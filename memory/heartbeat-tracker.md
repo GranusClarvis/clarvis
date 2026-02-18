@@ -34,8 +34,9 @@
 4. Developer tools (testing, debugging APIs)
 
 ### Current Task (ONE at a time)
-- [x] Build price checker script (DONE 2026-02-18 21:17 UTC)
-- Next: Add cron job to run every 5min
+- [x] Build price checker script (DONE 21:17 UTC)
+- [x] Add cron job every 5min (DONE 21:47 UTC)
+- Next: Test price checker manually
 
 ### Telegram Bot MVP Design
 **What:** Price alerts for crypto (BTC, ETH, etc.)
