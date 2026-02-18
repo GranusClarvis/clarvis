@@ -34,9 +34,8 @@
 4. Developer tools (testing, debugging APIs)
 
 ### Current Task (ONE at a time)
-- Explore: Telegram bot for crypto price alerts
-- Why: I have Telegram/Discord bots already, easy to extend
-- Validation needed: Is there demand? Who would pay?
+- [x] Build price checker script (DONE 2026-02-18 21:17 UTC)
+- Next: Add cron job to run every 5min
 
 ### Telegram Bot MVP Design
 **What:** Price alerts for crypto (BTC, ETH, etc.)
