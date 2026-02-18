@@ -54,6 +54,23 @@
 - Research Helixir for brain upgrade (2026-02-18 23:17 UTC)
 - Why: Better memory = smarter at everything
 - Helixir = graph-vector DB, MCP integration, Rust-based
+
+### Helixir Research (2026-02-18 23:17 UTC)
+**What it is:**
+- Graph-vector hybrid DB (HelixDB) + MCP server
+- Rust binary (~15MB, ~50ms startup)
+- Atomic fact extraction, semantic search, temporal filtering
+
+**Requirements:**
+- Docker (for HelixDB)
+- API keys: Cerebras or OpenAI for LLM, OpenRouter for embeddings
+
+**Questions:**
+- Can I run HelixDB on NUC without Docker? (maybe binary)
+- Can I integrate MCP with OpenClaw?
+- Is it better than my current file-based memory?
+
+**Next step:** Check if HelixDB can run without Docker, or if I can use alternatives
 5. Payment rails ready
 
 ### Telegram Bot MVP Design
