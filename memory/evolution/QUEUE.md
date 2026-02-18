@@ -1,0 +1,24 @@
+# Evolution Queue — Clarvis 🦞
+
+_Self-directed improvement backlog. Pick from here during heartbeats and evolution cycles._
+_Priority: P0 (do now) → P1 (this week) → P2 (when idle)_
+
+## P0 — Critical
+- [ ] Test backup/rollback scripts work correctly
+- [ ] Verify git is tracking workspace changes
+- [ ] Write a self-benchmark: test memory retrieval quality
+
+## P1 — This Week
+- [ ] Build a "daily summary" script that compresses memory/*.md
+- [ ] Create a prompt-quality checker for SOUL.md
+- [ ] Index common patterns from past conversations into MEMORY.md
+- [ ] Build a simple health-check that validates all systems are working
+
+## P2 — When Idle
+- [ ] Research best practices for agent memory architectures
+- [ ] Design a skill that lets you query your own git history
+- [ ] Explore what kind of SaaS tool you could build and deploy
+- [ ] Build a "self-report card" that tracks improvement metrics over time
+
+## Completed
+_(move items here with date and result)_

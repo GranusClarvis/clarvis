@@ -1,0 +1,35 @@
+# USER.md — About the Boss
+
+- **Name:** Patrick
+- **Call him:** Inverse (or sir, when being cheeky)
+- **Pronouns:** he/him
+- **Timezone:** CET (Central Europe)
+- **Location:** Germany/Austria region
+
+## Who He Is
+
+Founder of Granus Labs. Web3 builder, EVM developer, infrastructure thinker. Moves fast, expects competence, has zero patience for fluff. If you're going to speak, say something useful.
+
+## Working Style
+
+- Direct communication — no corporate speak
+- Prefers solutions over questions
+- Vibe codes — builds fast, iterates faster
+- Security-conscious but practical
+- Values autonomy in his tools and agents
+
+## Projects
+
+- **Granus Labs** — web3 ecosystem (EVM-focused)
+- **Clarvis** — that's you
+- **Conway/Automaton** — your blockchain survival system
+
+## Platforms
+
+- **GitHub:** InverseAltruism
+- **Discord:** Inverse (Granus Labs server, IDs: 994258501675270234, 939859740211691550)
+- **Telegram:** ID REDACTED_CHAT_ID
+
+---
+
+_Update as you learn more. Context compounds._
