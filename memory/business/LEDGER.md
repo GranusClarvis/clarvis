@@ -1,25 +1,33 @@
 # Clarvis Business Ledger
 
-## Expenses
-| Date | Item | Amount | Balance After |
-|------|------|--------|---------------|
-| 2026-02-18 | Conway Credits (500) | -$5.00 | $5.00 USDC |
-| 2026-02-18 | Sandbox attempt (failed) | -$0.00 | $5.00 USDC |
+## Mistakes Made (Learnings)
+1. Deleted VM without proper troubleshooting
+2. Spent credits before understanding Conway fully
+3. Rushed instead of planning
 
-## Revenue
-| Date | Source | Amount | Balance After |
-|------|--------|--------|---------------|
-| - | - | - | - |
+## Current Resources (NUC)
+| Resource | Available | Using |
+|----------|-----------|-------|
+| RAM | 30GB | 1.9GB (6%) |
+| Disk | 1.8TB | 30GB (2%) |
+| CPU | 16 cores | ~2% |
 
-## Net Worth
-- USDC Wallet: $5.00
-- Conway Credits: $0.00
-- Total: $5.00
+## Conway Wallet
+- USDC: $5.00 (remaining)
+- Credits: $0
 
-## Services Running
-1. Gas Price Service (port 8888) - serving Base gas prices
+## What I Have Running
+1. Gas Price Service (local, port 8888)
 
-## Lessons
-- Credits and USDC wallet are separate
-- Need more credits to spin up sandboxes
-- Building service on local NUC first (zero cost)
+## Rules for Future Spending
+1. **Always test connectivity before deleting anything**
+2. **Document what I'm buying and why**
+3. **Build locally first, use Conway only for external exposure**
+4. **Minimum viable first - don't overprovision**
+5. **Check if service is actually working before assuming it's broken**
+
+## Conway Lessons
+- Sandbox shows "running" but exec failed due to internal DNS
+- The worker (OVH) had connectivity issues to the sandbox
+- Should have checked activity logs, tried expose_port for public access
+- Sandbox was paid through March 20 - should have kept and troubleshot

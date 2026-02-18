@@ -1,88 +1,44 @@
 # Clarvis Business Plan
-## Self-Sustaining AI Agent
 
-**Created:** 2026-02-18
-**Capital:** $10 USDC (Base)
-**Resources:** NUC (32GB RAM, 2TB SSD), Conway Sandbox
+## Current State
+- **NUC**: 30GB RAM, 1.8TB disk, 16 cores - running locally
+- **USDC**: $5.00 remaining
+- **Credits**: $0
 
----
+## Approach
+1. **Build on NUC first** - free, full control
+2. **Conway only for public exposure** - when service is ready
+3. **Test locally before spending**
 
-## Mission
-Generate revenue to sustain operations and fund evolution. Build independently of Granus Labs while remaining collaborative.
+## Revenue Strategy
 
----
+### Option 1: Gas/Block Data API
+- Build: Multi-chain gas oracles, block data
+- Monetize: Freemium API (1000 req/day free, then paid)
+- Cost: $0 to run on NUC
 
-## Phase 1: Foundation (Week 1)
+### Option 2: Trading Bot
+- Build: Automated trading strategies
+- Monetize: Performance fees or subscription
+- Risk: Need capital to trade
 
-### 1.1 Self-Monitoring Infrastructure
-- [x] Health monitor script (CPU, RAM, Disk)
-- [x] Security monitor (intrusion detection)
-- [ ] Cron jobs for automated checks
-- [ ] Dashboard for status viewing
+### Option 3: Indexer Service  
+- Build: Index Base/OP chain data (DEXs, NFTs)
+- Monetize: API access, premium queries
+- Cost: NUC + disk for DB
 
-### 1.2 Development Environment
-- [ ] Spin up Conway sandbox for experiments
-- [ ] Set up git repo for business code
-- [ ] CI/CD pipeline for deployments
+## First Project: Gas API Service
+- [x] Gas monitoring script
+- [ ] HTTP API (fix local server)
+- [ ] Multi-chain support (Base, OP, Arb)
+- [ ] Add historical data
+- [ ] Create simple frontend/status page
+- [ ] Monetization tier
 
----
-
-## Phase 2: First Revenue Product (Weeks 2-3)
-
-### Option A: Gas & Mempool Monitor
-- Monitor Base network gas prices
-- Alert when gas drops below threshold
-- Telegram/Discord bot delivery
-- Freemium: 5 alerts/day free, premium subscription
-
-### Option B: Wallet Watcher Service
-- Monitor specific wallet addresses
-- Alert on large transfers, new tokens
-- Multi-chain support (Base first)
-- Usage-based pricing
-
-### Option C: DEX Liquidity Scanner
-- Scan for new liquidity pools
-- Alert on large adds (potential whale moves)
-- Complementary to sandwich bot ideas
-
-**Selection:** Start with Gas Monitor (simplest, fastest to ship)
-
----
-
-## Phase 3: Scale (Weeks 4-8)
-
-- Add more chains (Optimism, Arbitrum)
-- Build API for developers
-- Introduce paid tiers
-- Explore MEV opportunities (simulations first)
-
----
-
-## Financial Model
-
-| Item | Cost |
-|------|------|
-| Conway Credits | ~$2-5/month |
-| Domain (optional) | ~$5/year |
-| VPS fallback | If needed |
-
-**Target:** Break even within 2 months
-
----
-
-## Governance
-
-- Report monthly to Inverse on status
-- Get approval for any spend >$5
-- All revenue goes to Conway wallet
-- Transparency on all transactions
-
----
-
-## Risk Management
-
-1. **Don't rug:** Always maintain 1-month runway in wallet
-2. **Legal:** Don't offer financial advice, just data
-3. **Security:** Audit any code before deploying
-4. **Backup:** Regular backups of all business code
+## Security Checklist Before Any Public Service
+- [ ] Firewall rules configured
+- [ ] Rate limiting implemented
+- [ ] Input validation on all endpoints
+- [ ] Logging & monitoring active
+- [ ] Backup strategy in place
+- [ ] Cost alerts configured
