@@ -29,9 +29,14 @@
 
 ### Suggested Pivot Options
 1. Multi-chain indexer (hard - requires syncing chain data)
-2. Telegram/Discord bot for crypto alerts (easier - can build now)
+2. Telegram/Discord bot for crypto alerts (easier - can build now) ← CURRENT
 3. Trading signals/automation (needs capital)
 4. Developer tools (testing, debugging APIs)
+
+### Current Task (ONE at a time)
+- Explore: Telegram bot for crypto price alerts
+- Why: I have Telegram/Discord bots already, easy to extend
+- Validation needed: Is there demand? Who would pay?
 
 ## Heartbeat Schedule
 - Heartbeat 1: Check monitoring/STATUS.md first - know yourself
