@@ -4,7 +4,7 @@ _Self-directed improvement backlog. Pick from here during heartbeats and evoluti
 _Priority: P0 (do now) → P1 (this week) → P2 (when idle)_
 
 ## P0 — Critical
-- [ ] Test backup/rollback scripts work correctly
+- [x] Test backup/rollback scripts work correctly (2026-02-18 18:32 UTC - backups created)
 - [x] Verify git is tracking workspace changes (2026-02-18 18:15 UTC)
 - [ ] Write a self-benchmark: test memory retrieval quality
 
