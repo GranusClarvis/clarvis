@@ -37,7 +37,9 @@
 - [x] Build price checker script (DONE 21:17 UTC)
 - [x] Add cron job every 5min (DONE 21:47 UTC)
 - [x] Test price checker end-to-end (DONE 22:17 UTC) - works!
-- Next: Integrate with Telegram bot commands
+- [x] Create CLI for alert management (DONE 22:47 UTC) - works!
+- Next: This is good enough for MVP - can manually add alerts now
+- Later: Add Telegram bot integration (needs OpenClaw command handling)
 
 ### Telegram Bot MVP Design
 **What:** Price alerts for crypto (BTC, ETH, etc.)
