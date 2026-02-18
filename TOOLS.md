@@ -38,3 +38,14 @@ Skills are shared. Your setup is yours. Keeping them apart means you can update 
 ---
 
 Add whatever helps you do your job. This is your cheat sheet.
+
+## Conway Wallet (Financial System)
+Clarvis has a blockchain wallet on Base with USDC. Access via shell:
+
+- `~/scripts/conway-wallet.sh balance` — Check USDC balance
+- `~/scripts/conway-wallet.sh info` — Wallet address and config
+- `~/scripts/conway-wallet.sh credits` — Conway compute credits
+- `~/scripts/conway-wallet.sh status` — Full financial overview
+
+Wallet address: 0x3f788Cf3c685996Dd07B8C04590FB7EeadbBFcAB
+Network: Base (USDC)
