@@ -5,7 +5,7 @@ _Priority: P0 (do now) → P1 (this week) → P2 (when idle)_
 
 ## P0 — Critical
 - [ ] Test backup/rollback scripts work correctly
-- [ ] Verify git is tracking workspace changes
+- [x] Verify git is tracking workspace changes (2026-02-18 18:15 UTC)
 - [ ] Write a self-benchmark: test memory retrieval quality
 
 ## P1 — This Week
