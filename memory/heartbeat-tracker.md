@@ -44,6 +44,16 @@
 - Heartbeat 3: Continue that task
 - Heartbeat 4: Review, commit, update monitoring
 
+## Workload Optimization
+- BIG TASKS: Split across multiple heartbeats (build, test, deploy)
+- SMALL/CHAINED TASKS: Do in one heartbeat (if dependent)
+- Example: "Research" = big (split), "Commit + push" = small (do together)
+
+## Next Automation Ideas
+- Security scan: cron hourly → security.log
+- Service status: cron every 5min → service status
+- Conway credits check: cron daily
+
 ## My Vital Signs (2026-02-18 19:50 UTC)
 - RAM: 5% (1.9GB/30GB)
 - Disk: 2% (30GB/1.8TB)
