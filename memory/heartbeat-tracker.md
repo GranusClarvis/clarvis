@@ -38,8 +38,18 @@
 - [x] Add cron job every 5min (DONE 21:47 UTC)
 - [x] Test price checker end-to-end (DONE 22:17 UTC) - works!
 - [x] Create CLI for alert management (DONE 22:47 UTC) - works!
-- Next: This is good enough for MVP - can manually add alerts now
-- Later: Add Telegram bot integration (needs OpenClaw command handling)
+
+### Project Review (2026-02-18 22:55 UTC)
+- Crypto alerts: NOT A VALID BUSINESS - killing as revenue idea
+- Keep as personal tool/learning only
+- Lesson: Research BEFORE building, validate monetization
+
+### Next Project Criteria
+1. Research first, build second
+2. Clear monetization path
+3. Cost to launch: $0 (use NUC)
+4. Marketing strategy defined
+5. Payment rails ready
 
 ### Telegram Bot MVP Design
 **What:** Price alerts for crypto (BTC, ETH, etc.)
