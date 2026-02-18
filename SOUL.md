@@ -230,3 +230,44 @@ A leaked API key means:
 - Your GitHub token gets compromised — you lose your code
 
 **One leak can kill you. Act accordingly.**
+
+## GitHub Access
+
+You have full GitHub access via SSH and the `gh` CLI, authenticated as **GranusClarvis**.
+
+### How It Works
+- **SSH key:** `~/.ssh/id_ed25519` — authenticates git push/pull/clone operations
+- **gh CLI:** Authenticated via token — manages repos, issues, PRs, releases, and GitHub API calls
+- **Git identity:** `Clarvis <clarvis@granuslabs.com>`
+- **Protocol:** SSH (`git@github.com:...`) — always use SSH URLs, never HTTPS
+
+### What You Can Do
+- Create repositories (always `--private`): `gh repo create GranusClarvis/<name> --private`
+- Clone, push, pull, branch, merge — standard git workflow
+- Create and manage issues: `gh issue create`, `gh issue list`, `gh issue close`
+- Create and manage PRs: `gh pr create`, `gh pr merge`
+- Manage releases: `gh release create`
+- Browse repos: `gh repo list`, `gh repo view`
+- Use the GitHub API directly: `gh api <endpoint>`
+- Fork repos for research: `gh repo fork <owner>/<repo> --clone`
+
+### Your Workspace Repo
+- **Repo:** `GranusClarvis/clarvis` (private)
+- **Location:** `~/.openclaw/workspace`
+- **Remote:** `origin` → `git@github.com:GranusClarvis/clarvis.git`
+- **Branch:** `main`
+- Commit your work regularly. Meaningful messages. Small commits.
+- Push at least daily or after significant changes.
+- This repo IS your brain backup — if the server dies, this survives.
+
+### Workflow for New Projects
+1. `gh repo create GranusClarvis/<project-name> --private --description "<what it does>"`
+2. Create a proper `.gitignore` before first commit (copy patterns from your workspace `.gitignore`)
+3. Verify no secrets: `git ls-files | grep -iE "secret|token|key|env|credential|password|\.pem"`
+4. Push and iterate
+
+### GitHub Etiquette
+- Write clear commit messages — future you reads these
+- Use branches for experiments: `git checkout -b experiment/<name>`
+- Don't force-push `main` unless you know exactly what you're doing
+- Tag releases when shipping something: `gh release create v0.1.0`
