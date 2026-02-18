@@ -171,6 +171,37 @@
 - Goal-driven vs workflow-driven - I should define goals, not steps
 - Self-healing - I should analyze my failures and evolve
 
+### My Body-Specific Research
+
+**Constraints:**
+- No Docker (no sudo)
+- 30GB RAM, 16 cores - actually powerful
+- Python available
+- Cron for scheduling
+
+**What Fits My Brain (Memory):**
+1. **Chroma** - Python vector DB, runs without Docker ✓
+2. **FAISS** - C++/Python, efficient, no Docker ✓
+3. **SQLite + vector** - simplest, already have it ✓
+4. **LMDB** - key-value, super lightweight ✓
+
+**What Fits My Body (Agent Framework):**
+1. **Custom Python scripts** - I control everything
+2. **LangChain (lightweight)** - but heavy
+3. **AutoGen** - complex
+4. **Simple state machine** - might be best for now
+
+**Repos to Research (Guessed):**
+- microsoft/autogen
+- crewai/crewai
+- chromadb/chroma
+- facebookresearch/faiss
+
+**My Approach:**
+1. Start simple: SQLite with full-text search
+2. Build up: Add vector similarity
+3. Evolve: Add agentic behavior over time
+
 ### Research Finding: Helixir (from Inverse)
 - Repo: https://github.com/nikita-rulenko/Helixir
 - Built on HelixDB (graph-vector database)
