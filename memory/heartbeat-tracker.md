@@ -38,6 +38,21 @@
 - Why: I have Telegram/Discord bots already, easy to extend
 - Validation needed: Is there demand? Who would pay?
 
+### Telegram Bot MVP Design
+**What:** Price alerts for crypto (BTC, ETH, etc.)
+**How:** CoinGecko free API + existing Telegram bot
+**Features:**
+- /watch [coin] [price] - alert when price crosses
+- /unwatch [coin] - remove alert
+- /list - show active alerts
+- Cron checks every 5min, sends Telegram if triggered
+
+**Why viable:**
+- Free API (CoinGecko)
+- I have Telegram bot already
+- Easy to build, can expand
+- Monetization: premium alerts, more coins, push to Discord too
+
 ## Heartbeat Schedule
 - Heartbeat 1: Check monitoring/STATUS.md first - know yourself
 - Heartbeat 2: Pick ONE task from split list
