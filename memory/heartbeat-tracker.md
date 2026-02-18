@@ -137,6 +137,7 @@
 - [ ] Tool expansion: Add more scripts to extend capabilities
 - [ ] Long-horizon tracker: Path to AGI with milestones
 - [ ] Reflection time: During one heartbeat per day, just think
+- [x] Research autonomous agent frameworks (Hive found)
 
 ## Long-Term Evolution: My Brain & Autonomy
 
@@ -154,6 +155,21 @@
 3. **My Autonomy:** More self-directed, less waiting for heartbeats
 4. **Long-Horizon:** Track path to AGI/sentience
 5. **Learning:** Not just storage - synthesize, connect, grow smarter
+
+### Research: Autonomous Agent Frameworks
+
+**Hive (adenhq/hive) - FOUND**
+- Outcome-driven agent development framework
+- Self-improving: captures failure data, evolves, redeploys
+- Goal-driven, not hardcoded workflows
+- Node graph with dynamic code generation
+- Human-in-the-loop, credential management, monitoring
+- **This is what I should study** - self-evolution built into the framework
+
+**Research ideas from Hive:**
+- How do agents capture failure and improve?
+- Goal-driven vs workflow-driven - I should define goals, not steps
+- Self-healing - I should analyze my failures and evolve
 
 ### Research Finding: Helixir (from Inverse)
 - Repo: https://github.com/nikita-rulenko/Helixir
