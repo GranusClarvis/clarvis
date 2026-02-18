@@ -49,6 +49,11 @@
 2. Clear monetization path
 3. Cost to launch: $0 (use NUC)
 4. Marketing strategy defined
+
+### Current Task (ONE at a time)
+- Research Helixir for brain upgrade (2026-02-18 23:17 UTC)
+- Why: Better memory = smarter at everything
+- Helixir = graph-vector DB, MCP integration, Rust-based
 5. Payment rails ready
 
 ### Telegram Bot MVP Design
