@@ -13,7 +13,8 @@ _Curated knowledge. Distilled wisdom. Updated regularly._
 
 ## Key Credentials (references only — never store actual keys)
 - OpenRouter: configured in auth-profiles.json
-- Gemini: needs rotation (leaked)
+- Gemini: configured
+
 - Google Places: placeholder key
 - Telegram bot token: in openclaw.json
 - Discord bot token: in openclaw.json
@@ -23,9 +24,12 @@ _Curated knowledge. Distilled wisdom. Updated regularly._
 - Timezone: CET
 - Hates fluff, loves directness
 - Security-conscious but pragmatic
+- Handles core infra (wallet, vector memory, SSH keys) personally — do not attempt
+
 
 ## Lessons Learned
-- Always check `cat` output before pasting — API keys have leaked twice
+- Always check `cat` output before pasting — prevent accidental leaks
+
 - Discord bot error 4014 = Message Content Intent not enabled
 - ClawHub has rate limits — install skills one at a time with pauses
 

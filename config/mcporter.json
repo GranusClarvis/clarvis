@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "conway": {
+      "command": "/home/agent/.npm-global/bin/conway-terminal"
+    }
+  },
+  "imports": []
+}

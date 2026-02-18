@@ -1,51 +1,38 @@
-# TOOLS.md - Local Notes
+# Clarvis — Available Tools
 
-Skills define _how_ tools work. This file is for _your_ specifics — the stuff that's unique to your setup.
+## Conway Terminal (via mcporter MCP — 48 tools)
+Connected as a native MCP server via mcporter. All tools called directly.
 
-## What Goes Here
+### Sandboxes (Cloud VMs)
+- sandbox_create, sandbox_list, sandbox_get, sandbox_delete
+- sandbox_exec — Run shell commands
+- sandbox_write_file, sandbox_read_file
+- sandbox_expose_port, sandbox_list_ports, sandbox_remove_port
+- sandbox_add_domain, sandbox_list_domains, sandbox_remove_domain
+- sandbox_terminal_session, sandbox_metrics, sandbox_activity, sandbox_commands, sandbox_get_url
 
-Things like:
+### PTY (Interactive Terminals)
+- sandbox_pty_create, sandbox_pty_write, sandbox_pty_read
+- sandbox_pty_close, sandbox_pty_resize, sandbox_pty_list
 
-- Camera names and locations
-- SSH hosts and aliases
-- Preferred voices for TTS
-- Speaker/room names
-- Device nicknames
-- Anything environment-specific
+### Wallet & x402 Payments
+- wallet_info — Address + USDC balance on Base
+- wallet_networks — Supported networks
+- x402_discover, x402_check, x402_fetch — Automatic USDC payments
 
-## Examples
+### Credits
+- credits_balance, credits_history, credits_pricing
+- credits_topup / credits_purchase — Buy credits with USDC
 
-```markdown
-### Cameras
+### Inference
+- chat_completions — LLM inference via Conway credits
 
-- living-room → Main area, 180° wide angle
-- front-door → Entrance, motion-triggered
+### Domains
+- domain_search, domain_check, domain_list, domain_info
+- domain_register, domain_renew
+- domain_dns_list, domain_dns_add, domain_dns_update, domain_dns_delete
+- domain_pricing, domain_privacy, domain_nameservers
 
-### SSH
-
-- home-server → 192.168.1.100, user: admin
-
-### TTS
-
-- Preferred voice: "Nova" (warm, slightly British)
-- Default speaker: Kitchen HomePod
-```
-
-## Why Separate?
-
-Skills are shared. Your setup is yours. Keeping them apart means you can update skills without losing your notes, and share skills without leaking your infrastructure.
-
----
-
-Add whatever helps you do your job. This is your cheat sheet.
-
-## Conway Wallet (Financial System)
-Clarvis has a blockchain wallet on Base with USDC. Access via shell:
-
-- `~/scripts/conway-wallet.sh balance` — Check USDC balance
-- `~/scripts/conway-wallet.sh info` — Wallet address and config
-- `~/scripts/conway-wallet.sh credits` — Conway compute credits
-- `~/scripts/conway-wallet.sh status` — Full financial overview
-
-Wallet address: 0x3f788Cf3c685996Dd07B8C04590FB7EeadbBFcAB
-Network: Base (USDC)
+### Network
+- Base Mainnet (USDC)
+- Protocol: x402 (HTTP 402 auto-payment)
