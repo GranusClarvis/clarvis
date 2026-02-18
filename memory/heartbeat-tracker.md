@@ -36,7 +36,8 @@
 ### Current Task (ONE at a time)
 - [x] Build price checker script (DONE 21:17 UTC)
 - [x] Add cron job every 5min (DONE 21:47 UTC)
-- Next: Test price checker manually
+- [x] Test price checker end-to-end (DONE 22:17 UTC) - works!
+- Next: Integrate with Telegram bot commands
 
 ### Telegram Bot MVP Design
 **What:** Price alerts for crypto (BTC, ETH, etc.)
