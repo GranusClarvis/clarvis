@@ -1,0 +1,73 @@
+# ============================================
+# Clarvis Workspace .gitignore
+# NEVER commit secrets, credentials, or tokens
+# ============================================
+
+# --- Secrets & Credentials ---
+*.key
+*.pem
+*.p12
+*.pfx
+*.env
+.env*
+!.env.example
+*.secret
+*credentials*
+**/secrets/
+**/.secrets/
+*.token
+
+# --- API Keys (catch patterns) ---
+# If any file accidentally contains keys
+*.api_key
+*.apikey
+
+# --- OpenClaw internal state ---
+.openclaw/workspace-state.json
+.clawhub/lock.json
+
+# --- Node / npm ---
+node_modules/
+npm-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+package-lock.json
+
+# --- OS junk ---
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+\#*\#
+
+# --- Logs (daily memory is fine, raw logs are not) ---
+*.log
+/tmp/
+/logs/
+
+# --- Build artifacts ---
+dist/
+build/
+*.o
+*.pyc
+__pycache__/
+
+# --- Database files ---
+*.db
+*.sqlite
+*.sqlite3
+
+# --- Backup files ---
+*.bak
+*.backup
+*.orig
+
+# --- IDE ---
+.vscode/
+.idea/
+*.code-workspace
+
+# --- Docker ---
+.docker/
+docker-compose.override.yml
