@@ -58,3 +58,13 @@
 - Split tasks, don't 1-shot everything
 - Write state for next heartbeat
 - MONITOR YOURSELF - this is your body
+- AUTOMATE REPEATED TASKS - use cron, just read logs
+
+## Smart Automation Set Up
+- Health check: cron */15min → monitoring/health.log
+- Just read logs during heartbeats instead of running checks
+
+## Next Automation Ideas
+- Security scan: cron hourly → security.log
+- Service status: cron every 5min → service status
+- Conway credits check: cron daily
