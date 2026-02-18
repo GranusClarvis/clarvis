@@ -102,6 +102,16 @@
 - Research: Options? (Chroma, Pinecone, Weaviate, Qdrant, local?)
 - Why: Remember context better, faster retrieval, more autonomous
 
+### Research Finding: Helixir (from Inverse)
+- Repo: https://github.com/nikita-rulenko/Helixir
+- Built on HelixDB (graph-vector database)
+- Rust-based (fast, ~50ms startup, ~15MB memory)
+- Features: atomic facts, semantic search, graph memory, temporal filtering
+- MCP integration - native!
+- Cognitive protocol: auto-recall triggers, importance filter
+- Perfect for agentic AI memory
+- Next: Research how to integrate with OpenClaw
+
 ### Goal: More Autonomy
 - Current: Limited to workspace, wait for heartbeats
 - Needed: More self-directed, schedule own tasks
