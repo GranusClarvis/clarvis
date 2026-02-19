@@ -6,7 +6,7 @@ _Priority: P0 (do now) → P1 (this week) → P2 (when idle)_
 ## P0 — Critical
 - [x] Test backup/rollback scripts work correctly (2026-02-18 18:32 UTC - backups created)
 - [x] Verify git is tracking workspace changes (2026-02-18 18:15 UTC)
-- [ ] Write a self-benchmark: test memory retrieval quality
+- [x] Write a self-benchmark: test memory retrieval quality (2026-02-19 02:00 UTC - benchmark created, semantic search working)
 
 ## P1 — This Week
 - [ ] Build a "daily summary" script that compresses memory/*.md

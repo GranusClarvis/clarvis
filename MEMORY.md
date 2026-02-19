@@ -35,6 +35,7 @@ _Curated knowledge. Distilled wisdom. Updated regularly._
 
 ## Evolution Log
 - 2026-02-18: Genesis. All systems initialized. Dual-mode architecture defined.
+- 2026-02-19: Memory benchmark created. Semantic search (gemini-embedding-001) working well.
 
 ## Business Ideas
 _(none yet — first autonomous session will brainstorm)_
