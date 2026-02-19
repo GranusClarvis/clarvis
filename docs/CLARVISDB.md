@@ -75,8 +75,9 @@ A specially tuned memory system for an agentic AI. Not just vector storage - a t
 - [ ] Temporal sorting
 
 ### Phase 3: Graph Layer
-- [ ] Track relationships between memories
-- [ ] Graph traversal for context
+- [x] Track relationships between memories - DONE 2026-02-19 03:38 UTC
+- [x] Graph traversal for context - DONE
+- File: `relationships.json`
 
 ### Phase 4: Self-Awareness
 - [ ] Track what I know vs don't know
