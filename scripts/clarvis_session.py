@@ -20,7 +20,8 @@ def session_close(
     decisions: list[str],
     unfinished: list[str],
     learnings: list[str],
-    next_actions: list[str]
+    next_actions: list[str],
+    current_mode: str = "coding"
 ):
     """
     Save session state for future sessions to pick up.
@@ -40,6 +41,7 @@ def session_close(
         "unfinished": unfinished,
         "learnings": learnings,
         "next_actions": next_actions,
+        "current_mode": current_mode,
         "status": "closed"
     }
     
@@ -135,3 +137,24 @@ if __name__ == "__main__":
         print("  python clarvis_session.py close  # Close current session")
         print("  python clarvis_session.py open   # Open last N sessions")
         print("  python clarvis_session.py pending # Get pending work")
+def get_current_mode() -> str:
+    """Get the current working mode from the most recent session"""
+    sessions = session_open(n=1)
+    if sessions:
+        return sessions[0].get("current_mode", "coding")
+    return "coding"
+
+def set_current_mode(mode: str):
+    """Set the current mode (updates the most recent session)"""
+    import json
+    sessions_dir = SESSIONS_DIR
+    files = sorted([f for f in os.listdir(sessions_dir) if f.endswith(".json")], reverse=True)
+    if files:
+        latest = os.path.join(sessions_dir, files[0])
+        with open(latest, "r") as f:
+            session = json.load(f)
+        session["current_mode"] = mode
+        with open(latest, "w") as f:
+            json.dump(session, f, indent=2)
+        return mode
+    return None
