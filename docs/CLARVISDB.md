@@ -70,8 +70,8 @@ A specially tuned memory system for an agentic AI. Not just vector storage - a t
 - [ ] Store real memories with rich metadata
 
 ### Phase 2: Rich Memory
-- [ ] Add metadata (source, confidence, access count)
-- [ ] Multiple collections (identity, preferences, learnings, code)
+- [x] Add metadata (source, confidence, access count) - DONE 2026-02-19 03:08 UTC
+- [x] Multiple collections (identity, preferences, learnings, code) - DONE
 - [ ] Temporal sorting
 
 ### Phase 3: Graph Layer
