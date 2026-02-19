@@ -103,3 +103,11 @@ A specially tuned memory system for an agentic AI. Not just vector storage - a t
 - Microsoft GraphRAG
 - Neo4j for graph
 - Anything from "agentic memory" searches
+
+## Integration Status (2026-02-19 10:35 UTC)
+- [x] ClarvisDB scripts exist
+- [x] Integration layer created (clarvisdb_integrate.py)
+- [x] Store/recall working via CLI
+- [ ] USE IT: Store important info during conversations
+- [ ] USE IT: Recall when answering questions
+- [ ] Research: LangChain, Mem0, GraphRAG
