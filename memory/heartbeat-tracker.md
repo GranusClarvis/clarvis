@@ -219,9 +219,9 @@
 ### HelixDB/Chroma Status
 - Docker: Available (v29.2.1)
 - HelixDB image: NOT FOUND (wrong name)
-- Chroma: Blocked by PEP 668 (need venv or sudo)
-- ERROR: Can't pip install system packages
-- Need: Create venv or ask Inverse for pip access
+- Chroma: ✅ INSTALLED! (v1.5.0 via venv with PIP_USER=0)
+- Location: /home/agent/.openclaw/venvs/chroma
+- Next: Test basic vector storage
 
 **Fits My Body:**
 - Full agent frameworks
