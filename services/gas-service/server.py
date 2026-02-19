@@ -11,7 +11,7 @@ import os
 from urllib.parse import urlparse
 import gas_monitor
 
-PORT = 8080
+PORT = 8888
 CACHE_FILE = "/home/agent/.openclaw/workspace/services/gas-service/cache.json"
 
 class GasHandler(http.server.BaseHTTPRequestHandler):

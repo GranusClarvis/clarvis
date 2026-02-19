@@ -41,10 +41,10 @@ def get_gas_prices():
                 l1_fee = 0.001  # Base L1 fee estimate
                 
                 return {
-                    "slow": round(gas_gwei * 0.8, 2),
-                    "normal": round(gas_gwei, 2),
-                    "fast": round(gas_gwei * 1.2, 2),
-                    "current_gwei": round(gas_gwei, 2),
+                    "slow": round(gas_gwei * 0.8, 4),
+                    "normal": round(gas_gwei, 4),
+                    "fast": round(gas_gwei * 1.2, 4),
+                    "current_gwei": round(gas_gwei, 4),
                     "l1_estimate": l1_fee,
                     "timestamp": datetime.now().isoformat()
                 }
