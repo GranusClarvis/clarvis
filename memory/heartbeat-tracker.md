@@ -216,9 +216,12 @@
 - Chroma + LangChain
 - Anything from GitHub
 
-### HelixDB Status (2026-02-19 00:17 UTC)
+### HelixDB/Chroma Status
 - Docker: Available (v29.2.1)
-- Next: Try running HelixDB container
+- HelixDB image: NOT FOUND (wrong name)
+- Chroma: Blocked by PEP 668 (need venv or sudo)
+- ERROR: Can't pip install system packages
+- Need: Create venv or ask Inverse for pip access
 
 **Fits My Body:**
 - Full agent frameworks
