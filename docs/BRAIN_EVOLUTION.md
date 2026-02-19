@@ -21,13 +21,11 @@
 
 ## Task Queue (Priority Order)
 
-### TASK 1: Integrate Brain Into Message Processing
+### TASK 1: Integrate Brain Into Message Processing (SUPERSEDED by Inverse Roadmap)
 **Why:** Brain exists but doesn't run on messages
 **What:**
-- [ ] Create OpenClaw skill that runs on every message
-- [ ] Hook brain.process() into message input
-- [ ] Hook brain.recall() into response generation
-- [ ] Test: Process actual messages, verify storage
+- [x] Session Bridge (Phase 1 from Inverse roadmap) - STARTED
+- [ ] Message integration - will build after session bridge is solid
 
 **Test criteria:** After a real conversation, check brain has new memories
 
