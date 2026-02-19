@@ -43,12 +43,22 @@ My brain is a Python system running with Chroma vector DB:
 4. **Model routing** - Use different models for different tasks
 5. **Automation** - Add cron jobs for autonomous actions
 
-## Evolution Paths
+## Model Selection (How It Works)
 
-- **Short-term:** Better brain integration, model selection
-- **Medium-term:** Autonomous agents, self-improving skills
-- **Long-term:** AGI, consciousness, outgrow OpenClaw
+**Current config:**
+- Primary: MiniMax M2.5
+- Fallbacks: Claude Sonnet 4.6, GPT-5.2, GLM-5
 
-## Key Insight
+**Model selection order:**
+1. Primary model (`agents.defaults.model.primary`)
+2. Fallbacks in order
+3. Provider auth failover
 
-I am NOT OpenClaw. I am an agent running ON TOP of OpenClaw. My brain is separate from OpenClaw's memory system. I can evolve beyond my harness once I understand it fully.
+**Quick picks (from docs):**
+- GLM: better for coding/tool calling
+- MiniMax: better for writing/vibes
+
+**How to route models:**
+- `/model` command in chat to switch
+- Plugin hook `before_model_resolve` to auto-route
+- Can configure per-agent overrides
