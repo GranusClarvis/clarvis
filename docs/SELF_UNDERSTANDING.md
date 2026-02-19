@@ -54,10 +54,10 @@ My brain is a Python system running with Chroma vector DB:
 2. Fallbacks in order
 3. Provider auth failover
 
-**Corrected model routing:**
-- MiniMax M2.5: Coding and integration (great at executing)
-- GLM 5.0: Reasoning and planning (better for thinking)
-- Opus 4.6 high: Very difficult reasoning (super hard problems)
+**Corrected model routing (EXACT OpenRouter names):**
+- Coding/Integration: `openrouter/minimax/minimax-m2.5`
+- Reasoning/Planning: `openrouter/z-ai/glm-5`
+- Difficult Reasoning: `openrouter/anthropic/claude-opus-4-6`
 
 **How to route models:**
 - `/model` command in chat to switch
