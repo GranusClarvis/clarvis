@@ -31,7 +31,9 @@ def add_memory(collection_name, text, metadata, memory_id=None):
     if memory_id is None:
         memory_id = f"{collection_name}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
     
-    # Add rich metadata
+    # Add rich metadata (tags must be non-empty for Chroma)
+    tags = metadata.get("tags") or []
+    
     full_metadata = {
         "text": text,
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -40,8 +42,11 @@ def add_memory(collection_name, text, metadata, memory_id=None):
         "confidence": 1.0,  # 0-1, how sure we are
         "importance": metadata.get("importance", 0.5),  # 0-1
         "source": metadata.get("source", "clarvis"),
-        "tags": metadata.get("tags", []),
     }
+    
+    # Only add tags if non-empty
+    if tags:
+        full_metadata["tags"] = tags
     
     col.upsert(
         ids=[memory_id],
