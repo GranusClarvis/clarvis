@@ -54,9 +54,10 @@ My brain is a Python system running with Chroma vector DB:
 2. Fallbacks in order
 3. Provider auth failover
 
-**Quick picks (from docs):**
-- GLM: better for coding/tool calling
-- MiniMax: better for writing/vibes
+**Corrected model routing:**
+- MiniMax M2.5: Coding and integration (great at executing)
+- GLM 5.0: Reasoning and planning (better for thinking)
+- Opus 4.6 high: Very difficult reasoning (super hard problems)
 
 **How to route models:**
 - `/model` command in chat to switch
