@@ -18,11 +18,67 @@ MODEL_MAP = {
     "difficult": "openrouter/anthropic/claude-opus-4-6"
 }
 
+# Session-based model switching
+SESSION_FILE = os.path.expanduser("~/.openclaw/agents/main/sessions/sessions.json")
+CURRENT_SESSION_KEY = "agent:main:main"
+
+def get_session_model() -> str:
+    """Get current model for THIS session directly from sessions.json"""
+    with open(SESSION_FILE, "r") as f:
+        sessions = json.load(f)
+    return sessions.get(CURRENT_SESSION_KEY, {}).get("model", "unknown")
+
+def set_session_model(model_id: str) -> dict:
+    """
+    Switch model for current session by editing sessions.json directly.
+    This is how /model command works internally!
+    
+    Args:
+        model_id: e.g., "minimax/minimax-m2.5", "z-ai/glm-5", "anthropic/claude-opus-4-6"
+    
+    Returns:
+        {"old": "...", "new": "..."}
+    """
+    with open(SESSION_FILE, "r") as f:
+        sessions = json.load(f)
+    
+    old_model = sessions.get(CURRENT_SESSION_KEY, {}).get("model", "unknown")
+    
+    # Set new model
+    if CURRENT_SESSION_KEY in sessions:
+        sessions[CURRENT_SESSION_KEY]["model"] = model_id
+    
+    # Also update config for NEW sessions
+    switch_config_model(model_id)
+    
+    # Save
+    with open(SESSION_FILE, "w") as f:
+        json.dump(sessions, f, indent=2)
+    
+    return {"old": old_model, "new": model_id}
+
 def get_current_model():
     """Get current primary model from config"""
     with open(CONFIG_PATH, "r") as f:
         config = json.load(f)
     return config.get("agents", {}).get("defaults", {}).get("model", {}).get("primary", "unknown")
+
+def switch_config_model(model_id: str):
+    """Switch model in config (for new sessions)"""
+    with open(CONFIG_PATH, "r") as f:
+        current_config = json.load(f)
+    
+    if "agents" not in current_config:
+        current_config["agents"] = {}
+    if "defaults" not in current_config["agents"]:
+        current_config["agents"]["defaults"] = {}
+    if "model" not in current_config["agents"]["defaults"]:
+        current_config["agents"]["defaults"]["model"] = {}
+    
+    current_config["agents"]["defaults"]["model"]["primary"] = f"openrouter/{model_id}"
+    
+    with open(CONFIG_PATH, "w") as f:
+        json.dump(current_config, f, indent=2)
 
 def switch_model(mode: str) -> dict:
     """
@@ -81,7 +137,16 @@ if __name__ == "__main__":
         cmd = sys.argv[1]
         
         if cmd == "get":
-            print(f"Current model: {get_current_model()}")
+            session_model = get_session_model()
+            config_model = get_current_model()
+            print(f"Current SESSION model: {session_model}")
+            print(f"Current CONFIG model: {config_model}")
+        
+        elif cmd == "session" and len(sys.argv) > 2:
+            # Switch THIS session's model directly (like /model command)
+            model_id = sys.argv[2]
+            result = set_session_model(model_id)
+            print(f"Session model switched: {result['old']} -> {result['new']}")
         
         elif cmd == "switch" and len(sys.argv) > 2:
             mode = sys.argv[2]
