@@ -71,3 +71,4 @@ __pycache__/
 # --- Docker ---
 .docker/
 docker-compose.override.yml
+data/
