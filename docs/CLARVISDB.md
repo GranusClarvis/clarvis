@@ -104,10 +104,10 @@ A specially tuned memory system for an agentic AI. Not just vector storage - a t
 - Neo4j for graph
 - Anything from "agentic memory" searches
 
-## Integration Status (2026-02-19 10:35 UTC)
-- [x] ClarvisDB scripts exist
-- [x] Integration layer created (clarvisdb_integrate.py)
-- [x] Store/recall working via CLI
-- [ ] USE IT: Store important info during conversations
-- [ ] USE IT: Recall when answering questions
+## Integration Status (2026-02-19 10:42 UTC)
+- [x] ClarvisBrain - auto-operating memory (no manual commands!)
+- [x] Auto-importance detection
+- [x] Context tracking
+- [x] Goal tracking with progress
+- [ ] Integrate into OpenClaw workflow (run on every message)
 - [ ] Research: LangChain, Mem0, GraphRAG
