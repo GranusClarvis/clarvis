@@ -17,8 +17,11 @@ def load_metrics():
     """Load metrics from file"""
     p = Path(DATA_FILE)
     if p.exists():
-        with open(p) as f:
-            return json.load(f)
+        try:
+            with open(p) as f:
+                return json.load(f)
+        except (json.JSONDecodeError, ValueError):
+            print(f"Warning: corrupted {DATA_FILE}, starting fresh")
     return {
         "daily": [],
         "goals_history": [],
@@ -55,6 +58,17 @@ def run_assessment():
         if today in m.get("metadata", {}).get("created_at", ""):
             today_memories += 1
     
+    # Goal progress - extract percentages
+    goal_progress = {}
+    for g in goals:
+        doc = g.get("document", "")
+        # Extract percentage if present (e.g., "ClarvisDB: 90%")
+        if ":" in doc:
+            name, rest = doc.split(":", 1)
+            if "%" in rest:
+                pct = int(rest.split("%")[0].strip())
+                goal_progress[name.strip()] = pct
+    
     # Store daily snapshot
     snapshot = {
         "date": today,
@@ -62,10 +76,24 @@ def run_assessment():
         "today_memories": today_memories,
         "graph_edges": stats["graph_edges"],
         "collections": len(stats["collections"]),
-        "goals": len(goals)
+        "goals": len(goals),
+        "goal_progress": goal_progress
     }
     
-    metrics["daily"].append(snapshot)
+    # Track goal progress delta
+    if metrics.get("goals_history"):
+        prev_goals = metrics["goals_history"][-1].get("goal_progress", {})
+        for name, pct in goal_progress.items():
+            prev_pct = prev_goals.get(name, 0)
+            delta = pct - prev_pct
+            if delta > 0:
+                print(f"  ↑ {name}: +{delta}%")
+            elif delta < 0:
+                print(f"  ↓ {name}: {delta}%")
+    
+    metrics["goals_history"].append(snapshot)
+    metrics["goals_history"] = metrics["goals_history"][-90:]
+    metrics["daily"] = metrics["daily"][-90:]
     metrics["last_run"] = today
     
     # Calculate growth
