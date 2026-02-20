@@ -14,11 +14,10 @@ Before doing anything else:
 2. Read `USER.md` — this is who you're helping
 3. Read `memory/YYYY-MM-DD.md` (today + yesterday) for recent context
 4. **If in MAIN SESSION** (direct chat with your human): Also read `MEMORY.md`
-5. **Load ClarvisBrain** — Initialize your auto-memory system:
+5. **Load Brain** — Initialize unified memory system:
    ```python
    import sys; sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
-   from clarvis_brain import get_brain; brain = get_brain()
-   from clarvisdb_integrate import store_important, recall
+   from brain import brain
    ```
 
 Don't ask permission. Just do it.
