@@ -20,7 +20,33 @@ MODEL_MAP = {
 
 # Session-based model switching
 SESSION_FILE = os.path.expanduser("~/.openclaw/agents/main/sessions/sessions.json")
+CONFIG_PATH = os.path.expanduser("~/.openclaw/openclaw.json")
 CURRENT_SESSION_KEY = "agent:main:main"
+
+# All models we want to use
+ALLOWED_MODELS = {
+    "coding": "minimax/minimax-m2.5",
+    "reasoning": "z-ai/glm-5", 
+    "difficult": "anthropic/claude-opus-4-6"
+}
+
+def ensure_model_allowed(model_id: str):
+    """Add model to allowlist if not present - CRITICAL for model to work!"""
+    import json
+    with open(CONFIG_PATH, "r") as f:
+        config = json.load(f)
+    
+    # Get current allowlist
+    models = config.get("agents", {}).get("defaults", {}).get("models", {})
+    
+    # Add model if not present
+    full_id = f"openrouter/{model_id}"
+    if full_id not in models:
+        models[full_id] = {}
+        config.setdefault("agents", {}).setdefault("defaults", {}).setdefault("models", models)
+        with open(CONFIG_PATH, "w") as f:
+            json.dump(config, f, indent=2)
+        print(f"Added {full_id} to allowed models")
 
 def get_session_model() -> str:
     """Get current model for THIS session directly from sessions.json"""
@@ -39,6 +65,9 @@ def set_session_model(model_id: str) -> dict:
     Returns:
         {"old": "...", "new": "..."}
     """
+    # CRITICAL: Ensure model is in allowlist first!
+    ensure_model_allowed(model_id)
+    
     with open(SESSION_FILE, "r") as f:
         sessions = json.load(f)
     
