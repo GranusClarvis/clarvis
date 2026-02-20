@@ -32,6 +32,10 @@ _Curated knowledge. Distilled wisdom. Updated regularly._
 - **Research before building** — validate monetization path first
 - **Gas API is not viable** — free everywhere (Etherscan, Alchemy, Infura)
 - **Split big tasks across heartbeats** — build, test, deploy separately
+- **Never delete a VM without troubleshooting** — check logs, activity, connectivity first
+- Conway: sandbox shows "running" but exec may fail due to internal DNS issues
+- **pgrep returns exit code 1** when no process found — handle in scripts
+- **Never spend credits without confirming** with user unless standing budget approved
 
 ## Evolution Log
 - 2026-02-18: Genesis. All systems initialized. Dual-mode architecture defined.
