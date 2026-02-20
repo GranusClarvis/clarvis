@@ -46,21 +46,15 @@ Write the plan to: {output_file}
 Then confirm completion."""
 
     # Spawn GLM-5 subprocess (async)
+    # NOTE: This runs INDEPENDENTLY. I (M2.5) stay on M2.5 and continue.
     subprocess.Popen(
         ["openclaw", "agent", "--message", prompt, "--to", "+49123456789"],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL
     )
     
-    # After spawning, switch back to M2.5 for execution
-    # This is the key: spawn GLM-5 for thinking, then back to M2.5 for doing
-    import sys
-    sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
-    try:
-        from clarvis_model_switch import set_session_model
-        set_session_model("minimax/minimax-m2.5")
-    except:
-        pass  # Don't fail if this doesn't work
+    # Do NOT switch current session - stay on M2.5!
+    # The subprocess runs on GLM-5, I continue on M2.5
     
     return output_file
 
