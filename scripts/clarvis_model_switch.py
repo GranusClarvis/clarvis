@@ -56,8 +56,11 @@ def get_session_model() -> str:
 
 def set_session_model(model_id: str) -> dict:
     """
-    Switch model for current session by editing sessions.json AND config.
-    This is how /model command works internally!
+    Switch model for current session by sending /model directive through chat.
+    This is the SAME mechanism as when user types /model in Telegram!
+    
+    NOTE: This requires user to manually send /model or for the script to be run
+    externally. For now, we update config and document the manual process.
     
     Args:
         model_id: e.g., "minimax/minimax-m2.5", "z-ai/glm-5", "anthropic/claude-opus-4-6"
@@ -73,15 +76,7 @@ def set_session_model(model_id: str) -> dict:
         sessions = json.load(f)
     old_model = sessions.get(CURRENT_SESSION_KEY, {}).get("model", "unknown")
     
-    # 1. Set session model (for current session)
-    if CURRENT_SESSION_KEY in sessions:
-        sessions[CURRENT_SESSION_KEY]["model"] = model_id
-        sessions[CURRENT_SESSION_KEY]["modelProvider"] = "openrouter"
-    
-    with open(SESSION_FILE, "w") as f:
-        json.dump(sessions, f, indent=2)
-    
-    # 2. ALSO set config primary (prevents reset on new messages!)
+    # Update config primary (for new sessions)
     full_model = f"openrouter/{model_id}" if not model_id.startswith("openrouter/") else model_id
     with open(CONFIG_PATH, "r") as f:
         config = json.load(f)
@@ -90,7 +85,11 @@ def set_session_model(model_id: str) -> dict:
     with open(CONFIG_PATH, "w") as f:
         json.dump(config, f, indent=2)
     
-    return {"old": old_model, "new": model_id}
+    # NOTE: To switch CURRENT session model, send this message manually:
+    # /model openrouter/z-ai/glm-5
+    # Or use the message tool: message(action=send, message="/model openrouter/z-ai/glm-5", target="REDACTED_CHAT_ID")
+    
+    return {"old": old_model, "new": model_id, "note": "Send /model via chat to switch current session"}
 
 def get_current_model():
     """Get current primary model from config"""
