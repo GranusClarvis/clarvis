@@ -30,7 +30,9 @@ def plan_feature(task_description: str, context: str = "") -> str:
     output_file = f"{TOOL_SUITE_DIR}/plan_{plan_id}.md"
     
     # Create the planning prompt
-    prompt = f"""Create a detailed implementation plan for:
+    prompt = f"""You are running on GLM-5 model for deep reasoning.
+
+Create a detailed implementation plan for:
 
 Task: {task_description}
 
@@ -46,15 +48,15 @@ Write the plan to: {output_file}
 Then confirm completion."""
 
     # Spawn GLM-5 subprocess (async)
-    # NOTE: This runs INDEPENDENTLY. I (M2.5) stay on M2.5 and continue.
+    # NOTE: This runs INDEPENDENTLY. I (M2.5) stay on M2.5.
+    # Subprocess uses config primary (set to GLM-5) or default model.
     subprocess.Popen(
         ["openclaw", "agent", "--message", prompt, "--to", "+49123456789"],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL
     )
     
-    # Do NOT switch current session - stay on M2.5!
-    # The subprocess runs on GLM-5, I continue on M2.5
+    # Do NOT switch - stay on M2.5!
     
     return output_file
 
