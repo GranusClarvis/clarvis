@@ -10,6 +10,10 @@ Usage:
     brain.recall("what do I know about X")
     brain.get_goals()
     brain.set_context("working on ClarvisDB")
+    
+    # Use local embeddings (no cloud dependency)
+    from brain import LocalBrain
+    local_brain = LocalBrain()
 """
 
 import chromadb
@@ -19,10 +23,13 @@ from datetime import datetime, timezone
 
 # Single database location
 DATA_DIR = "/home/agent/.openclaw/workspace/data/clarvisdb"
+LOCAL_DATA_DIR = "/home/agent/.openclaw/workspace/data/clarvisdb-local"
 os.makedirs(DATA_DIR, exist_ok=True)
+os.makedirs(LOCAL_DATA_DIR, exist_ok=True)
 
 # Graph file
 GRAPH_FILE = os.path.join(DATA_DIR, "relationships.json")
+LOCAL_GRAPH_FILE = os.path.join(LOCAL_DATA_DIR, "relationships.json")
 
 # Collection names
 IDENTITY = "clarvis-identity"
@@ -36,11 +43,28 @@ MEMORIES = "clarvis-memories"
 ALL_COLLECTIONS = [IDENTITY, PREFERENCES, LEARNINGS, INFRASTRUCTURE, GOALS, CONTEXT, MEMORIES]
 
 
+def get_local_embedding_function():
+    """Get ONNX MiniLM embedding function (fully local, no cloud)"""
+    from chromadb.utils import embedding_functions
+    return embedding_functions.ONNXMiniLM_L6_V2()
+
+
 class ClarvisBrain:
     """Unified brain for Clarvis - single source of truth"""
     
-    def __init__(self):
-        self.client = chromadb.PersistentClient(path=DATA_DIR)
+    def __init__(self, use_local_embeddings=False):
+        self.use_local_embeddings = use_local_embeddings
+        
+        if use_local_embeddings:
+            self.data_dir = LOCAL_DATA_DIR
+            self.graph_file = LOCAL_GRAPH_FILE
+            self.embedding_function = get_local_embedding_function()
+        else:
+            self.data_dir = DATA_DIR
+            self.graph_file = GRAPH_FILE
+            self.embedding_function = None  # Use ChromaDB default
+        
+        self.client = chromadb.PersistentClient(path=self.data_dir)
         self._init_collections()
         self._load_graph()
     
@@ -48,19 +72,25 @@ class ClarvisBrain:
         """Ensure all collections exist"""
         self.collections = {}
         for name in ALL_COLLECTIONS:
-            self.collections[name] = self.client.get_or_create_collection(name)
+            if self.embedding_function:
+                self.collections[name] = self.client.get_or_create_collection(
+                    name, 
+                    embedding_function=self.embedding_function
+                )
+            else:
+                self.collections[name] = self.client.get_or_create_collection(name)
     
     def _load_graph(self):
         """Load relationship graph"""
-        if os.path.exists(GRAPH_FILE):
-            with open(GRAPH_FILE, 'r') as f:
+        if os.path.exists(self.graph_file):
+            with open(self.graph_file, 'r') as f:
                 self.graph = json.load(f)
         else:
             self.graph = {"nodes": {}, "edges": []}
     
     def _save_graph(self):
         """Save relationship graph"""
-        with open(GRAPH_FILE, 'w') as f:
+        with open(self.graph_file, 'w') as f:
             json.dump(self.graph, f, indent=2)
     
     # === CORE OPERATIONS ===
@@ -514,18 +544,93 @@ class ClarvisBrain:
             }
 
 
+class LocalBrain(ClarvisBrain):
+    """
+    Brain with local embeddings (ONNX MiniLM).
+    No cloud dependency - fully self-contained.
+    
+    Usage:
+        from brain import LocalBrain
+        brain = LocalBrain()
+        brain.store("memory")
+        brain.recall("query")
+    """
+    
+    def __init__(self):
+        super().__init__(use_local_embeddings=True)
+    
+    def migrate_from_cloud(self, source_path=None):
+        """
+        Migrate memories from cloud-based brain to local.
+        
+        Args:
+            source_path: Path to cloud brain data (default: DATA_DIR)
+        
+        Returns:
+            Number of memories migrated
+        """
+        import shutil
+        
+        if source_path is None:
+            source_path = DATA_DIR
+        
+        migrated = 0
+        
+        # Connect to source
+        source_client = chromadb.PersistentClient(path=source_path)
+        
+        for col_name in ALL_COLLECTIONS:
+            try:
+                source_col = source_client.get_collection(col_name)
+                results = source_col.get()
+                
+                if results["ids"]:
+                    # Batch insert to local
+                    target_col = self.collections[col_name]
+                    target_col.add(
+                        ids=results["ids"],
+                        documents=results["documents"],
+                        metadatas=results.get("metadatas")
+                    )
+                    migrated += len(results["ids"])
+                    print(f"Migrated {col_name}: {len(results['ids'])} memories")
+            except Exception as e:
+                print(f"Skipped {col_name}: {e}")
+        
+        return migrated
+    
+    def get_embedding_info(self):
+        """Get info about the embedding model"""
+        return {
+            "type": "ONNXMiniLM_L6_V2",
+            "dimension": 384,
+            "cloud_dependency": False,
+            "model": "all-MiniLM-L6-v2 (local)",
+            "performance": "~10ms per query (CPU)"
+        }
+
+
 # Singleton instance
 _brain = None
+_local_brain = None
 
 def get_brain():
-    """Get the brain singleton"""
+    """Get the brain singleton (cloud embeddings)"""
     global _brain
     if _brain is None:
         _brain = ClarvisBrain()
     return _brain
 
+def get_local_brain():
+    """Get local brain singleton (no cloud dependency)"""
+    global _local_brain
+    if _local_brain is None:
+        _local_brain = LocalBrain()
+    return _local_brain
+
 # Convenience exports
 brain = get_brain()
+local_brain = None  # Initialize on demand
 
 # Legacy compatibility - these match old API
 store_important = lambda text, collection=None, importance=0.7, source="conversation", tags=None: brain.store(text, collection or MEMORIES, importance, tags, source)

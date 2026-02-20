@@ -204,6 +204,40 @@ def test_memory_optimization():
     return True
 
 
+def test_local_brain():
+    """Test 11: Local embeddings (no cloud)"""
+    print("\n" + "=" * 60)
+    print("TEST 11: Local Brain (Independent)")
+    print("=" * 60)
+    
+    try:
+        from brain import LocalBrain
+        
+        lb = LocalBrain()
+        
+        # Test store
+        lb.store("Local test memory", importance=0.8)
+        
+        # Test recall
+        results = lb.recall("test", n=3)
+        
+        # Test stats
+        stats = lb.stats()
+        
+        # Test embedding info
+        info = lb.get_embedding_info()
+        
+        print(f"✓ Local brain working: {stats['total_memories']} memories")
+        print(f"  Embedding: {info['model']}")
+        print(f"  Dimension: {info['dimension']}")
+        print(f"  Cloud dependency: {info['cloud_dependency']}")
+        
+        return True
+    except Exception as e:
+        print(f"✗ Local brain failed: {e}")
+        return False
+
+
 def test_enhanced_recall():
     """Test 10: Enhanced recall with related"""
     print("\n" + "=" * 60)
@@ -280,6 +314,7 @@ def run_all():
         "temporal_queries": test_temporal_queries(),
         "memory_optimization": test_memory_optimization(),
         "enhanced_recall": test_enhanced_recall(),
+        "local_brain": test_local_brain(),
         "cleanup": test_no_old_databases()
     }
     

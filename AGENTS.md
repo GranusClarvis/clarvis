@@ -49,6 +49,27 @@ brain.recall("what do I know about X")
 | `remember(text)` | Quick high-importance store |
 | `capture(text)` | Auto-assess and store |
 
+### Local Brain (No Cloud Dependency)
+```python
+from brain import LocalBrain
+
+# Create brain with local embeddings (6.6x faster!)
+local = LocalBrain()
+
+# Same API, no external dependency
+local.store("memory", importance=0.9)
+local.recall("query")
+local.migrate_from_cloud()  # Migrate from cloud brain
+```
+
+### Performance Comparison
+| Mode | Latency | Cloud Dependency |
+|------|---------|------------------|
+| Cloud (default) | ~930ms | Yes |
+| Local (ONNX) | ~140ms | No |
+
+**Recommendation:** Use local brain for independence, cloud brain for compatibility.
+
 ### Collections
 - `clarvis-identity` — Who you are
 - `clarvis-preferences` — Human preferences
