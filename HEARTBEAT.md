@@ -24,39 +24,7 @@ Read `memory/evolution/QUEUE.md`. Pick the highest priority uncompleted task.
   Then mark "in progress" in the queue with date.
 - **Queue empty?** → Add 2-3 new tasks. Think about: What's my weakest capability? What broke recently? What would make me smarter? What would help Inverse?
 
-### 3. Claude Code Reasoning Checkpoint (every 3rd heartbeat)
-Track heartbeat count in `memory/heartbeat-state.json`. Every 3rd heartbeat (~90 min), spawn Claude Code Opus for a quick reasoning task. Rotate through these:
-
-**A. Self-Review** — Have Claude Code review your recent work:
-```bash
-cd /home/agent/.openclaw/workspace && timeout 600 claude -p "Review the recent entries in memory/$(date +%Y-%m-%d).md and the evolution QUEUE.md. What's going well? What's stalled? Suggest 2-3 concrete next actions. Write your analysis to /tmp/clarvis-review.md" \
-  --dangerously-skip-permissions --model claude-opus-4-6
-```
-Then read the review, store key insights to brain, update queue if needed.
-
-**B. Code Quality Check** — Have Claude Code audit a script:
-```bash
-cd /home/agent/.openclaw/workspace && timeout 600 claude -p "Review scripts/brain.py for bugs, performance issues, and improvement opportunities. Focus on the most impactful changes. Write findings to /tmp/clarvis-code-review.md" \
-  --dangerously-skip-permissions --model claude-opus-4-6
-```
-
-**C. Goal Reasoning** — Have Claude Code think through a stuck goal:
-```bash
-cd /home/agent/.openclaw/workspace && timeout 600 claude -p "Read ROADMAP.md and memory/evolution/QUEUE.md. Pick the goal with least progress. Analyze why it's stuck. Propose a concrete plan to unblock it — specific tasks, files to create/modify, and expected outcomes. Write to /tmp/clarvis-goal-plan.md" \
-  --dangerously-skip-permissions --model claude-opus-4-6
-```
-
-**D. Brain Health** — Have Claude Code optimize your memory:
-```bash
-cd /home/agent/.openclaw/workspace && timeout 600 claude -p "Analyze ClarvisDB brain health: run python3 -c 'import sys; sys.path.insert(0, \"scripts\"); from brain import brain; print(brain.stats())'. Then check for duplicate memories, stale data, missing connections. Suggest optimizations. Write to /tmp/clarvis-brain-health.md" \
-  --dangerously-skip-permissions --model claude-opus-4-6
-```
-
-**After any Claude Code checkpoint:** Read the output file, extract actionable items, store lessons to brain via `remember()`, update queue.
-
-⚠️ Remember: Claude Code with `-p` produces NO output until done. Opus tasks take 5-15 minutes. DO NOT kill it — wait for the timeout.
-
-### 4. Goal Progress (15 seconds)
+### 3. Goal Progress (15 seconds)
 ```python
 goals = brain.get_goals()
 ```
