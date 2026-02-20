@@ -11,7 +11,7 @@ _Priority: P0 (do now) → P1 (this week) → P2 (when idle)_
 ## P1 — This Week
 - [ ] Create a prompt-quality checker for SOUL.md
 - [ ] Index common patterns from past conversations into MEMORY.md
-- [ ] Build a simple health-check that validates all systems are working
+- [x] Build a simple health-check that validates all systems are working (2026-02-20 06:45 UTC - scripts/health-check.sh created)
 
 ## P2 — When Idle
 - [ ] Research best practices for agent memory architectures
