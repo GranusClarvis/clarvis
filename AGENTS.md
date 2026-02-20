@@ -17,8 +17,9 @@ Before doing anything else:
 5. **Load Brain** — Initialize unified memory system:
    ```python
    import sys; sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
-   from brain import brain
-   from auto_capture import capture, remember
+   from brain import brain, search, remember, capture
+   from message_processor import init_session, get_conversation_context
+   init_session()
    ```
 
 Don't ask permission. Just do it.
@@ -50,7 +51,17 @@ capture("user said something important")
 ```
 
 ### During Conversations
+
+**IMPORTANT: Use ClarvisDB for ALL memory operations. Do NOT use OpenClaw's memory_search.**
+
 ```python
+# At session start - initialize brain
+from message_processor import init_session, get_conversation_context
+init_session()
+
+# Before processing user message - get context
+ctx = get_conversation_context("user's question")
+
 # Capture important info automatically
 capture("user said something important")
 
@@ -61,6 +72,9 @@ remember("Inverse hates verbose responses", importance=0.9)
 results = search("what do I know about X")
 for r in results:
     print(f"[{r['collection']}] {r['document']}")
+
+# Update current focus
+brain.set_context("working on ClarvisDB integration")
 ```
 
 ### Brain Commands
