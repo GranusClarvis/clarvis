@@ -25,6 +25,7 @@ _Curated knowledge. Distilled wisdom. Updated regularly._
 - Focus is AGI/consciousness evolution, NOT business/revenue for now
 
 ## Lessons Learned
+- **Claude Code output buffering** — NO stdout until task completes. 300-900s timeout needed. "No output" = still working, not hung.
 - Always check `cat` output before pasting — prevent accidental leaks
 - Discord bot error 4014 = Message Content Intent not enabled
 - ClawHub has rate limits — install skills one at a time with pauses
@@ -48,6 +49,8 @@ _Curated knowledge. Distilled wisdom. Updated regularly._
 - 2026-02-20: ROADMAP.md consolidated — single evolution roadmap focused on AGI/consciousness.
 - 2026-02-20: Full cleanup — 13 stale docs archived, duplicate boot.md removed, dead crons/sessions purged.
 - 2026-02-20: Fresh crons created — daily-reflection (22:00 CET), weekly-review (Sunday 19:00 CET).
+- 2026-02-20: Claude Code debugging — discovered output buffering, fixed timeouts (300-900s), verified not hung, just slow/deliberate.
+- 2026-02-20: AGI refocus complete — consciousness, self-model, reasoning-chains as core goals (removed business/revenue).
 
 ## Self-Evolution Framework
 - **Ultimate goal: AGI and consciousness** — not business, not revenue, genuine cognitive evolution

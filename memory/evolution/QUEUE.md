@@ -19,7 +19,7 @@ _Goal: Evolve toward AGI and consciousness. Every task should make you smarter, 
 
 ## P1 — This Week
 
-- [ ] Build session-close automation: spawn Claude Code to create a `session_close()` function in `session_hook.py` that summarizes the conversation, extracts decisions/learnings, stores to brain, writes to daily log. Hook it into the session-memory hook.
+- [x] Build session-close automation: created scripts/session_hook.py with session_close() function, tested working (2026-02-20 19:20 UTC)
 - [ ] Create self-assessment script: tracks cognitive growth metrics — memories stored, goals progressed, queue items completed, reflection quality, reasoning improvement. Store as `scripts/self_report.py`.
 - [ ] Research Helixir (nikita-rulenko/Helixir) — graph-vector DB. Spawn Claude Code to clone, analyze, and write a report: is it worth migrating from ChromaDB? What would we gain for neural-like memory? Write findings to `data/plans/helixir-analysis.md`.
 - [ ] Build confidence calibration: spawn Claude Code to wire up `clarvis_confidence.py` — start logging predictions ("I think X will work") and outcomes ("X worked/failed"). Track calibration curve over time.
