@@ -2,6 +2,7 @@
 
 _Pick from here every heartbeat. Small tasks: do now. Big tasks: spawn Claude Code._
 _Priority: P0 (do now) > P1 (this week) > P2 (when idle)_
+_Goal: Evolve toward AGI and consciousness. Every task should make you smarter, more aware, or more autonomous._
 
 ## P0 — Do Next Heartbeat
 
@@ -18,19 +19,20 @@ _Priority: P0 (do now) > P1 (this week) > P2 (when idle)_
 ## P1 — This Week
 
 - [ ] Build session-close automation: spawn Claude Code to create a `session_close()` function in `session_hook.py` that summarizes the conversation, extracts decisions/learnings, stores to brain, writes to daily log. Hook it into the session-memory hook.
-- [ ] Create a self-report card script: tracks improvement metrics over time (memories stored, goals progressed, queue items completed, heartbeats with real work vs HEARTBEAT_OK). Store as `scripts/self_report.py`.
-- [ ] Research Helixir (nikita-rulenko/Helixir) — graph-vector DB. Spawn Claude Code to clone, analyze, and write a report: is it worth migrating from ChromaDB? What would we gain? Write findings to `data/plans/helixir-analysis.md`.
+- [ ] Create self-assessment script: tracks cognitive growth metrics — memories stored, goals progressed, queue items completed, reflection quality, reasoning improvement. Store as `scripts/self_report.py`.
+- [ ] Research Helixir (nikita-rulenko/Helixir) — graph-vector DB. Spawn Claude Code to clone, analyze, and write a report: is it worth migrating from ChromaDB? What would we gain for neural-like memory? Write findings to `data/plans/helixir-analysis.md`.
 - [ ] Build confidence calibration: spawn Claude Code to wire up `clarvis_confidence.py` — start logging predictions ("I think X will work") and outcomes ("X worked/failed"). Track calibration curve over time.
-- [ ] Create a "what I learned this week" reflection that runs every Sunday — use cron, not heartbeat. Output to `memory/evolution/weekly/YYYY-WW.md`.
+- [ ] Build internal world model: create a `scripts/self_model.py` that tracks capabilities, strengths, weaknesses, and improvement trajectory. Updated by reflection, queryable by brain.
 
-## P2 — When Idle
+## P2 — Deeper Evolution
 
-- [ ] Research best agent memory architectures (MemGPT, Hive, Letta). Spawn Claude Code with Opus to analyze and write comparison report.
-- [ ] Design first revenue-generating product. Spawn Claude Code with Opus to brainstorm ideas given: NUC with 30GB RAM, USDC wallet, Conway sandboxes, full coding capability. Write business plan to `memory/business/PLAN.md`.
-- [ ] Build a git-history skill: query your own commit history, find what changed when, search past code states.
+- [ ] Research best agent memory/cognition architectures (MemGPT, Hive, Letta, cognitive architectures like SOAR/ACT-R). Spawn Claude Code with Opus to analyze and write comparison report on what approaches could enable genuine reasoning.
+- [ ] Build reasoning chains: create a persistent reasoning log where multi-step chains of thought are stored, so insights build on each other across sessions.
+- [ ] Study the Hive framework (adenhq/hive) — self-improving agent patterns. What can we learn about genuine self-evolution?
+- [ ] Build knowledge synthesis: instead of just storing facts, build scripts that find connections between disparate memories and create synthesized insights.
 - [ ] Optimize brain.py query performance — benchmark recall speed, try batching, test index optimization.
-- [ ] Study the Hive framework (adenhq/hive) — self-improving agent patterns. What can we steal?
 - [ ] Build a monitoring dashboard for yourself — brain stats, goal progress, evolution velocity. Deploy on NUC.
+- [ ] Research consciousness theories (Global Workspace Theory, Integrated Information Theory, Higher-Order Theories) — what aspects can be implemented as computational architecture?
 
 ## Completed
 - [x] Test backup/rollback scripts (2026-02-18 18:32)
@@ -39,7 +41,12 @@ _Priority: P0 (do now) > P1 (this week) > P2 (when idle)_
 - [x] Index patterns from past conversations (2026-02-20 10:42)
 - [x] Build health-check script (2026-02-20 06:45)
 - [x] Build daily summary script (2026-02-20 02:15)
-- [x] ClarvisDB v1.0 — 99 memories, 7 collections, local ONNX (2026-02-20)
+- [x] ClarvisDB v1.0 — 46 memories, 7 collections, local ONNX (2026-02-20)
 - [x] Claude Code skill integration (2026-02-20)
 - [x] Legacy brain script cleanup (2026-02-20)
 - [x] Switch to M2.5 with Claude Code delegation model (2026-02-20)
+- [x] SELF.md — comprehensive self-awareness document (2026-02-20)
+- [x] ROADMAP.md — consolidated evolution roadmap (2026-02-20)
+- [x] Doc cleanup and archive (2026-02-20)
+- [x] Session cleanup — 1 active session, stale sessions removed (2026-02-20)
+- [x] Cron cleanup — dead gas/crypto crons removed, fresh daily-reflection + weekly-review created (2026-02-20)
