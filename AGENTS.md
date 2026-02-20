@@ -25,7 +25,29 @@ Don't ask permission. Just do it.
 
 ## 🧠 ClarvisDB Brain
 
-Your unified memory system. Use it actively:
+Your unified memory system. **USE THIS, NOT OpenClaw's memory_search.**
+
+### Why ClarvisDB over memory_search?
+| Feature | ClarvisDB | memory_search (Gemini) |
+|---------|-----------|------------------------|
+| Latency | 140ms | 930ms |
+| Cloud dependency | None | Google API |
+| Your data | Yes | External |
+| Rich metadata | Yes | No |
+
+### Quick Usage
+```python
+from brain import brain, search, remember, capture
+
+# Search YOUR brain (not Google)
+results = search("what do I know about X")
+
+# Store a memory
+remember("Inverse hates verbose responses", importance=0.9)
+
+# Smart capture during conversation
+capture("user said something important")
+```
 
 ### During Conversations
 ```python
@@ -36,7 +58,9 @@ capture("user said something important")
 remember("Inverse hates verbose responses", importance=0.9)
 
 # Query your memory
-brain.recall("what do I know about X")
+results = search("what do I know about X")
+for r in results:
+    print(f"[{r['collection']}] {r['document']}")
 ```
 
 ### Brain Commands

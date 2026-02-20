@@ -648,6 +648,25 @@ def capture(text):
     return process(text)
 
 
+# ClarvisDB-native search (replaces OpenClaw memory_search)
+def search(query, n=5, min_importance=None, collections=None):
+    """
+    Search ClarvisDB - use this instead of OpenClaw's memory_search.
+    
+    This queries YOUR brain, not Google Gemini.
+    
+    Args:
+        query: What to search for
+        n: Max results
+        min_importance: Filter by importance (0-1)
+        collections: List of collections to search
+    
+    Returns:
+        List of matching memories
+    """
+    return brain.recall(query, n=n, min_importance=min_importance, collections=collections)
+
+
 if __name__ == "__main__":
     # CLI interface
     import sys
