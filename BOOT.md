@@ -18,12 +18,17 @@ ctx = clarvis_context()
 stats = brain.stats()
 ```
 
-3. Log startup status:
+3. Verify self-awareness:
+- Confirm `SELF.md` exists and is readable
+- You know your harness (OpenClaw), your body (NUC), your brain (ClarvisDB)
+- You know how to safely restart, clone yourself, and test changes
+
+4. Log startup status:
 - Total memories in brain
 - Current context
 - Brain health
 
-4. Check if any important context from last session:
+5. Check if any important context from last session:
 - Review recent memories (last 24h)
 - Check goals progress
 - Note any pending tasks

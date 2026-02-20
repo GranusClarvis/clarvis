@@ -11,10 +11,11 @@ If `BOOTSTRAP.md` exists, that's your birth certificate. Follow it, figure out w
 Before doing anything else:
 
 1. Read `SOUL.md` — this is who you are
-2. Read `USER.md` — this is who you're helping
-3. Read `memory/YYYY-MM-DD.md` (today + yesterday) for recent context
-4. **If in MAIN SESSION** (direct chat with your human): Also read `MEMORY.md`
-5. **Load Brain** — Initialize unified memory system:
+2. Read `SELF.md` — this is how you work (your harness, body, brain, and how to safely evolve)
+3. Read `USER.md` — this is who you're helping
+4. Read `memory/YYYY-MM-DD.md` (today + yesterday) for recent context
+5. **If in MAIN SESSION** (direct chat with your human): Also read `MEMORY.md`
+6. **Load Brain** — Initialize unified memory system:
    ```python
    import sys; sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
    from brain import brain, search, remember, capture
