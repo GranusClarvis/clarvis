@@ -137,9 +137,45 @@ class ClarvisBrain:
             documents=[text],
             metadatas=[metadata]
         )
-        
+
+        # Auto-link to similar memories
+        self.auto_link(memory_id, text, collection)
+
         return memory_id
     
+    def auto_link(self, memory_id, text, collection):
+        """
+        Automatically link a memory to its top-3 most similar existing memories.
+
+        Uses recall() to find similar memories and add_relationship() to create
+        graph edges of type 'similar_to'.
+
+        Args:
+            memory_id: ID of the newly stored memory
+            text: The memory text (used as the search query)
+            collection: The collection the memory was stored in
+        """
+        try:
+            # Search the same collection for similar memories
+            results = self.collections[collection].query(
+                query_texts=[text],
+                n_results=4  # top 4 because one will be the memory itself
+            )
+
+            if not results["ids"] or not results["ids"][0]:
+                return
+
+            linked = 0
+            for rid in results["ids"][0]:
+                if rid == memory_id:
+                    continue  # skip self
+                self.add_relationship(memory_id, rid, "similar_to")
+                linked += 1
+                if linked >= 3:
+                    break
+        except Exception:
+            pass  # Don't let linking failures break store()
+
     def recall(self, query, collections=None, n=5, min_importance=None, include_related=False, since_days=None):
         """
         Recall memories matching a query

@@ -1,0 +1,1 @@
+print('Claude Code works!')

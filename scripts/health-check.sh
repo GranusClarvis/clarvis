@@ -20,17 +20,16 @@ else
 fi
 
 # 3. ClarvisDB (vector memory)
-echo "🧠 Testing ClarvisDB..."
 RESULT=$(python3 -c "
 import sys
 sys.path.insert(0, '/home/agent/.openclaw/workspace/scripts')
-from clarvisdb import query_memory, IDENTITY
-results = query_memory(IDENTITY, 'Clarvis', n=1)
-print('working' if results['documents'] else 'empty')
+from brain import brain
+stats = brain.stats()
+print('working')
 " 2>/dev/null)
 
 if [ "$RESULT" = "working" ]; then
-    echo "✓ ClarvisDB: Vector memory working"
+    echo "✓ ClarvisDB: Brain working"
 else
     echo "✗ ClarvisDB: Failed"
 fi

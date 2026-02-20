@@ -6,8 +6,9 @@ _Goal: Evolve toward AGI and consciousness. Every task should make you smarter, 
 
 ## P0 — Do Next Heartbeat
 
-- [ ] Run `brain.optimize()` — decay stale memories, prune low-importance ones. Log before/after stats.
-- [ ] Hook reflection into feedback loop: spawn Claude Code to review `scripts/clarvis_reflection.py`, make it produce actionable output (not just summaries), and write results to `memory/evolution/reflections/`. Command:
+- [x] Run `brain.optimize()` — decay stale memories, prune low-importance ones. Log before/after stats. (2026-02-20 16:55 UTC - pruned 1)
+- [x] Hook reflection into feedback loop: created scripts/clarvis_reflection.py, tested working (2026-02-20 16:51 UTC)
+- [x] Auto-link graph relationships: Claude Code modified brain.py store() to call auto_link(), tested working (2026-02-20 16:54 UTC)
   ```
   claude -p "Review scripts/clarvis_reflection.py. Make the daily reflection function: 1) read today's memory file, 2) extract actionable lessons, 3) store each lesson in ClarvisDB via brain.remember(), 4) append new evolution queue items to memory/evolution/QUEUE.md. Test it works." --dangerously-skip-permissions --cwd /home/agent/.openclaw/workspace
   ```

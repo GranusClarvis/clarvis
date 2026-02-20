@@ -1,96 +1,81 @@
 #!/usr/bin/env python3
 """
-Clarvis Reflection Protocol - Phase 3
-Daily/Weekly/Monthly reflection routines
+Clarvis Reflection Loop
+Reads today's memory, extracts lessons, stores in brain
 """
-
-import json
+import sys
 import os
-from datetime import datetime, timezone
+from datetime import datetime
 
-REFLECTIONS_DIR = "/home/agent/.openclaw/workspace/data/reflections"
-DAILY_DIR = f"{REFLECTIONS_DIR}/daily"
-os.makedirs(DAILY_DIR, exist_ok=True)
+sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
+from brain import brain
 
-def daily_reflection():
-    """Daily reflection - review today's sessions and consolidate learnings"""
+def get_today_memory():
+    """Read today's memory file"""
+    today = datetime.now().strftime("%Y-%m-%d")
+    path = f"/home/agent/.openclaw/workspace/memory/{today}.md"
     
-    # Load today's sessions
-    from clarvis_session import session_open
-    
-    sessions = session_open(n=10)
-    today_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    today_sessions = [s for s in sessions if today_date in s["id"]]
-    
-    # Consolidate learnings
-    all_learnings = []
-    all_unfinished = []
-    patterns = []
-    
-    for s in today_sessions:
-        all_learnings.extend(s.get("learnings", []))
-        all_unfinished.extend(s.get("unfinished", []))
-    
-    # Generate reflection
-    reflection = {
-        "type": "daily",
-        "date": datetime.now(timezone.utc).isoformat(),
-        "sessions_reviewed": len(today_sessions),
-        "learnings": list(set(all_learnings)),  # Dedupe
-        "unfinished_work": list(set(all_unfinished)),
-        "patterns": patterns,
-        "actions_needed": list(set(all_unfinished))
-    }
-    
-    # Save
-    filename = f"daily-{datetime.now(timezone.utc).strftime('%Y-%m-%d')}.json"
-    with open(f"{DAILY_DIR}/{filename}", "w") as f:
-        json.dump(reflection, f, indent=2)
-    
-    return reflection
-
-def get_latest_reflection(reflection_type="daily"):
-    """Get the latest reflection of a type"""
-    dir_map = {
-        "daily": DAILY_DIR,
-    }
-    
-    target_dir = dir_map.get(reflection_type, DAILY_DIR)
-    
-    if not os.path.exists(target_dir):
+    if not os.path.exists(path):
         return None
     
-    files = sorted([f for f in os.listdir(target_dir) if f.startswith(reflection_type)], reverse=True)
-    
-    if not files:
-        return None
-    
-    with open(f"{target_dir}/{files[0]}", "r") as f:
-        return json.load(f)
+    with open(path) as f:
+        return f.read()
 
-# CLI
+def extract_lessons(content):
+    """Extract key lessons from memory content"""
+    lessons = []
+    
+    # Simple extraction: look for lines with key patterns
+    lines = content.split('\n')
+    for line in lines:
+        # Look for action items, completions, insights
+        if any(x in line.lower() for x in ['completed', 'done', 'created', 'fixed', 'milestone', 'insight', 'learned']):
+            # Clean and add
+            cleaned = line.strip()
+            if len(cleaned) > 20 and not cleaned.startswith('#'):
+                lessons.append(cleaned[:200])  # Truncate long lines
+    
+    return lessons[:5]  # Max 5 lessons
+
+def store_lessons(lessons):
+    """Store lessons in brain"""
+    stored = 0
+    for lesson in lessons:
+        brain.store(
+            lesson,
+            collection='clarvis-learnings',
+            importance=0.8,
+            tags=['reflection', 'daily'],
+            source='reflection_loop'
+        )
+        stored += 1
+    return stored
+
+def main():
+    print("=== Clarvis Reflection Loop ===")
+    
+    # Get today's memory
+    content = get_today_memory()
+    if not content:
+        print("No memory file for today")
+        return
+    
+    # Extract lessons
+    lessons = extract_lessons(content)
+    if not lessons:
+        print("No lessons extracted")
+        return
+    
+    print(f"Found {len(lessons)} lessons")
+    
+    # Store in brain
+    stored = store_lessons(lessons)
+    print(f"Stored {stored} lessons in brain")
+    
+    # Show what was stored
+    print("\nLessons stored:")
+    for i, lesson in enumerate(lessons, 1):
+        print(f"  {i}. {lesson[:80]}...")
+
 if __name__ == "__main__":
-    import sys
-    
-    if len(sys.argv) > 1:
-        cmd = sys.argv[1]
-        
-        if cmd == "daily":
-            result = daily_reflection()
-            print(f"Daily reflection saved: {len(result['learnings'])} learnings, {len(result['unfinished_work'])} unfinished")
-            print(f"File: {DAILY_DIR}/daily-{datetime.now(timezone.utc).strftime('%Y-%m-%d')}.json")
-        
-        elif cmd == "latest" and len(sys.argv) > 2:
-            result = get_latest_reflection(sys.argv[2])
-            if result:
-                print(json.dumps(result, indent=2))
-            else:
-                print(f"No {sys.argv[2]} reflections found")
-        
-        else:
-            print("Usage:")
-            print("  reflection.py daily     # Run daily reflection")
-            print("  reflection.py latest daily  # Get latest daily reflection")
-    else:
-        print("Clarvis Reflection Protocol - Phase 3")
-        print(f"Daily: {DAILY_DIR}/")
+    main()
