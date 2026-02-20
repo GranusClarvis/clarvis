@@ -19,8 +19,21 @@ else
     echo "⚠ Git: Uncommitted changes"
 fi
 
-# 3. Semantic search - skip for now (chromadb dependency)
-echo "⊘ Memory: Vector DB check deferred"
+# 3. ClarvisDB (vector memory)
+echo "🧠 Testing ClarvisDB..."
+RESULT=$(python3 -c "
+import sys
+sys.path.insert(0, '/home/agent/.openclaw/workspace/scripts')
+from clarvisdb import query_memory, IDENTITY
+results = query_memory(IDENTITY, 'Clarvis', n=1)
+print('working' if results['documents'] else 'empty')
+" 2>/dev/null)
+
+if [ "$RESULT" = "working" ]; then
+    echo "✓ ClarvisDB: Vector memory working"
+else
+    echo "✗ ClarvisDB: Failed"
+fi
 
 # 4. Disk space
 DISK_USAGE=$(df -h / | awk 'NR==2 {print $5}' | tr -d '%')
