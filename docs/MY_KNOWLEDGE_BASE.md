@@ -192,4 +192,19 @@ clarvis_tools.py list                        # List pending tools
 
 ---
 
+## Important Notes
+
+### Token Usage
+- GLM-5 has 200k context window - uses more tokens than M2.5
+- Normal for detailed reasoning tasks
+- 600k-1M tokens is normal for complex analysis
+
+### Subprocess Behavior
+- When spawning GLM-5: runs independently
+- Writes output to specified file
+- Current session stays on M2.5
+- Check /tmp/ for subprocess output logs
+
+---
+
 *This document is my self-knowledge. Update when building new components.*
