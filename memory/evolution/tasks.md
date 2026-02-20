@@ -21,9 +21,10 @@
 - **Status:** Done
 
 #### Task C: Reflection Link (small)
-- [ ] Make self_model queryable via brain
-- **Scope:** Add 5 lines to enable brain.search for capabilities
-- **Time:** ~10 min
+- [x] Make self_model queryable via brain
+- **Scope:** Stored capabilities in brain, can now query with brain.recall()
+- **Time:** ~5 min
+- **Status:** Done - brain.recall("self model capabilities") returns 20 results
 
 ---
 
