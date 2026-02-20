@@ -47,32 +47,18 @@ Provide:
 Write the plan to: {output_file}
 Then confirm completion."""
 
-    # KEY FIX: Set config primary to GLM-5 BEFORE spawning!
-    # The subprocess uses config primary model
-    import json
-    config_path = os.path.expanduser("~/.openclaw/openclaw.json")
-    with open(config_path) as f:
-        config = json.load(f)
+    # KEY FIX: Use /model command IN the message!
+    # This triggers proper gateway processing
+    # Prepend /model to ensure GLM-5 is used
+    model_directive = "/model openrouter/z-ai/glm-5\n\n"
+    full_prompt = model_directive + prompt
     
-    # Save current config to restore later
-    saved_primary = config.get("agents", {}).get("defaults", {}).get("model", {}).get("primary", "")
-    
-    # Set GLM-5 as primary for the subprocess
-    config.setdefault("agents", {}).setdefault("defaults", {}).setdefault("model", {})["primary"] = "openrouter/z-ai/glm-5"
-    with open(config_path, "w") as f:
-        json.dump(config, f, indent=2)
-    
-    # Spawn GLM-5 subprocess (async)
+    # Spawn subprocess with /model directive
     subprocess.Popen(
-        ["openclaw", "agent", "--message", prompt, "--to", "+49123456789"],
+        ["openclaw", "agent", "--message", full_prompt, "--to", "+49123456789"],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL
     )
-    
-    # Restore config to M2.5 (so MY session stays on M2.5)
-    config.setdefault("agents", {}).setdefault("defaults", {}).setdefault("model", {})["primary"] = saved_primary
-    with open(config_path, "w") as f:
-        json.dump(config, f, indent=2)
     
     return output_file
 
