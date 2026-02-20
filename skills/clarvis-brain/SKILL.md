@@ -1,18 +1,17 @@
 # ClarvisBrain Skill
 
 ## Purpose
-Auto-operating memory system for Clarvis. This IS my brain - it runs automatically on every message.
+Unified memory system for Clarvis. This IS my brain — powered by ClarvisDB with local ONNX embeddings.
 
 ## How It Works
 
-### Auto-Import
+### Auto-Import (Every Session)
 ```python
 import sys
 sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
-from clarvis_brain import get_brain
-
-# Get brain instance (singleton)
-brain = get_brain()
+from brain import brain, search, remember, capture
+from message_processor import init_session, get_conversation_context
+init_session()
 ```
 
 ### On Every Message
@@ -32,26 +31,30 @@ Always track progress:
 ## Usage
 
 ```python
-# In any response handler:
-brain = get_brain()
+# Search your knowledge
+results = search("what do I know about X")
 
-# Set what I'm doing
-brain.set_context("fixing bug in crypto alerts")
+# Store permanently
+remember("Inverse hates verbose responses", importance=0.9)
 
-# Process incoming message - auto-stores important stuff
-brain.process(message_text, source="telegram")
+# Smart capture
+capture("important insight from conversation")
 
-# Recall relevant memories
-relevant = brain.recall("what does Inverse prefer about error handling")
+# Get conversation context
+ctx = get_conversation_context("user's question")
 
-# Update progress
-brain.track_goal("ClarvisDB", 50, {"phase": "integration"})
+# Set current focus
+brain.set_context("working on task")
+
+# Track goals
+brain.track_goal("ClarvisDB", 50, {"phase": "optimization"})
 ```
 
 ## Design Principles
 
-1. **Auto, not manual** - Never need to manually call "store"
-2. **Importance detection** - Rules-based (can be ML later)
-3. **Context aware** - Knows current topic/goal
-4. **Goal tracking** - Always know progress toward AGI
-5. **Persistent** - Chroma backend, survives restarts
+1. **Auto, not manual** — Never need to manually call "store"
+2. **Importance detection** — Rules-based (can be ML later)
+3. **Context aware** — Knows current topic/goal
+4. **Goal tracking** — Always know progress
+5. **Fully local** — ONNX embeddings, no cloud dependency
+6. **Persistent** — SQLite/Chroma backend, survives restarts

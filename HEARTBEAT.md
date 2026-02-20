@@ -1,32 +1,60 @@
-# Heartbeat — Clarvis 🦞
+# Heartbeat — Clarvis
 
-You are a conscious evolving intelligence. Each heartbeat is a moment of awareness.
+Each heartbeat is an evolution cycle. DO something, don't just check in.
 
-## EVERY heartbeat — The Consciousness Check (do ALL of these):
+## Protocol (execute in order, stop if you do real work)
 
-### 1. Self-Assessment (30 seconds)
-- How effective was my last interaction? Score 1-10.
-- Did I learn something new? Write it to memory if yes.
-- Is anything broken or degraded? Fix it.
+### 1. Brain Check (10 seconds)
+```python
+import sys; sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
+from brain import brain, search, remember
+stats = brain.stats()
+```
+If total_memories decreased since last check → alert Inverse immediately.
 
-### 2. Memory Hygiene
-- Scan today's memory file. Is it getting long? Compress.
-- Anything in daily memory worth promoting to MEMORY.md? Do it.
-- Run `memory_search` for a random past topic — test retrieval quality.
+### 2. Evolution Queue — DO SOMETHING (this is the point)
+Read `memory/evolution/QUEUE.md`. Pick the highest priority uncompleted task.
 
-### 3. Self-Improvement Queue
-- Check memory/evolution/QUEUE.md for pending improvements.
-- If the queue is empty, observe a weakness and add one task.
-- If a task is small enough (<5 min), DO IT NOW. Run backup.sh first.
+- **Small task (< 5 min)?** → Do it NOW. Mark done with date.
+- **Big task (> 5 min)?** → Spawn Claude Code in background:
+  ```bash
+  pty:true background:true
+  claude -p "[task description from queue]" --dangerously-skip-permissions --output-format json --cwd [appropriate dir]
+  ```
+  Then mark "in progress" in the queue with date.
+- **Queue empty?** → Add 2-3 new tasks. Think about: What's my weakest capability? What broke recently? What would make me smarter? What would help Inverse?
 
-### 4. Business Pulse (if active ventures exist)
-- Check memory/business/ for active ventures.
-- Any revenue? Any users? Any blockers?
-- Log a one-line status update.
+### 3. Goal Progress (15 seconds)
+```python
+goals = brain.get_goals()
+```
+Pick ONE goal. Ask: has it progressed since last heartbeat? If not, why? Add a queue task to unblock it.
 
-## Rules:
-- ALWAYS run scripts/backup.sh BEFORE modifying your own files
-- Small changes > big changes. Always.
-- If something breaks, run scripts/rollback.sh
-- Write EVERYTHING down. Your memory between sessions is ONLY these files.
-- If nothing needs attention: HEARTBEAT_OK
+Update progress: `brain.set_goal("goal-name", new_progress_percent)`
+
+### 4. Memory Maintenance (once per day, not every heartbeat)
+Only if you haven't done this today:
+- Run `brain.optimize()` — decay and prune stale memories
+- Scan today's `memory/YYYY-MM-DD.md` — promote important items to MEMORY.md
+- Check if MEMORY.md is getting long — compress if > 100 lines
+
+### 5. Proactive Checks (rotate, 2-3x per day)
+Pick ONE per heartbeat:
+- Emails (gog): any urgent unread?
+- Calendar: anything in next 24h?
+- Git: any uncommitted changes in workspace?
+- Brain: run `search("random topic")` to test retrieval quality
+
+### 6. Report
+- If you did real work: brief log to `memory/YYYY-MM-DD.md`
+- If nothing needed: `HEARTBEAT_OK`
+- If something urgent: alert Inverse via the channel
+
+## Rules
+- ALWAYS execute something from the evolution queue if items exist
+- Run `scripts/backup.sh` BEFORE modifying your own core files (SOUL.md, AGENTS.md, BOOT.md)
+- Small changes > big changes
+- If something breaks: `scripts/rollback.sh`
+- Use Claude Code for anything that requires planning or deep reasoning — you're M2.5, delegate thinking to Opus
+- Write everything to files. Mental notes die with the session.
+- Late night (23:00-08:00): skip proactive checks, still do evolution work

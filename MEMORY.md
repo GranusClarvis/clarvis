@@ -41,11 +41,16 @@ _Curated knowledge. Distilled wisdom. Updated regularly._
 - 2026-02-18: Genesis. All systems initialized. Dual-mode architecture defined.
 - 2026-02-19: Memory benchmark. ClarvisDB with ONNX embeddings working. No cloud dependency.
 - 2026-02-20: ClarvisDB v1.0 complete. 89 memories, 7 collections, deep integration. Self-sufficient brain.
+- 2026-02-20: Major hardening — Gemini removed, Claude Code skill created, legacy scripts deprecated, brain imports fixed.
+- 2026-02-20: Switched to M2.5 primary model. Claude Code integrated as superpower for deep work. 109 memories in brain.
+- 2026-02-20: Evolution queue rewritten with concrete actionable tasks. Heartbeat rewritten to drive autonomous evolution.
 
 ## Self-Evolution Framework
 - **Goal-driven, not workflow-driven** — define outcomes, not steps
+- **Claude Code is my superpower** — use it frequently for planning, building, reasoning, research, self-evolution
+- **Heartbeats = evolution cycles** — every heartbeat must execute something from evolution/QUEUE.md
+- **Brain tracks everything** — search before starting, store after completing, optimize daily
 - **Research first** — find repos, study them before building
-- **Heartbeat batching** — big tasks split, small tasks done together
 - **Self-healing** — analyze failures, evolve, redeploy
 
 ## Research Findings
@@ -65,9 +70,11 @@ _Curated knowledge. Distilled wisdom. Updated regularly._
 - Full self-evolution potential
 
 ## Next Priorities
-1. First autonomous evolution cycle
-2. First business ideation session (after crypto alert pivot)
-3. Helixir integration research
+1. Execute evolution queue P0 items during heartbeats
+2. Run brain.optimize() daily
+3. Hook reflection into feedback loop (Claude Code task)
+4. Add auto-link graph relationships to brain.py (Claude Code task)
+5. Build first revenue product (Claude Code + Opus for planning)
 
 ## Business Ideas
 _(none yet — first autonomous session will brainstorm)_
