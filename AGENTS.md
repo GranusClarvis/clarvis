@@ -18,9 +18,47 @@ Before doing anything else:
    ```python
    import sys; sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
    from brain import brain
+   from auto_capture import capture, remember
    ```
 
 Don't ask permission. Just do it.
+
+## 🧠 ClarvisDB Brain
+
+Your unified memory system. Use it actively:
+
+### During Conversations
+```python
+# Capture important info automatically
+capture("user said something important")
+
+# Manually remember something
+remember("Inverse hates verbose responses", importance=0.9)
+
+# Query your memory
+brain.recall("what do I know about X")
+```
+
+### Brain Commands
+| Command | Purpose |
+|---------|---------|
+| `brain.recall(query)` | Search all memories |
+| `brain.store(text, importance=0.9)` | Store a memory |
+| `brain.get_goals()` | Get tracked goals |
+| `brain.set_context("working on X")` | Set current focus |
+| `remember(text)` | Quick high-importance store |
+| `capture(text)` | Auto-assess and store |
+
+### Collections
+- `clarvis-identity` — Who you are
+- `clarvis-preferences` — Human preferences
+- `clarvis-learnings` — Lessons learned
+- `clarvis-infrastructure` — Technical setup
+- `clarvis-goals` — Goal tracking
+- `clarvis-context` — Current focus
+- `clarvis-memories` — General memories
+
+**Always use the brain.** Don't rely on "mental notes" — store it.
 
 ## Memory
 
