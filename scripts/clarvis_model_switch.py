@@ -56,7 +56,7 @@ def get_session_model() -> str:
 
 def set_session_model(model_id: str) -> dict:
     """
-    Switch model for current session by editing sessions.json directly.
+    Switch model for current session by editing sessions.json AND config.
     This is how /model command works internally!
     
     Args:
@@ -68,21 +68,27 @@ def set_session_model(model_id: str) -> dict:
     # CRITICAL: Ensure model is in allowlist first!
     ensure_model_allowed(model_id)
     
+    # Get old model from session
     with open(SESSION_FILE, "r") as f:
         sessions = json.load(f)
-    
     old_model = sessions.get(CURRENT_SESSION_KEY, {}).get("model", "unknown")
     
-    # Set new model
+    # 1. Set session model (for current session)
     if CURRENT_SESSION_KEY in sessions:
         sessions[CURRENT_SESSION_KEY]["model"] = model_id
+        sessions[CURRENT_SESSION_KEY]["modelProvider"] = "openrouter"
     
-    # Also update config for NEW sessions
-    switch_config_model(model_id)
-    
-    # Save
     with open(SESSION_FILE, "w") as f:
         json.dump(sessions, f, indent=2)
+    
+    # 2. ALSO set config primary (prevents reset on new messages!)
+    full_model = f"openrouter/{model_id}" if not model_id.startswith("openrouter/") else model_id
+    with open(CONFIG_PATH, "r") as f:
+        config = json.load(f)
+    config.setdefault("agents", {}).setdefault("defaults", {}).setdefault("model", {})["primary"] = full_model
+    
+    with open(CONFIG_PATH, "w") as f:
+        json.dump(config, f, indent=2)
     
     return {"old": old_model, "new": model_id}
 
