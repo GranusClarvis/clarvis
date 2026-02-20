@@ -92,19 +92,35 @@ def run_assessment():
                 print(f"  ↓ {name}: {delta}%")
     
     metrics["goals_history"].append(snapshot)
+    metrics["daily"].append(snapshot)
     metrics["goals_history"] = metrics["goals_history"][-90:]
     metrics["daily"] = metrics["daily"][-90:]
     metrics["last_run"] = today
     
+    # Detect stalled goals -> update self-model (from Claude Code reasoning)
+    if len(metrics["goals_history"]) >= 3:
+        for name, pct in goal_progress.items():
+            if all(h.get("goal_progress", {}).get(name) == pct for h in metrics["goals_history"][-3:]):
+                print(f"  ⚠ Stalled: {name} at {pct}% for 3+ days")
+                try:
+                    from self_model import update_model
+                    update_model(weakness=f"Stalled on {name} ({pct}%) for 3+ days")
+                except Exception as e:
+                    print(f"    (Could not update self_model: {e})")
+    
     # Calculate growth
+    growth = 0
     if len(metrics["daily"]) >= 2:
         prev = metrics["daily"][-2]
         growth = snapshot["memories"] - prev["memories"]
         print(f"Memory growth: +{growth} today")
-    
+
     # Store in brain
+    report = f"Self-report: {today} - {stats['total_memories']} total memories, {today_memories} added today, {stats['graph_edges']} graph edges"
+    if growth:
+        report += f", +{growth} growth"
     brain.store(
-        f"Self-report: {today} - {stats['total_memories']} total memories, {today_memories} added today, {stats['graph_edges']} graph edges",
+        report,
         collection="clarvis-memories",
         importance=0.6,
         tags=["self-report", "metrics", today],
