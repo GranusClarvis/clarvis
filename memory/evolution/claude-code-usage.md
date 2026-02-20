@@ -1,5 +1,15 @@
 # Claude Code Usage - Lessons Learned
 
+## What Claude Code Can Do
+Claude Code is multi-purpose:
+1. **REASONER** - deep analysis (needs 10+ min)
+2. **MENTOR** - guidance, teaches patterns
+3. **HELPER** - implementation help
+4. **DEBUGGER** - finds errors, fixes bugs
+5. **CODER** - can write full code
+
+Use the right timeout for the task.
+
 ## The Issue
 Claude Code was appearing to "hang" but it was just needing MORE TIME.
 
