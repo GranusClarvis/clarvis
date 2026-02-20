@@ -18,6 +18,7 @@ Before doing anything else:
    ```python
    import sys; sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
    from clarvis_brain import get_brain; brain = get_brain()
+   from clarvisdb_integrate import store_important, recall
    ```
 
 Don't ask permission. Just do it.
