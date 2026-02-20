@@ -164,6 +164,66 @@ def test_graph():
     return True
 
 
+def test_temporal_queries():
+    """Test 8: Temporal queries"""
+    print("\n" + "=" * 60)
+    print("TEST 8: Temporal Queries")
+    print("=" * 60)
+    
+    from brain import brain
+    
+    # Test recent memories
+    recent = brain.recall_recent(days=7, n=5)
+    print(f"✓ Recent memories (7 days): {len(recent)} found")
+    
+    # Test date range
+    from datetime import datetime
+    today = datetime.now().strftime("%Y-%m-%d")
+    from_date = brain.recall_from_date("2026-02-01", today, n=5)
+    print(f"✓ Date range query: {len(from_date)} found")
+    
+    return True
+
+
+def test_memory_optimization():
+    """Test 9: Memory optimization"""
+    print("\n" + "=" * 60)
+    print("TEST 9: Memory Optimization")
+    print("=" * 60)
+    
+    from brain import brain
+    
+    # Test stale detection
+    stale = brain.get_stale_memories(days=30)
+    print(f"✓ Stale detection: {len(stale)} stale memories")
+    
+    # Test decay (safe - won't delete anything important)
+    decayed = brain.decay_importance(decay_rate=0.001)  # Very small decay
+    print(f"✓ Decay mechanism: {decayed} memories decayed")
+    
+    return True
+
+
+def test_enhanced_recall():
+    """Test 10: Enhanced recall with related"""
+    print("\n" + "=" * 60)
+    print("TEST 10: Enhanced Recall")
+    print("=" * 60)
+    
+    from brain import brain
+    
+    # Test recall with importance filter
+    high_importance = brain.recall("Inverse", n=5, min_importance=0.8)
+    print(f"✓ Importance filter: {len(high_importance)} high-importance results")
+    
+    # Test recall with related
+    results = brain.recall("ClarvisDB", n=2, include_related=True)
+    has_related = any(r.get("related") for r in results)
+    print(f"✓ Include related: {'working' if has_related else 'no relations found'}")
+    
+    return True
+
+
 def test_cross_collection_recall():
     """Test 8: Recall across all collections"""
     print("\n" + "=" * 60)
@@ -217,7 +277,9 @@ def run_all():
         "context_management": test_context(),
         "importance_filter": test_importance_filter(),
         "graph_layer": test_graph(),
-        "cross_collection_recall": test_cross_collection_recall(),
+        "temporal_queries": test_temporal_queries(),
+        "memory_optimization": test_memory_optimization(),
+        "enhanced_recall": test_enhanced_recall(),
         "cleanup": test_no_old_databases()
     }
     

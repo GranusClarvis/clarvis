@@ -110,7 +110,7 @@ class ClarvisBrain:
         
         return memory_id
     
-    def recall(self, query, collections=None, n=5, min_importance=None):
+    def recall(self, query, collections=None, n=5, min_importance=None, include_related=False, since_days=None):
         """
         Recall memories matching a query
         
@@ -119,6 +119,8 @@ class ClarvisBrain:
             collections: List of collections to search (None = all)
             n: Max results per collection
             min_importance: Minimum importance filter (None = no filter)
+            include_related: Include graph-related memories
+            since_days: Only memories from last N days (None = all time)
         
         Returns:
             List of matching documents
@@ -127,6 +129,10 @@ class ClarvisBrain:
             collections = ALL_COLLECTIONS
         
         all_results = []
+        cutoff_date = None
+        if since_days:
+            from datetime import timedelta
+            cutoff_date = (datetime.now(timezone.utc) - timedelta(days=since_days)).isoformat()
         
         for col_name in collections:
             if col_name not in self.collections:
@@ -144,12 +150,25 @@ class ClarvisBrain:
                         if meta.get("importance", 0) < min_importance:
                             continue
                     
-                    all_results.append({
+                    # Filter by date if specified
+                    if cutoff_date and meta.get("created_at"):
+                        if meta["created_at"] < cutoff_date:
+                            continue
+                    
+                    result_item = {
                         "document": doc,
                         "metadata": meta,
                         "collection": col_name,
-                        "id": results["ids"][0][i]
-                    })
+                        "id": results["ids"][0][i],
+                        "related": []
+                    }
+                    
+                    # Include related memories via graph
+                    if include_related:
+                        related = self.get_related(results["ids"][0][i], depth=1)
+                        result_item["related"] = related
+                    
+                    all_results.append(result_item)
         
         # Sort by importance (highest first)
         all_results.sort(key=lambda x: x["metadata"].get("importance", 0), reverse=True)
@@ -262,6 +281,196 @@ class ClarvisBrain:
         traverse(memory_id, 1)
         return related
     
+    # === TEMPORAL QUERIES ===
+    
+    def recall_recent(self, days=7, collections=None, n=20):
+        """Get memories from the last N days"""
+        return self.recall("", collections=collections, n=n, since_days=days)
+    
+    def recall_from_date(self, start_date, end_date=None, collections=None, n=20):
+        """
+        Get memories from a date range
+        
+        Args:
+            start_date: ISO date string (e.g., "2026-02-01")
+            end_date: ISO date string (optional, defaults to now)
+            collections: Which collections to search
+            n: Max results
+        """
+        from datetime import datetime
+        
+        if collections is None:
+            collections = ALL_COLLECTIONS
+        
+        all_results = []
+        
+        for col_name in collections:
+            if col_name not in self.collections:
+                continue
+            
+            col = self.collections[col_name]
+            results = col.get()
+            
+            for i, doc in enumerate(results.get("documents", [])):
+                meta = results["metadatas"][i] if results.get("metadatas") else {}
+                created = meta.get("created_at", "")
+                
+                if created:
+                    # Parse date and check range
+                    try:
+                        mem_date = created[:10]  # Get YYYY-MM-DD
+                        if mem_date >= start_date:
+                            if end_date is None or mem_date <= end_date:
+                                all_results.append({
+                                    "document": doc,
+                                    "metadata": meta,
+                                    "collection": col_name,
+                                    "id": results["ids"][i]
+                                })
+                    except:
+                        pass
+        
+        # Sort by date (newest first)
+        all_results.sort(key=lambda x: x["metadata"].get("created_at", ""), reverse=True)
+        
+        return all_results[:n]
+    
+    # === MEMORY DECAY & PRUNING ===
+    
+    def decay_importance(self, decay_rate=0.01, min_importance=0.1):
+        """
+        Decay importance of all memories over time.
+        Memories accessed less recently decay faster.
+        
+        Args:
+            decay_rate: How much to decay per day unused (default 1%)
+            min_importance: Floor for importance (don't decay below this)
+        
+        Returns:
+            Number of memories decayed
+        """
+        from datetime import timedelta
+        
+        decayed = 0
+        now = datetime.now(timezone.utc)
+        
+        for col_name, col in self.collections.items():
+            results = col.get()
+            
+            for i, mem_id in enumerate(results.get("ids", [])):
+                meta = results["metadatas"][i] if results.get("metadatas") else {}
+                
+                last_accessed = meta.get("last_accessed")
+                if not last_accessed:
+                    continue
+                
+                try:
+                    last_dt = datetime.fromisoformat(last_accessed.replace('Z', '+00:00'))
+                    days_unused = (now - last_dt).days
+                    
+                    if days_unused > 0:
+                        current_importance = meta.get("importance", 0.5)
+                        new_importance = current_importance * ((1 - decay_rate) ** days_unused)
+                        new_importance = max(min_importance, new_importance)
+                        
+                        if new_importance < current_importance:
+                            meta["importance"] = new_importance
+                            col.upsert(
+                                ids=[mem_id],
+                                documents=[results["documents"][i]],
+                                metadatas=[meta]
+                            )
+                            decayed += 1
+                except:
+                    pass
+        
+        return decayed
+    
+    def prune_low_importance(self, threshold=0.15, preserve_tags=None):
+        """
+        Remove memories below importance threshold.
+        
+        Args:
+            threshold: Importance below which to delete (default 0.15)
+            preserve_tags: Tags that prevent deletion (e.g., ["genesis", "critical"])
+        
+        Returns:
+            Number of memories deleted
+        """
+        if preserve_tags is None:
+            preserve_tags = ["genesis", "critical", "identity"]
+        
+        deleted = 0
+        
+        for col_name, col in self.collections.items():
+            results = col.get()
+            
+            to_delete = []
+            
+            for i, mem_id in enumerate(results.get("ids", [])):
+                meta = results["metadatas"][i] if results.get("metadatas") else {}
+                importance = meta.get("importance", 0.5)
+                
+                if importance < threshold:
+                    # Check if has preserve tag
+                    tags_json = meta.get("tags", "[]")
+                    try:
+                        tags = json.loads(tags_json) if isinstance(tags_json, str) else tags_json
+                    except:
+                        tags = []
+                    
+                    if not any(t in tags for t in preserve_tags):
+                        to_delete.append(mem_id)
+            
+            if to_delete:
+                col.delete(ids=to_delete)
+                deleted += len(to_delete)
+        
+        return deleted
+    
+    def get_stale_memories(self, days=30):
+        """Get memories not accessed in N days"""
+        from datetime import timedelta
+        
+        stale = []
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        
+        for col_name, col in self.collections.items():
+            results = col.get()
+            
+            for i, mem_id in enumerate(results.get("ids", [])):
+                meta = results["metadatas"][i] if results.get("metadatas") else {}
+                last_accessed = meta.get("last_accessed", "")
+                
+                if last_accessed and last_accessed < cutoff:
+                    stale.append({
+                        "id": mem_id,
+                        "document": results["documents"][i][:50],
+                        "collection": col_name,
+                        "last_accessed": last_accessed[:10]
+                    })
+        
+        return stale
+    
+    def optimize(self):
+        """
+        Run brain optimization: decay, prune, clean.
+        Call periodically (e.g., once per day).
+        
+        Returns:
+            Dict with optimization stats
+        """
+        decayed = self.decay_importance()
+        pruned = self.prune_low_importance()
+        stale = self.get_stale_memories(days=60)
+        
+        return {
+            "decayed": decayed,
+            "pruned": pruned,
+            "stale_count": len(stale),
+            "stats": self.stats()
+        }
+    
     # === STATISTICS ===
     
     def stats(self):
@@ -331,7 +540,15 @@ if __name__ == "__main__":
     
     if len(sys.argv) < 2:
         print("Usage: brain.py <command> [args]")
-        print("Commands: stats, health, recall <query>, store <text>")
+        print("Commands:")
+        print("  stats              - Show brain statistics")
+        print("  health             - Run health check")
+        print("  recall <query>     - Search memories")
+        print("  recent [days]      - Recent memories (default 7 days)")
+        print("  store <text>       - Store a memory")
+        print("  optimize           - Run decay and prune")
+        print("  stale              - Show stale memories")
+        print("  context            - Show current context")
         sys.exit(1)
     
     cmd = sys.argv[1]
@@ -341,12 +558,35 @@ if __name__ == "__main__":
     elif cmd == "health":
         print(json.dumps(b.health_check(), indent=2))
     elif cmd == "recall" and len(sys.argv) > 2:
-        results = b.recall(" ".join(sys.argv[2:]))
+        query = " ".join(sys.argv[2:])
+        results = b.recall(query, include_related=True)
         for r in results:
             print(f"[{r['collection']}] {r['document'][:80]}...")
+            if r.get('related'):
+                print(f"  └─ Related: {len(r['related'])} memories")
+    elif cmd == "recent":
+        days = int(sys.argv[2]) if len(sys.argv) > 2 else 7
+        results = b.recall_recent(days=days)
+        print(f"Memories from last {days} days:")
+        for r in results:
+            print(f"  [{r['collection']}] {r['document'][:60]}...")
     elif cmd == "store" and len(sys.argv) > 2:
         text = " ".join(sys.argv[2:])
         mem_id = b.store(text)
         print(f"Stored: {mem_id}")
+    elif cmd == "optimize":
+        result = b.optimize()
+        print(f"Optimization complete:")
+        print(f"  Decayed: {result['decayed']}")
+        print(f"  Pruned: {result['pruned']}")
+        print(f"  Stale: {result['stale_count']}")
+        print(f"  Total memories: {result['stats']['total_memories']}")
+    elif cmd == "stale":
+        stale = b.get_stale_memories(days=30)
+        print(f"Memories not accessed in 30 days: {len(stale)}")
+        for s in stale[:10]:
+            print(f"  {s['last_accessed']} [{s['collection']}] {s['document']}...")
+    elif cmd == "context":
+        print(f"Current context: {b.get_context()}")
     else:
         print(f"Unknown command: {cmd}")
