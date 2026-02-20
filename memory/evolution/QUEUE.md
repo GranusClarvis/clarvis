@@ -9,7 +9,6 @@ _Priority: P0 (do now) → P1 (this week) → P2 (when idle)_
 - [x] Write a self-benchmark: test memory retrieval quality (2026-02-19 02:00 UTC - benchmark created, semantic search working)
 
 ## P1 — This Week
-- [ ] Build a "daily summary" script that compresses memory/*.md
 - [ ] Create a prompt-quality checker for SOUL.md
 - [ ] Index common patterns from past conversations into MEMORY.md
 - [ ] Build a simple health-check that validates all systems are working
@@ -22,3 +21,4 @@ _Priority: P0 (do now) → P1 (this week) → P2 (when idle)_
 
 ## Completed
 _(move items here with date and result)_
+- [x] Build a "daily summary" script that compresses memory/*.md (2026-02-20 02:15 UTC - created scripts/daily-summary.sh)
