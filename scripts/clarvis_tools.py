@@ -47,18 +47,35 @@ Provide:
 Write the plan to: {output_file}
 Then confirm completion."""
 
-    # KEY FIX: Use /model command IN the message!
-    # This triggers proper gateway processing
-    # Prepend /model to ensure GLM-5 is used
-    model_directive = "/model openrouter/z-ai/glm-5\n\n"
-    full_prompt = model_directive + prompt
+    # KEY FIX: Set config to GLM-5, spawn subprocess, THEN restore
+    import json
+    config_path = os.path.expanduser("~/.openclaw/openclaw.json")
     
-    # Spawn subprocess with /model directive
+    # Read current config
+    with open(config_path) as f:
+        config = json.load(f)
+    saved_primary = config.get("agents", {}).get("defaults", {}).get("model", {}).get("primary", "")
+    
+    # Set GLM-5
+    config.setdefault("agents", {}).setdefault("defaults", {}).setdefault("model", {})["primary"] = "openrouter/z-ai/glm-5"
+    with open(config_path, "w") as f:
+        json.dump(config, f, indent=2)
+    
+    # Spawn subprocess NOW (will use GLM-5 because config is set)
     subprocess.Popen(
-        ["openclaw", "agent", "--message", full_prompt, "--to", "+49123456789"],
+        ["openclaw", "agent", "--message", prompt, "--to", "+49123456789"],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL
     )
+    
+    # Wait for subprocess to start and use GLM-5
+    import time
+    time.sleep(3)
+    
+    # THEN restore config to M2.5
+    config.setdefault("agents", {}).setdefault("defaults", {}).setdefault("model", {})["primary"] = saved_primary
+    with open(config_path, "w") as f:
+        json.dump(config, f, indent=2)
     
     return output_file
 
