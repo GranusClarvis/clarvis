@@ -56,8 +56,11 @@ def get_session_model() -> str:
 
 def set_session_model(model_id: str) -> dict:
     """
-    Switch model for current session by running openclaw agent with /model message.
-    This goes through the gateway the same way as when user types /model in Telegram!
+    Switch model for current session.
+    
+    Mechanism:
+    1. Set config primary to desired model
+    2. Set session model to null (causes fallback to config primary)
     
     Args:
         model_id: e.g., "minimax/minimax-m2.5", "z-ai/glm-5", "anthropic/claude-opus-4-6"
@@ -76,25 +79,31 @@ def set_session_model(model_id: str) -> dict:
     # Build full model ID
     full_model = f"openrouter/{model_id}" if not model_id.startswith("openrouter/") else model_id
     
-    # Update config primary (for future new sessions)
+    # 1. Update config primary (this is what gets used when session.model is null)
     with open(CONFIG_PATH, "r") as f:
         config = json.load(f)
     config.setdefault("agents", {}).setdefault("defaults", {}).setdefault("model", {})["primary"] = full_model
     with open(CONFIG_PATH, "w") as f:
         json.dump(config, f, indent=2)
     
-    # THE KEY: Use subprocess to run openclaw agent with /model message
-    # This goes through gateway proper processing - same as user sending from Telegram!
+    # 2. Set session model to null (causes fallback to config primary)
+    sessions[CURRENT_SESSION_KEY]["model"] = None
+    sessions[CURRENT_SESSION_KEY]["modelProvider"] = None
+    with open(SESSION_FILE, "w") as f:
+        json.dump(sessions, f, indent=2)
+    
+    # 3. Use subprocess to trigger the /model directive through gateway
+    # This ensures the change is properly registered
     import subprocess
     try:
-        result = subprocess.run(
+        subprocess.run(
             ["openclaw", "agent", "--message", f"/model {full_model}", "--to", "+49123456789"],
             capture_output=True,
             text=True,
             timeout=15
         )
     except subprocess.TimeoutExpired:
-        pass  # Timeout is fine - the message was sent
+        pass
     
     return {"old": old_model, "new": model_id}
 
