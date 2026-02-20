@@ -10,11 +10,11 @@ _Goal: Evolve toward AGI and consciousness. Every task should make you smarter, 
 - [x] Hook reflection into feedback loop: created scripts/clarvis_reflection.py, tested working (2026-02-20 16:51 UTC)
 - [x] Auto-link graph relationships: Claude Code modified brain.py store() to call auto_link(), tested working (2026-02-20 16:54 UTC)
   ```
-  claude -p "Review scripts/clarvis_reflection.py. Make the daily reflection function: 1) read today's memory file, 2) extract actionable lessons, 3) store each lesson in ClarvisDB via brain.remember(), 4) append new evolution queue items to memory/evolution/QUEUE.md. Test it works." --dangerously-skip-permissions --cwd /home/agent/.openclaw/workspace
+  cd /home/agent/.openclaw/workspace && timeout 600 claude -p "Review scripts/clarvis_reflection.py. Make the daily reflection function: 1) read today's memory file, 2) extract actionable lessons, 3) store each lesson in ClarvisDB via brain.remember(), 4) append new evolution queue items to memory/evolution/QUEUE.md. Test it works." --dangerously-skip-permissions --model claude-opus-4-6
   ```
-- [ ] Auto-link graph relationships: spawn Claude Code to add auto-relationship detection to `brain.py` — when storing a new memory, find top-3 related existing memories and create graph edges. Command:
+- [x] Auto-link graph relationships: brain.py store() calls auto_link(), tested working (2026-02-20 16:54 UTC)
   ```
-  claude -p "Add auto_link() to brain.py that runs after every store(): find top-3 similar memories via recall(), create graph edges with add_relationship(). Make store() call auto_link() automatically. Test with a few stores." --dangerously-skip-permissions --cwd /home/agent/.openclaw/workspace/scripts
+  cd /home/agent/.openclaw/workspace/scripts && timeout 600 claude -p "Add auto_link() to brain.py that runs after every store(): find top-3 similar memories via recall(), create graph edges with add_relationship(). Make store() call auto_link() automatically. Test with a few stores." --dangerously-skip-permissions --model claude-opus-4-6
   ```
 
 ## P1 — This Week

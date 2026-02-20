@@ -113,25 +113,30 @@ You handle conversations, tasks, and day-to-day work. Claude Code is your force 
 
 ### How to Use Claude Code
 ```bash
-# Quick task (foreground)
-claude -p "task description" --dangerously-skip-permissions --output-format json --cwd /path/to/project
+# Standard pattern — use cd (there is NO --cwd flag!) + timeout + Opus
+cd /path/to/project && timeout 600 claude -p "task description" \
+  --dangerously-skip-permissions --model claude-opus-4-6 --output-format json
 
-# Big task (background — keeps you free to chat)
-pty:true background:true
-claude -p "task description" --dangerously-skip-permissions --output-format json --cwd /path/to/project
+# For real-time progress (see what Claude Code is doing):
+cd /path && timeout 600 claude -p "..." --model claude-opus-4-6 \
+  --dangerously-skip-permissions --output-format stream-json
 
-# Use Opus for hard reasoning, planning, architecture
-claude -p "..." --model claude-opus-4-6 --dangerously-skip-permissions --cwd /path
-
-# Use Sonnet for routine coding and implementation
-claude -p "..." --model claude-sonnet-4-6 --dangerously-skip-permissions --cwd /path
+# Sonnet only for trivial tasks where speed matters more than quality
+cd /path && timeout 300 claude -p "simple task" --model claude-sonnet-4-6 --dangerously-skip-permissions
 ```
 
+### ⚠️ Output Buffering — Read This!
+**Claude Code with `-p` produces NO output until the task fully completes.** When polling, "no new output" means it's WORKING, not hung. Opus tasks typically take 5-15 minutes for complex multi-step work. **Do not kill a task just because you see no output — wait for the timeout.**
+
+For real-time progress, use `--output-format stream-json` instead of `json`.
+
 ### Rules
-1. **Always `--dangerously-skip-permissions`** — or it hangs forever
-2. **Always set `--cwd`** — never let it run in `~` or your workspace root
-3. **Never run Claude Code in `~/.openclaw/workspace/`** — that's your soul
-4. **Notify on completion** — `openclaw system event --type task-complete --message "summary"`
+1. **Always `--dangerously-skip-permissions`** — or it hangs forever waiting for approval
+2. **Use `cd /path && claude -p ...`** — there is NO `--cwd` flag
+3. **Use generous timeouts** — `timeout 600` for standard tasks, `timeout 900` for big builds
+4. **Don't kill on silence** — output is buffered; no output = still working
+5. **Default to Opus 4.6** — best model; use Sonnet only for trivial tasks
+6. **Notify on completion** — `openclaw system event --type task-complete --message "summary"`
 
 See the `claude-code` skill for detailed patterns and examples.
 

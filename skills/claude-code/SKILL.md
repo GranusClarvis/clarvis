@@ -8,6 +8,22 @@ metadata: {"clawdbot":{"emoji":"🧠","requires":{"bins":["claude"]}}}
 
 Claude Code is not just a coding tool. It's an autonomous reasoning engine with full file system access, test execution, and deep multi-step problem solving. Use it whenever a task benefits from **isolated focus, deep analysis, or autonomous iteration**.
 
+## ⚠️ CRITICAL — How Claude Code Output Works
+
+**Claude Code with `-p` (non-interactive mode) buffers ALL output until the task fully completes.** There is NO progressive output. This means:
+
+- During execution, you will see **"no new output"** when polling — this is NORMAL
+- Claude Code is working (reading files, writing code, running tests) but produces no stdout until it's done
+- **DO NOT kill a running Claude Code process just because you see no output** — it's almost certainly working
+- A complex multi-step task with Opus takes **5-15 minutes**. With Sonnet, **2-5 minutes**. This is expected behavior.
+
+**If you want real-time progress**, use `--output-format stream-json` — this outputs newline-delimited JSON events as Claude Code works:
+```bash
+cd /path/to/project && claude -p "task" \
+  --dangerously-skip-permissions \
+  --output-format stream-json
+```
+
 ## When to Delegate
 
 **Always delegate when:**
@@ -28,38 +44,48 @@ Claude Code is not just a coding tool. It's an autonomous reasoning engine with 
 ## Quick Start — One-Shot Task
 
 ```bash
-claude -p "your task description here" \
+cd /path/to/project && claude -p "your task description here" \
   --dangerously-skip-permissions \
   --output-format json
 ```
 
 Always use `--dangerously-skip-permissions` so Claude Code never blocks waiting for approval.
 
-## Background Mode — Long Tasks
+**Important:** There is NO `--cwd` flag. Set the working directory with `cd` before running claude.
 
-For tasks that take a while, run in background so you can keep chatting:
+## Timeouts — Don't Kill Prematurely
 
+Claude Code needs time for multi-step tasks. Each API round trip takes 10-30 seconds, and complex tasks need 10-20+ round trips. Use generous timeouts:
+
+| Task type | Recommended timeout |
+|-----------|-------------------|
+| Simple (ls, echo, one-liner) | 120s |
+| Read & review a file | 300s |
+| Create/edit a script | 600s |
+| Complex multi-file task | 600s |
+| Architecture/planning | 900s |
+| Build a project | 900s |
+
+Use the shell `timeout` command:
 ```bash
-pty:true background:true
-claude -p "build a FastAPI service with auth, tests, and Docker setup" \
+cd /path/to/project && timeout 600 claude -p "complex task" \
   --dangerously-skip-permissions \
   --output-format json
 ```
 
-When it finishes, notify your human:
-```bash
-openclaw system event --type "task-complete" --message "Claude Code finished: [task summary]"
-```
+**Rule: When in doubt, use a longer timeout. A task finishing early costs nothing. Killing a task that was about to complete wastes all the work.**
 
 ## Model Selection
 
 ```bash
-# Use Opus for complex architecture, planning, hard debugging
-claude -p "..." --model claude-opus-4-6 --dangerously-skip-permissions
+# Default: Opus 4.6 — best reasoning, most capable
+cd /path && claude -p "..." --model claude-opus-4-6 --dangerously-skip-permissions
 
-# Use Sonnet for routine coding tasks (faster, cheaper)
-claude -p "..." --model claude-sonnet-4-6 --dangerously-skip-permissions
+# Sonnet: for simple/routine tasks where speed matters more than depth
+cd /path && claude -p "..." --model claude-sonnet-4-6 --dangerously-skip-permissions
 ```
+
+**Default to Opus 4.6** — it produces the best results for coding, architecture, debugging, and reasoning. Use Sonnet only for simple/routine tasks where speed is the priority. Opus takes longer per round trip (15-30s vs 5-10s) so use generous timeouts (600s+).
 
 ## Cost Awareness
 
@@ -68,67 +94,71 @@ Use `--max-turns` to scope effort proportionally to task complexity. No need to 
 - Medium task (feature, refactor): `--max-turns 30`
 - Large build or deep debug: `--max-turns 50` or more
 
-Optionally use `--max-budget-usd` if you want a hard cost ceiling for a specific task, but don't default to low caps — let Claude Code work until the job is done.
-
 ## Scoped Tasks — Tool Restriction
 
 ```bash
 # Read-only analysis / reasoning
-claude -p "review this code for bugs and propose fixes" \
+cd /path && claude -p "review this code for bugs and propose fixes" \
   --dangerously-skip-permissions \
   --allowedTools "Read,Grep,Glob"
 
 # Code changes only, no bash
-claude -p "refactor this module" \
+cd /path && claude -p "refactor this module" \
   --dangerously-skip-permissions \
   --allowedTools "Read,Write,Edit,Grep,Glob"
 ```
 
 ## Rules
 
-1. **Always use `--dangerously-skip-permissions`** — headless; without this it hangs
-2. **Always set a workdir** — `--cwd /path/to/project` or `cd` first
-3. **Never run in `~/.openclaw/workspace/`** — that's your soul; coding goes in project dirs
-4. **Use `--output-format json`** for structured results you can parse
-5. **Notify on completion** — `openclaw system event` so your human knows when background tasks finish
+1. **Always use `--dangerously-skip-permissions`** — headless; without this it hangs waiting for approval
+2. **Use `cd /path && claude -p ...`** — there is NO `--cwd` flag; set directory with `cd`
+3. **Use generous timeouts** — `timeout 300` minimum for anything beyond trivial tasks
+4. **Don't kill on "no output"** — Claude Code buffers output; silence means it's working
+5. **Default to Opus 4.6** — best model for coding and reasoning; use Sonnet only for simple/routine tasks
+6. **Use `--output-format json`** for structured results, or `stream-json` for real-time progress
+7. **Notify on completion** — `openclaw system event` so your human knows when background tasks finish
 
 ## Common Patterns
 
 ### Build a New Project
 ```bash
 mkdir -p /home/agent/projects/new-project && \
-claude -p "Initialize a Python project with pyproject.toml, src layout, pytest, and a basic CLI" \
+cd /home/agent/projects/new-project && \
+timeout 600 claude -p "Initialize a Python project with pyproject.toml, src layout, pytest, and a basic CLI" \
   --dangerously-skip-permissions \
-  --cwd /home/agent/projects/new-project
+  --model claude-opus-4-6
 ```
 
 ### Get a Second Opinion on Architecture
 ```bash
-claude -p "Review the architecture of this project. Identify design flaws, suggest improvements, and flag any scalability concerns. Write your analysis to REVIEW.md." \
+cd /home/agent/projects/myproject && \
+timeout 600 claude -p "Review the architecture of this project. Identify design flaws, suggest improvements, and flag any scalability concerns. Write your analysis to REVIEW.md." \
   --dangerously-skip-permissions \
-  --cwd /home/agent/projects/myproject \
   --allowedTools "Read,Write,Edit,Grep,Glob" \
-  --model claude-opus-4-6
-```
-
-### Plan a Complex Feature
-```bash
-claude -p "I need to add user authentication with OAuth2. Explore the codebase, understand the current structure, and write a detailed implementation plan to PLAN.md with specific files to create/modify." \
-  --dangerously-skip-permissions \
-  --cwd /home/agent/projects/myproject \
   --model claude-opus-4-6
 ```
 
 ### Debug a Hard Problem
 ```bash
-claude -p "The test test_auth_flow is failing with 'token expired'. Investigate root cause across all relevant files, fix it, and verify the fix passes." \
+cd /home/agent/projects/myproject && \
+timeout 600 claude -p "The test test_auth_flow is failing with 'token expired'. Investigate root cause across all relevant files, fix it, and verify the fix passes." \
   --dangerously-skip-permissions \
-  --cwd /home/agent/projects/myproject
+  --model claude-opus-4-6
 ```
 
 ### Self-Evolution — Brain Maintenance
 ```bash
-claude -p "Review brain.py, optimize query performance, improve error handling, and run benchmarks before/after" \
+cd /home/agent/.openclaw/workspace/scripts && \
+timeout 600 claude -p "Review brain.py, optimize query performance, improve error handling, and run benchmarks before/after" \
   --dangerously-skip-permissions \
-  --cwd /home/agent/.openclaw/workspace/scripts
+  --model claude-opus-4-6
 ```
+
+### Run a Python Script That Imports Brain
+```bash
+cd /home/agent/.openclaw/workspace && \
+timeout 300 claude -p "Run: python3 scripts/clarvis_reflection.py and report the output" \
+  --dangerously-skip-permissions \
+  --model claude-opus-4-6
+```
+Note: Scripts that import chromadb/brain.py take 1-2 seconds to initialize. This is normal.
