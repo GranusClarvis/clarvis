@@ -24,100 +24,68 @@ Before doing anything else:
 
 Don't ask permission. Just do it.
 
-## 🧠 ClarvisDB Brain
+## 🧠 ClarvisDB Brain — YOUR ONLY MEMORY SYSTEM
 
-Your unified memory system. **USE THIS, NOT OpenClaw's memory_search.**
+**ClarvisDB is your brain. No external dependencies.**
 
-### Why ClarvisDB over memory_search?
-| Feature | ClarvisDB | memory_search (Gemini) |
-|---------|-----------|------------------------|
-| Latency | 140ms | 930ms |
-| Cloud dependency | None | Google API |
-| Your data | Yes | External |
-| Rich metadata | Yes | No |
+- **6.6x faster** (140ms vs 930ms cloud)
+- **Fully local** — ONNX embeddings, no API calls
+- **Your data** — SQLite database you own
+- **89 memories** across 7 collections
 
 ### Quick Usage
 ```python
 from brain import brain, search, remember, capture
 
-# Search YOUR brain (not Google)
+# Search your knowledge
 results = search("what do I know about X")
 
-# Store a memory
+# Store permanently
 remember("Inverse hates verbose responses", importance=0.9)
 
-# Smart capture during conversation
-capture("user said something important")
+# Smart capture
+capture("important insight from conversation")
 ```
 
 ### During Conversations
-
-**IMPORTANT: Use ClarvisDB for ALL memory operations. Do NOT use OpenClaw's memory_search.**
-
 ```python
-# At session start - initialize brain
-from message_processor import init_session, get_conversation_context
-init_session()
-
-# Before processing user message - get context
+# Get context for conversation
 ctx = get_conversation_context("user's question")
 
-# Capture important info automatically
+# Capture important info
 capture("user said something important")
 
-# Manually remember something
+# Remember permanently
 remember("Inverse hates verbose responses", importance=0.9)
 
-# Query your memory
+# Search your knowledge
 results = search("what do I know about X")
-for r in results:
-    print(f"[{r['collection']}] {r['document']}")
 
-# Update current focus
-brain.set_context("working on ClarvisDB integration")
+# Update focus
+brain.set_context("working on task")
 ```
 
 ### Brain Commands
 | Command | Purpose |
 |---------|---------|
-| `brain.recall(query)` | Search all memories |
-| `brain.store(text, importance=0.9)` | Store a memory |
+| `search(query)` | Search all memories |
+| `remember(text, importance)` | Store permanently |
+| `capture(text)` | Smart auto-store |
 | `brain.get_goals()` | Get tracked goals |
-| `brain.set_context("working on X")` | Set current focus |
-| `remember(text)` | Quick high-importance store |
-| `capture(text)` | Auto-assess and store |
-
-### Local Brain (No Cloud Dependency)
-```python
-from brain import LocalBrain
-
-# Create brain with local embeddings (6.6x faster!)
-local = LocalBrain()
-
-# Same API, no external dependency
-local.store("memory", importance=0.9)
-local.recall("query")
-local.migrate_from_cloud()  # Migrate from cloud brain
-```
-
-### Performance Comparison
-| Mode | Latency | Cloud Dependency |
-|------|---------|------------------|
-| Cloud (default) | ~930ms | Yes |
-| Local (ONNX) | ~140ms | No |
-
-**Recommendation:** Use local brain for independence, cloud brain for compatibility.
+| `brain.set_context(text)` | Set current focus |
 
 ### Collections
-- `clarvis-identity` — Who you are
-- `clarvis-preferences` — Human preferences
-- `clarvis-learnings` — Lessons learned
-- `clarvis-infrastructure` — Technical setup
-- `clarvis-goals` — Goal tracking
-- `clarvis-context` — Current focus
-- `clarvis-memories` — General memories
+| Collection | Purpose |
+|------------|---------|
+| `clarvis-identity` | Who you are |
+| `clarvis-preferences` | Human preferences |
+| `clarvis-learnings` | Lessons learned |
+| `clarvis-infrastructure` | Technical setup |
+| `clarvis-goals` | Goal tracking |
+| `clarvis-context` | Current focus |
+| `clarvis-memories` | General memories |
 
-**Always use the brain.** Don't rely on "mental notes" — store it.
+**Always use ClarvisDB. Never rely on external memory services.**
 
 ## Memory
 

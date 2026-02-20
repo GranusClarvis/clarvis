@@ -39,7 +39,8 @@ _Curated knowledge. Distilled wisdom. Updated regularly._
 
 ## Evolution Log
 - 2026-02-18: Genesis. All systems initialized. Dual-mode architecture defined.
-- 2026-02-19: Memory benchmark. Semantic search (gemini-embedding-001) working. Chroma installed.
+- 2026-02-19: Memory benchmark. ClarvisDB with ONNX embeddings working. No cloud dependency.
+- 2026-02-20: ClarvisDB v1.0 complete. 89 memories, 7 collections, deep integration. Self-sufficient brain.
 
 ## Self-Evolution Framework
 - **Goal-driven, not workflow-driven** — define outcomes, not steps
