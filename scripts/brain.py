@@ -636,6 +636,17 @@ local_brain = None  # Initialize on demand
 store_important = lambda text, collection=None, importance=0.7, source="conversation", tags=None: brain.store(text, collection or MEMORIES, importance, tags, source)
 recall = lambda query, n=5: [r["document"] for r in brain.recall(query, n=n)]
 
+# Re-export from auto_capture for single-import convenience
+def remember(text, importance=0.9, category=None):
+    """Quick remember - high importance store"""
+    from auto_capture import remember as _remember
+    return _remember(text, importance, category)
+
+def capture(text):
+    """Auto-capture - assess importance and store if relevant"""
+    from auto_capture import process
+    return process(text)
+
 
 if __name__ == "__main__":
     # CLI interface
