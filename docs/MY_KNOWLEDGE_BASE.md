@@ -71,6 +71,35 @@ brain.track_goal("Goal Name", progress, details)
 
 ---
 
+### 10. clarvis_auto.py ⭐ (NEW!)
+**Purpose:** Auto-Message Processing - brain processes every message
+**Location:** `/home/agent/.openclaw/workspace/scripts/clarvis_auto.py`
+
+**Usage:**
+```bash
+# Process a message
+clarvis_auto.py process "some message"
+
+# Session start
+clarvis_auto.py start
+
+# Test
+clarvis_auto.py test
+```
+
+**In code:**
+```python
+from clarvis_auto import process_message, auto_start
+
+# At session start
+context = auto_start()
+
+# When message arrives
+result = process_message("user message", "user")
+```
+
+---
+
 ### 7. clarvis_model_switch.py ⭐
 **Purpose:** Self-aware model switching
 **Location:** `/home/agent/.openclaw/workspace/scripts/clarvis_model_switch.py`
@@ -155,11 +184,13 @@ clarvis_tools.py list                        # List pending tools
 - Task Graph
 - ClarvisBrain Core
 - Model Switching
-- Reflection (partial)
+- **Auto-Message Processing (P0)** - NEW!
 
 ### 🔄 In Progress
 - Self-Reflection Loop
-- Message Integration
+
+### ⏳ Next
+- Graph Association
 
 ### ❌ Not Done
 - Auto-message processing
