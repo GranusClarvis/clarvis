@@ -19,94 +19,71 @@ echo $$ > "$LOCKFILE"
 trap "rm -f $LOCKFILE" EXIT
 
 # === ATTENTION-BASED TASK SELECTION ===
-# Score all unchecked tasks and pick the highest-scoring one
+# Uses attention.py salience scoring + brain.py context (replaces bash keyword matching)
+# task_selector.py scores all tasks via GWT-inspired salience: importance, recency,
+# context relevance, AGI-boost, integration-boost — then returns the best one as JSON.
 
-# Get all unchecked tasks with their line numbers
-TASKS_RAW=$(grep -n '^\- \[ \]' memory/evolution/QUEUE.md)
-TASK_COUNT=$(echo "$TASKS_RAW" | grep -c '^')
+SELECTOR_SCRIPT="/home/agent/.openclaw/workspace/scripts/task_selector.py"
 
-if [ "$TASK_COUNT" -eq 0 ]; then
-    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Queue empty — spawning task generation..." >> "$LOGFILE"
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running attention-based task selector..." >> "$LOGFILE"
 
-    # Auto-replenish: spawn Claude Code to analyze state and add new tasks
-    timeout 300 /home/agent/.local/bin/claude -p \
-        "You are Clarvis's evolution engine. The evolution queue is EMPTY.
+# Run Python task selector — stdout=JSON result, stderr=score log
+SELECTOR_OUTPUT=$(python3 "$SELECTOR_SCRIPT" 2>> "$LOGFILE")
+SELECTOR_EXIT=$?
 
-        1. Read memory/evolution/QUEUE.md to see what was already completed.
-        2. Read scripts/ directory to see what tools exist but may not be wired in.
-        3. Check data/plans/ for unfinished research.
-        4. Think: What's the biggest gap between current capabilities and AGI/consciousness?
+if [ $SELECTOR_EXIT -ne 0 ]; then
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WARN: Task selector failed (exit $SELECTOR_EXIT), falling back to grep" >> "$LOGFILE"
+    # Fallback: first unchecked task
+    SELECTOR_OUTPUT=""
+fi
 
-        Add 3-5 NEW unchecked tasks to QUEUE.md under '## P0 — Do Next Heartbeat'.
-        Format: - [ ] <concrete task description>
+# Parse the JSON output
+if [ -n "$SELECTOR_OUTPUT" ]; then
+    # Check for error (empty queue)
+    IS_ERROR=$(echo "$SELECTOR_OUTPUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print('yes' if 'error' in d else 'no')" 2>/dev/null)
 
-        Focus on: wiring existing scripts into daily use, making capabilities persistent,
-        building feedback loops, improving autonomous learning.
-        Do NOT duplicate completed tasks. Be concrete and actionable." \
-        --dangerously-skip-permissions >> "$LOGFILE" 2>&1
+    if [ "$IS_ERROR" = "yes" ]; then
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Queue empty — spawning task generation..." >> "$LOGFILE"
 
-    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Queue replenished — will execute on next run" >> "$LOGFILE"
+        # Auto-replenish: spawn Claude Code to analyze state and add new tasks
+        timeout 300 /home/agent/.local/bin/claude -p \
+            "You are Clarvis's evolution engine. The evolution queue is EMPTY.
+
+            1. Read memory/evolution/QUEUE.md to see what was already completed.
+            2. Read scripts/ directory to see what tools exist but may not be wired in.
+            3. Check data/plans/ for unfinished research.
+            4. Think: What's the biggest gap between current capabilities and AGI/consciousness?
+
+            Add 3-5 NEW unchecked tasks to QUEUE.md under '## P0 — Do Next Heartbeat'.
+            Format: - [ ] <concrete task description>
+
+            Focus on: wiring existing scripts into daily use, making capabilities persistent,
+            building feedback loops, improving autonomous learning.
+            Do NOT duplicate completed tasks. Be concrete and actionable." \
+            --dangerously-skip-permissions >> "$LOGFILE" 2>&1
+
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Queue replenished — will execute on next run" >> "$LOGFILE"
+        exit 0
+    fi
+
+    # Extract best task text and salience from JSON
+    NEXT_TASK=$(echo "$SELECTOR_OUTPUT" | python3 -c "import sys,json; print(json.load(sys.stdin)['text'])" 2>/dev/null)
+    BEST_SALIENCE=$(echo "$SELECTOR_OUTPUT" | python3 -c "import sys,json; print(json.load(sys.stdin)['salience'])" 2>/dev/null)
+    TASK_SECTION=$(echo "$SELECTOR_OUTPUT" | python3 -c "import sys,json; print(json.load(sys.stdin)['section'])" 2>/dev/null)
+
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] SELECTED (salience=$BEST_SALIENCE, section=$TASK_SECTION): ${NEXT_TASK:0:80}..." >> "$LOGFILE"
+fi
+
+# Fallback if Python selector produced no result
+if [ -z "$NEXT_TASK" ]; then
+    NEXT_TASK=$(grep '^\- \[ \]' memory/evolution/QUEUE.md | head -1 | sed 's/^- \[ \] //')
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] FALLBACK: Using first unchecked task: ${NEXT_TASK:0:80}..." >> "$LOGFILE"
+fi
+
+if [ -z "$NEXT_TASK" ]; then
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] No tasks available at all." >> "$LOGFILE"
     exit 0
 fi
-
-# Score each task using attention-based salience
-# Higher scores = more important/relevant/urgent
-score_task() {
-    local task="$1"
-    local score=0.5
-    
-    # Importance keywords (higher = more important for AGI/consciousness)
-    if echo "$task" | grep -qi "AGI\|consciousness\|attention\|working.memory\|self.model\|reasoning\|Phi\|neural"; then
-        score=$(echo "$score + 0.3" | bc -l)
-    fi
-    
-    # Priority keywords (P0 = higher)
-    if echo "$task" | grep -qi "wire\|integrate\|persistent\|feedback.loop"; then
-        score=$(echo "$score + 0.15" | bc -l)
-    fi
-    
-    # Action keywords (concrete = higher)
-    if echo "$task" | grep -qi "build\|create\|implement\|add\|wire\|make"; then
-        score=$(echo "$score + 0.1" | bc -l)
-    fi
-    
-    # Cap at 1.0
-    score=$(echo "$score" | bc -l)
-    if (( $(echo "$score > 1.0" | bc -l) )); then
-        score=1.0
-    fi
-    
-    printf "%.2f" "$score"
-}
-
-# Score all tasks and find the highest-scoring one
-BEST_TASK=""
-BEST_SCORE=0
-
-while IFS= read -r line; do
-    task_num=$(echo "$line" | cut -d: -f1)
-    task_text=$(echo "$line" | sed 's/^[0-9]*: \- \[ \] //')
-    
-    score=$(score_task "$task_text")
-    
-    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] TASK SCORE: $score — ${task_text:0:60}..." >> "$LOGFILE"
-    
-    # Compare scores (bc returns 1 if first > second)
-    if (( $(echo "$score > $BEST_SCORE" | bc -l) )); then
-        BEST_SCORE="$score"
-        BEST_TASK="$task_text"
-    fi
-done <<< "$TASKS_RAW"
-
-if [ -z "$BEST_TASK" ]; then
-    # Fallback: just pick first task
-    BEST_TASK=$(echo "$TASKS_RAW" | head -1 | sed 's/^[0-9]*: \- \[ \] //')
-    BEST_SCORE="0.50 (fallback)"
-fi
-
-echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] SELECTED (salience=$BEST_SCORE): ${BEST_TASK:0:80}..." >> "$LOGFILE"
-
-NEXT_TASK="$BEST_TASK"
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] EXECUTING: $NEXT_TASK" >> "$LOGFILE"
 
