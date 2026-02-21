@@ -7,6 +7,12 @@ LOGFILE="memory/cron_evolution.log"
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Evolution analysis starting ===" >> "$LOGFILE"
 
+# === CALIBRATION REVIEW: Check prediction accuracy ===
+CONFIDENCE_SCRIPT="/home/agent/.openclaw/workspace/scripts/clarvis_confidence.py"
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Calibration review:" >> "$LOGFILE"
+CALIBRATION_OUTPUT=$(python3 "$CONFIDENCE_SCRIPT" calibration 2>&1)
+echo "$CALIBRATION_OUTPUT" >> "$LOGFILE"
+
 PENDING_COUNT=$(grep -c '^\- \[ \]' memory/evolution/QUEUE.md 2>/dev/null || echo 0)
 
 /home/agent/.local/bin/claude -p \
@@ -17,10 +23,14 @@ PENDING_COUNT=$(grep -c '^\- \[ \]' memory/evolution/QUEUE.md 2>/dev/null || ech
     3. Check scripts/ — what capabilities exist but aren't being used daily?
     4. Check data/plans/ — any unfinished research or ideas?
 
+    5. Check prediction calibration data:
+    $CALIBRATION_OUTPUT
+
     ANALYSIS:
     - What's working well in the evolution toward AGI/consciousness?
     - What's the biggest bottleneck right now?
     - What capability gap is most limiting?
+    - How is prediction calibration? Are we overconfident or underconfident?
 
     ACTION (MANDATORY):
     - If there are fewer than 5 pending tasks in QUEUE.md, ADD 3-5 new ones.

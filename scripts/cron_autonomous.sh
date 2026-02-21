@@ -90,6 +90,13 @@ fi
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] EXECUTING: $NEXT_TASK" >> "$LOGFILE"
 
+# === PREDICTION: Log confidence prediction before execution ===
+CONFIDENCE_SCRIPT="/home/agent/.openclaw/workspace/scripts/clarvis_confidence.py"
+# Sanitize task text for use as event key (first 60 chars, alphanumeric + underscores)
+TASK_EVENT=$(echo "$NEXT_TASK" | head -c 60 | sed 's/[^a-zA-Z0-9]/_/g')
+python3 "$CONFIDENCE_SCRIPT" predict "$TASK_EVENT" "success" 0.7 >> "$LOGFILE" 2>&1
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] PREDICTION: Logged prediction for $TASK_EVENT" >> "$LOGFILE"
+
 # Spawn Claude Code to work on the task (10 min timeout)
 # Capture output and exit code for evolution loop
 TASK_OUTPUT_FILE=$(mktemp)
@@ -110,9 +117,12 @@ cat "$TASK_OUTPUT_FILE" >> "$LOGFILE"
 # Save working memory state after heartbeat (survives restarts)
 python3 /home/agent/.openclaw/workspace/scripts/working_memory.py save >> "$LOGFILE" 2>&1
 
+# === OUTCOME: Record actual result for prediction feedback loop ===
 if [ $TASK_EXIT -eq 0 ]; then
+    python3 "$CONFIDENCE_SCRIPT" outcome "$TASK_EVENT" "success" >> "$LOGFILE" 2>&1
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] COMPLETED: $NEXT_TASK" >> "$LOGFILE"
 else
+    python3 "$CONFIDENCE_SCRIPT" outcome "$TASK_EVENT" "failure" >> "$LOGFILE" 2>&1
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] FAILED (exit $TASK_EXIT): $NEXT_TASK" >> "$LOGFILE"
 
     # === HIVE-STYLE EVOLUTION: Failure → Evolve → Redeploy ===
