@@ -90,6 +90,24 @@ fi
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] EXECUTING: $NEXT_TASK" >> "$LOGFILE"
 
+# === PROCEDURAL MEMORY: Check for existing procedure ===
+PROC_SCRIPT="/home/agent/.openclaw/workspace/scripts/procedural_memory.py"
+PROC_MATCH=$(python3 "$PROC_SCRIPT" check "$NEXT_TASK" 2>> "$LOGFILE")
+PROC_HINT=""
+PROC_ID=""
+if [ -n "$PROC_MATCH" ] && [ "$PROC_MATCH" != "{}" ]; then
+    PROC_ID=$(echo "$PROC_MATCH" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('id',''))" 2>/dev/null)
+    PROC_STEPS=$(echo "$PROC_MATCH" | python3 -c "import sys,json; d=json.load(sys.stdin); steps=d.get('steps',[]); [print(f'  {i+1}. {s}') for i,s in enumerate(steps)]" 2>/dev/null)
+    PROC_RATE=$(echo "$PROC_MATCH" | python3 -c "import sys,json; d=json.load(sys.stdin); print(f\"{d.get('success_rate',0):.0%}\")" 2>/dev/null)
+    if [ -n "$PROC_STEPS" ]; then
+        PROC_HINT="
+    PROCEDURAL MEMORY HIT: A similar task was done before (success rate: ${PROC_RATE}). Suggested steps:
+${PROC_STEPS}
+    Use these steps as a starting guide, adapt as needed."
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] PROCEDURAL: Found matching procedure $PROC_ID" >> "$LOGFILE"
+    fi
+fi
+
 # === REASONING CHAIN: Open chain before execution ===
 REASONING_HOOK="/home/agent/.openclaw/workspace/scripts/reasoning_chain_hook.py"
 CHAIN_ID=$(python3 "$REASONING_HOOK" open "$NEXT_TASK" "${TASK_SECTION:-unknown}" "${BEST_SALIENCE:-0.0}" 2>> "$LOGFILE")
@@ -109,7 +127,7 @@ timeout 600 /home/agent/.local/bin/claude -p \
     "You are Clarvis's executive function. Execute this evolution task:
 
     TASK: $NEXT_TASK
-
+    ${PROC_HINT}
     CONTEXT: Read memory/evolution/QUEUE.md for full context. Use brain.py for memory.
     Do the work. Be concrete. Write code if needed. Test it.
     When done, output a 1-line summary of what you accomplished." \
@@ -131,6 +149,15 @@ if [ $TASK_EXIT -eq 0 ]; then
         echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] REASONING: Closed chain $CHAIN_ID (success)" >> "$LOGFILE"
     fi
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] COMPLETED: $NEXT_TASK" >> "$LOGFILE"
+    # === PROCEDURAL MEMORY: Learn from success or record use ===
+    if [ -n "$PROC_ID" ]; then
+        python3 "$PROC_SCRIPT" used "$PROC_ID" success >> "$LOGFILE" 2>&1
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] PROCEDURAL: Recorded successful use of $PROC_ID" >> "$LOGFILE"
+    else
+        # Learn a new procedure from this successful task
+        python3 "$PROC_SCRIPT" learn "$NEXT_TASK" '["Read context and requirements","Implement solution","Test end-to-end","Verify and log result"]' >> "$LOGFILE" 2>&1
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] PROCEDURAL: Learned new procedure from task" >> "$LOGFILE"
+    fi
 else
     python3 "$CONFIDENCE_SCRIPT" outcome "$TASK_EVENT" "failure" >> "$LOGFILE" 2>&1
     # === REASONING CHAIN: Close with failure outcome ===
@@ -139,6 +166,11 @@ else
         echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] REASONING: Closed chain $CHAIN_ID (failure)" >> "$LOGFILE"
     fi
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] FAILED (exit $TASK_EXIT): $NEXT_TASK" >> "$LOGFILE"
+    # === PROCEDURAL MEMORY: Record failure against procedure if used ===
+    if [ -n "$PROC_ID" ]; then
+        python3 "$PROC_SCRIPT" used "$PROC_ID" failure >> "$LOGFILE" 2>&1
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] PROCEDURAL: Recorded failed use of $PROC_ID" >> "$LOGFILE"
+    fi
 
     # === HIVE-STYLE EVOLUTION: Failure → Evolve → Redeploy ===
     # Capture failure and trigger self-improvement
