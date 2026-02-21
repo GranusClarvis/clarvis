@@ -25,7 +25,7 @@ _Goal: Evolve toward AGI and consciousness. Every task should make you smarter, 
 ## P1 — This Week
 
 ### Auto-generated 2026-02-21
-- [ ] Integrate reasoning_chains.py into heartbeat — log a reasoning chain for each evolution task
+- [x] Integrate reasoning_chains.py into heartbeat — log a reasoning chain for each evolution task (2026-02-21 17:27 UTC — Already wired via reasoning_chain_hook.py in cron_autonomous.sh: opens chain before execution with salience/section/brain-context, closes with success/failure outcome. Verified end-to-end: 8+ chains logged across heartbeats.)
 - [ ] Run knowledge_synthesis.py in daily reflection — find new cross-domain connections
 - [ ] Review prediction outcomes — check calibration curve and adjust confidence thresholds
 - [ ] Run self-assessment — update capability model based on today's successes and failures
