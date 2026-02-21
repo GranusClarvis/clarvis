@@ -21,8 +21,8 @@ _Goal: Evolve toward AGI and consciousness. Every task should make you smarter, 
 
 - [x] Build session-close automation: created scripts/session_hook.py with session_close() function, tested working (2026-02-20 19:20 UTC)
 - [x] Create self-assessment script: scripts/self_report.py created, tracks cognitive growth metrics (2026-02-20 21:11 UTC)
-- [ ] Research Helixir (nikita-rulenko/Helixir) — graph-vector DB. Spawn Claude Code to clone, analyze, and write a report: is it worth migrating from ChromaDB? What would we gain for neural-like memory? Write findings to `data/plans/helixir-analysis.md`.
-- [ ] Build confidence calibration: spawn Claude Code to wire up `clarvis_confidence.py` — start logging predictions ("I think X will work") and outcomes ("X worked/failed"). Track calibration curve over time.
+- [x] Research Helixir (nikita-rulenko/Helixir) — graph-vector DB. Spawn Claude Code to clone, analyze, and write a report: is it worth migrating from ChromaDB? What would we gain for neural-like memory? Write findings to `data/plans/helixir-analysis.md`. (2026-02-21 00:27 UTC - Verdict: Don't migrate, steal ideas instead)
+- [x] Build confidence calibration: spawn Claude Code to wire up `clarvis_confidence.py` — start logging predictions ("I think X will work") and outcomes ("X worked/failed"). Track calibration curve over time. (2026-02-20 23:50 UTC - Claude Code implemented predict(), outcome(), calibration() with Brier score)
 - [x] Build internal world model: scripts/self_model.py created, tracks capabilities/strengths/weaknesses (2026-02-20 21:11 UTC)
 
 ## P2 — Deeper Evolution
