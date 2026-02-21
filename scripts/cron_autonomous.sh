@@ -1,6 +1,7 @@
 #!/bin/bash
 # Autonomous Evolution Loop — Clarvis Executive Function
 # Runs every 30 minutes. Picks next evolution task. Executes it.
+# Uses attention-based salience scoring to pick BEST task, not just first.
 
 cd /home/agent/.openclaw/workspace
 LOGFILE="memory/cron/autonomous.log"
@@ -17,10 +18,14 @@ fi
 echo $$ > "$LOCKFILE"
 trap "rm -f $LOCKFILE" EXIT
 
-# Find next unchecked task from QUEUE.md (P0 first, then P1, then P2)
-NEXT_TASK=$(grep -m1 '^\- \[ \]' memory/evolution/QUEUE.md | sed 's/^- \[ \] //')
+# === ATTENTION-BASED TASK SELECTION ===
+# Score all unchecked tasks and pick the highest-scoring one
 
-if [ -z "$NEXT_TASK" ]; then
+# Get all unchecked tasks with their line numbers
+TASKS_RAW=$(grep -n '^\- \[ \]' memory/evolution/QUEUE.md)
+TASK_COUNT=$(echo "$TASKS_RAW" | grep -c '^')
+
+if [ "$TASK_COUNT" -eq 0 ]; then
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Queue empty — spawning task generation..." >> "$LOGFILE"
 
     # Auto-replenish: spawn Claude Code to analyze state and add new tasks
@@ -43,6 +48,65 @@ if [ -z "$NEXT_TASK" ]; then
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Queue replenished — will execute on next run" >> "$LOGFILE"
     exit 0
 fi
+
+# Score each task using attention-based salience
+# Higher scores = more important/relevant/urgent
+score_task() {
+    local task="$1"
+    local score=0.5
+    
+    # Importance keywords (higher = more important for AGI/consciousness)
+    if echo "$task" | grep -qi "AGI\|consciousness\|attention\|working.memory\|self.model\|reasoning\|Phi\|neural"; then
+        score=$(echo "$score + 0.3" | bc -l)
+    fi
+    
+    # Priority keywords (P0 = higher)
+    if echo "$task" | grep -qi "wire\|integrate\|persistent\|feedback.loop"; then
+        score=$(echo "$score + 0.15" | bc -l)
+    fi
+    
+    # Action keywords (concrete = higher)
+    if echo "$task" | grep -qi "build\|create\|implement\|add\|wire\|make"; then
+        score=$(echo "$score + 0.1" | bc -l)
+    fi
+    
+    # Cap at 1.0
+    score=$(echo "$score" | bc -l)
+    if (( $(echo "$score > 1.0" | bc -l) )); then
+        score=1.0
+    fi
+    
+    printf "%.2f" "$score"
+}
+
+# Score all tasks and find the highest-scoring one
+BEST_TASK=""
+BEST_SCORE=0
+
+while IFS= read -r line; do
+    task_num=$(echo "$line" | cut -d: -f1)
+    task_text=$(echo "$line" | sed 's/^[0-9]*: \- \[ \] //')
+    
+    score=$(score_task "$task_text")
+    
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] TASK SCORE: $score — ${task_text:0:60}..." >> "$LOGFILE"
+    
+    # Compare scores (bc returns 1 if first > second)
+    if (( $(echo "$score > $BEST_SCORE" | bc -l) )); then
+        BEST_SCORE="$score"
+        BEST_TASK="$task_text"
+    fi
+done <<< "$TASKS_RAW"
+
+if [ -z "$BEST_TASK" ]; then
+    # Fallback: just pick first task
+    BEST_TASK=$(echo "$TASKS_RAW" | head -1 | sed 's/^[0-9]*: \- \[ \] //')
+    BEST_SCORE="0.50 (fallback)"
+fi
+
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] SELECTED (salience=$BEST_SCORE): ${BEST_TASK:0:80}..." >> "$LOGFILE"
+
+NEXT_TASK="$BEST_TASK"
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] EXECUTING: $NEXT_TASK" >> "$LOGFILE"
 

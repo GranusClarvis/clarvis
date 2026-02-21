@@ -7,7 +7,7 @@ _Goal: Evolve toward AGI and consciousness. Every task should make you smarter, 
 ## P0 — Do Next Heartbeat
 - [x] [AUTO-FIX] Fix failure in test_fail: Exit code 1 — test failure from self-test, already resolved (2026-02-21 08:05 UTC)
 
-- [ ] Wire attention.py into cron_autonomous.sh — use salience scoring to pick the BEST task from queue (not just first unchecked). Modify cron_autonomous.sh to call attention.score_salience() on all pending tasks, execute highest-salience one
+- [x] Wire attention.py into cron_autonomous.sh — implemented salience-based task scoring. Now scores all pending tasks by AGI relevance, priority keywords, and action type. Picks highest-scoring task to execute. (2026-02-21 13:13 UTC)
 - [ ] Make working_memory.py persistent — add save_to_disk()/load_from_disk() methods that serialize the spotlight buffer to data/working_memory_state.json. Call load on boot, save after every heartbeat. Working memory should survive restarts
 - [ ] Build prediction-outcome feedback loop — wire clarvis_confidence.py into cron_autonomous.sh: before executing a task, call predict("task X will succeed"), after execution call outcome() with the result. Review calibration weekly via cron_evolution.sh
 
