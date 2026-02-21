@@ -41,6 +41,8 @@ CONTEXT = "clarvis-context"
 MEMORIES = "clarvis-memories"
 
 ALL_COLLECTIONS = [IDENTITY, PREFERENCES, LEARNINGS, INFRASTRUCTURE, GOALS, CONTEXT, MEMORIES]
+# Fast defaults - excludes identity/infra (rarely needed in queries)
+DEFAULT_COLLECTIONS = [LEARNINGS, MEMORIES, GOALS, CONTEXT, PREFERENCES]
 
 
 def get_local_embedding_function():
@@ -192,7 +194,7 @@ class ClarvisBrain:
             List of matching documents
         """
         if collections is None:
-            collections = ALL_COLLECTIONS
+            collections = DEFAULT_COLLECTIONS  # Fast default - excludes identity/infra
         
         all_results = []
         cutoff_date = None

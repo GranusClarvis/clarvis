@@ -28,14 +28,42 @@ fi
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] EXECUTING: $NEXT_TASK" >> "$LOGFILE"
 
 # Spawn Claude Code to work on the task (10 min timeout)
+# Capture output and exit code for evolution loop
+TASK_OUTPUT_FILE=$(mktemp)
 timeout 600 /home/agent/.local/bin/claude -p \
     "You are Clarvis's executive function. Execute this evolution task:
-    
+
     TASK: $NEXT_TASK
-    
+
     CONTEXT: Read memory/evolution/QUEUE.md for full context. Use brain.py for memory.
     Do the work. Be concrete. Write code if needed. Test it.
     When done, output a 1-line summary of what you accomplished." \
-    --dangerously-skip-permissions >> "$LOGFILE" 2>&1
+    --dangerously-skip-permissions > "$TASK_OUTPUT_FILE" 2>&1
+TASK_EXIT=$?
 
-echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] COMPLETED: $NEXT_TASK" >> "$LOGFILE"
+# Log the output
+cat "$TASK_OUTPUT_FILE" >> "$LOGFILE"
+
+if [ $TASK_EXIT -eq 0 ]; then
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] COMPLETED: $NEXT_TASK" >> "$LOGFILE"
+else
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] FAILED (exit $TASK_EXIT): $NEXT_TASK" >> "$LOGFILE"
+
+    # === HIVE-STYLE EVOLUTION: Failure → Evolve → Redeploy ===
+    # Capture failure and trigger self-improvement
+    TASK_STDERR=$(tail -c 2000 "$TASK_OUTPUT_FILE")
+    python3 /home/agent/.openclaw/workspace/scripts/evolution_loop.py \
+        capture "cron_autonomous" "Exit code $TASK_EXIT running task" "$NEXT_TASK" >> "$LOGFILE" 2>&1
+
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] EVOLUTION: Failure captured, analyzing..." >> "$LOGFILE"
+
+    # Get the failure ID (most recent) and run evolution
+    FAILURE_ID=$(ls -t /home/agent/.openclaw/workspace/data/evolution/failures/fail_*_cron_autonomous.json 2>/dev/null | head -1 | xargs -I{} basename {} .json)
+    if [ -n "$FAILURE_ID" ]; then
+        python3 /home/agent/.openclaw/workspace/scripts/evolution_loop.py \
+            evolve "$FAILURE_ID" >> "$LOGFILE" 2>&1
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] EVOLUTION: Fix generated for $FAILURE_ID" >> "$LOGFILE"
+    fi
+fi
+
+rm -f "$TASK_OUTPUT_FILE"

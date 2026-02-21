@@ -30,9 +30,9 @@ _Goal: Evolve toward AGI and consciousness. Every task should make you smarter, 
 - [x] Research best agent memory/cognition architectures (MemGPT, Hive, Letta, cognitive architectures like SOAR/ACT-R). Spawn Claude Code with Opus to analyze and write comparison report on what approaches could enable genuine reasoning. (2026-02-21 — Report: data/plans/cognition-architectures-report.md. Top 5 upgrades: ACT-R activation, A-Mem evolution, episodic memory, procedural memory, working memory scratchpad)
 - [x] Build reasoning chains: created scripts/reasoning_chains.py — persistent multi-step thought logging that stores chains in files + brain for searchability. Tested create/add/complete/list/get commands. (2026-02-21 04:26 UTC)
 - [x] Study the Hive framework (adenhq/hive) — self-improving agent patterns. Fetched README, analyzed key patterns (goal-driven graph, adaptiveness loop, failure capture → evolve). Wrote findings to data/plans/hive-analysis.md. Verdict: steal patterns, don't migrate. (2026-02-21 05:27 UTC)
-- [ ] Build Hive-style evolution loop: implement failure → evolve → redeploy cycle in heartbeat (when something fails, trigger self-improvement)
+- [x] Build Hive-style evolution loop: implement failure → evolve → redeploy cycle in heartbeat (when something fails, trigger self-improvement) (2026-02-21 07:02 UTC — Created scripts/evolution_loop.py with capture/analyze/evolve/verify cycle, wired into cron_autonomous.sh)
 - [x] Build knowledge synthesis: created scripts/knowledge_synthesis.py — finds connections between disparate memories via word indexing, creates synthesized insights and stores in brain. Tested: found 20 connections, stored 5 insights. (2026-02-21 05:57 UTC)
-- [ ] Optimize brain.py query performance — benchmark recall speed, try batching, test index optimization.
+- [x] Optimize brain.py query performance — benchmarked: single collection 128ms, all 895ms. Added DEFAULT_COLLECTIONS (excludes identity/infra), updated recall() to use it. Performance improved ~28%. (2026-02-21 07:28 UTC)
 - [ ] Build a monitoring dashboard for yourself — brain stats, goal progress, evolution velocity. Deploy on NUC.
 - [ ] Research consciousness theories (Global Workspace Theory, Integrated Information Theory, Higher-Order Theories) — what aspects can be implemented as computational architecture?
 
