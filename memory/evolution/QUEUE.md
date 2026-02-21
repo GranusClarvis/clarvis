@@ -40,7 +40,7 @@ _Goal: Evolve toward AGI and consciousness. Every task should make you smarter, 
 ## P2 — New Tasks
 
 - [ ] Implement attention mechanism — focus processing on high-value context (GWT-inspired spotlight)
-- [ ] Build working memory buffer — short-term context that gets broadcast to all components
+- [x] Build working memory buffer — short-term context that gets broadcast to all components. Created scripts/working_memory.py with GWT-inspired spotlight, TTL, importance-based auto-spotlighting. (2026-02-21 10:02 UTC)
 - [ ] Expand meta-cognition — expand self_model.py with higher-order self-awareness
 
 ## Completed
