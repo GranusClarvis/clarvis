@@ -178,10 +178,10 @@ class ClarvisBrain:
         except Exception:
             pass  # Don't let linking failures break store()
 
-    def recall(self, query, collections=None, n=5, min_importance=None, include_related=False, since_days=None):
+    def recall(self, query, collections=None, n=5, min_importance=None, include_related=False, since_days=None, attention_boost=False):
         """
         Recall memories matching a query
-        
+
         Args:
             query: Search query
             collections: List of collections to search (None = all)
@@ -189,7 +189,8 @@ class ClarvisBrain:
             min_importance: Minimum importance filter (None = no filter)
             include_related: Include graph-related memories
             since_days: Only memories from last N days (None = all time)
-        
+            attention_boost: Boost results that match current spotlight focus
+
         Returns:
             List of matching documents
         """
@@ -238,9 +239,29 @@ class ClarvisBrain:
                     
                     all_results.append(result_item)
         
-        # Sort by importance (highest first)
-        all_results.sort(key=lambda x: x["metadata"].get("importance", 0), reverse=True)
-        
+        # Attention boost: items matching spotlight focus get a salience bump
+        if attention_boost:
+            try:
+                from attention import attention as attn
+                spotlight_words = set()
+                for s_item in attn.focus():
+                    spotlight_words.update(s_item["content"].lower().split())
+                for result in all_results:
+                    doc_words = set(result["document"].lower().split())
+                    overlap = len(spotlight_words & doc_words)
+                    if overlap > 0:
+                        boost = min(0.3, overlap * 0.05)
+                        result["metadata"]["_attention_boost"] = boost
+            except Exception:
+                pass  # Don't let attention failures break recall
+
+        # Sort by importance + attention boost (highest first)
+        def sort_key(x):
+            base = x["metadata"].get("importance", 0)
+            boost = x["metadata"].get("_attention_boost", 0)
+            return base + boost
+        all_results.sort(key=sort_key, reverse=True)
+
         return all_results[:n * len(collections)]
     
     def get(self, collection, n=100):
