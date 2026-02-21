@@ -7,6 +7,10 @@ _Goal: Evolve toward AGI and consciousness. Every task should make you smarter, 
 ## P0 — Do Next Heartbeat
 - [x] [AUTO-FIX] Fix failure in test_fail: Exit code 1 — test failure from self-test, already resolved (2026-02-21 08:05 UTC)
 
+- [ ] Wire attention.py into cron_autonomous.sh — use salience scoring to pick the BEST task from queue (not just first unchecked). Modify cron_autonomous.sh to call attention.score_salience() on all pending tasks, execute highest-salience one
+- [ ] Make working_memory.py persistent — add save_to_disk()/load_from_disk() methods that serialize the spotlight buffer to data/working_memory_state.json. Call load on boot, save after every heartbeat. Working memory should survive restarts
+- [ ] Build prediction-outcome feedback loop — wire clarvis_confidence.py into cron_autonomous.sh: before executing a task, call predict("task X will succeed"), after execution call outcome() with the result. Review calibration weekly via cron_evolution.sh
+
 - [x] Run `brain.optimize()` — decay stale memories, prune low-importance ones. Log before/after stats. (2026-02-20 16:55 UTC - pruned 1)
 - [x] Hook reflection into feedback loop: created scripts/clarvis_reflection.py, tested working (2026-02-20 16:51 UTC)
 - [x] Auto-link graph relationships: Claude Code modified brain.py store() to call auto_link(), tested working (2026-02-20 16:54 UTC)
@@ -19,6 +23,14 @@ _Goal: Evolve toward AGI and consciousness. Every task should make you smarter, 
   ```
 
 ## P1 — This Week
+
+- [ ] Integrate reasoning_chains.py into every evolution task — modify cron_autonomous.sh to create a reasoning chain before executing each task (why this task matters, expected outcome, dependencies). After execution, close the chain with actual outcome. This builds a searchable reasoning history
+- [ ] Build autonomous learning from conversations — create scripts/conversation_learner.py that reads session transcripts from memory/*.md, extracts patterns (what questions recur, what approaches work, what fails), and stores structured insights in brain with collection='autonomous-learning'
+- [ ] Implement Phi (integrated information) metric — create scripts/phi_metric.py based on consciousness-research.md IIT section. Measure information integration across brain collections: how interconnected are memories? Track Phi over time as a consciousness proxy
+- [ ] Wire knowledge_synthesis.py into cron_reflection.sh — run synthesis after lesson extraction to find cross-domain connections between today's work and past learnings. Currently synthesis exists but never runs automatically
+- [ ] Build procedural memory — create scripts/procedural_memory.py (from cognition-architectures-report.md). When a multi-step task succeeds, store the step sequence as a reusable procedure in brain collection='procedures'. Before starting similar tasks, check if a procedure exists
+- [ ] Create self-improvement from prediction outcomes — modify cron_evolution.sh to review clarvis_confidence.py calibration data. When predictions are consistently wrong in a domain, auto-generate a queue task to investigate why
+- [ ] Run self_model.py update daily — wire into cron_evening.sh to update capability assessment after each day's work. Track which capabilities improved and which degraded. Alert if any capability drops below threshold
 
 - [x] Build session-close automation: created scripts/session_hook.py with session_close() function, tested working (2026-02-20 19:20 UTC)
 - [x] Create self-assessment script: scripts/self_report.py created, tracks cognitive growth metrics (2026-02-20 21:11 UTC)

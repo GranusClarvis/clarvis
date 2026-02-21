@@ -51,31 +51,146 @@ def store_lessons(lessons):
         stored += 1
     return stored
 
+def count_pending_tasks():
+    """Count unchecked tasks in QUEUE.md"""
+    queue_path = "/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md"
+    if not os.path.exists(queue_path):
+        return 0
+    with open(queue_path) as f:
+        content = f.read()
+    return content.count('- [ ]')
+
+
+def generate_queue_tasks(lessons, content):
+    """
+    Generate new evolution tasks based on today's lessons and memory.
+    Returns list of task strings to add to QUEUE.md.
+    """
+    tasks = []
+
+    # Analyze what was worked on today to suggest next steps
+    lines = content.split('\n')
+    topics_today = set()
+    for line in lines:
+        lower = line.lower()
+        for keyword in ['attention', 'memory', 'brain', 'reasoning', 'evolution',
+                        'consciousness', 'learning', 'model', 'prediction',
+                        'synthesis', 'reflection', 'working_memory', 'confidence']:
+            if keyword in lower:
+                topics_today.add(keyword)
+
+    # Check what scripts exist but might not be wired in
+    scripts_dir = "/home/agent/.openclaw/workspace/scripts"
+    unwired_candidates = [
+        ('attention.py', 'Wire attention.py into daily execution — use salience scoring in cron_autonomous task selection'),
+        ('working_memory.py', 'Make working_memory.py persistent across sessions — save/load spotlight buffer to disk'),
+        ('reasoning_chains.py', 'Integrate reasoning_chains.py into heartbeat — log a reasoning chain for each evolution task'),
+        ('knowledge_synthesis.py', 'Run knowledge_synthesis.py in daily reflection — find new cross-domain connections'),
+        ('clarvis_confidence.py', 'Review prediction outcomes — check calibration curve and adjust confidence thresholds'),
+        ('self_model.py', 'Run self-assessment — update capability model based on today\'s successes and failures'),
+    ]
+
+    for script, task in unwired_candidates:
+        script_path = os.path.join(scripts_dir, script)
+        if os.path.exists(script_path):
+            # Check if it's mentioned in crontab or other scripts (rough check)
+            if script not in content:  # not mentioned in today's memory = probably not running
+                tasks.append(task)
+
+    # Generate tasks from lessons (what could improve based on what was learned)
+    for lesson in lessons:
+        lower = lesson.lower()
+        if 'fail' in lower or 'error' in lower or 'broke' in lower:
+            tasks.append(f"Investigate recurring failure pattern: {lesson[:80]}")
+        if 'slow' in lower or 'timeout' in lower or 'performance' in lower:
+            tasks.append(f"Optimize performance issue found: {lesson[:80]}")
+
+    # Always suggest meta-improvement if queue is nearly empty
+    pending = count_pending_tasks()
+    if pending < 3:
+        tasks.append("Deep self-analysis: What capability gap is most limiting? Design an experiment to address it")
+
+    return tasks[:5]  # Max 5 new tasks per reflection
+
+
+def add_tasks_to_queue(tasks):
+    """Add new tasks to QUEUE.md under P1 section."""
+    queue_path = "/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md"
+    if not os.path.exists(queue_path):
+        return 0
+
+    with open(queue_path) as f:
+        content = f.read()
+
+    # Don't add duplicates
+    added = 0
+    new_lines = []
+    for task in tasks:
+        # Check if a similar task already exists (by first 40 chars)
+        if task[:40] not in content:
+            new_lines.append(f"- [ ] {task}")
+            added += 1
+
+    if not new_lines:
+        return 0
+
+    # Add under P1 section
+    today = datetime.now().strftime("%Y-%m-%d")
+    marker = "## P1 — This Week"
+    if marker in content:
+        insert_block = "\n".join(new_lines)
+        parts = content.split(marker, 1)
+        content = parts[0] + marker + f"\n\n### Auto-generated {today}\n" + insert_block + "\n" + parts[1]
+    else:
+        # Fallback: append at end
+        content += "\n\n## P1 — Auto-generated " + today + "\n" + "\n".join(new_lines) + "\n"
+
+    with open(queue_path, 'w') as f:
+        f.write(content)
+
+    return added
+
+
 def main():
     print("=== Clarvis Reflection Loop ===")
-    
+
     # Get today's memory
     content = get_today_memory()
     if not content:
         print("No memory file for today")
         return
-    
+
     # Extract lessons
     lessons = extract_lessons(content)
     if not lessons:
-        print("No lessons extracted")
-        return
-    
-    print(f"Found {len(lessons)} lessons")
-    
-    # Store in brain
-    stored = store_lessons(lessons)
-    print(f"Stored {stored} lessons in brain")
-    
-    # Show what was stored
-    print("\nLessons stored:")
-    for i, lesson in enumerate(lessons, 1):
-        print(f"  {i}. {lesson[:80]}...")
+        print("No lessons extracted today, but checking queue health...")
+        lessons = []  # Continue to check queue
+    else:
+        print(f"Found {len(lessons)} lessons")
+        # Store in brain
+        stored = store_lessons(lessons)
+        print(f"Stored {stored} lessons in brain")
+        print("\nLessons stored:")
+        for i, lesson in enumerate(lessons, 1):
+            print(f"  {i}. {lesson[:80]}...")
+
+    # === KEY: Generate and add new evolution tasks ===
+    pending = count_pending_tasks()
+    print(f"\nQueue health: {pending} pending tasks")
+
+    if pending < 5:
+        print("Queue running low — generating new tasks...")
+        new_tasks = generate_queue_tasks(lessons, content)
+        if new_tasks:
+            added = add_tasks_to_queue(new_tasks)
+            print(f"Added {added} new tasks to QUEUE.md:")
+            for t in new_tasks:
+                print(f"  + {t[:80]}")
+        else:
+            print("No new tasks generated — queue may need manual review")
+    else:
+        print(f"Queue healthy ({pending} pending), skipping generation")
+
 
 if __name__ == "__main__":
     main()

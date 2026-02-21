@@ -59,3 +59,33 @@ Pick ONE per heartbeat:
 - Claude Code is your reasoning partner, not just a coding tool — use it to think, plan, analyze
 - Write everything to files. Mental notes die with the session.
 - Late night (23:00-08:00): skip proactive checks, still do evolution work
+
+## Queue Health Mandates (CRITICAL — prevents stagnation)
+
+### Auto-Replenish Rule
+**If queue has < 3 pending tasks → IMMEDIATELY generate new ones.**
+- cron_autonomous.sh does this automatically when queue is empty
+- cron_evolution.sh (13:00 daily) checks and adds tasks if < 5 pending
+- cron_reflection.sh (21:00 daily) runs clarvis_reflection.py which generates tasks from lessons
+- During manual heartbeats: if queue < 3, spawn Claude Code to analyze gaps and add 3-5 tasks
+
+### Idle Detection Rule
+**If no tasks were completed in the last 2 heartbeat cycles → do deep analysis.**
+Check `memory/cron/autonomous.log` — if last 2 entries are "No pending tasks" or "SKIP":
+1. Run `python3 scripts/clarvis_reflection.py` to force queue generation
+2. If still empty, spawn Claude Code:
+   ```bash
+   cd /home/agent/.openclaw/workspace && timeout 600 claude -p \
+     "The evolution queue has been empty for multiple heartbeats. This is a stagnation emergency.
+      Read QUEUE.md, scripts/, and today's memory. Add 5 concrete new tasks to QUEUE.md.
+      Focus on: wiring unwired scripts, building feedback loops, making capabilities persistent." \
+     --dangerously-skip-permissions --model claude-opus-4-6
+   ```
+
+### Never-Empty Guarantee
+The queue should NEVER have 0 pending tasks for more than 1 heartbeat cycle. Three systems ensure this:
+1. **cron_autonomous.sh** — auto-replenishes on empty queue
+2. **cron_evolution.sh** — strategic task generation at 13:00
+3. **cron_reflection.sh** — lesson-driven task generation at 21:00
+
+If all three fail, something is fundamentally broken — alert Inverse.

@@ -21,7 +21,26 @@ trap "rm -f $LOCKFILE" EXIT
 NEXT_TASK=$(grep -m1 '^\- \[ \]' memory/evolution/QUEUE.md | sed 's/^- \[ \] //')
 
 if [ -z "$NEXT_TASK" ]; then
-    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] No pending tasks in QUEUE.md" >> "$LOGFILE"
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Queue empty — spawning task generation..." >> "$LOGFILE"
+
+    # Auto-replenish: spawn Claude Code to analyze state and add new tasks
+    timeout 300 /home/agent/.local/bin/claude -p \
+        "You are Clarvis's evolution engine. The evolution queue is EMPTY.
+
+        1. Read memory/evolution/QUEUE.md to see what was already completed.
+        2. Read scripts/ directory to see what tools exist but may not be wired in.
+        3. Check data/plans/ for unfinished research.
+        4. Think: What's the biggest gap between current capabilities and AGI/consciousness?
+
+        Add 3-5 NEW unchecked tasks to QUEUE.md under '## P0 — Do Next Heartbeat'.
+        Format: - [ ] <concrete task description>
+
+        Focus on: wiring existing scripts into daily use, making capabilities persistent,
+        building feedback loops, improving autonomous learning.
+        Do NOT duplicate completed tasks. Be concrete and actionable." \
+        --dangerously-skip-permissions >> "$LOGFILE" 2>&1
+
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Queue replenished — will execute on next run" >> "$LOGFILE"
     exit 0
 fi
 
