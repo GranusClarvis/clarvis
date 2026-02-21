@@ -18,6 +18,9 @@ fi
 echo $$ > "$LOCKFILE"
 trap "rm -f $LOCKFILE" EXIT
 
+# === RESTORE WORKING MEMORY FROM DISK ===
+python3 /home/agent/.openclaw/workspace/scripts/working_memory.py load >> "$LOGFILE" 2>&1
+
 # === ATTENTION-BASED TASK SELECTION ===
 # Uses attention.py salience scoring + brain.py context (replaces bash keyword matching)
 # task_selector.py scores all tasks via GWT-inspired salience: importance, recency,
@@ -103,6 +106,9 @@ TASK_EXIT=$?
 
 # Log the output
 cat "$TASK_OUTPUT_FILE" >> "$LOGFILE"
+
+# Save working memory state after heartbeat (survives restarts)
+python3 /home/agent/.openclaw/workspace/scripts/working_memory.py save >> "$LOGFILE" 2>&1
 
 if [ $TASK_EXIT -eq 0 ]; then
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] COMPLETED: $NEXT_TASK" >> "$LOGFILE"

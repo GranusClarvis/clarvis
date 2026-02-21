@@ -13,11 +13,12 @@ from collections import deque
 from datetime import datetime, timedelta
 from pathlib import Path
 
-WORKING_MEM_FILE = Path("/home/agent/.openclaw/workspace/data/working_memory.json")
+WORKING_MEM_FILE = Path("/home/agent/.openclaw/workspace/data/working_memory_state.json")
 
 # Configuration
 MAX_ITEMS = 10  # Maximum items in working memory
 ITEM_TTL_SECONDS = 300  # 5 minutes default TTL
+PERSIST_TTL_SECONDS = 3600  # 1 hour — extended TTL for items restored from disk
 
 class WorkingMemoryBuffer:
     """GWT-inspired working memory with attention spotlight."""
@@ -25,35 +26,62 @@ class WorkingMemoryBuffer:
     def __init__(self, max_items=MAX_ITEMS, ttl=ITEM_TTL_SECONDS):
         self.max_items = max_items
         self.ttl = ttl
-        self._load()
-    
-    def _load(self):
-        """Load working memory from disk."""
-        if WORKING_MEM_FILE.exists():
-            try:
-                data = json.loads(WORKING_MEM_FILE.read_text())
-                self.items = deque(data.get("items", []))
-                self.spotlight = data.get("spotlight", None)
-                self.last_update = datetime.fromisoformat(data.get("last_update", datetime.now().isoformat()))
-            except:
-                self._reset()
-        else:
-            self._reset()
-    
+        self.load_from_disk()
+
     def _reset(self):
         """Reset to empty state."""
         self.items = deque()
         self.spotlight = None
         self.last_update = datetime.now()
-    
+
     def _save(self):
-        """Persist to disk."""
+        """Persist to disk (internal — called after every mutation)."""
+        self.save_to_disk()
+
+    def save_to_disk(self):
+        """
+        Serialize the full working memory state to data/working_memory_state.json.
+        Called after every heartbeat and every mutation.
+        """
+        WORKING_MEM_FILE.parent.mkdir(parents=True, exist_ok=True)
         data = {
             "items": list(self.items),
             "spotlight": self.spotlight,
-            "last_update": self.last_update.isoformat()
+            "last_update": self.last_update.isoformat(),
+            "saved_at": datetime.now().isoformat()
         }
         WORKING_MEM_FILE.write_text(json.dumps(data, indent=2))
+
+    def load_from_disk(self):
+        """
+        Load working memory state from data/working_memory_state.json.
+        Extends TTLs of restored items so working memory survives restarts.
+        Called on boot (init).
+        """
+        if WORKING_MEM_FILE.exists():
+            try:
+                data = json.loads(WORKING_MEM_FILE.read_text())
+                raw_items = data.get("items", [])
+                now = datetime.now()
+
+                # Extend TTLs for items that would otherwise expire after restart
+                restored_items = []
+                for item in raw_items:
+                    expires = datetime.fromisoformat(item["expires"])
+                    if expires < now:
+                        # Item expired — extend with persist TTL to keep it alive
+                        item["expires"] = (now + timedelta(seconds=PERSIST_TTL_SECONDS)).isoformat()
+                    restored_items.append(item)
+
+                self.items = deque(restored_items)
+                self.spotlight = data.get("spotlight", None)
+                self.last_update = datetime.fromisoformat(
+                    data.get("last_update", now.isoformat())
+                )
+            except Exception:
+                self._reset()
+        else:
+            self._reset()
     
     def add(self, content: str, importance: float = 0.5, source: str = "system"):
         """
@@ -202,7 +230,15 @@ if __name__ == "__main__":
     elif cmd == "clean":
         wm.clear_expired()
         print(f"Cleaned. Current: {wm}")
-    
+
+    elif cmd == "save":
+        wm.save_to_disk()
+        print(f"Saved to {WORKING_MEM_FILE}")
+
+    elif cmd == "load":
+        wm.load_from_disk()
+        print(f"Loaded from {WORKING_MEM_FILE}: {wm}")
+
     else:
         print(f"Unknown command: {cmd}")
-        print("Commands: add, spotlight, spotlight-get, broadcast, clear, clean")
+        print("Commands: add, spotlight, spotlight-get, broadcast, clear, clean, save, load")
