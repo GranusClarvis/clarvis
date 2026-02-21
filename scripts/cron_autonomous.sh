@@ -90,6 +90,11 @@ fi
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] EXECUTING: $NEXT_TASK" >> "$LOGFILE"
 
+# === REASONING CHAIN: Open chain before execution ===
+REASONING_HOOK="/home/agent/.openclaw/workspace/scripts/reasoning_chain_hook.py"
+CHAIN_ID=$(python3 "$REASONING_HOOK" open "$NEXT_TASK" "${TASK_SECTION:-unknown}" "${BEST_SALIENCE:-0.0}" 2>> "$LOGFILE")
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] REASONING: Opened chain $CHAIN_ID for task" >> "$LOGFILE"
+
 # === PREDICTION: Log confidence prediction before execution ===
 CONFIDENCE_SCRIPT="/home/agent/.openclaw/workspace/scripts/clarvis_confidence.py"
 # Sanitize task text for use as event key (first 60 chars, alphanumeric + underscores)
@@ -120,9 +125,19 @@ python3 /home/agent/.openclaw/workspace/scripts/working_memory.py save >> "$LOGF
 # === OUTCOME: Record actual result for prediction feedback loop ===
 if [ $TASK_EXIT -eq 0 ]; then
     python3 "$CONFIDENCE_SCRIPT" outcome "$TASK_EVENT" "success" >> "$LOGFILE" 2>&1
+    # === REASONING CHAIN: Close with success outcome ===
+    if [ -n "$CHAIN_ID" ]; then
+        python3 "$REASONING_HOOK" close "$CHAIN_ID" "success" "$NEXT_TASK" "$TASK_EXIT" 2>> "$LOGFILE"
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] REASONING: Closed chain $CHAIN_ID (success)" >> "$LOGFILE"
+    fi
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] COMPLETED: $NEXT_TASK" >> "$LOGFILE"
 else
     python3 "$CONFIDENCE_SCRIPT" outcome "$TASK_EVENT" "failure" >> "$LOGFILE" 2>&1
+    # === REASONING CHAIN: Close with failure outcome ===
+    if [ -n "$CHAIN_ID" ]; then
+        python3 "$REASONING_HOOK" close "$CHAIN_ID" "failure" "$NEXT_TASK" "$TASK_EXIT" 2>> "$LOGFILE"
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] REASONING: Closed chain $CHAIN_ID (failure)" >> "$LOGFILE"
+    fi
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] FAILED (exit $TASK_EXIT): $NEXT_TASK" >> "$LOGFILE"
 
     # === HIVE-STYLE EVOLUTION: Failure → Evolve → Redeploy ===
