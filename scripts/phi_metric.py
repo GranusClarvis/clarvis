@@ -398,6 +398,9 @@ def record_phi(brain=None):
         "total_edges": result["raw"]["total_edges"],
     })
 
+    # Keep last 90 days of history (matches capability_history cap)
+    history = history[-90:]
+
     os.makedirs(os.path.dirname(PHI_HISTORY_FILE), exist_ok=True)
     with open(PHI_HISTORY_FILE, 'w') as f:
         json.dump(history, f, indent=2)
