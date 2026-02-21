@@ -241,11 +241,15 @@ class ClarvisBrain:
                         if meta["created_at"] < cutoff_date:
                             continue
                     
+                    # ChromaDB distance (lower = more similar)
+                    distance = results["distances"][0][i] if results.get("distances") else None
+
                     result_item = {
                         "document": doc,
                         "metadata": meta,
                         "collection": col_name,
                         "id": results["ids"][0][i],
+                        "distance": distance,
                         "related": []
                     }
                     

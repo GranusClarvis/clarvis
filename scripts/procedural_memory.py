@@ -42,11 +42,12 @@ def find_procedure(task_text: str, threshold: float = 0.5) -> dict | None:
     """Search for a matching procedure for a given task.
 
     Uses semantic similarity via brain.recall() on the procedures collection.
-    Returns the best match if it's relevant enough, else None.
+    Returns the best match if similarity exceeds threshold, else None.
 
     Args:
         task_text: Description of the task to find a procedure for
-        threshold: Minimum importance to consider (lower = more permissive)
+        threshold: Maximum cosine distance to accept (lower = stricter match).
+                   Default 0.5. Typical good matches are < 0.3.
 
     Returns:
         Dict with procedure info (name, steps, success_rate, id) or None
@@ -60,8 +61,19 @@ def find_procedure(task_text: str, threshold: float = 0.5) -> dict | None:
     if not results:
         return None
 
-    # Return best match — brain.recall sorts by importance
-    best = results[0]
+    # Pick the closest semantic match (lowest distance)
+    results_with_dist = [r for r in results if r.get("distance") is not None]
+    if results_with_dist:
+        best = min(results_with_dist, key=lambda r: r["distance"])
+    else:
+        best = results[0]
+
+    distance = best.get("distance")
+
+    # Filter by similarity threshold — reject if too dissimilar
+    if distance is not None and distance > threshold:
+        return None
+
     meta = best.get("metadata", {})
 
     # Parse steps from metadata
