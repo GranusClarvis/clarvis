@@ -27,16 +27,14 @@ def get_brain_stats():
     }
 
 def get_goal_progress():
-    """Get all goal progress."""
-    # Goals are stored in clarvis-goals collection
-    results = brain.recall("goal progress", collections=["clarvis-goals"], n=20)
-    goals = []
-    for r in results:
-        doc = r.get("document", "")
-        # Extract goal info from stored memories
-        if "goal:" in doc.lower() or "progress" in doc.lower():
-            goals.append(doc[:200])  # Truncate for display
-    return goals
+    """Get all goal progress using get_goals() (normalized output)."""
+    goals = brain.get_goals()
+    result = []
+    for g in goals:
+        name = g["metadata"].get("goal", "unknown")
+        progress = g["metadata"].get("progress", 0)
+        result.append(f"{name}: {progress}%")
+    return result
 
 def get_evolution_velocity():
     """Calculate evolution velocity from recent memory activity."""

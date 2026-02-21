@@ -283,11 +283,67 @@ class ClarvisBrain:
         return memories
     
     # === GOAL TRACKING ===
-    
+
     def get_goals(self):
-        """Get all tracked goals"""
-        return self.get(GOALS)
-    
+        """Get all tracked goals with normalized name/progress fields.
+
+        Every goal is returned with metadata containing 'goal' (str) and
+        'progress' (int), regardless of how it was originally stored.
+
+        Returns list of dicts with 'document', 'metadata', 'id'.
+        """
+        raw = self.get(GOALS)
+        for g in raw:
+            meta = g.get("metadata", {})
+            if "goal" in meta and "progress" in meta:
+                continue
+            doc = g.get("document", "")
+            goal_id = g.get("id", "")
+            if ":" in doc and "%" in doc:
+                name = doc.split(":")[0].strip()
+                try:
+                    progress = int(doc.split(":")[1].split("%")[0].strip())
+                except (ValueError, IndexError):
+                    progress = 0
+            else:
+                name = goal_id.replace("goal-", "").replace("-", " ").replace("_", " ").title()
+                progress = 0
+            meta["goal"] = name
+            meta["progress"] = progress
+        return raw
+
+    def migrate_goals(self):
+        """One-time migration: convert store()-based goals to set_goal() format.
+
+        Goals stored via store() lack structured 'goal'/'progress' metadata.
+        This re-saves them via set_goal() so progress can be tracked, then
+        deletes the old unstructured entries.
+
+        Returns number of goals migrated.
+        """
+        col = self.collections[GOALS]
+        results = col.get()
+        migrated = 0
+        to_delete = []
+
+        for i, mem_id in enumerate(results.get("ids", [])):
+            meta = results["metadatas"][i] if results.get("metadatas") else {}
+            if "goal" in meta and "progress" in meta:
+                continue  # Already structured
+
+            doc = results["documents"][i] if results.get("documents") else ""
+            # Derive a clean name from the id
+            name = mem_id.replace("goal-", "").replace("-", " ").replace("_", " ").title()
+
+            self.set_goal(name, 0, subtasks={"description": doc[:200]})
+            to_delete.append(mem_id)
+            migrated += 1
+
+        if to_delete:
+            col.delete(ids=to_delete)
+
+        return migrated
+
     def set_goal(self, goal_name, progress, subtasks=None):
         """Set or update a goal"""
         goal_data = {
@@ -297,7 +353,7 @@ class ClarvisBrain:
         }
         if subtasks:
             goal_data["subtasks"] = json.dumps(subtasks)
-        
+
         col = self.collections[GOALS]
         col.upsert(
             ids=[goal_name],
