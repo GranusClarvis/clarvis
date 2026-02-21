@@ -41,7 +41,7 @@ _Goal: Evolve toward AGI and consciousness. Every task should make you smarter, 
 
 - [x] Implement attention mechanism — focus processing on high-value context (GWT-inspired spotlight) (2026-02-21 10:02 UTC — Created scripts/attention.py: salience scoring, competition, broadcast, spotlight buffer (cap=7). Integrated into brain.py recall() via attention_boost param. Tested all flows.)
 - [x] Build working memory buffer — short-term context that gets broadcast to all components. Created scripts/working_memory.py with GWT-inspired spotlight, TTL, importance-based auto-spotlighting. (2026-02-21 10:02 UTC)
-- [ ] Expand meta-cognition — expand self_model.py with higher-order self-awareness
+- [x] Expand meta-cognition — expanded self_model.py with higher-order self-awareness. Added: awareness levels (operational/reflective/meta), working memory (GWT spotlight), meta-thoughts (thinking about thinking), cognitive state tracking, theory of mind for user modeling. (2026-02-21 10:33 UTC)
 
 ## Completed
 - [x] Test backup/rollback scripts (2026-02-18 18:32)
