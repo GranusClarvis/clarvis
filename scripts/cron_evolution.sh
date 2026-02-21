@@ -1,7 +1,7 @@
 #!/bin/bash
 # Deep evolution thinking with Claude Code
 # KEY: Analyze progress AND write concrete new tasks to QUEUE.md
-cd /home/agent/.openclaw/workspace
+source /home/agent/.openclaw/workspace/scripts/cron_env.sh
 
 LOGFILE="memory/cron_evolution.log"
 

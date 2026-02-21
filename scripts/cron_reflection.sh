@@ -1,6 +1,6 @@
 #!/bin/bash
 # Daily reflection - consolidate memory AND generate new evolution tasks
-cd /home/agent/.openclaw/workspace
+source /home/agent/.openclaw/workspace/scripts/cron_env.sh
 
 LOGFILE="memory/cron_reflection.log"
 

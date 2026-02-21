@@ -93,6 +93,16 @@ def score_tasks(tasks):
     except Exception:
         recent_text = ""
 
+    # Log retrieval quality: context recall was useful if it contains real content
+    try:
+        from retrieval_quality import tracker
+        if context and context != "idle":
+            tracker.rate_last("task_selector_context", useful=True, reason="has active context")
+        if recent_text and len(recent_text) > 50:
+            tracker.rate_last("task_selector_recent", useful=True, reason="recent memories found")
+    except Exception:
+        pass
+
     scored = []
 
     for task in tasks:

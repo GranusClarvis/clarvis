@@ -1,6 +1,6 @@
 #!/bin/bash
 # Evening code review - audit today's work + daily capability assessment
-cd /home/agent/.openclaw/workspace
+source /home/agent/.openclaw/workspace/scripts/cron_env.sh
 LOGFILE="memory/cron_evening.log"
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Evening routine started ===" >> "$LOGFILE"

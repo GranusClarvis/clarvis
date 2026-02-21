@@ -56,9 +56,16 @@ def find_procedure(task_text: str, threshold: float = 0.5) -> dict | None:
         task_text,
         collections=[PROCEDURES],
         n=3,
+        caller="procedural_memory",
     )
 
     if not results:
+        # Rate: no results = not useful
+        try:
+            from retrieval_quality import tracker
+            tracker.rate_last("procedural_memory", useful=False, reason="no_results")
+        except Exception:
+            pass
         return None
 
     # Pick the closest semantic match (lowest distance)
@@ -72,6 +79,12 @@ def find_procedure(task_text: str, threshold: float = 0.5) -> dict | None:
 
     # Filter by similarity threshold — reject if too dissimilar
     if distance is not None and distance > threshold:
+        # Rate: results found but too dissimilar
+        try:
+            from retrieval_quality import tracker
+            tracker.rate_last("procedural_memory", useful=False, reason=f"too_dissimilar_d={distance:.3f}")
+        except Exception:
+            pass
         return None
 
     meta = best.get("metadata", {})
@@ -87,6 +100,13 @@ def find_procedure(task_text: str, threshold: float = 0.5) -> dict | None:
     use_count = int(meta.get("use_count", 0))
     success_count = int(meta.get("success_count", 0))
     success_rate = success_count / use_count if use_count > 0 else 1.0
+
+    # Rate: found a matching procedure = useful retrieval
+    try:
+        from retrieval_quality import tracker
+        tracker.rate_last("procedural_memory", useful=True, reason=f"matched_d={distance:.3f}")
+    except Exception:
+        pass
 
     return {
         "id": best["id"],

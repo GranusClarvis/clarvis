@@ -1,6 +1,6 @@
 #!/bin/bash
 # Evening Report - 11:00 PM CET
-cd /home/agent/.openclaw/workspace
+source /home/agent/.openclaw/workspace/scripts/cron_env.sh
 
 python3 << 'PYEOF'
 import sys

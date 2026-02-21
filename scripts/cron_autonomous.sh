@@ -3,7 +3,7 @@
 # Runs every 30 minutes. Picks next evolution task. Executes it.
 # Uses attention-based salience scoring to pick BEST task, not just first.
 
-cd /home/agent/.openclaw/workspace
+source /home/agent/.openclaw/workspace/scripts/cron_env.sh
 LOGFILE="memory/cron/autonomous.log"
 LOCKFILE="/tmp/clarvis_autonomous.lock"
 

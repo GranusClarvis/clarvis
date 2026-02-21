@@ -368,23 +368,44 @@ def _assess_memory_system():
         collections = len(stats.get("collections", {}))
 
         if total >= 10:
-            score += 0.3
+            score += 0.2
             evidence.append(f"{total} memories stored")
         if total >= 30:
             score += 0.1
         if edges >= 10:
-            score += 0.2
+            score += 0.15
             evidence.append(f"{edges} graph edges")
         if collections >= 5:
-            score += 0.2
+            score += 0.15
             evidence.append(f"{collections} collections")
         # Check recall works
         results = brain.recall("test", n=1)
         if results:
-            score += 0.2
+            score += 0.1
             evidence.append("recall operational")
     except Exception as e:
         evidence.append(f"error: {e}")
+
+    # Retrieval quality signal (new: finer-grained quality measure)
+    try:
+        from retrieval_quality import tracker
+        report = tracker.report(days=7)
+        if report.get("total_events", 0) > 0:
+            hit_rate = report.get("hit_rate")
+            dead_rate = report.get("dead_recall_rate", 0)
+            if hit_rate is not None:
+                # Scale 0-0.3 based on hit rate
+                quality_score = hit_rate * 0.3
+                score += quality_score
+                evidence.append(f"retrieval hit_rate={hit_rate:.0%} (+{quality_score:.2f})")
+            if dead_rate < 0.1:
+                evidence.append(f"low dead_recall_rate={dead_rate:.0%}")
+            elif dead_rate > 0.3:
+                score -= 0.1
+                evidence.append(f"HIGH dead_recall_rate={dead_rate:.0%} (-0.10)")
+    except Exception:
+        pass
+
     return min(1.0, score), evidence
 
 

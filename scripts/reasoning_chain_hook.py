@@ -53,7 +53,7 @@ def open_chain(task_text: str, section: str = "unknown", salience: str = "0.0") 
 
     # Enrich with brain context — what do we know about this domain?
     try:
-        context_memories = brain.recall(task_text, n=3)
+        context_memories = brain.recall(task_text, n=3, caller="reasoning_chain_hook")
         if context_memories:
             snippets = [m.get("text", "")[:80] for m in context_memories[:2]]
             initial_thought += f" Brain context: {'; '.join(snippets)}"

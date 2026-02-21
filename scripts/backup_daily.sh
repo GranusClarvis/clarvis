@@ -25,6 +25,7 @@
 # =============================================================================
 
 set -euo pipefail
+source /home/agent/.openclaw/workspace/scripts/cron_env.sh
 
 # --- Configuration ---
 WORKSPACE="$HOME/.openclaw/workspace"

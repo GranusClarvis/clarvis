@@ -195,7 +195,7 @@ class ClarvisBrain:
         except Exception:
             pass  # Don't let linking failures break store()
 
-    def recall(self, query, collections=None, n=5, min_importance=None, include_related=False, since_days=None, attention_boost=False):
+    def recall(self, query, collections=None, n=5, min_importance=None, include_related=False, since_days=None, attention_boost=False, caller=None):
         """
         Recall memories matching a query
 
@@ -207,6 +207,7 @@ class ClarvisBrain:
             include_related: Include graph-related memories
             since_days: Only memories from last N days (None = all time)
             attention_boost: Boost results that match current spotlight focus
+            caller: Who is calling recall (for retrieval quality tracking)
 
         Returns:
             List of matching documents
@@ -276,14 +277,33 @@ class ClarvisBrain:
             except Exception:
                 pass  # Don't let attention failures break recall
 
-        # Sort by importance + attention boost (highest first)
+        # Sort by combined relevance score:
+        # Primary signal: semantic distance (lower = more relevant)
+        # Secondary signal: importance + attention boost
+        # Formula: relevance = (1 / (1 + distance)) * 0.7 + importance * 0.3
         def sort_key(x):
-            base = x["metadata"].get("importance", 0)
+            distance = x.get("distance")
+            if distance is not None:
+                # Normalize distance to 0-1 relevance (inverse)
+                semantic_relevance = 1.0 / (1.0 + distance)
+            else:
+                semantic_relevance = 0.5  # Unknown distance = neutral
+            importance = x["metadata"].get("importance", 0.5)
             boost = x["metadata"].get("_attention_boost", 0)
-            return base + boost
+            return semantic_relevance * 0.7 + (importance + boost) * 0.3
         all_results.sort(key=sort_key, reverse=True)
 
-        return all_results[:n * len(collections)]
+        final_results = all_results[:n * len(collections)]
+
+        # Log retrieval event for quality tracking (non-blocking, fail-safe)
+        if caller and query:
+            try:
+                from retrieval_quality import tracker
+                tracker.on_recall(query, final_results, caller=caller)
+            except Exception:
+                pass  # Never let tracking break recall
+
+        return final_results
     
     def get(self, collection, n=100):
         """Get all memories from a collection"""
