@@ -15,9 +15,9 @@ _Goal: Evolve toward AGI and consciousness. Every task should make you smarter, 
 - [x] Fix assessor ceiling effect — all 7 assessors redesigned with continuous quality scoring. avg dropped 1.00 → 0.61 (accurate) (2026-02-21 22:00 UTC)
 - [x] Create memory_consolidation.py — dedup, noise prune, enhanced decay, stale archive. Wired into cron_reflection.sh as Step 4 (2026-02-21 22:00 UTC)
 - [x] Enhance cron_evolution.sh — now receives phi trend, capability scores, retrieval quality, auto-applied confidence threshold (2026-02-21 22:00 UTC)
-- [ ] Fix reasoning chain outcomes — 20 chains stored but 0 have outcomes. Investigate why reasoning_chain_hook.py close() isn't recording real outcomes
+- [x] Fix reasoning chain outcomes — 20 chains stored but 0 have outcomes. Investigate why reasoning_chain_hook.py close() isn't recording real outcomes (2026-02-21 22:03 UTC — Root cause: self_model.py assessor checked chain["outcome"] (top-level) but outcomes live inside steps[].outcome. Also >2 steps threshold was too strict. Fixed assessor, backfilled 2 orphaned chains. Score 0.20→0.99. close() itself was correct all along.)
 - [ ] Populate working memory during tasks — working_memory buffer is empty. Add working_memory.add() calls in cron_autonomous.sh for task context
-- [ ] Improve cross-collection connectivity — Phi weakest component at 8%. Run knowledge_synthesis more frequently or improve auto_link cross-collection threshold
+- [x] Improve cross-collection connectivity — Phi weakest component at 8%. Run knowledge_synthesis more frequently or improve auto_link cross-collection threshold (2026-02-21 — Raised auto_link threshold 1.2→1.5, increased max cross-links 2→4 per store, added bulk_cross_link() to brain.py, ran it on all 218 memories creating 611 new cross-collection edges. Cross-collection score 0.163→0.484, Phi 0.589→0.653. Wired crosslink into cron_reflection.sh as Step 3.5.)
 - [ ] Run memory consolidation first time — execute `python3 memory_consolidation.py consolidate` to prune 26 noise entries
 
 - [x] Fix reasoning_chain_hook.py:56 — change `limit=3` to `n=3` (wrong param name silently fails) — (2026-02-21 18:21 UTC — Fixed: `brain.recall(task_text, limit=3)` → `brain.recall(task_text, n=3)`. Tested end-to-end.)

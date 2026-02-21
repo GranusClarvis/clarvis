@@ -172,7 +172,7 @@ class ClarvisBrain:
                     if linked >= 3:
                         break
 
-            # 2) Cross-collection links (top 2 from other collections)
+            # 2) Cross-collection links (best match from each other collection, up to 4)
             cross_linked = 0
             for other_col in DEFAULT_COLLECTIONS:
                 if other_col == collection or other_col not in self.collections:
@@ -184,11 +184,11 @@ class ClarvisBrain:
                     )
                     if xresults["ids"] and xresults["ids"][0] and xresults["distances"] and xresults["distances"][0]:
                         dist = xresults["distances"][0][0]
-                        # Only link if reasonably similar (distance < 1.2)
-                        if dist < 1.2:
+                        # Link if semantically related (distance < 1.5)
+                        if dist < 1.5:
                             self.add_relationship(memory_id, xresults["ids"][0][0], "cross_collection")
                             cross_linked += 1
-                            if cross_linked >= 2:
+                            if cross_linked >= 4:
                                 break
                 except Exception:
                     continue
@@ -657,8 +657,87 @@ class ClarvisBrain:
             "stats": self.stats()
         }
     
+    # === BULK CROSS-COLLECTION LINKING ===
+
+    def bulk_cross_link(self, max_distance=1.5, max_links_per_memory=3, verbose=False):
+        """
+        Scan all memories and create cross-collection edges where missing.
+
+        This retroactively builds cross-collection connectivity for memories
+        that were stored before cross-linking was added or with stricter thresholds.
+
+        Args:
+            max_distance: Maximum embedding distance to create a link (default 1.5)
+            max_links_per_memory: Max new cross-collection links per memory
+            verbose: Print progress details
+
+        Returns:
+            Dict with stats: new_edges, memories_scanned, collections_linked
+        """
+        new_edges = 0
+        memories_scanned = 0
+
+        # Build set of existing cross-collection edges for dedup
+        existing_pairs = set()
+        for e in self.graph.get("edges", []):
+            if e.get("type") == "cross_collection":
+                existing_pairs.add((e["from"], e["to"]))
+                existing_pairs.add((e["to"], e["from"]))
+
+        for col_name, col in self.collections.items():
+            results = col.get()
+            ids = results.get("ids", [])
+            docs = results.get("documents", [])
+
+            for idx, (mem_id, doc) in enumerate(zip(ids, docs)):
+                if not doc or len(doc) < 10:
+                    continue
+
+                memories_scanned += 1
+                links_added = 0
+
+                for other_col_name, other_col in self.collections.items():
+                    if other_col_name == col_name:
+                        continue
+                    if other_col.count() == 0:
+                        continue
+
+                    try:
+                        xresults = other_col.query(
+                            query_texts=[doc],
+                            n_results=1
+                        )
+                        if (xresults["ids"] and xresults["ids"][0] and
+                            xresults["distances"] and xresults["distances"][0]):
+                            target_id = xresults["ids"][0][0]
+                            dist = xresults["distances"][0][0]
+
+                            if dist < max_distance and (mem_id, target_id) not in existing_pairs:
+                                self.add_relationship(mem_id, target_id, "cross_collection")
+                                existing_pairs.add((mem_id, target_id))
+                                existing_pairs.add((target_id, mem_id))
+                                new_edges += 1
+                                links_added += 1
+
+                                if verbose:
+                                    print(f"  {col_name} -> {other_col_name} (dist={dist:.3f})")
+
+                                if links_added >= max_links_per_memory:
+                                    break
+                    except Exception:
+                        continue
+
+            if verbose and ids:
+                print(f"  Scanned {col_name}: {len(ids)} memories")
+
+        return {
+            "new_edges": new_edges,
+            "memories_scanned": memories_scanned,
+            "total_edges": len(self.graph.get("edges", [])),
+        }
+
     # === STATISTICS ===
-    
+
     def stats(self):
         """Get brain statistics"""
         stats = {
@@ -840,6 +919,7 @@ if __name__ == "__main__":
         print("  optimize           - Run decay and prune")
         print("  stale              - Show stale memories")
         print("  context            - Show current context")
+        print("  crosslink          - Build cross-collection edges for all memories")
         sys.exit(1)
     
     cmd = sys.argv[1]
@@ -879,5 +959,11 @@ if __name__ == "__main__":
             print(f"  {s['last_accessed']} [{s['collection']}] {s['document']}...")
     elif cmd == "context":
         print(f"Current context: {b.get_context()}")
+    elif cmd == "crosslink":
+        result = b.bulk_cross_link(verbose=True)
+        print(f"\nCross-linking complete:")
+        print(f"  New edges: {result['new_edges']}")
+        print(f"  Scanned: {result['memories_scanned']} memories")
+        print(f"  Total edges: {result['total_edges']}")
     else:
         print(f"Unknown command: {cmd}")

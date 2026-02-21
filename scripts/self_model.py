@@ -757,11 +757,15 @@ def _assess_reasoning_chains():
                 with open(cf) as f:
                     chain = json.load(f)
                 steps = chain.get("steps", chain.get("chain", []))
-                has_outcome = bool(chain.get("outcome") or chain.get("conclusion"))
+                # Outcomes are stored inside steps, not at top level
+                has_outcome = any(
+                    s.get("outcome") is not None
+                    for s in steps
+                ) or bool(chain.get("outcome") or chain.get("conclusion"))
                 is_today = today in cf.name
 
-                # High quality: >2 steps AND has an outcome/conclusion
-                if len(steps) > 2 and has_outcome:
+                # High quality: has steps AND has a recorded outcome
+                if len(steps) >= 1 and has_outcome:
                     high_quality_count += 1
                 else:
                     low_quality_count += 1
