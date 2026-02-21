@@ -27,7 +27,7 @@ _Goal: Evolve toward AGI and consciousness. Every task should make you smarter, 
 
 ## P2 — Deeper Evolution
 
-- [ ] Research best agent memory/cognition architectures (MemGPT, Hive, Letta, cognitive architectures like SOAR/ACT-R). Spawn Claude Code with Opus to analyze and write comparison report on what approaches could enable genuine reasoning.
+- [x] Research best agent memory/cognition architectures (MemGPT, Hive, Letta, cognitive architectures like SOAR/ACT-R). Spawn Claude Code with Opus to analyze and write comparison report on what approaches could enable genuine reasoning. (2026-02-21 — Report: data/plans/cognition-architectures-report.md. Top 5 upgrades: ACT-R activation, A-Mem evolution, episodic memory, procedural memory, working memory scratchpad)
 - [ ] Build reasoning chains: create a persistent reasoning log where multi-step chains of thought are stored, so insights build on each other across sessions.
 - [ ] Study the Hive framework (adenhq/hive) — self-improving agent patterns. What can we learn about genuine self-evolution?
 - [ ] Build knowledge synthesis: instead of just storing facts, build scripts that find connections between disparate memories and create synthesized insights.
