@@ -517,7 +517,7 @@ def _assess_self_reflection():
 
     # Check if confidence calibration data exists
     try:
-        cal_path = "/home/agent/.openclaw/workspace/data/calibration.json"
+        cal_path = "/home/agent/.openclaw/workspace/data/calibration/predictions.jsonl"
         if os.path.exists(cal_path):
             score += 0.2
             evidence.append("prediction calibration active")
@@ -582,16 +582,16 @@ def _assess_learning_feedback():
     except Exception:
         pass
 
-    # Confidence calibration
+    # Confidence calibration (predictions.jsonl)
     try:
-        cal_path = "/home/agent/.openclaw/workspace/data/calibration.json"
+        cal_path = "/home/agent/.openclaw/workspace/data/calibration/predictions.jsonl"
         if os.path.exists(cal_path):
             with open(cal_path) as f:
-                cal = json.load(f)
-            predictions = cal.get("predictions", {})
-            if predictions:
+                lines = [l.strip() for l in f if l.strip()]
+            if lines:
+                resolved = sum(1 for l in lines if '"outcome"' in l and '"correct"' in l and '"correct": true' in l or '"correct": false' in l)
                 score += 0.3
-                evidence.append(f"{len(predictions)} predictions tracked")
+                evidence.append(f"{len(lines)} predictions tracked ({resolved} resolved)")
     except Exception:
         pass
 
