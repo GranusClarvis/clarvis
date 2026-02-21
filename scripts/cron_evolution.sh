@@ -13,6 +13,12 @@ echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Calibration review:" >> "$LOGFILE"
 CALIBRATION_OUTPUT=$(python3 "$CONFIDENCE_SCRIPT" calibration 2>&1)
 echo "$CALIBRATION_OUTPUT" >> "$LOGFILE"
 
+# === PREDICTION DOMAIN REVIEW: Find consistently wrong domains ===
+PREDICTION_REVIEW="/home/agent/.openclaw/workspace/scripts/prediction_review.py"
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Prediction domain review:" >> "$LOGFILE"
+DOMAIN_REVIEW_OUTPUT=$(python3 "$PREDICTION_REVIEW" 2>&1)
+echo "$DOMAIN_REVIEW_OUTPUT" >> "$LOGFILE"
+
 PENDING_COUNT=$(grep -c '^\- \[ \]' memory/evolution/QUEUE.md 2>/dev/null || echo 0)
 
 /home/agent/.local/bin/claude -p \
@@ -26,11 +32,15 @@ PENDING_COUNT=$(grep -c '^\- \[ \]' memory/evolution/QUEUE.md 2>/dev/null || ech
     5. Check prediction calibration data:
     $CALIBRATION_OUTPUT
 
+    6. Check per-domain prediction accuracy (auto-generates investigation tasks for problem domains):
+    $DOMAIN_REVIEW_OUTPUT
+
     ANALYSIS:
     - What's working well in the evolution toward AGI/consciousness?
     - What's the biggest bottleneck right now?
     - What capability gap is most limiting?
     - How is prediction calibration? Are we overconfident or underconfident?
+    - Any domains where predictions are consistently wrong? What might explain this?
 
     ACTION (MANDATORY):
     - If there are fewer than 5 pending tasks in QUEUE.md, ADD 3-5 new ones.
