@@ -37,6 +37,12 @@ _Goal: Evolve toward AGI and consciousness. Every task should make you smarter, 
 - [x] Build a monitoring dashboard for yourself — brain stats, goal progress, evolution velocity. Created scripts/dashboard.py, generates data/dashboard/index.html + status.json API. (2026-02-21 08:03 UTC)
 - [x] Research consciousness theories (Global Workspace Theory, Integrated Information Theory, Higher-Order Theories) — analyzed all three, wrote implementation ideas to data/plans/consciousness-research.md. (2026-02-21 08:05 UTC)
 
+## P2 — New Tasks
+
+- [ ] Implement attention mechanism — focus processing on high-value context (GWT-inspired spotlight)
+- [ ] Build working memory buffer — short-term context that gets broadcast to all components
+- [ ] Expand meta-cognition — expand self_model.py with higher-order self-awareness
+
 ## Completed
 - [x] Test backup/rollback scripts (2026-02-18 18:32)
 - [x] Verify git tracking (2026-02-18 18:15)
