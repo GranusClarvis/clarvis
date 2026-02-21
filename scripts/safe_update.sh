@@ -18,6 +18,9 @@
 #   3. PM2 graceful stop/start (not kill)
 #   4. Post-update health check with automatic rollback option
 #   5. Pre-update snapshot for instant rollback
+#   6. EXIT trap: gateway always restarts even if script is killed/crashes
+#   7. Lockfile prevents concurrent updates
+#   8. 5-minute timeout on npm install to prevent hangs
 #
 # What this script does NOT touch (safe by design):
 #   - workspace/data/clarvisdb/* (brain data - OpenClaw doesn't modify this)
@@ -54,6 +57,31 @@ NC='\033[0m'
 ACTION="update"
 SKIP_BACKUP=false
 TARGET_VERSION=""
+GATEWAY_WAS_STOPPED=false
+LOCKFILE="/tmp/openclaw-update.lock"
+
+# --- Gateway safety net ---
+# If we stopped the gateway and the script dies for ANY reason (killed, error,
+# signal, timeout, OOM, etc.), always bring the gateway back online.
+ensure_gateway_online() {
+  if [ "$GATEWAY_WAS_STOPPED" = true ]; then
+    log "${YELLOW}SAFETY${NC} Ensuring gateway is online before exit..."
+    if ! pm2 list 2>/dev/null | grep -q "openclaw-gateway.*online"; then
+      pm2 start openclaw-gateway 2>/dev/null || pm2 restart openclaw-gateway 2>/dev/null || true
+      sleep 3
+      if pm2 list 2>/dev/null | grep -q "openclaw-gateway.*online"; then
+        log "${GREEN}SAFETY${NC} Gateway restarted successfully"
+      else
+        log "${RED}SAFETY${NC} CRITICAL: Gateway failed to restart! Manual intervention needed: pm2 start openclaw-gateway"
+      fi
+    else
+      log "${GREEN}SAFETY${NC} Gateway already online"
+    fi
+  fi
+  # Clean up lockfile
+  rm -f "$LOCKFILE"
+}
+trap ensure_gateway_online EXIT
 
 # --- Parse args ---
 while [[ $# -gt 0 ]]; do
@@ -291,6 +319,8 @@ stop_gateway() {
   separator
   info "Stopping gateway gracefully..."
 
+  GATEWAY_WAS_STOPPED=true
+
   if pm2 list 2>/dev/null | grep -q "openclaw-gateway.*online"; then
     pm2 stop openclaw-gateway 2>/dev/null
     sleep 2
@@ -316,6 +346,7 @@ start_gateway() {
 
   if pm2 list 2>/dev/null | grep -q "openclaw-gateway.*online"; then
     ok "Gateway started"
+    GATEWAY_WAS_STOPPED=false
   else
     fail "Gateway failed to start!"
     return 1
@@ -335,13 +366,18 @@ do_update() {
 
   info "Running: $install_cmd"
 
-  # Run the update
-  if eval "$install_cmd" 2>&1 | tee -a "$LOG_FILE"; then
+  # Run the update with a 5 minute timeout so it can't hang forever
+  if timeout 300 bash -c "$install_cmd" 2>&1 | tee -a "$LOG_FILE"; then
     local new_version
     new_version=$(get_installed_version)
     ok "Update complete: now running $new_version"
   else
-    fail "Update command failed!"
+    local exit_code=$?
+    if [ "$exit_code" -eq 124 ]; then
+      fail "Update timed out after 5 minutes!"
+    else
+      fail "Update command failed (exit code: $exit_code)!"
+    fi
     return 1
   fi
 }
@@ -599,6 +635,19 @@ do_check() {
 do_full_update() {
   mkdir -p "$BACKUP_ROOT" "$(dirname "$LOG_FILE")"
   echo "" >> "$LOG_FILE"
+
+  # Prevent concurrent updates
+  if [ -f "$LOCKFILE" ]; then
+    local lock_pid
+    lock_pid=$(cat "$LOCKFILE" 2>/dev/null || echo "unknown")
+    if kill -0 "$lock_pid" 2>/dev/null; then
+      die "Another update is already running (PID: $lock_pid). Remove $LOCKFILE if stale."
+    else
+      warn "Stale lockfile found (PID $lock_pid not running). Removing."
+      rm -f "$LOCKFILE"
+    fi
+  fi
+  echo $$ > "$LOCKFILE"
 
   separator
   info "=== Clarvis Safe OpenClaw Update ==="
