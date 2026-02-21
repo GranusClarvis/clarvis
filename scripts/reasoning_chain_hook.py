@@ -21,6 +21,11 @@ sys.path.insert(0, os.path.dirname(__file__))
 from reasoning_chains import create_chain, add_step, complete_step, find_related_chains, list_chains
 from brain import brain
 
+try:
+    from retrieval_experiment import smart_recall
+except ImportError:
+    smart_recall = None
+
 
 def open_chain(task_text: str, section: str = "unknown", salience: str = "0.0") -> str:
     """Create a reasoning chain before executing a task.
@@ -53,12 +58,21 @@ def open_chain(task_text: str, section: str = "unknown", salience: str = "0.0") 
 
     # Enrich with brain context — what do we know about this domain?
     try:
-        context_memories = brain.recall(task_text, n=3, caller="reasoning_chain_hook")
+        if smart_recall is not None:
+            context_memories = smart_recall(task_text, n=3)
+        else:
+            context_memories = brain.recall(task_text, n=3, caller="reasoning_chain_hook")
         if context_memories:
             snippets = [m.get("text", "")[:80] for m in context_memories[:2]]
             initial_thought += f" Brain context: {'; '.join(snippets)}"
     except Exception:
-        pass
+        try:
+            context_memories = brain.recall(task_text, n=3, caller="reasoning_chain_hook")
+            if context_memories:
+                snippets = [m.get("text", "")[:80] for m in context_memories[:2]]
+                initial_thought += f" Brain context: {'; '.join(snippets)}"
+        except Exception:
+            pass
 
     chain_id = create_chain(f"Task: {task_text[:100]}", initial_thought)
     print(chain_id)  # stdout — captured by bash

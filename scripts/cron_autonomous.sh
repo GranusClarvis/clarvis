@@ -21,6 +21,9 @@ trap "rm -f $LOCKFILE" EXIT
 # === RESTORE WORKING MEMORY FROM DISK ===
 python3 /home/agent/.openclaw/workspace/scripts/working_memory.py load >> "$LOGFILE" 2>&1
 
+# === ATTENTION TICK: Run GWT competition cycle ===
+python3 /home/agent/.openclaw/workspace/scripts/attention.py tick >> "$LOGFILE" 2>&1 || true
+
 # === ATTENTION-BASED TASK SELECTION ===
 # Uses attention.py salience scoring + brain.py context (replaces bash keyword matching)
 # task_selector.py scores all tasks via GWT-inspired salience: importance, recency,
@@ -196,5 +199,19 @@ else
         echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] EVOLUTION: Fix generated for $FAILURE_ID" >> "$LOGFILE"
     fi
 fi
+
+# === ATTENTION BROADCAST: Feed task outcome into attention system ===
+TASK_STATUS="success"
+[ $TASK_EXIT -ne 0 ] && TASK_STATUS="failure"
+python3 -c "
+import sys; sys.path.insert(0, '/home/agent/.openclaw/workspace/scripts')
+from attention import attention
+attention.submit(
+    'Heartbeat task $TASK_STATUS: ${NEXT_TASK:0:100}',
+    source='heartbeat',
+    importance=0.7 if '$TASK_STATUS' == 'success' else 0.9,
+    relevance=0.8
+)
+" >> "$LOGFILE" 2>&1 || true
 
 rm -f "$TASK_OUTPUT_FILE"

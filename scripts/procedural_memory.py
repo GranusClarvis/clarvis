@@ -37,6 +37,11 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from brain import brain, PROCEDURES
 
+try:
+    from retrieval_experiment import smart_recall
+except ImportError:
+    smart_recall = None
+
 
 def find_procedure(task_text: str, threshold: float = 0.5) -> dict | None:
     """Search for a matching procedure for a given task.
@@ -52,12 +57,25 @@ def find_procedure(task_text: str, threshold: float = 0.5) -> dict | None:
     Returns:
         Dict with procedure info (name, steps, success_rate, id) or None
     """
-    results = brain.recall(
-        task_text,
-        collections=[PROCEDURES],
-        n=3,
-        caller="procedural_memory",
-    )
+    try:
+        if smart_recall is not None:
+            all_results = smart_recall(task_text, n=10)
+            # Filter to PROCEDURES collection only
+            results = [r for r in all_results if r.get("collection") == PROCEDURES][:3]
+        else:
+            results = brain.recall(
+                task_text,
+                collections=[PROCEDURES],
+                n=3,
+                caller="procedural_memory",
+            )
+    except Exception:
+        results = brain.recall(
+            task_text,
+            collections=[PROCEDURES],
+            n=3,
+            caller="procedural_memory",
+        )
 
     if not results:
         # Rate: no results = not useful

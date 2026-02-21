@@ -358,7 +358,15 @@ def save_capability_history(history):
 
 
 def _assess_memory_system():
-    """Score memory system capability based on current state."""
+    """Score memory system capability based on retrieval quality and graph density.
+
+    Scoring (continuous, quality-based — max 1.0):
+      - Retrieval quality via avg distance: <0.8 → +0.3, <1.2 → +0.2, <1.5 → +0.1  (0–0.3)
+      - Graph density: edges / total_memories ratio, scaled 0–0.3                      (0–0.3)
+      - Retrieval quality tracker hit_rate * 0.3 (if available)                         (0–0.3)
+      - Dead-recall penalty: -0.1 if dead_recall_rate > 0.3
+      - Baseline floor: +0.1 if recall returns anything at all
+    """
     score = 0.0
     evidence = []
     try:
@@ -366,27 +374,44 @@ def _assess_memory_system():
         total = stats.get("total_memories", 0)
         edges = stats.get("graph_edges", 0)
         collections = len(stats.get("collections", {}))
+        evidence.append(f"{total} memories, {edges} edges, {collections} collections")
 
-        if total >= 10:
-            score += 0.2
-            evidence.append(f"{total} memories stored")
-        if total >= 30:
-            score += 0.1
-        if edges >= 10:
-            score += 0.15
-            evidence.append(f"{edges} graph edges")
-        if collections >= 5:
-            score += 0.15
-            evidence.append(f"{collections} collections")
-        # Check recall works
-        results = brain.recall("test", n=1)
+        # --- Retrieval quality: distance-based scoring ---
+        results = brain.recall("self assessment memory quality", n=5)
         if results:
-            score += 0.1
-            evidence.append("recall operational")
+            distances = [r["distance"] for r in results if r.get("distance") is not None]
+            if distances:
+                avg_dist = sum(distances) / len(distances)
+                if avg_dist < 0.8:
+                    dist_score = 0.3
+                elif avg_dist < 1.2:
+                    dist_score = 0.2
+                elif avg_dist < 1.5:
+                    dist_score = 0.1
+                else:
+                    dist_score = 0.0
+                score += dist_score
+                evidence.append(f"avg retrieval distance={avg_dist:.3f} (+{dist_score:.2f})")
+            else:
+                score += 0.1
+                evidence.append("recall operational (no distance data)")
+        else:
+            evidence.append("recall returned no results")
+
+        # --- Graph density: edges per memory ---
+        if total > 0:
+            density = edges / total
+            # Scale: density of 3+ edges/memory = full 0.3; linear below that
+            density_score = min(0.3, (density / 3.0) * 0.3)
+            score += density_score
+            evidence.append(f"graph density={density:.2f} edges/mem (+{density_score:.2f})")
+        else:
+            evidence.append("no memories for graph density")
+
     except Exception as e:
         evidence.append(f"error: {e}")
 
-    # Retrieval quality signal (new: finer-grained quality measure)
+    # --- Retrieval quality tracker (hit-rate based, continuous) ---
     try:
         from retrieval_quality import tracker
         report = tracker.report(days=7)
@@ -394,69 +419,116 @@ def _assess_memory_system():
             hit_rate = report.get("hit_rate")
             dead_rate = report.get("dead_recall_rate", 0)
             if hit_rate is not None:
-                # Scale 0-0.3 based on hit rate
                 quality_score = hit_rate * 0.3
                 score += quality_score
                 evidence.append(f"retrieval hit_rate={hit_rate:.0%} (+{quality_score:.2f})")
-            if dead_rate < 0.1:
-                evidence.append(f"low dead_recall_rate={dead_rate:.0%}")
-            elif dead_rate > 0.3:
+            if dead_rate > 0.3:
                 score -= 0.1
                 evidence.append(f"HIGH dead_recall_rate={dead_rate:.0%} (-0.10)")
+            elif dead_rate < 0.1:
+                evidence.append(f"low dead_recall_rate={dead_rate:.0%}")
     except Exception:
         pass
 
-    return min(1.0, score), evidence
+    return max(0.0, min(1.0, score)), evidence
 
 
 def _assess_autonomous_execution():
-    """Score autonomous execution based on cron log and queue progress."""
+    """Score autonomous execution based on success rate, velocity, and diversity.
+
+    Scoring (continuous, quality-based — max 1.0):
+      - Success rate: completed / (completed + failed) * 0.5        (0–0.5)
+      - Velocity: tasks completed today / 5, capped at 0.3          (0–0.3)
+      - Task diversity: unique task domains in completions           (0–0.2)
+        1 domain = 0.05, 2 = 0.1, 3+ = 0.2
+    """
     score = 0.0
     evidence = []
     log_path = "/home/agent/.openclaw/workspace/memory/cron/autonomous.log"
-    queue_path = "/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md"
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    completed_count = 0
+    failed_count = 0
+    completed_descriptions = []
 
     try:
         if os.path.exists(log_path):
             with open(log_path) as f:
                 lines = f.readlines()
             today_lines = [l for l in lines if today in l]
-            completed = [l for l in today_lines if "COMPLETED" in l]
-            failed = [l for l in today_lines if "FAILED" in l]
-            if today_lines:
-                score += 0.3
-                evidence.append(f"{len(today_lines)} log entries today")
-            if completed:
-                score += 0.3
-                evidence.append(f"{len(completed)} tasks completed")
-            if failed:
-                penalty = min(0.2, len(failed) * 0.1)
-                score -= penalty
-                evidence.append(f"{len(failed)} tasks failed (-{penalty:.1f})")
+            completed_lines = [l for l in today_lines if "COMPLETED" in l]
+            failed_lines = [l for l in today_lines if "FAILED" in l]
+            completed_count = len(completed_lines)
+            failed_count = len(failed_lines)
+            completed_descriptions = completed_lines  # Keep for diversity analysis
+
+            # --- Success rate: completed / (completed + failed) * 0.5 ---
+            total_attempted = completed_count + failed_count
+            if total_attempted > 0:
+                success_rate = completed_count / total_attempted
+                rate_score = success_rate * 0.5
+                score += rate_score
+                evidence.append(f"success rate={success_rate:.0%} ({completed_count}/{total_attempted}) (+{rate_score:.2f})")
+            elif today_lines:
+                # Tasks running but none resolved yet — small credit for activity
+                score += 0.05
+                evidence.append(f"{len(today_lines)} log entries today (none resolved yet)")
+            else:
+                evidence.append("no autonomous activity today")
+
+            # --- Velocity: completed today / 5, capped at 0.3 ---
+            velocity = min(0.3, (completed_count / 5.0) * 0.3)
+            score += velocity
+            if completed_count > 0:
+                evidence.append(f"velocity={completed_count}/5 tasks (+{velocity:.2f})")
+
+            # --- Task diversity: unique domains in completed task descriptions ---
+            # Extract domain keywords from task descriptions
+            domain_keywords = {
+                "memory": ["memory", "brain", "recall", "store", "retrieval"],
+                "code": ["code", "script", "fix", "bug", "implement", "build"],
+                "infra": ["cron", "hook", "wire", "deploy", "config", "infrastructure"],
+                "reflection": ["reflect", "assess", "self", "model", "meta", "phi"],
+                "learning": ["learn", "predict", "calibrat", "feedback", "procedure"],
+                "reasoning": ["reason", "chain", "think", "analys"],
+                "monitoring": ["monitor", "log", "alert", "watchdog", "health"],
+            }
+            found_domains = set()
+            for desc in completed_descriptions:
+                desc_lower = desc.lower()
+                for domain, keywords in domain_keywords.items():
+                    if any(kw in desc_lower for kw in keywords):
+                        found_domains.add(domain)
+
+            if len(found_domains) >= 3:
+                diversity_score = 0.2
+            elif len(found_domains) == 2:
+                diversity_score = 0.1
+            elif len(found_domains) == 1:
+                diversity_score = 0.05
+            else:
+                diversity_score = 0.0
+
+            if diversity_score > 0:
+                score += diversity_score
+                evidence.append(f"task diversity={len(found_domains)} domains ({', '.join(sorted(found_domains))}) (+{diversity_score:.2f})")
+
     except Exception as e:
         evidence.append(f"log error: {e}")
-
-    try:
-        if os.path.exists(queue_path):
-            with open(queue_path) as f:
-                content = f.read()
-            done_count = content.count("[x]")
-            todo_count = content.count("[ ]")
-            if done_count > 0:
-                score += 0.2
-                evidence.append(f"{done_count} queue items completed total")
-            if todo_count > 0:
-                score += 0.2
-                evidence.append(f"{todo_count} items remaining")
-    except Exception as e:
-        evidence.append(f"queue error: {e}")
 
     return max(0.0, min(1.0, score)), evidence
 
 
 def _assess_code_generation():
-    """Score code generation based on today's git commits and codebase health."""
+    """Score code generation based on commits, compile health, and test pass rate.
+
+    Scoring (continuous, quality-based — max 1.0):
+      - Git commits today: scaled 0–0.3 (1 commit=0.1, 3+=0.2, 6+=0.3)
+      - Scripts exist (baseline infrastructure): +0.1 (reduced from 0.3)
+      - Key scripts compile clean: 0–0.2 (proportional to clean/total)
+      - Test pass rate (if test infra exists): 0–0.3
+      - Commit message quality bonus: +0.1 if avg msg length > 20 chars
+    """
     score = 0.0
     evidence = []
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -470,209 +542,483 @@ def _assess_code_generation():
         )
         commits = [l.strip() for l in result.stdout.strip().split('\n') if l.strip()]
         if commits:
-            score += 0.3
-            evidence.append(f"{len(commits)} commits today")
-            if len(commits) >= 3:
-                score += 0.1
             if len(commits) >= 6:
+                commit_score = 0.3
+            elif len(commits) >= 3:
+                commit_score = 0.2
+            else:
+                commit_score = 0.1
+            score += commit_score
+            evidence.append(f"{len(commits)} commits today (+{commit_score:.2f})")
+
+            # Commit message quality: longer messages suggest more thoughtful commits
+            avg_msg_len = sum(len(c) for c in commits) / len(commits)
+            if avg_msg_len > 20:
                 score += 0.1
+                evidence.append(f"avg commit msg {avg_msg_len:.0f} chars (+0.10)")
     except Exception as e:
         evidence.append(f"git error: {e}")
 
-    # Baseline: scripts directory has files (codebase infrastructure)
+    # Baseline: scripts directory has files (reduced — existence is not quality)
     try:
         scripts = list(Path("/home/agent/.openclaw/workspace/scripts").glob("*.py"))
         if len(scripts) >= 5:
             score += 0.1
-        if len(scripts) >= 15:
-            score += 0.2
-            evidence.append(f"{len(scripts)} Python scripts in codebase")
+            evidence.append(f"{len(scripts)} Python scripts (baseline +0.10)")
     except Exception:
         pass
 
-    # Check for syntax errors in key scripts
+    # Check for syntax errors in key scripts (proportional scoring)
     try:
         key_scripts = ["brain.py", "self_model.py", "attention.py", "working_memory.py"]
-        errors = 0
+        clean = 0
+        checked = 0
         for s in key_scripts:
             path = f"/home/agent/.openclaw/workspace/scripts/{s}"
             if os.path.exists(path):
+                checked += 1
                 r = subprocess.run(["python3", "-m", "py_compile", path],
                                    capture_output=True, text=True, timeout=5)
-                if r.returncode != 0:
-                    errors += 1
-        if errors == 0:
-            score += 0.2
-            evidence.append(f"all {len(key_scripts)} key scripts compile clean")
+                if r.returncode == 0:
+                    clean += 1
+        if checked > 0:
+            compile_score = (clean / checked) * 0.2
+            score += compile_score
+            evidence.append(f"{clean}/{checked} key scripts compile clean (+{compile_score:.2f})")
+    except Exception:
+        pass
+
+    # Test pass rate (if test infrastructure exists)
+    try:
+        test_dirs = [
+            Path("/home/agent/.openclaw/workspace/tests"),
+            Path("/home/agent/.openclaw/workspace/scripts/tests"),
+        ]
+        test_files = []
+        for td in test_dirs:
+            if td.exists():
+                test_files.extend(td.glob("test_*.py"))
+                test_files.extend(td.glob("*_test.py"))
+
+        if test_files:
+            r = subprocess.run(
+                ["python3", "-m", "pytest", "--tb=no", "-q"] + [str(f) for f in test_files[:20]],
+                capture_output=True, text=True, timeout=30,
+                cwd="/home/agent/.openclaw/workspace"
+            )
+            output = r.stdout + r.stderr
+            # Parse pytest summary: "X passed, Y failed" or "X passed"
+            import re
+            passed_m = re.search(r'(\d+) passed', output)
+            failed_m = re.search(r'(\d+) failed', output)
+            passed = int(passed_m.group(1)) if passed_m else 0
+            failed = int(failed_m.group(1)) if failed_m else 0
+            total_tests = passed + failed
+            if total_tests > 0:
+                pass_rate = passed / total_tests
+                test_score = pass_rate * 0.3
+                score += test_score
+                evidence.append(f"test pass rate={pass_rate:.0%} ({passed}/{total_tests}) (+{test_score:.2f})")
+            elif r.returncode == 0:
+                # pytest ran but no tests collected — small credit for having infra
+                score += 0.05
+                evidence.append("test infra exists but no tests collected (+0.05)")
+    except Exception:
+        pass  # No test infra — that's fine, other metrics carry the weight
+
+    return max(0.0, min(1.0, score)), evidence
+
+
+def _assess_self_reflection():
+    """Score self-reflection capability based on actual quality metrics.
+
+    Scoring (continuous, quality-based — max 1.0):
+      - Phi metric value directly: phi * 0.3                           (0–0.3)
+      - Prediction calibration quality: (1 - brier_score) * 0.3       (0–0.3)
+      - Meta-thought recency: any in last 24h → +0.2, older → +0.05  (0–0.2)
+      - Trajectory depth: len(trajectory) / 20, capped at 0.2         (0–0.2)
+    """
+    score = 0.0
+    evidence = []
+
+    # --- Phi metric value (continuous, not binary) ---
+    try:
+        phi_path = "/home/agent/.openclaw/workspace/data/phi_history.json"
+        if os.path.exists(phi_path):
+            with open(phi_path) as f:
+                phi_data = json.load(f)
+            if phi_data and isinstance(phi_data, list) and len(phi_data) > 0:
+                latest = phi_data[-1]
+                phi_val = float(latest.get("phi", 0))
+                phi_score = min(0.3, phi_val * 0.3)  # phi ranges 0-1
+                score += phi_score
+                evidence.append(f"phi={phi_val:.3f} (+{phi_score:.2f})")
+            else:
+                evidence.append("phi history empty")
         else:
-            evidence.append(f"{errors} scripts have syntax errors")
+            evidence.append("no phi history file")
+    except Exception as e:
+        evidence.append(f"phi error: {e}")
+
+    # --- Prediction calibration quality: Brier score ---
+    try:
+        cal_path = "/home/agent/.openclaw/workspace/data/calibration/predictions.jsonl"
+        if os.path.exists(cal_path):
+            with open(cal_path) as f:
+                lines = [l.strip() for l in f if l.strip()]
+            resolved = []
+            for line in lines:
+                try:
+                    pred = json.loads(line)
+                    if pred.get("correct") is not None:
+                        confidence = float(pred.get("confidence", 0.5))
+                        outcome = 1.0 if pred["correct"] else 0.0
+                        resolved.append((confidence, outcome))
+                except (json.JSONDecodeError, ValueError):
+                    continue
+
+            if resolved:
+                # Brier score: mean squared error of probability forecasts
+                brier = sum((conf - outcome) ** 2 for conf, outcome in resolved) / len(resolved)
+                cal_score = (1.0 - brier) * 0.3
+                score += cal_score
+                evidence.append(f"calibration brier={brier:.3f} ({len(resolved)} predictions) (+{cal_score:.2f})")
+            else:
+                evidence.append(f"{len(lines)} predictions tracked (none resolved)")
+        else:
+            evidence.append("no calibration data")
+    except Exception as e:
+        evidence.append(f"calibration error: {e}")
+
+    # --- Meta-thought recency ---
+    meta = load_meta()
+    meta_thoughts = meta.get("meta_thoughts", [])
+    if meta_thoughts:
+        try:
+            latest_ts = meta_thoughts[-1].get("timestamp", "")
+            latest_dt = datetime.fromisoformat(latest_ts.replace("Z", "+00:00")) if latest_ts else None
+            now = datetime.now(timezone.utc)
+            if latest_dt:
+                # Make both offset-aware for comparison
+                if latest_dt.tzinfo is None:
+                    latest_dt = latest_dt.replace(tzinfo=timezone.utc)
+                age_hours = (now - latest_dt).total_seconds() / 3600
+                if age_hours <= 24:
+                    score += 0.2
+                    evidence.append(f"meta-thought {age_hours:.1f}h ago (+0.20)")
+                else:
+                    score += 0.05
+                    evidence.append(f"meta-thought {age_hours:.0f}h ago (stale, +0.05)")
+            else:
+                score += 0.05
+                evidence.append(f"{len(meta_thoughts)} meta-thoughts (no timestamp)")
+        except Exception:
+            score += 0.05
+            evidence.append(f"{len(meta_thoughts)} meta-thoughts (parse error)")
+    else:
+        evidence.append("no meta-thoughts recorded")
+
+    # --- Trajectory depth ---
+    model = load_model()
+    trajectory = model.get("trajectory", [])
+    traj_depth = min(0.2, (len(trajectory) / 20.0) * 0.2)
+    score += traj_depth
+    evidence.append(f"trajectory depth={len(trajectory)}/20 (+{traj_depth:.2f})")
+
+    return max(0.0, min(1.0, score)), evidence
+
+
+def _assess_reasoning_chains():
+    """Score reasoning chain QUALITY, not just count.
+
+    Scoring (continuous, quality-based — max 1.0):
+      - High-quality chains (>2 steps AND has outcome): each +0.1, cap 0.5  (0–0.5)
+      - Today's chains with real outcomes vs empty chains                    (0–0.3)
+      - Hook exists: +0.05 (reduced from 0.2 — existence is not quality)    (0–0.05)
+      - Chain freshness: any chains today → +0.15                           (0–0.15)
+    """
+    score = 0.0
+    evidence = []
+
+    chains_dir = Path("/home/agent/.openclaw/workspace/data/reasoning_chains")
+    today = datetime.now(timezone.utc).strftime("%Y%m%d")
+
+    high_quality_count = 0
+    low_quality_count = 0
+    today_with_outcomes = 0
+    today_empty = 0
+
+    if chains_dir.exists():
+        chain_files = list(chains_dir.glob("*.json"))
+        evidence.append(f"{len(chain_files)} total chains stored")
+
+        for cf in chain_files:
+            try:
+                with open(cf) as f:
+                    chain = json.load(f)
+                steps = chain.get("steps", chain.get("chain", []))
+                has_outcome = bool(chain.get("outcome") or chain.get("conclusion"))
+                is_today = today in cf.name
+
+                # High quality: >2 steps AND has an outcome/conclusion
+                if len(steps) > 2 and has_outcome:
+                    high_quality_count += 1
+                else:
+                    low_quality_count += 1
+
+                if is_today:
+                    if has_outcome:
+                        today_with_outcomes += 1
+                    else:
+                        today_empty += 1
+            except (json.JSONDecodeError, Exception):
+                continue
+
+        # --- Quality score: high-quality chains, +0.1 each, capped at 0.5 ---
+        quality_score = min(0.5, high_quality_count * 0.1)
+        score += quality_score
+        if high_quality_count > 0:
+            evidence.append(f"{high_quality_count} high-quality chains (>2 steps + outcome) (+{quality_score:.2f})")
+
+        # --- Today's chain quality: ratio of outcome-bearing chains ---
+        today_total = today_with_outcomes + today_empty
+        if today_total > 0:
+            today_quality_ratio = today_with_outcomes / today_total
+            today_score = today_quality_ratio * 0.3
+            score += today_score
+            evidence.append(f"today: {today_with_outcomes}/{today_total} chains have outcomes (+{today_score:.2f})")
+
+            # Freshness bonus for any activity today
+            score += 0.15
+            evidence.append(f"{today_total} chains today (+0.15)")
+    else:
+        evidence.append("no reasoning chains directory")
+
+    # Hook existence (minimal weight — existence alone is not quality)
+    hook_path = Path("/home/agent/.openclaw/workspace/scripts/reasoning_chain_hook.py")
+    if hook_path.exists():
+        score += 0.05
+        evidence.append("reasoning chain hook exists (+0.05)")
+
+    return max(0.0, min(1.0, score)), evidence
+
+
+def _assess_learning_feedback():
+    """Score learning and feedback loops based on actual effectiveness.
+
+    Scoring (continuous, quality-based — max 1.0):
+      - Procedure success rate * 0.3 (not just "procedures exist")    (0–0.3)
+      - Calibration: (1 - brier_score) * 0.3                         (0–0.3)
+      - Evolution loop active + failures captured: +0.1               (0–0.1)
+      - Knowledge synthesis: proportional to recent synthesis runs     (0–0.15)
+      - Feedback loop completeness: predictions with outcomes * 0.15  (0–0.15)
+    """
+    score = 0.0
+    evidence = []
+
+    # --- Procedural memory: success rate, not just existence ---
+    try:
+        from procedural_memory import list_procedures
+        procs = list_procedures()
+        if procs:
+            # Weighted average success rate (weight by use_count)
+            total_uses = sum(p.get("use_count", 0) for p in procs)
+            if total_uses > 0:
+                weighted_success = sum(
+                    p.get("success_rate", 0) * p.get("use_count", 0)
+                    for p in procs
+                ) / total_uses
+                proc_score = weighted_success * 0.3
+                score += proc_score
+                evidence.append(f"{len(procs)} procedures, weighted success={weighted_success:.0%} ({total_uses} uses) (+{proc_score:.2f})")
+            else:
+                # Procedures exist but never used — minimal credit
+                proc_score = 0.05
+                score += proc_score
+                evidence.append(f"{len(procs)} procedures stored (unused) (+{proc_score:.2f})")
+        else:
+            evidence.append("no procedures stored")
+    except Exception:
+        evidence.append("procedural memory unavailable")
+
+    # --- Calibration: Brier score (quality, not binary "predictions tracked") ---
+    try:
+        cal_path = "/home/agent/.openclaw/workspace/data/calibration/predictions.jsonl"
+        if os.path.exists(cal_path):
+            with open(cal_path) as f:
+                lines = [l.strip() for l in f if l.strip()]
+            resolved = []
+            total_predictions = len(lines)
+            for line in lines:
+                try:
+                    pred = json.loads(line)
+                    if pred.get("correct") is not None:
+                        confidence = float(pred.get("confidence", 0.5))
+                        outcome = 1.0 if pred["correct"] else 0.0
+                        resolved.append((confidence, outcome))
+                except (json.JSONDecodeError, ValueError):
+                    continue
+
+            if resolved:
+                brier = sum((conf - outcome) ** 2 for conf, outcome in resolved) / len(resolved)
+                cal_score = (1.0 - brier) * 0.3
+                score += cal_score
+                evidence.append(f"calibration brier={brier:.3f} ({len(resolved)}/{total_predictions} resolved) (+{cal_score:.2f})")
+
+                # Feedback loop completeness: what fraction of predictions get resolved?
+                resolution_rate = len(resolved) / total_predictions if total_predictions > 0 else 0
+                loop_score = resolution_rate * 0.15
+                score += loop_score
+                evidence.append(f"resolution rate={resolution_rate:.0%} (+{loop_score:.2f})")
+            else:
+                evidence.append(f"{total_predictions} predictions (none resolved)")
+        else:
+            evidence.append("no calibration data")
+    except Exception as e:
+        evidence.append(f"calibration error: {e}")
+
+    # --- Evolution loop (reduced weight — existence check) ---
+    evo_dir = Path("/home/agent/.openclaw/workspace/data/evolution/failures")
+    if evo_dir.exists():
+        failures = list(evo_dir.glob("*.json"))
+        if failures:
+            score += 0.1
+            evidence.append(f"evolution loop active ({len(failures)} failures captured) (+0.10)")
+        else:
+            score += 0.05
+            evidence.append("evolution loop exists (no failures captured) (+0.05)")
+    else:
+        evidence.append("no evolution failure tracking")
+
+    # --- Knowledge synthesis: check for recent synthesis output ---
+    try:
+        synth_path = Path("/home/agent/.openclaw/workspace/data/synthesis")
+        if synth_path.exists():
+            synth_files = list(synth_path.glob("*.json"))
+            if synth_files:
+                synth_score = min(0.15, len(synth_files) * 0.03)
+                score += synth_score
+                evidence.append(f"{len(synth_files)} synthesis outputs (+{synth_score:.2f})")
+            else:
+                evidence.append("synthesis dir exists but empty")
+        else:
+            # Fall back to checking if script exists
+            if Path("/home/agent/.openclaw/workspace/scripts/knowledge_synthesis.py").exists():
+                score += 0.02
+                evidence.append("knowledge synthesis script exists (+0.02)")
     except Exception:
         pass
 
     return max(0.0, min(1.0, score)), evidence
 
 
-def _assess_self_reflection():
-    """Score self-reflection capability."""
-    score = 0.0
-    evidence = []
-
-    # Check meta-cognition state
-    meta = load_meta()
-    if meta.get("awareness_level") in ("reflective", "meta"):
-        score += 0.3
-        evidence.append(f"awareness: {meta['awareness_level']}")
-    elif meta.get("awareness_level") == "operational":
-        score += 0.1
-        evidence.append("awareness: operational")
-
-    if meta.get("meta_thoughts"):
-        score += 0.2
-        evidence.append(f"{len(meta['meta_thoughts'])} meta-thoughts recorded")
-
-    # Check self_model itself exists and has trajectory
-    model = load_model()
-    if model.get("trajectory"):
-        score += 0.2
-        evidence.append(f"{len(model['trajectory'])} trajectory events")
-
-    # Check if confidence calibration data exists
-    try:
-        cal_path = "/home/agent/.openclaw/workspace/data/calibration/predictions.jsonl"
-        if os.path.exists(cal_path):
-            score += 0.2
-            evidence.append("prediction calibration active")
-    except Exception:
-        pass
-
-    # Phi metric existence
-    try:
-        phi_path = "/home/agent/.openclaw/workspace/data/phi_history.json"
-        if os.path.exists(phi_path):
-            score += 0.1
-            evidence.append("Phi metric tracking active")
-    except Exception:
-        pass
-
-    return min(1.0, score), evidence
-
-
-def _assess_reasoning_chains():
-    """Score reasoning chain capability."""
-    score = 0.0
-    evidence = []
-
-    chains_dir = Path("/home/agent/.openclaw/workspace/data/reasoning_chains")
-    if chains_dir.exists():
-        chain_files = list(chains_dir.glob("*.json"))
-        if chain_files:
-            score += 0.4
-            evidence.append(f"{len(chain_files)} reasoning chains stored")
-            if len(chain_files) >= 5:
-                score += 0.2
-
-    # Check if hook script exists and is wired in
-    hook_path = Path("/home/agent/.openclaw/workspace/scripts/reasoning_chain_hook.py")
-    if hook_path.exists():
-        score += 0.2
-        evidence.append("reasoning chain hook exists")
-
-    # Check if chains are being created today
-    today = datetime.now(timezone.utc).strftime("%Y%m%d")
-    if chains_dir.exists():
-        today_chains = [f for f in chains_dir.glob("*.json") if today in f.name]
-        if today_chains:
-            score += 0.2
-            evidence.append(f"{len(today_chains)} chains today")
-
-    return min(1.0, score), evidence
-
-
-def _assess_learning_feedback():
-    """Score learning and feedback loop capability."""
-    score = 0.0
-    evidence = []
-
-    # Procedural memory
-    try:
-        from procedural_memory import list_procedures
-        procs = list_procedures()
-        if procs:
-            score += 0.3
-            evidence.append(f"{len(procs)} procedures stored")
-    except Exception:
-        pass
-
-    # Confidence calibration (predictions.jsonl)
-    try:
-        cal_path = "/home/agent/.openclaw/workspace/data/calibration/predictions.jsonl"
-        if os.path.exists(cal_path):
-            with open(cal_path) as f:
-                lines = [l.strip() for l in f if l.strip()]
-            if lines:
-                resolved = sum(1 for l in lines if '"outcome"' in l and '"correct"' in l and '"correct": true' in l or '"correct": false' in l)
-                score += 0.3
-                evidence.append(f"{len(lines)} predictions tracked ({resolved} resolved)")
-    except Exception:
-        pass
-
-    # Evolution loop
-    evo_dir = Path("/home/agent/.openclaw/workspace/data/evolution/failures")
-    if evo_dir.exists():
-        score += 0.2
-        failures = list(evo_dir.glob("*.json"))
-        evidence.append(f"evolution loop active ({len(failures)} failures captured)")
-
-    # Knowledge synthesis
-    synth_path = Path("/home/agent/.openclaw/workspace/scripts/knowledge_synthesis.py")
-    if synth_path.exists():
-        score += 0.2
-        evidence.append("knowledge synthesis available")
-
-    return min(1.0, score), evidence
-
-
 def _assess_consciousness_metrics():
-    """Score consciousness metric capability."""
+    """Score consciousness metrics using actual measured values.
+
+    Scoring (continuous, quality-based — max 1.0):
+      - Actual phi value * 0.3 (not just "file exists")                    (0–0.3)
+      - Attention spotlight utilization: items_in_spotlight / capacity * 0.2 (0–0.2)
+      - Working memory freshness: non-expired items / total items * 0.2     (0–0.2)
+      - Integration score from phi components * 0.3                         (0–0.3)
+    """
     score = 0.0
     evidence = []
 
-    # Phi metric
-    phi_path = Path("/home/agent/.openclaw/workspace/data/phi_history.json")
-    if phi_path.exists():
-        try:
+    # --- Actual phi value (continuous) ---
+    phi_val = 0.0
+    phi_components = {}
+    try:
+        phi_path = Path("/home/agent/.openclaw/workspace/data/phi_history.json")
+        if phi_path.exists():
             with open(phi_path) as f:
                 phi_data = json.load(f)
-            if phi_data:
-                latest = phi_data[-1] if isinstance(phi_data, list) else phi_data
-                phi_val = latest.get("phi", 0)
-                score += 0.3
-                evidence.append(f"Phi={phi_val:.3f}")
+            if phi_data and isinstance(phi_data, list) and len(phi_data) > 0:
+                latest = phi_data[-1]
+                phi_val = float(latest.get("phi", 0))
+                phi_components = latest.get("components", {})
+                phi_score = min(0.3, phi_val * 0.3)
+                score += phi_score
+                evidence.append(f"phi={phi_val:.3f} (+{phi_score:.2f})")
+            else:
+                evidence.append("phi history empty")
+        else:
+            evidence.append("no phi history file")
+    except Exception as e:
+        evidence.append(f"phi error: {e}")
+
+    # --- Attention spotlight utilization ---
+    try:
+        from attention import attention as attn
+        spotlight = attn.focus()
+        capacity = attn.capacity
+        if capacity > 0:
+            utilization = len(spotlight) / capacity
+            attn_score = utilization * 0.2
+            score += attn_score
+            evidence.append(f"spotlight {len(spotlight)}/{capacity} items, util={utilization:.0%} (+{attn_score:.2f})")
+        else:
+            evidence.append("attention capacity=0")
+    except Exception as e:
+        # Fall back: check if spotlight state file has items
+        try:
+            spotlight_file = Path("/home/agent/.openclaw/workspace/data/attention_spotlight.json")
+            if spotlight_file.exists():
+                with open(spotlight_file) as f:
+                    attn_data = json.load(f)
+                items = attn_data.get("items", [])
+                capacity = attn_data.get("capacity", 7)
+                if capacity > 0:
+                    utilization = min(1.0, len(items) / capacity)
+                    attn_score = utilization * 0.2
+                    score += attn_score
+                    evidence.append(f"spotlight {len(items)}/{capacity} (from file) (+{attn_score:.2f})")
+            else:
+                evidence.append(f"attention unavailable: {e}")
         except Exception:
-            pass
+            evidence.append(f"attention unavailable: {e}")
 
-    # Attention mechanism
-    attn_path = Path("/home/agent/.openclaw/workspace/scripts/attention.py")
-    if attn_path.exists():
-        score += 0.2
-        evidence.append("attention mechanism exists")
+    # --- Working memory freshness ---
+    try:
+        wm_state_path = Path("/home/agent/.openclaw/workspace/data/working_memory_state.json")
+        if wm_state_path.exists():
+            with open(wm_state_path) as f:
+                wm_data = json.load(f)
+            wm_items = wm_data.get("items", [])
+            if wm_items:
+                now = datetime.now()
+                active_count = 0
+                for item in wm_items:
+                    try:
+                        expires = datetime.fromisoformat(item.get("expires", ""))
+                        if expires > now:
+                            active_count += 1
+                    except (ValueError, TypeError):
+                        continue  # Can't parse — count as expired
+                freshness = active_count / len(wm_items) if wm_items else 0
+                wm_score = freshness * 0.2
+                score += wm_score
+                evidence.append(f"working memory: {active_count}/{len(wm_items)} active (+{wm_score:.2f})")
+            else:
+                evidence.append("working memory empty")
+        else:
+            evidence.append("no working memory state file")
+    except Exception as e:
+        evidence.append(f"working memory error: {e}")
 
-    # Working memory
-    wm_path = Path("/home/agent/.openclaw/workspace/scripts/working_memory.py")
-    if wm_path.exists():
-        score += 0.2
-        evidence.append("working memory exists")
+    # --- Integration score from phi components ---
+    if phi_components:
+        # Average of the phi sub-components — measures cross-system integration
+        component_values = [float(v) for v in phi_components.values() if isinstance(v, (int, float))]
+        if component_values:
+            avg_integration = sum(component_values) / len(component_values)
+            integration_score = min(0.3, avg_integration * 0.3)
+            score += integration_score
+            component_str = ", ".join(f"{k}={v:.2f}" for k, v in phi_components.items())
+            evidence.append(f"integration avg={avg_integration:.3f} ({component_str}) (+{integration_score:.2f})")
+    else:
+        evidence.append("no phi components for integration score")
 
-    wm_state = Path("/home/agent/.openclaw/workspace/data/working_memory_state.json")
-    if wm_state.exists():
-        score += 0.1
-        evidence.append("working memory persistent")
-
-    # Self model (this script — meta!)
-    score += 0.2
-    evidence.append("self-model active (this assessment)")
-
-    return min(1.0, score), evidence
+    return max(0.0, min(1.0, score)), evidence
 
 
 ASSESSORS = {

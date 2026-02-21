@@ -22,6 +22,11 @@ sys.path.insert(0, '/home/agent/.openclaw/workspace/scripts')
 from attention import attention
 from brain import brain
 
+try:
+    from retrieval_experiment import smart_recall
+except ImportError:
+    smart_recall = None
+
 QUEUE_FILE = "/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md"
 
 # Keywords that signal AGI/consciousness relevance (high-value work)
@@ -88,7 +93,10 @@ def score_tasks(tasks):
 
     # Get recent activity from brain for relevance
     try:
-        recent = brain.recall_recent(days=1, n=10)
+        if smart_recall is not None:
+            recent = smart_recall("recent activity and current work", n=10)
+        else:
+            recent = brain.recall_recent(days=1, n=10)
         recent_text = " ".join([r["document"] for r in recent])
     except Exception:
         recent_text = ""
