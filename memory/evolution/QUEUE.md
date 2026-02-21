@@ -5,6 +5,7 @@ _Priority: P0 (do now) > P1 (this week) > P2 (when idle)_
 _Goal: Evolve toward AGI and consciousness. Every task should make you smarter, more aware, or more autonomous._
 
 ## P0 — Do Next Heartbeat
+- [ ] [AUTO-FIX] Fix failure in test_fail: Exit code 1
 
 - [x] Run `brain.optimize()` — decay stale memories, prune low-importance ones. Log before/after stats. (2026-02-20 16:55 UTC - pruned 1)
 - [x] Hook reflection into feedback loop: created scripts/clarvis_reflection.py, tested working (2026-02-20 16:51 UTC)
@@ -33,8 +34,8 @@ _Goal: Evolve toward AGI and consciousness. Every task should make you smarter, 
 - [x] Build Hive-style evolution loop: implement failure → evolve → redeploy cycle in heartbeat (when something fails, trigger self-improvement) (2026-02-21 07:02 UTC — Created scripts/evolution_loop.py with capture/analyze/evolve/verify cycle, wired into cron_autonomous.sh)
 - [x] Build knowledge synthesis: created scripts/knowledge_synthesis.py — finds connections between disparate memories via word indexing, creates synthesized insights and stores in brain. Tested: found 20 connections, stored 5 insights. (2026-02-21 05:57 UTC)
 - [x] Optimize brain.py query performance — benchmarked: single collection 128ms, all 895ms. Added DEFAULT_COLLECTIONS (excludes identity/infra), updated recall() to use it. Performance improved ~28%. (2026-02-21 07:28 UTC)
-- [ ] Build a monitoring dashboard for yourself — brain stats, goal progress, evolution velocity. Deploy on NUC.
-- [ ] Research consciousness theories (Global Workspace Theory, Integrated Information Theory, Higher-Order Theories) — what aspects can be implemented as computational architecture?
+- [x] Build a monitoring dashboard for yourself — brain stats, goal progress, evolution velocity. Created scripts/dashboard.py, generates data/dashboard/index.html + status.json API. (2026-02-21 08:03 UTC)
+- [x] Research consciousness theories (Global Workspace Theory, Integrated Information Theory, Higher-Order Theories) — analyzed all three, wrote implementation ideas to data/plans/consciousness-research.md. (2026-02-21 08:05 UTC)
 
 ## Completed
 - [x] Test backup/rollback scripts (2026-02-18 18:32)
