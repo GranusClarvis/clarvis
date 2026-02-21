@@ -78,6 +78,10 @@ if [ -n "$SELECTOR_OUTPUT" ]; then
     TASK_SECTION=$(echo "$SELECTOR_OUTPUT" | python3 -c "import sys,json; print(json.load(sys.stdin)['section'])" 2>/dev/null)
 
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] SELECTED (salience=$BEST_SALIENCE, section=$TASK_SECTION): ${NEXT_TASK:0:80}..." >> "$LOGFILE"
+
+    # === WORKING MEMORY: Load task context into spotlight ===
+    python3 /home/agent/.openclaw/workspace/scripts/working_memory.py add "CURRENT TASK: $NEXT_TASK" 0.9 >> "$LOGFILE" 2>&1
+    python3 /home/agent/.openclaw/workspace/scripts/working_memory.py add "Task salience=$BEST_SALIENCE section=$TASK_SECTION" 0.5 >> "$LOGFILE" 2>&1
 fi
 
 # Fallback if Python selector produced no result
@@ -108,6 +112,8 @@ if [ -n "$PROC_MATCH" ] && [ "$PROC_MATCH" != "{}" ]; then
 ${PROC_STEPS}
     Use these steps as a starting guide, adapt as needed."
         echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] PROCEDURAL: Found matching procedure $PROC_ID" >> "$LOGFILE"
+        # === WORKING MEMORY: Add procedure context ===
+        python3 /home/agent/.openclaw/workspace/scripts/working_memory.py add "PROCEDURE HIT ($PROC_ID, ${PROC_RATE} success): matched prior steps for current task" 0.7 >> "$LOGFILE" 2>&1
     fi
 fi
 
@@ -115,6 +121,9 @@ fi
 REASONING_HOOK="/home/agent/.openclaw/workspace/scripts/reasoning_chain_hook.py"
 CHAIN_ID=$(python3 "$REASONING_HOOK" open "$NEXT_TASK" "${TASK_SECTION:-unknown}" "${BEST_SALIENCE:-0.0}" 2>> "$LOGFILE")
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] REASONING: Opened chain $CHAIN_ID for task" >> "$LOGFILE"
+
+# === WORKING MEMORY: Add reasoning chain ID for cross-reference ===
+python3 /home/agent/.openclaw/workspace/scripts/working_memory.py add "REASONING CHAIN: $CHAIN_ID tracking current task" 0.4 >> "$LOGFILE" 2>&1
 
 # === PREDICTION: Log confidence prediction before execution ===
 CONFIDENCE_SCRIPT="/home/agent/.openclaw/workspace/scripts/clarvis_confidence.py"
@@ -154,6 +163,8 @@ if [ $TASK_EXIT -eq 0 ]; then
         echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] REASONING: Closed chain $CHAIN_ID (success)" >> "$LOGFILE"
     fi
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] COMPLETED: $NEXT_TASK" >> "$LOGFILE"
+    # === WORKING MEMORY: Record success outcome ===
+    python3 /home/agent/.openclaw/workspace/scripts/working_memory.py add "OUTCOME: SUCCESS — ${NEXT_TASK:0:80}" 0.8 >> "$LOGFILE" 2>&1
     # === PROCEDURAL MEMORY: Learn from success or record use ===
     if [ -n "$PROC_ID" ]; then
         python3 "$PROC_SCRIPT" used "$PROC_ID" success >> "$LOGFILE" 2>&1
@@ -177,6 +188,8 @@ else
         echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] REASONING: Closed chain $CHAIN_ID (failure)" >> "$LOGFILE"
     fi
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] FAILED (exit $TASK_EXIT): $NEXT_TASK" >> "$LOGFILE"
+    # === WORKING MEMORY: Record failure outcome (high importance — needs attention) ===
+    python3 /home/agent/.openclaw/workspace/scripts/working_memory.py add "OUTCOME: FAILED (exit $TASK_EXIT) — ${NEXT_TASK:0:80}" 0.9 >> "$LOGFILE" 2>&1
     # === PROCEDURAL MEMORY: Record failure against procedure if used ===
     if [ -n "$PROC_ID" ]; then
         python3 "$PROC_SCRIPT" used "$PROC_ID" failure >> "$LOGFILE" 2>&1
