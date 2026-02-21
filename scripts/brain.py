@@ -148,10 +148,8 @@ class ClarvisBrain:
     
     def auto_link(self, memory_id, text, collection):
         """
-        Automatically link a memory to its top-3 most similar existing memories.
-
-        Uses recall() to find similar memories and add_relationship() to create
-        graph edges of type 'similar_to'.
+        Automatically link a memory to similar memories, both within
+        the same collection and across other collections.
 
         Args:
             memory_id: ID of the newly stored memory
@@ -159,23 +157,41 @@ class ClarvisBrain:
             collection: The collection the memory was stored in
         """
         try:
-            # Search the same collection for similar memories
+            linked = 0
+            # 1) Same-collection links (top 3)
             results = self.collections[collection].query(
                 query_texts=[text],
                 n_results=4  # top 4 because one will be the memory itself
             )
+            if results["ids"] and results["ids"][0]:
+                for rid in results["ids"][0]:
+                    if rid == memory_id:
+                        continue
+                    self.add_relationship(memory_id, rid, "similar_to")
+                    linked += 1
+                    if linked >= 3:
+                        break
 
-            if not results["ids"] or not results["ids"][0]:
-                return
-
-            linked = 0
-            for rid in results["ids"][0]:
-                if rid == memory_id:
-                    continue  # skip self
-                self.add_relationship(memory_id, rid, "similar_to")
-                linked += 1
-                if linked >= 3:
-                    break
+            # 2) Cross-collection links (top 2 from other collections)
+            cross_linked = 0
+            for other_col in DEFAULT_COLLECTIONS:
+                if other_col == collection or other_col not in self.collections:
+                    continue
+                try:
+                    xresults = self.collections[other_col].query(
+                        query_texts=[text],
+                        n_results=1
+                    )
+                    if xresults["ids"] and xresults["ids"][0] and xresults["distances"] and xresults["distances"][0]:
+                        dist = xresults["distances"][0][0]
+                        # Only link if reasonably similar (distance < 1.2)
+                        if dist < 1.2:
+                            self.add_relationship(memory_id, xresults["ids"][0][0], "cross_collection")
+                            cross_linked += 1
+                            if cross_linked >= 2:
+                                break
+                except Exception:
+                    continue
         except Exception:
             pass  # Don't let linking failures break store()
 

@@ -117,8 +117,10 @@ echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] REASONING: Opened chain $CHAIN_ID for task
 CONFIDENCE_SCRIPT="/home/agent/.openclaw/workspace/scripts/clarvis_confidence.py"
 # Sanitize task text for use as event key (first 60 chars, alphanumeric + underscores)
 TASK_EVENT=$(echo "$NEXT_TASK" | head -c 60 | sed 's/[^a-zA-Z0-9]/_/g')
-python3 "$CONFIDENCE_SCRIPT" predict "$TASK_EVENT" "success" 0.7 >> "$LOGFILE" 2>&1
-echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] PREDICTION: Logged prediction for $TASK_EVENT" >> "$LOGFILE"
+# Use dynamic confidence from calibration data (not hardcoded)
+DYNAMIC_CONF=$(python3 "$CONFIDENCE_SCRIPT" dynamic 2>/dev/null || echo "0.7")
+python3 "$CONFIDENCE_SCRIPT" predict "$TASK_EVENT" "success" "$DYNAMIC_CONF" >> "$LOGFILE" 2>&1
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] PREDICTION: Logged prediction for $TASK_EVENT (confidence=$DYNAMIC_CONF)" >> "$LOGFILE"
 
 # Spawn Claude Code to work on the task (10 min timeout)
 # Capture output and exit code for evolution loop

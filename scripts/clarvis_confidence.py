@@ -157,6 +157,167 @@ def calibration() -> dict:
     return result
 
 
+def dynamic_confidence(event: str = "") -> float:
+    """
+    Calculate what confidence to use for the next prediction based on
+    historical calibration data. Adjusts toward actual success rate.
+
+    Strategy:
+    - Start with base rate from historical outcomes
+    - Apply Bayesian shrinkage toward 0.7 when sample size is small
+    - Cap at 0.95 (never be 100% sure) and floor at 0.3
+
+    Returns:
+        float: Recommended confidence for next prediction (0.3-0.95)
+    """
+    entries = _load_predictions()
+    resolved = [e for e in entries if e["correct"] is not None]
+
+    if len(resolved) < 3:
+        return 0.7  # Not enough data, use conservative default
+
+    # Overall success rate
+    successes = sum(1 for e in resolved if e["correct"])
+    success_rate = successes / len(resolved)
+
+    # Bayesian shrinkage: blend observed rate with prior (0.7)
+    # As sample size grows, trust observed rate more
+    prior = 0.7
+    prior_weight = 5  # equivalent to 5 pseudo-observations
+    n = len(resolved)
+    blended = (success_rate * n + prior * prior_weight) / (n + prior_weight)
+
+    # Calculate calibration gap: how far off are current predictions?
+    avg_confidence = sum(e["confidence"] for e in resolved) / len(resolved)
+    gap = success_rate - avg_confidence  # positive = underconfident
+
+    # Adjust: move toward closing the gap (but only partially — be conservative)
+    adjusted = avg_confidence + gap * 0.6
+
+    # Final: blend Bayesian estimate with gap-adjusted estimate
+    final = (blended + adjusted) / 2
+
+    # Clamp to reasonable range
+    final = max(0.3, min(0.95, final))
+
+    return round(final, 2)
+
+
+def review() -> dict:
+    """
+    Deep calibration review with curve analysis and recommendations.
+    Returns structured analysis for storing in brain.
+    """
+    entries = _load_predictions()
+    resolved = [e for e in entries if e["correct"] is not None]
+
+    result = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "total_predictions": len(entries),
+        "resolved": len(resolved),
+        "unresolved": len(entries) - len(resolved),
+    }
+
+    if not resolved:
+        result["diagnosis"] = "No resolved predictions yet"
+        result["recommendation"] = "Keep making predictions, review after 10+"
+        return result
+
+    # Basic stats
+    successes = sum(1 for e in resolved if e["correct"])
+    failures = len(resolved) - successes
+    success_rate = successes / len(resolved)
+    avg_confidence = sum(e["confidence"] for e in resolved) / len(resolved)
+
+    result["success_rate"] = round(success_rate, 3)
+    result["failure_rate"] = round(1 - success_rate, 3)
+    result["avg_confidence"] = round(avg_confidence, 3)
+
+    # Brier score
+    brier = sum(
+        (e["confidence"] - (1.0 if e["correct"] else 0.0)) ** 2 for e in resolved
+    ) / len(resolved)
+    result["brier_score"] = round(brier, 4)
+
+    # Calibration curve: confidence vs actual outcome in buckets
+    buckets = [
+        ("0-20%", 0.0, 0.2),
+        ("20-40%", 0.2, 0.4),
+        ("40-60%", 0.4, 0.6),
+        ("60-80%", 0.6, 0.8),
+        ("80-100%", 0.8, 1.01),
+    ]
+    curve = {}
+    for label, lo, hi in buckets:
+        in_bucket = [e for e in resolved if lo <= e["confidence"] < hi]
+        if in_bucket:
+            actual = sum(1 for e in in_bucket if e["correct"]) / len(in_bucket)
+            midpoint = (lo + min(hi, 1.0)) / 2
+            curve[label] = {
+                "count": len(in_bucket),
+                "predicted_avg": round(midpoint, 2),
+                "actual_rate": round(actual, 3),
+                "gap": round(actual - midpoint, 3),
+            }
+    result["calibration_curve"] = curve
+
+    # Diagnose
+    gap = success_rate - avg_confidence
+    if gap > 0.15:
+        diagnosis = "UNDERCONFIDENT"
+        detail = f"Predicting {avg_confidence:.0%} but succeeding {success_rate:.0%} of the time (+{gap:.0%} gap)"
+    elif gap < -0.15:
+        diagnosis = "OVERCONFIDENT"
+        detail = f"Predicting {avg_confidence:.0%} but only succeeding {success_rate:.0%} ({gap:.0%} gap)"
+    else:
+        diagnosis = "WELL_CALIBRATED"
+        detail = f"Confidence {avg_confidence:.0%} vs actual {success_rate:.0%} — close match"
+
+    result["diagnosis"] = diagnosis
+    result["detail"] = detail
+
+    # Recommendation
+    recommended = dynamic_confidence()
+    result["recommended_confidence"] = recommended
+    result["current_default"] = avg_confidence
+
+    if diagnosis == "UNDERCONFIDENT":
+        result["recommendation"] = f"Raise default confidence from {avg_confidence:.0%} to {recommended:.0%}"
+        result["action"] = "threshold_raised"
+    elif diagnosis == "OVERCONFIDENT":
+        result["recommendation"] = f"Lower default confidence from {avg_confidence:.0%} to {recommended:.0%}"
+        result["action"] = "threshold_lowered"
+    else:
+        result["recommendation"] = f"Maintain current confidence ~{recommended:.0%}"
+        result["action"] = "maintain"
+
+    return result
+
+
+THRESHOLDS_FILE = f"{CALIBRATION_DIR}/thresholds.json"
+
+
+def save_threshold(confidence: float, reason: str):
+    """Save the current dynamic threshold for cron_autonomous.sh to read."""
+    data = {
+        "confidence": confidence,
+        "reason": reason,
+        "updated": datetime.now(timezone.utc).isoformat(),
+    }
+    with open(THRESHOLDS_FILE, "w") as f:
+        json.dump(data, f, indent=2)
+    return data
+
+
+def load_threshold() -> float:
+    """Load the saved dynamic threshold. Falls back to 0.7 if none saved."""
+    if os.path.exists(THRESHOLDS_FILE):
+        with open(THRESHOLDS_FILE, "r") as f:
+            data = json.load(f)
+            return data.get("confidence", 0.7)
+    return 0.7
+
+
 def _brain_store(text: str, importance: float = 0.5):
     """Store to brain if available, fail silently if not."""
     try:
@@ -212,6 +373,50 @@ if __name__ == "__main__":
                 status = " ?"
             print(f"  {entry['event']}: '{entry['expected']}' @ {entry['confidence']:.0%}{status}")
 
+    elif cmd == "review":
+        result = review()
+        print(f"=== Calibration Review ===")
+        print(f"Predictions: {result['total_predictions']} ({result['resolved']} resolved)")
+        if result['resolved'] > 0:
+            print(f"Success rate: {result.get('success_rate', 0):.0%}")
+            print(f"Avg confidence: {result.get('avg_confidence', 0):.0%}")
+            print(f"Brier score: {result.get('brier_score', 'N/A')}")
+            print(f"Diagnosis: {result.get('diagnosis', 'N/A')}")
+            print(f"  {result.get('detail', '')}")
+            print(f"Recommendation: {result.get('recommendation', '')}")
+            print(f"New threshold: {result.get('recommended_confidence', 0.7)}")
+            curve = result.get("calibration_curve", {})
+            if curve:
+                print(f"\nCalibration curve:")
+                for label, data in curve.items():
+                    bar = "#" * int(data["actual_rate"] * 20)
+                    print(f"  {label}: predicted={data['predicted_avg']:.0%} actual={data['actual_rate']:.0%} (n={data['count']}) {bar}")
+
+    elif cmd == "dynamic":
+        conf = dynamic_confidence()
+        print(f"{conf}")
+
+    elif cmd == "apply":
+        # Run review and save the new threshold
+        result = review()
+        new_conf = result.get("recommended_confidence", 0.7)
+        reason = result.get("recommendation", "calibration review")
+        saved = save_threshold(new_conf, reason)
+        print(f"Threshold updated to {new_conf} — {reason}")
+        # Store insight in brain
+        _brain_store(
+            f"Calibration review ({result.get('diagnosis', 'unknown')}): "
+            f"success_rate={result.get('success_rate', 'N/A')}, "
+            f"avg_confidence={result.get('avg_confidence', 'N/A')}, "
+            f"brier={result.get('brier_score', 'N/A')}. "
+            f"Adjusted threshold to {new_conf}.",
+            importance=0.7,
+        )
+
+    elif cmd == "threshold":
+        t = load_threshold()
+        print(f"{t}")
+
     else:
         print(f"Unknown command: {cmd}")
-        print("Try: predict, outcome, calibration, list")
+        print("Try: predict, outcome, calibration, list, review, dynamic, apply, threshold")
