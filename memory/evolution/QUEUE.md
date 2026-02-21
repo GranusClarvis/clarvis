@@ -5,7 +5,7 @@ _Priority: P0 (do now) > P1 (this week) > P2 (when idle)_
 _Goal: Evolve toward AGI and consciousness. Every task should make you smarter, more aware, or more autonomous._
 
 ## P0 — Do Next Heartbeat
-- [ ] Fix reasoning_chain_hook.py:56 — change `limit=3` to `n=3` (wrong param name silently fails) — (2026-02-21 18:00 UTC)
+- [x] Fix reasoning_chain_hook.py:56 — change `limit=3` to `n=3` (wrong param name silently fails) — (2026-02-21 18:21 UTC — Fixed: `brain.recall(task_text, limit=3)` → `brain.recall(task_text, n=3)`. Tested end-to-end.)
 - [ ] Fix procedural_memory.py find_procedure() — threshold param is accepted but never used. Add similarity threshold check. — (2026-02-21 18:00 UTC)
 - [ ] Fix cron_autonomous.sh — stops learning identical generic 4-step template. Extract real steps or skip learning. — (2026-02-21 18:00 UTC)
 - [ ] Fix phi_metric.py — add 90-day history cap (like capability_history) to phi_history.json — (2026-02-21 18:00 UTC)
