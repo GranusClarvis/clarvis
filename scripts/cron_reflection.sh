@@ -18,4 +18,8 @@ print('brain.optimize() complete')
 # Step 2: Run full reflection loop (extract lessons + generate queue tasks)
 python3 /home/agent/.openclaw/workspace/scripts/clarvis_reflection.py >> "$LOGFILE" 2>&1
 
+# Step 3: Knowledge synthesis — find cross-domain connections between today's work and past learnings
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running knowledge synthesis..." >> "$LOGFILE"
+python3 /home/agent/.openclaw/workspace/scripts/knowledge_synthesis.py >> "$LOGFILE" 2>&1
+
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Reflection complete ===" >> "$LOGFILE"
