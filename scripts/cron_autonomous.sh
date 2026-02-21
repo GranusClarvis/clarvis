@@ -156,9 +156,15 @@ if [ $TASK_EXIT -eq 0 ]; then
         python3 "$PROC_SCRIPT" used "$PROC_ID" success >> "$LOGFILE" 2>&1
         echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] PROCEDURAL: Recorded successful use of $PROC_ID" >> "$LOGFILE"
     else
-        # Learn a new procedure from this successful task
-        python3 "$PROC_SCRIPT" learn "$NEXT_TASK" '["Read context and requirements","Implement solution","Test end-to-end","Verify and log result"]' >> "$LOGFILE" 2>&1
-        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] PROCEDURAL: Learned new procedure from task" >> "$LOGFILE"
+        # Extract real steps from task output (not a generic template)
+        EXTRACT_SCRIPT="/home/agent/.openclaw/workspace/scripts/extract_steps.py"
+        EXTRACTED_STEPS=$(python3 "$EXTRACT_SCRIPT" --file "$TASK_OUTPUT_FILE" 2>/dev/null)
+        if [ -n "$EXTRACTED_STEPS" ] && [ "$EXTRACTED_STEPS" != "[]" ]; then
+            python3 "$PROC_SCRIPT" learn "$NEXT_TASK" "$EXTRACTED_STEPS" >> "$LOGFILE" 2>&1
+            echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] PROCEDURAL: Learned procedure with extracted steps: $EXTRACTED_STEPS" >> "$LOGFILE"
+        else
+            echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] PROCEDURAL: Skipped learning — could not extract concrete steps from output" >> "$LOGFILE"
+        fi
     fi
 else
     python3 "$CONFIDENCE_SCRIPT" outcome "$TASK_EVENT" "failure" >> "$LOGFILE" 2>&1

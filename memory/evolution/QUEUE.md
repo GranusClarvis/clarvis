@@ -7,7 +7,7 @@ _Goal: Evolve toward AGI and consciousness. Every task should make you smarter, 
 ## P0 — Do Next Heartbeat
 - [x] Fix reasoning_chain_hook.py:56 — change `limit=3` to `n=3` (wrong param name silently fails) — (2026-02-21 18:21 UTC — Fixed: `brain.recall(task_text, limit=3)` → `brain.recall(task_text, n=3)`. Tested end-to-end.)
 - [x] Fix procedural_memory.py find_procedure() — threshold param is accepted but never used. Add similarity threshold check. — (2026-02-21 19:00 UTC — Added distance passthrough in brain.recall(), find_procedure() now selects best match by cosine distance and filters by threshold. Tested: similar tasks match, dissimilar tasks rejected.)
-- [ ] Fix cron_autonomous.sh — stops learning identical generic 4-step template. Extract real steps or skip learning. — (2026-02-21 18:00 UTC)
+- [x] Fix cron_autonomous.sh — stops learning identical generic 4-step template. Extract real steps or skip learning. — (2026-02-21 19:10 UTC — Created scripts/extract_steps.py to parse Claude output for concrete action steps. Replaced hardcoded generic template in cron_autonomous.sh with extraction-or-skip logic. Purged existing generic procedures from brain. Tested: multi-step tasks learn real steps, simple fixes skip, generic templates rejected.)
 - [x] Fix phi_metric.py — add 90-day history cap (like capability_history) to phi_history.json — (2026-02-21 18:55 UTC — Added `history = history[-90:]` in record_phi() before write. Tested: record works, history capped.)
 
 - [x] [AUTO-FIX] Fix failure in test_fail: Exit code 1 — test failure from self-test, already resolved (2026-02-21 08:05 UTC)
