@@ -5,7 +5,6 @@ Shows brain stats, goal progress, and evolution velocity in real-time.
 """
 
 import json
-import os
 import sys
 from datetime import datetime
 from pathlib import Path

@@ -23,7 +23,7 @@ import re
 from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from brain import brain, ClarvisBrain, ALL_COLLECTIONS, DEFAULT_COLLECTIONS, \
+from brain import brain, ALL_COLLECTIONS, DEFAULT_COLLECTIONS, \
     GOALS, PROCEDURES, CONTEXT, LEARNINGS, MEMORIES, IDENTITY, PREFERENCES, INFRASTRUCTURE
 
 # === QUERY ROUTER ===

@@ -540,7 +540,6 @@ class ClarvisBrain:
             collections: Which collections to search
             n: Max results
         """
-        from datetime import datetime
         
         if collections is None:
             collections = ALL_COLLECTIONS
@@ -592,7 +591,6 @@ class ClarvisBrain:
         Returns:
             Number of memories decayed
         """
-        from datetime import timedelta
         
         decayed = 0
         now = datetime.now(timezone.utc)
@@ -904,7 +902,6 @@ class LocalBrain(ClarvisBrain):
         Returns:
             Number of memories migrated
         """
-        import shutil
         
         if source_path is None:
             source_path = DATA_DIR

@@ -24,7 +24,6 @@ import os
 import re
 import sys
 from datetime import datetime, timezone
-from pathlib import Path
 
 QUEUE_FILE = "/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md"
 STATE_FILE = "/home/agent/.openclaw/workspace/data/queue_writer_state.json"

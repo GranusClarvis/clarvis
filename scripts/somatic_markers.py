@@ -42,7 +42,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from brain import brain
 
 MARKERS_FILE = Path("/home/agent/.openclaw/workspace/data/somatic_markers.json")
 

@@ -7,7 +7,6 @@ Each chain has: title, steps (each with thought, timestamp, outcome)
 """
 
 import json
-import os
 from datetime import datetime
 from pathlib import Path
 

@@ -20,7 +20,7 @@ import sys
 from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from brain import brain as _brain_singleton, ClarvisBrain, ALL_COLLECTIONS
+from brain import brain as _brain_singleton
 
 BRIDGE_STATE_FILE = "/home/agent/.openclaw/workspace/data/bridge_builder_state.json"
 

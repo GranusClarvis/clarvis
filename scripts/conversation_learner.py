@@ -20,9 +20,7 @@ Usage:
 import sys
 import os
 import re
-import json
-from collections import defaultdict, Counter
-from datetime import datetime, timezone
+from collections import Counter
 
 sys.path.insert(0, '/home/agent/.openclaw/workspace/scripts')
 from brain import brain, AUTONOMOUS_LEARNING

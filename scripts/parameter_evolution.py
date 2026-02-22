@@ -25,7 +25,6 @@ import os
 import sys
 import time
 from datetime import datetime, timezone
-from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -301,7 +300,7 @@ def evaluate_config(semantic_w, importance_w, collection_boost, max_dist):
 
     Returns precision@3 and recall.
     """
-    from brain import brain, ALL_COLLECTIONS, DEFAULT_COLLECTIONS, \
+    from brain import brain, \
         GOALS, PROCEDURES, CONTEXT, LEARNINGS, MEMORIES, IDENTITY, PREFERENCES, INFRASTRUCTURE
     from retrieval_benchmark import BENCHMARK_PAIRS, check_hit
 

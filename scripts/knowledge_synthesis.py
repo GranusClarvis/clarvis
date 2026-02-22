@@ -10,7 +10,6 @@ import sys
 sys.path.insert(0, '/home/agent/.openclaw/workspace/scripts')
 from brain import brain, ALL_COLLECTIONS
 from collections import defaultdict
-import json
 import re
 
 # Stopwords to ignore in keyword extraction

@@ -219,7 +219,7 @@ echo "$AUDIT_OUTPUT" | grep -E "^- ADD P[012]:" | while read -r line; do
         ALREADY_EXISTS=$(grep -c "$TASK_DESC" memory/evolution/QUEUE.md 2>/dev/null || echo 0)
         if [ "$ALREADY_EXISTS" -eq 0 ]; then
             # Add to appropriate section
-            python3 scripts/queue_writer.py "[STRATEGIC AUDIT] $TASK_DESC" "$PRIORITY" >> "$LOGFILE" 2>&1
+            python3 scripts/queue_writer.py add "[STRATEGIC AUDIT] $TASK_DESC" --priority "$PRIORITY" --source "strategic_audit" >> "$LOGFILE" 2>&1
             echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] QUEUE: Added $PRIORITY task: $TASK_DESC" >> "$LOGFILE"
         else
             echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] QUEUE: Skipped duplicate: $TASK_DESC" >> "$LOGFILE"

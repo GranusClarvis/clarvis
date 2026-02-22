@@ -568,25 +568,47 @@ def _assess_code_generation():
     except Exception:
         pass
 
-    # Check for syntax errors in key scripts (proportional scoring)
+    # Code quality gate: use pyflakes clean_ratio from nightly quality gate
+    # Falls back to py_compile check if no quality gate data exists
+    quality_gate_used = False
     try:
-        key_scripts = ["brain.py", "self_model.py", "attention.py", "working_memory.py"]
-        clean = 0
-        checked = 0
-        for s in key_scripts:
-            path = f"/home/agent/.openclaw/workspace/scripts/{s}"
-            if os.path.exists(path):
-                checked += 1
-                r = subprocess.run(["python3", "-m", "py_compile", path],
-                                   capture_output=True, text=True, timeout=5)
-                if r.returncode == 0:
-                    clean += 1
-        if checked > 0:
-            compile_score = (clean / checked) * 0.2
-            score += compile_score
-            evidence.append(f"{clean}/{checked} key scripts compile clean (+{compile_score:.2f})")
+        qg_file = Path("/home/agent/.openclaw/workspace/data/code_quality_history.json")
+        if qg_file.exists():
+            with open(qg_file) as f:
+                qg_history = json.load(f)
+            if qg_history:
+                latest = qg_history[-1]
+                clean_ratio = latest.get("clean_ratio", 0)
+                syntax_errs = latest.get("syntax_errors", 0)
+                total_issues = latest.get("total_issues", 0)
+                # Scale: 0.0 clean_ratio = 0, 1.0 clean_ratio = 0.2
+                qg_score = clean_ratio * 0.2
+                score += qg_score
+                evidence.append(f"quality gate: {clean_ratio:.0%} clean ({total_issues} issues, {syntax_errs} syntax errs) (+{qg_score:.2f})")
+                quality_gate_used = True
     except Exception:
         pass
+
+    if not quality_gate_used:
+        # Fallback: check key scripts compile
+        try:
+            key_scripts = ["brain.py", "self_model.py", "attention.py", "working_memory.py"]
+            clean = 0
+            checked = 0
+            for s in key_scripts:
+                path = f"/home/agent/.openclaw/workspace/scripts/{s}"
+                if os.path.exists(path):
+                    checked += 1
+                    r = subprocess.run(["python3", "-m", "py_compile", path],
+                                       capture_output=True, text=True, timeout=5)
+                    if r.returncode == 0:
+                        clean += 1
+            if checked > 0:
+                compile_score = (clean / checked) * 0.2
+                score += compile_score
+                evidence.append(f"{clean}/{checked} key scripts compile clean (+{compile_score:.2f})")
+        except Exception:
+            pass
 
     # Test pass rate (if test infrastructure exists)
     try:
