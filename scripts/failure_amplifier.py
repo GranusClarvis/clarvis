@@ -9,8 +9,9 @@ Scans autonomous.log and reasoning chains for signals like:
   - Retroactive bug fixes (Fix X — means X was silently broken before)
   - Prediction tracking misses ("No unresolved prediction found")
   - Low capability scores mentioned in output
-  - Repeated task selections before completion
   - Single-step reasoning chains (no real reasoning captured)
+  - Low-confidence predictions (hedging, <60% confidence)
+  - Uncompleted tasks (EXECUTING without matching COMPLETED)
 
 Encodes these as negative-valence episodes so episodic_memory.py synthesize()
 can detect patterns and generate corrective goals.
@@ -37,7 +38,7 @@ def load_state():
     if AMPLIFIER_STATE.exists():
         with open(AMPLIFIER_STATE) as f:
             return json.load(f)
-    return {"last_log_offset": 0, "amplified_ids": []}
+    return {"last_log_offset": 0, "amplified_ids": [], "scanned_chains": []}
 
 
 def save_state(state):
@@ -61,13 +62,12 @@ def save_episodes(episodes):
 
 def parse_log_entries(log_text):
     """Parse autonomous.log into structured entries.
-    Each entry is a dict with: timestamp, event, task, output (lines between EXECUTING and COMPLETED).
+    Each entry has: timestamp, task, output_lines, completed_at, full log block.
     """
     entries = []
     current = None
 
     for line in log_text.split("\n"):
-        # Match timestamped lines
         ts_match = re.match(r'\[(\d{4}-\d{2}-\d{2}T[\d:]+)\]\s+(\w+):\s*(.*)', line)
         if ts_match:
             ts_str, event, detail = ts_match.groups()
@@ -82,30 +82,32 @@ def parse_log_entries(log_text):
                 current["completed_at"] = ts_str
                 entries.append(current)
                 current = None
-            elif event == "PROCEDURAL" and current:
-                current["output_lines"].append(f"PROCEDURAL: {detail}")
-            elif event == "REASONING" and current:
-                current["output_lines"].append(f"REASONING: {detail}")
-            elif event == "PREDICTION" and current:
-                current["output_lines"].append(f"PREDICTION: {detail}")
+            elif event == "COMPLETED" and not current:
+                # Orphaned COMPLETED — task may have started before log window
+                pass
+            elif current and event in ("PROCEDURAL", "REASONING", "PREDICTION", "SELECTED"):
+                current["output_lines"].append(f"{event}: {detail}")
         elif current and line.strip():
             current["output_lines"].append(line.strip())
+
+    # If there's a current task that never completed, track it
+    if current:
+        entries.append(current)  # Will have completed_at=None
 
     return entries
 
 
 def scan_duplicate_tasks(entries):
-    """Detect tasks that were executed more than once (indicating first attempt was inadequate)."""
+    """Detect tasks that were executed more than once (first attempt was inadequate)."""
     soft_failures = []
     task_counts = {}
     for e in entries:
-        # Normalize: strip timestamps and line numbers from task text
+        # Normalize: strip line numbers and checkboxes
         clean = re.sub(r'\d+:- \[.\]\s*', '', e["task"])[:120]
         task_counts.setdefault(clean, []).append(e)
 
     for task_key, occurrences in task_counts.items():
         if len(occurrences) > 1:
-            # The first execution was implicitly inadequate
             soft_failures.append({
                 "type": "duplicate_execution",
                 "task": occurrences[0]["task"][:200],
@@ -126,11 +128,11 @@ def scan_long_durations(entries):
             start = datetime.fromisoformat(e["timestamp"])
             end = datetime.fromisoformat(e["completed_at"])
             duration = (end - start).total_seconds()
-            if duration > 300:  # 5 minutes
+            if duration > 300:
                 soft_failures.append({
                     "type": "long_duration",
                     "task": e["task"][:200],
-                    "detail": f"Task took {duration:.0f}s (>{300}s threshold) — may indicate struggle",
+                    "detail": f"Task took {duration:.0f}s (>300s threshold) — may indicate struggle",
                     "severity": min(0.7, 0.3 + (duration - 300) / 600),
                     "timestamp": e["timestamp"],
                 })
@@ -172,9 +174,7 @@ def scan_prediction_misses(entries):
 
 
 def scan_retroactive_fixes(entries):
-    """Detect tasks that are fixes for silently broken prior work.
-    Pattern: task starts with "Fix" and mentions a prior component being wrong/broken.
-    """
+    """Detect tasks that are fixes for silently broken prior work."""
     soft_failures = []
     fix_patterns = [
         r"wrong param",
@@ -205,19 +205,26 @@ def scan_retroactive_fixes(entries):
     return soft_failures
 
 
-def scan_reasoning_chains():
+def scan_reasoning_chains(already_scanned=None):
     """Detect reasoning chains with minimal structure (single-step = no real reasoning).
-    Skip test chains. Cap at 5 most recent to avoid noise-dominating the signal."""
+    Only scans chains not already processed."""
     soft_failures = []
     if not CHAINS_DIR.exists():
-        return soft_failures
+        return soft_failures, []
+
+    already_scanned = set(already_scanned or [])
+    newly_scanned = []
 
     for chain_file in sorted(CHAINS_DIR.glob("chain_*.json")):
+        fname = chain_file.name
+        if fname in already_scanned:
+            continue
+        newly_scanned.append(fname)
+
         try:
             with open(chain_file) as f:
                 chain = json.load(f)
             title = chain.get("title", "")
-            # Skip test chains — they're expected to be minimal
             if "test" in title.lower() or "verify" in title.lower():
                 continue
             steps = chain.get("steps", [])
@@ -231,45 +238,87 @@ def scan_reasoning_chains():
                 })
         except (json.JSONDecodeError, IOError):
             continue
-    # Cap at 5 most recent to avoid flooding episodes with shallow_reasoning noise
-    return soft_failures[-5:]
+
+    return soft_failures, newly_scanned
 
 
-def scan_low_capability_scores(log_text):
-    """Detect mentions of low capability scores in log output."""
+def scan_low_capability_scores(entries):
+    """Detect mentions of low capability scores in task output.
+    Associates the score with the correct task rather than grabbing random fragments."""
     soft_failures = []
-    # Pattern: score mentions like "0.20", "score (0.20", capability=X.XX with X < 0.5
     score_pattern = re.compile(
         r'(?:score|capability|Phi|hit.rate)\D{0,20}(\d+\.\d+)',
         re.IGNORECASE
     )
-    for match in score_pattern.finditer(log_text):
-        score = float(match.group(1))
-        if score < 0.5 and score > 0.0:
-            context_start = max(0, match.start() - 100)
-            context_end = min(len(log_text), match.end() + 50)
-            context = log_text[context_start:context_end].replace("\n", " ").strip()
-            soft_failures.append({
-                "type": "low_capability",
-                "task": context[:200],
-                "detail": f"Low score detected: {score:.2f} — indicates capability gap",
-                "severity": min(0.7, 0.8 - score),
-                "timestamp": "",
-            })
-    # Deduplicate by detail
+
+    for e in entries:
+        output = "\n".join(e.get("output_lines", []))
+        combined = e["task"] + " " + output
+
+        seen_scores = set()
+        for match in score_pattern.finditer(combined):
+            score = float(match.group(1))
+            score_key = f"{score:.2f}"
+            if score < 0.5 and score > 0.0 and score_key not in seen_scores:
+                seen_scores.add(score_key)
+                soft_failures.append({
+                    "type": "low_capability",
+                    "task": e["task"][:200],
+                    "detail": f"Low score detected: {score:.2f} — indicates capability gap",
+                    "severity": min(0.7, 0.8 - score),
+                    "timestamp": e.get("timestamp", ""),
+                })
+
+    # Deduplicate by task + score detail
     seen = set()
     unique = []
     for sf in soft_failures:
-        key = sf["detail"]
+        key = (sf["task"][:80], sf["detail"])
         if key not in seen:
             seen.add(key)
             unique.append(sf)
     return unique
 
 
+def scan_low_confidence_predictions(entries):
+    """Detect predictions with very low confidence (<60%), suggesting hedging or uncertainty."""
+    soft_failures = []
+    conf_pattern = re.compile(r'@ (\d+)% confidence')
+
+    for e in entries:
+        output = "\n".join(e.get("output_lines", []))
+        for match in conf_pattern.finditer(output):
+            confidence = int(match.group(1))
+            if confidence < 60:
+                soft_failures.append({
+                    "type": "low_confidence",
+                    "task": e["task"][:200],
+                    "detail": f"Prediction at only {confidence}% confidence — low self-trust",
+                    "severity": min(0.6, 0.3 + (60 - confidence) / 100),
+                    "timestamp": e.get("timestamp", ""),
+                })
+    return soft_failures
+
+
+def scan_uncompleted_tasks(entries):
+    """Detect tasks that started (EXECUTING) but never got a COMPLETED line.
+    Could indicate timeout, crash, or manual abort."""
+    soft_failures = []
+    for e in entries:
+        if e.get("completed_at") is None:
+            soft_failures.append({
+                "type": "uncompleted_task",
+                "task": e["task"][:200],
+                "detail": "Task started but never completed — possible timeout or crash",
+                "severity": 0.6,
+                "timestamp": e.get("timestamp", ""),
+            })
+    return soft_failures
+
+
 def make_episode_id(sf_type, task_prefix):
     """Create a deterministic episode ID for deduplication.
-    Uses type + task fingerprint (no date) so same soft failure is never re-encoded."""
+    Uses type + task fingerprint so the same soft failure is never re-encoded."""
     fingerprint = f"{sf_type}_{task_prefix[:60]}"
     digest = hashlib.md5(fingerprint.encode()).hexdigest()[:8]
     return f"ep_soft_{digest}"
@@ -284,7 +333,6 @@ def encode_soft_failure(sf, existing_ids):
         return None  # Already amplified
 
     # Valence: higher = more emotionally significant (like real failures)
-    # Base 0.5 (above normal success baseline of 0.3-0.45) + severity boost
     valence = min(1.0, 0.5 + sf["severity"] * 0.4)
 
     episode = {
@@ -310,13 +358,22 @@ def amplify():
     episodes = load_episodes()
     existing_ids = {ep["id"] for ep in episodes}
 
-    # Read log
     if not AUTONOMOUS_LOG.exists():
         print("No autonomous.log found")
         return {"amplified": 0, "scanned": 0}
 
     log_text = AUTONOMOUS_LOG.read_text()
-    entries = parse_log_entries(log_text)
+
+    # Incremental: only parse new log content if state has offset
+    log_offset = state.get("last_log_offset", 0)
+    if log_offset > 0 and log_offset < len(log_text):
+        # Parse new content, but include some overlap for context
+        overlap_start = max(0, log_offset - 500)
+        new_log_text = log_text[overlap_start:]
+    else:
+        new_log_text = log_text
+
+    entries = parse_log_entries(new_log_text)
 
     # Run all scanners
     all_soft_failures = []
@@ -325,8 +382,15 @@ def amplify():
     all_soft_failures.extend(scan_skipped_learning(entries))
     all_soft_failures.extend(scan_prediction_misses(entries))
     all_soft_failures.extend(scan_retroactive_fixes(entries))
-    all_soft_failures.extend(scan_reasoning_chains())
-    all_soft_failures.extend(scan_low_capability_scores(log_text))
+    all_soft_failures.extend(scan_low_capability_scores(entries))
+    all_soft_failures.extend(scan_low_confidence_predictions(entries))
+    all_soft_failures.extend(scan_uncompleted_tasks(entries))
+
+    # Reasoning chains: only scan new ones
+    chain_failures, newly_scanned_chains = scan_reasoning_chains(
+        state.get("scanned_chains", [])
+    )
+    all_soft_failures.extend(chain_failures)
 
     # Encode as episodes (with dedup)
     new_episodes = []
@@ -352,7 +416,9 @@ def amplify():
     state["last_log_offset"] = len(log_text)
     state["amplified_ids"] = list(
         set(state.get("amplified_ids", [])) | {e["id"] for e in new_episodes}
-    )[-200:]  # Cap state history
+    )[-200:]
+    prev_chains = set(state.get("scanned_chains", []))
+    state["scanned_chains"] = list(prev_chains | set(newly_scanned_chains))[-200:]
     save_state(state)
 
     result = {
@@ -409,8 +475,12 @@ if __name__ == "__main__":
         all_sf.extend(scan_skipped_learning(entries))
         all_sf.extend(scan_prediction_misses(entries))
         all_sf.extend(scan_retroactive_fixes(entries))
-        all_sf.extend(scan_reasoning_chains())
-        all_sf.extend(scan_low_capability_scores(log_text))
+        all_sf.extend(scan_low_capability_scores(entries))
+        all_sf.extend(scan_low_confidence_predictions(entries))
+        all_sf.extend(scan_uncompleted_tasks(entries))
+
+        chain_sf, _ = scan_reasoning_chains()
+        all_sf.extend(chain_sf)
 
         print(f"Found {len(all_sf)} soft failures (dry run — not encoding):\n")
         for sf in all_sf:
@@ -419,5 +489,5 @@ if __name__ == "__main__":
             print()
 
     else:
-        print(f"Usage: failure_amplifier.py [amplify|scan]")
+        print("Usage: failure_amplifier.py [amplify|scan]")
         sys.exit(1)
