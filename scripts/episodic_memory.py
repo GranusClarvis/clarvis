@@ -219,6 +219,165 @@ class EpisodicMemory:
         for ep in self.episodes:
             ep["activation"] = self._compute_activation(ep)
 
+    def synthesize(self):
+        """Analyze all episodes for recurring patterns, generate goal entries.
+
+        Examines outcomes, action verbs, error types, and domain clusters to
+        produce actionable goal items stored in the clarvis-goals collection.
+
+        Returns a summary dict with patterns found and goals generated.
+        """
+        if not self.episodes:
+            return {"error": "No episodes to analyze", "goals_generated": []}
+
+        # 1. Count outcomes
+        outcome_counts: dict = {}
+        for ep in self.episodes:
+            o = ep["outcome"]
+            outcome_counts[o] = outcome_counts.get(o, 0) + 1
+
+        total = len(self.episodes)
+        success_count = outcome_counts.get("success", 0)
+        failure_count = outcome_counts.get("failure", 0) + outcome_counts.get("timeout", 0)
+        success_rate = success_count / total if total else 0.0
+
+        # 2. Extract first-word action verbs (typically the imperative verb)
+        success_actions: dict = {}
+        failure_actions: dict = {}
+        for ep in self.episodes:
+            words = ep["task"].split()
+            verb = words[0].lower().strip("[]()") if words else ""
+            if not verb:
+                continue
+            if ep["outcome"] == "success":
+                success_actions[verb] = success_actions.get(verb, 0) + 1
+            else:
+                failure_actions[verb] = failure_actions.get(verb, 0) + 1
+
+        # 3. Domain classification via keyword matching
+        DOMAIN_KEYWORDS = {
+            "memory_retrieval": ["retrieval", "recall", "search", "benchmark", "hit rate", "precision"],
+            "memory_system":    ["brain", "episodic", "procedural", "working_memory", "smart_recall"],
+            "automation":       ["cron", "task_selector", "scheduler", "autonomous", "cron_autonomous"],
+            "goal_tracking":    ["goal", "tracker", "progress", "goal-tracker"],
+            "consciousness":    ["consciousness", "phi", "awareness", "consciousness_metrics"],
+            "attention":        ["attention", "spotlight", "salience", "gwt"],
+            "infrastructure":   ["wire", "wiring", "import", "module", "cross-collection", "cross_link"],
+        }
+
+        domain_outcomes: dict = {}
+        for ep in self.episodes:
+            task_lower = ep["task"].lower()
+            matched = [d for d, kws in DOMAIN_KEYWORDS.items() if any(kw in task_lower for kw in kws)]
+            if not matched:
+                matched = ["general"]
+            for domain in matched:
+                if domain not in domain_outcomes:
+                    domain_outcomes[domain] = {"success": 0, "failure": 0, "timeout": 0}
+                bucket = ep["outcome"] if ep["outcome"] in domain_outcomes[domain] else "timeout"
+                domain_outcomes[domain][bucket] += 1
+
+        # 4. Classify error types across failures
+        error_types: dict = {}
+        for ep in self.episodes:
+            if ep.get("error"):
+                err = ep["error"].lower()
+                if "importerror" in err or "modulenotfounderror" in err or "no module" in err:
+                    error_types["module_import"] = error_types.get("module_import", 0) + 1
+                elif "attributeerror" in err:
+                    error_types["attribute"] = error_types.get("attribute", 0) + 1
+                elif "timeout" in err:
+                    error_types["timeout_error"] = error_types.get("timeout_error", 0) + 1
+                else:
+                    error_types["other"] = error_types.get("other", 0) + 1
+
+        # 5. Generate goals based on findings
+        now = datetime.now(timezone.utc)
+        goals_generated: list = []
+
+        # Goal: fix domains with >30% failure rate
+        for domain, counts in domain_outcomes.items():
+            d_total = sum(counts.values())
+            d_failures = counts.get("failure", 0) + counts.get("timeout", 0)
+            if d_failures > 0 and d_total > 0:
+                fail_rate = d_failures / d_total
+                if fail_rate > 0.3:
+                    goal_name = f"Reduce {domain.replace('_', ' ')} failure rate"
+                    brain.set_goal(goal_name, 0, subtasks={
+                        "source": "episodic_synthesis",
+                        "domain": domain,
+                        "fail_rate": round(fail_rate, 2),
+                        "episode_count": d_total,
+                        "description": (
+                            f"Failure rate {fail_rate:.0%} detected in {domain.replace('_', ' ')} tasks "
+                            f"({d_failures}/{d_total} episodes). Investigate and fix root causes."
+                        ),
+                        "generated_at": now.isoformat(),
+                    })
+                    goals_generated.append(goal_name)
+
+        # Goal: fix module import errors if any
+        if error_types.get("module_import", 0) > 0:
+            goal_name = "Fix module import reliability"
+            brain.set_goal(goal_name, 0, subtasks={
+                "source": "episodic_synthesis",
+                "description": (
+                    f"ImportError/ModuleNotFoundError appeared in {error_types['module_import']} episode(s). "
+                    "Audit sys.path, __init__.py files, and missing dependencies."
+                ),
+                "occurrences": error_types["module_import"],
+                "generated_at": now.isoformat(),
+            })
+            goals_generated.append(goal_name)
+
+        # Goal: strengthen dominant success domains
+        high_success_domains = {
+            d: c["success"] for d, c in domain_outcomes.items() if c.get("success", 0) >= 2
+        }
+        if high_success_domains:
+            best = max(high_success_domains, key=lambda d: high_success_domains[d])
+            goal_name = f"Deepen {best.replace('_', ' ')} capabilities"
+            brain.set_goal(goal_name, 25, subtasks={
+                "source": "episodic_synthesis",
+                "description": (
+                    f"Strong track record in {best.replace('_', ' ')} "
+                    f"({high_success_domains[best]} successes). "
+                    "Continue building depth: add tests, metrics, and stress cases."
+                ),
+                "success_count": high_success_domains[best],
+                "generated_at": now.isoformat(),
+            })
+            goals_generated.append(goal_name)
+
+        # Goal: improve overall success rate if below 80%
+        if success_rate < 0.8 and total >= 3:
+            goal_name = "Improve task success rate above 80%"
+            brain.set_goal(goal_name, int(success_rate * 100), subtasks={
+                "source": "episodic_synthesis",
+                "description": (
+                    f"Current success rate is {success_rate:.0%} ({success_count}/{total} episodes). "
+                    "Review failure patterns and add pre-flight checks."
+                ),
+                "current_rate": round(success_rate, 2),
+                "generated_at": now.isoformat(),
+            })
+            goals_generated.append(goal_name)
+
+        top_success = sorted(success_actions.items(), key=lambda x: x[1], reverse=True)[:5]
+        top_failure = sorted(failure_actions.items(), key=lambda x: x[1], reverse=True)[:5]
+
+        return {
+            "total_episodes": total,
+            "outcome_counts": outcome_counts,
+            "success_rate": round(success_rate, 2),
+            "top_success_actions": top_success,
+            "top_failure_actions": top_failure,
+            "domain_outcomes": domain_outcomes,
+            "error_types": error_types,
+            "goals_generated": goals_generated,
+            "goals_count": len(goals_generated),
+        }
+
 
 # Singleton
 episodic = EpisodicMemory()
@@ -226,7 +385,7 @@ episodic = EpisodicMemory()
 # CLI interface
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: episodic_memory.py <encode|recall|failures|stats>")
+        print("Usage: episodic_memory.py <encode|recall|failures|stats|synthesize>")
         sys.exit(1)
 
     cmd = sys.argv[1]
@@ -262,6 +421,53 @@ if __name__ == "__main__":
     elif cmd == "stats":
         stats = episodic.get_stats()
         print(json.dumps(stats, indent=2))
+
+    elif cmd == "synthesize":
+        result = episodic.synthesize()
+
+        if "error" in result:
+            print(f"Error: {result['error']}")
+            sys.exit(1)
+
+        print("=" * 60)
+        print("EPISODIC MEMORY SYNTHESIS REPORT")
+        print("=" * 60)
+        print(f"\nEpisodes analyzed : {result['total_episodes']}")
+        print(f"Outcome breakdown :")
+        for outcome, count in sorted(result["outcome_counts"].items()):
+            print(f"  {outcome:10s} {count}")
+        print(f"Success rate      : {result['success_rate']:.0%}")
+
+        print("\nTop action verbs (successes):")
+        for verb, count in result["top_success_actions"]:
+            print(f"  {count:2d}x  {verb}")
+
+        if result["top_failure_actions"]:
+            print("\nTop action verbs (failures):")
+            for verb, count in result["top_failure_actions"]:
+                print(f"  {count:2d}x  {verb}")
+
+        print("\nDomain outcomes:")
+        for domain, counts in sorted(result["domain_outcomes"].items()):
+            s = counts.get("success", 0)
+            f = counts.get("failure", 0) + counts.get("timeout", 0)
+            bar = "█" * s + "░" * f
+            print(f"  {domain:22s}  {bar}  ({s}✓ {f}✗)")
+
+        if result["error_types"]:
+            print("\nError type breakdown:")
+            for etype, count in result["error_types"].items():
+                print(f"  {count:2d}x  {etype}")
+
+        print(f"\nGoals generated ({result['goals_count']}):")
+        if result["goals_generated"]:
+            for goal in result["goals_generated"]:
+                print(f"  → {goal}")
+        else:
+            print("  (none — all patterns already well-handled)")
+
+        print("\n[Full JSON]")
+        print(json.dumps(result, indent=2))
 
     else:
         print(f"Unknown command: {cmd}")
