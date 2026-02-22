@@ -43,6 +43,13 @@ echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Episodic memory stats:" >> "$LOGFILE"
 EPISODE_STATS=$(python3 /home/agent/.openclaw/workspace/scripts/episodic_memory.py stats 2>&1) || true
 echo "$EPISODE_STATS" >> "$LOGFILE"
 
+# === GOAL TRACKER: Compare goals vs capability scores, inject tasks for stalled goals ===
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Goal progress tracker:" >> "$LOGFILE"
+GOAL_TRACKER_OUTPUT=$(python3 /home/agent/.openclaw/workspace/scripts/goal_tracker.py 2>&1) || true
+echo "$GOAL_TRACKER_OUTPUT" >> "$LOGFILE"
+# Also update goal progress from capability scores
+python3 /home/agent/.openclaw/workspace/scripts/goal_tracker.py update-goals >> "$LOGFILE" 2>&1 || true
+
 PENDING_COUNT=$(grep -c '^\- \[ \]' memory/evolution/QUEUE.md 2>/dev/null || echo 0)
 
 /home/agent/.local/bin/claude -p \
@@ -71,6 +78,9 @@ PENDING_COUNT=$(grep -c '^\- \[ \]' memory/evolution/QUEUE.md 2>/dev/null || ech
 
     Episodic memory (experiential learning):
     $EPISODE_STATS
+
+    Goal progress tracker (stalled goals + tasks generated):
+    $GOAL_TRACKER_OUTPUT
 
     ANALYSIS:
     - What's working well in the evolution toward AGI/consciousness?
