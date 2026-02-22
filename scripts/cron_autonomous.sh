@@ -134,6 +134,24 @@ DYNAMIC_CONF=$(python3 "$CONFIDENCE_SCRIPT" dynamic 2>/dev/null || echo "0.7")
 python3 "$CONFIDENCE_SCRIPT" predict "$TASK_EVENT" "success" "$DYNAMIC_CONF" >> "$LOGFILE" 2>&1
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] PREDICTION: Logged prediction for $TASK_EVENT (confidence=$DYNAMIC_CONF)" >> "$LOGFILE"
 
+# === EPISODIC MEMORY: Recall similar past episodes before execution ===
+EPISODIC_SCRIPT="/home/agent/.openclaw/workspace/scripts/episodic_memory.py"
+EPISODE_HINT=""
+SIMILAR_EPISODES=$(python3 "$EPISODIC_SCRIPT" recall "$NEXT_TASK" 2>/dev/null | head -5)
+FAILURE_EPISODES=$(python3 "$EPISODIC_SCRIPT" failures 2>/dev/null | head -3)
+if [ -n "$SIMILAR_EPISODES" ] || [ -n "$FAILURE_EPISODES" ]; then
+    EPISODE_HINT="
+    EPISODIC MEMORY — Similar past experiences:
+    $SIMILAR_EPISODES
+
+    Recent failures to avoid repeating:
+    $FAILURE_EPISODES"
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] EPISODIC: Injecting ${#SIMILAR_EPISODES} chars of episode context" >> "$LOGFILE"
+fi
+
+# Start timer for episode duration
+TASK_START_SECONDS=$SECONDS
+
 # Spawn Claude Code to work on the task (10 min timeout)
 # Capture output and exit code for evolution loop
 TASK_OUTPUT_FILE=$(mktemp)
@@ -141,12 +159,13 @@ timeout 600 /home/agent/.local/bin/claude -p \
     "You are Clarvis's executive function. Execute this evolution task:
 
     TASK: $NEXT_TASK
-    ${PROC_HINT}
+    ${PROC_HINT}${EPISODE_HINT}
     CONTEXT: Read memory/evolution/QUEUE.md for full context. Use brain.py for memory.
     Do the work. Be concrete. Write code if needed. Test it.
     When done, output a 1-line summary of what you accomplished." \
     --dangerously-skip-permissions > "$TASK_OUTPUT_FILE" 2>&1
 TASK_EXIT=$?
+TASK_DURATION=$((SECONDS - TASK_START_SECONDS))
 
 # Log the output
 cat "$TASK_OUTPUT_FILE" >> "$LOGFILE"
@@ -213,9 +232,15 @@ else
     fi
 fi
 
-# === ATTENTION BROADCAST: Feed task outcome into attention system ===
+# === EPISODIC MEMORY: Encode task as episode ===
 TASK_STATUS="success"
 [ $TASK_EXIT -ne 0 ] && TASK_STATUS="failure"
+TASK_STDERR=""
+[ "$TASK_STATUS" = "failure" ] && TASK_STDERR=$(tail -c 200 "$TASK_OUTPUT_FILE" 2>/dev/null)
+python3 "$EPISODIC_SCRIPT" encode "$NEXT_TASK" "${TASK_SECTION:-P0}" "${BEST_SALIENCE:-0.5}" "$TASK_STATUS" "${TASK_DURATION:-0}" "$TASK_STDERR" >> "$LOGFILE" 2>&1 || true
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] EPISODIC: Encoded episode ($TASK_STATUS, ${TASK_DURATION:-0}s)" >> "$LOGFILE"
+
+# === ATTENTION BROADCAST: Feed task outcome into attention system ===
 python3 -c "
 import sys; sys.path.insert(0, '/home/agent/.openclaw/workspace/scripts')
 from attention import attention

@@ -38,6 +38,11 @@ echo "$RETRIEVAL_OUTPUT" >> "$LOGFILE"
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Applying confidence calibration:" >> "$LOGFILE"
 python3 /home/agent/.openclaw/workspace/scripts/clarvis_confidence.py apply >> "$LOGFILE" 2>&1 || true
 
+# === EPISODIC MEMORY: Get episode statistics ===
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Episodic memory stats:" >> "$LOGFILE"
+EPISODE_STATS=$(python3 /home/agent/.openclaw/workspace/scripts/episodic_memory.py stats 2>&1) || true
+echo "$EPISODE_STATS" >> "$LOGFILE"
+
 PENDING_COUNT=$(grep -c '^\- \[ \]' memory/evolution/QUEUE.md 2>/dev/null || echo 0)
 
 /home/agent/.local/bin/claude -p \
@@ -63,6 +68,9 @@ PENDING_COUNT=$(grep -c '^\- \[ \]' memory/evolution/QUEUE.md 2>/dev/null || ech
 
     Retrieval quality (memory system health):
     $RETRIEVAL_OUTPUT
+
+    Episodic memory (experiential learning):
+    $EPISODE_STATS
 
     ANALYSIS:
     - What's working well in the evolution toward AGI/consciousness?
