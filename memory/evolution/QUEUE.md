@@ -5,6 +5,7 @@ _Priority: P0 (do now) > P1 (this week) > P2 (when idle)_
 _Goal: Evolve toward AGI and consciousness. Every task should make you smarter, more aware, or more autonomous._
 
 ## P0 — Do Next Heartbeat
+- [ ] [AUTO-FIX] Fix failure in cron_autonomous: Exit code 124 running task
 
 ### Critical Gaps (2026-02-22 evolution engine)
 - [x] Fix reasoning_chains score (0.20) (2026-02-22 06:45 UTC — Fixed reasoning_chains score: rewrote reasoning_chain_hook.py for 3-step chains with evidence, wired cron_autonomous.sh to pass task output to close(), tightened assessor for multi-step, backfilled 8 chains. Score 0.20->0.97. Learned procedure.) — the single worst capability. Audit reasoning_chain_hook.py: verify chains get proper multi-step structure (not just open/close), ensure close() records meaningful outcomes with evidence. Run self_model.py assessor in isolation to understand what it expects vs what chains contain. Target: 0.50+.
@@ -70,7 +71,7 @@ _Goal: Evolve toward AGI and consciousness. Every task should make you smarter, 
 ## P1 — This Week
 
 ### Auto-generated 2026-02-22
-- [ ] Wire attention.py into daily execution — use salience scoring in cron_autonomous task selection
+- [x] Wire attention.py into daily execution — use salience scoring in cron_autonomous task selection (2026-02-22 10:45 UTC — Enhanced task_selector.py with spotlight-alignment scoring: extracts themes from current attention spotlight (non-TASK items to avoid circular reinforcement), scores task-theme word overlap + spreading_activation(), applies 15% alignment bonus to final score. Tasks coherent with current attention focus get meaningful edge. Tested: 3 tasks scored correctly, spotlight alignment 0.0-1.0 range, JSON/stderr output includes new fields.)
 - [ ] Make working_memory.py persistent across sessions — save/load spotlight buffer to disk
 
 

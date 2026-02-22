@@ -74,9 +74,65 @@ def parse_tasks(queue_file=QUEUE_FILE):
     return tasks
 
 
+def _get_spotlight_themes():
+    """
+    Extract themes from current attention spotlight.
+    Returns (theme_words, spotlight_texts) from the top-K items in the spotlight.
+    Only considers non-TASK items (outcomes, episodic recalls, session state)
+    to avoid circular self-reinforcement.
+    """
+    try:
+        spotlight = attention.focus()
+    except Exception:
+        return set(), []
+
+    theme_words = set()
+    spotlight_texts = []
+    for item in spotlight:
+        content = item.get("content", "")
+        # Skip items that are task submissions (avoid circular reinforcement)
+        if content.startswith("TASK: ") or content.startswith("Task salience="):
+            continue
+        spotlight_texts.append(content)
+        # Extract meaningful words (skip short ones and common noise)
+        words = set(w.lower() for w in content.split() if len(w) > 3)
+        theme_words.update(words)
+
+    return theme_words, spotlight_texts
+
+
+def _spotlight_alignment(task_text, theme_words, spotlight_texts):
+    """
+    Score how well a task aligns with the current attention spotlight themes.
+    Uses word overlap + spreading activation for coherent focus.
+
+    Returns float 0.0 - 1.0 representing alignment strength.
+    """
+    if not theme_words:
+        return 0.0
+
+    task_words = set(w.lower() for w in task_text.split() if len(w) > 3)
+    if not task_words:
+        return 0.0
+
+    # Word overlap with spotlight themes
+    overlap = len(task_words & theme_words)
+    overlap_score = min(1.0, overlap / max(5, len(task_words)) * 2.0)
+
+    # Spreading activation: see how many spotlight items relate to this task
+    try:
+        activated = attention.spreading_activation(task_text, n=3)
+        activation_score = len(activated) / 3.0 if activated else 0.0
+    except Exception:
+        activation_score = 0.0
+
+    # Combine: 60% word overlap, 40% spreading activation
+    return round(min(1.0, 0.6 * overlap_score + 0.4 * activation_score), 4)
+
+
 def score_tasks(tasks):
     """
-    Score each task using attention-based salience + brain context.
+    Score each task using attention-based salience + brain context + spotlight alignment.
 
     Scoring factors:
       1. Section importance: P0=0.9, P1=0.6, P2=0.3
@@ -84,6 +140,7 @@ def score_tasks(tasks):
       3. Recent activity relevance: overlap with last day's memories
       4. AGI/consciousness boost: tasks advancing core goals
       5. Integration boost: tasks wiring existing components together
+      6. Spotlight alignment: coherence with current attention focus (NEW)
     """
     # Get current brain context for relevance scoring
     try:
@@ -100,6 +157,9 @@ def score_tasks(tasks):
         recent_text = " ".join([r["document"] for r in recent])
     except Exception:
         recent_text = ""
+
+    # Get spotlight themes for alignment scoring
+    theme_words, spotlight_texts = _get_spotlight_themes()
 
     # Log retrieval quality: rate smart_recall usage
     try:
@@ -155,25 +215,33 @@ def score_tasks(tasks):
             if kw in text_lower:
                 integration_boost = min(0.2, integration_boost + 0.1)
 
+        # 6. Spotlight alignment — coherence with current attention focus
+        spotlight_align = _spotlight_alignment(text, theme_words, spotlight_texts)
+
         total_boost = agi_boost + integration_boost
 
         # Submit to attention system for proper salience calculation
-        # This uses GWT-inspired scoring: recency, importance, relevance, boost
+        # Include spotlight alignment as part of relevance signal
+        effective_relevance = min(1.0, relevance + spotlight_align * 0.15)
         item = attention.submit(
             content=f"TASK: {text[:120]}",
             source="evolution_queue",
             importance=section_importance,
-            relevance=relevance,
+            relevance=effective_relevance,
             boost=total_boost,
         )
 
         salience = item.salience()
 
+        # Final score: 85% base salience + 15% spotlight alignment bonus
+        # This ensures tasks coherent with current focus get a meaningful edge
+        final_score = 0.85 * salience + 0.15 * spotlight_align
+
         scored.append({
             "text": text,
             "section": section,
             "line_num": task["line_num"],
-            "salience": round(salience, 4),
+            "salience": round(final_score, 4),
             "details": {
                 "section_importance": section_importance,
                 "context_relevance": round(context_relevance, 3),
@@ -181,6 +249,8 @@ def score_tasks(tasks):
                 "agi_boost": round(agi_boost, 3),
                 "integration_boost": round(integration_boost, 3),
                 "combined_relevance": round(relevance, 3),
+                "spotlight_alignment": round(spotlight_align, 3),
+                "base_salience": round(salience, 4),
             }
         })
 
@@ -232,7 +302,8 @@ if __name__ == "__main__":
             print(f"  {i+1}. [{t['salience']:.4f}] [{t['section']}] {t['text'][:70]}{marker}")
             d = t["details"]
             print(f"     importance={d['section_importance']}  relevance={d['combined_relevance']}"
-                  f"  agi={d['agi_boost']}  integration={d['integration_boost']}")
+                  f"  agi={d['agi_boost']}  integration={d['integration_boost']}"
+                  f"  spotlight={d.get('spotlight_alignment', 0)}")
         print(f"{'='*70}")
     else:
         select_best_task()

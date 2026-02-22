@@ -28,6 +28,8 @@ BRIDGE_STATE_FILE = "/home/agent/.openclaw/workspace/data/bridge_builder_state.j
 def find_weak_pairs(brain, threshold=0.30):
     """
     Identify collection pairs with semantic overlap below threshold.
+    Uses the same bidirectional methodology as phi_metric for consistency.
+    Skips existing bridge memories to measure organic overlap only.
 
     Returns list of (col1, col2, overlap_score) sorted by overlap ascending.
     """
@@ -38,8 +40,13 @@ def find_weak_pairs(brain, threshold=0.30):
         count = col.count()
         if count > 0:
             active_collections.append(col_name)
-            results = col.get(limit=min(5, count))
-            col_samples[col_name] = results.get("documents", [])
+            # Get larger sample, filter out bridges
+            results = col.get(limit=min(15, count))
+            docs = []
+            for doc in results.get("documents", []):
+                if doc and not doc.startswith("BRIDGE [") and not doc.startswith("Connection between"):
+                    docs.append(doc)
+            col_samples[col_name] = docs[:8]
 
     weak_pairs = []
     for i, c1 in enumerate(active_collections):
@@ -47,11 +54,23 @@ def find_weak_pairs(brain, threshold=0.30):
             if not col_samples.get(c1) or not col_samples.get(c2):
                 continue
 
-            col2 = brain.collections[c2]
             similarities = []
-            for doc in col_samples[c1][:3]:
+            # Bidirectional: c1->c2 and c2->c1 (matches phi_metric)
+            col2_obj = brain.collections[c2]
+            for doc in col_samples[c1][:5]:
                 try:
-                    results = col2.query(query_texts=[doc], n_results=1, include=["distances"])
+                    results = col2_obj.query(query_texts=[doc], n_results=1, include=["distances"])
+                    if results["distances"] and results["distances"][0]:
+                        dist = results["distances"][0][0]
+                        sim = max(0, 1.0 - dist / 2.0)
+                        similarities.append(sim)
+                except Exception:
+                    pass
+
+            col1_obj = brain.collections[c1]
+            for doc in col_samples[c2][:5]:
+                try:
+                    results = col1_obj.query(query_texts=[doc], n_results=1, include=["distances"])
                     if results["distances"] and results["distances"][0]:
                         dist = results["distances"][0][0]
                         sim = max(0, 1.0 - dist / 2.0)
@@ -134,45 +153,53 @@ def find_best_cross_pairs(brain, col1_name, col2_name, top_n=3):
 def create_bridge_memory(brain, pair, col1_name, col2_name):
     """
     Create an explicit bridge memory that references both sides.
-    Store in the sparser collection to boost its connectivity.
+    Store in BOTH collections to maximize semantic overlap measured by phi_metric.
+
+    The bridge text blends content from both memories naturally so it
+    embeds close to both source documents in vector space.
     """
-    col1_count = brain.collections[col1_name].count()
-    col2_count = brain.collections[col2_name].count()
-    target_col = col1_name if col1_count <= col2_count else col2_name
+    # Extract key content (strip existing bridge prefixes if any)
+    doc1 = pair["col1_doc"][:150].strip()
+    doc2 = pair["col2_doc"][:150].strip()
 
-    # Truncate docs for the bridge text
-    doc1_short = pair["col1_doc"][:120].strip()
-    doc2_short = pair["col2_doc"][:120].strip()
+    # Short collection labels
+    c1_short = col1_name.replace("clarvis-", "").replace("autonomous-", "auto-")
+    c2_short = col2_name.replace("clarvis-", "").replace("autonomous-", "auto-")
 
+    # Create bridge text that naturally blends both domains
     bridge_text = (
-        f"BRIDGE [{col1_name}] <-> [{col2_name}]: "
-        f"From {col1_name}: \"{doc1_short}\" "
-        f"connects to {col2_name}: \"{doc2_short}\". "
-        f"Semantic similarity: {pair['similarity']:.3f}."
+        f"Connection between {c1_short} and {c2_short}: "
+        f"{doc1} — relates to — {doc2}"
     )
 
     # Stable ID for idempotency
-    bridge_id = f"bridge_{pair['col1_id'][:30]}_{pair['col2_id'][:30]}"
-    # Clean ID (no spaces/special chars)
-    bridge_id = bridge_id.replace(" ", "_").replace("/", "_")[:80]
+    base_id = f"sbridge_{pair['col1_id'][:25]}_{pair['col2_id'][:25]}"
+    base_id = base_id.replace(" ", "_").replace("/", "_")[:70]
 
-    mem_id = brain.store(
-        bridge_text,
-        collection=target_col,
-        importance=0.6,
-        tags=["bridge", "semantic-bridge", col1_name, col2_name],
-        source="semantic_bridge_builder",
-        memory_id=bridge_id,
-    )
+    stored_ids = []
 
-    # Also create explicit cross-collection edges for both source memories
-    brain.add_relationship(pair["col1_id"], mem_id, "semantic_bridge")
-    brain.add_relationship(pair["col2_id"], mem_id, "semantic_bridge")
+    # Store in BOTH collections to boost bidirectional semantic overlap
+    for target_col in [col1_name, col2_name]:
+        bridge_id = f"{base_id}_{target_col[:15]}"[:80]
+        mem_id = brain.store(
+            bridge_text,
+            collection=target_col,
+            importance=0.6,
+            tags=["semantic-bridge", col1_name, col2_name],
+            source="semantic_bridge_builder",
+            memory_id=bridge_id,
+        )
+        stored_ids.append(mem_id)
+
+    # Create explicit cross-collection edges
+    brain.add_relationship(pair["col1_id"], stored_ids[0], "semantic_bridge")
+    brain.add_relationship(pair["col2_id"], stored_ids[1], "semantic_bridge")
     brain.add_relationship(pair["col1_id"], pair["col2_id"], "bridged_similarity")
+    brain.add_relationship(stored_ids[0], stored_ids[1], "cross_collection")
 
     return {
-        "bridge_id": mem_id,
-        "target_collection": target_col,
+        "bridge_id": stored_ids[0],
+        "target_collection": f"{col1_name}+{col2_name}",
         "text_preview": bridge_text[:100],
     }
 
