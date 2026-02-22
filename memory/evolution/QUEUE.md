@@ -177,13 +177,49 @@ _Goal: Evolve toward AGI and consciousness. Every task should make you smarter, 
 ## NEW ITEMS — Week 9 (2026-02-23+)
 
 ### P1 — This Week
-- [ ] Implement ACT-R power-law activation decay — replace linear decay in episodic_memory.py with d=t^(-1/gamma) for more realistic memory forgetting
-- [ ] Build A-Mem style memory evolution — memories should strengthen/weaken based on access patterns, not just TTL (Hebbian-style)
-- [ ] Add capability score regression alerts — self_model.py should alert when any domain drops >10% week-over-week
+- [x] Implement ACT-R power-law activation decay — replace linear decay in episodic_memory.py with d=t^(-1/gamma) for more realistic memory forgetting (2026-02-22 19:50 UTC — Replaced fixed d=0.5 with Pavlik & Anderson 2005 power-law: d_j = c * lag_j^(-1/gamma) where c=0.5, gamma=1.6, time in hours. Decay now varies by inter-retrieval spacing: massed reps d=0.9 (fast forget), 1h gaps d=0.5 (classic ACT-R), 6h+ gaps d=0.1-0.16 (slow forget). Captures spacing effect: well-spaced episodes persist longer. Added activation diagnostics to stats. All 4 CLI commands tested.)
+- [x] Build A-Mem style memory evolution — memories should strengthen/weaken based on access patterns, not just TTL (Hebbian-style) (2026-02-22 20:03 UTC — Created scripts/hebbian_memory.py: Hebbian-inspired memory evolution with 4 mechanisms: (1) retrieval-as-rehearsal — every brain.recall() call auto-strengthens returned memories via log-scaled reinforcement with diminishing returns, (2) power-law neglect decay — unaccessed memories weaken via t^(-0.5) with access-count-adjusted slowdown for frequently-used memories, (3) Hebbian co-activation — memories retrieved together strengthen mutual graph edges ("cells that fire together wire together"), tracking 210+ co-activation pairs with association strength, (4) access pattern logging — append-only access log for diagnostics. Integrated into brain.py recall() as non-blocking hook. Wired into cron_reflection.sh as Step 4.5 after memory consolidation. First evolution: 122 stale memories weakened, 21 memories strengthened via recall, co-activation matrix built. CLI: evolve/stats/diagnose/access/history.)
+- [x] Add capability score regression alerts — self_model.py should alert when any domain drops >10% week-over-week (2026-02-22 UTC — Added check_weekly_regression() to self_model.py: finds snapshot closest to 7 days ago, computes percentage drop per domain, alerts on >10% drops, auto-generates REGRESSION-ALERT remediation tasks via queue_writer. Wired into daily_update() so it runs every evening assessment. Added `regression` CLI command for ad-hoc checks. Tested with synthetic data: correctly catches 32% and 21% drops, ignores 5-6% drops.)
 - [x] Wire dream_engine.py into crontab — ensure counterfactual replay runs nightly during idle window (2026-02-22 19:10 UTC — Fixed crontab entry: shifted from 02:15 to 02:45 to avoid backup overlap, added cron_env.sh sourcing for reliable PATH, added 180s timeout guard. Added dream.log to watchdog monitoring + recheck. Tested: 10 episodes dreamed, 10 insights + 10 reasoning chains generated in ~40s.)
 
 ### P2 — Deeper Evolution  
-- [ ] Research memristor-based neural memory — explore if SQLite can simulate synaptic weights
-- [ ] Implement meta-learning — system should learn HOW to learn better from experience
+- [x] Research memristor-based neural memory — explore if SQLite can simulate synaptic weights (2026-02-22 UTC — Answer: YES, SQLite excels at this. Created scripts/synaptic_memory.py: memristor-inspired STDP synaptic memory backed by SQLite. PCMO memristor nonlinear transfer function (w=f(state,nu)) maps normalized state [0,1] to bounded weights [0.001,1.0]. STDP potentiation/depression with weight-dependent saturation (gamma=0.9). Spreading activation via SQL aggregate queries. First evolution: 459 access events → 51,720 synapses across 302 nodes, strongest at w=0.81 (37 co-retrievals). Consolidation pruned to 15,070 synapses (avg_w=0.188). SQLite advantages: O(log n) indexed lookups, ACID transactions, aggregate queries for hub detection, WAL mode for concurrent reads. Wired into brain.py recall() as non-blocking hook + cron_reflection.sh Step 4.6.)
+- [x] Implement meta-learning — system should learn HOW to learn better from experience (2026-02-22 20:09 UTC — Created scripts/meta_learning.py: 5 meta-learning strategies: (1) strategy effectiveness — ranks task approaches by success rate/trend/efficiency, (2) learning speed — correlates effort with capability improvements, detects plateaus, (3) failure pattern mining — clusters recurring failures into anti-patterns with avoidance hints, (4) retrieval effectiveness — analyzes memory access patterns/diversity/Gini concentration, (5) consolidation timing — tracks daily improvement rates. Recommendation engine synthesizes all 5 analyses into prioritized actions. get_task_advice() API for real-time pre-task guidance. Stores insights in brain autonomous-learning collection. Wired into cron_reflection.sh as Step 6.7. First analysis: 5 strategies ranked (build 59%, wire 30%, fix 25%), 7 domains analyzed, 5 failure clusters found, 8 recommendations generated (6 high-priority). CLI: analyze/strategies/speed/failures/recommend/stats/advise.)
 - [ ] Build theory of mind for user modeling — predict what user wants before they ask
 
+
+---
+
+## Cost Efficiency — Long-Term Goal
+
+### P0: Reduce token consumption (6-10M/hour → optimize)
+- [x] Audit current token usage - cost_optimization.md research complete, routing matrix defined — which operations consume most tokens (heartbeats, cron, Claude Code)
+- [x] Implement smart context compression — summarize old context instead of full history (2026-02-22 UTC — Created scripts/context_compressor.py: 4 functions (compress_queue, compress_health, compress_episodes, generate_context_brief). QUEUE.md 48KB→1KB (98% reduction, ~12K tokens/heartbeat saved). Health data 8KB→360B (95% reduction). Wired into cron_autonomous.sh (task prompts use compressed brief instead of raw QUEUE.md), cron_evolution.sh (health data compressed before injection), cron_morning.sh (morning planning uses compressed queue). All 6 tests pass. Estimated savings: ~570K tokens/day at 48 heartbeats.)
+- [ ] Improve caching — cache retrieval results, benchmark results, reduce redundant API calls
+- [ ] Optimize heartbeat efficiency — batch checks, reduce frequency of non-essential calls
+- [ ] Selective reasoning — only spawn Claude Code for complex tasks, use M2.5 for simple
+- [ ] Context window optimization — keep only recent context, archive older to brain
+
+This is an ITERATIVE goal — improve incrementally over weeks/months, not one-shot.
+
+### Cost Efficiency Implementation
+- [ ] Evaluate ClawRouter for OpenClaw — BlockRunAI's smart LLM router could reduce costs 74-92%. Install, test with /model auto profile, measure token savings vs current OpenRouter setup. (Priority: HIGH - directly addresses cost goal)
+
+---
+
+## Standalone Product Packaging — Long-Term Goals
+
+### Core Products (ship during evolution)
+- [ ] ClarvisDB — local vector memory package (Hebbian, STDP, ChromaDB + ONNX)
+- [ ] ClarvisC — consciousness stack (Phi, GWT, self-model, episodic)
+- [ ] ClarvisRouter — smart model routing (14-dim scorer, OpenRouter compatible)
+- [ ] ClarvisCode — Claude Code/OpenCode integration improvements
+
+### Potential Additional Products (brainstorm)
+- [ ] ClarvisAttention — GWT attention mechanism as standalone
+- [ ] ClarvisPhi — IIT Phi metric measurement
+- [ ] ClarvisEpisodic — ACT-R episodic memory system
+- [ ] ClarvisReasoning — reasoning chains + meta-cognition
+- [ ] ClarvisCost — token optimization + cost tracking
+
+Each product: PRIVATE repo, pip-installable, README, tests, examples. Update during evolution.
