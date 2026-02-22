@@ -8,6 +8,7 @@ from datetime import datetime
 
 sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
 from brain import brain
+from attention import attention
 
 def session_close(session_key=None, messages=None):
     """
@@ -57,6 +58,9 @@ def session_close(session_key=None, messages=None):
     
     # Update context
     brain.set_context(f"Session closed. Decisions: {len(decisions)}, Insights: {len(insights)}")
+    
+    # Save attention/working memory state for session continuity
+    attention._save()
     
     print(f"Stored: {len(decisions)} decisions, {len(insights)} insights")
     return {"decisions": len(decisions), "insights": len(insights)}
