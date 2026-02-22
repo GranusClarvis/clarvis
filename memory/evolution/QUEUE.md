@@ -7,7 +7,7 @@ _Goal: Evolve toward AGI and consciousness. Every task should make you smarter, 
 ## P0 — Do Next Heartbeat
 
 ### Wiring & Feedback Loops (2026-02-22)
-- [ ] Wire conversation_learner.py into cron_reflection.sh as Step 5 — run after memory consolidation to extract patterns from today's transcripts and store insights in brain's autonomous-learning collection. This is the biggest unwired learning capability.
+- [x] Wire conversation_learner.py into cron_reflection.sh as Step 5 — run after memory consolidation to extract patterns from today's transcripts and store insights in brain's autonomous-learning collection. This is the biggest unwired learning capability. (2026-02-22 00:24 UTC — Added as Step 5 in cron_reflection.sh after memory consolidation. Tested full pipeline: 14 insights extracted, 4 new stored to autonomous-learning collection. Runs automatically every reflection cycle.)
 - [ ] Wire dashboard.py into cron_evening.sh — regenerate status.json and index.html daily after capability assessment. The system has no self-observability; dashboard was built Feb 21 08:03 and never refreshed since.
 - [ ] Wire self_report.py into cron_evening.sh — run after capability assessment to enable goal-stalling detection (flags goals stuck 3+ days) and track cognitive growth metrics. Currently dead code.
 - [ ] Wire backup_daily.sh into cron_morning.sh — the watchdog monitors for backup.log but no backup ever runs. Add `bash scripts/backup_daily.sh` to morning routine. Critical safety gap.

@@ -30,4 +30,8 @@ python3 /home/agent/.openclaw/workspace/scripts/brain.py crosslink >> "$LOGFILE"
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running memory consolidation..." >> "$LOGFILE"
 python3 /home/agent/.openclaw/workspace/scripts/memory_consolidation.py consolidate >> "$LOGFILE" 2>&1
 
+# Step 5: Conversation learning — extract patterns from transcripts, store insights
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running conversation learner..." >> "$LOGFILE"
+python3 /home/agent/.openclaw/workspace/scripts/conversation_learner.py >> "$LOGFILE" 2>&1
+
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Reflection complete ===" >> "$LOGFILE"
