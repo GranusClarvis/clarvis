@@ -34,8 +34,8 @@ ROUTE_PATTERNS = [
     (re.compile(r'\b(goals?|objectives?|targets?|milestones?|progress)\b', re.I), [GOALS]),
     # Procedure-related queries
     (re.compile(r'\b(procedur\w*|how to|steps? for|recipe|workflow)\b', re.I), [PROCEDURES, LEARNINGS]),
-    # Self/identity queries
-    (re.compile(r'\b(who am i|my identity|my name|about me|self model)\b', re.I), [IDENTITY]),
+    # Self/identity queries (include MEMORIES — identity facts often stored there too)
+    (re.compile(r'\b(who am i|my identity|my name|about me|self model|who created|creator|capabilit\w+|what am i)\b', re.I), [IDENTITY, MEMORIES]),
     # Infrastructure queries
     (re.compile(r'\b(cron|script|server|system|infra|config)\b', re.I), [INFRASTRUCTURE, LEARNINGS]),
     # Context queries
@@ -113,8 +113,8 @@ def smart_recall(query: str, n: int = 5, max_distance: float = 1.5, **kwargs):
     # Step 4: Re-sort by boosted distance
     raw_results.sort(key=lambda x: x.get("_boosted_distance", 999))
 
-    # Step 5: Filter by distance threshold (on original distance)
-    filtered = [r for r in raw_results if r.get("distance") is not None and r["distance"] <= max_distance]
+    # Step 5: Filter by distance threshold (use boosted distance for routed collections)
+    filtered = [r for r in raw_results if r.get("distance") is not None and r["_boosted_distance"] <= max_distance]
 
     # Step 6: Deduplicate (same document text within 90% similarity)
     deduped = []
