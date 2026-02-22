@@ -170,11 +170,13 @@ def semantic_cross_collection(brain):
     """
     Measure 3: Semantic overlap across collection boundaries.
 
-    For each collection, take a sample of memories and query other collections.
-    High similarity across boundaries = information is naturally integrated
-    even if explicit graph edges don't connect them.
+    For each collection pair, measure best-match similarity bidirectionally.
+    Uses a diverse sample (up to 8 docs) from each collection and queries
+    in both directions, taking the best match per doc. This captures the
+    true semantic bridge strength — even one highly similar pair per
+    direction indicates meaningful integration.
 
-    This captures latent integration that the graph structure misses.
+    Score = average across all collection pairs of (avg best-match similarity).
     """
     active_collections = []
     col_samples = {}
@@ -183,14 +185,14 @@ def semantic_cross_collection(brain):
         count = col.count()
         if count > 0:
             active_collections.append(col_name)
-            # Get a sample of up to 5 documents
-            results = col.get(limit=min(5, count))
+            # Get a larger, more representative sample
+            sample_size = min(8, count)
+            results = col.get(limit=sample_size)
             col_samples[col_name] = results.get("documents", [])
 
     if len(active_collections) < 2:
         return 0.0, {}
 
-    # For each pair of collections, measure semantic similarity
     pair_scores = []
     pair_details = {}
 
@@ -199,20 +201,30 @@ def semantic_cross_collection(brain):
             if not col_samples.get(c1) or not col_samples.get(c2):
                 continue
 
-            # Query c2 with samples from c1, measure avg distance
-            col2 = brain.collections[c2]
+            col1_obj = brain.collections[c1]
+            col2_obj = brain.collections[c2]
             similarities = []
 
-            for doc in col_samples[c1][:3]:  # Limit queries for speed
+            # Direction 1: query c2 with samples from c1
+            for doc in col_samples[c1][:5]:
                 try:
-                    results = col2.query(
-                        query_texts=[doc],
-                        n_results=1,
-                        include=["distances"]
+                    results = col2_obj.query(
+                        query_texts=[doc], n_results=1, include=["distances"]
                     )
                     if results["distances"] and results["distances"][0]:
-                        # ChromaDB returns L2 distance; convert to similarity
-                        # Typical L2 range for MiniLM: 0 (identical) to ~2.0 (unrelated)
+                        dist = results["distances"][0][0]
+                        sim = max(0, 1.0 - dist / 2.0)
+                        similarities.append(sim)
+                except Exception:
+                    pass
+
+            # Direction 2: query c1 with samples from c2
+            for doc in col_samples[c2][:5]:
+                try:
+                    results = col1_obj.query(
+                        query_texts=[doc], n_results=1, include=["distances"]
+                    )
+                    if results["distances"] and results["distances"][0]:
                         dist = results["distances"][0][0]
                         sim = max(0, 1.0 - dist / 2.0)
                         similarities.append(sim)
