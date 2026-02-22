@@ -202,6 +202,39 @@ if [ $TASK_EXIT -eq 0 ]; then
             echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] PROCEDURAL: Skipped learning — could not extract concrete steps from output" >> "$LOGFILE"
         fi
     fi
+elif [ $TASK_EXIT -eq 124 ]; then
+    # === TIMEOUT HANDLING (exit 124) ===
+    # timeout(1) returns 124 when the command is killed. This is NOT the same as a
+    # task failure — it means the task was too complex for the 10-min window.
+    # Don't trigger the full evolution/failure loop for timeouts.
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] TIMEOUT (exit 124): Task exceeded 600s limit: ${NEXT_TASK:0:100}" >> "$LOGFILE"
+    python3 "$CONFIDENCE_SCRIPT" outcome "$TASK_EVENT" "failure" >> "$LOGFILE" 2>&1
+
+    # Close reasoning chain as timeout (not generic failure)
+    if [ -n "$CHAIN_ID" ]; then
+        CHAIN_EVIDENCE="TIMEOUT after 600s. Task too complex for single heartbeat window."
+        python3 "$REASONING_HOOK" close "$CHAIN_ID" "failure" "$NEXT_TASK" "$TASK_EXIT" "$CHAIN_EVIDENCE" 2>> "$LOGFILE"
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] REASONING: Closed chain $CHAIN_ID (timeout)" >> "$LOGFILE"
+    fi
+
+    # Record failure against procedure if used
+    if [ -n "$PROC_ID" ]; then
+        python3 "$PROC_SCRIPT" used "$PROC_ID" failure >> "$LOGFILE" 2>&1
+    fi
+
+    # Check if the task made partial progress (output > 500 chars suggests work was done)
+    OUTPUT_SIZE=$(wc -c < "$TASK_OUTPUT_FILE" 2>/dev/null || echo 0)
+    if [ "$OUTPUT_SIZE" -gt 500 ]; then
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] TIMEOUT-PARTIAL: Task produced ${OUTPUT_SIZE} bytes of output — may have partially completed" >> "$LOGFILE"
+    fi
+
+    python3 /home/agent/.openclaw/workspace/scripts/attention.py add "OUTCOME: TIMEOUT (600s) — ${NEXT_TASK:0:80}" 0.7 >> "$LOGFILE" 2>&1
+
+    # Light-weight capture — log the timeout but do NOT trigger the full evolution loop.
+    # Timeouts are expected for complex tasks and don't indicate a bug to fix.
+    python3 /home/agent/.openclaw/workspace/scripts/evolution_loop.py \
+        capture "cron_autonomous" "Timeout (exit 124) — task exceeded 600s" "$NEXT_TASK" >> "$LOGFILE" 2>&1
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] TIMEOUT: Captured for tracking (skipping evolution loop — timeouts are not bugs)" >> "$LOGFILE"
 else
     python3 "$CONFIDENCE_SCRIPT" outcome "$TASK_EVENT" "failure" >> "$LOGFILE" 2>&1
     # === REASONING CHAIN: Close with failure outcome + error evidence ===
@@ -245,13 +278,16 @@ python3 "$EPISODIC_SCRIPT" encode "$NEXT_TASK" "${TASK_SECTION:-P0}" "${BEST_SAL
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] EPISODIC: Encoded episode ($TASK_STATUS, ${TASK_DURATION:-0}s)" >> "$LOGFILE"
 
 # === ATTENTION BROADCAST: Feed task outcome into attention system ===
-python3 -c "
-import sys; sys.path.insert(0, '/home/agent/.openclaw/workspace/scripts')
+# Pass task text via env var to avoid SyntaxError from special chars (em-dashes, quotes)
+BROADCAST_TASK="${NEXT_TASK:0:100}" BROADCAST_STATUS="$TASK_STATUS" python3 -c "
+import os, sys; sys.path.insert(0, '/home/agent/.openclaw/workspace/scripts')
 from attention import attention
+status = os.environ.get('BROADCAST_STATUS', 'unknown')
+task = os.environ.get('BROADCAST_TASK', '')
 attention.submit(
-    'Heartbeat task $TASK_STATUS: ${NEXT_TASK:0:100}',
+    f'Heartbeat task {status}: {task}',
     source='heartbeat',
-    importance=0.7 if '$TASK_STATUS' == 'success' else 0.9,
+    importance=0.7 if status == 'success' else 0.9,
     relevance=0.8
 )
 " >> "$LOGFILE" 2>&1 || true

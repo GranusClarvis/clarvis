@@ -27,6 +27,11 @@ try:
 except ImportError:
     smart_recall = None
 
+try:
+    from somatic_markers import somatic
+except ImportError:
+    somatic = None
+
 QUEUE_FILE = "/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md"
 
 # Keywords that signal AGI/consciousness relevance (high-value work)
@@ -218,6 +223,17 @@ def score_tasks(tasks):
         # 6. Spotlight alignment — coherence with current attention focus
         spotlight_align = _spotlight_alignment(text, theme_words, spotlight_texts)
 
+        # 7. Somatic marker bias — emotional signal from past experiences
+        somatic_bias = 0.0
+        somatic_signal = "neutral"
+        if somatic is not None:
+            try:
+                bias_result = somatic.get_bias(text)
+                somatic_bias = bias_result.get("bias_score", 0.0)
+                somatic_signal = bias_result.get("signal", "neutral")
+            except Exception:
+                pass
+
         total_boost = agi_boost + integration_boost
 
         # Submit to attention system for proper salience calculation
@@ -233,9 +249,11 @@ def score_tasks(tasks):
 
         salience = item.salience()
 
-        # Final score: 85% base salience + 15% spotlight alignment bonus
-        # This ensures tasks coherent with current focus get a meaningful edge
-        final_score = 0.85 * salience + 0.15 * spotlight_align
+        # Final score: 80% base salience + 10% spotlight + 10% somatic bias
+        # Somatic markers bias toward tasks with positive past outcomes,
+        # and away from task patterns that previously caused pain/frustration
+        somatic_component = max(0.0, min(1.0, 0.5 + somatic_bias))  # map [-1,1] to [0,1]
+        final_score = 0.80 * salience + 0.10 * spotlight_align + 0.10 * somatic_component
 
         scored.append({
             "text": text,
@@ -250,6 +268,8 @@ def score_tasks(tasks):
                 "integration_boost": round(integration_boost, 3),
                 "combined_relevance": round(relevance, 3),
                 "spotlight_alignment": round(spotlight_align, 3),
+                "somatic_bias": round(somatic_bias, 4),
+                "somatic_signal": somatic_signal,
                 "base_salience": round(salience, 4),
             }
         })
@@ -303,7 +323,8 @@ if __name__ == "__main__":
             d = t["details"]
             print(f"     importance={d['section_importance']}  relevance={d['combined_relevance']}"
                   f"  agi={d['agi_boost']}  integration={d['integration_boost']}"
-                  f"  spotlight={d.get('spotlight_alignment', 0)}")
+                  f"  spotlight={d.get('spotlight_alignment', 0)}"
+                  f"  somatic={d.get('somatic_bias', 0)}({d.get('somatic_signal', 'n/a')})")
         print(f"{'='*70}")
     else:
         select_best_task()

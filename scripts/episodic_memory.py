@@ -81,6 +81,13 @@ class EpisodicMemory:
             source="episodic_memory"
         )
 
+        # Create somatic markers (emotional tags for decision biasing)
+        try:
+            from somatic_markers import somatic
+            somatic.tag_episode(episode)
+        except Exception:
+            pass  # Don't let somatic tagging break episode encoding
+
         return episode
 
     def recall_similar(self, query, n=5, use_spreading_activation=True):
