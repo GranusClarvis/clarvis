@@ -6,8 +6,8 @@ Usage:
     # Before task execution: create chain, print chain_id
     python3 reasoning_chain_hook.py open "task text" "section_name" "salience_score"
 
-    # After task execution: close chain with outcome
-    python3 reasoning_chain_hook.py close "chain_id" "success|failure" "task text" "exit_code"
+    # After task execution: close chain with outcome + evidence
+    python3 reasoning_chain_hook.py close "chain_id" "success|failure" "task text" "exit_code" ["evidence_summary"]
 
     # Search for related past reasoning
     python3 reasoning_chain_hook.py related "task text"
@@ -27,13 +27,28 @@ except ImportError:
     smart_recall = None
 
 
-def open_chain(task_text: str, section: str = "unknown", salience: str = "0.0") -> str:
-    """Create a reasoning chain before executing a task.
+def _recall_context(task_text: str) -> list:
+    """Retrieve brain context for a task, with smart_recall fallback."""
+    try:
+        if smart_recall is not None:
+            return smart_recall(task_text, n=3) or []
+        return brain.recall(task_text, n=3, caller="reasoning_chain_hook") or []
+    except Exception:
+        try:
+            return brain.recall(task_text, n=3, caller="reasoning_chain_hook") or []
+        except Exception:
+            return []
 
-    Builds the initial thought: why this task matters, expected outcome, dependencies.
+
+def open_chain(task_text: str, section: str = "unknown", salience: str = "0.0") -> str:
+    """Create a multi-step reasoning chain before executing a task.
+
+    Step 0: Context analysis — what do we know, what's related
+    Step 1: Strategy — why this task, expected approach and outcome
+
     Returns chain_id to stdout.
     """
-    # Look for related past reasoning to inform this chain
+    # Look for related past reasoning
     related = []
     try:
         recent_chains = list_chains()[:5]
@@ -43,65 +58,96 @@ def open_chain(task_text: str, section: str = "unknown", salience: str = "0.0") 
     except Exception:
         pass
 
-    # Build the initial reasoning thought
+    # Retrieve brain context
+    context_memories = _recall_context(task_text)
+    context_snippets = []
+    for m in context_memories[:3]:
+        snippet = m.get("document", m.get("text", ""))[:100].strip()
+        if snippet:
+            context_snippets.append(snippet)
+
+    # --- Step 0: Context analysis ---
+    context_note = ""
+    if context_snippets:
+        context_note = f" Relevant brain context: {'; '.join(context_snippets[:2])}."
     dependency_note = ""
     if related:
-        dependency_note = f" Related past work: {'; '.join(related[:3])}."
+        dependency_note = f" Related past chains: {'; '.join(related[:3])}."
 
-    initial_thought = (
-        f"Executing evolution task (section={section}, salience={salience}). "
-        f"Why this matters: This task was selected by attention-based salience scoring as the "
-        f"highest-priority evolution step. "
-        f"Expected outcome: Task completes successfully, advancing Clarvis's capabilities. "
-        f"Task: {task_text[:200]}.{dependency_note}"
+    step0_thought = (
+        f"Context analysis for task: {task_text[:200]}. "
+        f"Section={section}, salience={salience}. "
+        f"Prior knowledge: {len(context_snippets)} relevant memories found."
+        f"{context_note}{dependency_note}"
     )
 
-    # Enrich with brain context — what do we know about this domain?
-    try:
-        if smart_recall is not None:
-            context_memories = smart_recall(task_text, n=3)
-        else:
-            context_memories = brain.recall(task_text, n=3, caller="reasoning_chain_hook")
-        if context_memories:
-            snippets = [m.get("document", m.get("text", ""))[:80] for m in context_memories[:2]]
-            if any(s.strip() for s in snippets):
-                initial_thought += f" Brain context: {'; '.join(s for s in snippets if s.strip())}"
-    except Exception:
-        try:
-            context_memories = brain.recall(task_text, n=3, caller="reasoning_chain_hook")
-            if context_memories:
-                snippets = [m.get("document", m.get("text", ""))[:80] for m in context_memories[:2]]
-                if any(s.strip() for s in snippets):
-                    initial_thought += f" Brain context: {'; '.join(s for s in snippets if s.strip())}"
-        except Exception:
-            pass
+    chain_id = create_chain(f"Task: {task_text[:100]}", step0_thought)
 
-    chain_id = create_chain(f"Task: {task_text[:100]}", initial_thought)
+    # --- Step 1: Strategy and expected outcome ---
+    # Classify task type from keywords
+    task_lower = task_text.lower()
+    if any(w in task_lower for w in ["fix", "bug", "error", "broken"]):
+        task_type = "bug fix"
+    elif any(w in task_lower for w in ["build", "create", "implement", "add"]):
+        task_type = "new capability"
+    elif any(w in task_lower for w in ["wire", "hook", "integrate", "connect"]):
+        task_type = "integration"
+    elif any(w in task_lower for w in ["improve", "boost", "optimize", "increase"]):
+        task_type = "optimization"
+    else:
+        task_type = "evolution task"
+
+    step1_thought = (
+        f"Strategy: This is a {task_type}. "
+        f"Selected via attention-based salience scoring (score={salience}) "
+        f"as the highest-priority evolution step in {section}. "
+        f"Approach: Delegate to Claude Code with full context. "
+        f"Expected outcome: Task completes, advancing Clarvis capabilities. "
+        f"Risk: {'Low — similar past work succeeded' if related else 'Medium — no closely related past chains'}."
+    )
+
+    add_step(chain_id, step1_thought, previous_outcome="Context gathered, strategy formed")
+
     print(chain_id)  # stdout — captured by bash
     return chain_id
 
 
-def close_chain(chain_id: str, result: str, task_text: str, exit_code: str = "0") -> None:
+def close_chain(chain_id: str, result: str, task_text: str, exit_code: str = "0",
+                evidence: str = "") -> None:
     """Close a reasoning chain after task execution.
 
-    Records actual outcome, whether it matched expectations.
+    Records actual outcome with evidence from execution output.
+    Adds a final step (step 2+) with the concrete outcome.
     """
-    if result == "success":
-        outcome = (
-            f"Task completed successfully (exit {exit_code}). "
-            f"The evolution step was executed as expected. "
-            f"Task: {task_text[:200]}"
-        )
-    else:
-        outcome = (
-            f"Task FAILED (exit {exit_code}). "
-            f"Expected success but execution failed. "
-            f"This triggered the evolution loop for self-improvement. "
-            f"Task: {task_text[:200]}"
-        )
+    # Extract meaningful evidence summary
+    evidence_summary = ""
+    if evidence:
+        # Take last meaningful portion of output as evidence
+        evidence_clean = evidence.strip()
+        if len(evidence_clean) > 300:
+            evidence_clean = evidence_clean[-300:]
+        evidence_summary = f" Evidence: {evidence_clean}"
 
-    complete_step(chain_id, outcome)
-    print(f"Chain {chain_id} closed: {result}", file=sys.stderr)
+    if result == "success":
+        outcome_text = (
+            f"Task completed successfully (exit {exit_code}). "
+            f"Task: {task_text[:150]}."
+            f"{evidence_summary or ' No detailed evidence captured.'}"
+        )
+        # Close step 1 with outcome, add step 2 as final conclusion
+        add_step(chain_id, outcome_text, previous_outcome="Execution succeeded")
+    else:
+        outcome_text = (
+            f"Task FAILED (exit {exit_code}). "
+            f"Task: {task_text[:150]}. "
+            f"Triggered evolution loop for self-improvement."
+            f"{evidence_summary or ' No error details captured.'}"
+        )
+        add_step(chain_id, outcome_text, previous_outcome="Execution failed")
+
+    # Mark the final step's outcome
+    complete_step(chain_id, f"Chain complete: {result}")
+    print(f"Chain {chain_id} closed: {result} ({3}+ steps)", file=sys.stderr)
 
 
 def show_related(task_text: str) -> None:
@@ -129,8 +175,9 @@ if __name__ == "__main__":
         result = sys.argv[3] if len(sys.argv) > 3 else "unknown"
         task_text = sys.argv[4] if len(sys.argv) > 4 else ""
         exit_code = sys.argv[5] if len(sys.argv) > 5 else "0"
+        evidence = sys.argv[6] if len(sys.argv) > 6 else ""
         if chain_id:
-            close_chain(chain_id, result, task_text, exit_code)
+            close_chain(chain_id, result, task_text, exit_code, evidence)
         else:
             print("ERROR: No chain_id provided", file=sys.stderr)
             sys.exit(1)

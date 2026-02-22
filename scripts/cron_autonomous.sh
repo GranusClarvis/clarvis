@@ -177,10 +177,12 @@ python3 /home/agent/.openclaw/workspace/scripts/attention.py save >> "$LOGFILE" 
 # === OUTCOME: Record actual result for prediction feedback loop ===
 if [ $TASK_EXIT -eq 0 ]; then
     python3 "$CONFIDENCE_SCRIPT" outcome "$TASK_EVENT" "success" >> "$LOGFILE" 2>&1
-    # === REASONING CHAIN: Close with success outcome ===
+    # === REASONING CHAIN: Close with success outcome + evidence ===
     if [ -n "$CHAIN_ID" ]; then
-        python3 "$REASONING_HOOK" close "$CHAIN_ID" "success" "$NEXT_TASK" "$TASK_EXIT" 2>> "$LOGFILE"
-        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] REASONING: Closed chain $CHAIN_ID (success)" >> "$LOGFILE"
+        # Extract last meaningful lines from output as evidence
+        CHAIN_EVIDENCE=$(tail -c 300 "$TASK_OUTPUT_FILE" 2>/dev/null | tr '\n' ' ' | sed 's/[^a-zA-Z0-9 _.,:;=+\-\/()@#%]//g' | tail -c 280)
+        python3 "$REASONING_HOOK" close "$CHAIN_ID" "success" "$NEXT_TASK" "$TASK_EXIT" "$CHAIN_EVIDENCE" 2>> "$LOGFILE"
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] REASONING: Closed chain $CHAIN_ID (success, with evidence)" >> "$LOGFILE"
     fi
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] COMPLETED: $NEXT_TASK" >> "$LOGFILE"
     # === ATTENTION: Record success outcome ===
@@ -202,10 +204,11 @@ if [ $TASK_EXIT -eq 0 ]; then
     fi
 else
     python3 "$CONFIDENCE_SCRIPT" outcome "$TASK_EVENT" "failure" >> "$LOGFILE" 2>&1
-    # === REASONING CHAIN: Close with failure outcome ===
+    # === REASONING CHAIN: Close with failure outcome + error evidence ===
     if [ -n "$CHAIN_ID" ]; then
-        python3 "$REASONING_HOOK" close "$CHAIN_ID" "failure" "$NEXT_TASK" "$TASK_EXIT" 2>> "$LOGFILE"
-        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] REASONING: Closed chain $CHAIN_ID (failure)" >> "$LOGFILE"
+        CHAIN_EVIDENCE=$(tail -c 300 "$TASK_OUTPUT_FILE" 2>/dev/null | tr '\n' ' ' | sed 's/[^a-zA-Z0-9 _.,:;=+\-\/()@#%]//g' | tail -c 280)
+        python3 "$REASONING_HOOK" close "$CHAIN_ID" "failure" "$NEXT_TASK" "$TASK_EXIT" "$CHAIN_EVIDENCE" 2>> "$LOGFILE"
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] REASONING: Closed chain $CHAIN_ID (failure, with evidence)" >> "$LOGFILE"
     fi
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] FAILED (exit $TASK_EXIT): $NEXT_TASK" >> "$LOGFILE"
     # === ATTENTION: Record failure outcome (high importance — needs attention) ===

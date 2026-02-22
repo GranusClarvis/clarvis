@@ -764,9 +764,12 @@ def _assess_reasoning_chains():
                 ) or bool(chain.get("outcome") or chain.get("conclusion"))
                 is_today = today in cf.name
 
-                # High quality: has steps AND has a recorded outcome
-                if len(steps) >= 1 and has_outcome:
+                # High quality: multi-step (>= 3 steps) AND has a recorded outcome
+                if len(steps) >= 3 and has_outcome:
                     high_quality_count += 1
+                # Medium quality: has some steps and outcome
+                elif len(steps) >= 2 and has_outcome:
+                    high_quality_count += 1  # Still counts, slightly less strict
                 else:
                     low_quality_count += 1
 
@@ -782,7 +785,7 @@ def _assess_reasoning_chains():
         quality_score = min(0.5, high_quality_count * 0.1)
         score += quality_score
         if high_quality_count > 0:
-            evidence.append(f"{high_quality_count} high-quality chains (>2 steps + outcome) (+{quality_score:.2f})")
+            evidence.append(f"{high_quality_count} high-quality chains (multi-step + outcome) (+{quality_score:.2f})")
 
         # --- Today's chain quality: ratio of outcome-bearing chains ---
         today_total = today_with_outcomes + today_empty
