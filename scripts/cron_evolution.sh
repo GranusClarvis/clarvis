@@ -46,6 +46,11 @@ echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Retrieval quality:" >> "$LOGFILE"
 RETRIEVAL_OUTPUT=$(python3 /home/agent/.openclaw/workspace/scripts/retrieval_quality.py report 7 2>&1) || true
 echo "$RETRIEVAL_OUTPUT" >> "$LOGFILE"
 
+# === PARAMETER EVOLUTION: Tune salience weights from fitness signals ===
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Parameter evolution:" >> "$LOGFILE"
+PARAM_EVOLVE_OUTPUT=$(python3 /home/agent/.openclaw/workspace/scripts/parameter_evolution.py evolve 2>&1) || true
+echo "$PARAM_EVOLVE_OUTPUT" >> "$LOGFILE"
+
 # === CONFIDENCE THRESHOLD: Apply latest calibration ===
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Applying confidence calibration:" >> "$LOGFILE"
 python3 /home/agent/.openclaw/workspace/scripts/clarvis_confidence.py apply >> "$LOGFILE" 2>&1 || true
@@ -87,6 +92,9 @@ PENDING_COUNT=$(grep -c '^\- \[ \]' memory/evolution/QUEUE.md 2>/dev/null || ech
 
     Retrieval quality (memory system health):
     $RETRIEVAL_OUTPUT
+
+    Parameter evolution (salience weight tuning):
+    $PARAM_EVOLVE_OUTPUT
 
     Episodic memory (experiential learning):
     $EPISODE_STATS

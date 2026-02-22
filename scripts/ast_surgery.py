@@ -732,11 +732,73 @@ def store_to_brain(report):
 # CLI
 # ──────────────────────────────────────────────
 
-def cmd_scan():
-    """Full scan with report."""
+def auto_fix_dead_imports(proposals):
+    """Auto-fix dead imports that test as safe. Returns list of applied fixes."""
+    applied = []
+    for p in proposals:
+        if p["type"] != "dead_import":
+            continue
+        result = test_proposal(p)
+        if result["verdict"] != "safe":
+            continue
+        # Remove the import line
+        filepath = Path(p["path"])
+        source = filepath.read_text(encoding="utf-8")
+        lines = source.splitlines(keepends=True)
+        line_idx = p["line"] - 1
+        if 0 <= line_idx < len(lines):
+            removed_line = lines[line_idx].rstrip()
+            lines[line_idx] = ""
+            filepath.write_text("".join(lines), encoding="utf-8")
+            # Verify it still parses
+            ok, msg = run_parse_test(filepath)
+            if not ok:
+                # Revert
+                filepath.write_text(source, encoding="utf-8")
+                print(f"  REVERTED {p['file']}:{p['line']} — {msg}")
+            else:
+                applied.append({
+                    "id": p["id"],
+                    "file": p["file"],
+                    "line": p["line"],
+                    "removed": removed_line,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                })
+                print(f"  FIXED {p['file']}:{p['line']} — removed: {removed_line.strip()}")
+    return applied
+
+
+def cmd_scan(auto_fix=False):
+    """Full scan with report. If auto_fix=True, auto-remove safe dead imports."""
     profiles = scan_all()
     proposals = generate_proposals(profiles)
+
+    # Auto-fix safe dead imports before saving report
+    fixes = []
+    if auto_fix:
+        print("=== Auto-fixing safe dead imports ===")
+        fixes = auto_fix_dead_imports(proposals)
+        if fixes:
+            print(f"  Applied {len(fixes)} fixes")
+            # Re-scan after fixes to get accurate report
+            profiles = scan_all()
+            proposals = generate_proposals(profiles)
+        else:
+            print("  No safe fixes to apply")
+        print()
+
     report = save_report(profiles, proposals)
+    if fixes:
+        report["auto_fixes"] = fixes
+        # Append fixes to history
+        fix_record = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "action": "auto_fix",
+            "fixes_applied": len(fixes),
+            "fixes": fixes,
+        }
+        with open(HISTORY_FILE, "a") as f:
+            f.write(json.dumps(fix_record) + "\n")
     store_to_brain(report)
 
     print(f"=== AST Self-Surgery Report ===")
@@ -746,6 +808,8 @@ def cmd_scan():
     print(f"Avg quality:     {report['avg_quality']:.3f}")
     print(f"Total functions: {report['total_functions']}")
     print(f"Proposals:       {report['total_proposals']}")
+    if fixes:
+        print(f"Auto-fixed:      {len(fixes)} dead imports")
     print()
 
     if report["proposals_by_type"]:
@@ -883,9 +947,10 @@ def cmd_history():
 
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "scan"
+    auto_fix = "--auto-fix" in sys.argv
 
     if cmd == "scan":
-        cmd_scan()
+        cmd_scan(auto_fix=auto_fix)
     elif cmd == "proposals":
         cmd_proposals()
     elif cmd == "test":

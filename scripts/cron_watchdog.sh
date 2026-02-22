@@ -66,6 +66,35 @@ check_job "evening_review"  "$LOG_DIR/evening.log"          26   # daily at 18:0
 check_job "reflection"      "$LOG_DIR/reflection.log"       26   # daily at 21:00, grace 2h
 check_job "backup"          "$LOG_DIR/backup.log"           26   # daily at 02:00, grace 2h
 check_job "backup_verify"   "$LOG_DIR/backup_verify.log"    26   # daily at 02:30, grace 2h
+check_job "dream_engine"    "$LOG_DIR/dream.log"            26   # daily at 02:45, grace 2h
+
+# --- Working memory health check ---
+# Verify attention spotlight has active items (target: 3+)
+WM_FILE="/home/agent/.openclaw/workspace/data/attention/spotlight.json"
+if [ -f "$WM_FILE" ]; then
+    WM_ACTIVE=$(python3 -c "
+import json
+with open('$WM_FILE') as f:
+    data = json.load(f)
+items = data.get('items', [])
+active = sum(1 for i in items if i.get('salience', 0) >= 0.1)
+print(active)
+" 2>/dev/null || echo 0)
+    if [ "$WM_ACTIVE" -lt 3 ]; then
+        REPORT="${REPORT}WARN    working_memory — only ${WM_ACTIVE} active items (target: 3+)\n"
+        # Auto-seed if completely empty
+        if [ "$WM_ACTIVE" -eq 0 ]; then
+            python3 /home/agent/.openclaw/workspace/scripts/attention.py add "System watchdog: working memory was empty, seeded" 0.6 >> "$WATCHDOG_LOG" 2>&1
+            python3 /home/agent/.openclaw/workspace/scripts/attention.py add "Active evolution: $(date -u +%Y-%m-%d) heartbeat cycle running" 0.5 >> "$WATCHDOG_LOG" 2>&1
+            REPORT="${REPORT}REPAIR  working_memory — seeded 2 items to prevent empty state\n"
+        fi
+    else
+        REPORT="${REPORT}OK      working_memory — ${WM_ACTIVE} active items\n"
+    fi
+else
+    REPORT="${REPORT}MISSED  working_memory — spotlight.json missing\n"
+    ((FAILURES++)) || true
+fi
 
 # --- Output report ---
 TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%S)
@@ -112,6 +141,7 @@ if [ "$FAILURES" -gt 0 ]; then
   recheck_job "$LOG_DIR/reflection.log" 26
   recheck_job "$LOG_DIR/backup.log" 26
   recheck_job "$LOG_DIR/backup_verify.log" 26
+  recheck_job "$LOG_DIR/dream.log" 26
 
   RECOVERED=$(( FAILURES - STILL_FAILING ))
   echo "------------------------------"

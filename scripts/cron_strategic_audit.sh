@@ -22,6 +22,12 @@ trap "rm -f $LOCKFILE" EXIT
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === STRATEGIC AUDIT START ===" >> "$LOGFILE"
 
+# === STEP 0: AST SURGERY — auto-fix dead imports before audit ===
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running AST surgery scan with auto-fix..." >> "$LOGFILE"
+AST_SURGERY_OUTPUT=$(timeout 120 python3 scripts/ast_surgery.py scan --auto-fix 2>&1) || true
+echo "$AST_SURGERY_OUTPUT" >> "$LOGFILE"
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] AST surgery complete." >> "$LOGFILE"
+
 # === GATHER CURRENT STATE FOR AUDIT ===
 
 # Brain stats
@@ -91,6 +97,21 @@ try:
 except: print('  No code quality data')
 " 2>/dev/null)
 
+# AST surgery latest results
+AST_SURGERY_SUMMARY=$(python3 -c "
+import json
+try:
+    with open('data/ast_surgery/latest.json') as f:
+        r = json.load(f)
+    print(f'  Files: {r[\"files_scanned\"]}, Avg quality: {r[\"avg_quality\"]:.3f}')
+    print(f'  Proposals: {r[\"total_proposals\"]}')
+    for t, c in r.get('proposals_by_type', {}).items():
+        print(f'    {t}: {c}')
+    if r.get('auto_fixes'):
+        print(f'  Auto-fixed: {len(r[\"auto_fixes\"])} dead imports')
+except: print('  No AST surgery data')
+" 2>/dev/null)
+
 # Previous audit findings (if any)
 PREV_AUDIT=""
 if [ -f "data/strategic_audit_last.md" ]; then
@@ -132,6 +153,9 @@ $RECENT_AUTONOMOUS
 
 ### Code Quality Trend
 $CODE_QUALITY
+
+### AST Surgery (auto-fix dead imports, code quality scan)
+$AST_SURGERY_SUMMARY
 
 ### Previous Audit Findings
 $PREV_AUDIT

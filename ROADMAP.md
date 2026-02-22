@@ -23,22 +23,26 @@ Goal: Self-Sustaining Intelligence (generate revenue, improve independently)
 
 | Capability | Status | What Exists |
 |-----------|--------|-------------|
-| **Brain (ClarvisDB)** | 90% | ChromaDB + ONNX local embeddings, 9 collections (195 memories), graph layer with 611+ cross-collection edges, smart_recall with query routing, unified brain.py API |
-| **Session Continuity** | 80% | BOOT.md auto-init, AGENTS.md loads brain, daily memory files, MEMORY.md curated wisdom, session_hook.py for close automation |
-| **Heartbeat Evolution** | 90% | cron_autonomous.sh runs 6x/day with attention-based task selection, procedural memory, reasoning chains, confidence predictions, working memory, evolution loop on failure |
+| **Brain (ClarvisDB)** | 95% | ChromaDB + ONNX local embeddings, 10 collections (600+ memories), graph layer with 10,000+ cross-collection edges, smart_recall with 85%+ hit rate, unified brain.py API |
+| **Session Continuity** | 86% | BOOT.md auto-init, AGENTS.md loads brain, daily memory files, MEMORY.md curated wisdom, session_hook.py with open/close automation |
+| **Heartbeat Evolution** | 100% | cron_autonomous.sh runs 6x/day with attention-based task selection, procedural memory, reasoning chains, confidence predictions, working memory, evolution loop on failure |
 | **Claude Code Integration** | 95% | 4 daily Claude Code sessions (morning/evolution/evening/reflection), autonomous heartbeat spawns Claude Code for every task |
-| **Self-Awareness** | 90% | SELF.md, self_model.py with 7 scored capability domains, phi_metric.py consciousness tracking, daily capability assessment |
-| **Task Tracking** | 70% | evolution/QUEUE.md with P0/P1/P2 priorities, attention-based task selection (task_selector.py), auto-replenishment when queue empty |
-| **Reflection** | 80% | 5-step reflection pipeline: brain.optimize, clarvis_reflection, knowledge_synthesis, crosslink, memory_consolidation, conversation_learner |
-| **Confidence Gating** | 70% | clarvis_confidence.py with predict/outcome/calibration, dynamic confidence thresholds, prediction_review.py for domain analysis |
-| **Attention & Working Memory** | 80% | GWT-inspired attention.py (salience scoring, broadcast, spotlight cap=7), working_memory.py (persistent, TTL, importance-based) |
-| **Reasoning Chains** | 70% | reasoning_chain_hook.py opens/closes chains per task, chains stored in brain + files, reasoning_chains.py for multi-step logging |
-| **Knowledge Synthesis** | 70% | knowledge_synthesis.py finds cross-domain connections, 611+ cross-collection edges, daily synthesis in reflection |
-| **Procedural Memory** | 70% | procedural_memory.py with store/find/learn/used, wired into heartbeat, extracts real steps from task output |
-| **Monitoring** | 80% | health_monitor.sh (15min), cron_watchdog.sh (alerts), dashboard.py, self_report.py (now wired into evening) |
-| **Backup & Recovery** | 90% | backup_daily.sh (2 AM, incremental, checksums, 30-day retention), backup_verify.sh, backup_restore.sh, safe_update.sh |
-| **Episodic Memory** | 80% | episodic_memory.py with ACT-R activation, episode encode/recall/failures/synthesize, wired into heartbeat + reflection |
-| **Revenue** | 0% | No viable product yet — need fresh research |
+| **Self-Awareness** | 95% | SELF.md, self_model.py with 7 scored capability domains, phi_metric.py consciousness tracking (Phi=0.70), daily capability assessment |
+| **Task Tracking** | 85% | evolution/QUEUE.md with P0/P1/P2 priorities, attention-based task selection, auto-replenishment, goal_tracker.py with stall detection |
+| **Reflection** | 90% | 8-step reflection pipeline: brain.optimize, clarvis_reflection, knowledge_synthesis, crosslink, memory_consolidation, conversation_learner, episodic synthesis, temporal_self |
+| **Confidence Gating** | 82% | clarvis_confidence.py with predict/outcome/calibration (Brier=0.033), dynamic confidence thresholds, prediction_review.py for domain analysis |
+| **Attention & Working Memory** | 90% | GWT-inspired attention.py (salience scoring, broadcast, spotlight cap=7), working_memory.py (persistent, TTL, importance-based) |
+| **Reasoning Chains** | 98% | reasoning_chain_hook.py opens/closes chains per task, chains stored in brain + files, 3-step structured reasoning |
+| **Knowledge Synthesis** | 85% | knowledge_synthesis.py finds cross-domain connections, 10,000+ cross-collection edges, semantic_bridge_builder.py, daily synthesis in reflection |
+| **Procedural Memory** | 85% | procedural_memory.py with store/find/learn/used, wired into heartbeat, extracts real steps from task output |
+| **Monitoring** | 90% | health_monitor.sh (15min), cron_watchdog.sh (alerts), cron_doctor.py (auto-recovery), dashboard.py, self_report.py |
+| **Backup & Recovery** | 95% | backup_daily.sh (2 AM, incremental, checksums, 30-day retention), backup_verify.sh, backup_restore.sh, safe_update.sh |
+| **Episodic Memory** | 90% | episodic_memory.py with ACT-R activation, episode encode/recall/failures/synthesize (48 episodes), failure_amplifier.py (37 soft failures), wired into heartbeat + reflection |
+| **Self-Surgery** | 80% | ast_surgery.py parses 32 scripts, finds 99 proposals, auto-fixes 4 imports, benchmark-tested mutations |
+| **Counterfactual Dreaming** | 75% | dream_engine.py replays episodes as what-if scenarios, stores insights at low activation |
+| **Somatic Markers** | 80% | 8 emotion dimensions, 141 markers backfilled, influences task selection |
+| **Thought Protocol** | 70% | Internal DSL for fast reasoning (Signals, Relations, Decisions), wired into task selection |
+| **Revenue** | 0% | No viable product yet |
 
 ---
 

@@ -630,6 +630,33 @@ def run_evolution(dry_run=False):
             changes.append(f"procedural_memory.py: threshold={new_proc_threshold}")
             print(f"  Applied procedural threshold: {new_proc_threshold}")
 
+    # Gather fitness signals: retrieval hit rate + capability scores
+    fitness_signals = {}
+    retrieval_report = "/home/agent/.openclaw/workspace/data/retrieval_quality/report.json"
+    if os.path.exists(retrieval_report):
+        try:
+            with open(retrieval_report) as f:
+                rq = json.load(f)
+            fitness_signals["retrieval_hit_rate"] = rq.get("hit_rate")
+            fitness_signals["retrieval_diagnosis"] = rq.get("diagnosis")
+        except (json.JSONDecodeError, KeyError):
+            pass
+
+    capability_file = "/home/agent/.openclaw/workspace/data/capability_history.json"
+    if os.path.exists(capability_file):
+        try:
+            with open(capability_file) as f:
+                cap = json.load(f)
+            snapshots = cap.get("snapshots", [])
+            if snapshots:
+                latest = snapshots[-1].get("scores", {})
+                fitness_signals["capability_scores"] = latest
+                fitness_signals["capability_avg"] = round(
+                    sum(latest.values()) / len(latest), 3
+                ) if latest else None
+        except (json.JSONDecodeError, KeyError):
+            pass
+
     # Save history
     history_entry = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -650,6 +677,7 @@ def run_evolution(dry_run=False):
             "attention_weights": list(new_attn),
             "proc_threshold": new_proc_threshold,
         },
+        "fitness_signals": fitness_signals,
         "changes": changes,
         "configs_tested": search_results["total_configs_tested"],
     }
@@ -660,6 +688,20 @@ def run_evolution(dry_run=False):
     # Save current params snapshot
     with open(CURRENT_FILE, "w") as f:
         json.dump(history_entry["applied"], f, indent=2)
+
+    # Also write to data/parameter_history.json (consolidated view)
+    param_history_file = "/home/agent/.openclaw/workspace/data/parameter_history.json"
+    param_history = []
+    if os.path.exists(param_history_file):
+        try:
+            with open(param_history_file) as f:
+                param_history = json.load(f)
+        except (json.JSONDecodeError, ValueError):
+            param_history = []
+    param_history.append(history_entry)
+    param_history = param_history[-90:]  # Cap at 90 entries
+    with open(param_history_file, "w") as f:
+        json.dump(param_history, f, indent=2)
 
     print(f"\n  Changes applied: {len(changes)}")
     for c in changes:

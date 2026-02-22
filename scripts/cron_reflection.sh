@@ -44,6 +44,10 @@ python3 /home/agent/.openclaw/workspace/scripts/knowledge_synthesis.py >> "$LOGF
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running cross-collection linking..." >> "$LOGFILE"
 python3 /home/agent/.openclaw/workspace/scripts/brain.py crosslink >> "$LOGFILE" 2>&1 || true
 
+# Step 3.7: Semantic bridge building — fill weak cross-collection gaps (cap 5/run)
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running semantic bridge builder..." >> "$LOGFILE"
+python3 /home/agent/.openclaw/workspace/scripts/semantic_bridge_builder.py --top 2 >> "$LOGFILE" 2>&1 || true
+
 # Step 4: Memory consolidation — deduplicate, prune noise, archive stale
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running memory consolidation..." >> "$LOGFILE"
 python3 /home/agent/.openclaw/workspace/scripts/memory_consolidation.py consolidate >> "$LOGFILE" 2>&1 || true

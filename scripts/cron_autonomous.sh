@@ -96,6 +96,23 @@ if [ -z "$NEXT_TASK" ]; then
     exit 0
 fi
 
+# === COGNITIVE LOAD CHECK: Homeostatic regulation ===
+# Measure system load and defer non-critical tasks when overloaded
+LOAD_SCRIPT="/home/agent/.openclaw/workspace/scripts/cognitive_load.py"
+LOAD_SECTION="${TASK_SECTION:-P1}"  # Default to P1 if section unknown
+LOAD_RESULT=$(python3 "$LOAD_SCRIPT" should-defer "$LOAD_SECTION" 2>> "$LOGFILE")
+LOAD_DEFER=$?
+
+if [ $LOAD_DEFER -eq 0 ]; then
+    # Load check says defer this task
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] COGNITIVE LOAD: $LOAD_RESULT — DEFERRING task" >> "$LOGFILE"
+    # Record load state
+    python3 "$LOAD_SCRIPT" check >> "$LOGFILE" 2>&1 || true
+    python3 /home/agent/.openclaw/workspace/scripts/attention.py add "DEFERRED due to cognitive load: ${NEXT_TASK:0:80}" 0.6 >> "$LOGFILE" 2>&1
+    exit 0
+fi
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] COGNITIVE LOAD: $LOAD_RESULT" >> "$LOGFILE"
+
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] EXECUTING: $NEXT_TASK" >> "$LOGFILE"
 
 # === PROCEDURAL MEMORY: Check for existing procedure ===

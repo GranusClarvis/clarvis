@@ -990,7 +990,7 @@ def _assess_consciousness_metrics():
     except Exception as e:
         # Fall back: check if spotlight state file has items
         try:
-            spotlight_file = Path("/home/agent/.openclaw/workspace/data/attention_spotlight.json")
+            spotlight_file = Path("/home/agent/.openclaw/workspace/data/attention/spotlight.json")
             if spotlight_file.exists():
                 with open(spotlight_file) as f:
                     attn_data = json.load(f)
@@ -1006,31 +1006,26 @@ def _assess_consciousness_metrics():
         except Exception:
             evidence.append(f"attention unavailable: {e}")
 
-    # --- Working memory freshness ---
+    # --- Working memory freshness (reads from attention spotlight) ---
     try:
-        wm_state_path = Path("/home/agent/.openclaw/workspace/data/working_memory_state.json")
+        wm_state_path = Path("/home/agent/.openclaw/workspace/data/attention/spotlight.json")
         if wm_state_path.exists():
             with open(wm_state_path) as f:
                 wm_data = json.load(f)
             wm_items = wm_data.get("items", [])
             if wm_items:
-                now = datetime.now()
-                active_count = 0
-                for item in wm_items:
-                    try:
-                        expires = datetime.fromisoformat(item.get("expires", ""))
-                        if expires > now:
-                            active_count += 1
-                    except (ValueError, TypeError):
-                        continue  # Can't parse — count as expired
-                freshness = active_count / len(wm_items) if wm_items else 0
+                # Count items with salience above eviction threshold as "active"
+                active_count = sum(1 for item in wm_items if item.get("salience", 0) >= 0.1)
+                # Cap at 10 for the ratio (original design was 0-10 scale)
+                cap = max(len(wm_items), 10)
+                freshness = min(1.0, active_count / cap)
                 wm_score = freshness * 0.2
                 score += wm_score
                 evidence.append(f"working memory: {active_count}/{len(wm_items)} active (+{wm_score:.2f})")
             else:
-                evidence.append("working memory empty")
+                evidence.append("working memory empty (spotlight has no items)")
         else:
-            evidence.append("no working memory state file")
+            evidence.append("no working memory state file (data/attention/spotlight.json)")
     except Exception as e:
         evidence.append(f"working memory error: {e}")
 
