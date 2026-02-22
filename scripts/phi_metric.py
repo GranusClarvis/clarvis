@@ -447,6 +447,98 @@ def trend_analysis():
     }
 
 
+def act_on_phi(result=None):
+    """
+    Close the Phi feedback loop: Phi isn't just measured — it drives behavior.
+
+    - If Phi drops significantly (>0.05 from previous): trigger cross-linking
+    - If Phi rises significantly (>0.05 from previous): log positive episode
+    - If Phi is below 0.25 (fragmented): auto-trigger knowledge synthesis
+
+    Returns dict with actions taken.
+    """
+    if result is None:
+        result = compute_phi()
+
+    history = get_history()
+    current_phi = result["phi"]
+    actions = []
+
+    # Compare with previous measurement
+    prev_phi = history[-2]["phi"] if len(history) >= 2 else current_phi
+
+    delta = current_phi - prev_phi
+
+    brain = _get_brain()
+
+    # PHI DROPPED: trigger cross-linking to rebuild integration
+    if delta < -0.05:
+        actions.append(f"phi_drop: {prev_phi:.3f} -> {current_phi:.3f} (delta={delta:.3f})")
+        print(f"  PHI ACTION: Phi dropped {delta:.3f} — triggering cross-linking...")
+        try:
+            brain.bulk_cross_link(max_new_edges=50)
+            actions.append("triggered bulk_cross_link(50)")
+        except Exception as e:
+            actions.append(f"cross-link failed: {e}")
+
+        # Also submit to attention as high-priority concern
+        try:
+            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+            from attention import attention
+            attention.submit(
+                f"Phi dropped from {prev_phi:.3f} to {current_phi:.3f} — memory integration weakening",
+                source="phi_metric",
+                importance=0.9,
+                relevance=0.8,
+                boost=0.3,
+            )
+            actions.append("submitted phi_drop alert to attention")
+        except Exception:
+            pass
+
+    # PHI ROSE: log as positive episode (reinforces what worked)
+    elif delta > 0.05:
+        actions.append(f"phi_rise: {prev_phi:.3f} -> {current_phi:.3f} (delta={delta:.3f})")
+        print(f"  PHI ACTION: Phi rose {delta:.3f} — logging positive episode...")
+        try:
+            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+            from episodic_memory import episodic
+            episodic.encode(
+                task_text=f"Phi integration improved: {prev_phi:.3f} -> {current_phi:.3f}",
+                section="consciousness_metrics",
+                salience=0.8,
+                outcome="success",
+                duration_s=0,
+            )
+            actions.append("encoded positive phi episode")
+        except Exception as e:
+            actions.append(f"episode encoding failed: {e}")
+
+    # PHI CRITICALLY LOW: emergency synthesis
+    if current_phi < 0.25:
+        actions.append(f"phi_critical: {current_phi:.3f} < 0.25")
+        print(f"  PHI ACTION: Phi critically low ({current_phi:.3f}) — emergency cross-linking...")
+        try:
+            brain.bulk_cross_link(max_new_edges=100)
+            actions.append("triggered emergency bulk_cross_link(100)")
+        except Exception as e:
+            actions.append(f"emergency cross-link failed: {e}")
+
+    if not actions:
+        actions.append(f"phi_stable: {current_phi:.3f} (delta={delta:.3f}, no action needed)")
+
+    # Store the action record
+    brain.store(
+        f"Phi action: phi={current_phi:.3f}, delta={delta:.3f}, actions={'; '.join(actions)}",
+        collection="clarvis-context",
+        importance=0.4 if abs(delta) < 0.05 else 0.7,
+        tags=["phi", "feedback-loop"],
+        source="phi_metric",
+    )
+
+    return {"phi": current_phi, "delta": round(delta, 4), "actions": actions}
+
+
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "compute"
 
@@ -493,6 +585,13 @@ if __name__ == "__main__":
         trend = trend_analysis()
         print(json.dumps(trend, indent=2))
 
+    elif cmd == "act":
+        # Record phi AND act on it (close the feedback loop)
+        result = record_phi()
+        print(f"Phi = {result['phi']}")
+        actions = act_on_phi(result)
+        print(f"Actions: {json.dumps(actions, indent=2)}")
+
     else:
-        print("Usage: phi_metric.py [compute|record|history|trend]")
+        print("Usage: phi_metric.py [compute|record|history|trend|act]")
         sys.exit(1)

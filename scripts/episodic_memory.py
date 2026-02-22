@@ -83,9 +83,13 @@ class EpisodicMemory:
 
         return episode
 
-    def recall_similar(self, query, n=5):
+    def recall_similar(self, query, n=5, use_spreading_activation=True):
         """Recall episodes similar to the current situation.
-        Returns episodes sorted by activation (ACT-R style)."""
+        Returns episodes sorted by activation (ACT-R style).
+
+        If use_spreading_activation=True, also boosts attention items related
+        to the query — closing the loop between episodic recall and GWT spotlight.
+        """
         # Semantic search in brain
         results = brain.recall(query, n=n * 2, collections=["clarvis-episodes"])
 
@@ -111,7 +115,30 @@ class EpisodicMemory:
         self._save()
         # Sort by activation (highest first)
         matched_episodes.sort(key=lambda e: e["activation"], reverse=True)
-        return matched_episodes[:n]
+        top_episodes = matched_episodes[:n]
+
+        # === SPREADING ACTIVATION: Connect episodic recall to attention spotlight ===
+        if use_spreading_activation and top_episodes:
+            try:
+                from attention import attention
+                # Build activation text from retrieved episodes
+                activation_text = " ".join(ep["task"] for ep in top_episodes)
+                # Boost spotlight items that overlap with recalled episodes
+                boosted = attention.spreading_activation(activation_text, n=3)
+                if boosted:
+                    # Also submit the top recalled episode to attention
+                    # (what we remember should influence what we attend to)
+                    attention.submit(
+                        f"Episodic recall: {top_episodes[0]['task'][:100]} ({top_episodes[0]['outcome']})",
+                        source="episodic_recall",
+                        importance=0.6,
+                        relevance=0.7,
+                        boost=0.1,
+                    )
+            except Exception:
+                pass  # Attention module unavailable — degrade gracefully
+
+        return top_episodes
 
     def recall_failures(self, n=5):
         """Recall recent failure episodes (high learning value)."""

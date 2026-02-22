@@ -335,6 +335,45 @@ class AttentionSpotlight:
         scored.sort(key=lambda x: x[0], reverse=True)
         return [item.to_dict() for _, item in scored[:n]]
 
+    def add(self, content, importance=0.5, source="system"):
+        """
+        Working-memory-compatible add method.
+        Absorbs working_memory.py's add() — submits to spotlight competition.
+        High-importance items (>=0.8) get a boost to auto-focus.
+        """
+        boost = 0.3 if importance >= 0.8 else 0.0
+        return self.submit(
+            content=content,
+            source=source,
+            importance=importance,
+            relevance=max(0.5, importance),
+            boost=boost,
+        )
+
+    def spreading_activation(self, query, n=5):
+        """
+        Spreading activation: boost attention items related to a query.
+        Used by episodic memory to connect recall with current spotlight.
+
+        Returns list of boosted item dicts sorted by combined score.
+        """
+        query_words = set(query.lower().split())
+        boosted = []
+
+        for item in self.items.values():
+            item_words = set(item.content.lower().split())
+            overlap = len(query_words & item_words)
+            if overlap > 0:
+                # Boost proportional to overlap
+                activation_boost = min(0.3, overlap * 0.05)
+                item.relevance = min(1.0, item.relevance + activation_boost)
+                item.touch()
+                boosted.append(item)
+
+        self._save()
+        boosted.sort(key=lambda x: x.salience(), reverse=True)
+        return [item.to_dict() for item in boosted[:n]]
+
     def clear(self):
         """Clear all attention items (reset spotlight)."""
         self.items.clear()
@@ -392,18 +431,37 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Usage: attention.py <command> [args]")
         print("Commands:")
+        print("  add <text> [imp] - Add item (working memory compat)")
         print("  submit <text>    - Submit item for attention")
         print("  focus            - Show current spotlight")
         print("  tick             - Run competition cycle")
         print("  broadcast        - Push spotlight to brain context")
         print("  query <text>     - Find relevant attention items")
         print("  stats            - Show attention stats")
+        print("  load             - Reload state from disk")
+        print("  save             - Persist state to disk")
         print("  clear            - Reset spotlight")
         sys.exit(0)
 
     cmd = sys.argv[1]
 
-    if cmd == "submit" and len(sys.argv) > 2:
+    if cmd == "add" and len(sys.argv) > 2:
+        # Compatible with working_memory.py CLI: add <text> [importance]
+        text = sys.argv[2]
+        importance = float(sys.argv[3]) if len(sys.argv) > 3 else 0.5
+        item = a.add(text, importance=importance, source="cli")
+        print(f"Added: {item.id} (salience={item.salience():.3f})")
+
+    elif cmd == "load":
+        # Reload from disk (already happens on init, but explicit for compatibility)
+        a._load()
+        print(f"Loaded: {len(a.items)} items from disk")
+
+    elif cmd == "save":
+        a._save()
+        print(f"Saved: {len(a.items)} items to {SPOTLIGHT_FILE}")
+
+    elif cmd == "submit" and len(sys.argv) > 2:
         text = " ".join(sys.argv[2:])
         item = a.submit(text, source="cli", importance=0.7, relevance=0.8)
         print(f"Submitted: {item.id} (salience={item.salience():.3f})")

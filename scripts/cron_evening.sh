@@ -5,20 +5,21 @@ LOGFILE="memory/cron/evening.log"
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Evening routine started ===" >> "$LOGFILE"
 
-# === PHI METRIC RECORDING ===
-# Record phi metric snapshot — non-blocking, failures won't abort the rest of the cron
-echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Recording phi metric..." >> "$LOGFILE"
-PHI_OUTPUT=$(python3 /home/agent/.openclaw/workspace/scripts/phi_metric.py record 2>&1) || true
+# === PHI METRIC: RECORD AND ACT ===
+# Record phi metric AND act on it: drops trigger cross-linking, rises log positive episodes
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Recording phi metric and acting on changes..." >> "$LOGFILE"
+PHI_OUTPUT=$(python3 /home/agent/.openclaw/workspace/scripts/phi_metric.py act 2>&1) || true
 PHI_EXIT=$?
 echo "$PHI_OUTPUT" >> "$LOGFILE"
 
 if [ $PHI_EXIT -ne 0 ]; then
-    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WARN: Phi metric recording failed (exit $PHI_EXIT) — continuing anyway" >> "$LOGFILE"
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WARN: Phi metric act failed (exit $PHI_EXIT) — continuing anyway" >> "$LOGFILE"
 fi
 
-# === DAILY CAPABILITY ASSESSMENT ===
-# Run self_model.py daily update — scores all capabilities, tracks diffs, alerts on degradation
-echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running daily capability assessment..." >> "$LOGFILE"
+# === DAILY CAPABILITY ASSESSMENT + AUTO-REMEDIATION ===
+# Run self_model.py daily update — scores capabilities, tracks diffs, alerts on degradation
+# NEW: domains below 0.4 auto-generate P0 remediation tasks in QUEUE.md (sense-assess-act loop)
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running daily capability assessment (with auto-remediation)..." >> "$LOGFILE"
 ASSESSMENT_OUTPUT=$(python3 /home/agent/.openclaw/workspace/scripts/self_model.py daily 2>&1)
 ASSESSMENT_EXIT=$?
 echo "$ASSESSMENT_OUTPUT" >> "$LOGFILE"
@@ -30,6 +31,11 @@ fi
 # Check for alerts in the output (capability below threshold)
 if echo "$ASSESSMENT_OUTPUT" | grep -q "ALERT:"; then
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] !!! CAPABILITY ALERTS DETECTED — see assessment above !!!" >> "$LOGFILE"
+fi
+
+# Check for remediation tasks generated
+if echo "$ASSESSMENT_OUTPUT" | grep -q "REMEDIATION:"; then
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] SELF-IMPROVEMENT: Remediation tasks auto-generated for weak domains" >> "$LOGFILE"
 fi
 
 # === RETRIEVAL QUALITY REPORT ===

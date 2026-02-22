@@ -1053,6 +1053,104 @@ def assess_all_capabilities():
     return results
 
 
+REMEDIATION_THRESHOLD = 0.4  # Auto-generate P0 task if domain drops below this
+
+# Remediation templates: domain -> task description
+REMEDIATION_TEMPLATES = {
+    "memory_system": "Rehabilitate memory system — retrieval quality is below threshold ({score:.2f}). Run retrieval_benchmark, check smart_recall wiring, verify brain.recall distances. Target: hit_rate >50%, graph density >1.0 edge/mem.",
+    "autonomous_execution": "Improve autonomous execution — success rate is below threshold ({score:.2f}). Check cron_autonomous.sh logs for recent failures, fix recurring error patterns, verify lock file handling. Target: >60% success rate.",
+    "code_generation": "Boost code generation quality — score below threshold ({score:.2f}). Ensure commits have meaningful messages, key scripts compile clean, add test coverage for critical paths. Target: all key scripts compile, >1 commit/day.",
+    "self_reflection": "Strengthen self-reflection — score below threshold ({score:.2f}). Record phi metric, run calibration predictions, add meta-thoughts. Target: phi >0.3, recent meta-thoughts, active prediction tracking.",
+    "reasoning_chains": "Improve reasoning chain quality — score below threshold ({score:.2f}). Ensure chains have recorded outcomes, not just open chains. Check reasoning_chain_hook.py close() is being called. Target: >50% chains with outcomes.",
+    "learning_feedback": "Fix learning feedback loops — score below threshold ({score:.2f}). Check procedural memory usage, resolve pending predictions, verify evolution loop captures failures. Target: weighted procedure success >50%.",
+    "consciousness_metrics": "Improve consciousness metrics — score below threshold ({score:.2f}). Record phi, populate attention spotlight, ensure working memory has active items. Target: phi >0.3, spotlight >30% utilized.",
+}
+
+
+def generate_remediation_tasks(current_scores, previous_snapshot):
+    """
+    Close the self-improvement loop: when a domain drops below threshold,
+    generate a concrete P0 task to fix it.
+
+    Args:
+        current_scores: dict from assess_all_capabilities()
+        previous_snapshot: previous history snapshot (or None)
+
+    Returns:
+        List of task strings to inject into QUEUE.md
+    """
+    tasks = []
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    for domain, data in current_scores.items():
+        score = data["score"]
+        if score >= REMEDIATION_THRESHOLD:
+            continue
+
+        # Skip if this domain was already below threshold yesterday
+        # (avoid duplicate task spam)
+        if previous_snapshot:
+            prev_score = previous_snapshot.get("scores", {}).get(domain, 1.0)
+            if prev_score < REMEDIATION_THRESHOLD:
+                # Already below threshold last time — don't re-add
+                continue
+
+        template = REMEDIATION_TEMPLATES.get(domain)
+        if template:
+            task_text = template.format(score=score)
+            tasks.append(f"[AUTO-REMEDIATION {today}] {task_text}")
+            print(f"  REMEDIATION: {domain} at {score:.2f} < {REMEDIATION_THRESHOLD} — generating P0 task")
+
+    return tasks
+
+
+def inject_tasks_to_queue(tasks, queue_file="/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md"):
+    """Inject remediation tasks into QUEUE.md under P0 section."""
+    if not tasks:
+        return
+
+    queue_path = Path(queue_file)
+    if not queue_path.exists():
+        return
+
+    content = queue_path.read_text()
+    lines = content.split("\n")
+
+    # Find the P0 section header and inject after it
+    insert_idx = None
+    for i, line in enumerate(lines):
+        if "## P0" in line:
+            insert_idx = i + 1
+            break
+
+    if insert_idx is None:
+        return
+
+    # Skip any sub-headers or blank lines right after P0
+    while insert_idx < len(lines) and (lines[insert_idx].startswith("###") or lines[insert_idx].strip() == ""):
+        insert_idx += 1
+
+    # Check for duplicate tasks already in queue (don't re-inject)
+    existing_text = content.lower()
+    new_tasks = []
+    for task in tasks:
+        # Check if a similar remediation task already exists (by domain keyword)
+        if "[auto-remediation" in existing_text and any(
+            kw in existing_text for kw in task.lower().split()[:5]
+        ):
+            continue
+        new_tasks.append(f"- [ ] {task}")
+
+    if not new_tasks:
+        return
+
+    for task_line in reversed(new_tasks):
+        lines.insert(insert_idx, task_line)
+
+    queue_path.write_text("\n".join(lines))
+    print(f"  Injected {len(new_tasks)} remediation tasks into QUEUE.md")
+
+
 def daily_update():
     """Run daily capability assessment. Compare with previous day. Alert on degradations.
 
@@ -1145,6 +1243,11 @@ def daily_update():
         source="self-assessment"
     )
 
+    # === ACT ON ASSESSMENT: Auto-generate remediation tasks for weak domains ===
+    remediation_tasks = generate_remediation_tasks(current, previous)
+    if remediation_tasks:
+        inject_tasks_to_queue(remediation_tasks)
+
     result = {
         "date": today,
         "capabilities": current,
@@ -1152,6 +1255,7 @@ def daily_update():
         "improved": improved,
         "degraded": degraded,
         "alerts": alerts,
+        "remediation_tasks": remediation_tasks,
         "average_score": round(sum(s["score"] for s in current.values()) / len(current), 2),
     }
 
