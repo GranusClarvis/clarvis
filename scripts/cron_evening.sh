@@ -49,6 +49,16 @@ if [ $RQ_EXIT -ne 0 ]; then
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WARN: Retrieval quality report failed (exit $RQ_EXIT) — continuing anyway" >> "$LOGFILE"
 fi
 
+# === RETRIEVAL BENCHMARK: Ground-truth precision@3 and recall ===
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running retrieval benchmark (20 ground-truth queries)..." >> "$LOGFILE"
+BENCH_OUTPUT=$(python3 /home/agent/.openclaw/workspace/scripts/retrieval_benchmark.py run 2>&1) || true
+BENCH_EXIT=$?
+echo "$BENCH_OUTPUT" >> "$LOGFILE"
+
+if [ $BENCH_EXIT -ne 0 ]; then
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WARN: Retrieval benchmark failed (exit $BENCH_EXIT) — continuing anyway" >> "$LOGFILE"
+fi
+
 # === SELF-REPORT: Cognitive growth tracking ===
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running self-report assessment..." >> "$LOGFILE"
 python3 /home/agent/.openclaw/workspace/scripts/self_report.py >> "$LOGFILE" 2>&1 || true
