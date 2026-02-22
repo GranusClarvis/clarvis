@@ -99,6 +99,8 @@ def smart_recall(query: str, n: int = 5, max_distance: float = 1.5, **kwargs):
             primary_collections.update(cols)
 
     # Step 2: Recall with more candidates than needed (for filtering)
+    if "caller" not in kwargs:
+        kwargs["caller"] = "smart_recall"
     raw_results = brain.recall(query, collections=collections, n=n * 3, **kwargs)
 
     # Step 3: Boost results from primary collections (reduce their distance score)

@@ -63,14 +63,16 @@ def open_chain(task_text: str, section: str = "unknown", salience: str = "0.0") 
         else:
             context_memories = brain.recall(task_text, n=3, caller="reasoning_chain_hook")
         if context_memories:
-            snippets = [m.get("text", "")[:80] for m in context_memories[:2]]
-            initial_thought += f" Brain context: {'; '.join(snippets)}"
+            snippets = [m.get("document", m.get("text", ""))[:80] for m in context_memories[:2]]
+            if any(s.strip() for s in snippets):
+                initial_thought += f" Brain context: {'; '.join(s for s in snippets if s.strip())}"
     except Exception:
         try:
             context_memories = brain.recall(task_text, n=3, caller="reasoning_chain_hook")
             if context_memories:
-                snippets = [m.get("text", "")[:80] for m in context_memories[:2]]
-                initial_thought += f" Brain context: {'; '.join(snippets)}"
+                snippets = [m.get("document", m.get("text", ""))[:80] for m in context_memories[:2]]
+                if any(s.strip() for s in snippets):
+                    initial_thought += f" Brain context: {'; '.join(s for s in snippets if s.strip())}"
         except Exception:
             pass
 

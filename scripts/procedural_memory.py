@@ -58,17 +58,25 @@ def find_procedure(task_text: str, threshold: float = 0.5) -> dict | None:
         Dict with procedure info (name, steps, success_rate, id) or None
     """
     try:
+        # Always search PROCEDURES directly for best procedure matches
+        results = brain.recall(
+            task_text,
+            collections=[PROCEDURES],
+            n=3,
+            caller="procedural_memory",
+        )
+        # If smart_recall is available, also check for cross-collection procedure hints
         if smart_recall is not None:
-            all_results = smart_recall(task_text, n=10)
-            # Filter to PROCEDURES collection only
-            results = [r for r in all_results if r.get("collection") == PROCEDURES][:3]
-        else:
-            results = brain.recall(
-                task_text,
-                collections=[PROCEDURES],
-                n=3,
-                caller="procedural_memory",
-            )
+            try:
+                sr_results = smart_recall(task_text, n=5)
+                sr_procs = [r for r in sr_results if r.get("collection") == PROCEDURES]
+                # Merge any procedure results from smart_recall we didn't already find
+                existing_ids = {r["id"] for r in results}
+                for r in sr_procs:
+                    if r["id"] not in existing_ids:
+                        results.append(r)
+            except Exception:
+                pass
     except Exception:
         results = brain.recall(
             task_text,
