@@ -141,8 +141,9 @@ class EpisodicMemory:
         return top_episodes
 
     def recall_failures(self, n=5):
-        """Recall recent failure episodes (high learning value)."""
-        failures = [e for e in self.episodes if e["outcome"] == "failure"]
+        """Recall recent failure episodes (high learning value).
+        Includes both hard failures and soft failures."""
+        failures = [e for e in self.episodes if e["outcome"] in ("failure", "soft_failure", "timeout")]
         self._decay_activations()
         failures.sort(key=lambda e: e["activation"], reverse=True)
         return failures[:n]
@@ -238,7 +239,9 @@ class EpisodicMemory:
 
         total = len(self.episodes)
         success_count = outcome_counts.get("success", 0)
-        failure_count = outcome_counts.get("failure", 0) + outcome_counts.get("timeout", 0)
+        failure_count = (outcome_counts.get("failure", 0) +
+                         outcome_counts.get("timeout", 0) +
+                         outcome_counts.get("soft_failure", 0))
         success_rate = success_count / total if total else 0.0
 
         # 2. Extract first-word action verbs (typically the imperative verb)
@@ -273,8 +276,9 @@ class EpisodicMemory:
                 matched = ["general"]
             for domain in matched:
                 if domain not in domain_outcomes:
-                    domain_outcomes[domain] = {"success": 0, "failure": 0, "timeout": 0}
-                bucket = ep["outcome"] if ep["outcome"] in domain_outcomes[domain] else "timeout"
+                    domain_outcomes[domain] = {"success": 0, "failure": 0, "timeout": 0, "soft_failure": 0}
+                outcome = ep["outcome"]
+                bucket = outcome if outcome in domain_outcomes[domain] else "failure"
                 domain_outcomes[domain][bucket] += 1
 
         # 4. Classify error types across failures
@@ -298,7 +302,7 @@ class EpisodicMemory:
         # Goal: fix domains with >30% failure rate
         for domain, counts in domain_outcomes.items():
             d_total = sum(counts.values())
-            d_failures = counts.get("failure", 0) + counts.get("timeout", 0)
+            d_failures = counts.get("failure", 0) + counts.get("timeout", 0) + counts.get("soft_failure", 0)
             if d_failures > 0 and d_total > 0:
                 fail_rate = d_failures / d_total
                 if fail_rate > 0.3:
@@ -450,7 +454,7 @@ if __name__ == "__main__":
         print("\nDomain outcomes:")
         for domain, counts in sorted(result["domain_outcomes"].items()):
             s = counts.get("success", 0)
-            f = counts.get("failure", 0) + counts.get("timeout", 0)
+            f = counts.get("failure", 0) + counts.get("timeout", 0) + counts.get("soft_failure", 0)
             bar = "█" * s + "░" * f
             print(f"  {domain:22s}  {bar}  ({s}✓ {f}✗)")
 

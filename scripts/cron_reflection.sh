@@ -34,6 +34,10 @@ python3 /home/agent/.openclaw/workspace/scripts/memory_consolidation.py consolid
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running conversation learner..." >> "$LOGFILE"
 python3 /home/agent/.openclaw/workspace/scripts/conversation_learner.py >> "$LOGFILE" 2>&1
 
+# Step 5.5: Failure amplification — surface soft failures (timeouts, retries, low scores) as negative episodes
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running failure amplifier..." >> "$LOGFILE"
+python3 /home/agent/.openclaw/workspace/scripts/failure_amplifier.py amplify >> "$LOGFILE" 2>&1
+
 # Step 6: Episodic synthesis — analyze episodes, generate new goals from experiential patterns
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running episodic synthesis..." >> "$LOGFILE"
 python3 /home/agent/.openclaw/workspace/scripts/episodic_memory.py synthesize >> "$LOGFILE" 2>&1
