@@ -80,15 +80,59 @@ echo "------------------------------"
 echo "Total failures: $FAILURES"
 echo "=============================="
 
-# --- Send alert if failures detected ---
+# --- Auto-recovery: Run cron_doctor if failures detected ---
+if [ "$FAILURES" -gt 0 ]; then
+  echo "[$TIMESTAMP] Running cron_doctor.py recover..." >> "$WATCHDOG_LOG"
+  DOCTOR_SCRIPT="/home/agent/.openclaw/workspace/scripts/cron_doctor.py"
+  DOCTOR_OUTPUT=$(python3 "$DOCTOR_SCRIPT" recover 2>&1)
+  DOCTOR_EXIT=$?
+  echo "$DOCTOR_OUTPUT"
+  echo "[$TIMESTAMP] Cron doctor exit=$DOCTOR_EXIT" >> "$WATCHDOG_LOG"
+
+  # Re-check after recovery to see how many are still failing
+  STILL_FAILING=0
+  recheck_job() {
+    local log_file="$1"
+    local max_age_hours="$2"
+    local max_age_seconds=$((max_age_hours * 3600))
+    if [ ! -f "$log_file" ]; then ((STILL_FAILING++)) || true; return; fi
+    local file_mod; file_mod=$(stat -c%Y "$log_file" 2>/dev/null || echo 0)
+    local age=$(( $(date +%s) - file_mod ))
+    [ "$age" -gt "$max_age_seconds" ] && { ((STILL_FAILING++)) || true; }
+  }
+  # Brief pause to let re-runs produce output
+  sleep 2
+  recheck_job "$LOG_DIR/autonomous.log" 4
+  recheck_job "/home/agent/.openclaw/workspace/monitoring/health.log" 1
+  recheck_job "$LOG_DIR/report_morning.log" 26
+  recheck_job "$LOG_DIR/report_evening.log" 26
+  recheck_job "$LOG_DIR/morning.log" 26
+  recheck_job "$LOG_DIR/evolution.log" 26
+  recheck_job "$LOG_DIR/evening.log" 26
+  recheck_job "$LOG_DIR/reflection.log" 26
+  recheck_job "$LOG_DIR/backup.log" 26
+  recheck_job "$LOG_DIR/backup_verify.log" 26
+
+  RECOVERED=$(( FAILURES - STILL_FAILING ))
+  echo "------------------------------"
+  echo "  Recovery: $RECOVERED/$FAILURES jobs recovered"
+  echo "  Still failing: $STILL_FAILING"
+  echo "=============================="
+  echo "[$TIMESTAMP] Recovery: $RECOVERED/$FAILURES recovered, $STILL_FAILING still failing" >> "$WATCHDOG_LOG"
+
+  FAILURES=$STILL_FAILING
+fi
+
+# --- Send alert if failures STILL detected after recovery ---
 if [ "$FAILURES" -gt 0 ] && [ "$ALERT_MODE" = true ]; then
   ALERT_MSG="⚠️ Cron Watchdog Alert
 
-${FAILURES} cron job(s) missed their schedule:
+${FAILURES} cron job(s) still failing after auto-recovery:
 
 $(echo -e "$REPORT" | grep "MISSED")
 
-Check: memory/cron/watchdog.log"
+Recovery log: memory/cron/doctor.log
+Watchdog log: memory/cron/watchdog.log"
 
   python3 << PYEOF
 import json, urllib.request, urllib.parse
