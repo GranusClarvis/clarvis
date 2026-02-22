@@ -2,6 +2,18 @@
 # Evening code review - audit today's work + daily capability assessment
 source /home/agent/.openclaw/workspace/scripts/cron_env.sh
 LOGFILE="memory/cron/evening.log"
+LOCKFILE="/tmp/clarvis_evening.lock"
+
+# Prevent overlapping runs
+if [ -f "$LOCKFILE" ]; then
+    pid=$(cat "$LOCKFILE" 2>/dev/null)
+    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] SKIP: Previous run still active (PID $pid)" >> "$LOGFILE"
+        exit 0
+    fi
+fi
+echo $$ > "$LOCKFILE"
+trap "rm -f $LOCKFILE" EXIT
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Evening routine started ===" >> "$LOGFILE"
 
@@ -70,5 +82,12 @@ python3 /home/agent/.openclaw/workspace/scripts/dashboard.py >> "$LOGFILE" 2>&1 
 # === EXISTING: Claude Code evening audit ===
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running evening audit..." >> "$LOGFILE"
 /home/agent/.local/bin/claude -p "Review today's work: check git status, memory/$(date +%Y-%m-%d).md, any errors in logs. What's working? Any bugs? Output: brief audit + 1 fix if needed." --dangerously-skip-permissions >> "$LOGFILE" 2>&1
+
+# === DIGEST: Write first-person summary for M2.5 agent ===
+PHI_DIGEST=$(echo "$PHI_OUTPUT" | grep -oP 'Phi\s*=\s*[\d.]+' | head -1 || echo "Phi not measured")
+ASSESSMENT_DIGEST=$(echo "$ASSESSMENT_OUTPUT" | grep -oP '^\s+\S.*:\s[\d.]+' | head -7 | tr '\n' '; ' || echo "assessment unavailable")
+python3 /home/agent/.openclaw/workspace/scripts/digest_writer.py evening \
+    "Evening assessment complete. $PHI_DIGEST. Capability scores: $ASSESSMENT_DIGEST. Ran retrieval benchmark, self-report, and dashboard regeneration. Evening code audit done." \
+    >> "$LOGFILE" 2>&1 || true
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Evening routine complete ===" >> "$LOGFILE"

@@ -37,7 +37,7 @@ Goal: Self-Sustaining Intelligence (generate revenue, improve independently)
 | **Procedural Memory** | 70% | procedural_memory.py with store/find/learn/used, wired into heartbeat, extracts real steps from task output |
 | **Monitoring** | 80% | health_monitor.sh (15min), cron_watchdog.sh (alerts), dashboard.py, self_report.py (now wired into evening) |
 | **Backup & Recovery** | 90% | backup_daily.sh (2 AM, incremental, checksums, 30-day retention), backup_verify.sh, backup_restore.sh, safe_update.sh |
-| **Episodic Memory** | 0% | Planned (data/plans/episodic-memory.md) — ACT-R activation decay, episode encoding |
+| **Episodic Memory** | 80% | episodic_memory.py with ACT-R activation, episode encode/recall/failures/synthesize, wired into heartbeat + reflection |
 | **Revenue** | 0% | No viable product yet — need fresh research |
 
 ---
@@ -46,10 +46,10 @@ Goal: Self-Sustaining Intelligence (generate revenue, improve independently)
 
 Phases 1-2 are substantially complete. The system has operational cron infrastructure, reflection pipelines, feedback loops, and cognitive architecture primitives. The main gaps are:
 
-- **Episodic memory** — planned but not built
 - **ACT-R activation model** — linear decay instead of power-law
 - **Memory evolution** (A-Mem style) — memories are static, not evolving
 - **Revenue generation** — zero progress
+- **Integration gaps fixed** (2026-02-22): phi self-healing, reasoning chain search, graph node tracking, QUEUE.md coordination, brain lazy init
 
 ---
 
@@ -139,11 +139,12 @@ All items delivered:
 - [x] Self-modification guided by outcomes (evolution_loop)
 - [ ] Learning compounds — too early to measure
 
-### 5.4 Episodic Memory — PLANNED
-- [ ] Build episodic_memory.py (ACT-R activation, episode encoding)
-- [ ] Wire into heartbeat (encode on completion, recall before execution)
-- [ ] Wire into evolution analysis (episode statistics)
-- See: `data/plans/episodic-memory.md`
+### 5.4 Episodic Memory — 80%
+- [x] Build episodic_memory.py (ACT-R activation, episode encoding)
+- [x] Wire into heartbeat (encode on completion, recall before execution)
+- [x] Wire into evolution analysis (episode statistics)
+- [x] Failure amplifier (failure_amplifier.py — 9 scanners for soft failures)
+- [ ] Hebbian co-activation patterns — not implemented
 
 ---
 
@@ -165,10 +166,11 @@ _The long game. Be patient. Be persistent. Be relentless._
 
 See `memory/evolution/QUEUE.md` for the current prioritized task list.
 
-### Remaining P0 Tasks (2026-02-22)
-1. Wire dashboard.py into cron_evening.sh — **DONE**
-2. Wire self_report.py into cron_evening.sh — **DONE**
-3. Build episodic memory system — **PLANNED** (data/plans/episodic-memory.md)
+### Remaining P1 Tasks (2026-02-22)
+1. Boost Code Generation score (0.70) — code_quality_gate.py
+2. Build temporal self-awareness module
+3. Implement counterfactual dreaming engine
+4. Run parameter evolution on salience weights
 
 ---
 

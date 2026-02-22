@@ -20,7 +20,7 @@ import sys
 from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from brain import ClarvisBrain, ALL_COLLECTIONS
+from brain import brain as _brain_singleton, ClarvisBrain, ALL_COLLECTIONS
 
 BRIDGE_STATE_FILE = "/home/agent/.openclaw/workspace/data/bridge_builder_state.json"
 
@@ -230,7 +230,7 @@ def run(threshold=0.30, top_n=3, dry_run=False, verbose=True):
 
     Returns summary dict.
     """
-    brain = ClarvisBrain()
+    brain = _brain_singleton
     state = load_state()
 
     if verbose:

@@ -2,6 +2,14 @@
 # Morning Report - 11:00 AM CET
 source /home/agent/.openclaw/workspace/scripts/cron_env.sh
 
+LOCKFILE="/tmp/clarvis_report_morning.lock"
+if [ -f "$LOCKFILE" ]; then
+    pid=$(cat "$LOCKFILE" 2>/dev/null)
+    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then exit 0; fi
+fi
+echo $$ > "$LOCKFILE"
+trap "rm -f $LOCKFILE" EXIT
+
 python3 << 'PYEOF'
 import sys
 import json

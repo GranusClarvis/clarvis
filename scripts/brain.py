@@ -169,7 +169,8 @@ class ClarvisBrain:
                 for rid in results["ids"][0]:
                     if rid == memory_id:
                         continue
-                    self.add_relationship(memory_id, rid, "similar_to")
+                    self.add_relationship(memory_id, rid, "similar_to",
+                                          source_collection=collection, target_collection=collection)
                     linked += 1
                     if linked >= 3:
                         break
@@ -188,7 +189,8 @@ class ClarvisBrain:
                         dist = xresults["distances"][0][0]
                         # Link if semantically related (distance < 1.5)
                         if dist < 1.5:
-                            self.add_relationship(memory_id, xresults["ids"][0][0], "cross_collection")
+                            self.add_relationship(memory_id, xresults["ids"][0][0], "cross_collection",
+                                                  source_collection=collection, target_collection=other_col)
                             cross_linked += 1
                             if cross_linked >= 4:
                                 break
@@ -388,7 +390,14 @@ class ClarvisBrain:
         return migrated
 
     def set_goal(self, goal_name, progress, subtasks=None):
-        """Set or update a goal"""
+        """Set or update a goal. Rejects garbage goals (too short, bridge artifacts)."""
+        # Validate: reject garbage goals
+        if not goal_name or len(goal_name.strip()) < 10:
+            return
+        reject_patterns = ["bridge", "sbridge", "BRIDGE", "Sbridge", "Connection between"]
+        if any(p.lower() in goal_name.lower() for p in reject_patterns):
+            return
+
         goal_data = {
             "goal": goal_name,
             "progress": progress,
@@ -424,21 +433,67 @@ class ClarvisBrain:
     
     # === GRAPH OPERATIONS ===
     
-    def add_relationship(self, from_id, to_id, relationship_type):
-        """Add a relationship between two memories"""
+    def add_relationship(self, from_id, to_id, relationship_type,
+                         source_collection=None, target_collection=None):
+        """Add a relationship between two memories.
+
+        Args:
+            from_id: Source memory ID
+            to_id: Target memory ID
+            relationship_type: Edge type (e.g. 'similar_to', 'cross_collection')
+            source_collection: Collection the from_id belongs to (optional)
+            target_collection: Collection the to_id belongs to (optional)
+        """
+        # Ensure both nodes are registered in the graph
+        if from_id not in self.graph["nodes"]:
+            self.graph["nodes"][from_id] = {
+                "collection": source_collection or self._infer_collection(from_id),
+                "added_at": datetime.now(timezone.utc).isoformat(),
+            }
+        if to_id not in self.graph["nodes"]:
+            self.graph["nodes"][to_id] = {
+                "collection": target_collection or self._infer_collection(to_id),
+                "added_at": datetime.now(timezone.utc).isoformat(),
+            }
+
         edge = {
             "from": from_id,
             "to": to_id,
             "type": relationship_type,
-            "created_at": datetime.now(timezone.utc).isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat(),
         }
-        
-        # Avoid duplicates
-        if edge not in self.graph["edges"]:
-            self.graph["edges"].append(edge)
-            self._save_graph()
-        
+        if source_collection:
+            edge["source_collection"] = source_collection
+        if target_collection:
+            edge["target_collection"] = target_collection
+
+        # Avoid duplicates (check from/to/type only, ignore timestamps)
+        for existing in self.graph["edges"]:
+            if (existing["from"] == from_id and
+                    existing["to"] == to_id and
+                    existing["type"] == relationship_type):
+                return existing
+
+        self.graph["edges"].append(edge)
+        self._save_graph()
+
         return edge
+
+    def _infer_collection(self, memory_id):
+        """Infer which collection a memory ID belongs to."""
+        for col_name, col in self.collections.items():
+            if memory_id.startswith(col_name):
+                return col_name
+        # Try prefix matching
+        prefix = memory_id.split("_")[0].split("-")[0]
+        prefix_map = {
+            "proc": PROCEDURES,
+            "bridge": MEMORIES,
+            "sbridge": MEMORIES,
+            "goal": GOALS,
+            "mem": MEMORIES,
+        }
+        return prefix_map.get(prefix, "unknown")
     
     def get_related(self, memory_id, depth=1):
         """Get memories related to a given memory"""
@@ -640,24 +695,66 @@ class ClarvisBrain:
         
         return stale
     
-    def optimize(self):
+    def optimize(self, full=False):
         """
         Run brain optimization: decay, prune, clean.
         Call periodically (e.g., once per day).
-        
+
+        Args:
+            full: If True, also run dedup, noise prune, and stale archive
+                  via memory_consolidation.py.
+
         Returns:
             Dict with optimization stats
         """
         decayed = self.decay_importance()
         pruned = self.prune_low_importance()
         stale = self.get_stale_memories(days=60)
-        
-        return {
+
+        result = {
             "decayed": decayed,
             "pruned": pruned,
             "stale_count": len(stale),
-            "stats": self.stats()
         }
+
+        if full:
+            try:
+                from memory_consolidation import deduplicate, prune_noise, archive_stale
+                dedup_result = deduplicate(dry_run=False)
+                noise_result = prune_noise(dry_run=False)
+                archive_result = archive_stale(dry_run=False)
+                result["duplicates_removed"] = dedup_result.get("duplicates_removed", 0)
+                result["noise_pruned"] = noise_result.get("pruned", 0)
+                result["archived"] = archive_result.get("archived", 0)
+            except Exception as e:
+                result["consolidation_error"] = str(e)
+
+        result["stats"] = self.stats()
+        return result
+
+    def backfill_graph_nodes(self):
+        """
+        Register all nodes referenced by existing edges but missing from the nodes dict.
+        Fixes the orphan-edge problem where edges reference IDs not in graph["nodes"].
+
+        Returns:
+            int: Number of nodes backfilled
+        """
+        backfilled = 0
+        for edge in self.graph.get("edges", []):
+            for key in ("from", "to"):
+                node_id = edge.get(key)
+                if node_id and node_id not in self.graph["nodes"]:
+                    collection = edge.get(f"{'source' if key == 'from' else 'target'}_collection")
+                    self.graph["nodes"][node_id] = {
+                        "collection": collection or self._infer_collection(node_id),
+                        "added_at": datetime.now(timezone.utc).isoformat(),
+                        "backfilled": True,
+                    }
+                    backfilled += 1
+        if backfilled > 0:
+            self._save_graph()
+        return backfilled
     
     # === BULK CROSS-COLLECTION LINKING ===
 
@@ -715,7 +812,8 @@ class ClarvisBrain:
                             dist = xresults["distances"][0][0]
 
                             if dist < max_distance and (mem_id, target_id) not in existing_pairs:
-                                self.add_relationship(mem_id, target_id, "cross_collection")
+                                self.add_relationship(mem_id, target_id, "cross_collection",
+                                                      source_collection=col_name, target_collection=other_col_name)
                                 existing_pairs.add((mem_id, target_id))
                                 existing_pairs.add((target_id, mem_id))
                                 new_edges += 1
@@ -865,8 +963,28 @@ def get_local_brain():
         _local_brain = LocalBrain()
     return _local_brain
 
-# Convenience exports
-brain = get_brain()
+
+class _LazyBrain:
+    """Lazy proxy for ClarvisBrain — delays ChromaDB initialization until first access.
+
+    This avoids the ~200ms startup cost when importing brain.py from scripts
+    that may not need the brain at all (e.g., queue_writer, CLI tools).
+    """
+
+    def __getattr__(self, name):
+        # On first attribute access, initialize the real brain and replace ourselves
+        real = get_brain()
+        # Replace module-level 'brain' so future accesses skip the proxy
+        import brain as _module
+        _module.brain = real
+        return getattr(real, name)
+
+    def __repr__(self):
+        return "<LazyBrain (not yet initialized)>"
+
+
+# Convenience exports — lazy so importing brain.py doesn't trigger ChromaDB init
+brain = _LazyBrain()
 local_brain = None  # Initialize on demand
 
 # Legacy compatibility - these match old API
@@ -914,11 +1032,13 @@ if __name__ == "__main__":
         print("Usage: brain.py <command> [args]")
         print("Commands:")
         print("  stats              - Show brain statistics")
-        print("  health             - Run health check")
+        print("  health             - Full health report (stats + consolidation + graph)")
         print("  recall <query>     - Search memories")
         print("  recent [days]      - Recent memories (default 7 days)")
         print("  store <text>       - Store a memory")
         print("  optimize           - Run decay and prune")
+        print("  optimize-full      - Run decay, prune, dedup, noise clean, archive")
+        print("  backfill           - Backfill missing graph nodes from edges")
         print("  stale              - Show stale memories")
         print("  context            - Show current context")
         print("  crosslink          - Build cross-collection edges for all memories")
@@ -929,7 +1049,49 @@ if __name__ == "__main__":
     if cmd == "stats":
         print(json.dumps(b.stats(), indent=2))
     elif cmd == "health":
-        print(json.dumps(b.health_check(), indent=2))
+        print("=== Clarvis Brain Health Report ===\n")
+
+        # 1. Basic stats
+        s = b.stats()
+        print(f"Memories: {s['total_memories']} across {len(s['collections'])} collections")
+        for name, count in s["collections"].items():
+            print(f"  {name}: {count}")
+        print(f"\nGraph: {s['graph_nodes']} nodes, {s['graph_edges']} edges")
+
+        # 2. Check orphan ratio
+        referenced_nodes = set()
+        for e in b.graph.get("edges", []):
+            referenced_nodes.add(e.get("from", ""))
+            referenced_nodes.add(e.get("to", ""))
+        referenced_nodes.discard("")
+        orphan_count = len(referenced_nodes - set(b.graph.get("nodes", {}).keys()))
+        if orphan_count > 0:
+            print(f"  WARNING: {orphan_count} nodes referenced by edges but not in graph (run: brain.py backfill)")
+        else:
+            print("  Graph nodes: OK (all edge references resolved)")
+
+        # 3. Consolidation preview
+        try:
+            from memory_consolidation import get_consolidation_stats
+            cs = get_consolidation_stats()
+            print(f"\nConsolidation status:")
+            print(f"  Potential duplicates: {cs['potential_duplicates']}")
+            print(f"  Potential noise: {cs['potential_noise']}")
+            print(f"  Stale (archivable): {cs['stale_archivable']}")
+            print(f"  Archived: {cs['archive_count']}")
+            if cs['potential_duplicates'] > 0 or cs['potential_noise'] > 0:
+                print("  Recommendation: run 'brain.py optimize-full' to clean")
+        except Exception as e:
+            print(f"\nConsolidation check failed: {e}")
+
+        # 4. Stale check
+        stale = b.get_stale_memories(days=30)
+        print(f"\nStale memories (>30 days unaccessed): {len(stale)}")
+
+        # 5. Basic store/recall test
+        hc = b.health_check()
+        print(f"\nStore/recall test: {hc['status']}")
+        print("\n=== Health check complete ===")
     elif cmd == "recall" and len(sys.argv) > 2:
         query = " ".join(sys.argv[2:])
         results = b.recall(query, include_related=True)
@@ -954,6 +1116,25 @@ if __name__ == "__main__":
         print(f"  Pruned: {result['pruned']}")
         print(f"  Stale: {result['stale_count']}")
         print(f"  Total memories: {result['stats']['total_memories']}")
+    elif cmd == "optimize-full":
+        result = b.optimize(full=True)
+        print(f"Full optimization complete:")
+        print(f"  Decayed: {result['decayed']}")
+        print(f"  Pruned: {result['pruned']}")
+        print(f"  Stale: {result['stale_count']}")
+        print(f"  Duplicates removed: {result.get('duplicates_removed', 'N/A')}")
+        print(f"  Noise pruned: {result.get('noise_pruned', 'N/A')}")
+        print(f"  Archived: {result.get('archived', 'N/A')}")
+        if result.get('consolidation_error'):
+            print(f"  WARNING: {result['consolidation_error']}")
+        print(f"  Total memories: {result['stats']['total_memories']}")
+    elif cmd == "backfill":
+        count = b.backfill_graph_nodes()
+        s = b.stats()
+        print(f"Graph node backfill complete:")
+        print(f"  Nodes backfilled: {count}")
+        print(f"  Total nodes now: {s['graph_nodes']}")
+        print(f"  Total edges: {s['graph_edges']}")
     elif cmd == "stale":
         stale = b.get_stale_memories(days=30)
         print(f"Memories not accessed in 30 days: {len(stale)}")

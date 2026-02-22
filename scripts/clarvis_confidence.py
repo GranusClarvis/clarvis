@@ -157,6 +157,54 @@ def calibration() -> dict:
     return result
 
 
+def predict_specific(domain: str) -> dict | None:
+    """Generate a domain-specific prediction with real uncertainty.
+
+    Instead of predicting "will this task succeed" (almost always yes),
+    predict specific measurable outcomes where failure is plausible.
+
+    Args:
+        domain: One of 'retrieval', 'phi', 'procedure', 'chain', 'calibration'
+
+    Returns:
+        Prediction entry dict, or None if domain unknown.
+    """
+    import random
+
+    generators = {
+        "retrieval": lambda: predict(
+            "retrieval_quality_improvement",
+            "avg_distance_below_1.0",
+            max(0.3, min(0.8, dynamic_confidence() - 0.1)),
+        ),
+        "phi": lambda: predict(
+            "phi_increase_next_measurement",
+            "phi_higher_than_previous",
+            max(0.3, min(0.7, dynamic_confidence() - 0.15)),
+        ),
+        "procedure": lambda: predict(
+            "procedure_reuse_next_cycle",
+            "at_least_one_procedure_matched",
+            max(0.2, min(0.6, 0.3 + random.uniform(0, 0.2))),
+        ),
+        "chain": lambda: predict(
+            "reasoning_chain_outcome_recorded",
+            "chain_closed_with_outcome",
+            max(0.4, min(0.8, dynamic_confidence() - 0.05)),
+        ),
+        "calibration": lambda: predict(
+            "brier_score_below_0.1",
+            "brier_under_threshold",
+            max(0.3, min(0.7, 0.5)),
+        ),
+    }
+
+    gen = generators.get(domain)
+    if gen:
+        return gen()
+    return None
+
+
 def dynamic_confidence(event: str = "") -> float:
     """
     Calculate what confidence to use for the next prediction based on
@@ -417,6 +465,22 @@ if __name__ == "__main__":
         t = load_threshold()
         print(f"{t}")
 
+    elif cmd == "predict-specific":
+        domain = sys.argv[2] if len(sys.argv) > 2 else ""
+        if domain:
+            result = predict_specific(domain)
+            if result:
+                print(f"Logged specific prediction for domain '{domain}'")
+            else:
+                print(f"Unknown domain: {domain}. Try: retrieval, phi, procedure, chain, calibration")
+        else:
+            # Generate predictions for all domains
+            domains = ["retrieval", "phi", "procedure", "chain", "calibration"]
+            for d in domains:
+                result = predict_specific(d)
+                if result:
+                    print(f"  {d}: predicted '{result['expected']}' @ {result['confidence']:.0%}")
+
     else:
         print(f"Unknown command: {cmd}")
-        print("Try: predict, outcome, calibration, list, review, dynamic, apply, threshold")
+        print("Try: predict, outcome, calibration, list, review, dynamic, apply, threshold, predict-specific")

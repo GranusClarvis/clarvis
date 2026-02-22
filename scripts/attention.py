@@ -41,11 +41,11 @@ SPOTLIGHT_FILE = ATTENTION_DIR / "spotlight.json"
 SPOTLIGHT_CAPACITY = 7
 
 # Salience weights
-W_IMPORTANCE = 0.30
-W_RECENCY = 0.25
-W_RELEVANCE = 0.25
+W_IMPORTANCE = 0.25
+W_RECENCY = 0.20
+W_RELEVANCE = 0.30
 W_ACCESS = 0.10
-W_BOOST = 0.10  # External boost (e.g., user explicitly mentioned it)
+W_BOOST = 0.15  # External boost (e.g., user explicitly mentioned it)
 
 # Decay rate per tick for items NOT re-activated
 DECAY_PER_TICK = 0.05

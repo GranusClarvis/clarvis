@@ -4,6 +4,18 @@
 source /home/agent/.openclaw/workspace/scripts/cron_env.sh
 
 LOGFILE="memory/cron/evolution.log"
+LOCKFILE="/tmp/clarvis_evolution.lock"
+
+# Prevent overlapping runs
+if [ -f "$LOCKFILE" ]; then
+    pid=$(cat "$LOCKFILE" 2>/dev/null)
+    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] SKIP: Previous run still active (PID $pid)" >> "$LOGFILE"
+        exit 0
+    fi
+fi
+echo $$ > "$LOCKFILE"
+trap "rm -f $LOCKFILE" EXIT
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Evolution analysis starting ===" >> "$LOGFILE"
 
@@ -100,5 +112,13 @@ PENDING_COUNT=$(grep -c '^\- \[ \]' memory/evolution/QUEUE.md 2>/dev/null || ech
     Currently $PENDING_COUNT pending tasks in queue.
     Output: 1-paragraph analysis + list of tasks added." \
     --dangerously-skip-permissions >> "$LOGFILE" 2>&1
+
+# === DIGEST: Write first-person summary for M2.5 agent ===
+# Extract key metrics for digest
+PHI_SHORT=$(echo "$PHI_TREND_OUTPUT" | grep -oP 'Phi\s*=\s*[\d.]+' | head -1 || echo "Phi unknown")
+WEAKEST=$(echo "$CAPABILITY_OUTPUT" | sort -t: -k2 -n | head -1 | sed 's/^[ ]*//' || echo "unknown")
+python3 /home/agent/.openclaw/workspace/scripts/digest_writer.py evolution \
+    "Deep evolution analysis complete. $PHI_SHORT. Weakest capability: $WEAKEST. $PENDING_COUNT tasks pending in queue. Calibration: $(echo "$CALIBRATION_OUTPUT" | head -1). Ran prediction review, goal tracker, and retrieval quality checks." \
+    >> "$LOGFILE" 2>&1 || true
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Evolution analysis complete ===" >> "$LOGFILE"

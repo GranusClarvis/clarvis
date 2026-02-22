@@ -3,6 +3,18 @@
 source /home/agent/.openclaw/workspace/scripts/cron_env.sh
 
 LOGFILE="memory/cron/morning.log"
+LOCKFILE="/tmp/clarvis_morning.lock"
+
+# Prevent overlapping runs
+if [ -f "$LOCKFILE" ]; then
+    pid=$(cat "$LOCKFILE" 2>/dev/null)
+    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] SKIP: Previous run still active (PID $pid)" >> "$LOGFILE"
+        exit 0
+    fi
+fi
+echo $$ > "$LOCKFILE"
+trap "rm -f $LOCKFILE" EXIT
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Morning routine started ===" >> "$LOGFILE"
 
@@ -12,6 +24,13 @@ python3 /home/agent/.openclaw/workspace/scripts/session_hook.py open >> "$LOGFIL
 
 # === MORNING PLANNING ===
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running morning planning..." >> "$LOGFILE"
-/home/agent/.local/bin/claude -p "It's morning. Review evolution/QUEUE.md, pick top 3 priorities for today. Update brain.set_context() with today's focus. Output: 3 priorities with brief reasoning." --dangerously-skip-permissions >> "$LOGFILE" 2>&1
+MORNING_OUTPUT_FILE=$(mktemp)
+/home/agent/.local/bin/claude -p "It's morning. Review evolution/QUEUE.md, pick top 3 priorities for today. Update brain.set_context() with today's focus. Output: 3 priorities with brief reasoning." --dangerously-skip-permissions > "$MORNING_OUTPUT_FILE" 2>&1
+cat "$MORNING_OUTPUT_FILE" >> "$LOGFILE"
+
+# === DIGEST: Write first-person summary for M2.5 agent ===
+PRIORITIES=$(tail -c 500 "$MORNING_OUTPUT_FILE" 2>/dev/null | tr '\n' ' ' | sed 's/[^a-zA-Z0-9 _.,:;=+\-\/()@#%]//g' | tail -c 400)
+python3 /home/agent/.openclaw/workspace/scripts/digest_writer.py morning "I started my day and reviewed the evolution queue. $PRIORITIES" >> "$LOGFILE" 2>&1 || true
+rm -f "$MORNING_OUTPUT_FILE"
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Morning routine complete ===" >> "$LOGFILE"

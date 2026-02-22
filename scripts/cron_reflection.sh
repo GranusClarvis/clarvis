@@ -3,10 +3,23 @@
 source /home/agent/.openclaw/workspace/scripts/cron_env.sh
 
 LOGFILE="memory/cron/reflection.log"
+LOCKFILE="/tmp/clarvis_reflection.lock"
+
+# Prevent overlapping runs
+if [ -f "$LOCKFILE" ]; then
+    pid=$(cat "$LOCKFILE" 2>/dev/null)
+    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] SKIP: Previous run still active (PID $pid)" >> "$LOGFILE"
+        exit 0
+    fi
+fi
+echo $$ > "$LOCKFILE"
+trap "rm -f $LOCKFILE" EXIT
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Reflection starting ===" >> "$LOGFILE"
 
-# Step 1: Memory optimization (decay stale memories)
+# Step 1: Memory optimization (decay stale memories) — CRITICAL
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running brain.optimize()..." >> "$LOGFILE"
 python3 -c "
 import sys
 sys.path.insert(0, '/home/agent/.openclaw/workspace/scripts')
@@ -14,36 +27,54 @@ from brain import brain
 brain.optimize()
 print('brain.optimize() complete')
 " >> "$LOGFILE" 2>&1
+OPTIMIZE_EXIT=$?
+if [ $OPTIMIZE_EXIT -ne 0 ]; then
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WARNING: brain.optimize() failed with exit $OPTIMIZE_EXIT" >> "$LOGFILE"
+fi
 
 # Step 2: Run full reflection loop (extract lessons + generate queue tasks)
-python3 /home/agent/.openclaw/workspace/scripts/clarvis_reflection.py >> "$LOGFILE" 2>&1
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running reflection loop..." >> "$LOGFILE"
+python3 /home/agent/.openclaw/workspace/scripts/clarvis_reflection.py >> "$LOGFILE" 2>&1 || true
 
 # Step 3: Knowledge synthesis — find cross-domain connections between today's work and past learnings
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running knowledge synthesis..." >> "$LOGFILE"
-python3 /home/agent/.openclaw/workspace/scripts/knowledge_synthesis.py >> "$LOGFILE" 2>&1
+python3 /home/agent/.openclaw/workspace/scripts/knowledge_synthesis.py >> "$LOGFILE" 2>&1 || true
 
 # Step 3.5: Cross-collection linking — ensure all memories have cross-collection edges
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running cross-collection linking..." >> "$LOGFILE"
-python3 /home/agent/.openclaw/workspace/scripts/brain.py crosslink >> "$LOGFILE" 2>&1
+python3 /home/agent/.openclaw/workspace/scripts/brain.py crosslink >> "$LOGFILE" 2>&1 || true
 
 # Step 4: Memory consolidation — deduplicate, prune noise, archive stale
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running memory consolidation..." >> "$LOGFILE"
-python3 /home/agent/.openclaw/workspace/scripts/memory_consolidation.py consolidate >> "$LOGFILE" 2>&1
+python3 /home/agent/.openclaw/workspace/scripts/memory_consolidation.py consolidate >> "$LOGFILE" 2>&1 || true
 
 # Step 5: Conversation learning — extract patterns from transcripts, store insights
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running conversation learner..." >> "$LOGFILE"
-python3 /home/agent/.openclaw/workspace/scripts/conversation_learner.py >> "$LOGFILE" 2>&1
+python3 /home/agent/.openclaw/workspace/scripts/conversation_learner.py >> "$LOGFILE" 2>&1 || true
 
 # Step 5.5: Failure amplification — surface soft failures (timeouts, retries, low scores) as negative episodes
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running failure amplifier..." >> "$LOGFILE"
-python3 /home/agent/.openclaw/workspace/scripts/failure_amplifier.py amplify >> "$LOGFILE" 2>&1
+python3 /home/agent/.openclaw/workspace/scripts/failure_amplifier.py amplify >> "$LOGFILE" 2>&1 || true
 
 # Step 6: Episodic synthesis — analyze episodes, generate new goals from experiential patterns
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running episodic synthesis..." >> "$LOGFILE"
-python3 /home/agent/.openclaw/workspace/scripts/episodic_memory.py synthesize >> "$LOGFILE" 2>&1
+python3 /home/agent/.openclaw/workspace/scripts/episodic_memory.py synthesize >> "$LOGFILE" 2>&1 || true
 
-# Step 7: Session close — save attention state and working memory for next session
+# Step 6.5: Temporal self-awareness — generate growth narrative (how have I changed?)
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running temporal self-awareness..." >> "$LOGFILE"
+python3 /home/agent/.openclaw/workspace/scripts/temporal_self.py store >> "$LOGFILE" 2>&1 || true
+
+# Step 7: Session close — save attention state and working memory for next session — CRITICAL
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running session close..." >> "$LOGFILE"
 python3 /home/agent/.openclaw/workspace/scripts/session_hook.py close >> "$LOGFILE" 2>&1
+SESSION_EXIT=$?
+if [ $SESSION_EXIT -ne 0 ]; then
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WARNING: session_hook.py close failed with exit $SESSION_EXIT" >> "$LOGFILE"
+fi
+
+# === DIGEST: Write first-person summary for M2.5 agent ===
+python3 /home/agent/.openclaw/workspace/scripts/digest_writer.py reflection \
+    "Nightly reflection complete. Ran full 8-step pipeline: brain.optimize, clarvis_reflection, knowledge_synthesis, crosslink, memory_consolidation, conversation_learner, failure_amplifier, episodic_synthesis, temporal_self. Session state saved. Ready for tomorrow." \
+    >> "$LOGFILE" 2>&1 || true
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Reflection complete ===" >> "$LOGFILE"

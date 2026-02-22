@@ -469,21 +469,23 @@ class EvolutionLoop:
         return {"success": False, "method": "unknown", "detail": f"Unknown action type: {action_type}"}
 
     def _add_to_queue(self, task: str):
-        """Add a fix task to the evolution queue under P0."""
-        queue_path = Path("/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md")
-        if not queue_path.exists():
-            return
-
-        content = queue_path.read_text()
-
-        # Add under P0 section
-        marker = "## P0 — Do Next Heartbeat"
-        if marker in content:
-            # Insert right after the header
-            parts = content.split(marker, 1)
-            new_task = f"\n- [ ] [AUTO-FIX] {task}"
-            content = parts[0] + marker + new_task + parts[1]
-            queue_path.write_text(content)
+        """Add a fix task to the evolution queue under P0 via shared queue_writer."""
+        try:
+            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+            from queue_writer import add_task
+            add_task(task, priority="P0", source="evolution-loop")
+        except ImportError:
+            # Fallback: direct write
+            queue_path = Path("/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md")
+            if not queue_path.exists():
+                return
+            content = queue_path.read_text()
+            marker = "## P0 — Do Next Heartbeat"
+            if marker in content:
+                parts = content.split(marker, 1)
+                new_task = f"\n- [ ] [AUTO-FIX] {task}"
+                content = parts[0] + marker + new_task + parts[1]
+                queue_path.write_text(content)
 
 
 # === Module-level convenience function for heartbeat integration ===

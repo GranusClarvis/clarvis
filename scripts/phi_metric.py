@@ -488,8 +488,8 @@ def act_on_phi(result=None):
         actions.append(f"phi_drop: {prev_phi:.3f} -> {current_phi:.3f} (delta={delta:.3f})")
         print(f"  PHI ACTION: Phi dropped {delta:.3f} — triggering cross-linking...")
         try:
-            brain.bulk_cross_link(max_new_edges=50)
-            actions.append("triggered bulk_cross_link(50)")
+            brain.bulk_cross_link(max_links_per_memory=5)
+            actions.append("triggered bulk_cross_link(max_links_per_memory=5)")
         except Exception as e:
             actions.append(f"cross-link failed: {e}")
 
@@ -531,8 +531,8 @@ def act_on_phi(result=None):
         actions.append(f"phi_critical: {current_phi:.3f} < 0.25")
         print(f"  PHI ACTION: Phi critically low ({current_phi:.3f}) — emergency cross-linking...")
         try:
-            brain.bulk_cross_link(max_new_edges=100)
-            actions.append("triggered emergency bulk_cross_link(100)")
+            brain.bulk_cross_link(max_links_per_memory=8)
+            actions.append("triggered emergency bulk_cross_link(max_links_per_memory=8)")
         except Exception as e:
             actions.append(f"emergency cross-link failed: {e}")
 

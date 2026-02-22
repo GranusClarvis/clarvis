@@ -32,6 +32,11 @@ try:
 except ImportError:
     somatic = None
 
+try:
+    from thought_protocol import thought as thought_proto
+except ImportError:
+    thought_proto = None
+
 QUEUE_FILE = "/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md"
 
 # Keywords that signal AGI/consciousness relevance (high-value work)
@@ -276,6 +281,20 @@ def score_tasks(tasks):
 
     # Sort by salience (highest first)
     scored.sort(key=lambda x: x["salience"], reverse=True)
+
+    # Log cognitive state via thought protocol (non-blocking)
+    if thought_proto and scored:
+        try:
+            best = scored[0]
+            thought_proto.task_decision(
+                best["text"][:120],
+                salience=best["salience"],
+                somatic_bias=best["details"].get("somatic_bias", 0.0),
+                spotlight_align=best["details"].get("spotlight_alignment", 0.0),
+            )
+        except Exception:
+            pass  # Never let protocol logging break task selection
+
     return scored
 
 

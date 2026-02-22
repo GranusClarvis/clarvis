@@ -292,4 +292,10 @@ attention.submit(
 )
 " >> "$LOGFILE" 2>&1 || true
 
+# === DIGEST: Write first-person summary for M2.5 agent ===
+TASK_RESULT_SNIPPET=$(tail -c 200 "$TASK_OUTPUT_FILE" 2>/dev/null | tr '\n' ' ' | sed 's/[^a-zA-Z0-9 _.,:;=+\-\/()@#%]//g' | tail -c 180)
+python3 /home/agent/.openclaw/workspace/scripts/digest_writer.py autonomous \
+    "I executed evolution task: \"${NEXT_TASK:0:120}\". Result: $TASK_STATUS (exit $TASK_EXIT, ${TASK_DURATION}s). Output: $TASK_RESULT_SNIPPET" \
+    >> "$LOGFILE" 2>&1 || true
+
 rm -f "$TASK_OUTPUT_FILE"

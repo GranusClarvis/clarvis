@@ -26,6 +26,11 @@ try:
 except ImportError:
     smart_recall = None
 
+try:
+    from thought_protocol import thought as thought_proto
+except ImportError:
+    thought_proto = None
+
 
 def _recall_context(task_text: str) -> list:
     """Retrieve brain context for a task, with smart_recall fallback."""
@@ -82,6 +87,14 @@ def open_chain(task_text: str, section: str = "unknown", salience: str = "0.0") 
     )
 
     chain_id = create_chain(f"Task: {task_text[:100]}", step0_thought)
+
+    # Log cognitive state at chain open via thought protocol
+    if thought_proto:
+        try:
+            state = thought_proto.encode_state()
+            print(f"THOUGHT_STATE: {state}", file=sys.stderr)
+        except Exception:
+            pass
 
     # --- Step 1: Strategy and expected outcome ---
     # Classify task type from keywords

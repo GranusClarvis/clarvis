@@ -149,38 +149,31 @@ def generate_queue_task(domain: str, stats: dict) -> str:
 
 
 def append_to_queue(tasks: list[str]):
-    """Append auto-generated tasks to QUEUE.md under P1."""
+    """Append auto-generated tasks to QUEUE.md under P1 via shared queue_writer."""
     if not tasks:
         return
-
-    with open(QUEUE_FILE, "r") as f:
-        content = f.read()
-
-    # Find the P1 section and insert after auto-generated header
-    header = "### Auto-generated " + datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    date_tag = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-
-    # Check if today's auto-generated section exists
-    if header in content:
-        # Insert after the existing header line
-        insert_point = content.index(header) + len(header)
-        # Find end of line
-        nl = content.index("\n", insert_point)
-        new_tasks = "\n".join(tasks)
-        content = content[:nl + 1] + new_tasks + "\n" + content[nl + 1:]
-    elif "## P1" in content:
-        # Insert a new auto-generated section after P1 header
-        p1_idx = content.index("## P1")
-        # Find end of P1 header line
-        nl = content.index("\n", p1_idx)
-        block = f"\n{header} (prediction-review)\n" + "\n".join(tasks) + "\n"
-        content = content[:nl + 1] + block + content[nl + 1:]
-    else:
-        # Append at end
-        content += f"\n## P1 — This Week\n\n{header} (prediction-review)\n" + "\n".join(tasks) + "\n"
-
-    with open(QUEUE_FILE, "w") as f:
-        f.write(content)
+    # Strip leading "- [ ] " if already present in task strings
+    import re
+    clean_tasks = [re.sub(r'^- \[[ x]\] ', '', t).strip() for t in tasks]
+    try:
+        from queue_writer import add_tasks
+        added = add_tasks(clean_tasks, priority="P1", source="prediction-review")
+        if added:
+            print(f"  Injected {len(added)} prediction-review tasks into QUEUE.md")
+    except ImportError:
+        # Fallback: direct write
+        with open(QUEUE_FILE, "r") as f:
+            content = f.read()
+        header = "### Auto-generated " + datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        if "## P1" in content:
+            p1_idx = content.index("## P1")
+            nl = content.index("\n", p1_idx)
+            block = f"\n{header} (prediction-review)\n" + "\n".join(tasks) + "\n"
+            content = content[:nl + 1] + block + content[nl + 1:]
+        else:
+            content += f"\n## P1 — This Week\n\n{header} (prediction-review)\n" + "\n".join(tasks) + "\n"
+        with open(QUEUE_FILE, "w") as f:
+            f.write(content)
 
 
 def review_and_generate() -> dict:

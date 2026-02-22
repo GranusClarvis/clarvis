@@ -43,7 +43,7 @@ except ImportError:
     smart_recall = None
 
 
-def find_procedure(task_text: str, threshold: float = 0.5) -> dict | None:
+def find_procedure(task_text: str, threshold: float = 0.8) -> dict | None:
     """Search for a matching procedure for a given task.
 
     Uses semantic similarity via brain.recall() on the procedures collection.

@@ -114,41 +114,40 @@ def generate_queue_tasks(lessons, content):
 
 
 def add_tasks_to_queue(tasks):
-    """Add new tasks to QUEUE.md under P1 section."""
-    queue_path = "/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md"
-    if not os.path.exists(queue_path):
+    """Add new tasks to QUEUE.md under P1 section via shared queue_writer."""
+    if not tasks:
         return 0
-
-    with open(queue_path) as f:
-        content = f.read()
-
-    # Don't add duplicates
-    added = 0
-    new_lines = []
-    for task in tasks:
-        # Check if a similar task already exists (by first 40 chars)
-        if task[:40] not in content:
-            new_lines.append(f"- [ ] {task}")
-            added += 1
-
-    if not new_lines:
-        return 0
-
-    # Add under P1 section
-    today = datetime.now().strftime("%Y-%m-%d")
-    marker = "## P1 — This Week"
-    if marker in content:
-        insert_block = "\n".join(new_lines)
-        parts = content.split(marker, 1)
-        content = parts[0] + marker + f"\n\n### Auto-generated {today}\n" + insert_block + "\n" + parts[1]
-    else:
-        # Fallback: append at end
-        content += "\n\n## P1 — Auto-generated " + today + "\n" + "\n".join(new_lines) + "\n"
-
-    with open(queue_path, 'w') as f:
-        f.write(content)
-
-    return added
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from queue_writer import add_tasks
+        added = add_tasks(tasks, priority="P1", source="reflection")
+        return len(added)
+    except ImportError:
+        # Fallback: direct write
+        queue_path = "/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md"
+        if not os.path.exists(queue_path):
+            return 0
+        with open(queue_path) as f:
+            content = f.read()
+        added = 0
+        new_lines = []
+        for task in tasks:
+            if task[:40] not in content:
+                new_lines.append(f"- [ ] {task}")
+                added += 1
+        if not new_lines:
+            return 0
+        today = datetime.now().strftime("%Y-%m-%d")
+        marker = "## P1 — This Week"
+        if marker in content:
+            insert_block = "\n".join(new_lines)
+            parts = content.split(marker, 1)
+            content = parts[0] + marker + f"\n\n### Auto-generated {today}\n" + insert_block + "\n" + parts[1]
+        else:
+            content += "\n\n## P1 — Auto-generated " + today + "\n" + "\n".join(new_lines) + "\n"
+        with open(queue_path, 'w') as f:
+            f.write(content)
+        return added
 
 
 def main():

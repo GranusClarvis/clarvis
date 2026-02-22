@@ -117,12 +117,20 @@ def list_chains() -> list:
 
 def find_related_chains(query: str) -> list:
     """Find chains related to a query via brain."""
-    results = brain.recall(query, limit=5)
+    results = brain.recall(query, n=5, collections=["clarvis-learnings"])
     chain_ids = set()
     for r in results:
         meta = r.get("metadata", {})
-        if meta.get("type", "").startswith("reasoning"):
-            chain_ids.add(meta.get("chain_id"))
+        tags_raw = meta.get("tags", "[]")
+        try:
+            tags = json.loads(tags_raw) if isinstance(tags_raw, str) else (tags_raw or [])
+        except (json.JSONDecodeError, TypeError):
+            tags = []
+        if "reasoning_chain" in tags or "reasoning_step" in tags or "reasoning_outcome" in tags:
+            # Extract chain_id from tags (it's the non-keyword tag)
+            for tag in tags:
+                if tag.startswith("chain_"):
+                    chain_ids.add(tag)
     return list(chain_ids)
 
 if __name__ == "__main__":

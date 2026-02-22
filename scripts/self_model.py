@@ -1108,50 +1108,34 @@ def generate_remediation_tasks(current_scores, previous_snapshot):
 
 
 def inject_tasks_to_queue(tasks, queue_file="/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md"):
-    """Inject remediation tasks into QUEUE.md under P0 section."""
+    """Inject remediation tasks into QUEUE.md under P0 section via shared queue_writer."""
     if not tasks:
         return
-
-    queue_path = Path(queue_file)
-    if not queue_path.exists():
-        return
-
-    content = queue_path.read_text()
-    lines = content.split("\n")
-
-    # Find the P0 section header and inject after it
-    insert_idx = None
-    for i, line in enumerate(lines):
-        if "## P0" in line:
-            insert_idx = i + 1
-            break
-
-    if insert_idx is None:
-        return
-
-    # Skip any sub-headers or blank lines right after P0
-    while insert_idx < len(lines) and (lines[insert_idx].startswith("###") or lines[insert_idx].strip() == ""):
-        insert_idx += 1
-
-    # Check for duplicate tasks already in queue (don't re-inject)
-    existing_text = content.lower()
-    new_tasks = []
-    for task in tasks:
-        # Check if a similar remediation task already exists (by domain keyword)
-        if "[auto-remediation" in existing_text and any(
-            kw in existing_text for kw in task.lower().split()[:5]
-        ):
-            continue
-        new_tasks.append(f"- [ ] {task}")
-
-    if not new_tasks:
-        return
-
-    for task_line in reversed(new_tasks):
-        lines.insert(insert_idx, task_line)
-
-    queue_path.write_text("\n".join(lines))
-    print(f"  Injected {len(new_tasks)} remediation tasks into QUEUE.md")
+    try:
+        from queue_writer import add_tasks
+        added = add_tasks(tasks, priority="P0", source="self-model")
+        if added:
+            print(f"  Injected {len(added)} remediation tasks into QUEUE.md")
+    except ImportError:
+        # Fallback: direct write (legacy path)
+        queue_path = Path(queue_file)
+        if not queue_path.exists():
+            return
+        content = queue_path.read_text()
+        lines = content.split("\n")
+        insert_idx = None
+        for i, line in enumerate(lines):
+            if "## P0" in line:
+                insert_idx = i + 1
+                break
+        if insert_idx is None:
+            return
+        while insert_idx < len(lines) and (lines[insert_idx].startswith("###") or lines[insert_idx].strip() == ""):
+            insert_idx += 1
+        for task in reversed(tasks):
+            lines.insert(insert_idx, f"- [ ] {task}")
+        queue_path.write_text("\n".join(lines))
+        print(f"  Injected {len(tasks)} remediation tasks into QUEUE.md (legacy)")
 
 
 def daily_update():

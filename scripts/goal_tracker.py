@@ -264,41 +264,34 @@ def generate_tasks(goal_status, dry_run=False):
 
 
 def inject_tasks(tasks):
-    """Inject tasks into QUEUE.md under P0 section."""
-    queue_path = Path(QUEUE_FILE)
-    if not queue_path.exists():
+    """Inject tasks into QUEUE.md under P0 section via shared queue_writer."""
+    if not tasks:
         return
-
-    content = queue_path.read_text()
-    lines = content.split("\n")
-
-    # Find P0 section
-    insert_idx = None
-    for i, line in enumerate(lines):
-        if "## P0" in line:
-            insert_idx = i + 1
-            break
-
-    if insert_idx is None:
-        return
-
-    # Skip sub-headers right after P0
-    while insert_idx < len(lines) and (lines[insert_idx].startswith("###") or lines[insert_idx].strip() == ""):
-        insert_idx += 1
-
-    # Dedup against existing content
-    existing_lower = content.lower()
-    new_lines = []
-    for task in tasks:
-        if "[goal-tracker" in existing_lower and task[:50].lower() in existing_lower:
-            continue
-        new_lines.append(f"- [ ] {task}")
-
-    if new_lines:
-        for line in reversed(new_lines):
-            lines.insert(insert_idx, line)
+    try:
+        from queue_writer import add_tasks
+        added = add_tasks(tasks, priority="P0", source="goal-tracker")
+        if added:
+            print(f"  Injected {len(added)} goal-tracker tasks into QUEUE.md")
+    except ImportError:
+        # Fallback: direct write
+        queue_path = Path(QUEUE_FILE)
+        if not queue_path.exists():
+            return
+        content = queue_path.read_text()
+        lines = content.split("\n")
+        insert_idx = None
+        for i, line in enumerate(lines):
+            if "## P0" in line:
+                insert_idx = i + 1
+                break
+        if insert_idx is None:
+            return
+        while insert_idx < len(lines) and (lines[insert_idx].startswith("###") or lines[insert_idx].strip() == ""):
+            insert_idx += 1
+        for task in reversed(tasks):
+            lines.insert(insert_idx, f"- [ ] {task}")
         queue_path.write_text("\n".join(lines))
-        print(f"  Injected {len(new_lines)} goal-tracker tasks into QUEUE.md")
+        print(f"  Injected {len(tasks)} goal-tracker tasks into QUEUE.md (legacy)")
 
 
 def update_goal_progress(goal_status):

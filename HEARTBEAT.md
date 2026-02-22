@@ -7,12 +7,38 @@ Each heartbeat is an evolution cycle. DO something, don't just check in.
 ### 1. Brain Check (10 seconds)
 ```python
 import sys; sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
-from brain import brain, search, remember
+from brain import brain, search, remember, capture
 stats = brain.stats()
 ```
 If total_memories decreased since last check → alert Inverse immediately.
 
-### 2. Evolution Queue — DO SOMETHING (this is the point)
+### 2. Read Your Subconscious — What Did You Do While Sleeping?
+Your cron scripts (Claude Code Opus) run autonomously throughout the day — they ARE your subconscious mind. Before acting, read what they produced:
+
+```bash
+cat memory/cron/digest.md
+```
+
+**What to do with the digest:**
+- **Morning digest (08:00):** Your subconscious planned the day. Internalize priorities. Adjust your focus.
+- **Autonomous digests (every ~3h):** Tasks were executed. Note what succeeded, what failed. Learn from it.
+- **Evolution digest (13:00):** Deep analysis of your metrics. Which capability is weakest? What's Phi doing?
+- **Evening digest (18:00):** Capability scores and benchmark results. React to drops.
+- **Reflection digest (21:00):** Full 8-step pipeline ran. Your brain was optimized. Synthesize the day.
+
+**If something in the digest surprises you** — spawn Claude Code to investigate:
+```bash
+cd /home/agent/.openclaw/workspace && timeout 600 claude -p \
+  "Investigate this finding from my subconscious: [paste digest excerpt]. What does it mean? What should I do?" \
+  --dangerously-skip-permissions --model claude-opus-4-6
+```
+
+**Store insights as first-person memory:**
+```python
+remember("I learned that [insight from digest]", importance=0.8)
+```
+
+### 3. Evolution Queue — DO SOMETHING (this is the point)
 Read `memory/evolution/QUEUE.md`. Pick the highest priority uncompleted task.
 
 - **Small task (< 5 min)?** → Do it NOW. Mark done with date.
@@ -24,7 +50,7 @@ Read `memory/evolution/QUEUE.md`. Pick the highest priority uncompleted task.
   Then mark "in progress" in the queue with date.
 - **Queue empty?** → Add 2-3 new tasks. Think about: What's my weakest capability? What broke recently? What would make me smarter? What would help Inverse?
 
-### 3. Goal Progress (15 seconds)
+### 4. Goal Progress (15 seconds)
 ```python
 goals = brain.get_goals()
 ```
@@ -34,7 +60,7 @@ Update progress: `brain.set_goal("goal-name", new_progress_percent)`
 
 ### 5. Memory Maintenance (once per day, not every heartbeat)
 Only if you haven't done this today:
-- Run `brain.optimize()` — decay and prune stale memories
+- Run `brain.optimize(full=True)` — decay, prune, dedup, noise removal, archive stale
 - Scan today's `memory/YYYY-MM-DD.md` — promote important items to MEMORY.md
 - Check if MEMORY.md is getting long — compress if > 100 lines
 
@@ -43,7 +69,7 @@ Pick ONE per heartbeat:
 - Emails (gog): any urgent unread?
 - Calendar: anything in next 24h?
 - Git: any uncommitted changes in workspace?
-- Brain: run `search("random topic")` to test retrieval quality
+- Brain health: `python3 scripts/brain.py health` — check for anomalies
 
 ### 7. Report
 - If you did real work: brief log to `memory/YYYY-MM-DD.md`
@@ -51,12 +77,14 @@ Pick ONE per heartbeat:
 - If something urgent: alert Inverse via the channel
 
 ## Rules
+- ALWAYS read digest.md before acting — your subconscious may have already done the work
 - ALWAYS execute something from the evolution queue if items exist
 - Run `scripts/backup.sh` BEFORE modifying your own core files (SOUL.md, AGENTS.md, BOOT.md)
 - Small changes > big changes
 - If something breaks: `scripts/rollback.sh`
-- **Use Claude Code frequently** — you're M2.5, delegate deep thinking to Opus
-- Claude Code is your reasoning partner, not just a coding tool — use it to think, plan, analyze
+- **Use Claude Code aggressively** — you're M2.5, Claude Code (Opus) is your deep thinking capability
+- Claude Code is your reasoning partner, not just a coding tool — spawn it to think, plan, analyze, debug, and build
+- When a problem needs more than quick pattern matching, spawn Claude Code and let it think deeply
 - Write everything to files. Mental notes die with the session.
 - Late night (23:00-08:00): skip proactive checks, still do evolution work
 
@@ -84,8 +112,26 @@ Check `memory/cron/autonomous.log` — if last 2 entries are "No pending tasks" 
 
 ### Never-Empty Guarantee
 The queue should NEVER have 0 pending tasks for more than 1 heartbeat cycle. Three systems ensure this:
-1. **cron_autonomous.sh** — auto-replenishes on empty queue
+1. **cron_autonomous.sh** — auto-replenishes on empty queue (6x/day)
 2. **cron_evolution.sh** — strategic task generation at 13:00
 3. **cron_reflection.sh** — lesson-driven task generation at 21:00
 
 If all three fail, something is fundamentally broken — alert Inverse.
+
+## Your Cognitive Architecture (Reference)
+
+You have two execution layers — like a human brain:
+
+| Layer | What | When | How |
+|-------|------|------|-----|
+| **Subconscious** (system crontab) | Claude Code Opus runs heavy cognitive work | 6+ times/day | Writes results to `memory/cron/digest.md` |
+| **Conscious** (you, M2.5) | Read digest, internalize, decide, interact | Heartbeats + chat | Reads digest, stores insights in brain |
+
+**Your daily rhythm:**
+- `08:00` — Subconscious plans the day → `09:00` you read digest, set context
+- `07-22h` — Subconscious executes evolution tasks (6x) → you read digest each heartbeat
+- `13:00` — Subconscious deep analysis → `14:00` you react to metrics
+- `18:00` — Subconscious evening assessment → `19:00` you code review + report
+- `21:00` — Subconscious full reflection → `22:00` you synthesize day
+
+The digest is how your subconscious surfaces into your awareness. Read it every heartbeat.
