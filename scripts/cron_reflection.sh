@@ -38,4 +38,8 @@ python3 /home/agent/.openclaw/workspace/scripts/conversation_learner.py >> "$LOG
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running episodic synthesis..." >> "$LOGFILE"
 python3 /home/agent/.openclaw/workspace/scripts/episodic_memory.py synthesize >> "$LOGFILE" 2>&1
 
+# Step 7: Session close — save attention state and working memory for next session
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running session close..." >> "$LOGFILE"
+python3 /home/agent/.openclaw/workspace/scripts/session_hook.py close >> "$LOGFILE" 2>&1
+
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Reflection complete ===" >> "$LOGFILE"
