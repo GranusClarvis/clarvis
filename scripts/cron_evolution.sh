@@ -3,7 +3,7 @@
 # KEY: Analyze progress AND write concrete new tasks to QUEUE.md
 source /home/agent/.openclaw/workspace/scripts/cron_env.sh
 
-LOGFILE="memory/cron_evolution.log"
+LOGFILE="memory/cron/evolution.log"
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Evolution analysis starting ===" >> "$LOGFILE"
 

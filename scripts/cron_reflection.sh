@@ -2,7 +2,7 @@
 # Daily reflection - consolidate memory AND generate new evolution tasks
 source /home/agent/.openclaw/workspace/scripts/cron_env.sh
 
-LOGFILE="memory/cron_reflection.log"
+LOGFILE="memory/cron/reflection.log"
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Reflection starting ===" >> "$LOGFILE"
 

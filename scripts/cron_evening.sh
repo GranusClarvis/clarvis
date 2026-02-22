@@ -1,7 +1,7 @@
 #!/bin/bash
 # Evening code review - audit today's work + daily capability assessment
 source /home/agent/.openclaw/workspace/scripts/cron_env.sh
-LOGFILE="memory/cron_evening.log"
+LOGFILE="memory/cron/evening.log"
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Evening routine started ===" >> "$LOGFILE"
 
@@ -42,6 +42,14 @@ echo "$RQ_OUTPUT" >> "$LOGFILE"
 if [ $RQ_EXIT -ne 0 ]; then
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WARN: Retrieval quality report failed (exit $RQ_EXIT) — continuing anyway" >> "$LOGFILE"
 fi
+
+# === SELF-REPORT: Cognitive growth tracking ===
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running self-report assessment..." >> "$LOGFILE"
+python3 /home/agent/.openclaw/workspace/scripts/self_report.py >> "$LOGFILE" 2>&1 || true
+
+# === DASHBOARD: Regenerate monitoring dashboard ===
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Regenerating dashboard..." >> "$LOGFILE"
+python3 /home/agent/.openclaw/workspace/scripts/dashboard.py >> "$LOGFILE" 2>&1 || true
 
 # === EXISTING: Claude Code evening audit ===
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running evening audit..." >> "$LOGFILE"

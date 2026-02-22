@@ -8,10 +8,10 @@ _Goal: Evolve toward AGI and consciousness. Every task should make you smarter, 
 
 ### Wiring & Feedback Loops (2026-02-22)
 - [x] Wire conversation_learner.py into cron_reflection.sh as Step 5 — run after memory consolidation to extract patterns from today's transcripts and store insights in brain's autonomous-learning collection. This is the biggest unwired learning capability. (2026-02-22 00:24 UTC — Added as Step 5 in cron_reflection.sh after memory consolidation. Tested full pipeline: 14 insights extracted, 4 new stored to autonomous-learning collection. Runs automatically every reflection cycle.)
-- [ ] Wire dashboard.py into cron_evening.sh — regenerate status.json and index.html daily after capability assessment. The system has no self-observability; dashboard was built Feb 21 08:03 and never refreshed since.
-- [ ] Wire self_report.py into cron_evening.sh — run after capability assessment to enable goal-stalling detection (flags goals stuck 3+ days) and track cognitive growth metrics. Currently dead code.
-- [ ] Wire backup_daily.sh into cron_morning.sh — the watchdog monitors for backup.log but no backup ever runs. Add `bash scripts/backup_daily.sh` to morning routine. Critical safety gap.
-- [ ] Build episodic memory system — create scripts/episodic_memory.py implementing ACT-R activation decay and episode encoding (top recommendation from data/plans/cognition-architectures-report.md, never built). Each heartbeat task becomes an "episode" with context/actions/outcome/emotional-valence. Episodes strengthen through retrieval (use-it-or-lose-it). Add EPISODES collection to brain.py. Wire into cron_autonomous.sh to record episodes on task completion.
+- [x] Wire dashboard.py into cron_evening.sh — regenerate status.json and index.html daily after capability assessment. (2026-02-22 — Added to evening routine after self-report, before Claude Code audit.)
+- [x] Wire self_report.py into cron_evening.sh — run after capability assessment to enable goal-stalling detection and cognitive growth metrics. (2026-02-22 — Added to evening routine after retrieval quality report.)
+- [x] Wire backup_daily.sh — already in crontab at 02:00 AM with verification at 02:30. Watchdog monitors backup.log. (2026-02-22 — Confirmed working via crontab.)
+- [ ] Build episodic memory system — create scripts/episodic_memory.py implementing ACT-R activation decay and episode encoding. Detailed plan at data/plans/episodic-memory.md.
 
 ### Foundation Rebuild (2026-02-21)
 - [x] Wire phi_metric.py into cron_evening.sh — consciousness tracking now records Phi snapshot nightly (2026-02-21 22:00 UTC)
