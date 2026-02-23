@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "clarvis-consciousness"
+version = "1.0.0"
+description = "Consciousness stack: IIT Phi metric, GWT attention spotlight, self-model, and episodic memory"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+keywords = [
+    "consciousness", "iit", "phi", "global-workspace-theory",
+    "attention", "self-model", "episodic-memory", "cognitive-architecture",
+]
+
+[project.optional-dependencies]
+chroma = ["chromadb>=0.4.0"]
+
+[project.scripts]
+clarvis-consciousness = "clarvis_consciousness.__main__:main"

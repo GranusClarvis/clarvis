@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "clarvis-code"
+version = "1.0.0"
+description = "Smart task routing, context compression, and session management for Claude Code / OpenCode autonomous agents"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+keywords = ["claude-code", "opencode", "task-routing", "context-compression", "autonomous-agent"]
+
+[project.scripts]
+clarvis-code = "clarvis_code.__main__:main"

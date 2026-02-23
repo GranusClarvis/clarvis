@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "clarvis-episodic"
+version = "1.0.0"
+description = "ACT-R inspired episodic memory system with power-law decay and emotional valence scoring"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+keywords = ["episodic-memory", "act-r", "cognitive-architecture", "memory-system"]
+
+[project.optional-dependencies]
+chroma = ["chromadb>=0.4.0"]
+
+[project.scripts]
+clarvis-episodic = "clarvis_episodic.__main__:main"
