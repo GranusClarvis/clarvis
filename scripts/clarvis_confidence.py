@@ -15,25 +15,43 @@ CALIBRATION_DIR = "/home/agent/.openclaw/workspace/data/calibration"
 PREDICTIONS_FILE = f"{CALIBRATION_DIR}/predictions.jsonl"
 os.makedirs(CALIBRATION_DIR, exist_ok=True)
 
+# In-memory prediction cache — avoids re-reading JSONL on every call.
+# Invalidated on writes (predict, outcome, _save_predictions).
+_predictions_cache = None
+_predictions_cache_mtime = 0
+
 
 def _load_predictions():
-    """Load all predictions from disk."""
+    """Load all predictions from disk (cached in memory)."""
+    global _predictions_cache, _predictions_cache_mtime
     if not os.path.exists(PREDICTIONS_FILE):
+        _predictions_cache = []
+        _predictions_cache_mtime = 0
         return []
+
+    mtime = os.path.getmtime(PREDICTIONS_FILE)
+    if _predictions_cache is not None and mtime == _predictions_cache_mtime:
+        return _predictions_cache
+
     entries = []
     with open(PREDICTIONS_FILE, "r") as f:
         for line in f:
             line = line.strip()
             if line:
                 entries.append(json.loads(line))
+    _predictions_cache = entries
+    _predictions_cache_mtime = mtime
     return entries
 
 
 def _save_predictions(entries):
-    """Rewrite all predictions to disk."""
+    """Rewrite all predictions to disk (invalidates cache)."""
+    global _predictions_cache, _predictions_cache_mtime
     with open(PREDICTIONS_FILE, "w") as f:
         for entry in entries:
             f.write(json.dumps(entry) + "\n")
+    _predictions_cache = list(entries)  # update cache in-place
+    _predictions_cache_mtime = os.path.getmtime(PREDICTIONS_FILE)
 
 
 def predict(event: str, expected: str, confidence: float) -> dict:
@@ -65,7 +83,7 @@ def predict(event: str, expected: str, confidence: float) -> dict:
         importance=0.4,
     )
 
-    print(f"Logged prediction: {event} @ {confidence:.0%} confidence")
+    print(f"Logged prediction: {event} @ {confidence:.0%} confidence", file=sys.stderr)
     return entry
 
 
@@ -104,7 +122,7 @@ def outcome(event: str, actual: str) -> dict | None:
         importance=0.6,
     )
 
-    print(f"Recorded: {event} → {status} (was {target['confidence']:.0%} confident)")
+    print(f"Recorded: {event} → {status} (was {target['confidence']:.0%} confident)", file=sys.stderr)
     return target
 
 

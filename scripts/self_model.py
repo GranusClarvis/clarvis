@@ -22,6 +22,7 @@ DATA_FILE = "/home/agent/.openclaw/workspace/data/self_model.json"
 META_FILE = "/home/agent/.openclaw/workspace/data/meta_cognition.json"
 CAPABILITY_HISTORY_FILE = "/home/agent/.openclaw/workspace/data/capability_history.json"
 ALERT_THRESHOLD = 0.3  # Alert if any scored capability drops below this
+WEEKLY_REGRESSION_THRESHOLD = 0.10  # Alert if any domain drops >10% week-over-week
 
 def load_model():
     """Load world model from file"""
@@ -753,12 +754,23 @@ def _assess_self_reflection():
 def _assess_reasoning_chains():
     """Score reasoning chain QUALITY, not just count.
 
+    Uses ClarvisReasoning engine when available for richer evaluation,
+    falls back to legacy chain counting.
+
     Scoring (continuous, quality-based — max 1.0):
-      - High-quality chains (>2 steps AND has outcome): each +0.1, cap 0.5  (0–0.5)
-      - Today's chains with real outcomes vs empty chains                    (0–0.3)
-      - Hook exists: +0.05 (reduced from 0.2 — existence is not quality)    (0–0.05)
-      - Chain freshness: any chains today → +0.15                           (0–0.15)
+      - High-quality chains (>2 steps AND has outcome): each +0.08, cap 0.5  (0–0.5)
+      - Today's chains with real outcomes vs empty chains                     (0–0.3)
+      - Hook exists: +0.05 (reduced from 0.2 — existence is not quality)     (0–0.05)
+      - Chain freshness: any chains today → +0.15                            (0–0.15)
     """
+    # Try ClarvisReasoning first (richer meta-cognitive scoring)
+    try:
+        from clarvis_reasoning import reasoner
+        return reasoner.get_reasoning_score()
+    except ImportError:
+        pass
+
+    # Legacy fallback
     score = 0.0
     evidence = []
 
@@ -779,19 +791,16 @@ def _assess_reasoning_chains():
                 with open(cf) as f:
                     chain = json.load(f)
                 steps = chain.get("steps", chain.get("chain", []))
-                # Outcomes are stored inside steps, not at top level
                 has_outcome = any(
                     s.get("outcome") is not None
                     for s in steps
                 ) or bool(chain.get("outcome") or chain.get("conclusion"))
                 is_today = today in cf.name
 
-                # High quality: multi-step (>= 3 steps) AND has a recorded outcome
                 if len(steps) >= 3 and has_outcome:
                     high_quality_count += 1
-                # Medium quality: has some steps and outcome
                 elif len(steps) >= 2 and has_outcome:
-                    high_quality_count += 1  # Still counts, slightly less strict
+                    high_quality_count += 1
                 else:
                     low_quality_count += 1
 
@@ -803,27 +812,22 @@ def _assess_reasoning_chains():
             except (json.JSONDecodeError, Exception):
                 continue
 
-        # --- Quality score: high-quality chains, +0.1 each, capped at 0.5 ---
         quality_score = min(0.5, high_quality_count * 0.1)
         score += quality_score
         if high_quality_count > 0:
-            evidence.append(f"{high_quality_count} high-quality chains (multi-step + outcome) (+{quality_score:.2f})")
+            evidence.append(f"{high_quality_count} high-quality chains (+{quality_score:.2f})")
 
-        # --- Today's chain quality: ratio of outcome-bearing chains ---
         today_total = today_with_outcomes + today_empty
         if today_total > 0:
             today_quality_ratio = today_with_outcomes / today_total
             today_score = today_quality_ratio * 0.3
             score += today_score
-            evidence.append(f"today: {today_with_outcomes}/{today_total} chains have outcomes (+{today_score:.2f})")
-
-            # Freshness bonus for any activity today
+            evidence.append(f"today: {today_with_outcomes}/{today_total} with outcomes (+{today_score:.2f})")
             score += 0.15
             evidence.append(f"{today_total} chains today (+0.15)")
     else:
         evidence.append("no reasoning chains directory")
 
-    # Hook existence (minimal weight — existence alone is not quality)
     hook_path = Path("/home/agent/.openclaw/workspace/scripts/reasoning_chain_hook.py")
     if hook_path.exists():
         score += 0.05
@@ -1155,6 +1159,90 @@ def inject_tasks_to_queue(tasks, queue_file="/home/agent/.openclaw/workspace/mem
         print(f"  Injected {len(tasks)} remediation tasks into QUEUE.md (legacy)")
 
 
+def check_weekly_regression(current_scores, history):
+    """Detect week-over-week capability regressions (>10% drop).
+
+    Finds the snapshot closest to 7 days ago, compares each domain's score
+    to the current score. Returns alerts and remediation tasks for any domain
+    that dropped more than WEEKLY_REGRESSION_THRESHOLD.
+
+    Args:
+        current_scores: dict from assess_all_capabilities()
+        history: full capability history dict with "snapshots" key
+
+    Returns:
+        Dict with "alerts" (list of alert strings) and "tasks" (list of task strings)
+    """
+    alerts = []
+    tasks = []
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    snapshots = history.get("snapshots", [])
+
+    if len(snapshots) < 2:
+        return {"alerts": [], "tasks": []}
+
+    # Find the snapshot closest to 7 days ago
+    now = datetime.now(timezone.utc)
+    target_age_hours = 7 * 24  # 168 hours
+    best_snap = None
+    best_dist = float("inf")
+
+    for snap in snapshots:
+        try:
+            ts = snap.get("timestamp", "")
+            snap_dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            if snap_dt.tzinfo is None:
+                snap_dt = snap_dt.replace(tzinfo=timezone.utc)
+            age_hours = (now - snap_dt).total_seconds() / 3600
+            # Must be at least 5 days old to count as "last week"
+            if age_hours < 5 * 24:
+                continue
+            dist = abs(age_hours - target_age_hours)
+            if dist < best_dist:
+                best_dist = dist
+                best_snap = snap
+        except (ValueError, TypeError):
+            continue
+
+    if best_snap is None:
+        # Not enough history for weekly comparison
+        return {"alerts": [], "tasks": []}
+
+    week_ago_scores = best_snap.get("scores", {})
+    week_ago_date = best_snap.get("date", "?")
+
+    for domain, data in current_scores.items():
+        current_score = data["score"]
+        prev_score = week_ago_scores.get(domain)
+
+        if prev_score is None or prev_score == 0:
+            continue
+
+        # Calculate percentage drop: (old - new) / old
+        pct_drop = (prev_score - current_score) / prev_score
+
+        if pct_drop > WEEKLY_REGRESSION_THRESHOLD:
+            pct_str = f"{pct_drop:.0%}"
+            alert = (
+                f"REGRESSION: {data['label']} dropped {pct_str} week-over-week "
+                f"({prev_score:.2f} on {week_ago_date} -> {current_score:.2f} today)"
+            )
+            alerts.append(alert)
+            print(f"  {alert}")
+
+            # Generate remediation task for significant regressions
+            template = REMEDIATION_TEMPLATES.get(domain)
+            if template:
+                task_text = template.format(score=current_score)
+                task = (
+                    f"[REGRESSION-ALERT {today}] {data['label']} dropped {pct_str} "
+                    f"week-over-week ({prev_score:.2f}->{current_score:.2f}). {task_text}"
+                )
+                tasks.append(task)
+
+    return {"alerts": alerts, "tasks": tasks}
+
+
 def daily_update():
     """Run daily capability assessment. Compare with previous day. Alert on degradations.
 
@@ -1252,6 +1340,14 @@ def daily_update():
     if remediation_tasks:
         inject_tasks_to_queue(remediation_tasks)
 
+    # === WEEKLY REGRESSION CHECK: alert on >10% week-over-week drops ===
+    regression = check_weekly_regression(current, history)
+    regression_alerts = regression["alerts"]
+    regression_tasks = regression["tasks"]
+    alerts.extend(regression_alerts)
+    if regression_tasks:
+        inject_tasks_to_queue(regression_tasks)
+
     result = {
         "date": today,
         "capabilities": current,
@@ -1259,7 +1355,8 @@ def daily_update():
         "improved": improved,
         "degraded": degraded,
         "alerts": alerts,
-        "remediation_tasks": remediation_tasks,
+        "remediation_tasks": remediation_tasks + regression_tasks,
+        "regression_alerts": regression_alerts,
         "average_score": round(sum(s["score"] for s in current.values()) / len(current), 2),
     }
 
@@ -1343,12 +1440,26 @@ if __name__ == "__main__":
                 scores = snap["scores"]
                 avg = sum(scores.values()) / len(scores) if scores else 0
                 print(f"  {snap['date']}: avg={avg:.2f} | " + " ".join(f"{k[:4]}={v:.2f}" for k, v in scores.items()))
+    elif sys.argv[1] == "regression":
+        # Check weekly regression without running full daily update
+        history = load_capability_history()
+        current = assess_all_capabilities()
+        result = check_weekly_regression(current, history)
+        if result["alerts"]:
+            print(f"=== Weekly Regression Check ===")
+            for a in result["alerts"]:
+                print(f"  {a}")
+            if result["tasks"]:
+                print(f"\n{len(result['tasks'])} remediation tasks would be generated.")
+        else:
+            print("No weekly regressions detected (all domains within 10% of last week).")
     else:
         print("""Usage:
   python self_model.py [show|init|update <event>]
   python self_model.py assess              - Run capability assessment (scores only)
   python self_model.py daily               - Full daily update with diffs & alerts
   python self_model.py history             - Show capability score history
+  python self_model.py regression          - Check for week-over-week regressions (>10%)
   python self_model.py meta [show|level <level>|state <state>|clear|think <thought>]
 
 Levels: operational, reflective, meta

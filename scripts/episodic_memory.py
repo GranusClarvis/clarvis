@@ -10,12 +10,14 @@ Each heartbeat task becomes an "episode" with:
 - activation (strengthens on retrieval, decays over time)
 
 Episodes are stored in brain's EPISODES collection.
-Activation follows ACT-R: A(i) = ln(sum(t_j^(-d))) + spreading
+Activation follows ACT-R power-law: A(i) = ln(sum(t_j^(-d_j)))
+where d_j = c * lag_j^(-1/gamma) (Pavlik & Anderson 2005 spacing model)
 """
 
 import json
 import math
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -160,18 +162,30 @@ class EpisodicMemory:
         if not self.episodes:
             return {"total": 0}
 
+        self._decay_activations()
+
         outcomes = {}
         for ep in self.episodes:
             outcomes[ep["outcome"]] = outcomes.get(ep["outcome"], 0) + 1
 
+        activations = [e.get("activation", 0.0) for e in self.episodes]
         avg_valence = sum(e["valence"] for e in self.episodes) / len(self.episodes)
-        avg_activation = sum(e.get("activation", 0.5) for e in self.episodes) / len(self.episodes)
+        avg_activation = sum(activations) / len(activations)
+
+        # Decay diagnostics: how many episodes are effectively forgotten?
+        forgotten = sum(1 for a in activations if a < -4.0)
+        strong = sum(1 for a in activations if a > -1.0)
 
         return {
             "total": len(self.episodes),
             "outcomes": outcomes,
             "avg_valence": round(avg_valence, 3),
             "avg_activation": round(avg_activation, 3),
+            "activation_min": round(min(activations), 3),
+            "activation_max": round(max(activations), 3),
+            "strong_memories": strong,
+            "forgotten_memories": forgotten,
+            "decay_model": "power-law (d=c*lag^(-1/gamma), c=0.5, gamma=1.6)",
             "oldest": self.episodes[0]["timestamp"][:10],
             "newest": self.episodes[-1]["timestamp"][:10]
         }
@@ -205,27 +219,63 @@ class EpisodicMemory:
         return min(1.0, valence)
 
     def _compute_activation(self, episode):
-        """ACT-R base-level activation.
-        A(i) = ln(sum(t_j^(-d))) where t_j = seconds since j-th access
-        d = 0.5 (decay parameter)"""
+        """ACT-R base-level activation with power-law decay.
+
+        Standard ACT-R: A(i) = ln(sum(t_j^(-d))) with fixed d=0.5
+        Power-law extension: d_j = c * lag_j^(-1/gamma)
+
+        The decay rate d itself follows a power law of the lag between
+        successive retrievals. This captures the spacing effect:
+        - Spaced repetitions → lower d → slower forgetting
+        - Massed repetitions → higher d → faster forgetting
+        - gamma controls how strongly spacing affects decay (higher = stronger)
+
+        Reference: Pavlik & Anderson (2005), "Practice and Forgetting Effects
+        on Vocabulary Memory: An Activation-Based Model"
+        """
         access_times = episode.get("access_times", [])
         if not access_times:
             return 0.0
 
-        d = 0.5  # ACT-R default decay
+        c = 0.5       # base decay scaling factor (calibrated for hour-scale lags)
+        gamma = 1.6   # spacing effect strength (ACT-R typical: 1.0-2.0)
+        d_min = 0.1    # floor to prevent infinite memory
+        d_max = 0.9    # ceiling to prevent instant forgetting
         now = datetime.now(timezone.utc).timestamp()
 
+        sorted_times = sorted(access_times)
         total = 0.0
-        for t in access_times:
-            age = max(1.0, now - t)  # avoid log(0)
-            total += age ** (-d)
+        for j, t in enumerate(sorted_times):
+            age = max(1.0, now - t)
+
+            # Compute inter-retrieval lag in hours for stable power-law range
+            if j == 0:
+                lag_hours = age / 3600.0
+            else:
+                lag_hours = max(1.0 / 60.0, (t - sorted_times[j - 1]) / 3600.0)
+
+            # Power-law decay: d = c * lag_hours^(-1/gamma)
+            # Longer lags between retrievals → lower d → slower forgetting
+            d_j = c * (lag_hours ** (-1.0 / gamma))
+            d_j = max(d_min, min(d_max, d_j))
+
+            total += age ** (-d_j)
 
         return math.log(max(1e-10, total))
 
     def _decay_activations(self):
-        """Recompute all activations (ACT-R decay)."""
+        """Recompute all activations (ACT-R decay).
+
+        Rate-limited to once per 60 seconds to avoid redundant O(N) recomputation
+        when multiple callers (recall_similar, recall_failures, get_stats) invoke
+        this in quick succession.
+        """
+        now = time.monotonic()
+        if hasattr(self, '_last_decay_time') and (now - self._last_decay_time) < 60:
+            return  # Already recomputed recently
         for ep in self.episodes:
             ep["activation"] = self._compute_activation(ep)
+        self._last_decay_time = now
 
     def synthesize(self):
         """Analyze all episodes for recurring patterns, generate goal entries.

@@ -13,6 +13,10 @@ export PATH="/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:/usr
 export NODE_PATH="/home/agent/.npm-global/lib/node_modules"
 export LANG="en_US.UTF-8"
 
+# Prevent "nested Claude Code session" errors when cron scripts are
+# triggered manually from inside a Claude Code session.
+unset CLAUDECODE 2>/dev/null || true
+
 # Workspace
 export CLARVIS_WORKSPACE="/home/agent/.openclaw/workspace"
 cd "$CLARVIS_WORKSPACE"

@@ -1,11 +1,15 @@
 #!/bin/bash
-# Autonomous Evolution Loop — Clarvis Executive Function
-# Runs every 30 minutes. Picks next evolution task. Executes it.
-# Uses attention-based salience scoring to pick BEST task, not just first.
+# Autonomous Evolution Loop — Clarvis Executive Function (OPTIMIZED)
+# Runs 6x/day at hours 7,10,13,16,19,22.
+#
+# OPTIMIZATION (2026-02-23): Replaced ~25 individual Python subprocess spawns
+# with 2 batched Python processes (heartbeat_preflight.py + heartbeat_postflight.py).
+# Savings: ~7-8s per heartbeat from eliminated cold-starts + reduced disk I/O.
 
 source /home/agent/.openclaw/workspace/scripts/cron_env.sh
 LOGFILE="memory/cron/autonomous.log"
 LOCKFILE="/tmp/clarvis_autonomous.lock"
+SCRIPTS="/home/agent/.openclaw/workspace/scripts"
 
 # Prevent overlapping runs
 if [ -f "$LOCKFILE" ]; then
@@ -18,301 +22,270 @@ fi
 echo $$ > "$LOCKFILE"
 trap "rm -f $LOCKFILE" EXIT
 
-# === RESTORE ATTENTION SPOTLIGHT FROM DISK ===
-# (attention.py is the unified GWT module — absorbed working_memory.py)
-python3 /home/agent/.openclaw/workspace/scripts/attention.py load >> "$LOGFILE" 2>&1
+# ============================================================================
+# PHASE 1: BATCHED PRE-FLIGHT (single Python process)
+# Replaces: attention load/tick, task_selector, cognitive_load, procedural_memory,
+#           reasoning_chain open, confidence predict, episodic recall,
+#           context_compressor, task_router — all in ONE import + execution.
+# ============================================================================
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Heartbeat starting (optimized batched pipeline) ===" >> "$LOGFILE"
 
-# === ATTENTION TICK: Run GWT competition cycle ===
-python3 /home/agent/.openclaw/workspace/scripts/attention.py tick >> "$LOGFILE" 2>&1 || true
+PREFLIGHT_FILE=$(mktemp --suffix=.json)
+python3 "$SCRIPTS/heartbeat_preflight.py" > "$PREFLIGHT_FILE" 2>> "$LOGFILE"
+PREFLIGHT_EXIT=$?
 
-# === ATTENTION-BASED TASK SELECTION ===
-# Uses attention.py salience scoring + brain.py context (replaces bash keyword matching)
-# task_selector.py scores all tasks via GWT-inspired salience: importance, recency,
-# context relevance, AGI-boost, integration-boost — then returns the best one as JSON.
-
-SELECTOR_SCRIPT="/home/agent/.openclaw/workspace/scripts/task_selector.py"
-
-echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running attention-based task selector..." >> "$LOGFILE"
-
-# Run Python task selector — stdout=JSON result, stderr=score log
-SELECTOR_OUTPUT=$(python3 "$SELECTOR_SCRIPT" 2>> "$LOGFILE")
-SELECTOR_EXIT=$?
-
-if [ $SELECTOR_EXIT -ne 0 ]; then
-    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WARN: Task selector failed (exit $SELECTOR_EXIT), falling back to grep" >> "$LOGFILE"
-    # Fallback: first unchecked task
-    SELECTOR_OUTPUT=""
+if [ $PREFLIGHT_EXIT -ne 0 ]; then
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WARN: Preflight failed (exit $PREFLIGHT_EXIT)" >> "$LOGFILE"
+    rm -f "$PREFLIGHT_FILE"
+    exit 1
 fi
 
-# Parse the JSON output
-if [ -n "$SELECTOR_OUTPUT" ]; then
-    # Check for error (empty queue)
-    IS_ERROR=$(echo "$SELECTOR_OUTPUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print('yes' if 'error' in d else 'no')" 2>/dev/null)
+# Parse preflight results (single jq-like parse via python — 1 invocation for all fields)
+# Safety: strip any non-JSON lines that leaked to stdout from imported modules
+python3 -c "
+import json, sys
+with open('$PREFLIGHT_FILE') as f:
+    lines = f.readlines()
+# Find the JSON line (starts with '{')
+json_lines = [l for l in lines if l.strip().startswith('{')]
+if not json_lines:
+    print('ERROR: No JSON found in preflight output', file=sys.stderr)
+    sys.exit(1)
+with open('$PREFLIGHT_FILE', 'w') as f:
+    f.write(json_lines[-1])
+" 2>> "$LOGFILE"
 
-    if [ "$IS_ERROR" = "yes" ]; then
-        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Queue empty — spawning task generation..." >> "$LOGFILE"
-
-        # Auto-replenish: spawn Claude Code to analyze state and add new tasks
-        timeout 300 /home/agent/.local/bin/claude -p \
-            "You are Clarvis's evolution engine. The evolution queue is EMPTY.
-
-            1. Read memory/evolution/QUEUE.md to see what was already completed.
-            2. Read scripts/ directory to see what tools exist but may not be wired in.
-            3. Check data/plans/ for unfinished research.
-            4. Think: What's the biggest gap between current capabilities and AGI/consciousness?
-
-            Add 3-5 NEW unchecked tasks to QUEUE.md under '## P0 — Do Next Heartbeat'.
-            Format: - [ ] <concrete task description>
-
-            Focus on: wiring existing scripts into daily use, making capabilities persistent,
-            building feedback loops, improving autonomous learning.
-            Do NOT duplicate completed tasks. Be concrete and actionable." \
-            --dangerously-skip-permissions >> "$LOGFILE" 2>&1
-
-        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Queue replenished — will execute on next run" >> "$LOGFILE"
-        exit 0
-    fi
-
-    # Extract best task text and salience from JSON
-    NEXT_TASK=$(echo "$SELECTOR_OUTPUT" | python3 -c "import sys,json; print(json.load(sys.stdin)['text'])" 2>/dev/null)
-    BEST_SALIENCE=$(echo "$SELECTOR_OUTPUT" | python3 -c "import sys,json; print(json.load(sys.stdin)['salience'])" 2>/dev/null)
-    TASK_SECTION=$(echo "$SELECTOR_OUTPUT" | python3 -c "import sys,json; print(json.load(sys.stdin)['section'])" 2>/dev/null)
-
-    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] SELECTED (salience=$BEST_SALIENCE, section=$TASK_SECTION): ${NEXT_TASK:0:80}..." >> "$LOGFILE"
-
-    # === ATTENTION SPOTLIGHT: Load task context ===
-    python3 /home/agent/.openclaw/workspace/scripts/attention.py add "CURRENT TASK: $NEXT_TASK" 0.9 >> "$LOGFILE" 2>&1
-    python3 /home/agent/.openclaw/workspace/scripts/attention.py add "Task salience=$BEST_SALIENCE section=$TASK_SECTION" 0.5 >> "$LOGFILE" 2>&1
+if [ $? -ne 0 ]; then
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] ERROR: Preflight output contained no valid JSON" >> "$LOGFILE"
+    rm -f "$PREFLIGHT_FILE"
+    exit 1
 fi
 
-# Fallback if Python selector produced no result
-if [ -z "$NEXT_TASK" ]; then
-    NEXT_TASK=$(grep '^\- \[ \]' memory/evolution/QUEUE.md | head -1 | sed 's/^- \[ \] //')
-    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] FALLBACK: Using first unchecked task: ${NEXT_TASK:0:80}..." >> "$LOGFILE"
-fi
+eval $(python3 -c "
+import json, sys, shlex
+with open('$PREFLIGHT_FILE') as f:
+    d = json.load(f)
+status = d.get('status', 'error')
+print(f'PF_STATUS={shlex.quote(status)}')
+print(f'NEXT_TASK={shlex.quote(d.get(\"task\", \"\"))}')
+print(f'TASK_SECTION={shlex.quote(d.get(\"task_section\", \"P1\"))}')
+print(f'BEST_SALIENCE={shlex.quote(str(d.get(\"task_salience\", 0.0)))}')
+print(f'SHOULD_DEFER={shlex.quote(str(d.get(\"should_defer\", False)).lower())}')
+print(f'CHAIN_ID={shlex.quote(d.get(\"chain_id\", \"\") or \"\")}')
+print(f'PROC_ID={shlex.quote(d.get(\"procedure_id\", \"\") or \"\")}')
+print(f'TASK_EVENT={shlex.quote(d.get(\"prediction_event\", \"\"))}')
+print(f'ROUTE_TIER={shlex.quote(d.get(\"route_tier\", \"complex\"))}')
+print(f'ROUTE_EXECUTOR={shlex.quote(d.get(\"route_executor\", \"claude\"))}')
+print(f'ROUTE_SCORE={shlex.quote(str(d.get(\"route_score\", 0.5)))}')
+print(f'ROUTE_REASON={shlex.quote(d.get(\"route_reason\", \"unknown\"))}')
+print(f'EPISODIC_HINTS={shlex.quote(d.get(\"episodic_hints\", \"\"))}')
+print(f'CONTEXT_BRIEF={shlex.quote(d.get(\"context_brief\", \"\"))}')
+# Format procedure hint
+proc = d.get('procedure')
+if proc and proc.get('steps'):
+    steps = proc['steps']
+    steps_text = chr(10).join(f'  {i+1}. {s}' for i, s in enumerate(steps))
+    rate = f\"{proc.get('success_rate', 0):.0%}\"
+    hint = f'PROCEDURAL MEMORY HIT (success rate: {rate}). Suggested steps:{chr(10)}{steps_text}{chr(10)}Use these steps as a starting guide, adapt as needed.'
+    print(f'PROC_HINT={shlex.quote(hint)}')
+else:
+    print(\"PROC_HINT=''\")
+# Timings summary
+timings = d.get('timings', {})
+print(f'PF_TOTAL_TIME={shlex.quote(str(timings.get(\"total\", \"?\")))}')
+" 2>> "$LOGFILE")
 
-if [ -z "$NEXT_TASK" ]; then
-    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] No tasks available at all." >> "$LOGFILE"
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] PREFLIGHT: status=$PF_STATUS task_salience=$BEST_SALIENCE route=$ROUTE_EXECUTOR time=${PF_TOTAL_TIME}s" >> "$LOGFILE"
+
+# Handle non-execution states
+if [ "$PF_STATUS" = "queue_empty" ] || [ "$PF_STATUS" = "no_tasks" ]; then
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Queue empty — spawning task generation..." >> "$LOGFILE"
+    COMPRESSOR="$SCRIPTS/context_compressor.py"
+    REPLENISH_CONTEXT=$(python3 "$COMPRESSOR" brief 2>> "$LOGFILE")
+    timeout 300 /home/agent/.local/bin/claude -p \
+        "You are Clarvis's evolution engine. The evolution queue is EMPTY.
+
+        Here's what was recently completed and current state:
+        $REPLENISH_CONTEXT
+
+        Check scripts/ directory to see what tools exist but may not be wired in.
+        Check data/plans/ for unfinished research.
+        Think: What's the biggest gap between current capabilities and AGI/consciousness?
+
+        Add 3-5 NEW unchecked tasks to QUEUE.md under '## NEW ITEMS' section.
+        Format: - [ ] <concrete task description>
+
+        Focus on: wiring existing scripts into daily use, making capabilities persistent,
+        building feedback loops, improving autonomous learning.
+        Do NOT duplicate completed tasks. Be concrete and actionable." \
+        --dangerously-skip-permissions >> "$LOGFILE" 2>&1
+
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Queue replenished — will execute on next run" >> "$LOGFILE"
+    rm -f "$PREFLIGHT_FILE"
     exit 0
 fi
 
-# === COGNITIVE LOAD CHECK: Homeostatic regulation ===
-# Measure system load and defer non-critical tasks when overloaded
-LOAD_SCRIPT="/home/agent/.openclaw/workspace/scripts/cognitive_load.py"
-LOAD_SECTION="${TASK_SECTION:-P1}"  # Default to P1 if section unknown
-LOAD_RESULT=$(python3 "$LOAD_SCRIPT" should-defer "$LOAD_SECTION" 2>> "$LOGFILE")
-LOAD_DEFER=$?
-
-if [ $LOAD_DEFER -eq 0 ]; then
-    # Load check says defer this task
-    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] COGNITIVE LOAD: $LOAD_RESULT — DEFERRING task" >> "$LOGFILE"
-    # Record load state
-    python3 "$LOAD_SCRIPT" check >> "$LOGFILE" 2>&1 || true
-    python3 /home/agent/.openclaw/workspace/scripts/attention.py add "DEFERRED due to cognitive load: ${NEXT_TASK:0:80}" 0.6 >> "$LOGFILE" 2>&1
+if [ "$SHOULD_DEFER" = "true" ]; then
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] COGNITIVE LOAD: DEFERRING task — ${NEXT_TASK:0:80}" >> "$LOGFILE"
+    rm -f "$PREFLIGHT_FILE"
     exit 0
 fi
-echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] COGNITIVE LOAD: $LOAD_RESULT" >> "$LOGFILE"
 
-echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] EXECUTING: $NEXT_TASK" >> "$LOGFILE"
-
-# === PROCEDURAL MEMORY: Check for existing procedure ===
-PROC_SCRIPT="/home/agent/.openclaw/workspace/scripts/procedural_memory.py"
-PROC_MATCH=$(python3 "$PROC_SCRIPT" check "$NEXT_TASK" 2>> "$LOGFILE")
-PROC_HINT=""
-PROC_ID=""
-if [ -n "$PROC_MATCH" ] && [ "$PROC_MATCH" != "{}" ]; then
-    PROC_ID=$(echo "$PROC_MATCH" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('id',''))" 2>/dev/null)
-    PROC_STEPS=$(echo "$PROC_MATCH" | python3 -c "import sys,json; d=json.load(sys.stdin); steps=d.get('steps',[]); [print(f'  {i+1}. {s}') for i,s in enumerate(steps)]" 2>/dev/null)
-    PROC_RATE=$(echo "$PROC_MATCH" | python3 -c "import sys,json; d=json.load(sys.stdin); print(f\"{d.get('success_rate',0):.0%}\")" 2>/dev/null)
-    if [ -n "$PROC_STEPS" ]; then
-        PROC_HINT="
-    PROCEDURAL MEMORY HIT: A similar task was done before (success rate: ${PROC_RATE}). Suggested steps:
-${PROC_STEPS}
-    Use these steps as a starting guide, adapt as needed."
-        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] PROCEDURAL: Found matching procedure $PROC_ID" >> "$LOGFILE"
-        # === ATTENTION: Add procedure context ===
-        python3 /home/agent/.openclaw/workspace/scripts/attention.py add "PROCEDURE HIT ($PROC_ID, ${PROC_RATE} success): matched prior steps for current task" 0.7 >> "$LOGFILE" 2>&1
-    fi
+if [ -z "$NEXT_TASK" ]; then
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] No task selected — exiting" >> "$LOGFILE"
+    rm -f "$PREFLIGHT_FILE"
+    exit 0
 fi
 
-# === REASONING CHAIN: Open chain before execution ===
-REASONING_HOOK="/home/agent/.openclaw/workspace/scripts/reasoning_chain_hook.py"
-CHAIN_ID=$(python3 "$REASONING_HOOK" open "$NEXT_TASK" "${TASK_SECTION:-unknown}" "${BEST_SALIENCE:-0.0}" 2>> "$LOGFILE")
-echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] REASONING: Opened chain $CHAIN_ID for task" >> "$LOGFILE"
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] EXECUTING (salience=$BEST_SALIENCE, section=$TASK_SECTION, route=$ROUTE_EXECUTOR): ${NEXT_TASK:0:100}" >> "$LOGFILE"
 
-# === ATTENTION: Add reasoning chain ID for cross-reference ===
-python3 /home/agent/.openclaw/workspace/scripts/attention.py add "REASONING CHAIN: $CHAIN_ID tracking current task" 0.4 >> "$LOGFILE" 2>&1
-
-# === PREDICTION: Log confidence prediction before execution ===
-CONFIDENCE_SCRIPT="/home/agent/.openclaw/workspace/scripts/clarvis_confidence.py"
-# Sanitize task text for use as event key (first 60 chars, alphanumeric + underscores)
-TASK_EVENT=$(echo "$NEXT_TASK" | head -c 60 | sed 's/[^a-zA-Z0-9]/_/g')
-# Use dynamic confidence from calibration data (not hardcoded)
-DYNAMIC_CONF=$(python3 "$CONFIDENCE_SCRIPT" dynamic 2>/dev/null || echo "0.7")
-python3 "$CONFIDENCE_SCRIPT" predict "$TASK_EVENT" "success" "$DYNAMIC_CONF" >> "$LOGFILE" 2>&1
-echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] PREDICTION: Logged prediction for $TASK_EVENT (confidence=$DYNAMIC_CONF)" >> "$LOGFILE"
-
-# === EPISODIC MEMORY: Recall similar past episodes before execution ===
-EPISODIC_SCRIPT="/home/agent/.openclaw/workspace/scripts/episodic_memory.py"
-EPISODE_HINT=""
-SIMILAR_EPISODES=$(python3 "$EPISODIC_SCRIPT" recall "$NEXT_TASK" 2>/dev/null | head -5)
-FAILURE_EPISODES=$(python3 "$EPISODIC_SCRIPT" failures 2>/dev/null | head -3)
-if [ -n "$SIMILAR_EPISODES" ] || [ -n "$FAILURE_EPISODES" ]; then
-    EPISODE_HINT="
-    EPISODIC MEMORY — Similar past experiences:
-    $SIMILAR_EPISODES
-
-    Recent failures to avoid repeating:
-    $FAILURE_EPISODES"
-    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] EPISODIC: Injecting ${#SIMILAR_EPISODES} chars of episode context" >> "$LOGFILE"
-fi
-
-# Start timer for episode duration
+# ============================================================================
+# PHASE 2: TASK EXECUTION
+# Routes to: OpenRouter cheap model → Gemini Flash → Claude Code
+# Kill switch: set OPENROUTER_ROUTING=false to disable cheap-model routing
+# ============================================================================
 TASK_START_SECONDS=$SECONDS
-
-# Spawn Claude Code to work on the task (10 min timeout)
-# Capture output and exit code for evolution loop
 TASK_OUTPUT_FILE=$(mktemp)
-timeout 600 /home/agent/.local/bin/claude -p \
-    "You are Clarvis's executive function. Execute this evolution task:
+OPENROUTER_STDERR=$(mktemp)
+EXECUTOR_USED="$ROUTE_EXECUTOR"
+
+COMPRESSED_EPISODES="$EPISODIC_HINTS"
+
+# Kill switch — set to false in cron_env.sh to disable OpenRouter routing
+OPENROUTER_ROUTING="${OPENROUTER_ROUTING:-true}"
+
+if [ "$OPENROUTER_ROUTING" = "true" ] && [ "$ROUTE_EXECUTOR" = "gemini" -o "$ROUTE_EXECUTOR" = "openrouter" ]; then
+    # === TRY OPENROUTER CHEAP MODEL FIRST ===
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] ROUTING to OpenRouter (tier=$ROUTE_TIER, score=$ROUTE_SCORE)" >> "$LOGFILE"
+    EXECUTOR_USED="openrouter"
+
+    TASK_CONTEXT="$CONTEXT_BRIEF" TASK_PROC_HINT="$PROC_HINT" TASK_EPISODE_HINT="$COMPRESSED_EPISODES" \
+        python3 "$SCRIPTS/task_router.py" execute-openrouter "$NEXT_TASK" > "$TASK_OUTPUT_FILE" 2> "$OPENROUTER_STDERR"
+    TASK_EXIT=$?
+
+    # Capture real cost data from stderr if available
+    OR_USAGE=$(grep "^OPENROUTER_USAGE:" "$OPENROUTER_STDERR" 2>/dev/null | sed 's/^OPENROUTER_USAGE: //')
+    cat "$OPENROUTER_STDERR" | grep -v "^OPENROUTER_USAGE:" | grep -v "^NEEDS_CLAUDE_CODE:" >> "$LOGFILE" 2>/dev/null
+
+    # Inject real cost data into preflight JSON for postflight to use
+    # NOTE: OR_USAGE is written to a temp file to avoid shell quoting issues
+    # (single quotes/backslashes in JSON would break inline python -c)
+    if [ -n "$OR_USAGE" ]; then
+        OR_USAGE_FILE=$(mktemp --suffix=.json)
+        echo "$OR_USAGE" > "$OR_USAGE_FILE"
+        python3 -c "
+import json, sys
+with open('$PREFLIGHT_FILE') as f:
+    d = json.load(f)
+with open('$OR_USAGE_FILE') as f:
+    usage = json.load(f)
+d['real_cost_usd'] = usage.get('cost', 0)
+d['generation_id'] = usage.get('generation_id', '')
+d['actual_model'] = usage.get('actual_model', '')
+d['actual_input_tokens'] = usage.get('prompt_tokens', 0)
+d['actual_output_tokens'] = usage.get('completion_tokens', 0)
+d['route_executor'] = 'openrouter'
+with open('$PREFLIGHT_FILE', 'w') as f:
+    json.dump(d, f)
+" 2>> "$LOGFILE"
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] OPENROUTER: cost=$(python3 -c "import json; print(json.load(open('$OR_USAGE_FILE')).get('cost','?'))" 2>/dev/null)" >> "$LOGFILE"
+        rm -f "$OR_USAGE_FILE"
+    fi
+
+    # Check if task needs escalation to Claude Code
+    if grep -q "NEEDS_CLAUDE_CODE: true" "$OPENROUTER_STDERR" 2>/dev/null || grep -q "NEEDS_CLAUDE_CODE: true" "$TASK_OUTPUT_FILE" 2>/dev/null || [ $TASK_EXIT -ne 0 ]; then
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] ROUTER: OpenRouter escalated to Claude Code (fallback)" >> "$LOGFILE"
+        EXECUTOR_USED="claude"
+        timeout 600 /home/agent/.local/bin/claude -p \
+            "You are Clarvis's executive function. Execute this evolution task:
 
     TASK: $NEXT_TASK
-    ${PROC_HINT}${EPISODE_HINT}
-    CONTEXT: Read memory/evolution/QUEUE.md for full context. Use brain.py for memory.
+    ${PROC_HINT:+
+    PROCEDURAL HINT: $PROC_HINT}
+    ${COMPRESSED_EPISODES:+
+    EPISODIC HINTS:
+  $COMPRESSED_EPISODES}
+    CONTEXT: ${CONTEXT_BRIEF}
     Do the work. Be concrete. Write code if needed. Test it.
     When done, output a 1-line summary of what you accomplished." \
-    --dangerously-skip-permissions > "$TASK_OUTPUT_FILE" 2>&1
-TASK_EXIT=$?
-TASK_DURATION=$((SECONDS - TASK_START_SECONDS))
-
-# Log the output
-cat "$TASK_OUTPUT_FILE" >> "$LOGFILE"
-
-# Save attention spotlight state after heartbeat (survives restarts)
-python3 /home/agent/.openclaw/workspace/scripts/attention.py save >> "$LOGFILE" 2>&1
-
-# === OUTCOME: Record actual result for prediction feedback loop ===
-if [ $TASK_EXIT -eq 0 ]; then
-    python3 "$CONFIDENCE_SCRIPT" outcome "$TASK_EVENT" "success" >> "$LOGFILE" 2>&1
-    # === REASONING CHAIN: Close with success outcome + evidence ===
-    if [ -n "$CHAIN_ID" ]; then
-        # Extract last meaningful lines from output as evidence
-        CHAIN_EVIDENCE=$(tail -c 300 "$TASK_OUTPUT_FILE" 2>/dev/null | tr '\n' ' ' | sed 's/[^a-zA-Z0-9 _.,:;=+\-\/()@#%]//g' | tail -c 280)
-        python3 "$REASONING_HOOK" close "$CHAIN_ID" "success" "$NEXT_TASK" "$TASK_EXIT" "$CHAIN_EVIDENCE" 2>> "$LOGFILE"
-        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] REASONING: Closed chain $CHAIN_ID (success, with evidence)" >> "$LOGFILE"
-    fi
-    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] COMPLETED: $NEXT_TASK" >> "$LOGFILE"
-    # === ATTENTION: Record success outcome ===
-    python3 /home/agent/.openclaw/workspace/scripts/attention.py add "OUTCOME: SUCCESS — ${NEXT_TASK:0:80}" 0.8 >> "$LOGFILE" 2>&1
-    # === PROCEDURAL MEMORY: Learn from success or record use ===
-    if [ -n "$PROC_ID" ]; then
-        python3 "$PROC_SCRIPT" used "$PROC_ID" success >> "$LOGFILE" 2>&1
-        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] PROCEDURAL: Recorded successful use of $PROC_ID" >> "$LOGFILE"
-    else
-        # Extract real steps from task output (not a generic template)
-        EXTRACT_SCRIPT="/home/agent/.openclaw/workspace/scripts/extract_steps.py"
-        EXTRACTED_STEPS=$(python3 "$EXTRACT_SCRIPT" --file "$TASK_OUTPUT_FILE" 2>/dev/null)
-        if [ -n "$EXTRACTED_STEPS" ] && [ "$EXTRACTED_STEPS" != "[]" ]; then
-            python3 "$PROC_SCRIPT" learn "$NEXT_TASK" "$EXTRACTED_STEPS" >> "$LOGFILE" 2>&1
-            echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] PROCEDURAL: Learned procedure with extracted steps: $EXTRACTED_STEPS" >> "$LOGFILE"
-        else
-            echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] PROCEDURAL: Skipped learning — could not extract concrete steps from output" >> "$LOGFILE"
-        fi
-    fi
-elif [ $TASK_EXIT -eq 124 ]; then
-    # === TIMEOUT HANDLING (exit 124) ===
-    # timeout(1) returns 124 when the command is killed. This is NOT the same as a
-    # task failure — it means the task was too complex for the 10-min window.
-    # Don't trigger the full evolution/failure loop for timeouts.
-    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] TIMEOUT (exit 124): Task exceeded 600s limit: ${NEXT_TASK:0:100}" >> "$LOGFILE"
-    python3 "$CONFIDENCE_SCRIPT" outcome "$TASK_EVENT" "failure" >> "$LOGFILE" 2>&1
-
-    # Close reasoning chain as timeout (not generic failure)
-    if [ -n "$CHAIN_ID" ]; then
-        CHAIN_EVIDENCE="TIMEOUT after 600s. Task too complex for single heartbeat window."
-        python3 "$REASONING_HOOK" close "$CHAIN_ID" "failure" "$NEXT_TASK" "$TASK_EXIT" "$CHAIN_EVIDENCE" 2>> "$LOGFILE"
-        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] REASONING: Closed chain $CHAIN_ID (timeout)" >> "$LOGFILE"
+            --dangerously-skip-permissions > "$TASK_OUTPUT_FILE" 2>&1
+        TASK_EXIT=$?
     fi
 
-    # Record failure against procedure if used
-    if [ -n "$PROC_ID" ]; then
-        python3 "$PROC_SCRIPT" used "$PROC_ID" failure >> "$LOGFILE" 2>&1
+elif [ "$ROUTE_EXECUTOR" = "gemini" ]; then
+    # === FALLBACK: GEMINI FLASH (when OpenRouter routing disabled) ===
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] ROUTING to Gemini Flash (tier=$ROUTE_TIER, score=$ROUTE_SCORE)" >> "$LOGFILE"
+
+    TASK_CONTEXT="$CONTEXT_BRIEF" TASK_PROC_HINT="$PROC_HINT" TASK_EPISODE_HINT="$COMPRESSED_EPISODES" \
+        python3 "$SCRIPTS/task_router.py" execute "$NEXT_TASK" > "$TASK_OUTPUT_FILE" 2>&1
+    TASK_EXIT=$?
+
+    if grep -q "NEEDS_CLAUDE_CODE: true" "$TASK_OUTPUT_FILE" 2>/dev/null || [ $TASK_EXIT -ne 0 ]; then
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] ROUTER: Gemini escalated to Claude Code (fallback)" >> "$LOGFILE"
+        EXECUTOR_USED="claude"
+        timeout 600 /home/agent/.local/bin/claude -p \
+            "You are Clarvis's executive function. Execute this evolution task:
+
+    TASK: $NEXT_TASK
+    ${PROC_HINT:+
+    PROCEDURAL HINT: $PROC_HINT}
+    ${COMPRESSED_EPISODES:+
+    EPISODIC HINTS:
+  $COMPRESSED_EPISODES}
+    CONTEXT: ${CONTEXT_BRIEF}
+    Do the work. Be concrete. Write code if needed. Test it.
+    When done, output a 1-line summary of what you accomplished." \
+            --dangerously-skip-permissions > "$TASK_OUTPUT_FILE" 2>&1
+        TASK_EXIT=$?
     fi
-
-    # Check if the task made partial progress (output > 500 chars suggests work was done)
-    OUTPUT_SIZE=$(wc -c < "$TASK_OUTPUT_FILE" 2>/dev/null || echo 0)
-    if [ "$OUTPUT_SIZE" -gt 500 ]; then
-        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] TIMEOUT-PARTIAL: Task produced ${OUTPUT_SIZE} bytes of output — may have partially completed" >> "$LOGFILE"
-    fi
-
-    python3 /home/agent/.openclaw/workspace/scripts/attention.py add "OUTCOME: TIMEOUT (600s) — ${NEXT_TASK:0:80}" 0.7 >> "$LOGFILE" 2>&1
-
-    # Light-weight capture — log the timeout but do NOT trigger the full evolution loop.
-    # Timeouts are expected for complex tasks and don't indicate a bug to fix.
-    python3 /home/agent/.openclaw/workspace/scripts/evolution_loop.py \
-        capture "cron_autonomous" "Timeout (exit 124) — task exceeded 600s" "$NEXT_TASK" >> "$LOGFILE" 2>&1
-    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] TIMEOUT: Captured for tracking (skipping evolution loop — timeouts are not bugs)" >> "$LOGFILE"
 else
-    python3 "$CONFIDENCE_SCRIPT" outcome "$TASK_EVENT" "failure" >> "$LOGFILE" 2>&1
-    # === REASONING CHAIN: Close with failure outcome + error evidence ===
-    if [ -n "$CHAIN_ID" ]; then
-        CHAIN_EVIDENCE=$(tail -c 300 "$TASK_OUTPUT_FILE" 2>/dev/null | tr '\n' ' ' | sed 's/[^a-zA-Z0-9 _.,:;=+\-\/()@#%]//g' | tail -c 280)
-        python3 "$REASONING_HOOK" close "$CHAIN_ID" "failure" "$NEXT_TASK" "$TASK_EXIT" "$CHAIN_EVIDENCE" 2>> "$LOGFILE"
-        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] REASONING: Closed chain $CHAIN_ID (failure, with evidence)" >> "$LOGFILE"
-    fi
-    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] FAILED (exit $TASK_EXIT): $NEXT_TASK" >> "$LOGFILE"
-    # === ATTENTION: Record failure outcome (high importance — needs attention) ===
-    python3 /home/agent/.openclaw/workspace/scripts/attention.py add "OUTCOME: FAILED (exit $TASK_EXIT) — ${NEXT_TASK:0:80}" 0.9 >> "$LOGFILE" 2>&1
-    # === PROCEDURAL MEMORY: Record failure against procedure if used ===
-    if [ -n "$PROC_ID" ]; then
-        python3 "$PROC_SCRIPT" used "$PROC_ID" failure >> "$LOGFILE" 2>&1
-        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] PROCEDURAL: Recorded failed use of $PROC_ID" >> "$LOGFILE"
-    fi
+    # === CLAUDE CODE (complex/reasoning tasks) ===
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] ROUTING to Claude Code (tier=$ROUTE_TIER, score=$ROUTE_SCORE)" >> "$LOGFILE"
 
-    # === HIVE-STYLE EVOLUTION: Failure → Evolve → Redeploy ===
-    # Capture failure and trigger self-improvement
-    TASK_STDERR=$(tail -c 2000 "$TASK_OUTPUT_FILE")
-    python3 /home/agent/.openclaw/workspace/scripts/evolution_loop.py \
-        capture "cron_autonomous" "Exit code $TASK_EXIT running task" "$NEXT_TASK" >> "$LOGFILE" 2>&1
+    timeout 600 /home/agent/.local/bin/claude -p \
+        "You are Clarvis's executive function. Execute this evolution task:
 
-    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] EVOLUTION: Failure captured, analyzing..." >> "$LOGFILE"
-
-    # Get the failure ID (most recent) and run evolution
-    FAILURE_ID=$(ls -t /home/agent/.openclaw/workspace/data/evolution/failures/fail_*_cron_autonomous.json 2>/dev/null | head -1 | xargs -I{} basename {} .json)
-    if [ -n "$FAILURE_ID" ]; then
-        python3 /home/agent/.openclaw/workspace/scripts/evolution_loop.py \
-            evolve "$FAILURE_ID" >> "$LOGFILE" 2>&1
-        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] EVOLUTION: Fix generated for $FAILURE_ID" >> "$LOGFILE"
-    fi
+    TASK: $NEXT_TASK
+    ${PROC_HINT:+
+    PROCEDURAL HINT: $PROC_HINT}
+    ${COMPRESSED_EPISODES:+
+    EPISODIC HINTS:
+  $COMPRESSED_EPISODES}
+    CONTEXT: ${CONTEXT_BRIEF}
+    Do the work. Be concrete. Write code if needed. Test it.
+    When done, output a 1-line summary of what you accomplished." \
+        --dangerously-skip-permissions > "$TASK_OUTPUT_FILE" 2>&1
+    TASK_EXIT=$?
 fi
 
-# === EPISODIC MEMORY: Encode task as episode ===
-TASK_STATUS="success"
-[ $TASK_EXIT -ne 0 ] && TASK_STATUS="failure"
-TASK_STDERR=""
-[ "$TASK_STATUS" = "failure" ] && TASK_STDERR=$(tail -c 200 "$TASK_OUTPUT_FILE" 2>/dev/null)
-python3 "$EPISODIC_SCRIPT" encode "$NEXT_TASK" "${TASK_SECTION:-P0}" "${BEST_SALIENCE:-0.5}" "$TASK_STATUS" "${TASK_DURATION:-0}" "$TASK_STDERR" >> "$LOGFILE" 2>&1 || true
-echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] EPISODIC: Encoded episode ($TASK_STATUS, ${TASK_DURATION:-0}s)" >> "$LOGFILE"
+rm -f "$OPENROUTER_STDERR"
 
-# === ATTENTION BROADCAST: Feed task outcome into attention system ===
-# Pass task text via env var to avoid SyntaxError from special chars (em-dashes, quotes)
-BROADCAST_TASK="${NEXT_TASK:0:100}" BROADCAST_STATUS="$TASK_STATUS" python3 -c "
-import os, sys; sys.path.insert(0, '/home/agent/.openclaw/workspace/scripts')
-from attention import attention
-status = os.environ.get('BROADCAST_STATUS', 'unknown')
-task = os.environ.get('BROADCAST_TASK', '')
-attention.submit(
-    f'Heartbeat task {status}: {task}',
-    source='heartbeat',
-    importance=0.7 if status == 'success' else 0.9,
-    relevance=0.8
-)
-" >> "$LOGFILE" 2>&1 || true
+TASK_DURATION=$((SECONDS - TASK_START_SECONDS))
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] EXECUTION: executor=$EXECUTOR_USED exit=$TASK_EXIT duration=${TASK_DURATION}s" >> "$LOGFILE"
 
-# === DIGEST: Write first-person summary for M2.5 agent ===
-TASK_RESULT_SNIPPET=$(tail -c 200 "$TASK_OUTPUT_FILE" 2>/dev/null | tr '\n' ' ' | sed 's/[^a-zA-Z0-9 _.,:;=+\-\/()@#%]//g' | tail -c 180)
-python3 /home/agent/.openclaw/workspace/scripts/digest_writer.py autonomous \
-    "I executed evolution task: \"${NEXT_TASK:0:120}\". Result: $TASK_STATUS (exit $TASK_EXIT, ${TASK_DURATION}s). Output: $TASK_RESULT_SNIPPET" \
-    >> "$LOGFILE" 2>&1 || true
+# Log executor output (truncated to last 2000 chars to prevent log bloat)
+tail -c 2000 "$TASK_OUTPUT_FILE" >> "$LOGFILE" 2>/dev/null
 
-rm -f "$TASK_OUTPUT_FILE"
+# ============================================================================
+# PHASE 3: BATCHED POST-FLIGHT (single Python process)
+# Replaces: confidence outcome, reasoning_chain close, attention broadcast,
+#           procedural memory learn/record, episodic encode, evolution loop,
+#           digest writer, routing log — all in ONE import + execution.
+# ============================================================================
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running batched post-flight..." >> "$LOGFILE"
+
+POSTFLIGHT_OUTPUT=$(python3 "$SCRIPTS/heartbeat_postflight.py" "$TASK_EXIT" "$TASK_OUTPUT_FILE" "$PREFLIGHT_FILE" "$TASK_DURATION" 2>> "$LOGFILE")
+POSTFLIGHT_EXIT=$?
+
+if [ $POSTFLIGHT_EXIT -ne 0 ]; then
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WARN: Postflight failed (exit $POSTFLIGHT_EXIT)" >> "$LOGFILE"
+else
+    # Log postflight timings
+    PF_POST_TIME=$(echo "$POSTFLIGHT_OUTPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('timings',{}).get('total','?'))" 2>/dev/null || echo "?")
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] POSTFLIGHT: complete in ${PF_POST_TIME}s" >> "$LOGFILE"
+fi
+
+# Cleanup
+rm -f "$TASK_OUTPUT_FILE" "$PREFLIGHT_FILE"
+
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Heartbeat complete (preflight=${PF_TOTAL_TIME}s + exec=${TASK_DURATION}s + postflight=${PF_POST_TIME:-?}s) ===" >> "$LOGFILE"

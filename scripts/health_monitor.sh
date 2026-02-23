@@ -33,9 +33,22 @@ SUSPICIOUS=$(ps aux | grep -E "nc |netcat |nmap |masscan |hydra" | grep -v grep 
 # === NETWORK EXPOSURE ===
 OPEN_PORTS=$(ss -tuln | awk 'NR>1 {print $1}' | sort -u | wc -l)
 
-# === WALLET BALANCE ===
-WALLET_INFO=$(curl -s https://api.mcporter.io/v1/conway/wallet_info 2>/dev/null)
-USDC_BALANCE=$(echo "$WALLET_INFO" | grep -oP '"usdc":\K[0-9]+')
+# === WALLET BALANCE (hourly, not every 15m — non-essential external API call) ===
+USDC_BALANCE=""
+WALLET_CACHE="/tmp/clarvis_wallet_cache"
+WALLET_STALE=true
+if [ -f "$WALLET_CACHE" ]; then
+    CACHE_AGE=$(( $(date +%s) - $(stat -c%Y "$WALLET_CACHE" 2>/dev/null || echo 0) ))
+    if [ "$CACHE_AGE" -lt 3600 ]; then
+        USDC_BALANCE=$(cat "$WALLET_CACHE")
+        WALLET_STALE=false
+    fi
+fi
+if [ "$WALLET_STALE" = true ]; then
+    WALLET_INFO=$(curl -s --connect-timeout 5 --max-time 10 https://api.mcporter.io/v1/conway/wallet_info 2>/dev/null)
+    USDC_BALANCE=$(echo "$WALLET_INFO" | grep -oP '"usdc":\K[0-9]+')
+    [ -n "$USDC_BALANCE" ] && echo "$USDC_BALANCE" > "$WALLET_CACHE"
+fi
 
 # === LOG STATUS ===
 echo "[$DATE] MEM:${MEM_PCT}% DISK:${DISK_USED}% LOAD:$LOAD PORTS:$OPEN_PORTS SSH_FAILS:$FAILED_SSH WALLET:\$$USDC_BALANCE" >> $LOG_DIR/health.log

@@ -9,7 +9,7 @@ Called by cron scripts:
 """
 import json
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
@@ -25,7 +25,7 @@ def session_open(session_key=None):
     Called at start of day / new session.
     Restores attention state, loads brain context, sets session metadata.
     """
-    session_key = session_key or datetime.utcnow().strftime("day-%Y-%m-%d")
+    session_key = session_key or datetime.now(timezone.utc).strftime("day-%Y-%m-%d")
     print(f"=== Session Open: {session_key} ===")
 
     # 1. Restore attention spotlight from disk (persisted by last session_close)
@@ -41,7 +41,7 @@ def session_open(session_key=None):
     brain.set_context(
         f"Session opened: {session_key}. "
         f"Spotlight: {tick_result['total']} items. "
-        f"Time: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}"
+        f"Time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}"
     )
 
     # 4. Submit session-open event to attention so it's visible in working memory
@@ -51,12 +51,25 @@ def session_open(session_key=None):
         importance=0.6,
         relevance=0.5
     )
+
+    # 5. Theory of Mind: generate proactive suggestions and push to spotlight
+    try:
+        from theory_of_mind import tom
+        suggestions = tom.generate_suggestions()
+        pushed = tom.push_to_spotlight(suggestions)
+        if suggestions:
+            print(f"  Theory of Mind: {len(suggestions)} suggestions, {pushed} pushed to spotlight")
+            for s in suggestions[:3]:
+                print(f"    [{s['priority']}] {s['suggestion'][:70]}")
+    except Exception as e:
+        print(f"  Theory of Mind: unavailable ({e})")
+
     attention._save()
 
-    # 5. Record session state for close to reference
+    # 6. Record session state for close to reference
     state = {
         "session_key": session_key,
-        "opened_at": datetime.utcnow().isoformat(),
+        "opened_at": datetime.now(timezone.utc).isoformat(),
         "spotlight_restored": spotlight_count,
         "spotlight_after_tick": tick_result["total"],
     }
@@ -79,7 +92,7 @@ def session_close(session_key=None, messages=None):
         except (json.JSONDecodeError, OSError):
             pass
 
-    session_key = session_key or prior_state.get("session_key") or datetime.utcnow().strftime("day-%Y-%m-%d")
+    session_key = session_key or prior_state.get("session_key") or datetime.now(timezone.utc).strftime("day-%Y-%m-%d")
     print(f"=== Session Close: {session_key} ===")
 
     if messages:
@@ -112,6 +125,18 @@ def session_close(session_key=None, messages=None):
             )
         print(f"  Stored: {len(decisions)} decisions, {len(insights)} insights")
 
+    # Theory of Mind: record session close event and feed observations
+    try:
+        from theory_of_mind import tom
+        tom.observe("feedback", f"Session closed: {session_key}",
+                    context={"source": "session_close"})
+        if decisions:
+            for d in decisions[:3]:
+                tom.observe("preference", d, context={"source": "session_decision"})
+        print(f"  Theory of Mind: session close events recorded")
+    except Exception:
+        pass
+
     # Save attention/working memory state for next session
     spotlight_count = len(attention.items)
     attention._save()
@@ -121,12 +146,12 @@ def session_close(session_key=None, messages=None):
     brain.set_context(
         f"Session closed: {session_key}. "
         f"Spotlight: {spotlight_count} items saved. "
-        f"Time: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}"
+        f"Time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}"
     )
 
     # Record close in session state
     if prior_state:
-        prior_state["closed_at"] = datetime.utcnow().isoformat()
+        prior_state["closed_at"] = datetime.now(timezone.utc).isoformat()
         prior_state["spotlight_at_close"] = spotlight_count
         SESSION_STATE_FILE.write_text(json.dumps(prior_state, indent=2))
         print(f"  Session duration: {prior_state.get('opened_at', '?')} → {prior_state['closed_at']}")

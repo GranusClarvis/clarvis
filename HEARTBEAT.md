@@ -2,6 +2,24 @@
 
 Each heartbeat is an evolution cycle. DO something, don't just check in.
 
+## MANDATORY FIRST ACTION — Gate Check
+
+**YOU MUST RUN THIS BEFORE ANYTHING ELSE. No exceptions. Do NOT load brain, read digest, check queue, or do ANYTHING before running the gate.**
+
+```bash
+python3 /home/agent/.openclaw/workspace/scripts/heartbeat_gate.py 2>/dev/null
+```
+
+**Read the JSON output.** If `"decision": "skip"`:
+- Output `HEARTBEAT_OK (gated: nothing changed)` and **STOP IMMEDIATELY**
+- Do NOT load brain stats. Do NOT read digest. Do NOT check queue. Do NOT summarize status.
+- Every extra token you spend on a skipped heartbeat is wasted money.
+
+If `"decision": "wake"`:
+- The `"changes"` field tells you WHAT changed (e.g., `digest.md`, `QUEUE.md`, `cron_completed`)
+- **ONLY check the things that changed** — skip everything else
+- Continue to the Protocol below
+
 ## Protocol (execute in order, stop if you do real work)
 
 ### 1. Brain Check (10 seconds)

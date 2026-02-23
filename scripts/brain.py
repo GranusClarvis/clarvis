@@ -19,6 +19,7 @@ Usage:
 import chromadb
 import json
 import os
+import time
 from datetime import datetime, timezone
 
 # Single database location
@@ -59,7 +60,7 @@ class ClarvisBrain:
     
     def __init__(self, use_local_embeddings=False):
         self.use_local_embeddings = use_local_embeddings
-        
+
         if use_local_embeddings:
             self.data_dir = LOCAL_DATA_DIR
             self.graph_file = LOCAL_GRAPH_FILE
@@ -68,10 +69,17 @@ class ClarvisBrain:
             self.data_dir = DATA_DIR
             self.graph_file = GRAPH_FILE
             self.embedding_function = None  # Use ChromaDB default
-        
+
         self.client = chromadb.PersistentClient(path=self.data_dir)
         self._init_collections()
         self._load_graph()
+
+        # Caches with TTL
+        self._stats_cache = None
+        self._stats_cache_time = 0
+        self._stats_cache_ttl = 30  # seconds
+        self._collection_cache = {}  # col_name -> (time, results)
+        self._collection_cache_ttl = 60  # seconds
     
     def _init_collections(self):
         """Ensure all collections exist"""
@@ -142,6 +150,9 @@ class ClarvisBrain:
             documents=[text],
             metadatas=[metadata]
         )
+
+        # Invalidate caches for this collection
+        self._invalidate_cache(collection)
 
         # Auto-link to similar memories
         self.auto_link(memory_id, text, collection)
@@ -306,6 +317,22 @@ class ClarvisBrain:
                 tracker.on_recall(query, final_results, caller=caller)
             except Exception:
                 pass  # Never let tracking break recall
+
+        # Hebbian memory evolution: strengthen retrieved memories (non-blocking)
+        if final_results and query:
+            try:
+                from hebbian_memory import hebbian
+                hebbian.on_recall(query, final_results, caller=caller)
+            except Exception:
+                pass  # Never let Hebbian tracking break recall
+
+        # Synaptic memory: memristor-inspired STDP weight updates (non-blocking)
+        if final_results and query:
+            try:
+                from synaptic_memory import synaptic
+                synaptic.on_recall(query, final_results, caller=caller)
+            except Exception:
+                pass  # Never let synaptic tracking break recall
 
         return final_results
     
@@ -834,24 +861,60 @@ class ClarvisBrain:
             "total_edges": len(self.graph.get("edges", [])),
         }
 
+    # === CACHE MANAGEMENT ===
+
+    def _invalidate_cache(self, collection=None):
+        """Invalidate caches after writes."""
+        self._stats_cache = None
+        self._stats_cache_time = 0
+        if collection:
+            self._collection_cache.pop(collection, None)
+        else:
+            self._collection_cache.clear()
+
+    def get_all_cached(self, collection_name):
+        """Get all memories from a collection, with TTL caching.
+
+        Use this for read-heavy bulk operations (consolidation, stats, decay).
+        The cache is invalidated on store() and expires after _collection_cache_ttl seconds.
+        """
+        now = time.monotonic()
+        cached = self._collection_cache.get(collection_name)
+        if cached and (now - cached[0]) < self._collection_cache_ttl:
+            return cached[1]
+
+        result = self.get(collection_name, n=10000)
+        self._collection_cache[collection_name] = (now, result)
+        return result
+
     # === STATISTICS ===
 
     def stats(self):
-        """Get brain statistics"""
+        """Get brain statistics (cached for 30s)"""
+        now = time.monotonic()
+        if self._stats_cache and (now - self._stats_cache_time) < self._stats_cache_ttl:
+            return self._stats_cache
+
         stats = {
             "collections": {},
             "total_memories": 0,
             "graph_nodes": len(self.graph["nodes"]),
             "graph_edges": len(self.graph["edges"])
         }
-        
+
         for name, col in self.collections.items():
             count = col.count()
             stats["collections"][name] = count
             stats["total_memories"] += count
-        
+
+        self._stats_cache = stats
+        self._stats_cache_time = now
         return stats
     
+    def health(self):
+        """Alias for health_check — verify brain is working."""
+        return self.health_check()
+
     def health_check(self):
         """Verify brain is working"""
         try:

@@ -34,8 +34,18 @@ MODEL_PRICING: Dict[str, Dict[str, float]] = {
     # Gemini models
     "gemini-2.0-flash": {"input": 0.0, "output": 0.0},  # Free tier
     "gemini-2.5-pro": {"input": 1.25, "output": 10.0},
-    # OpenRouter generic markers
-    "openrouter/minimax/minimax-m2.5": {"input": 0.50, "output": 1.50},
+    "gemini-3-flash": {"input": 0.80, "output": 0.80},   # Web search model
+    # OpenClaw / OpenRouter models (per-1M-token pricing)
+    "minimax-m2.5": {"input": 0.42, "output": 0.42},     # Simple/coding tasks
+    "glm-5": {"input": 1.32, "output": 1.32},             # Complex reasoning
+    "kimi-k2.5": {"input": 0.90, "output": 0.90},         # Vision tasks
+    # OpenRouter-prefixed aliases (as used in openclaw.json and router)
+    "openrouter/minimax/minimax-m2.5": {"input": 0.42, "output": 0.42},
+    "openrouter/z-ai/glm-5": {"input": 1.32, "output": 1.32},
+    "minimax/minimax-m2.5": {"input": 0.42, "output": 0.42},
+    "z-ai/glm-5": {"input": 1.32, "output": 1.32},
+    "moonshotai/kimi-k2.5": {"input": 0.90, "output": 0.90},
+    "google/gemini-3-flash-preview": {"input": 0.80, "output": 0.80},
     # Claude Code CLI — priced as opus (tool-use sessions)
     "claude-code": {"input": 15.0, "output": 75.0},
 }
@@ -112,6 +122,8 @@ class CostEntry:
     source: str = ""          # Where the call came from (cron_autonomous, cron_evolution, etc.)
     task: str = ""            # Task description (first 150 chars)
     duration_s: float = 0.0   # API call duration
+    generation_id: str = ""   # OpenRouter generation ID for detailed lookups
+    estimated: bool = True    # False when cost comes from real API data
 
     def to_dict(self) -> Dict:
         return asdict(self)
@@ -148,6 +160,37 @@ class CostTracker:
             source=source,
             task=task[:150],
             duration_s=round(duration_s, 2),
+        )
+        with open(self.log_path, "a") as f:
+            f.write(json.dumps(entry.to_dict()) + "\n")
+        return entry
+
+    def log_real(
+        self,
+        model: str,
+        input_tokens: int,
+        output_tokens: int,
+        cost_usd: float,
+        source: str = "",
+        task: str = "",
+        duration_s: float = 0.0,
+        generation_id: str = "",
+    ) -> CostEntry:
+        """Log an API call with REAL cost from API response (not estimated).
+
+        Use this when you have the actual cost from OpenRouter's usage.cost field.
+        """
+        entry = CostEntry(
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            model=model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cost_usd=round(cost_usd, 6),
+            source=source,
+            task=task[:150],
+            duration_s=round(duration_s, 2),
+            generation_id=generation_id,
+            estimated=False,
         )
         with open(self.log_path, "a") as f:
             f.write(json.dumps(entry.to_dict()) + "\n")

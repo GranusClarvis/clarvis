@@ -81,10 +81,31 @@ def _save_archive(entries):
         json.dump(entries, f, indent=2)
 
 
-def _get_all_memories(collection_name):
-    """Get all memories from a single collection with full metadata."""
+# Session-level cache for _get_all_memories — avoids re-fetching the same
+# collection data 5+ times during a single consolidation run.
+_memories_cache = {}
+_memories_cache_gen = 0  # bump to invalidate
+
+
+def _get_all_memories(collection_name, _cache_gen=[0]):
+    """Get all memories from a single collection with full metadata.
+
+    Results are cached for the duration of a consolidation run. Call
+    _invalidate_memories_cache() after mutations to force re-fetch.
+    """
+    global _memories_cache, _memories_cache_gen
+
+    # If generation changed, clear the cache
+    if _cache_gen[0] != _memories_cache_gen:
+        _memories_cache.clear()
+        _cache_gen[0] = _memories_cache_gen
+
+    if collection_name in _memories_cache:
+        return _memories_cache[collection_name]
+
     col = brain.collections.get(collection_name)
     if col is None:
+        _memories_cache[collection_name] = []
         return []
     results = col.get()
     memories = []
@@ -97,7 +118,15 @@ def _get_all_memories(collection_name):
             "metadata": meta,
             "collection": collection_name,
         })
+    _memories_cache[collection_name] = memories
     return memories
+
+
+def _invalidate_memories_cache():
+    """Invalidate the session-level memories cache after mutations."""
+    global _memories_cache_gen
+    _memories_cache_gen += 1
+    _memories_cache.clear()
 
 
 # ---------------------------------------------------------------------------
@@ -152,6 +181,7 @@ def deduplicate(dry_run=False):
 
             if not dry_run:
                 col.delete(ids=ids_to_delete)
+                _invalidate_memories_cache()
 
             stats["duplicates_removed"] += len(ids_to_delete)
 
@@ -256,6 +286,7 @@ def merge_clusters(dry_run=False):
                 )
                 # Delete originals
                 col.delete(ids=ids_to_delete)
+                _invalidate_memories_cache()
 
             stats["clusters_merged"] += 1
 
@@ -408,6 +439,7 @@ def prune_noise(dry_run=False):
         if ids_to_delete:
             if not dry_run:
                 col.delete(ids=ids_to_delete)
+                _invalidate_memories_cache()
             stats["pruned"] += len(ids_to_delete)
 
     return stats
@@ -473,6 +505,7 @@ def archive_stale(days=30, importance_threshold=0.3, dry_run=False):
         if ids_to_archive:
             if not dry_run:
                 col.delete(ids=ids_to_archive)
+                _invalidate_memories_cache()
             stats["archived"] += len(ids_to_archive)
 
     if not dry_run and stats["archived"] > 0:

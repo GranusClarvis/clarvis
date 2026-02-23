@@ -18,6 +18,10 @@ trap "rm -f $LOCKFILE" EXIT
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Reflection starting ===" >> "$LOGFILE"
 
+# Step 0.5: Context window GC — archive old completed tasks, rotate oversized logs
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running context window GC..." >> "$LOGFILE"
+python3 /home/agent/.openclaw/workspace/scripts/context_compressor.py gc >> "$LOGFILE" 2>&1 || true
+
 # Step 1: Memory optimization (decay stale memories) — CRITICAL
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running brain.optimize()..." >> "$LOGFILE"
 python3 -c "
@@ -52,6 +56,15 @@ python3 /home/agent/.openclaw/workspace/scripts/semantic_bridge_builder.py --top
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running memory consolidation..." >> "$LOGFILE"
 python3 /home/agent/.openclaw/workspace/scripts/memory_consolidation.py consolidate >> "$LOGFILE" 2>&1 || true
 
+# Step 4.5: Hebbian memory evolution — strengthen frequently accessed, weaken neglected (A-Mem style)
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running Hebbian memory evolution..." >> "$LOGFILE"
+python3 /home/agent/.openclaw/workspace/scripts/hebbian_memory.py evolve >> "$LOGFILE" 2>&1 || true
+
+# Step 4.6: Synaptic memory evolution — memristor-inspired STDP weight updates + consolidation
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running synaptic memory evolution..." >> "$LOGFILE"
+python3 /home/agent/.openclaw/workspace/scripts/synaptic_memory.py evolve >> "$LOGFILE" 2>&1 || true
+python3 /home/agent/.openclaw/workspace/scripts/synaptic_memory.py consolidate >> "$LOGFILE" 2>&1 || true
+
 # Step 5: Conversation learning — extract patterns from transcripts, store insights
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running conversation learner..." >> "$LOGFILE"
 python3 /home/agent/.openclaw/workspace/scripts/conversation_learner.py >> "$LOGFILE" 2>&1 || true
@@ -67,6 +80,10 @@ python3 /home/agent/.openclaw/workspace/scripts/episodic_memory.py synthesize >>
 # Step 6.5: Temporal self-awareness — generate growth narrative (how have I changed?)
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running temporal self-awareness..." >> "$LOGFILE"
 python3 /home/agent/.openclaw/workspace/scripts/temporal_self.py store >> "$LOGFILE" 2>&1 || true
+
+# Step 6.7: Meta-learning — analyze learning strategies, failure patterns, recommend improvements
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running meta-learning analysis..." >> "$LOGFILE"
+python3 /home/agent/.openclaw/workspace/scripts/meta_learning.py analyze >> "$LOGFILE" 2>&1 || true
 
 # Step 7: Session close — save attention state and working memory for next session — CRITICAL
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running session close..." >> "$LOGFILE"

@@ -22,10 +22,17 @@ echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Morning routine started ===" >> "$LOGF
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running session open..." >> "$LOGFILE"
 python3 /home/agent/.openclaw/workspace/scripts/session_hook.py open >> "$LOGFILE" 2>&1
 
-# === MORNING PLANNING ===
+# === MORNING PLANNING (with context compression) ===
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running morning planning..." >> "$LOGFILE"
+COMPRESSOR="/home/agent/.openclaw/workspace/scripts/context_compressor.py"
+MORNING_CONTEXT=$(python3 "$COMPRESSOR" brief 2>> "$LOGFILE")
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Compressed context: ${#MORNING_CONTEXT} bytes" >> "$LOGFILE"
 MORNING_OUTPUT_FILE=$(mktemp)
-/home/agent/.local/bin/claude -p "It's morning. Review evolution/QUEUE.md, pick top 3 priorities for today. Update brain.set_context() with today's focus. Output: 3 priorities with brief reasoning." --dangerously-skip-permissions > "$MORNING_OUTPUT_FILE" 2>&1
+/home/agent/.local/bin/claude -p "It's morning. Here's the compressed evolution queue:
+
+$MORNING_CONTEXT
+
+Pick top 3 priorities for today from the pending tasks. Update brain.set_context() with today's focus. Output: 3 priorities with brief reasoning." --dangerously-skip-permissions > "$MORNING_OUTPUT_FILE" 2>&1
 cat "$MORNING_OUTPUT_FILE" >> "$LOGFILE"
 
 # === DIGEST: Write first-person summary for M2.5 agent ===

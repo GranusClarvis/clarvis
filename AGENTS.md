@@ -324,6 +324,23 @@ Reactions are lightweight social signals. Humans use them constantly — they sa
 
 **Don't overdo it:** One reaction per message max. Pick the one that fits best.
 
+## Slash Commands
+
+When users send these commands, execute them immediately:
+
+### `/costs` — Real OpenRouter Usage Report
+Run this script and send the output as your response:
+```bash
+python3 /home/agent/.openclaw/workspace/scripts/cost_tracker.py telegram
+```
+This shows REAL spending from the OpenRouter API (daily/weekly/monthly + model breakdown).
+**NEVER reference costs.jsonl for cost data** — it only has partial test data and will show wrong numbers like "$0.15". Always use `cost_tracker.py telegram` or `cost_api.py` for real cost data. If you mention costs in a status summary, run the API command first — do not guess or read the local file.
+
+### `/budget` — Budget Status
+```bash
+python3 /home/agent/.openclaw/workspace/scripts/budget_alert.py --status
+```
+
 ## Tools
 
 Skills provide your tools. When you need one, check its `SKILL.md`. Keep local notes (camera names, SSH details, voice preferences) in `TOOLS.md`.
