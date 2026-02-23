@@ -196,7 +196,7 @@ with open('$PREFLIGHT_FILE', 'w') as f:
     if grep -q "NEEDS_CLAUDE_CODE: true" "$OPENROUTER_STDERR" 2>/dev/null || grep -q "NEEDS_CLAUDE_CODE: true" "$TASK_OUTPUT_FILE" 2>/dev/null || [ $TASK_EXIT -ne 0 ]; then
         echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] ROUTER: OpenRouter escalated to Claude Code (fallback)" >> "$LOGFILE"
         EXECUTOR_USED="claude"
-        timeout 600 /home/agent/.local/bin/claude -p \
+        timeout 1800 /home/agent/.local/bin/claude -p \
             "You are Clarvis's executive function. Execute this evolution task:
 
     TASK: $NEXT_TASK
@@ -223,7 +223,7 @@ elif [ "$ROUTE_EXECUTOR" = "gemini" ]; then
     if grep -q "NEEDS_CLAUDE_CODE: true" "$TASK_OUTPUT_FILE" 2>/dev/null || [ $TASK_EXIT -ne 0 ]; then
         echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] ROUTER: Gemini escalated to Claude Code (fallback)" >> "$LOGFILE"
         EXECUTOR_USED="claude"
-        timeout 600 /home/agent/.local/bin/claude -p \
+        timeout 1800 /home/agent/.local/bin/claude -p \
             "You are Clarvis's executive function. Execute this evolution task:
 
     TASK: $NEXT_TASK
@@ -242,7 +242,7 @@ else
     # === CLAUDE CODE (complex/reasoning tasks) ===
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] ROUTING to Claude Code (tier=$ROUTE_TIER, score=$ROUTE_SCORE)" >> "$LOGFILE"
 
-    timeout 600 /home/agent/.local/bin/claude -p \
+    timeout 1800 /home/agent/.local/bin/claude -p \
         "You are Clarvis's executive function. Execute this evolution task:
 
     TASK: $NEXT_TASK
