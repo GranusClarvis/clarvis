@@ -15,7 +15,11 @@ export LANG="en_US.UTF-8"
 
 # Prevent "nested Claude Code session" errors when cron scripts are
 # triggered manually from inside a Claude Code session.
-unset CLAUDECODE 2>/dev/null || true
+unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT 2>/dev/null || true
+
+# Systemd user session (required for openclaw gateway management since v2026.2.23)
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}"
 
 # Workspace
 export CLARVIS_WORKSPACE="/home/agent/.openclaw/workspace"

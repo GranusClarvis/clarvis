@@ -17,9 +17,12 @@ DISK_USED=$(df -h / | awk 'NR==2 {print $5}' | tr -d '%')
 LOAD=$(uptime | awk -F'load average:' '{print $2}' | cut -d',' -f1 | xargs)
 
 # === PROCESS MONITORING ===
-GATEWAY_PID=$(pgrep -f "openclaw-gateway" | head -1)
-if [ -z "$GATEWAY_PID" ]; then
-    echo "[ALERT] Gateway process not found!" >> $LOG_DIR/alerts.log
+# Check gateway via port (most reliable) and process
+if ! ss -tlnp 2>/dev/null | grep -q ":18789 "; then
+    echo "[$DATE] [ALERT] Gateway port 18789 not listening!" >> $LOG_DIR/alerts.log
+    # Attempt auto-recovery via systemd (preferred) or PM2 (fallback)
+    systemctl --user start openclaw-gateway.service 2>/dev/null \
+        || pm2 start openclaw-gateway 2>/dev/null || true
     ALERT=1
 fi
 

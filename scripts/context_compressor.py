@@ -60,7 +60,6 @@ def compress_queue(queue_file=QUEUE_FILE, max_recent_completed=5):
     pending_tasks = []       # [ ] items — keep in full
     recent_completed = []    # [x] items — keep last N as summaries
     current_section = ""
-    section_header = ""
 
     for line in lines:
         stripped = line.strip()
@@ -68,7 +67,6 @@ def compress_queue(queue_file=QUEUE_FILE, max_recent_completed=5):
         # Track section headers
         if stripped.startswith('## '):
             current_section = stripped
-            section_header = stripped
             continue
 
         # Skip completed section entirely
@@ -344,6 +342,412 @@ def generate_context_brief(queue_file=QUEUE_FILE):
     return "\n".join(brief_parts)
 
 
+# === TIERED CONTEXT BRIEF (v2 — quality-optimized) ===
+#
+# Designed around LLM attention research, not just token budgets.
+#
+# Key insights applied:
+#   1. "Lost in the Middle" (Liu et al. 2023) — LLMs attend most to the
+#      BEGINNING and END of context. Critical info must go at those positions.
+#   2. Reasoning scaffolding — explicit "think before doing" instructions
+#      improve output quality significantly (CoT research).
+#   3. Decision context > raw data — Claude Code needs to know WHY and
+#      WHAT GOOD LOOKS LIKE, not just metrics.
+#   4. Failure patterns > success patterns — knowing what to AVOID
+#      prevents the most common quality failures.
+#
+# Section ordering follows the primacy/recency principle:
+#   BEGINNING (high attention): Decision context, failure avoidance, constraints
+#   MIDDLE (lower attention):   Metrics, related tasks, completions
+#   END (high attention):       Episodic lessons, reasoning instructions
+#
+# Tiers:
+#   minimal  (~200 tokens) — cheap models: task + 1-line context only
+#   standard (~600 tokens) — Claude Code: decision context + spotlight + metrics
+#   full     (~1000 tokens) — complex reasoning: everything, optimally ordered
+
+# Budget limits per section (approximate token counts)
+TIER_BUDGETS = {
+    "minimal": {
+        "total": 200,
+        "decision_context": 0,   # skip
+        "spotlight": 0,          # skip
+        "related_tasks": 0,      # skip
+        "metrics": 0,            # skip
+        "completions": 0,        # skip
+        "episodes": 0,           # skip
+        "reasoning_scaffold": 0, # skip
+    },
+    "standard": {
+        "total": 600,
+        "decision_context": 100, # success criteria + constraints
+        "spotlight": 80,         # top 3 attention items
+        "related_tasks": 60,     # 1-2 related pending tasks
+        "metrics": 40,           # phi + worst capability only
+        "completions": 40,       # last 2 completions
+        "episodes": 60,          # failure patterns (was 0 — quality loss)
+        "reasoning_scaffold": 40,# think-then-do instruction
+    },
+    "full": {
+        "total": 1000,
+        "decision_context": 150, # full success criteria + failure avoidance
+        "spotlight": 120,        # top 5 attention items
+        "related_tasks": 100,    # 2-3 related pending tasks
+        "metrics": 80,           # all capabilities + phi
+        "completions": 60,       # last 3 completions
+        "episodes": 120,         # full episodic lessons with root causes
+        "reasoning_scaffold": 60,# detailed reasoning instructions
+    },
+}
+
+
+def _build_decision_context(current_task, tier="standard"):
+    """Build a decision-context block that tells the executor what GOOD looks like.
+
+    Extracts:
+      - Inferred success criteria from the task text
+      - Relevant failure patterns from recent episodes
+      - Key constraints (coding standards, system patterns)
+
+    This is the highest-value context for quality: it shapes HOW Claude Code
+    approaches the task, not just WHAT the task is.
+    """
+    parts = []
+
+    # --- Success criteria: parse actionable targets from task text ---
+    targets = []
+    # Look for explicit targets like "Target: 0.55+", "> 60%", "above 70%"
+    for m in re.finditer(r'(?:target|goal|above|>|improve.*to)\s*[:=]?\s*([0-9.]+[%+]?)', current_task, re.IGNORECASE):
+        targets.append(m.group(0).strip())
+    # Look for explicit action verbs that define "done"
+    done_verbs = re.findall(r'(?:verify|ensure|confirm|test|check|wire|implement|fix|build|add|create)\s+[^,.]+', current_task, re.IGNORECASE)
+    if done_verbs:
+        targets.extend(v.strip()[:60] for v in done_verbs[:3])
+
+    if targets:
+        parts.append("SUCCESS CRITERIA:")
+        for t in targets[:4]:
+            parts.append(f"  - {t}")
+
+    # --- Failure patterns from recent episodes ---
+    failure_patterns = _get_failure_patterns(current_task, n=3 if tier == "full" else 2)
+    if failure_patterns:
+        parts.append("AVOID THESE FAILURE PATTERNS:")
+        parts.extend(failure_patterns)
+
+    # --- Constraints: common quality issues from code_quality scores ---
+    scores = get_latest_scores()
+    if scores:
+        caps = scores.get("capabilities", {})
+        # Flag capabilities below 0.5 that are relevant to this task
+        weak_caps = [(k, v) for k, v in caps.items() if v < 0.5]
+        if weak_caps:
+            weak_names = ", ".join(f"{k}={v}" for k, v in sorted(weak_caps, key=lambda x: x[1]))
+            parts.append(f"WEAK AREAS (be extra careful): {weak_names}")
+
+    return "\n".join(parts)
+
+
+def _get_failure_patterns(current_task, n=3):
+    """Extract failure root causes from episodic memory, not just outcomes.
+
+    Returns list of actionable avoidance strings like:
+      '  - AVOID: Nested Claude Code calls cause timeout (seen 2x)'
+    """
+    patterns = []
+    try:
+        from episodic_memory import EpisodicMemory
+        em = EpisodicMemory()
+
+        # Get failures relevant to this task type
+        failures = em.recall_failures(n=n * 2)
+        if not failures:
+            return []
+
+        task_words = set(re.findall(r'[a-z]{3,}', current_task.lower()))
+        seen = set()
+
+        for ep in failures:
+            task_text = ep.get("task", "")
+            outcome = ep.get("outcome", "failure")
+            # Extract the error/lesson if stored
+            error = ep.get("error", "") or ep.get("lesson", "") or ""
+            core = error[:60] if error else task_text[:60]
+
+            # Dedup by core
+            dedup_key = core[:30].lower()
+            if dedup_key in seen:
+                continue
+            seen.add(dedup_key)
+
+            if error:
+                patterns.append(f"  - AVOID: {error[:80]}")
+            elif task_text:
+                patterns.append(f"  - [{outcome}] {task_text[:60]}")
+
+            if len(patterns) >= n:
+                break
+
+    except Exception:
+        pass
+
+    return patterns
+
+
+def _build_reasoning_scaffold(tier="standard"):
+    """Generate reasoning scaffolding instructions appropriate to the tier.
+
+    Research shows explicit step-by-step instructions improve LLM output quality
+    significantly, especially for complex tasks.
+    """
+    if tier == "full":
+        return (
+            "APPROACH: Before writing code, briefly analyze:\n"
+            "  1. What files need to change and why\n"
+            "  2. What could go wrong (check failure patterns above)\n"
+            "  3. How to verify success (check criteria above)\n"
+            "Then implement, test, and report what you accomplished."
+        )
+    else:
+        return (
+            "APPROACH: Analyze before implementing. Check the failure patterns above. "
+            "Test your changes. Report what you accomplished."
+        )
+
+
+def _get_spotlight_items(n=5, exclude_task=""):
+    """Get top-N attention spotlight items as compact strings.
+
+    Deduplicates similar items and strips TASK: prefixes.
+    Excludes items that closely match `exclude_task` to avoid echoing the current task.
+    """
+    try:
+        from attention import attention
+        attention._load()
+        focused = attention.focus()
+        items = []
+        seen_cores = set()
+        exclude_words = set(re.findall(r'[a-z]{3,}', exclude_task.lower())) if exclude_task else set()
+
+        for item in focused[:n * 3]:  # scan wider to fill after dedup
+            content = item.get("content", "")
+            sal = item.get("salience", 0)
+
+            # Strip common prefixes
+            for prefix in ("CURRENT TASK: ", "TASK: ", "OUTCOME: ", "PROCEDURE HIT "):
+                if content.startswith(prefix):
+                    content = content[len(prefix):]
+                    break
+
+            # Deduplicate by core content (first 40 chars)
+            core = content[:40].lower()
+            if core in seen_cores:
+                continue
+            seen_cores.add(core)
+
+            # Skip if this item is basically the current task
+            if exclude_words:
+                item_words = set(re.findall(r'[a-z]{3,}', content.lower()))
+                if item_words and len(exclude_words & item_words) / max(1, len(exclude_words)) > 0.5:
+                    continue
+
+            items.append(f"  ({sal:.2f}) {content[:80]}")
+            if len(items) >= n:
+                break
+
+        return items
+    except Exception:
+        return []
+
+
+def _find_related_tasks(current_task, queue_file=QUEUE_FILE, max_tasks=3):
+    """Find pending tasks related to the current task by word overlap.
+
+    Returns list of task strings, excluding the current task itself.
+    """
+    if not current_task or not os.path.exists(queue_file):
+        return []
+
+    # Tokenize current task into keywords
+    task_words = set(re.findall(r'[a-z]{3,}', current_task.lower()))
+    if not task_words:
+        return []
+
+    with open(queue_file, 'r') as f:
+        lines = f.readlines()
+
+    candidates = []
+    for line in lines:
+        stripped = line.strip()
+        match = re.match(r'^- \[ \] (.+)$', stripped)
+        if not match:
+            continue
+        task_text = match.group(1)
+        # Skip if this IS the current task (fuzzy match: >60% overlap)
+        candidate_words = set(re.findall(r'[a-z]{3,}', task_text.lower()))
+        if not candidate_words:
+            continue
+        overlap = len(task_words & candidate_words) / max(1, len(task_words | candidate_words))
+        if overlap > 0.6:
+            continue  # too similar — this is probably the current task
+        relevance = len(task_words & candidate_words) / max(1, len(candidate_words))
+        if relevance > 0.1:
+            # Extract core task name
+            core = re.split(r'\s*[\(—]', task_text, 1)[0].strip()
+            if len(core) < 15:
+                core = task_text[:100]
+            candidates.append((relevance, core[:80]))
+
+    candidates.sort(reverse=True)
+    return [text for _, text in candidates[:max_tasks]]
+
+
+def _get_recent_completions(queue_file=QUEUE_FILE, n=3):
+    """Get the N most recent completed tasks as compact 1-liners."""
+    if not os.path.exists(queue_file):
+        return []
+
+    with open(queue_file, 'r') as f:
+        lines = f.readlines()
+
+    completions = []
+    for line in lines:
+        stripped = line.strip()
+        match = re.match(r'^- \[x\] (.+)$', stripped)
+        if not match:
+            continue
+        task_text = match.group(1)
+        date_match = re.search(r'(\d{4}-\d{2}-\d{2})', task_text)
+        date_str = date_match.group(1) if date_match else ""
+        core = re.split(r'\s*[\(—]', task_text, 1)[0].strip()
+        if len(core) < 15:
+            core = task_text[:80]
+        completions.append(f"  [{date_str}] {core[:60]}")
+
+    # Return last N (most recent are usually at the top of the section)
+    return completions[:n]
+
+
+def generate_tiered_brief(
+    current_task,
+    tier="standard",
+    episodic_hints="",
+    queue_file=QUEUE_FILE,
+):
+    """Generate a quality-optimized context brief using primacy/recency positioning.
+
+    Ordering follows LLM attention research (Liu et al. "Lost in the Middle"):
+      BEGINNING (highest attention): Decision context — success criteria, failure
+          avoidance, constraints. This shapes HOW the model approaches the task.
+      MIDDLE (lower attention): Metrics, related tasks, completions — useful but
+          non-critical reference data.
+      END (high attention): Episodic lessons + reasoning scaffold — the final
+          instructions the model sees before generating output.
+
+    Args:
+        current_task: The task being executed (used for relevance filtering).
+        tier: "minimal" | "standard" | "full" — controls depth, not just size.
+        episodic_hints: Pre-compressed episode text (from compress_episodes).
+        queue_file: Path to QUEUE.md.
+
+    Returns:
+        Quality-optimized context string. Size varies by tier:
+          minimal:  ~200 tokens (task-focused, no extras)
+          standard: ~600 tokens (decision context + spotlight + metrics + scaffold)
+          full:     ~1000 tokens (everything, optimally ordered for attention)
+    """
+    budget = TIER_BUDGETS.get(tier, TIER_BUDGETS["standard"])
+    # Build sections in attention-optimal order:
+    #   beginning_parts → middle_parts → end_parts
+    beginning = []
+    middle = []
+    end = []
+
+    # =====================================================================
+    # BEGINNING — High attention zone: shapes the model's approach
+    # =====================================================================
+
+    # === SECTION 1: Decision Context (success criteria + failure avoidance) ===
+    if budget.get("decision_context", 0) > 0:
+        decision_ctx = _build_decision_context(current_task, tier=tier)
+        if decision_ctx:
+            beginning.append(decision_ctx)
+
+    # === SECTION 2: Working Memory (Attention Spotlight) ===
+    if budget["spotlight"] > 0:
+        n_items = 5 if tier == "full" else 3
+        spotlight = _get_spotlight_items(n=n_items, exclude_task=current_task)
+        if spotlight:
+            beginning.append("WORKING MEMORY:")
+            beginning.extend(spotlight[:n_items])
+
+    # =====================================================================
+    # MIDDLE — Lower attention zone: reference data
+    # =====================================================================
+
+    # === SECTION 3: Related Pending Tasks ===
+    if budget["related_tasks"] > 0:
+        n_related = 3 if tier == "full" else 2
+        related = _find_related_tasks(current_task, queue_file, max_tasks=n_related)
+        if related:
+            middle.append("RELATED TASKS:")
+            for t in related:
+                middle.append(f"  - {t}")
+
+    # === SECTION 4: Metrics ===
+    if budget["metrics"] > 0:
+        scores = get_latest_scores()
+        if scores:
+            if tier == "full" and "capabilities" in scores:
+                caps = scores["capabilities"]
+                worst_k = min(caps, key=caps.get) if caps else "?"
+                worst_v = caps.get(worst_k, "?") if caps else "?"
+                middle.append(f"METRICS: Phi={scores.get('phi', '?')}, cap_avg={scores.get('capability_avg', '?')}, worst={worst_k}={worst_v}")
+                middle.append(f"  {', '.join(f'{k}={v}' for k, v in sorted(caps.items(), key=lambda x: x[1]))}")
+            else:
+                phi = scores.get("phi", "?")
+                if "capabilities" in scores:
+                    caps = scores["capabilities"]
+                    worst_k = min(caps, key=caps.get) if caps else "?"
+                    worst_v = caps.get(worst_k, "?") if caps else "?"
+                    middle.append(f"METRICS: Phi={phi}, worst_cap={worst_k}={worst_v}")
+                else:
+                    middle.append(f"METRICS: Phi={phi}")
+
+    # === SECTION 5: Recent Completions ===
+    if budget["completions"] > 0:
+        n_comp = 3 if tier == "full" else 2
+        completions = _get_recent_completions(queue_file, n=n_comp)
+        if completions:
+            middle.append("RECENT:")
+            middle.extend(completions)
+
+    # =====================================================================
+    # END — High attention zone: last thing the model sees before output
+    # =====================================================================
+
+    # === SECTION 6: Episodic Lessons (specific to this task type) ===
+    if budget["episodes"] > 0 and episodic_hints:
+        max_chars = budget["episodes"] * 4  # ~4 chars per token
+        end.append(episodic_hints[:max_chars])
+
+    # === SECTION 7: Reasoning Scaffold (think-then-do instruction) ===
+    if budget.get("reasoning_scaffold", 0) > 0:
+        scaffold = _build_reasoning_scaffold(tier=tier)
+        end.append(scaffold)
+
+    # Assemble: beginning → middle → end
+    parts = beginning
+    if middle:
+        parts.append("---")
+        parts.extend(middle)
+    if end:
+        parts.append("---")
+        parts.extend(end)
+
+    return "\n".join(parts)
+
+
 def archive_completed(queue_file=QUEUE_FILE, archive_file=QUEUE_ARCHIVE,
                       keep_days=7, dry_run=False):
     """Move old completed tasks from QUEUE.md to archive file.
@@ -524,14 +928,15 @@ def gc(dry_run=False):
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: context_compressor.py <queue|health|brief|episodes|gc|savings>")
-        print("  queue       — compressed evolution queue")
-        print("  health      — compressed health summary (reads from stdin or args)")
-        print("  brief       — full context brief for prompts")
+        print("Usage: context_compressor.py <queue|health|brief|tiered|episodes|gc|savings>")
+        print("  queue        — compressed evolution queue")
+        print("  health       — compressed health summary (reads from stdin or args)")
+        print("  brief        — full context brief for prompts (legacy)")
         print("  brief --file — write brief to data/context_brief.txt")
-        print("  episodes    — compress episode text from stdin")
-        print("  savings     — estimate token savings")
-        print("  gc          — archive old completed tasks + rotate logs")
+        print("  tiered TASK [minimal|standard|full] — budget-aware brief adapted to task")
+        print("  episodes     — compress episode text from stdin")
+        print("  savings      — estimate token savings")
+        print("  gc           — archive old completed tasks + rotate logs")
         print("  gc --dry-run — show what gc would do without doing it")
         sys.exit(1)
 
@@ -557,6 +962,14 @@ if __name__ == "__main__":
             print(f"Written to {BRIEF_FILE} ({len(brief)} bytes)")
         else:
             print(brief)
+
+    elif cmd == "tiered":
+        # Usage: context_compressor.py tiered "task text" [minimal|standard|full]
+        task = sys.argv[2] if len(sys.argv) > 2 else "unknown task"
+        tier = sys.argv[3] if len(sys.argv) > 3 else "standard"
+        brief = generate_tiered_brief(task, tier=tier)
+        print(brief)
+        print(f"\n--- {tier} tier: {len(brief)} bytes (~{len(brief)//4} tokens) ---")
 
     elif cmd == "episodes":
         if not sys.stdin.isatty():
@@ -590,7 +1003,7 @@ if __name__ == "__main__":
             comp_tokens = len(compressed) // 4
             savings = raw_tokens - comp_tokens
             pct = (1 - comp_tokens / max(1, raw_tokens)) * 100
-            print(f"QUEUE.md token estimate:")
+            print("QUEUE.md token estimate:")
             print(f"  Raw: ~{raw_tokens} tokens ({len(raw)} bytes)")
             print(f"  Compressed: ~{comp_tokens} tokens ({len(compressed)} bytes)")
             print(f"  Savings: ~{savings} tokens/heartbeat ({pct:.0f}% reduction)")

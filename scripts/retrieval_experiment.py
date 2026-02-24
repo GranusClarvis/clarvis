@@ -431,17 +431,17 @@ if __name__ == "__main__":
         print(f"  Missing metadata:          {audit['missing_metadata_count']}")
 
         if audit["examples"]["duplicates"]:
-            print(f"\n  Top duplicate groups:")
+            print("\n  Top duplicate groups:")
             for dg in audit["examples"]["duplicates"][:5]:
                 print(f"    \"{dg['text']}\" x{dg['count']}")
 
         if audit["examples"]["high_noise"]:
-            print(f"\n  Noise examples:")
+            print("\n  Noise examples:")
             for n in audit["examples"]["high_noise"][:5]:
                 print(f"    [{n['collection']}] {n['text']}")
 
         if audit["examples"]["too_terse"]:
-            print(f"\n  Terse examples:")
+            print("\n  Terse examples:")
             for t in audit["examples"]["too_terse"][:5]:
                 print(f"    [{t['collection']}] {t['id']}: \"{t['text']}\"")
 

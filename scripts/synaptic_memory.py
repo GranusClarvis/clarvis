@@ -452,7 +452,6 @@ class SynapticMemory:
 
         conn = self._conn()
         now_iso = datetime.now(timezone.utc).isoformat()
-        now_ts = datetime.now(timezone.utc).timestamp()
         potentiated = 0
         depressed = 0
 
@@ -849,7 +848,7 @@ if __name__ == "__main__":
     elif cmd == "consolidate":
         print("Running synaptic consolidation...")
         result = synaptic.consolidate()
-        print(f"\n=== Consolidation Complete ===")
+        print("\n=== Consolidation Complete ===")
         print(f"  Total synapses: {result['total_synapses']}")
         print(f"  Decayed: {result['decayed']}")
         print(f"  Pruned: {result['pruned']}")
@@ -859,7 +858,7 @@ if __name__ == "__main__":
     elif cmd == "evolve":
         print("Running STDP evolution from access log...")
         result = synaptic.evolve_from_access_log()
-        print(f"\n=== STDP Evolution Complete ===")
+        print("\n=== STDP Evolution Complete ===")
         if "error" in result:
             print(f"  {result['error']}")
         else:

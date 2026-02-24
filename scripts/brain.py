@@ -919,10 +919,10 @@ class ClarvisBrain:
         """Verify brain is working"""
         try:
             # Test store
-            test_id = self.store("health check test", collection=MEMORIES, importance=0.1)
-            
+            self.store("health check test", collection=MEMORIES, importance=0.1)
+
             # Test recall
-            results = self.recall("health check test", n=1)
+            self.recall("health check test", n=1)
             
             # Test stats
             s = self.stats()
@@ -1134,7 +1134,7 @@ if __name__ == "__main__":
         try:
             from memory_consolidation import get_consolidation_stats
             cs = get_consolidation_stats()
-            print(f"\nConsolidation status:")
+            print("\nConsolidation status:")
             print(f"  Potential duplicates: {cs['potential_duplicates']}")
             print(f"  Potential noise: {cs['potential_noise']}")
             print(f"  Stale (archivable): {cs['stale_archivable']}")
@@ -1171,14 +1171,14 @@ if __name__ == "__main__":
         print(f"Stored: {mem_id}")
     elif cmd == "optimize":
         result = b.optimize()
-        print(f"Optimization complete:")
+        print("Optimization complete:")
         print(f"  Decayed: {result['decayed']}")
         print(f"  Pruned: {result['pruned']}")
         print(f"  Stale: {result['stale_count']}")
         print(f"  Total memories: {result['stats']['total_memories']}")
     elif cmd == "optimize-full":
         result = b.optimize(full=True)
-        print(f"Full optimization complete:")
+        print("Full optimization complete:")
         print(f"  Decayed: {result['decayed']}")
         print(f"  Pruned: {result['pruned']}")
         print(f"  Stale: {result['stale_count']}")
@@ -1191,7 +1191,7 @@ if __name__ == "__main__":
     elif cmd == "backfill":
         count = b.backfill_graph_nodes()
         s = b.stats()
-        print(f"Graph node backfill complete:")
+        print("Graph node backfill complete:")
         print(f"  Nodes backfilled: {count}")
         print(f"  Total nodes now: {s['graph_nodes']}")
         print(f"  Total edges: {s['graph_edges']}")
@@ -1204,7 +1204,7 @@ if __name__ == "__main__":
         print(f"Current context: {b.get_context()}")
     elif cmd == "crosslink":
         result = b.bulk_cross_link(verbose=True)
-        print(f"\nCross-linking complete:")
+        print("\nCross-linking complete:")
         print(f"  New edges: {result['new_edges']}")
         print(f"  Scanned: {result['memories_scanned']} memories")
         print(f"  Total edges: {result['total_edges']}")

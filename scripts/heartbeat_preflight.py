@@ -28,7 +28,6 @@ sys.path.insert(0, os.path.dirname(__file__))
 start_import = time.monotonic()
 
 from attention import attention
-from brain import brain
 
 try:
     from task_selector import parse_tasks, score_tasks
@@ -63,9 +62,10 @@ except ImportError:
     EpisodicMemory = None
 
 try:
-    from context_compressor import generate_context_brief, compress_episodes
+    from context_compressor import generate_context_brief, generate_tiered_brief, compress_episodes
 except ImportError:
     generate_context_brief = None
+    generate_tiered_brief = None
     compress_episodes = None
 
 try:
@@ -284,17 +284,24 @@ def run_preflight(dry_run=False):
             log(f"Episodic recall failed: {e}")
     result["timings"]["episodic"] = round(time.monotonic() - t8, 3)
 
-    # === 9. CONTEXT COMPRESSION ===
+    # === 9. TASK ROUTING (moved before context compression to inform tier) ===
     t9 = time.monotonic()
-    context_brief = ""
-    if generate_context_brief:
+    if classify_task:
         try:
-            context_brief = generate_context_brief()
-            log(f"Context brief: {len(context_brief)} bytes")
+            cl = classify_task(next_task)
+            result["route_tier"] = cl.get("tier", "complex")
+            result["route_executor"] = cl.get("executor", "claude")
+            result["route_score"] = cl.get("score", 0.5)
+            result["route_reason"] = cl.get("reason", "unknown")
+            log(f"Route: tier={result['route_tier']} executor={result['route_executor']} score={result['route_score']}")
         except Exception as e:
-            log(f"Context compression failed: {e}")
+            log(f"Task classification failed: {e}")
+    result["timings"]["routing"] = round(time.monotonic() - t9, 3)
 
-    # Compress episodic hints
+    # === 10. CONTEXT COMPRESSION (uses routing tier for budget) ===
+    t10 = time.monotonic()
+
+    # Compress episodic hints first (needed by tiered brief)
     compressed_episodes = ""
     if (similar_episodes or failure_episodes) and compress_episodes:
         try:
@@ -306,23 +313,42 @@ def run_preflight(dry_run=False):
     elif similar_episodes or failure_episodes:
         compressed_episodes = f"{similar_episodes}\n---\n{failure_episodes}"
 
+    # Generate tiered brief (adapts to executor)
+    context_brief = ""
+    executor = result["route_executor"]
+    if generate_tiered_brief:
+        try:
+            # Map executor to brief tier
+            brief_tier = {
+                "openrouter": "minimal",
+                "gemini": "minimal",
+                "claude": "full" if result["route_tier"] in ("complex", "reasoning") else "standard",
+            }.get(executor, "standard")
+
+            context_brief = generate_tiered_brief(
+                current_task=next_task,
+                tier=brief_tier,
+                episodic_hints=compressed_episodes,
+            )
+            log(f"Tiered brief ({brief_tier}): {len(context_brief)} bytes")
+        except Exception as e:
+            log(f"Tiered brief failed, falling back to legacy: {e}")
+            # Fallback to legacy brief
+            if generate_context_brief:
+                try:
+                    context_brief = generate_context_brief()
+                except Exception:
+                    pass
+    elif generate_context_brief:
+        try:
+            context_brief = generate_context_brief()
+            log(f"Context brief (legacy): {len(context_brief)} bytes")
+        except Exception as e:
+            log(f"Context compression failed: {e}")
+
     result["episodic_hints"] = compressed_episodes
     result["context_brief"] = context_brief
-    result["timings"]["context"] = round(time.monotonic() - t9, 3)
-
-    # === 10. TASK ROUTING ===
-    t10 = time.monotonic()
-    if classify_task:
-        try:
-            cl = classify_task(next_task)
-            result["route_tier"] = cl.get("tier", "complex")
-            result["route_executor"] = cl.get("executor", "claude")
-            result["route_score"] = cl.get("score", 0.5)
-            result["route_reason"] = cl.get("reason", "unknown")
-            log(f"Route: tier={result['route_tier']} executor={result['route_executor']} score={result['route_score']}")
-        except Exception as e:
-            log(f"Task classification failed: {e}")
-    result["timings"]["routing"] = round(time.monotonic() - t10, 3)
+    result["timings"]["context"] = round(time.monotonic() - t10, 3)
 
     # === SAVE ATTENTION STATE ===
     try:

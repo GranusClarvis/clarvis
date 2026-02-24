@@ -67,6 +67,7 @@ check_job "reflection"      "$LOG_DIR/reflection.log"       26   # daily at 21:0
 check_job "backup"          "$LOG_DIR/backup.log"           26   # daily at 02:00, grace 2h
 check_job "backup_verify"   "$LOG_DIR/backup_verify.log"    26   # daily at 02:30, grace 2h
 check_job "dream_engine"    "$LOG_DIR/dream.log"            26   # daily at 02:45, grace 2h
+check_job "research"        "$LOG_DIR/research.log"         10   # 3x/day at 09,14,20, grace 2h
 
 # --- Working memory health check ---
 # Verify attention spotlight has active items (target: 3+)
@@ -142,6 +143,7 @@ if [ "$FAILURES" -gt 0 ]; then
   recheck_job "$LOG_DIR/backup.log" 26
   recheck_job "$LOG_DIR/backup_verify.log" 26
   recheck_job "$LOG_DIR/dream.log" 26
+  recheck_job "$LOG_DIR/research.log" 10
 
   RECOVERED=$(( FAILURES - STILL_FAILING ))
   echo "------------------------------"

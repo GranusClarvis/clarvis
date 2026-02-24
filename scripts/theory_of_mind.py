@@ -29,7 +29,7 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from brain import brain, PREFERENCES, AUTONOMOUS_LEARNING
+from brain import brain, AUTONOMOUS_LEARNING
 
 DATA_DIR = Path("/home/agent/.openclaw/workspace/data/theory_of_mind")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -781,7 +781,7 @@ class TheoryOfMind:
         pos = sat.get("positive_signals", [])
         neg = sat.get("negative_signals", [])
         if pos or neg:
-            print(f"\n--- Satisfaction Signals ---")
+            print("\n--- Satisfaction Signals ---")
             print(f"  Positive: {len(pos)} signals")
             print(f"  Negative: {len(neg)} signals")
 
@@ -930,7 +930,7 @@ if __name__ == "__main__":
     elif cmd == "update":
         print("Running full theory of mind update...")
         stats = tom.full_update()
-        print(f"\n--- Update Complete ---")
+        print("\n--- Update Complete ---")
         print(f"  Events mined: {stats['events_mined']}")
         print(f"  Preferences updated: {stats['preferences_updated']}")
         print(f"  Request patterns: {stats['patterns_found']}")

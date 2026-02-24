@@ -196,7 +196,6 @@ def review_and_generate() -> dict:
         last_alert = state["alerted_domains"].get(domain)
         if last_alert:
             # Don't re-alert within 7 days unless new failures occurred
-            last_dt = last_alert.get("timestamp", "")
             last_wrong = last_alert.get("wrong_count", 0)
             if stats["wrong"] <= last_wrong:
                 continue  # No new failures since last alert
@@ -266,7 +265,7 @@ if __name__ == "__main__":
     else:
         # Full review with queue generation
         result = review_and_generate()
-        print(f"Prediction Review Complete:")
+        print("Prediction Review Complete:")
         print(f"  Total: {result['total_predictions']} ({result['resolved']} resolved)")
         print(f"  Domains analyzed: {len(result['domains'])}")
         for domain, stats in result["domains"].items():
@@ -277,4 +276,4 @@ if __name__ == "__main__":
             for t in result["tasks"]:
                 print(f"    {t[:100]}...")
         else:
-            print(f"  No problem domains found — all domains performing well")
+            print("  No problem domains found — all domains performing well")

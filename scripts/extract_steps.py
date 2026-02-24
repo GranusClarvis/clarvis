@@ -18,21 +18,24 @@ import json
 import re
 
 # Generic phrases that indicate a template, not real steps
+# NOTE: These must be specific enough to avoid rejecting concrete steps like
+# "tested via python3 foo.py" or "verified brain connectivity". Use end anchors
+# and require generic follow-on words to avoid false positives.
 GENERIC_PATTERNS = [
-    r"^read (context|requirements|the|existing)",
-    r"^implement solution",
-    r"^test end.to.end",
-    r"^verify (and|result|output)",
-    r"^analyze (the )?requirements",
-    r"^write (the )?code",
-    r"^deploy",
-    r"^review (the )?result",
+    r"^read (context|requirements|the existing)$",
+    r"^implement (the )?solution$",
+    r"^test end.to.end$",
+    r"^verify (and commit|results?|output)$",
+    r"^analyze (the )?requirements$",
+    r"^write (the )?code$",
+    r"^deploy (to production|the changes?)$",
+    r"^review (the )?results?$",
 ]
 
 GENERIC_RE = [re.compile(p, re.IGNORECASE) for p in GENERIC_PATTERNS]
 
 # Minimum quality bar for a step
-MIN_STEP_LENGTH = 15  # steps shorter than this are likely too vague
+MIN_STEP_LENGTH = 10  # steps shorter than this are likely too vague
 MIN_STEPS = 2
 MAX_STEPS = 8
 

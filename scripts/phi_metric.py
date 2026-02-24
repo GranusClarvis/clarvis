@@ -557,17 +557,17 @@ if __name__ == "__main__":
     if cmd == "compute":
         result = compute_phi()
         print(f"Φ (Phi) = {result['phi']}")
-        print(f"\nComponents:")
+        print("\nComponents:")
         for k, v in result["components"].items():
             bar = "█" * int(v * 20) + "░" * (20 - int(v * 20))
             print(f"  {k:35s} {bar} {v:.4f}")
-        print(f"\nIntra-collection density:")
+        print("\nIntra-collection density:")
         for col, d in result["details"]["intra_density_per_collection"].items():
             print(f"  {col:35s} {d:.4f}")
-        print(f"\nSemantic cross-collection pairs:")
+        print("\nSemantic cross-collection pairs:")
         for pair, sim in result["details"]["semantic_pairs"].items():
             print(f"  {pair:60s} {sim:.4f}")
-        print(f"\nRaw:")
+        print("\nRaw:")
         print(f"  Total memories: {result['raw']['total_memories']}")
         print(f"  Total edges:    {result['raw']['total_edges']}")
         print(f"  Cross-collection edges: {result['raw']['cross_collection_edges']}")

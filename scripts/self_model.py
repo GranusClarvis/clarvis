@@ -434,6 +434,43 @@ def _assess_memory_system():
     return max(0.0, min(1.0, score)), evidence
 
 
+def _get_prediction_outcomes_today(today_str):
+    """Get task success/failure counts from predictions.jsonl for today.
+
+    This is a secondary data source that survives log rotation, since
+    predictions.jsonl is append-only and never truncated by context_compressor.
+
+    Returns (completed, failed, descriptions) tuple.
+    """
+    cal_path = "/home/agent/.openclaw/workspace/data/calibration/predictions.jsonl"
+    completed = 0
+    failed = 0
+    descriptions = []
+    try:
+        if os.path.exists(cal_path):
+            with open(cal_path) as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        pred = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    ts = pred.get("timestamp", "")
+                    if not ts.startswith(today_str):
+                        continue
+                    correct = pred.get("correct")
+                    if correct is True:
+                        completed += 1
+                        descriptions.append(pred.get("description", ""))
+                    elif correct is False:
+                        failed += 1
+    except Exception:
+        pass
+    return completed, failed, descriptions
+
+
 def _assess_autonomous_execution():
     """Score autonomous execution based on success rate, velocity, and diversity.
 
@@ -442,80 +479,117 @@ def _assess_autonomous_execution():
       - Velocity: tasks completed today / 5, capped at 0.3          (0–0.3)
       - Task diversity: unique task domains in completions           (0–0.2)
         1 domain = 0.05, 2 = 0.1, 3+ = 0.2
+
+    Uses both autonomous.log and predictions.jsonl as data sources.
+    The log can be truncated by context_compressor rotation (100KB cap),
+    so predictions.jsonl acts as a durable fallback that survives rotation.
     """
     score = 0.0
     evidence = []
     log_path = "/home/agent/.openclaw/workspace/memory/cron/autonomous.log"
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-    completed_count = 0
-    failed_count = 0
-    completed_descriptions = []
+    log_completed = 0
+    log_failed = 0
+    log_descriptions = []
+    log_today_lines = 0
 
+    # --- Source 1: autonomous.log ---
     try:
         if os.path.exists(log_path):
             with open(log_path) as f:
                 lines = f.readlines()
             today_lines = [l for l in lines if today in l]
-            completed_lines = [l for l in today_lines if "COMPLETED" in l]
-            failed_lines = [l for l in today_lines if "FAILED" in l]
-            completed_count = len(completed_lines)
-            failed_count = len(failed_lines)
-            completed_descriptions = completed_lines  # Keep for diversity analysis
-
-            # --- Success rate: completed / (completed + failed) * 0.5 ---
-            total_attempted = completed_count + failed_count
-            if total_attempted > 0:
-                success_rate = completed_count / total_attempted
-                rate_score = success_rate * 0.5
-                score += rate_score
-                evidence.append(f"success rate={success_rate:.0%} ({completed_count}/{total_attempted}) (+{rate_score:.2f})")
-            elif today_lines:
-                # Tasks running but none resolved yet — small credit for activity
-                score += 0.05
-                evidence.append(f"{len(today_lines)} log entries today (none resolved yet)")
-            else:
-                evidence.append("no autonomous activity today")
-
-            # --- Velocity: completed today / 5, capped at 0.3 ---
-            velocity = min(0.3, (completed_count / 5.0) * 0.3)
-            score += velocity
-            if completed_count > 0:
-                evidence.append(f"velocity={completed_count}/5 tasks (+{velocity:.2f})")
-
-            # --- Task diversity: unique domains in completed task descriptions ---
-            # Extract domain keywords from task descriptions
-            domain_keywords = {
-                "memory": ["memory", "brain", "recall", "store", "retrieval"],
-                "code": ["code", "script", "fix", "bug", "implement", "build"],
-                "infra": ["cron", "hook", "wire", "deploy", "config", "infrastructure"],
-                "reflection": ["reflect", "assess", "self", "model", "meta", "phi"],
-                "learning": ["learn", "predict", "calibrat", "feedback", "procedure"],
-                "reasoning": ["reason", "chain", "think", "analys"],
-                "monitoring": ["monitor", "log", "alert", "watchdog", "health"],
-            }
-            found_domains = set()
-            for desc in completed_descriptions:
-                desc_lower = desc.lower()
-                for domain, keywords in domain_keywords.items():
-                    if any(kw in desc_lower for kw in keywords):
-                        found_domains.add(domain)
-
-            if len(found_domains) >= 3:
-                diversity_score = 0.2
-            elif len(found_domains) == 2:
-                diversity_score = 0.1
-            elif len(found_domains) == 1:
-                diversity_score = 0.05
-            else:
-                diversity_score = 0.0
-
-            if diversity_score > 0:
-                score += diversity_score
-                evidence.append(f"task diversity={len(found_domains)} domains ({', '.join(sorted(found_domains))}) (+{diversity_score:.2f})")
-
+            log_today_lines = len(today_lines)
+            # Match both old format ("COMPLETED") and new postflight format ("outcome: success")
+            completed_lines = [l for l in today_lines if "COMPLETED" in l or "outcome: success" in l]
+            failed_lines = [l for l in today_lines if "FAILED" in l or "outcome: timeout" in l or "outcome: failure" in l]
+            log_completed = len(completed_lines)
+            log_failed = len(failed_lines)
+            log_descriptions = completed_lines
     except Exception as e:
         evidence.append(f"log error: {e}")
+
+    # --- Source 2: predictions.jsonl (survives log rotation) ---
+    pred_completed, pred_failed, pred_descriptions = _get_prediction_outcomes_today(today)
+
+    # Use whichever source has more resolved tasks (log rotation may have
+    # removed entries from autonomous.log but predictions.jsonl is durable)
+    log_total = log_completed + log_failed
+    pred_total = pred_completed + pred_failed
+
+    if pred_total > log_total:
+        completed_count = pred_completed
+        failed_count = pred_failed
+        completed_descriptions = pred_descriptions
+        source = "predictions"
+    else:
+        completed_count = log_completed
+        failed_count = log_failed
+        completed_descriptions = log_descriptions
+        source = "log"
+
+    total_attempted = completed_count + failed_count
+
+    # --- Success rate: completed / (completed + failed) * 0.5 ---
+    # Minimum-sample guard: with <3 resolved tasks, blend with a prior
+    # (assumes 50% base rate) to prevent early-day volatile scores.
+    if total_attempted > 0:
+        raw_rate = completed_count / total_attempted
+        if total_attempted < 3:
+            # Bayesian smoothing: blend with 50% prior weighted by sample count
+            # At n=1: 67% prior, 33% data. At n=2: 50/50. At n=3+: pure data.
+            prior_weight = max(0, 3 - total_attempted)
+            success_rate = (completed_count + prior_weight * 0.5) / (total_attempted + prior_weight)
+            evidence.append(f"success rate={success_rate:.0%} (smoothed from {raw_rate:.0%}, n={total_attempted} via {source})")
+        else:
+            success_rate = raw_rate
+            evidence.append(f"success rate={success_rate:.0%} ({completed_count}/{total_attempted} via {source})")
+        rate_score = success_rate * 0.5
+        score += rate_score
+        evidence[-1] += f" (+{rate_score:.2f})"
+    elif log_today_lines:
+        # Tasks running but none resolved yet — small credit for activity
+        score += 0.05
+        evidence.append(f"{log_today_lines} log entries today (none resolved yet)")
+    else:
+        evidence.append("no autonomous activity today")
+
+    # --- Velocity: completed today / 5, capped at 0.3 ---
+    velocity = min(0.3, (completed_count / 5.0) * 0.3)
+    score += velocity
+    if completed_count > 0:
+        evidence.append(f"velocity={completed_count}/5 tasks (+{velocity:.2f})")
+
+    # --- Task diversity: unique domains in completed task descriptions ---
+    domain_keywords = {
+        "memory": ["memory", "brain", "recall", "store", "retrieval"],
+        "code": ["code", "script", "fix", "bug", "implement", "build"],
+        "infra": ["cron", "hook", "wire", "deploy", "config", "infrastructure"],
+        "reflection": ["reflect", "assess", "self", "model", "meta", "phi"],
+        "learning": ["learn", "predict", "calibrat", "feedback", "procedure"],
+        "reasoning": ["reason", "chain", "think", "analys"],
+        "monitoring": ["monitor", "log", "alert", "watchdog", "health"],
+    }
+    found_domains = set()
+    for desc in completed_descriptions:
+        desc_lower = desc.lower() if isinstance(desc, str) else str(desc).lower()
+        for domain, keywords in domain_keywords.items():
+            if any(kw in desc_lower for kw in keywords):
+                found_domains.add(domain)
+
+    if len(found_domains) >= 3:
+        diversity_score = 0.2
+    elif len(found_domains) == 2:
+        diversity_score = 0.1
+    elif len(found_domains) == 1:
+        diversity_score = 0.05
+    else:
+        diversity_score = 0.0
+
+    if diversity_score > 0:
+        score += diversity_score
+        evidence.append(f"task diversity={len(found_domains)} domains ({', '.join(sorted(found_domains))}) (+{diversity_score:.2f})")
 
     return max(0.0, min(1.0, score)), evidence
 
@@ -1446,7 +1520,7 @@ if __name__ == "__main__":
         current = assess_all_capabilities()
         result = check_weekly_regression(current, history)
         if result["alerts"]:
-            print(f"=== Weekly Regression Check ===")
+            print("=== Weekly Regression Check ===")
             for a in result["alerts"]:
                 print(f"  {a}")
             if result["tasks"]:

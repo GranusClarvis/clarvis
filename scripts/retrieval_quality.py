@@ -274,7 +274,7 @@ if __name__ == "__main__":
         print(f"Diagnosis: {result.get('diagnosis', 'N/A')}")
         print(f"Recommendation: {result.get('recommendation', '')}")
         if result.get("by_caller"):
-            print(f"\nBy caller:")
+            print("\nBy caller:")
             for caller, stats in result["by_caller"].items():
                 caller_short = caller.replace("clarvis-", "")
                 hr = f"{stats['hit_rate']:.0%}" if stats.get("hit_rate") is not None else "unrated"

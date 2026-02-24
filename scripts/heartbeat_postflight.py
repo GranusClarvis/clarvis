@@ -72,6 +72,11 @@ try:
 except ImportError:
     extract_steps = None
 
+try:
+    from benchmark_brief import record as benchmark_record
+except ImportError:
+    benchmark_record = None
+
 # Cost tracking
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'packages', 'clarvis-cost'))
 try:
@@ -97,6 +102,11 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
     """
     t0 = time.monotonic()
     timings = {}
+
+    # Shared constants used by multiple sections
+    QUEUE_FILE = "/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md"
+    RETRY_FILE = "/home/agent/.openclaw/workspace/data/task_retries.json"
+    MAX_TASK_RETRIES = 3
 
     task = preflight_data.get("task", "unknown")
     task_section = preflight_data.get("task_section", "P1")
@@ -148,6 +158,56 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
             log(f"Reasoning chain close failed: {e}")
     timings["reasoning_close"] = round(time.monotonic() - t2, 3)
 
+    # === 2.5 FAILURE LESSONS: Store in brain + generate follow-up task ===
+    t25 = time.monotonic()
+    if task_status == "failure" and exit_code != 0 and exit_code != 124:
+        try:
+            # Store a concise lesson in brain
+            error_snippet = output_text[-300:] if output_text else "no output"
+            error_snippet = re.sub(r'[^a-zA-Z0-9 _.,:;=+\-/()@#%\n]', '', error_snippet)[:250]
+            lesson = f"FAILURE LESSON: Attempted '{task[:100]}' — exit {exit_code}. Error: {error_snippet}"
+            brain_mod = None
+            try:
+                from brain import brain as brain_mod
+            except ImportError:
+                pass
+            if brain_mod:
+                brain_mod.store(
+                    lesson,
+                    collection="clarvis-learnings",
+                    importance=0.8,
+                    tags=["failure", "lesson"],
+                    source="postflight_failure"
+                )
+                log(f"Stored failure lesson in brain")
+
+            # Generate a follow-up investigation task (max 1 per cycle)
+            # Check retry count to avoid infinite failure loops
+            retry_data = {}
+            if os.path.exists(RETRY_FILE):
+                try:
+                    with open(RETRY_FILE) as rf:
+                        retry_data = json.load(rf)
+                except Exception:
+                    pass
+            task_key = task[:80]
+            failure_count = retry_data.get(task_key, 0)
+
+            if failure_count < 2:  # Only generate follow-up if <2 prior failures
+                try:
+                    from queue_writer import add_task
+                    followup = f"Investigate failure: '{task[:80]}' failed with exit {exit_code}. Check logs and fix root cause."
+                    added = add_task(followup, priority="P1", source="reasoning_failure")
+                    if added:
+                        log(f"Generated follow-up investigation task")
+                except ImportError:
+                    pass
+            else:
+                log(f"Skipped follow-up task — {task_key[:40]}... failed {failure_count}+ times")
+        except Exception as e:
+            log(f"Failure lesson recording failed: {e}")
+    timings["failure_lessons"] = round(time.monotonic() - t25, 3)
+
     # === 3. ATTENTION: Record outcome ===
     t3 = time.monotonic()
     try:
@@ -174,7 +234,10 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
             try:
                 steps = None
                 if extract_steps:
-                    steps = extract_steps(output_text)
+                    # Truncate to last 2000 chars — extract_steps looks at the
+                    # summary line near the end; a huge blob confuses the splitter
+                    extraction_text = output_text[-2000:] if len(output_text) > 2000 else output_text
+                    steps = extract_steps(extraction_text)
                 if steps:
                     learn_from_task(task, steps)
                     log(f"Learned new procedure from task output ({len(steps)} steps)")
@@ -229,6 +292,16 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
             log(f"Routing log failed: {e}")
     timings["routing_log"] = round(time.monotonic() - t7, 3)
 
+    # === 7.25 BENCHMARK: Brief v2 quality tracking ===
+    t725 = time.monotonic()
+    if benchmark_record:
+        try:
+            benchmark_record(preflight_data, exit_code, task_duration)
+            log("Benchmark: brief v2 entry recorded")
+        except Exception as e:
+            log(f"Benchmark recording failed: {e}")
+    timings["benchmark"] = round(time.monotonic() - t725, 3)
+
     # === 7.5 COST TRACKING ===
     t75 = time.monotonic()
     if cost_tracker:
@@ -244,9 +317,7 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
             executor = preflight_data.get("route_executor", "claude")
             if real_model:
                 model = real_model
-            elif executor == "gemini":
-                model = "gemini-2.0-flash"
-            elif executor == "openrouter":
+            elif executor in ("gemini", "openrouter"):
                 model = preflight_data.get("route_model", "minimax/minimax-m2.5")
             else:
                 model = "claude-code"
@@ -321,7 +392,7 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
             evo = EvolutionLoop()
             evo.capture_failure(
                 "cron_autonomous",
-                "Timeout (exit 124) — task exceeded 600s",
+                f"Timeout (exit 124) — task exceeded {task_duration}s",
                 context=task,
                 exit_code=124
             )
@@ -347,9 +418,6 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
 
     # === 10. MARK TASK COMPLETE IN QUEUE.MD ===
     t10 = time.monotonic()
-    QUEUE_FILE = "/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md"
-    RETRY_FILE = "/home/agent/.openclaw/workspace/data/task_retries.json"
-    MAX_TASK_RETRIES = 3
 
     def _mark_task_in_queue(task_text, annotation):
         """Mark a task as [x] in QUEUE.md with an annotation."""

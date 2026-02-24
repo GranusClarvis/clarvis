@@ -48,6 +48,10 @@ python3 /home/agent/.openclaw/workspace/scripts/knowledge_synthesis.py >> "$LOGF
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running cross-collection linking..." >> "$LOGFILE"
 python3 /home/agent/.openclaw/workspace/scripts/brain.py crosslink >> "$LOGFILE" 2>&1 || true
 
+# Step 3.6: Intra-collection linking — boost within-collection edge density (cap 5/collection)
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running intra-collection linker..." >> "$LOGFILE"
+python3 /home/agent/.openclaw/workspace/scripts/intra_linker.py --cap 5 >> "$LOGFILE" 2>&1 || true
+
 # Step 3.7: Semantic bridge building — fill weak cross-collection gaps (cap 5/run)
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running semantic bridge builder..." >> "$LOGFILE"
 python3 /home/agent/.openclaw/workspace/scripts/semantic_bridge_builder.py --top 2 >> "$LOGFILE" 2>&1 || true
@@ -84,6 +88,10 @@ python3 /home/agent/.openclaw/workspace/scripts/temporal_self.py store >> "$LOGF
 # Step 6.7: Meta-learning — analyze learning strategies, failure patterns, recommend improvements
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running meta-learning analysis..." >> "$LOGFILE"
 python3 /home/agent/.openclaw/workspace/scripts/meta_learning.py analyze >> "$LOGFILE" 2>&1 || true
+
+# Step 6.9: Absolute Zero Reasoner — self-improvement through autonomous task generation (AZR)
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running Absolute Zero Reasoner..." >> "$LOGFILE"
+python3 /home/agent/.openclaw/workspace/scripts/absolute_zero.py run 3 >> "$LOGFILE" 2>&1 || true
 
 # Step 7: Session close — save attention state and working memory for next session — CRITICAL
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running session close..." >> "$LOGFILE"

@@ -234,7 +234,7 @@ def run(threshold=0.30, top_n=3, dry_run=False, verbose=True):
     state = load_state()
 
     if verbose:
-        print(f"Semantic Bridge Builder")
+        print("Semantic Bridge Builder")
         print(f"  Threshold: {threshold}")
         print(f"  Top pairs per weak link: {top_n}")
         print(f"  Dry run: {dry_run}")

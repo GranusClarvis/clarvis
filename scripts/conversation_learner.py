@@ -441,36 +441,36 @@ def print_report(patterns: dict, insights: list):
     print("  CONVERSATION LEARNING REPORT")
     print("=" * 60)
 
-    print(f"\n--- Transcript Stats ---")
+    print("\n--- Transcript Stats ---")
     print(f"  Successes extracted: {len(patterns['successes'])}")
     print(f"  Failures extracted:  {len(patterns['failures'])}")
     print(f"  Questions found:     {len(patterns['questions'])}")
     print(f"  Insights found:      {len(patterns['insights'])}")
     print(f"  Approaches found:    {len(patterns['approaches'])}")
 
-    print(f"\n--- Bug Type Distribution ---")
+    print("\n--- Bug Type Distribution ---")
     for bt, count in patterns['bug_types'].most_common():
         print(f"  {bt}: {count}")
 
-    print(f"\n--- Top Systems Touched ---")
+    print("\n--- Top Systems Touched ---")
     for sys_name, count in patterns['systems_touched'].most_common(8):
         print(f"  {sys_name}: {count}")
 
-    print(f"\n--- Recurring Themes ---")
+    print("\n--- Recurring Themes ---")
     for theme, count in patterns['recurring_themes'].most_common(8):
         print(f"  '{theme}': {count}")
 
-    print(f"\n--- What Works ---")
+    print("\n--- What Works ---")
     for w in find_what_works(patterns)[:5]:
         print(f"  {w['pattern']}")
 
-    print(f"\n--- What Fails ---")
+    print("\n--- What Fails ---")
     for f in find_what_fails(patterns)[:5]:
         print(f"  {f['pattern']}")
 
     recurring = find_recurring_questions(patterns)
     if recurring:
-        print(f"\n--- Recurring Questions ---")
+        print("\n--- Recurring Questions ---")
         for r in recurring[:3]:
             print(f"  ({r['occurrences']}x) {r['question'][:100]}")
 

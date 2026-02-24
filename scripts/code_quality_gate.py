@@ -211,7 +211,7 @@ def record_history(summary):
 
 def print_report(summary, syntax_errors, issues, fixes, per_file):
     """Print human-readable report."""
-    print(f"=== Code Quality Gate ===")
+    print("=== Code Quality Gate ===")
     print(f"Files scanned: {summary['total_files']}")
     print(f"Clean files:   {summary['clean_files']}/{summary['total_files']} ({summary['clean_ratio']:.0%})")
     print(f"Syntax errors: {summary['syntax_errors']}")
@@ -220,7 +220,7 @@ def print_report(summary, syntax_errors, issues, fixes, per_file):
         print(f"  Breakdown: {summary['by_type']}")
 
     if syntax_errors:
-        print(f"\n--- Syntax Errors ---")
+        print("\n--- Syntax Errors ---")
         for e in syntax_errors:
             print(f"  {Path(e['file']).name}:{e['line']}: {e['msg']}")
 

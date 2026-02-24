@@ -146,24 +146,24 @@ def enrich_infrastructure(scripts, crons):
     # Data layout
     entries.append((
         'infra-data-layout',
-        f"Data directory layout: data/clarvisdb/ (ChromaDB vector store, primary), "
-        f"data/clarvisdb-local/ (ONNX local embeddings), data/dashboard/ (HTML+JSON status), "
-        f"data/phi_history.json (Phi trend), data/capability_history.json (capability scores), "
-        f"data/calibration.json (prediction calibration), data/working_memory_state.json (WM persistence), "
-        f"data/reasoning_chains/ (thought chain logs), data/plans/ (architecture analysis docs).",
+        "Data directory layout: data/clarvisdb/ (ChromaDB vector store, primary), "
+        "data/clarvisdb-local/ (ONNX local embeddings), data/dashboard/ (HTML+JSON status), "
+        "data/phi_history.json (Phi trend), data/capability_history.json (capability scores), "
+        "data/calibration.json (prediction calibration), data/working_memory_state.json (WM persistence), "
+        "data/reasoning_chains/ (thought chain logs), data/plans/ (architecture analysis docs).",
         0.7,
     ))
 
     # ChromaDB collections reference
     entries.append((
         'infra-collections-map',
-        f"ChromaDB collections (10 total): clarvis-identity (9 entries, who I am), "
-        f"clarvis-preferences (user prefs), clarvis-learnings (128 entries, knowledge base), "
-        f"clarvis-infrastructure (system docs), clarvis-goals (12 entries, tracked objectives), "
-        f"clarvis-context (current state), clarvis-memories (66 entries, general), "
-        f"clarvis-procedures (6 entries, reusable step sequences), "
-        f"autonomous-learning (18 entries, conversation-extracted patterns), "
-        f"clarvis-episodes (7 entries, ACT-R episodic memory).",
+        "ChromaDB collections (10 total): clarvis-identity (9 entries, who I am), "
+        "clarvis-preferences (user prefs), clarvis-learnings (128 entries, knowledge base), "
+        "clarvis-infrastructure (system docs), clarvis-goals (12 entries, tracked objectives), "
+        "clarvis-context (current state), clarvis-memories (66 entries, general), "
+        "clarvis-procedures (6 entries, reusable step sequences), "
+        "autonomous-learning (18 entries, conversation-extracted patterns), "
+        "clarvis-episodes (7 entries, ACT-R episodic memory).",
         0.8,
     ))
 

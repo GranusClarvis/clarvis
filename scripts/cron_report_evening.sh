@@ -24,16 +24,36 @@ with open('/home/agent/.openclaw/openclaw.json') as f:
 TOKEN = config['channels']['telegram']['botToken']
 
 stats = brain.stats()
-ctx = brain.get_context()
 
-ctx_preview = ctx[:80] if ctx else "No active context"
+# Read actual P1 priorities from QUEUE.md
+queue_path = "/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md"
+with open(queue_path) as f:
+    queue_content = f.read()
+
+# Extract P1 items completed today
+p1_match = re.search(r'## P1 — This Week\s*\n(.*?)(?=##|$)', queue_content, re.DOTALL)
+p1_items = []
+if p1_match:
+    for line in p1_match.group(1).strip().split('\n'):
+        if '- [ ]' in line:
+            task = re.sub(r'^- \[ \]\s*', '', line.split('—')[0] if '—' in line else line)
+            task = re.sub(r'\s*\([^)]+\)\s*$', '', task).strip()
+            if task and len(task) < 60:
+                p1_items.append(task[:55])
+
+# Count completed research
+completed_research = queue_content.count('[x] P')
+
 collections_str = ", ".join([f"{k.split('-')[-1]}({v})" for k,v in stats['collections'].items()])
+p1_str = " • ".join(p1_items[:3]) if p1_items else "All clear"
 
 report = f"""🌙 Clarvis Evening Report
 
 🧠 Brain: {stats['total_memories']} memories, {len(stats['collections'])} collections
-📍 Context: {ctx_preview}
 📁 Collections: {collections_str}
+
+📋 P1: {p1_str}
+🔬 Research: {completed_research}/10 priority sessions done
 
 🎯 Current Focus: Evolution toward AGI/consciousness
 🔄 Status: Ready for nighttime evolution

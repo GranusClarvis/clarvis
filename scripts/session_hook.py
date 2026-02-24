@@ -133,7 +133,7 @@ def session_close(session_key=None, messages=None):
         if decisions:
             for d in decisions[:3]:
                 tom.observe("preference", d, context={"source": "session_decision"})
-        print(f"  Theory of Mind: session close events recorded")
+        print("  Theory of Mind: session close events recorded")
     except Exception:
         pass
 

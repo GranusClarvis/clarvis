@@ -34,7 +34,6 @@ Usage:
 
 import json
 import math
-import os
 import sys
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -594,7 +593,7 @@ if __name__ == "__main__":
     if cmd == "evolve":
         print("Running Hebbian evolution cycle...")
         result = hebbian.evolve(dry_run=False)
-        print(f"\n=== Hebbian Evolution Complete ===")
+        print("\n=== Hebbian Evolution Complete ===")
         print(f"  Memories scanned:          {result['total_memories_scanned']}")
         print(f"  Strengthened:              {result['strengthened']}")
         print(f"  Weakened (power-law decay): {result['weakened']}")
@@ -604,7 +603,7 @@ if __name__ == "__main__":
     elif cmd == "evolve-dry":
         print("Dry-run Hebbian evolution cycle...")
         result = hebbian.evolve(dry_run=True)
-        print(f"\n=== Hebbian Evolution (DRY RUN) ===")
+        print("\n=== Hebbian Evolution (DRY RUN) ===")
         print(f"  Memories scanned:          {result['total_memories_scanned']}")
         print(f"  Would strengthen:          {result['strengthened']}")
         print(f"  Would weaken:              {result['weakened']}")
@@ -622,7 +621,7 @@ if __name__ == "__main__":
     elif cmd == "diagnose":
         print("Diagnosing memory health...")
         diag = hebbian.diagnose()
-        print(f"\n=== Memory Health Diagnosis ===")
+        print("\n=== Memory Health Diagnosis ===")
         print(f"  High importance (>0.85): {diag['high_importance_count']}")
         print(f"  Low importance (<0.15):  {diag['low_importance_count']}")
         print(f"  Never accessed:          {diag['never_accessed_count']}")
@@ -631,12 +630,12 @@ if __name__ == "__main__":
         print(f"  Strong associations:     {diag['strong_associations']}")
 
         if diag["top_heavily_accessed"]:
-            print(f"\n  Top accessed memories:")
+            print("\n  Top accessed memories:")
             for m in diag["top_heavily_accessed"]:
                 print(f"    [{m['collection']}] x{m['access_count']} imp={m['importance']} {m['preview']}")
 
         if diag["top_high_importance"]:
-            print(f"\n  Highest importance memories:")
+            print("\n  Highest importance memories:")
             for m in diag["top_high_importance"]:
                 print(f"    [{m['collection']}] imp={m['importance']} x{m['access_count']} {m['preview']}")
 
@@ -648,13 +647,13 @@ if __name__ == "__main__":
         print(f"  Unique memories:     {patterns['unique_memories']}")
 
         if patterns.get("caller_breakdown"):
-            print(f"\n  By caller:")
+            print("\n  By caller:")
             for caller, count in sorted(patterns["caller_breakdown"].items(),
                                          key=lambda x: x[1], reverse=True):
                 print(f"    {caller}: {count}")
 
         if patterns.get("top_accessed"):
-            print(f"\n  Top accessed memories:")
+            print("\n  Top accessed memories:")
             for mem_id, count in patterns["top_accessed"][:10]:
                 print(f"    x{count}  {mem_id}")
 

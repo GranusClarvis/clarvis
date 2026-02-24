@@ -368,7 +368,7 @@ def dream(n_episodes=10):
         source="dream_engine"
     )
 
-    print(f"\n[dream] Dream cycle complete:")
+    print("\n[dream] Dream cycle complete:")
     print(f"  Episodes dreamed: {len(episodes)}")
     print(f"  Insights generated: {len(session_insights)}")
     print(f"  Reasoning chains: {len(chains_created)}")

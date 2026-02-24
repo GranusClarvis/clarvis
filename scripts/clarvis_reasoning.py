@@ -47,11 +47,9 @@ CLI:
 """
 
 import json
-import math
-import os
 import sys
-from collections import Counter, defaultdict
-from datetime import datetime, timezone, timedelta
+from collections import Counter
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -687,7 +685,7 @@ class ClarvisReasoner:
             evidence.append(f"today: {today_with_outcomes}/{today_count} with outcomes (+{today_score:.2f})")
             # Freshness bonus
             score += 0.15
-            evidence.append(f"active today (+0.15)")
+            evidence.append("active today (+0.15)")
 
         # Hook exists (minimal)
         hook = Path("/home/agent/.openclaw/workspace/scripts/reasoning_chain_hook.py")
@@ -842,13 +840,13 @@ if __name__ == "__main__":
         if cal.get("total", 0) > 0:
             print(f"\n  Calibration: {cal['hits']}/{cal['total']} correct ({cal['accuracy']:.0%})")
         if report.get("recommendations"):
-            print(f"\n  Recommendations:")
+            print("\n  Recommendations:")
             for r in report["recommendations"]:
                 print(f"    - {r}")
 
     elif cmd == "stats":
         meta = reasoner._meta
-        print(f"ClarvisReasoning Statistics:")
+        print("ClarvisReasoning Statistics:")
         print(f"  Total sessions created: {meta.get('total_sessions', 0)}")
         print(f"  Last diagnosis: {meta.get('last_diagnosis', 'never')}")
         print(f"  Avg depth: {meta.get('avg_depth', 0):.2f}")

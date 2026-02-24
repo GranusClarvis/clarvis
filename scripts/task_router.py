@@ -3,8 +3,8 @@
 Task Router — Selective reasoning for Clarvis heartbeat loop.
 
 Classifies task complexity and routes to the appropriate executor:
-  SIMPLE  → Gemini Flash API (free, fast) or OpenRouter cheap model
-  COMPLEX → Claude Code CLI (full agentic, file editing, code gen)
+  SIMPLE/MEDIUM → OpenRouter cheap model (MiniMax M2.5)
+  COMPLEX       → Claude Code CLI (full agentic, file editing, code gen)
 
 Saves ~80-90% cost on simple tasks (queue management, config edits,
 memory lookups, status checks) by not spawning a full Claude Code session.
@@ -13,7 +13,6 @@ Adapted from ClawRouter's 14-dimension weighted scorer.
 
 Usage:
     python3 task_router.py classify "Build a new cron script for X"
-    python3 task_router.py execute "Fix typo in QUEUE.md" --context "..."
     python3 task_router.py execute-openrouter "Task text" [model]
     python3 task_router.py stats
 """
@@ -31,7 +30,6 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 DATA_DIR = "/home/agent/.openclaw/workspace/data"
 ROUTER_LOG = os.path.join(DATA_DIR, "router_decisions.jsonl")
-GEMINI_MODEL = "gemini-2.0-flash"  # Free tier, fast
 
 # Tier boundaries (from ClawRouter research, tuned for Clarvis tasks)
 TIER_BOUNDARIES = {
@@ -301,92 +299,6 @@ def classify_task(task_text, context=""):
     }
 
 
-# === LIGHTWEIGHT EXECUTOR (Gemini Flash) ===
-
-def execute_simple(task_text, context="", proc_hint="", episode_hint=""):
-    """
-    Execute a simple task using Gemini Flash API.
-
-    Returns:
-        dict: {"output": str, "exit_code": int, "model": str, "tokens": int}
-    """
-    api_key = os.environ.get("GEMINI_API_KEY", "")
-    if not api_key:
-        return {
-            "output": "ERROR: GEMINI_API_KEY not set, falling back to Claude",
-            "exit_code": 1,
-            "model": "none",
-            "tokens": 0,
-            "fallback": True,
-        }
-
-    # Build prompt — same structure as cron_autonomous.sh but simpler
-    prompt = f"""You are Clarvis's executive function. Execute this evolution task:
-
-TASK: {task_text}
-{proc_hint}
-{episode_hint}
-CONTEXT: {context}
-
-IMPORTANT: You are running in lightweight mode (no file editing tools).
-If this task requires writing or modifying code files, output exactly:
-NEEDS_CLAUDE_CODE: true
-and explain what needs to be done.
-
-Otherwise, do the work. Be concrete. When done, output a 1-line summary."""
-
-    import urllib.request
-
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={api_key}"
-    payload = json.dumps({
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {
-            "maxOutputTokens": 2048,
-            "temperature": 0.3,
-        },
-    }).encode()
-
-    req = urllib.request.Request(url, payload, {"Content-Type": "application/json"})
-
-    try:
-        resp = urllib.request.urlopen(req, timeout=60)
-        result = json.loads(resp.read())
-
-        # Extract text
-        text = result.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-
-        # Extract token usage
-        usage = result.get("usageMetadata", {})
-        tokens = usage.get("totalTokenCount", 0)
-
-        # Check if task needs escalation to Claude Code
-        if "NEEDS_CLAUDE_CODE: true" in text:
-            return {
-                "output": text,
-                "exit_code": 0,
-                "model": GEMINI_MODEL,
-                "tokens": tokens,
-                "fallback": True,  # Signal to caller: re-run with Claude Code
-            }
-
-        return {
-            "output": text,
-            "exit_code": 0,
-            "model": GEMINI_MODEL,
-            "tokens": tokens,
-            "fallback": False,
-        }
-
-    except Exception as e:
-        return {
-            "output": f"Gemini API error: {e}",
-            "exit_code": 1,
-            "model": GEMINI_MODEL,
-            "tokens": 0,
-            "fallback": True,  # Fall back to Claude Code on API error
-        }
-
-
 # === OPENROUTER DIRECT EXECUTOR ===
 
 # Model selection by tier and task type
@@ -401,7 +313,7 @@ OPENROUTER_MODELS = {
 # Patterns that trigger specialized model selection (checked before tier routing)
 VISION_PATTERNS = [
     r"(?i)image", r"(?i)photo", r"(?i)picture", r"(?i)screenshot",
-    r"(?i)visual", r"(?i)diagram", r"(?i)chart", r"(?i)graph",
+    r"(?i)visual", r"(?i)diagram", r"(?i)chart",
     r"(?i)look\s+at", r"(?i)what.*see", r"(?i)describe.*(?:image|photo)",
     r"(?i)ocr\b", r"(?i)scan\b",
 ]
@@ -598,8 +510,8 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Usage:")
         print("  task_router.py classify <task_text>     # Classify complexity")
-        print("  task_router.py execute <task_text>       # Execute via lightweight model")
         print("  task_router.py route <task_text>         # Classify + output JSON for bash")
+        print("  task_router.py execute-openrouter <task> # Execute via OpenRouter")
         print("  task_router.py stats                     # Show routing statistics")
         sys.exit(1)
 
@@ -616,16 +528,6 @@ if __name__ == "__main__":
         result = classify_task(task)
         # Output as single-line JSON for bash parsing
         print(json.dumps(result))
-
-    elif cmd == "execute":
-        task = " ".join(sys.argv[2:])
-        # Read context from env if available
-        context = os.environ.get("TASK_CONTEXT", "")
-        proc_hint = os.environ.get("TASK_PROC_HINT", "")
-        episode_hint = os.environ.get("TASK_EPISODE_HINT", "")
-        result = execute_simple(task, context, proc_hint, episode_hint)
-        print(result["output"])
-        sys.exit(result["exit_code"])
 
     elif cmd == "execute-openrouter":
         task = " ".join(sys.argv[2:])
@@ -647,7 +549,7 @@ if __name__ == "__main__":
 
     elif cmd == "stats":
         stats = get_stats()
-        print(f"Routing Stats:")
+        print("Routing Stats:")
         print(f"  Total decisions: {stats['total']}")
         print(f"  Gemini (simple): {stats['gemini']} ({stats['gemini_pct']}%)")
         print(f"  Claude (complex): {stats['claude']}")

@@ -29,7 +29,7 @@ import sys
 # Add clarvis-cost package to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'packages', 'clarvis-cost'))
 
-from clarvis_cost.core import CostTracker, estimate_cost, estimate_tokens, analyze_savings, import_router_decisions
+from clarvis_cost.core import CostTracker, analyze_savings, import_router_decisions
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), '..', 'data')
 COST_LOG = os.path.join(DATA_DIR, 'costs.jsonl')
@@ -46,33 +46,33 @@ def main():
 
     if cmd in ("daily", "day"):
         rollup = tracker.rollup("day")
-        print(f"=== Daily Cost Report ===")
+        print("=== Daily Cost Report ===")
         print(f"Total: ${rollup['total_cost']:.4f}")
         print(f"Calls: {rollup['call_count']}")
         print(f"Tokens: {rollup['total_input_tokens']:,} in / {rollup['total_output_tokens']:,} out")
         if rollup["by_model"]:
-            print(f"\nBy model:")
+            print("\nBy model:")
             for m, d in sorted(rollup["by_model"].items(), key=lambda x: -x[1]["cost"]):
                 print(f"  {m}: ${d['cost']:.4f} ({d['count']} calls)")
         if rollup["by_source"]:
-            print(f"\nBy source:")
+            print("\nBy source:")
             for s, d in sorted(rollup["by_source"].items(), key=lambda x: -x[1]["cost"]):
                 print(f"  {s}: ${d['cost']:.4f} ({d['count']} calls)")
 
     elif cmd in ("weekly", "week"):
         rollup = tracker.rollup("week")
-        print(f"=== Weekly Cost Report ===")
+        print("=== Weekly Cost Report ===")
         print(f"Total: ${rollup['total_cost']:.4f}")
         print(f"Calls: {rollup['call_count']}")
         print(f"Tokens: {rollup['total_input_tokens']:,} in / {rollup['total_output_tokens']:,} out")
         if rollup["by_model"]:
-            print(f"\nBy model:")
+            print("\nBy model:")
             for m, d in sorted(rollup["by_model"].items(), key=lambda x: -x[1]["cost"]):
                 print(f"  {m}: ${d['cost']:.4f} ({d['count']} calls)")
 
     elif cmd in ("monthly", "month"):
         rollup = tracker.rollup("month")
-        print(f"=== Monthly Cost Report ===")
+        print("=== Monthly Cost Report ===")
         print(f"Total: ${rollup['total_cost']:.4f}")
         print(f"Calls: {rollup['call_count']}")
         print(f"Tokens: {rollup['total_input_tokens']:,} in / {rollup['total_output_tokens']:,} out")
@@ -107,7 +107,7 @@ def main():
 
     elif cmd == "analyze":
         stats = analyze_savings(tracker, ROUTER_LOG)
-        print(f"=== Cost Optimization Analysis ===")
+        print("=== Cost Optimization Analysis ===")
         print(f"Weekly cost: ${stats['weekly_cost']:.4f}")
         print(f"Weekly calls: {stats['weekly_calls']}")
         print(f"Weekly tokens: {stats['weekly_tokens']:,}")
@@ -116,11 +116,11 @@ def main():
         if "output_input_ratio" in stats:
             print(f"Output/input ratio: {stats['output_input_ratio']}x")
         if stats.get("suggestions"):
-            print(f"\nSuggestions:")
+            print("\nSuggestions:")
             for s in stats["suggestions"]:
                 print(f"  - {s}")
         else:
-            print(f"\nNo optimization suggestions at this time.")
+            print("\nNo optimization suggestions at this time.")
 
     elif cmd == "import-router":
         count = import_router_decisions(ROUTER_LOG, tracker)
@@ -154,14 +154,14 @@ def main():
         local_week = tracker.rollup("week")
         local_month = tracker.rollup("month")
         print("=== Local Tracked vs OpenRouter API ===")
-        print(f"              Local      API        Gap")
+        print("              Local      API        Gap")
         print(f"  Daily:   ${local_day['total_cost']:>8.4f}  ${usage['daily']:>8.4f}  ${usage['daily'] - local_day['total_cost']:>8.4f}")
         print(f"  Weekly:  ${local_week['total_cost']:>8.4f}  ${usage['weekly']:>8.4f}  ${usage['weekly'] - local_week['total_cost']:>8.4f}")
         print(f"  Monthly: ${local_month['total_cost']:>8.4f}  ${usage['monthly']:>8.4f}  ${usage['monthly'] - local_month['total_cost']:>8.4f}")
         gap_pct = ((usage['monthly'] - local_month['total_cost']) / max(usage['monthly'], 0.01)) * 100
         if gap_pct > 10:
             print(f"\n  WARNING: Local tracking misses {gap_pct:.0f}% of actual costs.")
-            print(f"  This gap = costs from the M2.5 interactive agent + untracked cron calls.")
+            print("  This gap = costs from the M2.5 interactive agent + untracked cron calls.")
 
     elif cmd == "telegram":
         # Formatted output for Telegram /costs command

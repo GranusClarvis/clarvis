@@ -349,7 +349,7 @@ def run_tracker(dry_run=False):
     # Find cross-goal blockers
     blockers = find_weakest_domains(goal_status)
     if blockers:
-        print(f"\n  Cross-goal blockers (domains blocking most stalled goals):")
+        print("\n  Cross-goal blockers (domains blocking most stalled goals):")
         for domain, count in blockers[:3]:
             print(f"    {domain}: blocking {count} goal(s)")
 
@@ -360,7 +360,7 @@ def run_tracker(dry_run=False):
         for t in tasks:
             print(f"    -> {t[:120]}...")
     else:
-        print(f"\n  No new tasks needed (all goals progressing or already tracked)")
+        print("\n  No new tasks needed (all goals progressing or already tracked)")
 
     return {
         "goals": goal_status,

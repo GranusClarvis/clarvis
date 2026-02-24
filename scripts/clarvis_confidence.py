@@ -291,7 +291,7 @@ def review() -> dict:
 
     # Basic stats
     successes = sum(1 for e in resolved if e["correct"])
-    failures = len(resolved) - successes
+    _ = len(resolved) - successes
     success_rate = successes / len(resolved)
     avg_confidence = sum(e["confidence"] for e in resolved) / len(resolved)
 
@@ -441,7 +441,7 @@ if __name__ == "__main__":
 
     elif cmd == "review":
         result = review()
-        print(f"=== Calibration Review ===")
+        print("=== Calibration Review ===")
         print(f"Predictions: {result['total_predictions']} ({result['resolved']} resolved)")
         if result['resolved'] > 0:
             print(f"Success rate: {result.get('success_rate', 0):.0%}")
@@ -453,7 +453,7 @@ if __name__ == "__main__":
             print(f"New threshold: {result.get('recommended_confidence', 0.7)}")
             curve = result.get("calibration_curve", {})
             if curve:
-                print(f"\nCalibration curve:")
+                print("\nCalibration curve:")
                 for label, data in curve.items():
                     bar = "#" * int(data["actual_rate"] * 20)
                     print(f"  {label}: predicted={data['predicted_avg']:.0%} actual={data['actual_rate']:.0%} (n={data['count']}) {bar}")

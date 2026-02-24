@@ -335,7 +335,6 @@ class FileProfile:
             return 0.0
 
         penalties = 0.0
-        total_fns = len(self.functions) + sum(len(c["methods"]) for c in self.classes)
 
         # Dead imports: -0.02 each
         penalties += len(self.find_dead_imports()) * 0.02
@@ -556,7 +555,7 @@ def run_thought_protocol_tests():
 def run_retrieval_benchmark():
     """Run retrieval_benchmark.py and return precision/recall."""
     try:
-        result = subprocess.run(
+        subprocess.run(
             [sys.executable, str(SCRIPTS_DIR / "retrieval_benchmark.py")],
             capture_output=True, text=True, timeout=120,
             cwd=str(SCRIPTS_DIR),
@@ -801,7 +800,7 @@ def cmd_scan(auto_fix=False):
             f.write(json.dumps(fix_record) + "\n")
     store_to_brain(report)
 
-    print(f"=== AST Self-Surgery Report ===")
+    print("=== AST Self-Surgery Report ===")
     print(f"Files scanned:   {report['files_scanned']}")
     print(f"Total lines:     {report['total_lines']}")
     print(f"Parse errors:    {report['parse_errors']}")
@@ -910,7 +909,7 @@ def cmd_stats():
     with open(LATEST_FILE) as f:
         report = json.load(f)
 
-    print(f"=== AST Surgery Stats ===")
+    print("=== AST Surgery Stats ===")
     print(f"Last scan:       {report['timestamp']}")
     print(f"Files:           {report['files_scanned']}")
     print(f"Lines:           {report['total_lines']}")

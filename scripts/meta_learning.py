@@ -32,11 +32,9 @@ Usage:
 """
 
 import json
-import math
-import os
 import sys
 from collections import defaultdict
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -927,14 +925,14 @@ if __name__ == "__main__":
 
         # Retrieval
         rp = result["retrieval_patterns"]
-        print(f"\n--- Retrieval Effectiveness ---")
+        print("\n--- Retrieval Effectiveness ---")
         print(f"  Total accesses: {rp.get('total_accesses', 0)}")
         if rp.get("retrieval_usefulness_rate") is not None:
             print(f"  Usefulness rate: {rp['retrieval_usefulness_rate']:.0%}")
         print(f"  Access concentration (Gini): {rp.get('access_concentration', 0):.3f}")
         callers = rp.get("caller_effectiveness", {})
         if callers:
-            print(f"  Top callers:")
+            print("  Top callers:")
             for caller, stats in sorted(callers.items(),
                                          key=lambda x: x[1]["total_accesses"], reverse=True)[:5]:
                 print(f"    {caller:25s}  {stats['total_accesses']} accesses  "
@@ -951,7 +949,7 @@ if __name__ == "__main__":
 
         # Summary
         s = result["summary"]
-        print(f"\n--- Summary ---")
+        print("\n--- Summary ---")
         print(f"  Strategies analyzed: {s['strategy_count']}")
         print(f"  Domains analyzed: {s['domains_analyzed']}")
         print(f"  Failure clusters: {s['failure_clusters']}")
@@ -1016,7 +1014,7 @@ if __name__ == "__main__":
 
     elif cmd == "stats":
         analysis = meta_learner._analysis
-        print(f"Meta-Learning Statistics:")
+        print("Meta-Learning Statistics:")
         print(f"  Last run: {analysis.get('last_run', 'never')}")
         print(f"  Total runs: {analysis.get('run_count', 0)}")
         print(f"  Strategies tracked: {len(analysis.get('strategies', {}))}")

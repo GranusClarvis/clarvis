@@ -8,18 +8,33 @@ Handles:
   - Importance decay with access-frequency boosting
   - Noise pruning (prediction logs, attention broadcasts, etc.)
   - Archival of stale low-importance memories
+  - Attention-guided consolidation (GWT spotlight salience)
   - CLI for manual and automated operation
 
+Attention-Guided Consolidation (GWT Integration):
+  The attention spotlight from attention.py provides salience signals for
+  what the system is currently focused on. During consolidation, we compute
+  a "spotlight salience" for each brain memory — how relevant it is to the
+  current spotlight contents. This score modulates all consolidation decisions:
+
+  - High-salience memories RESIST decay (they're currently relevant)
+  - Low-salience + low-access + old = prime prune candidates
+  - After consolidation, surviving high-value memories are broadcast back
+    to the spotlight (GWT global broadcast)
+
 Usage:
-    python3 memory_consolidation.py consolidate   # Run full consolidation
-    python3 memory_consolidation.py dedup          # Deduplicate only
-    python3 memory_consolidation.py prune          # Noise prune only
-    python3 memory_consolidation.py archive        # Archive stale memories
-    python3 memory_consolidation.py stats          # Show memory stats
-    python3 memory_consolidation.py dry-run        # Preview without changes
+    python3 memory_consolidation.py consolidate    # Run full consolidation
+    python3 memory_consolidation.py dedup           # Deduplicate only
+    python3 memory_consolidation.py prune           # Noise prune only
+    python3 memory_consolidation.py archive         # Archive stale memories
+    python3 memory_consolidation.py attention-prune # Attention-guided prune
+    python3 memory_consolidation.py salience        # Show salience report
+    python3 memory_consolidation.py stats           # Show memory stats
+    python3 memory_consolidation.py dry-run         # Preview without changes
 """
 
 import json
+import math
 import os
 import re
 import sys
@@ -28,6 +43,7 @@ from datetime import datetime, timezone, timedelta
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from brain import brain, ALL_COLLECTIONS
+from attention import attention
 
 DATA_DIR = "/home/agent/.openclaw/workspace/data"
 ARCHIVE_DIR = os.path.join(DATA_DIR, "memory_archive")
@@ -93,8 +109,6 @@ def _get_all_memories(collection_name, _cache_gen=[0]):
     Results are cached for the duration of a consolidation run. Call
     _invalidate_memories_cache() after mutations to force re-fetch.
     """
-    global _memories_cache, _memories_cache_gen
-
     # If generation changed, clear the cache
     if _cache_gen[0] != _memories_cache_gen:
         _memories_cache.clear()
@@ -515,7 +529,444 @@ def archive_stale(days=30, importance_threshold=0.3, dry_run=False):
 
 
 # ---------------------------------------------------------------------------
-# 6. Stats
+# 6. Attention-Guided Consolidation (GWT Integration)
+# ---------------------------------------------------------------------------
+
+# Salience thresholds
+SALIENCE_HIGH = 0.6       # Memories above this resist decay entirely
+SALIENCE_MEDIUM = 0.3     # Partial decay resistance
+PRUNE_SALIENCE_CEILING = 0.2   # Only prune if salience below this
+PRUNE_ACCESS_CEILING = 2       # And access count at or below this
+PRUNE_AGE_FLOOR_DAYS = 14      # And older than this many days
+
+
+def _get_spotlight_contents():
+    """Get current spotlight items from the attention system.
+
+    Returns:
+        List of spotlight item dicts (content, salience, source, etc.)
+        Empty list if spotlight is empty or unavailable.
+    """
+    try:
+        ranked = sorted(
+            attention.items.values(),
+            key=lambda x: x.salience(),
+            reverse=True,
+        )
+        return [item.to_dict() for item in ranked[:attention.capacity]]
+    except Exception:
+        return []
+
+
+def _compute_spotlight_salience(memory_text, spotlight_items):
+    """Compute how salient a brain memory is relative to the current spotlight.
+
+    Uses word-overlap scoring (fast, no embeddings) weighted by the spotlight
+    item's own salience. A memory that overlaps with high-salience spotlight
+    items scores higher than one overlapping with low-salience items.
+
+    Args:
+        memory_text: The memory document text
+        spotlight_items: List of spotlight item dicts (from _get_spotlight_contents)
+
+    Returns:
+        Float 0.0-1.0 — composite spotlight salience for this memory
+    """
+    if not spotlight_items or not memory_text:
+        return 0.0
+
+    mem_words = set(memory_text.lower().split())
+    if not mem_words:
+        return 0.0
+
+    weighted_overlap_sum = 0.0
+    total_weight = 0.0
+
+    for item in spotlight_items:
+        item_salience = item.get("salience", 0.5)
+        item_words = set(item.get("content", "").lower().split())
+        if not item_words:
+            continue
+
+        overlap = len(mem_words & item_words)
+        if overlap == 0:
+            continue
+
+        # Overlap normalized by the smaller set
+        overlap_score = overlap / min(len(mem_words), len(item_words))
+        # Weight by the spotlight item's own salience
+        weighted_overlap_sum += overlap_score * item_salience
+        total_weight += item_salience
+
+    if total_weight == 0:
+        return 0.0
+
+    raw = weighted_overlap_sum / total_weight
+    return round(min(1.0, raw), 4)
+
+
+def attention_guided_prune(dry_run=False):
+    """
+    Prune memories that are:
+      1. Low spotlight salience (not relevant to current attention)
+      2. Low access count (not frequently retrieved)
+      3. Old (not recently created or accessed)
+      4. Low importance (not marked as valuable)
+
+    All four conditions must be met — this is a conservative pruner that only
+    removes memories the system has clearly moved past.
+
+    Protected memories (critical/genesis tags) are never pruned.
+
+    Returns:
+        dict with 'pruned' count, 'spared_by_salience' count, and details.
+    """
+    stats = {
+        "pruned": 0,
+        "spared_by_salience": 0,
+        "candidates_evaluated": 0,
+        "spotlight_items": 0,
+        "details": [],
+    }
+
+    spotlight = _get_spotlight_contents()
+    stats["spotlight_items"] = len(spotlight)
+
+    if not spotlight:
+        return stats
+
+    now = datetime.now(timezone.utc)
+    age_cutoff = now - timedelta(days=PRUNE_AGE_FLOOR_DAYS)
+
+    for col_name in ALL_COLLECTIONS:
+        memories = _get_all_memories(col_name)
+        if not memories:
+            continue
+
+        col = brain.collections[col_name]
+        ids_to_delete = []
+
+        for mem in memories:
+            meta = mem["metadata"]
+            doc = mem["document"]
+
+            if _has_protected_tag(meta):
+                continue
+
+            importance = meta.get("importance", 0.5)
+            if isinstance(importance, str):
+                try:
+                    importance = float(importance)
+                except (ValueError, TypeError):
+                    importance = 0.5
+
+            access_count = meta.get("access_count", 0)
+            if isinstance(access_count, str):
+                try:
+                    access_count = int(access_count)
+                except (ValueError, TypeError):
+                    access_count = 0
+
+            last_accessed = meta.get("last_accessed", "")
+            created_at = meta.get("created_at", "")
+
+            most_recent = last_accessed or created_at
+            if not most_recent:
+                continue
+
+            try:
+                most_recent_dt = datetime.fromisoformat(
+                    most_recent.replace("Z", "+00:00")
+                )
+                if most_recent_dt.tzinfo is None:
+                    most_recent_dt = most_recent_dt.replace(tzinfo=timezone.utc)
+            except (ValueError, TypeError):
+                continue
+
+            if most_recent_dt > age_cutoff:
+                continue
+            if access_count > PRUNE_ACCESS_CEILING:
+                continue
+            if importance > 0.4:
+                continue
+
+            stats["candidates_evaluated"] += 1
+
+            salience = _compute_spotlight_salience(doc, spotlight)
+
+            if salience >= PRUNE_SALIENCE_CEILING:
+                stats["spared_by_salience"] += 1
+                continue
+
+            ids_to_delete.append(mem["id"])
+            stats["details"].append({
+                "collection": col_name,
+                "id": mem["id"],
+                "preview": doc[:80],
+                "importance": round(importance, 3),
+                "access_count": access_count,
+                "salience": salience,
+                "age_days": round((now - most_recent_dt).total_seconds() / 86400, 1),
+            })
+
+        if ids_to_delete:
+            if not dry_run:
+                col.delete(ids=ids_to_delete)
+                _invalidate_memories_cache()
+            stats["pruned"] += len(ids_to_delete)
+
+    return stats
+
+
+def attention_guided_decay(dry_run=False):
+    """
+    Enhanced decay that respects attention salience.
+
+    Modulates the decay rate by spotlight salience:
+      - High salience (>0.6): NO decay + small importance boost
+      - Medium salience (0.3-0.6): 50% decay rate
+      - Low salience (<0.3): Full decay rate
+
+    Returns:
+        dict with counts of decayed, resisted, boosted memories.
+    """
+    stats = {
+        "decayed": 0,
+        "resisted": 0,
+        "salience_boosted": 0,
+        "spotlight_items": 0,
+    }
+
+    spotlight = _get_spotlight_contents()
+    stats["spotlight_items"] = len(spotlight)
+
+    now = datetime.now(timezone.utc)
+    DECAY_RATE = 0.01
+
+    for col_name, col in brain.collections.items():
+        try:
+            results = col.get()
+        except Exception:
+            continue
+
+        ids = results.get("ids", [])
+        docs = results.get("documents", [])
+        metas = results.get("metadatas", [])
+
+        for i, mem_id in enumerate(ids):
+            meta = metas[i] if i < len(metas) else {}
+            doc = docs[i] if i < len(docs) else ""
+
+            importance = meta.get("importance", 0.5)
+            if isinstance(importance, str):
+                try:
+                    importance = float(importance)
+                except (ValueError, TypeError):
+                    importance = 0.5
+
+            last_accessed = meta.get("last_accessed")
+            if not last_accessed:
+                continue
+
+            try:
+                last_dt = datetime.fromisoformat(
+                    last_accessed.replace("Z", "+00:00")
+                )
+                if last_dt.tzinfo is None:
+                    last_dt = last_dt.replace(tzinfo=timezone.utc)
+            except (ValueError, TypeError):
+                continue
+
+            days_since = (now - last_dt).total_seconds() / 86400.0
+            if days_since <= 0:
+                continue
+
+            salience = _compute_spotlight_salience(doc, spotlight) if spotlight else 0.0
+
+            if salience >= SALIENCE_HIGH:
+                effective_decay = 0.0
+                salience_boost = min(0.05, salience * 0.05)
+                if importance < 0.9 and salience_boost > 0.005:
+                    new_importance = min(0.95, importance + salience_boost)
+                    if not dry_run:
+                        meta["importance"] = round(new_importance, 4)
+                        meta["salience_boosted_at"] = now.isoformat()
+                        meta["spotlight_salience"] = salience
+                        col.upsert(ids=[mem_id], documents=[doc], metadatas=[meta])
+                    stats["salience_boosted"] += 1
+                stats["resisted"] += 1
+                continue
+            elif salience >= SALIENCE_MEDIUM:
+                effective_decay = DECAY_RATE * 0.5
+                stats["resisted"] += 1
+            else:
+                effective_decay = DECAY_RATE
+
+            decay_amount = effective_decay * days_since
+            new_importance = max(0.1, importance - decay_amount)
+
+            if new_importance < importance - 0.001:
+                stats["decayed"] += 1
+                if not dry_run:
+                    meta["importance"] = round(new_importance, 4)
+                    meta["spotlight_salience"] = salience
+                    meta["attention_decay_at"] = now.isoformat()
+                    col.upsert(ids=[mem_id], documents=[doc], metadatas=[meta])
+
+    return stats
+
+
+def gwt_broadcast_survivors(top_n=3):
+    """
+    After consolidation, broadcast the highest-value surviving memories
+    back to the attention spotlight (GWT re-entry mechanism).
+
+    Args:
+        top_n: How many memories to promote to spotlight
+
+    Returns:
+        List of promoted memory previews
+    """
+    spotlight_contents = set()
+    for item in attention.items.values():
+        spotlight_contents.add(item.content.lower().strip()[:100])
+
+    candidates = []
+    now = datetime.now(timezone.utc)
+    recency_window = timedelta(days=7)
+
+    for col_name in ALL_COLLECTIONS:
+        memories = _get_all_memories(col_name)
+        for mem in memories:
+            meta = mem["metadata"]
+            doc = mem["document"]
+
+            importance = meta.get("importance", 0.5)
+            if isinstance(importance, str):
+                try:
+                    importance = float(importance)
+                except (ValueError, TypeError):
+                    importance = 0.5
+
+            access_count = meta.get("access_count", 0)
+            if isinstance(access_count, str):
+                try:
+                    access_count = int(access_count)
+                except (ValueError, TypeError):
+                    access_count = 0
+
+            last_accessed = meta.get("last_accessed", "")
+            if not last_accessed:
+                continue
+
+            try:
+                la_dt = datetime.fromisoformat(
+                    last_accessed.replace("Z", "+00:00")
+                )
+                if la_dt.tzinfo is None:
+                    la_dt = la_dt.replace(tzinfo=timezone.utc)
+            except (ValueError, TypeError):
+                continue
+
+            if now - la_dt > recency_window:
+                continue
+
+            if doc.lower().strip()[:100] in spotlight_contents:
+                continue
+
+            score = importance * (1.0 + math.log1p(access_count))
+            candidates.append((score, doc, importance, access_count, col_name))
+
+    candidates.sort(key=lambda x: x[0], reverse=True)
+
+    promoted = []
+    for score, doc, importance, access_count, col_name in candidates[:top_n]:
+        preview = doc[:200]
+        attention.submit(
+            content=f"[consolidated] {preview}",
+            source=f"consolidation/{col_name}",
+            importance=importance,
+            relevance=min(1.0, importance + 0.1),
+            boost=0.2,
+        )
+        promoted.append({
+            "collection": col_name,
+            "preview": doc[:80],
+            "score": round(score, 3),
+            "importance": round(importance, 3),
+        })
+
+    return promoted
+
+
+def salience_report():
+    """
+    Generate a report showing spotlight salience for all brain memories.
+
+    Returns:
+        dict with distribution info and top/bottom memories by salience.
+    """
+    spotlight = _get_spotlight_contents()
+    if not spotlight:
+        return {"error": "Spotlight is empty — no salience data available"}
+
+    all_scored = []
+
+    for col_name in ALL_COLLECTIONS:
+        memories = _get_all_memories(col_name)
+        for mem in memories:
+            salience = _compute_spotlight_salience(mem["document"], spotlight)
+            importance = mem["metadata"].get("importance", 0.5)
+            if isinstance(importance, str):
+                try:
+                    importance = float(importance)
+                except (ValueError, TypeError):
+                    importance = 0.5
+
+            access_count = mem["metadata"].get("access_count", 0)
+            if isinstance(access_count, str):
+                try:
+                    access_count = int(access_count)
+                except (ValueError, TypeError):
+                    access_count = 0
+
+            all_scored.append({
+                "collection": col_name,
+                "id": mem["id"],
+                "preview": mem["document"][:80],
+                "salience": salience,
+                "importance": round(importance, 3),
+                "access_count": access_count,
+            })
+
+    if not all_scored:
+        return {"error": "No memories to score"}
+
+    all_scored.sort(key=lambda x: x["salience"], reverse=True)
+    saliences = [m["salience"] for m in all_scored]
+
+    high = sum(1 for s in saliences if s >= SALIENCE_HIGH)
+    medium = sum(1 for s in saliences if SALIENCE_MEDIUM <= s < SALIENCE_HIGH)
+    low = sum(1 for s in saliences if 0 < s < SALIENCE_MEDIUM)
+    zero = sum(1 for s in saliences if s == 0)
+
+    return {
+        "total_memories": len(all_scored),
+        "spotlight_items": len(spotlight),
+        "distribution": {
+            "high_salience": high,
+            "medium_salience": medium,
+            "low_salience": low,
+            "zero_salience": zero,
+        },
+        "avg_salience": round(sum(saliences) / len(saliences), 4),
+        "top_salient": all_scored[:10],
+        "bottom_salient": [m for m in all_scored[-10:] if m["salience"] == 0][:5],
+    }
+
+
+# ---------------------------------------------------------------------------
+# 7. Stats
 # ---------------------------------------------------------------------------
 
 def get_consolidation_stats():
@@ -582,22 +1033,49 @@ def get_consolidation_stats():
             if la and la < cutoff and imp < 0.3:
                 stale_count += 1
 
+    # Attention salience snapshot
+    spotlight = _get_spotlight_contents()
+    salience_info = {"spotlight_items": len(spotlight)}
+    if spotlight:
+        salience_scores = []
+        for col_name in ALL_COLLECTIONS:
+            memories = _get_all_memories(col_name)
+            for mem in memories:
+                s = _compute_spotlight_salience(mem["document"], spotlight)
+                salience_scores.append(s)
+        if salience_scores:
+            salience_info["avg_salience"] = round(
+                sum(salience_scores) / len(salience_scores), 4
+            )
+            salience_info["high_salience_count"] = sum(
+                1 for s in salience_scores if s >= SALIENCE_HIGH
+            )
+
     return {
         "brain": brain_stats,
         "archive_count": archive_count,
         "potential_noise": noise_count,
         "potential_duplicates": dup_count,
         "stale_archivable": stale_count,
+        "attention": salience_info,
     }
 
 
 # ---------------------------------------------------------------------------
-# 7. Integration Hook
+# 8. Integration Hook
 # ---------------------------------------------------------------------------
 
 def run_consolidation():
     """
-    Run full consolidation pipeline: dedup, noise prune, decay, archive.
+    Run full consolidation pipeline with attention-guided phases:
+      1. Deduplication
+      2. Noise pruning
+      3. Importance decay + access boost
+      4. Stale memory archival
+      5. Attention-guided decay (salience-modulated)
+      6. Attention-guided pruning (low-salience + low-access + old)
+      7. GWT broadcast survivors (re-entry to spotlight)
+
     Intended to be called from cron or other automation.
 
     Returns:
@@ -621,6 +1099,25 @@ def run_consolidation():
     results["archive"] = archive_stale(dry_run=False)
     print(f"  Archived {results['archive']['archived']} stale memories")
 
+    print("[consolidation] Phase 5: Attention-guided decay (GWT salience)...")
+    results["attention_decay"] = attention_guided_decay(dry_run=False)
+    ad = results["attention_decay"]
+    print(f"  Decayed {ad['decayed']}, resisted {ad['resisted']}, "
+          f"salience-boosted {ad['salience_boosted']} "
+          f"(spotlight: {ad['spotlight_items']} items)")
+
+    print("[consolidation] Phase 6: Attention-guided pruning...")
+    results["attention_prune"] = attention_guided_prune(dry_run=False)
+    ap = results["attention_prune"]
+    print(f"  Pruned {ap['pruned']}, spared {ap['spared_by_salience']} by salience "
+          f"(evaluated {ap['candidates_evaluated']})")
+
+    print("[consolidation] Phase 7: GWT broadcast survivors...")
+    results["gwt_promoted"] = gwt_broadcast_survivors(top_n=3)
+    print(f"  Promoted {len(results['gwt_promoted'])} memories to spotlight")
+    for p in results["gwt_promoted"]:
+        print(f"    [{p['collection']}] {p['preview'][:60]} (score={p['score']})")
+
     # Summary
     total_actions = (
         results["dedup"]["duplicates_removed"]
@@ -628,6 +1125,10 @@ def run_consolidation():
         + results["decay"]["decayed"]
         + results["decay"]["boosted"]
         + results["archive"]["archived"]
+        + results["attention_decay"]["decayed"]
+        + results["attention_decay"]["salience_boosted"]
+        + results["attention_prune"]["pruned"]
+        + len(results["gwt_promoted"])
     )
     results["total_actions"] = total_actions
     print(f"[consolidation] Complete. Total actions: {total_actions}")
@@ -675,6 +1176,51 @@ def main():
         for d in results["details"][:10]:
             print(f"  [{d['collection']}] {d['preview']} (imp={d['importance']}, last={d['last_accessed']})")
 
+    elif cmd == "attention-prune":
+        results = attention_guided_prune(dry_run=False)
+        print(f"Attention-guided prune: {results['pruned']} pruned, "
+              f"{results['spared_by_salience']} spared by salience "
+              f"(spotlight: {results['spotlight_items']} items)")
+        for d in results["details"][:10]:
+            print(f"  [{d['collection']}] {d['preview']} "
+                  f"(sal={d['salience']}, imp={d['importance']}, "
+                  f"age={d['age_days']}d, acc={d['access_count']})")
+
+    elif cmd == "attention-decay":
+        results = attention_guided_decay(dry_run=False)
+        print(f"Attention-guided decay: decayed={results['decayed']}, "
+              f"resisted={results['resisted']}, "
+              f"salience-boosted={results['salience_boosted']} "
+              f"(spotlight: {results['spotlight_items']} items)")
+
+    elif cmd == "salience":
+        report = salience_report()
+        if "error" in report:
+            print(report["error"])
+        else:
+            print(f"=== Salience Report ({report['total_memories']} memories, "
+                  f"{report['spotlight_items']} spotlight items) ===")
+            d = report["distribution"]
+            print(f"  High salience (>={SALIENCE_HIGH}): {d['high_salience']}")
+            print(f"  Medium ({SALIENCE_MEDIUM}-{SALIENCE_HIGH}): {d['medium_salience']}")
+            print(f"  Low (>0, <{SALIENCE_MEDIUM}): {d['low_salience']}")
+            print(f"  Zero salience: {d['zero_salience']}")
+            print(f"  Average: {report['avg_salience']}")
+            if report["top_salient"]:
+                print("\nTop salient memories:")
+                for m in report["top_salient"][:5]:
+                    print(f"  [{m['collection']}] sal={m['salience']} imp={m['importance']} "
+                          f"acc={m['access_count']} {m['preview'][:60]}")
+
+    elif cmd == "gwt-broadcast":
+        promoted = gwt_broadcast_survivors(top_n=3)
+        if promoted:
+            print(f"GWT broadcast: promoted {len(promoted)} memories to spotlight")
+            for p in promoted:
+                print(f"  [{p['collection']}] score={p['score']} {p['preview'][:60]}")
+        else:
+            print("GWT broadcast: no memories to promote")
+
     elif cmd == "stats":
         stats = get_consolidation_stats()
         print("=== Memory Consolidation Stats ===")
@@ -683,6 +1229,11 @@ def main():
         print(f"Potential noise: {stats['potential_noise']}")
         print(f"Potential duplicates: {stats['potential_duplicates']}")
         print(f"Stale (archivable): {stats['stale_archivable']}")
+        attn = stats.get("attention", {})
+        print(f"\nAttention spotlight: {attn.get('spotlight_items', 0)} items")
+        if "avg_salience" in attn:
+            print(f"  Avg memory salience: {attn['avg_salience']}")
+            print(f"  High-salience memories: {attn.get('high_salience_count', 0)}")
         print("\nCollections:")
         for name, count in stats["brain"]["collections"].items():
             print(f"  {name}: {count}")
@@ -713,18 +1264,38 @@ def main():
         for d in archive_stats["details"][:5]:
             print(f"     [{d['collection']}] {d['preview']} (imp={d['importance']})")
 
+        print("\n5. Attention-guided decay preview:")
+        attn_decay_stats = attention_guided_decay(dry_run=True)
+        print(f"   Would decay {attn_decay_stats['decayed']} memories")
+        print(f"   Would resist {attn_decay_stats['resisted']} (salience protection)")
+        print(f"   Would salience-boost {attn_decay_stats['salience_boosted']}")
+        print(f"   Spotlight items: {attn_decay_stats['spotlight_items']}")
+
+        print("\n6. Attention-guided prune preview:")
+        attn_prune_stats = attention_guided_prune(dry_run=True)
+        print(f"   Would prune {attn_prune_stats['pruned']} low-salience memories")
+        print(f"   Would spare {attn_prune_stats['spared_by_salience']} by salience")
+        for d in attn_prune_stats["details"][:5]:
+            print(f"     [{d['collection']}] sal={d['salience']} imp={d['importance']} "
+                  f"age={d['age_days']}d {d['preview'][:50]}")
+
         total = (
             dedup_stats["duplicates_removed"]
             + prune_stats["pruned"]
             + decay_stats["decayed"]
             + decay_stats["boosted"]
             + archive_stats["archived"]
+            + attn_decay_stats["decayed"]
+            + attn_decay_stats["salience_boosted"]
+            + attn_prune_stats["pruned"]
         )
         print(f"\n=== Total potential actions: {total} ===")
 
     else:
         print(f"Unknown command: {cmd}")
-        print("Valid commands: consolidate, dedup, merge, prune, archive, stats, dry-run")
+        print("Valid commands: consolidate, dedup, merge, prune, archive, "
+              "attention-prune, attention-decay, salience, gwt-broadcast, "
+              "stats, dry-run")
         sys.exit(1)
 
 

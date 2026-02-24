@@ -21,6 +21,8 @@
 #   6. EXIT trap: gateway always restarts even if script is killed/crashes
 #   7. Lockfile prevents concurrent updates
 #   8. 5-minute timeout on npm install to prevent hangs
+#   9. Self-decapitation protection: detects if running inside the gateway
+#      process tree and re-launches itself as an independent process
 #
 # What this script does NOT touch (safe by design):
 #   - workspace/data/clarvisdb/* (brain data - OpenClaw doesn't modify this)
@@ -37,6 +39,55 @@
 
 set -euo pipefail
 
+# --- Self-decapitation protection ---
+# If this script is running as a child of the openclaw-gateway process,
+# stopping the gateway will kill us too (the parent kills the child).
+# Detect this and re-launch ourselves as a fully independent process.
+if [ "${SAFE_UPDATE_DETACHED:-}" != "1" ]; then
+  # Check if any ancestor PID is the openclaw-gateway
+  gateway_pid=$(pgrep -f "openclaw-gateway" 2>/dev/null | head -1 || echo "")
+  if [ -n "$gateway_pid" ]; then
+    my_pid=$$
+    check_pid=$my_pid
+    is_child_of_gateway=false
+    # Walk up the process tree (max 20 levels to avoid infinite loop)
+    for _ in $(seq 1 20); do
+      parent_pid=$(ps -o ppid= -p "$check_pid" 2>/dev/null | tr -d ' ')
+      [ -z "$parent_pid" ] && break
+      [ "$parent_pid" = "1" ] && break
+      [ "$parent_pid" = "0" ] && break
+      if [ "$parent_pid" = "$gateway_pid" ]; then
+        is_child_of_gateway=true
+        break
+      fi
+      check_pid=$parent_pid
+    done
+
+    if [ "$is_child_of_gateway" = true ]; then
+      SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+      LOG_DIR="$HOME/.openclaw/backups"
+      mkdir -p "$LOG_DIR"
+      echo "[$(date '+%Y-%m-%d %H:%M:%S')] SAFETY: Detected running inside gateway process tree (gateway PID: $gateway_pid)." | tee -a "$LOG_DIR/update.log"
+      echo "[$(date '+%Y-%m-%d %H:%M:%S')] SAFETY: Re-launching as independent process with nohup+setsid..." | tee -a "$LOG_DIR/update.log"
+
+      # Re-launch as a fully detached process:
+      # - setsid: creates a new session (new process group leader, no controlling terminal)
+      # - nohup: ignores SIGHUP
+      # - SAFE_UPDATE_DETACHED=1: prevents infinite re-launch loop
+      # - </dev/null: detach stdin
+      # - stdout/stderr go to the log file
+      export SAFE_UPDATE_DETACHED=1
+      nohup setsid bash "${BASH_SOURCE[0]}" "$@" </dev/null >>"$LOG_DIR/update.log" 2>&1 &
+      detached_pid=$!
+      echo "[$(date '+%Y-%m-%d %H:%M:%S')] SAFETY: Detached update process started as PID $detached_pid." | tee -a "$LOG_DIR/update.log"
+      echo "[$(date '+%Y-%m-%d %H:%M:%S')] SAFETY: Update will continue independently. Check $LOG_DIR/update.log for progress." | tee -a "$LOG_DIR/update.log"
+
+      # Return success to the calling agent — the update is running independently now
+      exit 0
+    fi
+  fi
+fi
+
 # --- Configuration ---
 WORKSPACE="$HOME/.openclaw/workspace"
 OPENCLAW_CONFIG="$HOME/.openclaw/openclaw.json"
@@ -45,6 +96,7 @@ BACKUP_ROOT="$HOME/.openclaw/backups"
 UPDATE_BACKUP_DIR="$BACKUP_ROOT/pre-update"
 SCRIPTS_DIR="$WORKSPACE/scripts"
 LOG_FILE="$BACKUP_ROOT/update.log"
+GATEWAY_WRAPPER="$HOME/.openclaw/gateway-run.sh"
 
 # Colors
 RED='\033[0;31m'
@@ -66,18 +118,25 @@ LOCKFILE="/tmp/openclaw-update.lock"
 ensure_gateway_online() {
   if [ "$GATEWAY_WAS_STOPPED" = true ]; then
     log "${YELLOW}SAFETY${NC} Ensuring gateway is online before exit..."
-    if ! pm2 list 2>/dev/null | grep -q "openclaw-gateway.*online"; then
-      pm2 start openclaw-gateway 2>/dev/null || pm2 restart openclaw-gateway 2>/dev/null || true
-      sleep 3
-      if pm2 list 2>/dev/null | grep -q "openclaw-gateway.*online"; then
+    export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+    export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}"
+    if ! ss -tlnp 2>/dev/null | grep -q ":18789 "; then
+      systemctl --user start openclaw-gateway.service 2>/dev/null \
+        || pm2 start openclaw-gateway 2>/dev/null \
+        || pm2 restart openclaw-gateway 2>/dev/null \
+        || true
+      sleep 5
+      if ss -tlnp 2>/dev/null | grep -q ":18789 "; then
         log "${GREEN}SAFETY${NC} Gateway restarted successfully"
       else
-        log "${RED}SAFETY${NC} CRITICAL: Gateway failed to restart! Manual intervention needed: pm2 start openclaw-gateway"
+        log "${RED}SAFETY${NC} CRITICAL: Gateway failed to restart! Manual intervention needed: systemctl --user start openclaw-gateway.service"
       fi
     else
       log "${GREEN}SAFETY${NC} Gateway already online"
     fi
   fi
+  # Kill the watchdog — we handled it ourselves
+  kill_watchdog 2>/dev/null || true
   # Clean up lockfile
   rm -f "$LOCKFILE"
 }
@@ -314,6 +373,70 @@ STATE_EOF
   echo "$backup_dir"
 }
 
+# --- Gateway restart watchdog ---
+# Spawns an independent background process that monitors this script.
+# If this script's PID disappears AND the gateway is still down,
+# the watchdog restarts it. This survives even SIGKILL.
+WATCHDOG_PID=""
+spawn_gateway_watchdog() {
+  local parent_pid=$$
+  local watchdog_log="$LOG_FILE"
+  (
+    # Wait for the update to complete or the parent to die
+    # Check every 10 seconds, give the update up to 10 minutes
+    for i in $(seq 1 60); do
+      sleep 10
+      # If parent is still alive, the update is still running — keep waiting
+      if kill -0 "$parent_pid" 2>/dev/null; then
+        continue
+      fi
+      # Parent is gone. Check if gateway is online (port 18789 listening).
+      if ss -tlnp 2>/dev/null | grep -q ":18789 "; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Parent gone but gateway is online. Exiting." >> "$watchdog_log"
+        exit 0
+      fi
+      # Parent is gone AND gateway is down — restart it
+      echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Parent PID $parent_pid gone, gateway DOWN. Restarting..." >> "$watchdog_log"
+      export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+      export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}"
+      systemctl --user start openclaw-gateway.service 2>/dev/null \
+        || pm2 start openclaw-gateway 2>/dev/null \
+        || pm2 restart openclaw-gateway 2>/dev/null \
+        || true
+      sleep 10
+      if ss -tlnp 2>/dev/null | grep -q ":18789 "; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Gateway restarted successfully." >> "$watchdog_log"
+      else
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: CRITICAL — Gateway failed to restart!" >> "$watchdog_log"
+      fi
+      # Clean up stale lockfile
+      rm -f "$LOCKFILE"
+      exit 0
+    done
+    # 10 minute timeout — something is very wrong
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: 10 minute timeout. Ensuring gateway is online..." >> "$watchdog_log"
+    if ! ss -tlnp 2>/dev/null | grep -q ":18789 "; then
+      export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+      export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}"
+      systemctl --user start openclaw-gateway.service 2>/dev/null \
+        || pm2 start openclaw-gateway 2>/dev/null \
+        || pm2 restart openclaw-gateway 2>/dev/null \
+        || true
+    fi
+    rm -f "$LOCKFILE"
+  ) &
+  WATCHDOG_PID=$!
+  disown "$WATCHDOG_PID" 2>/dev/null || true
+  info "Gateway watchdog spawned (PID: $WATCHDOG_PID, monitors PID: $$)"
+}
+
+kill_watchdog() {
+  if [ -n "$WATCHDOG_PID" ] && kill -0 "$WATCHDOG_PID" 2>/dev/null; then
+    kill "$WATCHDOG_PID" 2>/dev/null || true
+    info "Gateway watchdog stopped"
+  fi
+}
+
 # --- Stop gateway gracefully ---
 stop_gateway() {
   separator
@@ -321,15 +444,30 @@ stop_gateway() {
 
   GATEWAY_WAS_STOPPED=true
 
-  if pm2 list 2>/dev/null | grep -q "openclaw-gateway.*online"; then
+  # Spawn a watchdog BEFORE stopping the gateway.
+  # If we get killed during the update, the watchdog will restart the gateway.
+  spawn_gateway_watchdog
+
+  # Ensure systemd env vars are set
+  export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+  export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}"
+
+  # Try systemd first, fall back to PM2
+  if systemctl --user is-active openclaw-gateway.service &>/dev/null; then
+    systemctl --user stop openclaw-gateway.service 2>/dev/null
+    sleep 2
+    if ! systemctl --user is-active openclaw-gateway.service &>/dev/null; then
+      ok "Gateway stopped (systemd)"
+    else
+      warn "Gateway may not have stopped cleanly (systemd)"
+    fi
+  elif pm2 list 2>/dev/null | grep -q "openclaw-gateway.*online"; then
     pm2 stop openclaw-gateway 2>/dev/null
     sleep 2
-
-    # Verify it stopped
     if pm2 list 2>/dev/null | grep -q "openclaw-gateway.*stopped"; then
-      ok "Gateway stopped"
+      ok "Gateway stopped (pm2)"
     else
-      warn "Gateway may not have stopped cleanly"
+      warn "Gateway may not have stopped cleanly (pm2)"
     fi
   else
     info "Gateway was not running"
@@ -341,16 +479,46 @@ start_gateway() {
   separator
   info "Starting gateway..."
 
-  pm2 start openclaw-gateway 2>/dev/null || pm2 restart openclaw-gateway 2>/dev/null
-  sleep 5
+  # Ensure systemd env vars are set
+  export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+  export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}"
 
-  if pm2 list 2>/dev/null | grep -q "openclaw-gateway.*online"; then
-    ok "Gateway started"
-    GATEWAY_WAS_STOPPED=false
-  else
-    fail "Gateway failed to start!"
+  # Try systemd first (preferred since OpenClaw 2026.2.23+), fall back to PM2
+  local started=false
+  if systemctl --user cat openclaw-gateway.service &>/dev/null; then
+    info "Starting via systemd..."
+    systemctl --user start openclaw-gateway.service 2>/dev/null
+    started=true
+  elif pm2 list 2>/dev/null | grep -q "openclaw-gateway"; then
+    info "Starting via PM2..."
+    pm2 start openclaw-gateway 2>/dev/null || pm2 restart openclaw-gateway 2>/dev/null
+    started=true
+  elif [ -f "$GATEWAY_WRAPPER" ]; then
+    info "Starting via PM2 wrapper script..."
+    pm2 start "$GATEWAY_WRAPPER" --name openclaw-gateway --cwd "$HOME/.openclaw" 2>/dev/null
+    started=true
+  fi
+
+  if [ "$started" = false ]; then
+    fail "No gateway startup method found!"
     return 1
   fi
+
+  sleep 5
+
+  # Verify port is actually listening
+  local retries=0
+  while [ $retries -lt 6 ]; do
+    if ss -tlnp 2>/dev/null | grep -q ":18789 "; then
+      ok "Gateway started (port 18789 listening)"
+      GATEWAY_WAS_STOPPED=false
+      return 0
+    fi
+    sleep 5
+    ((retries++)) || true
+  done
+  fail "Gateway port 18789 not listening after 30s"
+  return 1
 }
 
 # --- Perform the update ---

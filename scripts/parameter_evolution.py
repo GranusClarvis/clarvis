@@ -300,8 +300,7 @@ def evaluate_config(semantic_w, importance_w, collection_boost, max_dist):
 
     Returns precision@3 and recall.
     """
-    from brain import brain, \
-        GOALS, PROCEDURES, CONTEXT, LEARNINGS, MEMORIES, IDENTITY, PREFERENCES, INFRASTRUCTURE
+    from brain import brain
     from retrieval_benchmark import BENCHMARK_PAIRS, check_hit
 
     # Import smart_recall components
@@ -461,7 +460,6 @@ def apply_smart_recall_params(collection_boost, max_distance):
     changes = 0
 
     # Update collection boost: r["distance"] * 0.8
-    old_boost = None
     for line in content.split('\n'):
         if '"_boosted_distance"' in line and 'distance"] *' in line and 'primary' not in line:
             continue
@@ -581,14 +579,14 @@ def run_evolution(dry_run=False):
     print(f"  Tested {search_results['total_configs_tested']} configurations in {elapsed:.1f}s")
 
     best = search_results["best"]
-    print(f"\n  BEST CONFIG:")
+    print("\n  BEST CONFIG:")
     print(f"    semantic_weight:   {best['semantic_weight']} (was 0.70)")
     print(f"    importance_weight: {best['importance_weight']} (was 0.30)")
     print(f"    collection_boost:  {best['collection_boost']} (was 0.80)")
     print(f"    max_distance:      {best['max_distance']} (was 1.50)")
     print(f"    -> P@3={best['precision_at_3']}, Recall={best['recall']}, Score={best['score']}")
 
-    print(f"\n  Top 5:")
+    print("\n  Top 5:")
     for i, cfg in enumerate(search_results["top_5"]):
         print(f"    #{i+1}: sem={cfg['semantic_weight']} boost={cfg['collection_boost']} "
               f"maxd={cfg['max_distance']} -> P@3={cfg['precision_at_3']} R={cfg['recall']} S={cfg['score']}")
@@ -610,12 +608,12 @@ def run_evolution(dry_run=False):
     # Apply recall sort weights
     if apply_recall_sort_weights(best["semantic_weight"], best["importance_weight"]):
         changes.append(f"brain.py: semantic={best['semantic_weight']}, importance={best['importance_weight']}")
-        print(f"  Applied brain.py recall sort weights")
+        print("  Applied brain.py recall sort weights")
 
     # Apply smart_recall params
     if apply_smart_recall_params(best["collection_boost"], best["max_distance"]):
         changes.append(f"retrieval_experiment.py: boost={best['collection_boost']}, max_dist={best['max_distance']}")
-        print(f"  Applied smart_recall params")
+        print("  Applied smart_recall params")
 
     # Apply attention weights (evidence-based shift: more relevance, less recency)
     new_attn = (0.25, 0.20, 0.30, 0.10, 0.15)  # IMP, REC, REL, ACC, BST

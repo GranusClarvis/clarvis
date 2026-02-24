@@ -165,7 +165,7 @@ def run_all_tests():
         print("Safe to proceed with router integration.")
     else:
         failed = [r for r in results if not r["success"]]
-        print(f"\nFailed tests:")
+        print("\nFailed tests:")
         for r in failed:
             print(f"  {r['model']} ({r['label']}): {r.get('error', 'unknown')}")
 

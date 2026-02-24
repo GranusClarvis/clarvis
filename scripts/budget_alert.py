@@ -169,7 +169,7 @@ def main():
         print("Sending test alert...")
         config = load_config()
         usage = fetch_usage()
-        msg = f"<b>[TEST] Budget Alert System Working</b>\n\n"
+        msg = "<b>[TEST] Budget Alert System Working</b>\n\n"
         msg += f"Today: ${usage['daily']:.2f}\n"
         msg += f"Week: ${usage['weekly']:.2f}\n"
         msg += f"Month: ${usage['monthly']:.2f}\n"
@@ -189,13 +189,13 @@ def main():
         usage = fetch_usage()
         config = load_config()
         state = load_state()
-        print(f"=== Budget Status ===")
+        print("=== Budget Status ===")
         print(f"Daily:     ${usage['daily']:.4f}")
         print(f"Weekly:    ${usage['weekly']:.4f}")
         print(f"Monthly:   ${usage['monthly']:.4f}")
         if usage["remaining"] is not None:
             print(f"Remaining: ${usage['remaining']:.4f} / ${usage.get('limit', '?')}")
-        print(f"\nThresholds:")
+        print("\nThresholds:")
         now = time.time()
         cooldown_s = config.get("cooldown_hours", 6) * 3600
         for t in config.get("thresholds", []):

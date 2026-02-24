@@ -105,6 +105,13 @@ JOBS = {
         "max_age_hours": 26,
         "timeout": 120,
     },
+    "research": {
+        "script": "scripts/cron_research.sh",
+        "log": "memory/cron/research.log",
+        "lock": "/tmp/clarvis_research.lock",
+        "max_age_hours": 10,
+        "timeout": 1800,
+    },
 }
 
 # Backoff multiplier for retries (seconds): attempt 1 = 30s wait, attempt 2 = 120s, etc.
@@ -441,7 +448,6 @@ def _rerun_job(job_name: str, result: dict) -> dict:
     """Re-run a cron job script in the background."""
     job = JOBS[job_name]
     script = WORKSPACE / job["script"]
-    log_path = WORKSPACE / job["log"]
     timeout = job.get("timeout", 600)
 
     if not script.exists():

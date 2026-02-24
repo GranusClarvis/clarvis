@@ -12,12 +12,19 @@ Each heartbeat task becomes an "episode" with:
 Episodes are stored in brain's EPISODES collection.
 Activation follows ACT-R power-law: A(i) = ln(sum(t_j^(-d_j)))
 where d_j = c * lag_j^(-1/gamma) (Pavlik & Anderson 2005 spacing model)
+
+Causal Graph:
+Episodes are connected by directed causal links. Each link records a
+relationship type (caused, enabled, blocked, fixed, retried) between
+two episodes, forming a DAG that supports temporal reasoning queries
+like "what caused this failure?" and "what chain of events led here?"
 """
 
 import json
 import math
 import sys
 import time
+from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -25,11 +32,24 @@ sys.path.insert(0, str(Path(__file__).parent))
 from brain import brain
 
 EPISODES_FILE = Path("/home/agent/.openclaw/workspace/data/episodes.json")
+CAUSAL_LINKS_FILE = Path("/home/agent/.openclaw/workspace/data/causal_links.json")
+
+# Valid causal relationship types
+CAUSAL_RELATIONSHIPS = {
+    "caused":  "A directly caused B to happen",
+    "enabled": "A made B possible (necessary precondition)",
+    "blocked": "A prevented B from succeeding",
+    "fixed":   "B was a fix/resolution of A's failure",
+    "retried": "B was a retry of the same task as A",
+}
 
 
 class EpisodicMemory:
     def __init__(self):
         self.episodes = self._load()
+        self.causal_links = self._load_causal()
+        # Index for fast episode lookup by id
+        self._id_index = {ep["id"]: ep for ep in self.episodes}
 
     def _load(self):
         if EPISODES_FILE.exists():
@@ -37,10 +57,288 @@ class EpisodicMemory:
                 return json.load(f)
         return []
 
+    def _load_causal(self):
+        if CAUSAL_LINKS_FILE.exists():
+            with open(CAUSAL_LINKS_FILE) as f:
+                return json.load(f)
+        return []
+
     def _save(self):
         EPISODES_FILE.parent.mkdir(parents=True, exist_ok=True)
         with open(EPISODES_FILE, 'w') as f:
             json.dump(self.episodes[-500:], f, indent=2)  # cap at 500
+
+    def _save_causal(self):
+        CAUSAL_LINKS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(CAUSAL_LINKS_FILE, 'w') as f:
+            json.dump(self.causal_links[-2000:], f, indent=2)  # cap at 2000
+
+    # ------------------------------------------------------------------
+    # Causal graph: linking and querying
+    # ------------------------------------------------------------------
+
+    def causal_link(self, episode_a, episode_b, relationship, confidence=1.0):
+        """Create a directed causal link: episode_a --[relationship]--> episode_b.
+
+        Args:
+            episode_a: episode id (str) or episode dict — the cause/source
+            episode_b: episode id (str) or episode dict — the effect/target
+            relationship: one of caused, enabled, blocked, fixed, retried
+            confidence: 0.0-1.0, how certain we are about this link (default 1.0)
+
+        Returns:
+            The created link dict, or None if invalid.
+        """
+        id_a = episode_a["id"] if isinstance(episode_a, dict) else episode_a
+        id_b = episode_b["id"] if isinstance(episode_b, dict) else episode_b
+
+        if relationship not in CAUSAL_RELATIONSHIPS:
+            print(f"Invalid relationship '{relationship}'. "
+                  f"Valid: {list(CAUSAL_RELATIONSHIPS.keys())}")
+            return None
+
+        if id_a == id_b:
+            return None  # no self-loops
+
+        # Prevent exact duplicate links
+        for link in self.causal_links:
+            if (link["from"] == id_a and link["to"] == id_b
+                    and link["relationship"] == relationship):
+                return link  # already exists
+
+        link = {
+            "from": id_a,
+            "to": id_b,
+            "relationship": relationship,
+            "confidence": round(min(1.0, max(0.0, confidence)), 2),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        self.causal_links.append(link)
+        self._save_causal()
+        return link
+
+    def causes_of(self, episode_id, relationship=None):
+        """Return all direct causes of an episode (incoming edges).
+
+        Args:
+            episode_id: str episode id
+            relationship: optional filter (e.g. "blocked")
+
+        Returns:
+            List of (link, episode) tuples where episode caused this one.
+        """
+        eid = episode_id["id"] if isinstance(episode_id, dict) else episode_id
+        results = []
+        for link in self.causal_links:
+            if link["to"] != eid:
+                continue
+            if relationship and link["relationship"] != relationship:
+                continue
+            ep = self._id_index.get(link["from"])
+            results.append((link, ep))
+        return results
+
+    def effects_of(self, episode_id, relationship=None):
+        """Return all direct effects of an episode (outgoing edges).
+
+        Args:
+            episode_id: str episode id
+            relationship: optional filter
+
+        Returns:
+            List of (link, episode) tuples where this episode caused them.
+        """
+        eid = episode_id["id"] if isinstance(episode_id, dict) else episode_id
+        results = []
+        for link in self.causal_links:
+            if link["from"] != eid:
+                continue
+            if relationship and link["relationship"] != relationship:
+                continue
+            ep = self._id_index.get(link["to"])
+            results.append((link, ep))
+        return results
+
+    def causal_chain(self, episode_id, direction="backward", max_depth=10):
+        """Walk the causal graph transitively.
+
+        Args:
+            episode_id: starting episode id
+            direction: "backward" traces causes, "forward" traces effects
+            max_depth: maximum traversal depth to prevent infinite loops
+
+        Returns:
+            List of (depth, link, episode) tuples in BFS order.
+        """
+        eid = episode_id["id"] if isinstance(episode_id, dict) else episode_id
+
+        # Build adjacency for the chosen direction
+        if direction == "backward":
+            # link["to"] -> link["from"] (trace causes)
+            adj = {}
+            for link in self.causal_links:
+                adj.setdefault(link["to"], []).append(link)
+            get_next = lambda link: link["from"]
+        else:
+            # link["from"] -> link["to"] (trace effects)
+            adj = {}
+            for link in self.causal_links:
+                adj.setdefault(link["from"], []).append(link)
+            get_next = lambda link: link["to"]
+
+        visited = {eid}
+        queue = deque()
+        # Seed with depth 0 neighbors
+        for link in adj.get(eid, []):
+            nxt = get_next(link)
+            if nxt not in visited:
+                queue.append((1, link, nxt))
+
+        chain = []
+        while queue:
+            depth, link, node_id = queue.popleft()
+            if node_id in visited or depth > max_depth:
+                continue
+            visited.add(node_id)
+            ep = self._id_index.get(node_id)
+            chain.append((depth, link, ep))
+            # Continue traversal
+            for next_link in adj.get(node_id, []):
+                nxt = get_next(next_link)
+                if nxt not in visited:
+                    queue.append((depth + 1, next_link, nxt))
+
+        return chain
+
+    def root_causes(self, episode_id, max_depth=10):
+        """Find root causes — episodes with no incoming causal links
+        in the backward chain from the given episode."""
+        chain = self.causal_chain(episode_id, direction="backward", max_depth=max_depth)
+        if not chain:
+            return []
+
+        # Collect all "to" targets in the chain's links
+        has_incoming = set()
+        for _, link, _ in chain:
+            has_incoming.add(link["to"])
+
+        # Root causes are chain nodes that have no incoming link in the subgraph
+        roots = []
+        for depth, link, ep in chain:
+            node_id = link["from"]
+            if node_id not in has_incoming and ep is not None:
+                roots.append(ep)
+        return roots
+
+    def causal_graph_stats(self):
+        """Summary statistics for the causal graph."""
+        if not self.causal_links:
+            return {"total_links": 0}
+
+        rel_counts = {}
+        for link in self.causal_links:
+            r = link["relationship"]
+            rel_counts[r] = rel_counts.get(r, 0) + 1
+
+        # Count unique nodes involved
+        nodes = set()
+        for link in self.causal_links:
+            nodes.add(link["from"])
+            nodes.add(link["to"])
+
+        # Find episodes with most connections (hubs)
+        in_degree = {}
+        out_degree = {}
+        for link in self.causal_links:
+            out_degree[link["from"]] = out_degree.get(link["from"], 0) + 1
+            in_degree[link["to"]] = in_degree.get(link["to"], 0) + 1
+
+        top_causes = sorted(out_degree.items(), key=lambda x: x[1], reverse=True)[:5]
+        top_effects = sorted(in_degree.items(), key=lambda x: x[1], reverse=True)[:5]
+
+        return {
+            "total_links": len(self.causal_links),
+            "unique_nodes": len(nodes),
+            "relationship_counts": rel_counts,
+            "top_causes": [(eid, deg, self._id_index.get(eid, {}).get("task", "?")[:60])
+                           for eid, deg in top_causes],
+            "top_effects": [(eid, deg, self._id_index.get(eid, {}).get("task", "?")[:60])
+                            for eid, deg in top_effects],
+        }
+
+    def backfill_causal_links(self):
+        """Retroactively detect causal links across ALL existing episodes.
+
+        Walks through episodes chronologically, applying _auto_link_against()
+        for each episode against its predecessors (window of 20).
+        Returns count of links created.
+        """
+        created = 0
+        for i, ep in enumerate(self.episodes):
+            window_start = max(0, i - 20)
+            window = self.episodes[window_start:i]
+            if not window:
+                continue
+            before = len(self.causal_links)
+            self._auto_link_against(ep, window)
+            created += len(self.causal_links) - before
+        if created:
+            self._save_causal()
+        return created
+
+    def _auto_link_against(self, new_episode, candidates):
+        """Heuristically detect causal links between new_episode and candidates.
+
+        Same rules as _auto_link but accepts an explicit candidate list.
+        """
+        if not candidates:
+            return
+
+        new_words = set(new_episode["task"].lower().split())
+        new_section = new_episode["section"]
+        new_outcome = new_episode["outcome"]
+
+        for prior in reversed(candidates):
+            prior_words = set(prior["task"].lower().split())
+            overlap = len(new_words & prior_words) / max(1, len(new_words | prior_words))
+
+            if (overlap > 0.5
+                    and prior["outcome"] in ("failure", "timeout")
+                    and prior["section"] == new_section):
+                self.causal_link(prior, new_episode, "retried", confidence=round(overlap, 2))
+                break
+
+            if (new_outcome == "success"
+                    and prior["outcome"] in ("failure", "timeout", "soft_failure")
+                    and overlap > 0.3):
+                self.causal_link(prior, new_episode, "fixed", confidence=round(overlap, 2))
+                break
+
+            if (prior["outcome"] == "success"
+                    and prior["section"] == new_section
+                    and overlap > 0.2
+                    and new_outcome == "success"):
+                self.causal_link(prior, new_episode, "enabled", confidence=round(min(0.8, overlap), 2))
+                break
+
+            if (prior["outcome"] in ("failure", "timeout")
+                    and new_outcome in ("failure", "timeout")
+                    and prior["section"] == new_section
+                    and overlap > 0.3):
+                self.causal_link(prior, new_episode, "blocked", confidence=round(overlap, 2))
+                break
+
+    def _auto_link(self, new_episode):
+        """Heuristically detect causal links between new_episode and recent episodes.
+
+        Detection rules:
+        1. RETRY: same section + similar task text + prior was failure → retried
+        2. FIX: new success that follows a failure with overlapping keywords → fixed
+        3. ENABLED: prior success in same section within last 10 episodes → enabled
+        4. BLOCKED: prior failure in same section, new episode also fails → blocked
+        """
+        recent = self.episodes[-20:-1]  # last 20 episodes excluding new one
+        self._auto_link_against(new_episode, recent)
 
     def encode(self, task_text, section, salience, outcome,
                duration_s=0, error_msg=None, steps_taken=None):
@@ -66,7 +364,11 @@ class EpisodicMemory:
         }
 
         self.episodes.append(episode)
+        self._id_index[episode["id"]] = episode
         self._save()
+
+        # Auto-detect causal links with recent episodes
+        self._auto_link(episode)
 
         # Store searchable version in brain
         importance = min(1.0, 0.5 + valence * 0.3)
@@ -288,18 +590,18 @@ class EpisodicMemory:
         if not self.episodes:
             return {"error": "No episodes to analyze", "goals_generated": []}
 
-        # 1. Count outcomes
+        # 1. Count outcomes — separate real executions from soft-failure observations
         outcome_counts: dict = {}
         for ep in self.episodes:
             o = ep["outcome"]
             outcome_counts[o] = outcome_counts.get(o, 0) + 1
 
         total = len(self.episodes)
+        # Real execution outcomes exclude soft_failures (manufactured by failure_amplifier)
+        real_episodes = [ep for ep in self.episodes if ep["outcome"] != "soft_failure"]
+        real_total = len(real_episodes)
         success_count = outcome_counts.get("success", 0)
-        failure_count = (outcome_counts.get("failure", 0) +
-                         outcome_counts.get("timeout", 0) +
-                         outcome_counts.get("soft_failure", 0))
-        success_rate = success_count / total if total else 0.0
+        success_rate = success_count / real_total if real_total else 0.0
 
         # 2. Extract first-word action verbs (typically the imperative verb)
         success_actions: dict = {}
@@ -356,22 +658,28 @@ class EpisodicMemory:
         now = datetime.now(timezone.utc)
         goals_generated: list = []
 
-        # Goal: fix domains with >30% failure rate
+        # Goal: fix domains with >30% REAL failure rate
+        # Soft failures are observational notes (shallow reasoning, long duration, etc.)
+        # and should not inflate domain failure rates or trigger corrective goals.
         for domain, counts in domain_outcomes.items():
-            d_total = sum(counts.values())
-            d_failures = counts.get("failure", 0) + counts.get("timeout", 0) + counts.get("soft_failure", 0)
-            if d_failures > 0 and d_total > 0:
-                fail_rate = d_failures / d_total
+            d_real_total = counts.get("success", 0) + counts.get("failure", 0) + counts.get("timeout", 0)
+            d_hard_failures = counts.get("failure", 0) + counts.get("timeout", 0)
+            d_soft_failures = counts.get("soft_failure", 0)
+            if d_hard_failures > 0 and d_real_total > 0:
+                fail_rate = d_hard_failures / d_real_total
                 if fail_rate > 0.3:
                     goal_name = f"Reduce {domain.replace('_', ' ')} failure rate"
                     brain.set_goal(goal_name, 0, subtasks={
                         "source": "episodic_synthesis",
                         "domain": domain,
                         "fail_rate": round(fail_rate, 2),
-                        "episode_count": d_total,
+                        "episode_count": d_real_total,
+                        "soft_failures_noted": d_soft_failures,
                         "description": (
                             f"Failure rate {fail_rate:.0%} detected in {domain.replace('_', ' ')} tasks "
-                            f"({d_failures}/{d_total} episodes). Investigate and fix root causes."
+                            f"({d_hard_failures}/{d_real_total} real episodes, "
+                            f"+{d_soft_failures} soft observations). "
+                            f"Investigate and fix root causes."
                         ),
                         "generated_at": now.isoformat(),
                     })
@@ -410,13 +718,13 @@ class EpisodicMemory:
             })
             goals_generated.append(goal_name)
 
-        # Goal: improve overall success rate if below 80%
-        if success_rate < 0.8 and total >= 3:
+        # Goal: improve overall success rate if below 80% (real executions only)
+        if success_rate < 0.8 and real_total >= 3:
             goal_name = "Improve task success rate above 80%"
             brain.set_goal(goal_name, int(success_rate * 100), subtasks={
                 "source": "episodic_synthesis",
                 "description": (
-                    f"Current success rate is {success_rate:.0%} ({success_count}/{total} episodes). "
+                    f"Current success rate is {success_rate:.0%} ({success_count}/{real_total} real episodes). "
                     "Review failure patterns and add pre-flight checks."
                 ),
                 "current_rate": round(success_rate, 2),
@@ -427,8 +735,25 @@ class EpisodicMemory:
         top_success = sorted(success_actions.items(), key=lambda x: x[1], reverse=True)[:5]
         top_failure = sorted(failure_actions.items(), key=lambda x: x[1], reverse=True)[:5]
 
+        # === INJECT TOP GOALS INTO QUEUE.MD ===
+        # Close the loop: episodes → patterns → goals → executable tasks
+        tasks_injected = []
+        if goals_generated:
+            try:
+                from queue_writer import add_tasks
+                # Convert goal names to actionable task descriptions, cap at 2
+                actionable = []
+                for goal_name in goals_generated[:2]:
+                    actionable.append(f"Investigate and fix: {goal_name}")
+                injected = add_tasks(actionable, priority="P1", source="episodic_synthesis")
+                tasks_injected = injected
+            except Exception:
+                pass  # queue_writer unavailable — degrade gracefully
+
         return {
             "total_episodes": total,
+            "real_episodes": real_total,
+            "soft_failure_episodes": outcome_counts.get("soft_failure", 0),
             "outcome_counts": outcome_counts,
             "success_rate": round(success_rate, 2),
             "top_success_actions": top_success,
@@ -437,6 +762,7 @@ class EpisodicMemory:
             "error_types": error_types,
             "goals_generated": goals_generated,
             "goals_count": len(goals_generated),
+            "tasks_injected": tasks_injected,
         }
 
 
@@ -446,7 +772,8 @@ episodic = EpisodicMemory()
 # CLI interface
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: episodic_memory.py <encode|recall|failures|stats|synthesize>")
+        print("Usage: episodic_memory.py <encode|recall|failures|stats|synthesize"
+              "|link|causes|effects|chain|roots|causal-stats|backfill>")
         sys.exit(1)
 
     cmd = sys.argv[1]
@@ -494,7 +821,7 @@ if __name__ == "__main__":
         print("EPISODIC MEMORY SYNTHESIS REPORT")
         print("=" * 60)
         print(f"\nEpisodes analyzed : {result['total_episodes']}")
-        print(f"Outcome breakdown :")
+        print("Outcome breakdown :")
         for outcome, count in sorted(result["outcome_counts"].items()):
             print(f"  {outcome:10s} {count}")
         print(f"Success rate      : {result['success_rate']:.0%}")
@@ -508,12 +835,14 @@ if __name__ == "__main__":
             for verb, count in result["top_failure_actions"]:
                 print(f"  {count:2d}x  {verb}")
 
-        print("\nDomain outcomes:")
+        print("\nDomain outcomes (real | soft):")
         for domain, counts in sorted(result["domain_outcomes"].items()):
             s = counts.get("success", 0)
-            f = counts.get("failure", 0) + counts.get("timeout", 0) + counts.get("soft_failure", 0)
-            bar = "█" * s + "░" * f
-            print(f"  {domain:22s}  {bar}  ({s}✓ {f}✗)")
+            f = counts.get("failure", 0) + counts.get("timeout", 0)
+            sf = counts.get("soft_failure", 0)
+            bar = "█" * s + "░" * f + "·" * sf
+            soft_note = f" +{sf}soft" if sf else ""
+            print(f"  {domain:22s}  {bar}  ({s}✓ {f}✗{soft_note})")
 
         if result["error_types"]:
             print("\nError type breakdown:")
@@ -529,6 +858,96 @@ if __name__ == "__main__":
 
         print("\n[Full JSON]")
         print(json.dumps(result, indent=2))
+
+    # ------------------------------------------------------------------
+    # Causal graph CLI commands
+    # ------------------------------------------------------------------
+
+    elif cmd == "link":
+        # link <episode_a_id> <episode_b_id> <relationship> [confidence]
+        if len(sys.argv) < 5:
+            print("Usage: link <from_id> <to_id> <relationship> [confidence]")
+            print(f"  relationships: {list(CAUSAL_RELATIONSHIPS.keys())}")
+            sys.exit(1)
+        confidence = float(sys.argv[5]) if len(sys.argv) > 5 else 1.0
+        result = episodic.causal_link(sys.argv[2], sys.argv[3], sys.argv[4], confidence)
+        if result:
+            print(f"Linked: {result['from']} --[{result['relationship']}]--> {result['to']} "
+                  f"(conf={result['confidence']})")
+        else:
+            print("Link creation failed (invalid relationship or self-loop)")
+
+    elif cmd == "causes":
+        # causes <episode_id> [relationship]
+        if len(sys.argv) < 3:
+            print("Usage: causes <episode_id> [relationship]")
+            sys.exit(1)
+        rel = sys.argv[3] if len(sys.argv) > 3 else None
+        results = episodic.causes_of(sys.argv[2], relationship=rel)
+        if not results:
+            print(f"No causes found for {sys.argv[2]}")
+        for link, ep in results:
+            task = ep["task"][:60] if ep else "?"
+            print(f"  {link['from']} --[{link['relationship']}]--> {sys.argv[2]}  "
+                  f"(conf={link['confidence']})  {task}")
+
+    elif cmd == "effects":
+        # effects <episode_id> [relationship]
+        if len(sys.argv) < 3:
+            print("Usage: effects <episode_id> [relationship]")
+            sys.exit(1)
+        rel = sys.argv[3] if len(sys.argv) > 3 else None
+        results = episodic.effects_of(sys.argv[2], relationship=rel)
+        if not results:
+            print(f"No effects found for {sys.argv[2]}")
+        for link, ep in results:
+            task = ep["task"][:60] if ep else "?"
+            print(f"  {sys.argv[2]} --[{link['relationship']}]--> {link['to']}  "
+                  f"(conf={link['confidence']})  {task}")
+
+    elif cmd == "chain":
+        # chain <episode_id> [backward|forward] [max_depth]
+        if len(sys.argv) < 3:
+            print("Usage: chain <episode_id> [backward|forward] [max_depth]")
+            sys.exit(1)
+        direction = sys.argv[3] if len(sys.argv) > 3 else "backward"
+        max_depth = int(sys.argv[4]) if len(sys.argv) > 4 else 10
+        chain = episodic.causal_chain(sys.argv[2], direction=direction, max_depth=max_depth)
+        if not chain:
+            print(f"No causal chain found ({direction}) from {sys.argv[2]}")
+        else:
+            print(f"Causal chain ({direction}) from {sys.argv[2]}:")
+            for depth, link, ep in chain:
+                indent = "  " * depth
+                task = ep["task"][:55] if ep else "?"
+                outcome = ep["outcome"] if ep else "?"
+                node = link["from"] if direction == "backward" else link["to"]
+                print(f"  {indent}depth={depth} [{link['relationship']}] "
+                      f"{node} [{outcome}] {task}")
+
+    elif cmd == "roots":
+        # roots <episode_id>
+        if len(sys.argv) < 3:
+            print("Usage: roots <episode_id>")
+            sys.exit(1)
+        roots = episodic.root_causes(sys.argv[2])
+        if not roots:
+            print(f"No root causes found for {sys.argv[2]}")
+        else:
+            print(f"Root causes of {sys.argv[2]}:")
+            for ep in roots:
+                print(f"  {ep['id']} [{ep['outcome']}] {ep['task'][:70]}")
+
+    elif cmd == "causal-stats":
+        stats = episodic.causal_graph_stats()
+        print(json.dumps(stats, indent=2, default=str))
+
+    elif cmd == "backfill":
+        # Retroactively detect causal links across all episodes
+        count = episodic.backfill_causal_links()
+        print(f"Backfilled {count} causal links across {len(episodic.episodes)} episodes")
+        stats = episodic.causal_graph_stats()
+        print(json.dumps(stats, indent=2, default=str))
 
     else:
         print(f"Unknown command: {cmd}")

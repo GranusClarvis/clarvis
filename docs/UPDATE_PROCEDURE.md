@@ -111,11 +111,14 @@ npm list -g openclaw --depth=0
 
 ### Phase 3: Stop Gateway
 ```bash
-# Graceful stop (NOT kill)
-pm2 stop openclaw-gateway
+# Graceful stop via systemd (preferred)
+systemctl --user stop openclaw-gateway.service
 
-# Verify stopped
-pm2 list
+# Verify stopped (port should not be listening)
+ss -tlnp | grep ":18789 "
+
+# Fallback if systemd unavailable:
+# pm2 stop openclaw-gateway
 ```
 
 ### Phase 4: Update
@@ -135,13 +138,19 @@ openclaw doctor --fix --non-interactive --yes
 
 ### Phase 6: Restart
 ```bash
-pm2 start openclaw-gateway
+# Start via systemd (preferred)
+systemctl --user start openclaw-gateway.service
 
-# Wait for startup
+# Wait for startup and verify port
 sleep 5
+ss -tlnp | grep ":18789 "
 
 # Check logs
-pm2 logs openclaw-gateway --lines 50
+journalctl --user -u openclaw-gateway.service --since "5 min ago" --no-pager
+
+# Fallback if systemd unavailable:
+# pm2 start openclaw-gateway
+# pm2 logs openclaw-gateway --lines 50
 ```
 
 ### Phase 7: Verify
@@ -165,13 +174,14 @@ openclaw --version 2>/dev/null || npm list -g openclaw --depth=0
 
 After any update, verify these manually:
 
-- [ ] Gateway is running: `pm2 list`
+- [ ] Gateway port listening: `ss -tlnp | grep ":18789 "`
+- [ ] Systemd service active: `systemctl --user status openclaw-gateway.service`
 - [ ] Brain responds: `python3 scripts/brain.py recall "hello"`
 - [ ] Config is valid: `python3 -c "import json; json.load(open('$HOME/.openclaw/openclaw.json'))"`
 - [ ] Send a test message via Telegram
 - [ ] Wait for next heartbeat (30min cycle) and verify it fires
 - [ ] Check cron jobs still active: `crontab -l`
-- [ ] Review gateway logs: `pm2 logs openclaw-gateway --lines 50`
+- [ ] Review gateway logs: `journalctl --user -u openclaw-gateway.service --since "30 min ago" --no-pager`
 - [ ] Verify working memory: `python3 -c "import json; print(json.load(open('data/working_memory_state.json')).keys())"`
 - [ ] Test reasoning chain hook: `python3 scripts/reasoning_chain_hook.py open "update test" --why "testing post-update"`
 
@@ -187,10 +197,10 @@ scripts/safe_update.sh --rollback
 ### Manual
 ```bash
 # 1. Stop gateway
-pm2 stop openclaw-gateway
+systemctl --user stop openclaw-gateway.service
 
 # 2. Reinstall old version
-npm install -g openclaw@2026.2.19-2
+npm install -g openclaw@2026.2.21-2
 
 # 3. Restore config if needed
 cp ~/.openclaw/openclaw.json.pre-update ~/.openclaw/openclaw.json
@@ -199,10 +209,10 @@ cp ~/.openclaw/openclaw.json.pre-update ~/.openclaw/openclaw.json
 scripts/backup_restore.sh --latest
 
 # 5. Restart
-pm2 start openclaw-gateway
+systemctl --user start openclaw-gateway.service
 
-# 6. Verify
-scripts/health-check.sh
+# 6. Verify port is listening
+ss -tlnp | grep ":18789 "
 ```
 
 ---
@@ -211,7 +221,35 @@ scripts/health-check.sh
 
 | Date | From | To | Status | Notes |
 |---|---|---|---|---|
-| 2026-02-21 | 2026.2.19-2 | 2026.2.21-2 | Pending | SHA-256 migration, memory fixes |
+| 2026-02-24 | 2026.2.21-2 | 2026.2.23 | **Done** | Migrated PM2→systemd, self-decapitation fix, auto-updater disabled |
+| 2026-02-21 | 2026.2.19-2 | 2026.2.21-2 | Done | SHA-256 migration, memory fixes |
+
+---
+
+## Important Notes
+
+### Auto-Updater (Disabled)
+OpenClaw 2026.2.23+ has a built-in auto-updater that checks npm on gateway start. We disable this because we manage updates manually via `safe_update.sh` with backups and health checks.
+
+Config settings (in `openclaw.json`):
+```json
+"update": {
+  "checkOnStart": false,
+  "auto": { "enabled": false }
+}
+```
+
+### Gateway Management: Systemd (since 2026-02-24)
+The gateway runs as a **systemd user service** (`openclaw-gateway.service`), not PM2.
+- Linger is enabled (survives logout, starts on boot)
+- Auto-restart on crash (`Restart=always`, `RestartSec=5`)
+- Installed via: `openclaw gateway install`
+- Managed via: `systemctl --user {start|stop|restart|status} openclaw-gateway.service`
+- Logs: `journalctl --user -u openclaw-gateway.service`
+- Required env vars (set in `cron_env.sh`): `XDG_RUNTIME_DIR`, `DBUS_SESSION_BUS_ADDRESS`
+
+### Self-Decapitation Prevention
+`safe_update.sh` detects if it's running inside the gateway process tree (e.g. when M2.5 invokes it). If so, it re-launches itself as a detached process via `nohup setsid` and also spawns a watchdog that will restart the gateway if the update script dies unexpectedly.
 
 ---
 

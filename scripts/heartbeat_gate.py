@@ -232,7 +232,7 @@ def check_gate() -> Tuple[str, str, List[str]]:
     if cron_fp and prev_cron:
         if cron_fp["latest_mtime"] != prev_cron["latest_mtime"]:
             changes.append("cron_completed")
-            debug(f"Cron run completed since last check")
+            debug("Cron run completed since last check")
 
     # === DECISION ===
 

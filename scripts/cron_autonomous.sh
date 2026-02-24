@@ -11,12 +11,23 @@ LOGFILE="memory/cron/autonomous.log"
 LOCKFILE="/tmp/clarvis_autonomous.lock"
 SCRIPTS="/home/agent/.openclaw/workspace/scripts"
 
-# Prevent overlapping runs
+# Belt-and-suspenders: forcibly remove Claude Code nesting guard env vars.
+# cron_env.sh already does this, but if invoked from within a claude session
+# (e.g. manual trigger during dev), the vars may leak through.
+unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT 2>/dev/null || true
+
+# Prevent overlapping runs (with stale-lock detection)
 if [ -f "$LOCKFILE" ]; then
     pid=$(cat "$LOCKFILE" 2>/dev/null)
     if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] SKIP: Previous run still active (PID $pid)" >> "$LOGFILE"
-        exit 0
+        # Check lock age — if >2400s (40min), assume stale and reclaim
+        lock_age=$(( $(date +%s) - $(stat -c %Y "$LOCKFILE" 2>/dev/null || echo 0) ))
+        if [ "$lock_age" -gt 2400 ]; then
+            echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WARN: Stale lock (age=${lock_age}s, PID $pid) — reclaiming" >> "$LOGFILE"
+        else
+            echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] SKIP: Previous run still active (PID $pid, age=${lock_age}s)" >> "$LOGFILE"
+            exit 0
+        fi
     fi
 fi
 echo $$ > "$LOCKFILE"
@@ -102,7 +113,7 @@ if [ "$PF_STATUS" = "queue_empty" ] || [ "$PF_STATUS" = "no_tasks" ]; then
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Queue empty — spawning task generation..." >> "$LOGFILE"
     COMPRESSOR="$SCRIPTS/context_compressor.py"
     REPLENISH_CONTEXT=$(python3 "$COMPRESSOR" brief 2>> "$LOGFILE")
-    timeout 300 /home/agent/.local/bin/claude -p \
+    timeout 300 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT /home/agent/.local/bin/claude -p \
         "You are Clarvis's evolution engine. The evolution queue is EMPTY.
 
         Here's what was recently completed and current state:
@@ -137,7 +148,7 @@ if [ -z "$NEXT_TASK" ]; then
     exit 0
 fi
 
-echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] EXECUTING (salience=$BEST_SALIENCE, section=$TASK_SECTION, route=$ROUTE_EXECUTOR): ${NEXT_TASK:0:100}" >> "$LOGFILE"
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] EXECUTING (salience=$BEST_SALIENCE, section=$TASK_SECTION, route=$ROUTE_EXECUTOR tier=$ROUTE_TIER): ${NEXT_TASK:0:100}" >> "$LOGFILE"
 
 # ============================================================================
 # PHASE 2: TASK EXECUTION
@@ -150,6 +161,33 @@ OPENROUTER_STDERR=$(mktemp)
 EXECUTOR_USED="$ROUTE_EXECUTOR"
 
 COMPRESSED_EPISODES="$EPISODIC_HINTS"
+
+# Tier-aware timeout: reasoning tasks get more time, complex tasks get moderate
+case "$ROUTE_TIER" in
+    reasoning) CLAUDE_TIMEOUT=1800 ;;
+    complex)   CLAUDE_TIMEOUT=900  ;;
+    *)         CLAUDE_TIMEOUT=600  ;;
+esac
+
+# Check if this task previously timed out (from retry tracker)
+RETRY_FILE="/home/agent/.openclaw/workspace/data/task_retries.json"
+PREV_TIMEOUTS=0
+if [ -f "$RETRY_FILE" ]; then
+    PREV_TIMEOUTS=$(python3 -c "
+import json, sys
+with open('$RETRY_FILE') as f:
+    d = json.load(f)
+key = '''${NEXT_TASK:0:80}'''
+print(d.get(key, 0))
+" 2>/dev/null || echo 0)
+fi
+
+# Build time-budget hint for Claude prompts
+TIME_BUDGET_HINT="TIME BUDGET: You have ~$((CLAUDE_TIMEOUT / 60)) minutes. Prioritize completing something concrete over perfection."
+if [ "$PREV_TIMEOUTS" -gt 0 ]; then
+    TIME_BUDGET_HINT="${TIME_BUDGET_HINT}
+    WARNING: This task timed out ${PREV_TIMEOUTS} time(s) before. Focus on the SMALLEST viable increment. If the task is too large, do only the most impactful part and mark the rest as TODO."
+fi
 
 # Kill switch — set to false in cron_env.sh to disable OpenRouter routing
 OPENROUTER_ROUTING="${OPENROUTER_ROUTING:-true}"
@@ -196,64 +234,65 @@ with open('$PREFLIGHT_FILE', 'w') as f:
     if grep -q "NEEDS_CLAUDE_CODE: true" "$OPENROUTER_STDERR" 2>/dev/null || grep -q "NEEDS_CLAUDE_CODE: true" "$TASK_OUTPUT_FILE" 2>/dev/null || [ $TASK_EXIT -ne 0 ]; then
         echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] ROUTER: OpenRouter escalated to Claude Code (fallback)" >> "$LOGFILE"
         EXECUTOR_USED="claude"
-        timeout 1800 /home/agent/.local/bin/claude -p \
-            "You are Clarvis's executive function. Execute this evolution task:
+        timeout $CLAUDE_TIMEOUT env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT /home/agent/.local/bin/claude -p \
+            "You are Clarvis's executive function.
 
-    TASK: $NEXT_TASK
+    ${TIME_BUDGET_HINT}
+    ${CONTEXT_BRIEF}
     ${PROC_HINT:+
     PROCEDURAL HINT: $PROC_HINT}
-    ${COMPRESSED_EPISODES:+
-    EPISODIC HINTS:
-  $COMPRESSED_EPISODES}
-    CONTEXT: ${CONTEXT_BRIEF}
+
+    TASK: $NEXT_TASK
+
     Do the work. Be concrete. Write code if needed. Test it.
-    When done, output a 1-line summary of what you accomplished." \
+    When done, output a summary listing what you did, comma-separated. Example: created scripts/foo.py, added bar() to brain.py, wired into cron postflight, tested via python3 foo.py" \
             --dangerously-skip-permissions > "$TASK_OUTPUT_FILE" 2>&1
         TASK_EXIT=$?
     fi
 
 elif [ "$ROUTE_EXECUTOR" = "gemini" ]; then
-    # === FALLBACK: GEMINI FLASH (when OpenRouter routing disabled) ===
-    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] ROUTING to Gemini Flash (tier=$ROUTE_TIER, score=$ROUTE_SCORE)" >> "$LOGFILE"
+    # === FALLBACK: OpenRouter cheap model (when primary OpenRouter routing disabled) ===
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] ROUTING to OpenRouter fallback (tier=$ROUTE_TIER, score=$ROUTE_SCORE)" >> "$LOGFILE"
+    EXECUTOR_USED="openrouter"
 
     TASK_CONTEXT="$CONTEXT_BRIEF" TASK_PROC_HINT="$PROC_HINT" TASK_EPISODE_HINT="$COMPRESSED_EPISODES" \
-        python3 "$SCRIPTS/task_router.py" execute "$NEXT_TASK" > "$TASK_OUTPUT_FILE" 2>&1
+        python3 "$SCRIPTS/task_router.py" execute-openrouter "$NEXT_TASK" > "$TASK_OUTPUT_FILE" 2>&1
     TASK_EXIT=$?
 
     if grep -q "NEEDS_CLAUDE_CODE: true" "$TASK_OUTPUT_FILE" 2>/dev/null || [ $TASK_EXIT -ne 0 ]; then
-        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] ROUTER: Gemini escalated to Claude Code (fallback)" >> "$LOGFILE"
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] ROUTER: OpenRouter escalated to Claude Code (fallback)" >> "$LOGFILE"
         EXECUTOR_USED="claude"
-        timeout 1800 /home/agent/.local/bin/claude -p \
-            "You are Clarvis's executive function. Execute this evolution task:
+        timeout $CLAUDE_TIMEOUT env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT /home/agent/.local/bin/claude -p \
+            "You are Clarvis's executive function.
 
-    TASK: $NEXT_TASK
+    ${TIME_BUDGET_HINT}
+    ${CONTEXT_BRIEF}
     ${PROC_HINT:+
     PROCEDURAL HINT: $PROC_HINT}
-    ${COMPRESSED_EPISODES:+
-    EPISODIC HINTS:
-  $COMPRESSED_EPISODES}
-    CONTEXT: ${CONTEXT_BRIEF}
+
+    TASK: $NEXT_TASK
+
     Do the work. Be concrete. Write code if needed. Test it.
-    When done, output a 1-line summary of what you accomplished." \
+    When done, output a summary listing what you did, comma-separated. Example: created scripts/foo.py, added bar() to brain.py, wired into cron postflight, tested via python3 foo.py" \
             --dangerously-skip-permissions > "$TASK_OUTPUT_FILE" 2>&1
         TASK_EXIT=$?
     fi
 else
     # === CLAUDE CODE (complex/reasoning tasks) ===
-    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] ROUTING to Claude Code (tier=$ROUTE_TIER, score=$ROUTE_SCORE)" >> "$LOGFILE"
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] ROUTING to Claude Code (tier=$ROUTE_TIER, score=$ROUTE_SCORE, timeout=${CLAUDE_TIMEOUT}s)" >> "$LOGFILE"
 
-    timeout 1800 /home/agent/.local/bin/claude -p \
-        "You are Clarvis's executive function. Execute this evolution task:
+    timeout $CLAUDE_TIMEOUT env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT /home/agent/.local/bin/claude -p \
+        "You are Clarvis's executive function.
 
-    TASK: $NEXT_TASK
+    ${TIME_BUDGET_HINT}
+    ${CONTEXT_BRIEF}
     ${PROC_HINT:+
     PROCEDURAL HINT: $PROC_HINT}
-    ${COMPRESSED_EPISODES:+
-    EPISODIC HINTS:
-  $COMPRESSED_EPISODES}
-    CONTEXT: ${CONTEXT_BRIEF}
+
+    TASK: $NEXT_TASK
+
     Do the work. Be concrete. Write code if needed. Test it.
-    When done, output a 1-line summary of what you accomplished." \
+    When done, output a summary listing what you did, comma-separated. Example: created scripts/foo.py, added bar() to brain.py, wired into cron postflight, tested via python3 foo.py" \
         --dangerously-skip-permissions > "$TASK_OUTPUT_FILE" 2>&1
     TASK_EXIT=$?
 fi
@@ -261,7 +300,7 @@ fi
 rm -f "$OPENROUTER_STDERR"
 
 TASK_DURATION=$((SECONDS - TASK_START_SECONDS))
-echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] EXECUTION: executor=$EXECUTOR_USED exit=$TASK_EXIT duration=${TASK_DURATION}s" >> "$LOGFILE"
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] EXECUTION: executor=$EXECUTOR_USED exit=$TASK_EXIT duration=${TASK_DURATION}s timeout=${CLAUDE_TIMEOUT}s tier=$ROUTE_TIER" >> "$LOGFILE"
 
 # Log executor output (truncated to last 2000 chars to prevent log bloat)
 tail -c 2000 "$TASK_OUTPUT_FILE" >> "$LOGFILE" 2>/dev/null

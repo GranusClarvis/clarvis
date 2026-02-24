@@ -406,7 +406,6 @@ class EvolutionLoop:
 
         # Generate concrete action based on strategy
         strategy = analysis.get("fix_strategy", "")
-        error = failure["error"].lower()
 
         if "reuse fix" in strategy.lower():
             # Find the referenced fix and copy its action
