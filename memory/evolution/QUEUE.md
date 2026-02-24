@@ -14,7 +14,7 @@ _Completed items archived to QUEUE_ARCHIVE.md (100+ items since 2026-02-18)._
 - [x] [EPISODIC_SYNTHESIS 2026-02-24] Investigate and fix: Reduce memory system failure rate — Root cause: soft_failure episodes (44/82) counted equally with real failures in synthesize(), inflating all domain failure rates. Fixed: synthesize() now separates real executions from soft observations. Memory system domain: 0 real failures (was 53%). Overall success rate: 87% (was 40%). False goals reduced from 10 to 3. (2026-02-24 UTC)
 - [x] Investigate 50% success rate in autonomous execution — root causes: nested Claude Code calls (09:29), complex task timeouts (16:10). Consider longer timeouts or better task routing to improve success rate above 60%. (2026-02-24 02:35 UTC)
 - [x] Fix code generation score (0.41) — run ast_surgery.py auto-fix on all 50+ scripts to reduce the 57 pyflakes issues. After cleanup, verify code_quality_gate.py shows clean_ratio > 70%. Target: 0.55+. (2026-02-24 13:08 UTC — Done: Code quality now 95% clean, 53/56 files clean, only 6 minor issues remaining)
-- [ ] Build attention-guided memory consolidation — extend memory_consolidation.py to use attention spotlight salience when deciding what to prune. High-salience memories should resist decay. Low-salience + low-access + old = prune candidate.
+- [x] Build attention-guided memory consolidation — extend memory_consolidation.py to use attention spotlight salience when deciding what to prune. High-salience memories should resist decay. Low-salience + low-access + old = prune candidate. IMPLEMENTED: PRUNE_SALIENCE_CEILING=0.2, _compute_spotlight_salience(), salience report working (1084 memories, 7 spotlight items). (2026-02-24 13:07 UTC)
 - [x] Implement causal chain tracking across episodes — extend episodic_memory.py with a `causal_link(episode_a, episode_b, relationship)` method. Build a simple causal graph. Wire into cron_autonomous.sh after task completion. (2026-02-24 10:04 UTC)
 - [x] Benchmark context brief v2 quality impact — track autonomous execution success rate over next 10 heartbeats (before: ~50%, target: >60%). Compare task output quality (code that passes tests, correct file edits) between v1 and v2 briefs. Key metrics: success rate, timeout rate, escalation rate. (2026-02-24 07:06 UTC)
 ## Recent Completions (context — full history in QUEUE_ARCHIVE.md)
@@ -56,7 +56,7 @@ _Completed items archived to QUEUE_ARCHIVE.md (100+ items since 2026-02-18)._
 - [ ] P4: Darwin Gödel Machine — Sakana AI 2025
 - [ ] P5: Bayesian brain hypothesis — Lake, Tenenbaum
 - [ ] P6: Judea Pearl — Causal Inference & structural causal models
-- [ ] P7: Absolute Zero Reasoner — self-improvement through autonomous task generation
+- [x] P7: Absolute Zero Reasoner — self-improvement through autonomous task generation (2026-02-24 13:09 UTC — implemented scripts/absolute_zero.py with 3 reasoning modes: deduction, abduction, induction. Learnability reward identifies capability edges. Wired into cron_reflection.sh. Key finding: deduction at capability edge (learnability=0.65), abduction too hard (0.0), induction too easy (0.13).)
 - [ ] P8: LIDA — Franklin & Patterson (GWT implementation)
 - [ ] P9: Schmidhuber — Artificial Curiosity & compression-based motivation
 - [ ] P10: Population-Based Training — DeepMind hyperparameter evolution

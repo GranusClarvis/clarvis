@@ -377,13 +377,18 @@ def solve_abduction(task: dict) -> dict:
             score = 1.0
         elif diagnosis["category"] in gold_category or gold_category in diagnosis["category"]:
             score = 0.5
+        elif diagnosis["category"] != "unknown":
+            score = 0.2  # At least made a specific diagnosis
     else:
         # Counterfactual — score based on plausibility
         plausible = gold.get("plausible_causes", [])
-        if any(cause in diagnosis["explanation"].lower() for cause in plausible):
+        diag_lower = (diagnosis["category"] + " " + diagnosis["explanation"]).lower()
+        if any(cause in diag_lower for cause in plausible):
             score = 0.75
+        elif diagnosis["category"] != "unknown":
+            score = 0.35  # Partial credit for specific diagnosis
         else:
-            score = 0.25  # Partial credit for attempting
+            score = 0.15  # Minimal credit for attempting
 
     return {
         "diagnosis": diagnosis,
