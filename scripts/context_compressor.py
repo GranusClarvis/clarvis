@@ -632,6 +632,7 @@ def generate_tiered_brief(
     current_task,
     tier="standard",
     episodic_hints="",
+    knowledge_hints="",
     queue_file=QUEUE_FILE,
 ):
     """Generate a quality-optimized context brief using primacy/recency positioning.
@@ -672,6 +673,13 @@ def generate_tiered_brief(
         decision_ctx = _build_decision_context(current_task, tier=tier)
         if decision_ctx:
             beginning.append(decision_ctx)
+
+    # === SECTION 1.5: Brain Knowledge (research, dreams, synthesis) ===
+    if knowledge_hints and tier != "minimal":
+        beginning.append("RELEVANT KNOWLEDGE:")
+        # Cap knowledge hints to stay within budget
+        max_chars = 600 if tier == "full" else 350
+        beginning.append(knowledge_hints[:max_chars])
 
     # === SECTION 2: Working Memory (Attention Spotlight) ===
     if budget["spotlight"] > 0:

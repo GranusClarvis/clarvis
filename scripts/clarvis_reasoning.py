@@ -445,6 +445,22 @@ class ClarvisReasoner:
         session._save()
         return session
 
+    def causal_query(self, treatment: str, treatment_val: str,
+                     target: str = "outcome") -> Optional[dict]:
+        """Run a Pearl do-calculus interventional query.
+
+        Answers: P(target | do(treatment=treatment_val))
+        Uses the SCM built from episodic memory.
+
+        Returns the interventional query result, or None if SCM unavailable.
+        """
+        try:
+            from causal_model import build_task_scm
+            scm = build_task_scm()
+            return scm.interventional_query(target, {treatment: treatment_val})
+        except Exception:
+            return None
+
     def load_session(self, session_id: str) -> ReasoningSession:
         """Load an existing session."""
         return ReasoningSession.load(session_id)

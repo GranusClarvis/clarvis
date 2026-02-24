@@ -99,7 +99,49 @@ COUNTERFACTUAL_TEMPLATES = [
             "flipped_outcome": "silent_failure",
         },
     },
+    {
+        "id": "pearl_intervention",
+        "label": "Pearl SCM: What if strategy had been different?",
+        "applies_to": "any",
+        "transform": lambda ep: _pearl_scm_counterfactual(ep),
+    },
 ]
+
+
+def _pearl_scm_counterfactual(episode):
+    """Generate a counterfactual using Pearl's structural causal model.
+
+    Uses the causal_model.py SCM engine for principled do-calculus reasoning
+    (Rung 3 of the Ladder of Causation) rather than template-based what-ifs.
+    """
+    try:
+        from causal_model import run_counterfactual
+        # Try different strategy intervention
+        strategies = ["implement", "fix", "research", "optimize", "test"]
+        task_lower = episode.get("task", "").lower()
+        # Pick a strategy different from what was actually used
+        alt_strategies = [s for s in strategies if s not in task_lower]
+        alt = alt_strategies[0] if alt_strategies else "research"
+
+        result = run_counterfactual(episode["id"], {"strategy": alt}, "outcome")
+        prediction = result.get("counterfactual_answer", {})
+        est = prediction.get("estimate", "unknown")
+        conf = prediction.get("confidence", 0)
+
+        return {
+            "scenario": (f"Pearl SCM counterfactual: '{episode['task'][:60]}' "
+                         f"with do(strategy={alt}) → P(outcome={est})={conf:.0%}"),
+            "question": (f"The SCM predicts {est} with {conf:.0%} confidence. "
+                         f"Does this match intuition? What confounders might invalidate this?"),
+            "flipped_outcome": est,
+            "scm_detail": result,
+        }
+    except Exception as e:
+        return {
+            "scenario": f"Counterfactual: '{episode['task'][:80]}' with a different strategy",
+            "question": f"SCM unavailable ({e}). What strategy would have changed the outcome?",
+            "flipped_outcome": "unknown",
+        }
 
 
 def _load_dream_log():
@@ -325,11 +367,11 @@ def dream(n_episodes=10):
         chain_id, insight = reason_about_counterfactual(cf)
         chains_created.append(chain_id)
 
-        # 4. Store dream insight with lower activation (0.3 vs normal 0.5+)
+        # 4. Store dream insight (0.5 — discoverable by preflight knowledge recall)
         dream_memory_id = brain.store(
             f"[DREAM INSIGHT] {insight}",
             collection="clarvis-learnings",
-            importance=0.3,  # Lower than normal — dream-sourced
+            importance=0.5,  # Must be >=0.3 to surface in preflight knowledge recall
             tags=["dream", "counterfactual", cf["template_id"], session_id],
             source="dream_engine"
         )

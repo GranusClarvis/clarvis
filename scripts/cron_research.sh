@@ -177,13 +177,26 @@ DIGEST_FILE="memory/cron/digest.md"
     echo ""
 } >> "$DIGEST_FILE"
 
-# Log cost estimate
+# === RESEARCH POSTFLIGHT: Ensure insights are stored in brain ===
+# Uses brain.py ingest-research (single source of truth for ingestion logic).
+# Hash-based dedup prevents double-ingestion. Files get moved to ingested/ after.
+if [ $TASK_EXIT -eq 0 ]; then
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running research postflight..." >> "$LOGFILE"
+    python3 "$SCRIPTS/brain.py" ingest-research >> "$LOGFILE" 2>&1
+fi
+
+# Log cost estimate (Claude Code research sessions ~5k input, ~2k output tokens per minute)
 python3 -c "
-import sys
-sys.path.insert(0, '$SCRIPTS')
+import sys, os
+sys.path.insert(0, os.path.join('$SCRIPTS', '..', 'packages', 'clarvis-cost'))
 try:
-    from cost_tracker import log_cost
-    log_cost('claude-code', $TASK_DURATION, 'research', task='${RESEARCH_TASK:0:80}')
+    from clarvis_cost.core import CostTracker, estimate_tokens
+    COST_LOG = os.path.join('$SCRIPTS', '..', 'data', 'costs.jsonl')
+    ct = CostTracker(COST_LOG)
+    # Rough estimate: ~5k input + ~2k output tokens per minute of research
+    duration_min = max(1, $TASK_DURATION // 60)
+    ct.log('claude-code', 5000 * duration_min, 2000 * duration_min,
+           source='research', task='research', duration_s=$TASK_DURATION)
     print('Cost logged')
 except Exception as e:
     print(f'Cost log failed: {e}', file=sys.stderr)

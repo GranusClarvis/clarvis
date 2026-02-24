@@ -284,6 +284,37 @@ def run_preflight(dry_run=False):
             log(f"Episodic recall failed: {e}")
     result["timings"]["episodic"] = round(time.monotonic() - t8, 3)
 
+    # === 8.5 BRAIN KNOWLEDGE: Recall learnings relevant to this task ===
+    t85 = time.monotonic()
+    knowledge_hints = ""
+    try:
+        from brain import get_brain, LEARNINGS
+        b = get_brain()
+        # Search clarvis-learnings for task-relevant knowledge (research, dreams, synthesis)
+        learnings = b.recall(next_task, collections=[LEARNINGS], n=5, min_importance=0.3)
+        if learnings:
+            hints = []
+            for mem in learnings:
+                doc = mem.get("document", "")[:120]
+                src = mem.get("metadata", {}).get("source", "")
+                tags = mem.get("metadata", {}).get("tags", "")
+                # Tag prefix for clarity
+                if "dream" in str(tags):
+                    prefix = "[DREAM]"
+                elif "research" in str(src) or "research" in str(tags):
+                    prefix = "[RESEARCH]"
+                elif "synthesis" in str(src):
+                    prefix = "[SYNTHESIS]"
+                else:
+                    prefix = "[LEARNING]"
+                hints.append(f"  {prefix} {doc}")
+            knowledge_hints = "\n".join(hints)
+            log(f"Brain knowledge: {len(learnings)} relevant learnings found")
+    except Exception as e:
+        log(f"Brain knowledge recall failed: {e}")
+    result["knowledge_hints"] = knowledge_hints
+    result["timings"]["knowledge"] = round(time.monotonic() - t85, 3)
+
     # === 9. TASK ROUTING (moved before context compression to inform tier) ===
     t9 = time.monotonic()
     if classify_task:
@@ -329,6 +360,7 @@ def run_preflight(dry_run=False):
                 current_task=next_task,
                 tier=brief_tier,
                 episodic_hints=compressed_episodes,
+                knowledge_hints=knowledge_hints,
             )
             log(f"Tiered brief ({brief_tier}): {len(context_brief)} bytes")
         except Exception as e:

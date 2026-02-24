@@ -747,8 +747,23 @@ class EpisodicMemory:
                     actionable.append(f"Investigate and fix: {goal_name}")
                 injected = add_tasks(actionable, priority="P1", source="episodic_synthesis")
                 tasks_injected = injected
-            except Exception:
-                pass  # queue_writer unavailable — degrade gracefully
+            except Exception as e:
+                import sys as _sys
+                print(f"[EPISODIC SYNTHESIZE] queue_writer injection failed: {e}", file=_sys.stderr)
+                # Fallback: store goals in brain so they're at least discoverable
+                try:
+                    from brain import get_brain
+                    b = get_brain()
+                    for goal_name in goals_generated[:2]:
+                        b.store(
+                            f"[SYNTHESIS GOAL] {goal_name} — generated from episodic pattern analysis",
+                            collection="clarvis-learnings",
+                            importance=0.75,
+                            tags=["synthesis", "goal", "auto-generated"],
+                            source="episodic_synthesis"
+                        )
+                except Exception:
+                    pass
 
         return {
             "total_episodes": total,

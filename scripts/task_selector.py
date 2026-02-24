@@ -239,7 +239,22 @@ def score_tasks(tasks):
             except Exception:
                 pass
 
-        total_boost = agi_boost + integration_boost
+        # 8. Failure penalty — check if similar tasks have failed before
+        failure_penalty = 0.0
+        try:
+            failure_lessons = brain.recall(
+                text, collections=["clarvis-learnings"], n=3, min_importance=0.5
+            )
+            for lesson in failure_lessons:
+                doc = lesson.get("document", "").lower()
+                dist = lesson.get("distance", 1.0)
+                # Only penalize if it's actually a failure lesson AND semantically close
+                if ("failure" in doc or "failed" in doc or "avoid" in doc) and dist < 0.8:
+                    failure_penalty = min(0.15, failure_penalty + 0.05)
+        except Exception:
+            pass
+
+        total_boost = agi_boost + integration_boost - failure_penalty
 
         # Submit to attention system for proper salience calculation
         # Include spotlight alignment as part of relevance signal
@@ -275,6 +290,7 @@ def score_tasks(tasks):
                 "spotlight_alignment": round(spotlight_align, 3),
                 "somatic_bias": round(somatic_bias, 4),
                 "somatic_signal": somatic_signal,
+                "failure_penalty": round(failure_penalty, 3),
                 "base_salience": round(salience, 4),
             }
         })
@@ -343,7 +359,8 @@ if __name__ == "__main__":
             print(f"     importance={d['section_importance']}  relevance={d['combined_relevance']}"
                   f"  agi={d['agi_boost']}  integration={d['integration_boost']}"
                   f"  spotlight={d.get('spotlight_alignment', 0)}"
-                  f"  somatic={d.get('somatic_bias', 0)}({d.get('somatic_signal', 'n/a')})")
+                  f"  somatic={d.get('somatic_bias', 0)}({d.get('somatic_signal', 'n/a')})"
+                  f"  fail_pen={d.get('failure_penalty', 0)}")
         print(f"{'='*70}")
     else:
         select_best_task()

@@ -93,6 +93,10 @@ python3 /home/agent/.openclaw/workspace/scripts/meta_learning.py analyze >> "$LO
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running Absolute Zero Reasoner..." >> "$LOGFILE"
 python3 /home/agent/.openclaw/workspace/scripts/absolute_zero.py run 3 >> "$LOGFILE" 2>&1 || true
 
+# Step 6.95: Causal Analysis (Pearl SCM) — build structural causal model, run do-calculus, store findings
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running causal analysis (Pearl SCM)..." >> "$LOGFILE"
+python3 /home/agent/.openclaw/workspace/scripts/causal_model.py analyze >> "$LOGFILE" 2>&1 || true
+
 # Step 7: Session close — save attention state and working memory for next session — CRITICAL
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running session close..." >> "$LOGFILE"
 python3 /home/agent/.openclaw/workspace/scripts/session_hook.py close >> "$LOGFILE" 2>&1

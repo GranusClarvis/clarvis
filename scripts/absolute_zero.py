@@ -591,8 +591,51 @@ def run_n_cycles(n: int = 3) -> dict:
 # Heuristic Solvers — rule-based reasoning (no LLM call needed)
 # ══════════════════════════════════════════════════════════════════════════
 
+def _extract_task_text(prompt_lower: str) -> str:
+    """Extract just the task description from a deduction prompt.
+
+    Avoids template self-contamination where keywords like 'timeout' and
+    'failure' in the choices line ("Choose: success, failure, timeout, ...")
+    would match against failure/error signals.
+
+    Prompt format:
+      "Predict the outcome of this autonomous task:
+        Task: <description>
+        Priority: ...
+        Context: ..."
+    """
+    # Find "  task: " (indented) to skip "autonomous task:\n" in the header
+    marker = "\n  task: "
+    if marker not in prompt_lower:
+        # Fallback: try "task: " at start of string
+        if prompt_lower.startswith("task: "):
+            start = 6
+        else:
+            return prompt_lower
+    else:
+        start = prompt_lower.index(marker) + len(marker)
+    end = len(prompt_lower)
+    for delimiter in ["\n", "priority:", "context:", "what was"]:
+        pos = prompt_lower.find(delimiter, start)
+        if pos != -1 and pos < end:
+            end = pos
+    return prompt_lower[start:end].strip()
+
+
 def _predict_outcome_heuristic(prompt_lower: str) -> str:
-    """Predict task outcome from textual signals."""
+    """Predict task outcome from textual signals.
+
+    NOTE (2026-02-24): Fixed pessimism bias caused by two issues:
+    1. Template self-contamination: the prompt template contains "timeout" and
+       "soft_failure" in the choices line, which were matching failure_signals
+       on EVERY deduction task (guaranteed fail_count >= 1).
+    2. Substring false positives: "memory" matched "episodic_memory.py" etc.,
+       triggering false failure predictions for successful tasks.
+    Fix: extract only the task description line for keyword matching, and use
+    word-boundary-aware matching for ambiguous keywords.
+    """
+    task_text = _extract_task_text(prompt_lower)
+
     # Load recent success rate from episodes for calibration
     eps = _load_episodes()
     recent = eps[-20:] if eps else []
@@ -602,42 +645,49 @@ def _predict_outcome_heuristic(prompt_lower: str) -> str:
     else:
         success_rate = 0.5
 
-    # Keyword signals
+    # Keyword signals — matched against task description only (not template)
     hard_signals = ["complex", "multi-step", "refactor", "research", "investigate",
                     "deep", "analyze", "global", "consciousness"]
     easy_signals = ["fix typo", "simple", "add comment", "log", "update version",
                     "run test"]
-    failure_signals = ["nested claude", "timeout", "import error", "memory",
-                       "permission denied"]
+    # Use multi-word phrases or word-boundary patterns to avoid substring matches
+    # e.g. "memory" alone matches "episodic_memory.py" — use "out of memory" instead
+    failure_signals = ["nested claude", "timed out", "import error",
+                       "out of memory", "permission denied", "oom"]
 
-    hard_count = sum(1 for s in hard_signals if s in prompt_lower)
-    easy_count = sum(1 for s in easy_signals if s in prompt_lower)
-    fail_count = sum(1 for s in failure_signals if s in prompt_lower)
+    hard_count = sum(1 for s in hard_signals if s in task_text)
+    easy_count = sum(1 for s in easy_signals if s in task_text)
+    fail_count = sum(1 for s in failure_signals if s in task_text)
 
     if fail_count >= 2:
         return "failure"
+    if fail_count == 1:
+        return "soft_failure"
     if hard_count >= 2 and success_rate < 0.6:
         return "soft_failure"
     if easy_count >= 1:
         return "success"
-    # Default: use base rate
+    # Default: use base rate, but anchor toward success when rate > 0.5
+    # (prior heuristic was too pessimistic at 65% base rate)
     return "success" if random.random() < success_rate else "soft_failure"
 
 
 def _predict_duration_heuristic(prompt_lower: str) -> str:
     """Predict duration bucket."""
-    if any(kw in prompt_lower for kw in ["research", "deep", "investigate", "complex"]):
+    task_text = _extract_task_text(prompt_lower)
+    if any(kw in task_text for kw in ["research", "deep", "investigate", "complex"]):
         return "long"
-    if any(kw in prompt_lower for kw in ["fix", "simple", "add", "update"]):
+    if any(kw in task_text for kw in ["fix", "simple", "add", "update"]):
         return "short"
     return "medium"
 
 
 def _predict_error_heuristic(prompt_lower: str) -> bool:
     """Predict whether errors occurred."""
-    error_signals = ["error", "fail", "timeout", "exception", "crash",
-                     "import", "permission"]
-    return sum(1 for s in error_signals if s in prompt_lower) >= 2
+    task_text = _extract_task_text(prompt_lower)
+    error_signals = ["error", "fail", "timed out", "exception", "crash",
+                     "permission denied"]
+    return sum(1 for s in error_signals if s in task_text) >= 2
 
 
 def _diagnose_heuristic(prompt_lower: str) -> dict:

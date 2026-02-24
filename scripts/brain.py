@@ -1051,16 +1051,59 @@ local_brain = None  # Initialize on demand
 store_important = lambda text, collection=None, importance=0.7, source="conversation", tags=None: brain.store(text, collection or MEMORIES, importance, tags, source)
 recall = lambda query, n=5: [r["document"] for r in brain.recall(query, n=n)]
 
-# Re-export from auto_capture for single-import convenience
+# High-importance store — inlined from deprecated auto_capture.py
 def remember(text, importance=0.9, category=None):
-    """Quick remember - high importance store"""
-    from auto_capture import remember as _remember
-    return _remember(text, importance, category)
+    """Manually remember something important. Auto-detects collection if category=None."""
+    import re as _re
+    if category is None:
+        # Simple category detection from text content
+        tl = text.lower()
+        if _re.search(r'\b(prefer|hate|love|like|dislike|want|don\'?t want)\b', tl):
+            category = PREFERENCES
+        elif _re.search(r'\b(learned|lesson|mistake|fixed|solved|research|insight)\b', tl):
+            category = LEARNINGS
+        elif _re.search(r'\b(my name is|i am|creator|made me)\b', tl):
+            category = IDENTITY
+        elif _re.search(r'\b(server|host|port|database|api|config|running on)\b', tl):
+            category = INFRASTRUCTURE
+        elif _re.search(r'\b(goal|objective|target|deadline|milestone)\b', tl):
+            category = GOALS
+        else:
+            category = MEMORIES
+    # Extract tags
+    tags = []
+    tl = text.lower()
+    if _re.search(r'\b(code|script|python|js|rust)\b', tl):
+        tags.append("technical")
+    if _re.search(r'\b(bug|fix|error|issue)\b', tl):
+        tags.append("bug")
+    if _re.search(r'\b(goal|objective)\b', tl):
+        tags.append("goal")
+    if _re.search(r'\b(research|paper|study|theory)\b', tl):
+        tags.append("research")
+    return brain.store(text, collection=category, importance=importance,
+                       tags=tags or None, source="manual")
 
 def capture(text):
-    """Auto-capture - assess importance and store if relevant"""
-    from auto_capture import process
-    return process(text)
+    """Auto-capture — assess importance and store if relevant (>= 0.6)."""
+    import re as _re
+    tl = text.lower()
+    score = 0.5
+    # Boost for important patterns
+    for pat in [r'\b(remember|important|critical|note that)\b',
+                r'\b(prefer|hate|love|always|never)\b',
+                r'\b(goal|objective|target|deadline)\b',
+                r'\b(bug|fix|issue|problem|error)\b']:
+        if _re.search(pat, tl):
+            score += 0.1
+    # Penalize low-value
+    if _re.match(r'^(ok|okay|sure|yes|no|thanks|nice|cool|good|hmm|uh)\.?$', tl):
+        score -= 0.2
+    score = max(0.0, min(1.0, score))
+    if score < 0.6:
+        return {"captured": False, "reason": f"low importance ({score:.2f})", "importance": score}
+    mem_id = remember(text, importance=score)
+    return {"captured": True, "memory_id": mem_id, "importance": score}
 
 
 # ClarvisDB-native search (replaces OpenClaw memory_search)
@@ -1102,6 +1145,8 @@ if __name__ == "__main__":
         print("  stale              - Show stale memories")
         print("  context            - Show current context")
         print("  crosslink          - Build cross-collection edges for all memories")
+        print("  remember <text>    - High-importance store (--importance 0.8 --collection clarvis-learnings --tags t1,t2)")
+        print("  ingest-research [file] - Ingest research markdown into brain (all files if no arg)")
         sys.exit(1)
     
     cmd = sys.argv[1]
@@ -1208,5 +1253,148 @@ if __name__ == "__main__":
         print(f"  New edges: {result['new_edges']}")
         print(f"  Scanned: {result['memories_scanned']} memories")
         print(f"  Total edges: {result['total_edges']}")
+    elif cmd == "remember" and len(sys.argv) > 2:
+        # Parse flags: --importance FLOAT, --collection NAME, --tags tag1,tag2
+        text_parts = []
+        importance = 0.9
+        collection = LEARNINGS
+        tags = None
+        source = "research"
+        i = 2
+        while i < len(sys.argv):
+            if sys.argv[i] == "--importance" and i + 1 < len(sys.argv):
+                try:
+                    importance = float(sys.argv[i + 1])
+                except ValueError:
+                    pass
+                i += 2
+            elif sys.argv[i] == "--collection" and i + 1 < len(sys.argv):
+                collection = sys.argv[i + 1]
+                # Normalize: accept short names like "clarvis-learnings" or just "learnings"
+                if not collection.startswith("clarvis-"):
+                    collection = f"clarvis-{collection}"
+                i += 2
+            elif sys.argv[i] == "--tags" and i + 1 < len(sys.argv):
+                tags = [t.strip() for t in sys.argv[i + 1].split(",")]
+                i += 2
+            elif sys.argv[i] == "--source" and i + 1 < len(sys.argv):
+                source = sys.argv[i + 1]
+                i += 2
+            else:
+                text_parts.append(sys.argv[i])
+                i += 1
+        text = " ".join(text_parts)
+        if text:
+            mem_id = b.store(text, collection=collection, importance=importance,
+                             tags=tags, source=source)
+            print(f"Remembered: {mem_id} (importance={importance}, collection={collection})")
+        else:
+            print("Error: no text provided")
+            sys.exit(1)
+    elif cmd == "ingest-research":
+        # Ingest a research markdown file into brain with file-hash dedup
+        import glob as glob_mod
+        import hashlib
+        research_dir = "/home/agent/.openclaw/workspace/memory/research"
+        tracker_file = "/home/agent/.openclaw/workspace/data/research_ingested.json"
+        force = "--force" in sys.argv
+
+        # Load tracker
+        tracker = {}
+        if os.path.exists(tracker_file):
+            try:
+                with open(tracker_file) as tf:
+                    tracker = json.load(tf)
+            except Exception:
+                tracker = {}
+
+        if len(sys.argv) > 2 and not sys.argv[2].startswith("--"):
+            files = [sys.argv[2]]
+        else:
+            files = sorted(glob_mod.glob(os.path.join(research_dir, "*.md")))
+
+        if not files:
+            print("No research files found")
+            sys.exit(0)
+
+        total_stored = 0
+        for filepath in files:
+            if not os.path.exists(filepath):
+                print(f"File not found: {filepath}")
+                continue
+
+            filename = os.path.basename(filepath)
+
+            # Hash-based dedup
+            with open(filepath, "rb") as hf:
+                file_hash = hashlib.sha256(hf.read()).hexdigest()[:16]
+
+            prev = tracker.get(filename, {})
+            if not force and prev.get("hash") == file_hash:
+                print(f"\nSkipping: {filename} (already ingested, hash match)")
+                continue
+
+            with open(filepath) as f:
+                content = f.read()
+
+            print(f"\nIngesting: {filename} (hash={file_hash})")
+
+            # Split into sections and store each meaningful section
+            sections = content.split("\n## ")
+            title = sections[0].strip().split("\n")[0].replace("# ", "")
+            memory_ids = []
+
+            for section in sections[1:]:
+                section_lines = section.strip().split("\n")
+                section_title = section_lines[0].strip()
+                section_body = "\n".join(section_lines[1:]).strip()
+
+                if len(section_body) < 30:
+                    continue
+
+                memory_text = f"[RESEARCH: {title}] {section_title}: {section_body[:500]}"
+                mem_id = b.store(
+                    memory_text,
+                    collection=LEARNINGS,
+                    importance=0.8,
+                    tags=["research", "paper", filename.replace(".md", "")],
+                    source="research_ingest"
+                )
+                memory_ids.append(mem_id)
+                total_stored += 1
+                print(f"  Stored: {section_title[:60]} → {mem_id}")
+
+            summary = f"[RESEARCH SUMMARY] {title} — ingested from {filename}, {len(memory_ids)} sections"
+            mid = b.store(summary, collection=LEARNINGS, importance=0.85,
+                    tags=["research", "summary"], source="research_ingest")
+            memory_ids.append(mid)
+            total_stored += 1
+
+            # Record in tracker
+            import time as _time
+            tracker[filename] = {
+                "hash": file_hash,
+                "ingested_at": _time.strftime("%Y-%m-%dT%H:%M:%SZ", _time.gmtime()),
+                "memory_count": len(memory_ids),
+                "memory_ids": memory_ids,
+            }
+
+        # Move ingested files to ingested/ subfolder
+        import shutil as _shutil
+        ingested_dir = os.path.join(research_dir, "ingested")
+        os.makedirs(ingested_dir, exist_ok=True)
+        for filepath in files:
+            filename = os.path.basename(filepath)
+            if filename in tracker and tracker[filename].get("memory_count", 0) > 0:
+                dest = os.path.join(ingested_dir, filename)
+                if os.path.exists(filepath) and not os.path.exists(dest):
+                    _shutil.move(filepath, dest)
+                    print(f"  Moved {filename} → ingested/")
+
+        # Save tracker
+        os.makedirs(os.path.dirname(tracker_file), exist_ok=True)
+        with open(tracker_file, "w") as tf:
+            json.dump(tracker, tf, indent=2)
+        print(f"\nIngestion complete: {total_stored} memories stored (tracker updated)")
     else:
         print(f"Unknown command: {cmd}")
