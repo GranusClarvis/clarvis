@@ -46,6 +46,8 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 ANALYSIS_FILE = DATA_DIR / "analysis.json"
 HISTORY_FILE = DATA_DIR / "history.jsonl"
 RECOMMENDATIONS_FILE = DATA_DIR / "recommendations.json"
+INJECTION_HISTORY_FILE = DATA_DIR / "injection_history.json"
+MAX_INJECTIONS_PER_CYCLE = 2
 
 # Paths to data sources
 EPISODES_FILE = Path("/home/agent/.openclaw/workspace/data/episodes.json")
@@ -710,6 +712,10 @@ class MetaLearner:
         # Store top insights in brain for retrieval by other systems
         self._store_insights(strategies, learning_speeds, recommendations)
 
+        # Inject high-priority recommendations into QUEUE.md
+        tasks_injected = self._inject_to_queue(recommendations)
+        result["summary"]["tasks_injected"] = tasks_injected
+
         return result
 
     def _store_insights(self, strategies, learning_speeds, recommendations):
@@ -771,6 +777,97 @@ class MetaLearner:
                     source="meta_learning",
                     memory_id=f"meta_speed_{now[:10]}",
                 )
+
+    # =================================================================
+    # QUEUE INJECTION — Turn recommendations into tasks
+    # =================================================================
+
+    def _load_injection_history(self):
+        """Load injection history for dedup."""
+        if INJECTION_HISTORY_FILE.exists():
+            try:
+                with open(INJECTION_HISTORY_FILE) as f:
+                    return json.load(f)
+            except (json.JSONDecodeError, OSError):
+                pass
+        return {"injected": []}
+
+    def _save_injection_history(self, history):
+        """Save injection history, keeping last 50 entries."""
+        history["injected"] = history["injected"][-50:]
+        with open(INJECTION_HISTORY_FILE, "w") as f:
+            json.dump(history, f, indent=2)
+
+    def _inject_to_queue(self, recommendations):
+        """Inject HIGH priority recommendations into QUEUE.md as tasks.
+
+        Filters to high-priority only, deduplicates against injection history,
+        caps at MAX_INJECTIONS_PER_CYCLE per cycle.
+
+        Args:
+            recommendations: List of recommendation dicts from generate_recommendations()
+
+        Returns:
+            Number of tasks injected.
+        """
+        try:
+            from queue_writer import add_tasks
+        except ImportError:
+            return 0
+
+        try:
+            # Filter to HIGH priority only
+            high_recs = [r for r in recommendations if r.get("priority") == "high"]
+            if not high_recs:
+                return 0
+
+            # Load injection history for dedup
+            history = self._load_injection_history()
+            injected_keys = {entry["key"] for entry in history["injected"]}
+
+            # Build task strings, skipping already-injected
+            tasks = []
+            for rec in high_recs:
+                action = rec.get("action", "")
+                category = rec.get("category", "unknown")
+                detail = rec.get("detail", "")
+
+                # Dedup key: first 80 chars of action
+                dedup_key = action[:80].strip()
+                if dedup_key in injected_keys:
+                    continue
+
+                task_text = f"[Meta-learning/{category}] {action}"
+                if detail:
+                    task_text += f" — {detail[:100]}"
+
+                tasks.append(task_text)
+                injected_keys.add(dedup_key)
+
+                # Record in history
+                history["injected"].append({
+                    "key": dedup_key,
+                    "category": category,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                })
+
+                if len(tasks) >= MAX_INJECTIONS_PER_CYCLE:
+                    break
+
+            if not tasks:
+                return 0
+
+            # Inject to QUEUE.md
+            added = add_tasks(tasks, priority="P1", source="meta_learning")
+
+            # Only save history if at least one task was actually added
+            if added:
+                self._save_injection_history(history)
+
+            return len(added)
+
+        except Exception:
+            return 0  # Never let injection break analysis
 
     # =================================================================
     # GET RECOMMENDATIONS FOR TASK SELECTION

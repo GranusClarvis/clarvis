@@ -331,6 +331,40 @@ class ClarvisBrain:
             try:
                 from synaptic_memory import synaptic
                 synaptic.on_recall(query, final_results, caller=caller)
+
+                # Spreading activation: use top-5 result IDs to find
+                # synaptically connected memories not already in results
+                top_ids = [r["id"] for r in final_results[:5] if r.get("id")]
+                if top_ids:
+                    spread_results = synaptic.spread(top_ids, n=3, min_weight=0.15)
+                    if spread_results:
+                        existing_ids = {r["id"] for r in final_results}
+                        for spread_id, activation in spread_results:
+                            if spread_id in existing_ids:
+                                continue
+                            # Retrieve the actual memory from ChromaDB
+                            for col_name in (collections or DEFAULT_COLLECTIONS):
+                                if col_name not in self.collections:
+                                    continue
+                                try:
+                                    col = self.collections[col_name]
+                                    got = col.get(ids=[spread_id])
+                                    if got["ids"] and got["documents"] and got["documents"][0]:
+                                        meta = got["metadatas"][0] if got.get("metadatas") else {}
+                                        final_results.append({
+                                            "document": got["documents"][0],
+                                            "metadata": meta,
+                                            "collection": col_name,
+                                            "id": spread_id,
+                                            "distance": None,
+                                            "related": [],
+                                            "spread_activated": True,
+                                            "spread_weight": activation,
+                                        })
+                                        existing_ids.add(spread_id)
+                                        break
+                                except Exception:
+                                    continue
             except Exception:
                 pass  # Never let synaptic tracking break recall
 

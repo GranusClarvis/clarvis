@@ -529,6 +529,136 @@ def archive_stale(days=30, importance_threshold=0.3, dry_run=False):
 
 
 # ---------------------------------------------------------------------------
+# 5.5. Memory Caps — Enforce per-collection size limits
+# ---------------------------------------------------------------------------
+
+# Soft caps per collection (total target ~2000)
+COLLECTION_CAPS = {
+    "clarvis-learnings": 600,
+    "clarvis-memories": 400,
+    "clarvis-episodes": 300,
+    "autonomous-learning": 300,
+    "clarvis-goals": 200,
+    "clarvis-context": 200,
+    "clarvis-preferences": 200,
+    "clarvis-procedures": 200,
+    # No cap (small, stable):
+    # "clarvis-identity", "clarvis-infrastructure"
+}
+
+PROTECTED_TAGS = ("genesis", "critical", "identity")
+
+
+def enforce_memory_caps(dry_run=False):
+    """
+    Enforce per-collection memory caps by archiving lowest-scored excess.
+
+    Scoring formula: importance * recency * log(access_count + 1)
+    where recency = 1 / (1 + days_since_access).
+
+    Protected tags (genesis, critical, identity) are never archived.
+
+    Returns:
+        dict with 'archived' count, 'details' list, per-collection breakdown.
+    """
+    stats = {
+        "archived": 0,
+        "collections": {},
+        "details": [],
+    }
+
+    now = datetime.now(timezone.utc)
+    archive_entries = _load_archive()
+
+    for col_name, cap in COLLECTION_CAPS.items():
+        memories = _get_all_memories(col_name)
+        count = len(memories)
+        stats["collections"][col_name] = {"count": count, "cap": cap, "excess": 0}
+
+        if count <= cap:
+            continue
+
+        excess = count - cap
+        stats["collections"][col_name]["excess"] = excess
+
+        # Score each memory (higher = more worth keeping)
+        scored = []
+        for mem in memories:
+            meta = mem["metadata"]
+
+            # Never archive protected
+            if _has_protected_tag(meta, protected=PROTECTED_TAGS):
+                continue
+
+            importance = meta.get("importance", 0.5)
+            if isinstance(importance, str):
+                try:
+                    importance = float(importance)
+                except (ValueError, TypeError):
+                    importance = 0.5
+
+            access_count = meta.get("access_count", 0)
+            if isinstance(access_count, str):
+                try:
+                    access_count = int(access_count)
+                except (ValueError, TypeError):
+                    access_count = 0
+
+            last_accessed = meta.get("last_accessed", meta.get("created_at", ""))
+            days_since = 1.0
+            if last_accessed:
+                try:
+                    la_dt = datetime.fromisoformat(
+                        last_accessed.replace("Z", "+00:00")
+                    )
+                    if la_dt.tzinfo is None:
+                        la_dt = la_dt.replace(tzinfo=timezone.utc)
+                    days_since = max(0.1, (now - la_dt).total_seconds() / 86400.0)
+                except (ValueError, TypeError):
+                    pass
+
+            recency = 1.0 / (1.0 + days_since)
+            score = importance * recency * math.log(access_count + 1 + 1)  # +1 to avoid log(0)
+
+            scored.append((score, mem))
+
+        # Sort ascending — lowest scores get archived first
+        scored.sort(key=lambda x: x[0])
+
+        # Archive the lowest-scored excess
+        ids_to_archive = []
+        for score, mem in scored[:excess]:
+            archive_entries.append({
+                "id": mem["id"],
+                "document": mem["document"],
+                "metadata": mem["metadata"],
+                "collection": col_name,
+                "archived_at": now.isoformat(),
+                "archive_reason": "memory_cap",
+                "retention_score": round(score, 4),
+            })
+            ids_to_archive.append(mem["id"])
+            stats["details"].append({
+                "collection": col_name,
+                "id": mem["id"],
+                "preview": mem["document"][:60],
+                "score": round(score, 4),
+            })
+
+        if ids_to_archive:
+            if not dry_run:
+                col = brain.collections[col_name]
+                col.delete(ids=ids_to_archive)
+                _invalidate_memories_cache()
+            stats["archived"] += len(ids_to_archive)
+
+    if not dry_run and stats["archived"] > 0:
+        _save_archive(archive_entries)
+
+    return stats
+
+
+# ---------------------------------------------------------------------------
 # 6. Attention-Guided Consolidation (GWT Integration)
 # ---------------------------------------------------------------------------
 
@@ -1099,6 +1229,13 @@ def run_consolidation():
     results["archive"] = archive_stale(dry_run=False)
     print(f"  Archived {results['archive']['archived']} stale memories")
 
+    print("[consolidation] Phase 4.5: Memory caps enforcement...")
+    results["caps"] = enforce_memory_caps(dry_run=False)
+    print(f"  Cap-archived {results['caps']['archived']} excess memories")
+    for col_name, info in results["caps"]["collections"].items():
+        if info["excess"] > 0:
+            print(f"    {col_name}: {info['count']}/{info['cap']} (excess: {info['excess']})")
+
     print("[consolidation] Phase 5: Attention-guided decay (GWT salience)...")
     results["attention_decay"] = attention_guided_decay(dry_run=False)
     ad = results["attention_decay"]
@@ -1125,6 +1262,7 @@ def run_consolidation():
         + results["decay"]["decayed"]
         + results["decay"]["boosted"]
         + results["archive"]["archived"]
+        + results["caps"]["archived"]
         + results["attention_decay"]["decayed"]
         + results["attention_decay"]["salience_boosted"]
         + results["attention_prune"]["pruned"]
@@ -1221,6 +1359,19 @@ def main():
         else:
             print("GWT broadcast: no memories to promote")
 
+    elif cmd == "caps":
+        is_dry = "--dry-run" in sys.argv
+        results = enforce_memory_caps(dry_run=is_dry)
+        prefix = "Would archive" if is_dry else "Archived"
+        print(f"{'DRY RUN: ' if is_dry else ''}Memory caps: {prefix} {results['archived']} excess memories")
+        for col_name, info in results["collections"].items():
+            status = "OK" if info["excess"] == 0 else f"OVER by {info['excess']}"
+            print(f"  {col_name}: {info['count']}/{info['cap']} ({status})")
+        if results["details"]:
+            print(f"\n{'Would archive' if is_dry else 'Archived'}:")
+            for d in results["details"][:15]:
+                print(f"  [{d['collection']}] score={d['score']} {d['preview']}")
+
     elif cmd == "stats":
         stats = get_consolidation_stats()
         print("=== Memory Consolidation Stats ===")
@@ -1293,7 +1444,7 @@ def main():
 
     else:
         print(f"Unknown command: {cmd}")
-        print("Valid commands: consolidate, dedup, merge, prune, archive, "
+        print("Valid commands: consolidate, dedup, merge, prune, archive, caps, "
               "attention-prune, attention-decay, salience, gwt-broadcast, "
               "stats, dry-run")
         sys.exit(1)

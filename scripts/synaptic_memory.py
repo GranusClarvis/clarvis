@@ -676,27 +676,42 @@ class SynapticMemory:
             conn.close()
 
     def get_weight_distribution(self, bins=10):
-        """Get histogram of synaptic weight distribution."""
+        """Get histogram of synaptic weight distribution using SQL aggregation."""
         conn = self._conn()
         try:
-            rows = conn.execute("SELECT weight FROM synapses").fetchall()
-            if not rows:
+            # Get total count and stats via SQL (no loading all weights into Python)
+            stats_row = conn.execute("""
+                SELECT COUNT(*), AVG(weight), AVG(weight * weight)
+                FROM synapses
+            """).fetchone()
+            total = stats_row[0] or 0
+            if total == 0:
                 return {"bins": [], "counts": [], "total": 0}
 
-            weights = [r[0] for r in rows]
-            bin_width = (W_MAX - W_MIN) / bins
-            bin_edges = [W_MIN + i * bin_width for i in range(bins + 1)]
-            counts = [0] * bins
-            for w in weights:
-                idx = min(int((w - W_MIN) / bin_width), bins - 1)
-                counts[idx] += 1
+            mean = stats_row[1] or 0
+            # Variance = E[X^2] - E[X]^2
+            variance = max(0, (stats_row[2] or 0) - mean * mean)
+            std = variance ** 0.5
 
+            # Compute histogram buckets in SQL
+            bin_width = (W_MAX - W_MIN) / bins
+            counts = [0] * bins
+            rows = conn.execute(f"""
+                SELECT CAST((weight - ?) / ? AS INTEGER) AS bucket, COUNT(*)
+                FROM synapses
+                GROUP BY bucket
+            """, (W_MIN, bin_width)).fetchall()
+            for bucket, count in rows:
+                idx = max(0, min(int(bucket), bins - 1))
+                counts[idx] += count
+
+            bin_edges = [W_MIN + i * bin_width for i in range(bins + 1)]
             return {
                 "bins": [f"{bin_edges[i]:.3f}-{bin_edges[i+1]:.3f}" for i in range(bins)],
                 "counts": counts,
-                "total": len(weights),
-                "mean": round(sum(weights) / len(weights), 4),
-                "std": round((sum((w - sum(weights)/len(weights))**2 for w in weights) / len(weights))**0.5, 4),
+                "total": total,
+                "mean": round(mean, 4),
+                "std": round(std, 4),
             }
         finally:
             conn.close()
@@ -716,20 +731,38 @@ class SynapticMemory:
                 FROM synapses
             """).fetchone()
 
-            unique_nodes = conn.execute("""
-                SELECT COUNT(*) FROM (
-                    SELECT pre_id as id FROM synapses
-                    UNION
-                    SELECT post_id as id FROM synapses
-                )
-            """).fetchone()[0]
+            # Use pre-computed distinct counts instead of expensive UNION
+            # row[5] = COUNT(DISTINCT pre_id), row[6] = COUNT(DISTINCT post_id)
+            # Approximate unique nodes = max(distinct_pre, distinct_post)
+            # (exact UNION is O(n) and hangs on large tables)
+            unique_nodes = max(row[5] or 0, row[6] or 0)
 
             activation_count = conn.execute(
                 "SELECT COUNT(*) FROM activations"
             ).fetchone()[0]
 
-            # Weight distribution summary
-            dist = self.get_weight_distribution()
+            # Weight distribution via SQL (inline, no separate connection)
+            bin_count = 10
+            bin_width = (W_MAX - W_MIN) / bin_count
+            dist_rows = conn.execute("""
+                SELECT CAST((weight - ?) / ? AS INTEGER) AS bucket, COUNT(*)
+                FROM synapses GROUP BY bucket
+            """, (W_MIN, bin_width)).fetchall()
+            dist_counts = [0] * bin_count
+            for bucket, count in dist_rows:
+                idx = max(0, min(int(bucket), bin_count - 1))
+                dist_counts[idx] += count
+
+            avg_sq = conn.execute("SELECT AVG(weight * weight) FROM synapses").fetchone()[0] or 0
+            variance = max(0, avg_sq - (row[0] or 0) ** 2)
+            bin_edges = [W_MIN + i * bin_width for i in range(bin_count + 1)]
+            dist = {
+                "bins": [f"{bin_edges[i]:.3f}-{bin_edges[i+1]:.3f}" for i in range(bin_count)],
+                "counts": dist_counts,
+                "total": total,
+                "mean": round(row[0] or 0, 4),
+                "std": round(variance ** 0.5, 4),
+            }
 
             # Recent evolution log
             recent_log = conn.execute(
@@ -760,26 +793,47 @@ class SynapticMemory:
         """Hook called after brain.recall() — create/strengthen synapses.
 
         Same interface as hebbian_memory.on_recall() for compatibility.
-        Creates synapses between all co-retrieved memories with STDP timing.
+        Creates synapses between top-K co-retrieved memories with STDP timing.
+        Uses a single DB connection for all operations (batched).
         """
         if not results or len(results) < 2:
             return
 
+        # Cap to top-K=10 results — drops pairwise ops from O(n^2) to max 90
+        TOP_K = 10
         memory_ids = []
-        for r in results:
+        for r in results[:TOP_K]:
             mem_id = r.get("id")
             if mem_id:
                 memory_ids.append(mem_id)
-                self.record_activation(mem_id, source=caller)
 
-        # Pairwise potentiation (co-retrieved = co-activated)
-        for i, id_a in enumerate(memory_ids):
-            for j, id_b in enumerate(memory_ids):
-                if i == j:
-                    continue
-                # Small timing difference based on result rank
-                delta_t = abs(i - j) * 10.0  # 10s per rank difference
-                self.potentiate(id_a, id_b, delta_t=delta_t)
+        if len(memory_ids) < 2:
+            return
+
+        conn = self._conn()
+        try:
+            now_ts = datetime.now(timezone.utc).timestamp()
+            now_iso = datetime.now(timezone.utc).isoformat()
+
+            # Batch record all activations in one transaction
+            for mem_id in memory_ids:
+                conn.execute(
+                    "INSERT OR REPLACE INTO activations (memory_id, timestamp, source) "
+                    "VALUES (?, ?, ?)",
+                    (mem_id, now_ts, caller)
+                )
+
+            # Pairwise potentiation using batched method (single connection)
+            for i, id_a in enumerate(memory_ids):
+                for j, id_b in enumerate(memory_ids):
+                    if i == j:
+                        continue
+                    delta_t = abs(i - j) * 10.0  # 10s per rank difference
+                    self._batch_potentiate(conn, id_a, id_b, delta_t, now_iso)
+
+            conn.commit()
+        finally:
+            conn.close()
 
     def _save_stats(self, stats):
         with open(STATS_FILE, "w") as f:
