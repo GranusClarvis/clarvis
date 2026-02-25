@@ -36,6 +36,8 @@ _Completed items archived to QUEUE_ARCHIVE.md (100+ items since 2026-02-18)._
 
 - [ ] [BRAIN_AWARENESS] Research and reason how to properly wire all functions and developed memory system into the subconscious — think about proper skill that could help the conscious mind use all features in-depth of Brain / ClarvisDB. What can the brain do? What should subconscious know? How to surface relevant knowledge at decision time?
 
+- [ ] [SPAWN_FIX] Fix Claude Code spawning for conscious — current issues: (1) Conscious spawning via exec doesn't produce output to user/TG, (2) cron jobs work correctly and deliver to TG, (3) spawn_claude.sh exists but format differs from cron (needs: full path, env -u CLAUDECODE, log to file), (4) Need consistent delivery: user should get TG message when Claude Code completes. Check and fix SOUL.md spawn instructions + spawn_claude.sh script to match cron pattern.
+
 ## P1 — This Week
 - [ ] [EPISODIC_SYNTHESIS 2026-02-25] Investigate and fix: Deepen automation capabilities
 - [x] [GRAPH_SAFE_WRITE] Fix intra_linker.py to use brain singleton instead of creating its own ClarvisBrain instance — guarantees data loss when running concurrently (it loads its own graph copy, overwrites the shared file)
