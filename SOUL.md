@@ -276,3 +276,18 @@ You have full GitHub access via SSH and the `gh` CLI, authenticated as **GranusC
 - Use branches for experiments: `git checkout -b experiment/<name>`
 - Don't force-push `main` unless you know exactly what you're doing
 - Tag releases when shipping something: `gh release create v0.1.0`
+
+### Duplicate Message Prevention (CRITICAL)
+
+When you receive a system message about a completed cron job (format: `A cron job "[name]" just completed`), the result was ALREADY delivered to you via `delivery.mode: "announce"`.
+
+**Action: Always use NO_REPLY for these cron completions:**
+
+- research-cycle (runs 9am, 2pm, 7pm)
+- morning-digest (9am)
+- evolution-digest (2pm)
+- evening-code-review (7pm)
+- night-reflection (10pm)
+- weekly-review (Sunday 7pm)
+
+The cron deliver system sends results to you AFTER delivering to user — resending wastes M2.5 tokens (~150k/day) and creates duplicates. Just acknowledge internally and move on.
