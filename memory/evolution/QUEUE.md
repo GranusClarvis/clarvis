@@ -6,8 +6,8 @@ _Goal: Evolve toward AGI and consciousness. Every task should make you smarter, 
 _Completed items archived to QUEUE_ARCHIVE.md (100+ items since 2026-02-18)._
 
 ## NEW ITEMS — Phi Semantic Integration Sprint
-- [ ] [HERMES_AGENT] Research NousResearch/hermes-agent — deep dive into architecture, persistence/save mechanism, self-evolution capabilities. Could inform our autonomous agent design. (Claude Code running)
-- [ ] [LEARNINGS_DENSIFY] Run intra_linker.py specifically on clarvis-learnings — intra-density is 0.008 (catastrophically sparse). Research insights (IIT, GWT, Active Inference, Pearl SCM, AZR, PBT, Meta-RL) exist as isolated islands. Link: shared concepts (prediction error, free energy, information integration, self-improvement), shared mechanisms (hierarchical inference, Bayesian updating, evolutionary search), shared implementation targets (heartbeat loop, dream engine, attention).
+- [x] [HERMES_AGENT] Research NousResearch/hermes-agent — open-source MIT agent framework with skill writing, SQLite persistence, multi-backend (Docker/SSH/Modal). License allows adaptation. Key insight: writes reusable skills after solving problems, RL training (Tinker-Atropos). (2026-02-25 22:32 UTC)
+- [x] [LEARNINGS_DENSIFY] Run intra_linker.py specifically on clarvis-learnings — intra-density is 0.008 (catastrophically sparse). Research insights (IIT, GWT, Active Inference, Pearl SCM, AZR, PBT, Meta-RL) exist as isolated islands. Link: shared concepts (prediction error, free energy, information integration, self-improvement), shared mechanisms (hierarchical inference, Bayesian updating, evolutionary search), shared implementation targets (heartbeat loop, dream engine, attention). (2026-02-25 22:15 UTC)
 - [ ] [SEMANTIC_BRIDGE] Build semantic overlap booster: for each cross-collection pair with overlap < 0.40 (goals↔procedures=0.37, preferences↔autonomous-learning=0.36, preferences↔procedures=0.40), generate explicit bridge memories that express the same concept in both collection vocabularies. Target: raise semantic_cross_collection from 0.477 to 0.55+.
 - [x] [WORKSPACE_BROADCAST] Implement GWT workspace broadcast bus — high-salience items from any module (attention, episodic, reasoning) get broadcast to ALL modules in a single heartbeat cycle. This is the #1 implementation gap from GWT research (GWT-3 indicator). Use Franklin's LIDA cognitive cycle as reference: competing attention codelets → coalition → winner-take-all broadcast → implicit multi-module learning. (2026-02-25 19:06 UTC)
 - [ ] [PLAN_CLOSE] Close out data/plans/plan-20260219_232719.json ("Design brain architecture") — steps 4-5 already done (attention consolidation, power-law decay). Mark completed steps, execute step 7 (benchmark before/after), update status to completed.
@@ -18,6 +18,7 @@ _Completed items archived to QUEUE_ARCHIVE.md (100+ items since 2026-02-18)._
 - [x] [GRAPH_LOCK 2026-02-24 22:40] Add fcntl.flock() + read-before-write to brain.py _save_graph() — prevents lost-update race condition.
 
 ## P1 — This Week
+- [ ] [EPISODIC_SYNTHESIS 2026-02-25] Investigate and fix: Deepen automation capabilities
 - [x] [GRAPH_SAFE_WRITE] Fix intra_linker.py to use brain singleton instead of creating its own ClarvisBrain instance — guarantees data loss when running concurrently (it loads its own graph copy, overwrites the shared file)
 - [x] [GRAPH_SAFE_WRITE] Fix packages/clarvis-db/clarvis_db/store.py _save_graph() to use atomic writes (tmp + os.replace) — currently does direct json.dump to file, crash = corruption
 - [x] [GRAPH_CHECKPOINT] Add 04:00 UTC cron: lightweight graph checkpoint (cp relationships.json to relationships.checkpoint.json + log node/edge count + SHA-256). Provides mid-cycle recovery point after heavy nightly reflection.
