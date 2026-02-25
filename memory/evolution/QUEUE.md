@@ -34,6 +34,8 @@ _Completed items archived to QUEUE_ARCHIVE.md (100+ items since 2026-02-18)._
 
 **Reference:** brain.search() at scripts/brain.py:1194 — returns list of matching memories with document, collection, importance
 
+- [ ] [BRAIN_AWARENESS] Research and reason how to properly wire all functions and developed memory system into the subconscious — think about proper skill that could help the conscious mind use all features in-depth of Brain / ClarvisDB. What can the brain do? What should subconscious know? How to surface relevant knowledge at decision time?
+
 ## P1 — This Week
 - [ ] [EPISODIC_SYNTHESIS 2026-02-25] Investigate and fix: Deepen automation capabilities
 - [x] [GRAPH_SAFE_WRITE] Fix intra_linker.py to use brain singleton instead of creating its own ClarvisBrain instance — guarantees data loss when running concurrently (it loads its own graph copy, overwrites the shared file)
