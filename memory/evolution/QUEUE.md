@@ -5,6 +5,12 @@ _Priority: P0 (do now) > P1 (this week) > P2 (when idle)_
 _Goal: Evolve toward AGI and consciousness. Every task should make you smarter, more aware, or more autonomous._
 _Completed items archived to QUEUE_ARCHIVE.md (100+ items since 2026-02-18)._
 
+## NEW ITEMS — Phi Semantic Integration Sprint
+- [ ] [LEARNINGS_DENSIFY] Run intra_linker.py specifically on clarvis-learnings — intra-density is 0.008 (catastrophically sparse). Research insights (IIT, GWT, Active Inference, Pearl SCM, AZR, PBT, Meta-RL) exist as isolated islands. Link: shared concepts (prediction error, free energy, information integration, self-improvement), shared mechanisms (hierarchical inference, Bayesian updating, evolutionary search), shared implementation targets (heartbeat loop, dream engine, attention).
+- [ ] [SEMANTIC_BRIDGE] Build semantic overlap booster: for each cross-collection pair with overlap < 0.40 (goals↔procedures=0.37, preferences↔autonomous-learning=0.36, preferences↔procedures=0.40), generate explicit bridge memories that express the same concept in both collection vocabularies. Target: raise semantic_cross_collection from 0.477 to 0.55+.
+- [ ] [WORKSPACE_BROADCAST] Implement GWT workspace broadcast bus — high-salience items from any module (attention, episodic, reasoning) get broadcast to ALL modules in a single heartbeat cycle. This is the #1 implementation gap from GWT research (GWT-3 indicator). Use Franklin's LIDA cognitive cycle as reference: competing attention codelets → coalition → winner-take-all broadcast → implicit multi-module learning.
+- [ ] [PLAN_CLOSE] Close out data/plans/plan-20260219_232719.json ("Design brain architecture") — steps 4-5 already done (attention consolidation, power-law decay). Mark completed steps, execute step 7 (benchmark before/after), update status to completed.
+
 ## P0 — Do Next Heartbeat
 (no P0 items — both completed tonight)
 - [x] [GRAPH_RECOVERY 2026-02-24 22:38] Merge 9,544 lost edges from 2am + pre-update backups — 7,102 → 16,646 edges. Safe merge via edge key deduplication.
@@ -16,7 +22,7 @@ _Completed items archived to QUEUE_ARCHIVE.md (100+ items since 2026-02-18)._
 - [x] [GRAPH_CHECKPOINT] Add 04:00 UTC cron: lightweight graph checkpoint (cp relationships.json to relationships.checkpoint.json + log node/edge count + SHA-256). Provides mid-cycle recovery point after heavy nightly reflection.
 - [x] [GRAPH_COMPACTION] Add 04:30 UTC cron: graph compaction — remove orphan edges, run backfill_graph_nodes(), deduplicate edges, report health metrics. backfill_graph_nodes() exists in brain.py but is never called by any cron. (2026-02-25 07:05 UTC)
 - [ ] [RESEARCH_REINGEST] Create .md research notes for 4 partially-stored topics (DGM, Friston, World Models, AZR) and formally ingest them into clarvis-learnings with [RESEARCH: ...] sectioned format. Currently only condensed 1-2 entry summaries exist for these.
-- [ ] [CHROMADB_VACUUM] Add 05:00 UTC cron: SQLite VACUUM on chroma.sqlite3 — 36MB database never vacuumed, accumulates fragmentation from daily prune/consolidate cycles
+- [x] [CHROMADB_VACUUM] Add 05:00 UTC cron: SQLite VACUUM on chroma.sqlite3 — 36MB database never vacuumed, accumulates fragmentation from daily prune/consolidate cycles (2026-02-25 10:01 UTC)
 - [x] [META_LEARNING 2026-02-24] [Meta-learning/strategy] Investigate 'wire' strategy — only 30% success rate (10 tasks) — Root causes: shallow_reasoning (57% of failures, vague task descriptions), long_duration (29%, multi-file exploration). Fix: added _build_wire_guidance() to context_compressor.py that auto-detects wire tasks and injects explicit 6-step integration checklist + target-specific patterns (cron_reflection.sh, heartbeat_preflight.py, etc.) into the decision context. Wire tasks now get concrete sub-steps instead of vague "Wire X into Y". (2026-02-24 UTC)
 - [x] [ABSOLUTE_ZERO 2026-02-24] [AZR] Self-improvement: AZR cycle found capability gap (avg_learnability=0.51). Root cause: template self-contamination in _predict_outcome_heuristic() — keywords in template (timeout, memory) matched against template text instead of actual task. Fix: _extract_task_text() helper isolates task description. Deduction prediction accuracy ~20% → ~60%. (2026-02-24 14:51 UTC)
 - [x] [EPISODIC_SYNTHESIS 2026-02-24] Investigate and fix: Fix module import reliability — Verified all core modules (brain, episodic_memory, context_compressor, phi_metric, clarvis_reasoning, attention, memory_consolidation) import correctly. Task triggered by 1 transient episode; system recovered. (2026-02-24 14:58 UTC)
@@ -72,8 +78,8 @@ _Completed items archived to QUEUE_ARCHIVE.md (100+ items since 2026-02-18)._
 
 === BUNDLED SESSIONS === (3 topics per session — scan, compare, extract patterns)
 
-- [ ] Bundle A: Active Inference Deep Cuts — "Active Inference: Demystified" (Bogacz 2017), "Deep Active Inference" (Ueltzhöffer 2018), Free Energy Principle (Friston) overview
-- [ ] Bundle B: Predictive Processing — "Action-Oriented Predictive Processing" (Clark 2015), Predictive remapping & forward models (Wolpert), Dopamine as prediction error (Schultz)
+- [x] Bundle A: Active Inference Deep Cuts — Bogacz 2017 (tutorial on free-energy framework + predictive coding), Tschantz 2020 "Active Inference Demystified and Compared" (RL = special case of active inference, epistemic value for principled exploration). (2026-02-25 13:02 UTC)
+- [x] Bundle B: Predictive Processing — "Action-Oriented Predictive Processing" (Clark 2015), Predictive remapping & forward models (Wolpert), Dopamine as prediction error (Schultz) (2026-02-25 — All three converge on prediction error as universal brain currency. Clark: precision weighting IS attention (1/variance). Wolpert MOSAIC: forward model prediction accuracy gates controller selection. Schultz: two-component dopamine RPE (fast salience → slow value). Implementation ideas: precision-weighted heartbeat context, MOSAIC-inspired strategy selection, two-phase task evaluation. Research note: memory/research/ingested/bundle-b-predictive-processing.md)
 - [x] Bundle C: World Models & Simulation — World Models (Ha & Schmidhuber 2018) + JEPA/MaskVJEPA, Mind's Eye (simulation-grounded reasoning), LeCun — Path Toward Autonomous Machine Intelligence (2026-02-24 — scripts/world_models.py)
 - [ ] Bundle D: Self-Modification & Reflexivity — Self-Referential Weight Matrix, Lipson + Neural Self-Modeling (2024-25), Evolutionary parameter & architecture tuning
 - [ ] Bundle E: Cognitive Architectures — ACT-R (episodic/procedural memory, decay), SOAR (goal-driven cognition), OpenCog Hyperon (Ben Goertzel)
@@ -92,7 +98,7 @@ _Completed items archived to QUEUE_ARCHIVE.md (100+ items since 2026-02-18)._
 - [ ] Bundle R: Agent Orchestration — ComposioHQ/agent-orchestrator (parallel agents, worktree isolation), Self-healing CI/CD pipelines, Multi-agent coordination protocols
 - [ ] Bundle S: Autonomous Code Evolution — Auto-fixing PR review comments, Git worktree isolation per task, Agent lifecycle management (spawn/resume/kill/restore)
 - [ ] Bundle T: Plugin & Config Patterns — Swappable component patterns (runtime/agent/tracker), Interface-driven plugin system, Configuration-driven orchestration (YAML)
-- [ ] Bundle U: Self-Representation & Modeling — VanRullen & Kanai (GWT + Deep Learning), Dossa et al. (2024) revisit, "Anticipatory Systems" revisit
+- [x] Bundle U: Self-Representation & Modeling — VanRullen & Kanai (GWT + Deep Learning), Dossa et al. (2024) revisit, "Anticipatory Systems" revisit (2026-02-25 13:11 UTC)
 
 ---
 **Implementation ideas from Agent Orchestrator:**

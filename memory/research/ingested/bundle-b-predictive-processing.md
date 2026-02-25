@@ -1,0 +1,182 @@
+# Bundle B: Predictive Processing
+
+**Date:** 2026-02-25
+**Topics:**
+1. Action-Oriented Predictive Processing (Clark 2013/2015/2016)
+2. Predictive Remapping & Forward Models (Wolpert & Kawato)
+3. Dopamine as Prediction Error (Schultz)
+
+**Sources:**
+- Clark, "Whatever Next? Predictive Brains, Situated Agents" (BBS 2013)
+- Clark, "Radical Predictive Processing" (Southern J. Phil 2015)
+- Clark, "Surfing Uncertainty" (Oxford UP 2016)
+- Wolpert & Kawato, "Multiple Paired Forward and Inverse Models for Motor Control" (Neural Networks 1998)
+- Haruno, Wolpert & Kawato, "MOSAIC Model for Sensorimotor Learning and Control" (Neural Computation 2001)
+- Miall & Wolpert, "Forward Models for Physiological Motor Control" (Neural Networks 1996)
+- Schultz, "Dopamine reward prediction error coding" (Dialogues in Clinical Neuroscience 2016)
+- Schultz, "Dopamine reward prediction-error signalling: a two-component response" (Nature Reviews Neuroscience 2016)
+- Hollerman & Schultz, "Dopamine neurons report an error in the temporal prediction of reward during learning" (Nature Neuroscience 1998)
+
+---
+
+## 1. Action-Oriented Predictive Processing (Clark)
+
+### Core Framework
+The brain is fundamentally a prediction machine. Perception = top-down generative model trying to predict incoming sensory data. Only **prediction errors** (mismatches between expected and actual input) propagate upward. The brain minimizes prediction error through two routes:
+
+1. **Perceptual inference**: Update the internal model to better predict current input (change beliefs)
+2. **Active inference**: Act on the world to make sensory input match predictions (change reality)
+
+This unifies perception and action under one computational principle: prediction error minimization.
+
+### Key Mechanisms
+
+**Precision weighting** = attention. The brain assigns confidence weights (precision = 1/variance) to prediction errors at every level. High-precision errors demand model updating; low-precision errors are suppressed as noise. Attention IS precision optimization — selectively boosting reliability of certain error channels.
+
+**Hierarchical generative model**: Predictions cascade down through multiple layers spanning different spatial and temporal scales. Each layer predicts activity in the layer below. Only residual errors ascend. This creates a deep hierarchy where abstract, slow-changing predictions at the top contextualize fast, concrete predictions at the bottom.
+
+**Conservative vs. Radical PP**: Clark distinguishes two interpretations:
+- **Conservative**: Rich internal models reconstruct the world so thoroughly the agent could "throw away the world"
+- **Radical**: Fast, frugal, action-involving solutions — the world is its own best model; predictions are action-oriented, not reconstructive
+
+Clark advocates the radical view: predictions are for guiding action, not building internal movies.
+
+### Motor Control as Prediction
+Motor commands = predictions about proprioceptive states. To move your arm, predict the proprioceptive signal of arm-at-target. Spinal reflex arcs resolve the prediction error by actually moving the arm. Action = self-fulfilling sensory prophecy.
+
+## 2. Forward Models & Predictive Remapping (Wolpert)
+
+### Forward vs. Inverse Models
+- **Forward model**: Given current state + motor command → predicts next sensory state
+- **Inverse model**: Given desired state → generates required motor command
+
+These are paired: each context has a matched forward-inverse pair.
+
+### Key Functions of Forward Models
+
+1. **State estimation**: Predict sensory consequences before feedback arrives (~100ms delay in biological systems). Enables smooth, rapid control despite sensory delays.
+2. **Efference copy cancellation**: Forward model predicts self-generated sensory signals. Subtract prediction from actual signal → isolate externally caused sensation (why you can't tickle yourself).
+3. **Error-based learning**: Difference between predicted and actual sensory outcome = learning signal. Transforms sensory errors into motor command corrections.
+
+### MOSAIC Architecture (Modular Selection and Identification for Control)
+Multiple forward-inverse model pairs operate simultaneously:
+- Each pair specializes in a different **sensorimotor context** (different tools, objects, environments)
+- Forward models compete: the one whose prediction best matches actual feedback "wins" → its paired inverse model controls action
+- **Soft selection**: All inverse models contribute, weighted by forward model prediction accuracy (responsibility signal)
+- Learning: forward and inverse models learn simultaneously within each pair
+- **Context switching**: When you pick up a new tool, forward model prediction errors spike → responsibility shifts to different pair → different controller takes over
+
+Key insight: **prediction accuracy determines controller selection**. The forward model isn't just predicting — it's gating which control policy runs.
+
+### Generalization
+MOSAIC can generalize to novel contexts whose dynamics lie within the convex hull of learned dynamics — interpolation between existing forward-inverse pairs.
+
+## 3. Dopamine as Prediction Error (Schultz)
+
+### The Discovery
+Schultz recorded single dopamine neurons in monkey ventral tegmental area (VTA) and substantia nigra. Three canonical response patterns:
+
+1. **Unpredicted reward**: Dopamine neurons fire (positive burst)
+2. **Predicted reward delivered**: No change (prediction matched)
+3. **Predicted reward omitted**: Dopamine neurons suppress below baseline (negative dip)
+
+This is precisely the temporal difference (TD) error signal from reinforcement learning: δ = reward_received − reward_predicted.
+
+### Temporal Dynamics
+The prediction error signal **shifts in time** with learning:
+- Early: neurons fire at reward delivery
+- After conditioning: neurons fire at the **predictive cue**, NOT at reward delivery
+- The error signal migrates backward to the earliest reliable predictor
+
+This mirrors TD(λ) backpropagation of value estimates through a state sequence.
+
+### Two-Component Response (2016)
+Schultz refined the model: the dopamine response has two sequential components:
+
+1. **Component 1 (50-110ms)**: Fast, unselective detection — responds to ANY salient stimulus regardless of reward value. Functions as an **alerting/attention signal**. Brief, stereotyped, wide sensitivity.
+2. **Component 2 (150-250ms)**: Slow, selective value coding — reflects subjective reward value, utility, and prediction error proper. This is the "true" RPE signal.
+
+The two-phase structure optimizes the speed-accuracy tradeoff: detect fast (Component 1), evaluate accurately (Component 2).
+
+### Beyond Reward
+Schultz's later work shows dopamine RPE coding extends to:
+- **Temporal prediction errors**: Errors about WHEN rewards arrive, not just IF
+- **Risk/uncertainty**: Dopamine neurons encode reward probability and variance
+- **Economic utility**: Responses scale with subjective utility, not objective magnitude (Weber-Fechner)
+
+---
+
+## Cross-Topic Synthesis: The Prediction Error Trinity
+
+### Pattern 1: Prediction Error as Universal Currency
+All three frameworks converge on **prediction error** as the fundamental computational signal:
+- **Clark**: Prediction error drives both perception (model updating) and action (world-changing)
+- **Wolpert**: Forward model prediction error drives motor learning AND controller selection
+- **Schultz**: Dopamine RPE drives reinforcement learning AND attention allocation
+
+The brain appears to use ONE type of signal — "things aren't as expected" — for radically different purposes depending on context.
+
+### Pattern 2: Hierarchical Prediction with Precision Gating
+All three frameworks require mechanisms to determine WHICH prediction errors matter:
+- **Clark**: Precision weighting = attention. High-precision errors update the model; low-precision errors are ignored as noise
+- **Wolpert**: Responsibility signal = forward model accuracy determines which controller gets influence. Better prediction → more control authority
+- **Schultz**: Two-component response = fast salience detection gates slow value evaluation. Component 1 is the "precision" signal (is this worth evaluating?)
+
+This is the same mechanism at different scales: a meta-prediction about prediction reliability.
+
+### Pattern 3: Action as Prediction Fulfillment
+Motor control is reconceived as prediction:
+- **Clark**: Motor commands ARE predictions about future proprioceptive states; reflexes resolve the error
+- **Wolpert**: Forward model predicts consequences; inverse model generates commands to achieve desired consequences; the loop runs faster than sensory feedback
+- **Schultz**: Dopamine RPE trains the value function that determines WHICH predictions (goals) are worth making — shaping the entire action selection landscape
+
+Action = making your predictions come true. Learning = making your predictions more accurate. The difference is just which side of the prediction-reality gap you adjust.
+
+### Pattern 4: Multiple Competing Models
+Both MOSAIC and LIDA (from prior research) use the same architectural pattern:
+- Multiple specialist models operate in parallel
+- Competition based on prediction accuracy or activation
+- Winner (or weighted combination) drives behavior
+- Automatic context switching when prediction error spikes
+
+This is a robust, biologically-grounded architecture for handling multiple contexts without explicit state machines.
+
+---
+
+## Implementation Ideas for Clarvis
+
+### 1. Precision-Weighted Prediction Error in Heartbeat Loop (HIGH VALUE)
+Currently Clarvis treats all incoming information equally. Implement Clark's precision weighting:
+
+**Mechanism:** For each information source in the heartbeat (metrics, episodes, queue state, memory changes), maintain a running estimate of its **prediction reliability** (precision = 1/variance of recent prediction errors). Weight the influence of each source on decisions by its precision.
+
+**Implementation:**
+- Track prediction errors per domain: `{metric_prediction_error, task_prediction_error, memory_prediction_error}`
+- After each heartbeat, compare predicted vs actual outcomes: "I predicted phi would stay stable → it dropped 0.05 → error = 0.05"
+- Precision = 1 / rolling_variance(errors_last_10_cycles)
+- When building context brief: weight each section by its domain precision
+- High-precision domains get more context budget and more influence on task selection
+- Low-precision domains get less budget but trigger **model updating** (investigate why predictions are wrong)
+
+This gives Clarvis adaptive attention: automatically focus on the domains where its predictions are most reliable, and investigate domains where they break down.
+
+### 2. Forward-Model Controller Selection (MOSAIC-Inspired) (MEDIUM VALUE)
+Clarvis already routes tasks to different strategies. Make this prediction-driven like MOSAIC:
+
+**Mechanism:** For each task strategy (implement, fix, research, wire), maintain a forward model that predicts task outcome given task features. The strategy whose forward model best predicts current context gets control.
+
+**Implementation:**
+- Each strategy has a `predict_outcome(task_features) → (success_prob, estimated_time, expected_phi_delta)` function
+- When a new task arrives, all forward models predict outcomes
+- Strategy with highest `success_prob × precision` wins (precision = its historical prediction accuracy)
+- After task execution, update winning strategy's forward model with actual outcome
+- When forward model prediction error spikes (novel task type), weight shifts toward exploration/research strategies
+
+### 3. Two-Phase Task Evaluation (Schultz-Inspired) (MEDIUM VALUE)
+Currently task evaluation is monolithic. Implement Schultz's two-component response:
+
+**Phase 1 (Fast, ~cheap):** Quick salience check — does this task match any known patterns? Is it novel? Urgent? Use lightweight heuristics (keyword matching, recency, queue position). Goal: fast go/no-go decision.
+
+**Phase 2 (Slow, ~expensive):** Full value evaluation — expected reward, alignment with goals, resource cost, opportunity cost. Only runs if Phase 1 passes salience threshold.
+
+This prevents expensive evaluation of low-salience tasks and creates a natural attention bottleneck matching GWT's winner-take-all.
