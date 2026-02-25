@@ -436,8 +436,17 @@ class VectorStore:
         return {"nodes": {}, "edges": []}
 
     def _save_graph(self):
-        with open(self.graph_file, "w") as f:
-            json.dump(self.graph, f, indent=2)
+        # Atomic write: write to temp file, then replace
+        import tempfile
+        tmp_fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(self.graph_file) or ".", suffix=".tmp")
+        try:
+            with os.fdopen(tmp_fd, "w") as f:
+                json.dump(self.graph, f, indent=2)
+            os.replace(tmp_path, self.graph_file)
+        except Exception:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+            raise
 
     def _auto_link(self, memory_id, text, collection):
         """Auto-link to similar memories within and across collections."""

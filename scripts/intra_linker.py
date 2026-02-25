@@ -25,7 +25,7 @@ import argparse
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from brain import ClarvisBrain, ALL_COLLECTIONS, GRAPH_FILE
+from brain import brain, ALL_COLLECTIONS  # Use singleton to prevent data loss from concurrent writes
 
 
 def _load_graph_safe():
@@ -118,26 +118,9 @@ def run_intra_linker(cap_per_collection=DEFAULT_CAP, dry_run=False,
     Returns:
         dict with per-collection stats, total new edges, and density snapshot.
     """
-    # Load graph safely (handles concurrent-write corruption) and inject
-    # into ClarvisBrain to bypass its fragile _load_graph().
-    graph_data = _load_graph_safe()
-    brain = ClarvisBrain.__new__(ClarvisBrain)
-    brain.use_local_embeddings = False
-    brain.data_dir = os.path.join(os.path.dirname(os.path.dirname(
-        os.path.abspath(__file__))), "data", "clarvisdb")
-    brain.graph_file = GRAPH_FILE
-    import chromadb
-    brain.client = chromadb.PersistentClient(path=brain.data_dir)
-    brain.collections = {}
-    for name in ALL_COLLECTIONS:
-        brain.collections[name] = brain.client.get_or_create_collection(name)
-    brain.graph = graph_data
-    brain._stats_cache = None
-    brain._stats_cache_time = 0
-    brain._stats_cache_ttl = 30
-    brain._collection_cache = {}
-    brain._collection_cache_ttl = 60
-
+    # Use the brain singleton - its _save_graph() handles concurrent writes safely
+    # via read-before-write merge, preventing lost-update race conditions.
+    brain._load_graph()  # Refresh to get latest state
     existing_pairs = build_existing_intra_pairs(brain)
 
     total_new = 0
