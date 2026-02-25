@@ -13,9 +13,26 @@ _Completed items archived to QUEUE_ARCHIVE.md (100+ items since 2026-02-18)._
 - [ ] [PLAN_CLOSE] Close out data/plans/plan-20260219_232719.json ("Design brain architecture") — steps 4-5 already done (attention consolidation, power-law decay). Mark completed steps, execute step 7 (benchmark before/after), update status to completed.
 
 ## P0 — Do Next Heartbeat
-(no P0 items — both completed tonight)
-- [x] [GRAPH_RECOVERY 2026-02-24 22:38] Merge 9,544 lost edges from 2am + pre-update backups — 7,102 → 16,646 edges. Safe merge via edge key deduplication.
-- [x] [GRAPH_LOCK 2026-02-24 22:40] Add fcntl.flock() + read-before-write to brain.py _save_graph() — prevents lost-update race condition.
+- [ ] [BRAIN_TO_SUBCONSCIOUS] Wire brain directly to subconscious — current architecture gap
+
+**Problem:**
+- Subconscious (Claude Code via cron) gets TEXT summary from QUEUE.md + context_compressor.py
+- It does NOT query the brain (vector DB + graph) for relevant knowledge
+- brain.search() exists but is never called in preflight
+- 48k graph edges, 1120 memories, semantic learnings all exist but unused
+
+**What needs to change in heartbeat_preflight.py:**
+1. Import brain: `from brain import brain, search`
+2. For each task in queue, call `brain.search(task_description, n=3)` 
+3. Include search results in CONTEXT_BRIEF passed to Claude Code
+4. Also pass: recent relevant learnings, related episodes, hebbian patterns
+
+**Expected improvement:**
+- Claude Code will have actual knowledge context, not just text summary
+- Will reason with full brain state
+- Should improve task selection and execution quality
+
+**Reference:** brain.search() at scripts/brain.py:1194 — returns list of matching memories with document, collection, importance
 
 ## P1 — This Week
 - [ ] [EPISODIC_SYNTHESIS 2026-02-25] Investigate and fix: Deepen automation capabilities
