@@ -33,17 +33,12 @@ if os.path.exists(digest_path):
     with open(digest_path) as f:
         digest_content = f.read()
 
-# Extract entries from last ~16 hours (overnight period)
-# Digest format: ### ⚡ Autonomous — HH:MM UTC or ### Research — HH:MM UTC
+# Parse digest entries with better extraction
 entries = []
-current_date = datetime.now().strftime("%Y-%m-%d")
-
-# Parse digest entries with timestamps
 pattern = r'### (.+?) — (\d{2}:\d{2}) UTC'
 for match in re.finditer(pattern, digest_content):
     entry_type = match.group(1).strip()
     timestamp = match.group(2)
-    # Get context around this entry
     start = match.start()
     end = digest_content.find('###', start + 10)
     if end == -1:
@@ -52,58 +47,85 @@ for match in re.finditer(pattern, digest_content):
     entries.append({'type': entry_type, 'time': timestamp, 'context': context})
 
 # Filter to overnight entries (22:00 previous day to 10:00 today)
-# This is roughly the entries that happened while user was asleep
 overnight_entries = []
 for e in entries:
     hour = int(e['time'].split(':')[0])
-    # Night hours: 22, 23, 00, 01, 02, 03, 04, 05, 06, 07, 08, 09
     if hour >= 22 or hour <= 9:
         overnight_entries.append(e)
 
-# ==== PARSE QUEUE ====
+# ==== BETTER TASK EXTRACTION FROM DIGEST ====
+def extract_task_details(context, entry_type):
+    """Extract meaningful task description from digest context"""
+    # For Autonomous tasks
+    if 'Autonomous' in entry_type:
+        # Look for evolution task in brackets - simpler regex
+        task_match = re.search(r'\[([A-Z_]+)\]', context)
+        if task_match:
+            return f"{task_match.group(1)}"
+        
+        return "Evolution task"
+    
+    # For Research
+    if 'Research' in entry_type:
+        bundle_match = re.search(r'Researched:\s*(Bundle \w+|.+?)(?:\.|—|Result)', context)
+        if bundle_match:
+            return bundle_match.group(1).strip()[:45]
+        return "Research task"
+    
+    if 'Morning' in entry_type or 'Evening' in entry_type:
+        return "Planning cycle"
+    
+    return entry_type[:30]
+
+# ==== PARSE QUEUE BETTER ====
 queue_path = "/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md"
 with open(queue_path) as f:
     queue_content = f.read()
 
-# Count completed vs pending
-p0_completed = queue_content.count('[x] [BRAIN') + queue_content.count('[x] [SPAWN') + queue_content.count('[x] [SEMANTIC')
-p0_pending = queue_content.count('- [ ] [BRAIN') + queue_content.count('- [ ] [SPAWN') + queue_content.count('- [ ] [SEMANTIC')
+# Get P0 pending items
+p0_pending = []
+for match in re.finditer(r'- \[ \] \[([^\]]+)\]', queue_content):
+    task = match.group(1)
+    if len(p0_pending) < 3:
+        p0_pending.append(task)
 
-p1_items = []
-p1_match = re.search(r'## P1 — This Week\s*\n(.*?)(?=##|$)', queue_content, re.DOTALL)
-if p1_match:
-    for line in p1_match.group(1).strip().split('\n'):
-        if '- [ ]' in line and '—' in line:
-            task = line.split('—')[1].split('(')[0].strip() if '—' in line else line
-            task = re.sub(r'\s*\(.*', '', task).strip()
-            if task and len(task) < 50:
-                p1_items.append(task)
-        elif '- [ ]' in line and '—' not in line:
-            task = re.sub(r'^- \[ \]\s*', '', line).strip()
-            task = re.sub(r'\s*\(.*', '', task).strip()
-            if task and len(task) < 50:
-                p1_items.append(task)
+# Get P1 pending items  
+p1_pending = []
+for match in re.finditer(r'- \[ \] \[([^\]]+)\].*?—\s*(.+?)(?:\(|—|$)', queue_content):
+    task_id = match.group(1)
+    task_desc = match.group(2).strip()[:40]
+    if len(p1_pending) < 2:
+        p1_pending.append(f"{task_id}")
 
-# Research progress
-research_section = re.search(r'=== COMPLETED ===.*?=== PRIORITY TRACKING ===', queue_content, re.DOTALL)
-completed_research = []
-if research_section:
-    completed_research = re.findall(r'\[x\] (P\d+): (.+?) —', research_section.group(0))
+# Get TODAY's completed items
+today_completed = []
+for match in re.finditer(r'- \[x\] \[([^\]]+)\].*?(\d{4}-\d{2}-\d{2})', queue_content):
+    date = match.group(2)
+    if '2026-02-26' in date:
+        task = match.group(1)[:35]
+        today_completed.append(task)
 
-research_pending = re.search(r'=== PRIORITY TRACKING ===\s*\n(.*?)(?====|$)', queue_content, re.DOTALL)
-next_research = "None"
-if research_pending:
-    for line in research_pending.group(1).split('\n'):
-        if '[ ] P' in line and '—' in line:
-            next_research = line.split('—')[1].strip() if '—' in line else line.strip()
-            break
+# ==== RESEARCH PROGRESS ====
+research_completed = []
+for i in range(1, 11):
+    if f'[x] P{i}:' in queue_content:
+        m = re.search(rf'\[x\] P{i}:\s*(.+?)\s*—', queue_content)
+        if m:
+            research_completed.append(f"P{i}: {m.group(1)[:25]}")
+
+research_pending = []
+for i in range(1, 11):
+    if f'[ ] P{i}:' in queue_content:
+        m = re.search(rf'\[ \] P{i}:\s*(.+?)\s*—', queue_content)
+        if m:
+            research_pending.append(f"P{i}: {m.group(1)[:25]}")
+        break
+if not research_pending:
+    research_pending = ["All done!"]
 
 # ==== BRAIN STATS ====
 from brain import brain
 stats = brain.stats()
-
-# Get Phi if available (skip if slow/hanging)
-phi_score = "N/A"
 
 # ==== BUILD REPORT ====
 lines = []
@@ -112,81 +134,74 @@ lines.append("🌅 Clarvis Morning Report")
 lines.append("=" * 40)
 lines.append("")
 
-# Overnight activity
-lines.append("🌙 OVERNIGHT ACTIVITY")
+# Overnight activity - ACTUAL TASKS
+lines.append("🌙 OVERNIGHT WORK")
 lines.append("-" * 20)
 if overnight_entries:
     for e in overnight_entries:
-        # Extract result from context
         result_match = re.search(r'Result: (\w+)', e['context'])
         result = result_match.group(1) if result_match else "?"
         
-        # Extract task description
-        task_match = re.search(r'executed evolution task: \[([^\]]+)\]|Researched: (.+?)(?:\.|Result)', e['context'])
-        if task_match:
-            if task_match.group(1):
-                task_desc = task_match.group(1)
-            else:
-                task_desc = task_match.group(2)
-        else:
-            task_desc = e['type']
+        task_desc = extract_task_details(e['context'], e['type'])
         
-        lines.append(f"  • {e['time']} — {task_desc[:45]} [{result}]")
+        lines.append(f"  {e['time']} → {task_desc} [{result}]")
 else:
-    lines.append("  (No overnight activity logged)")
+    lines.append("  (No overnight activity)")
+lines.append("")
+
+# Queue - WHAT'S PENDING
+lines.append("📋 QUEUE: WHAT'S NEXT")
+lines.append("-" * 20)
+if p0_pending:
+    lines.append("  P0 (do now):")
+    for t in p0_pending:
+        lines.append(f"    • {t}")
+elif p1_pending:
+    lines.append("  P1 (this week):")
+    for t in p1_pending:
+        lines.append(f"    • {t}")
+else:
+    lines.append("  Queue empty!")
+
+if today_completed:
+    lines.append(f"  Today: {', '.join(today_completed[:3])}")
+lines.append("")
+
+# Research - WHICH BUNDLES
+lines.append("🔬 RESEARCH BUNDLES")
+lines.append("-" * 20)
+lines.append(f"  Done: {len(research_completed)}/10")
+for r in research_completed[-3:]:
+    lines.append(f"    ✓ {r}")
+lines.append(f"  Next: {research_pending[0]}")
 lines.append("")
 
 # Brain state
 lines.append("🧠 BRAIN STATE")
 lines.append("-" * 20)
 lines.append(f"  Memories: {stats['total_memories']}")
-lines.append(f"  Collections: {len(stats['collections'])}")
-lines.append(f"  Phi Score: {phi_score}")
-
-# Top collections
-top_cols = sorted(stats['collections'].items(), key=lambda x: x[1], reverse=True)[:5]
+top_cols = sorted(stats['collections'].items(), key=lambda x: x[1], reverse=True)[:4]
 cols_str = ", ".join([f"{k.split('-')[-1]}({v})" for k, v in top_cols])
 lines.append(f"  Top: {cols_str}")
-lines.append("")
 
-# Queue progress
-lines.append("📋 EVOLUTION QUEUE")
-lines.append("-" * 20)
-lines.append(f"  P0 completed: {p0_completed} | pending: {p0_pending}")
-if p1_items:
-    lines.append(f"  P1: {p1_items[0][:40]}")
-    if len(p1_items) > 1:
-        lines.append(f"      {p1_items[1][:40]}")
+# Goals with context
 lines.append("")
-
-# Research progress
-lines.append("🔬 RESEARCH PROGRESS")
-lines.append("-" * 20)
-lines.append(f"  Completed: {len(completed_research)}/10 priority")
-if completed_research:
-    recent = [r[1][:25] for r in completed_research[-3:]]
-    lines.append(f"  Recent: {', '.join(recent)}")
-lines.append(f"  Next: {next_research[:40]}")
-lines.append("")
-
-# Goals
 lines.append("🎯 GOALS")
 lines.append("-" * 20)
 try:
     goals = brain.get_goals()
     for g in goals[:3]:
         doc = g.get('document', '')
-        # Extract progress
         prog_match = re.search(r'progress: (\d+)%', doc)
-        if prog_match:
+        goal_match = re.search(r'Goal:\s*([^—]+)', doc)
+        if prog_match and goal_match:
             prog = prog_match.group(1)
-            name = g.get('id', 'Unknown')[:25]
+            name = goal_match.group(1).strip()[:30]
             lines.append(f"  {name}: {prog}%")
 except:
-    lines.append("  (Goals unavailable)")
-lines.append("")
+    lines.append("  (Unavailable)")
 
-# Footer
+lines.append("")
 lines.append("=" * 40)
 lines.append("Ready for the day, sir.")
 

@@ -19,6 +19,7 @@ import urllib.request
 import urllib.parse
 from datetime import datetime
 import os
+import subprocess
 sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
 
 # Get bot token
@@ -53,75 +54,70 @@ for e in entries:
     if 10 <= hour <= 21:
         daytime_entries.append(e)
 
-# ==== GIT ACTIVITY ====
-git_log = ""
+# ==== TASK EXTRACTION ====
+def extract_task_details(context, entry_type):
+    if 'Autonomous' in entry_type:
+        task_match = re.search(r'\[([A-Z_]+)\]', context)
+        if task_match:
+            return f"{task_match.group(1)}"
+        return "Evolution task"
+    
+    if 'Research' in entry_type:
+        bundle_match = re.search(r'Researched:\s*(Bundle \w+|.+?)(?:\.|—|Result)', context)
+        if bundle_match:
+            return bundle_match.group(1).strip()[:45]
+        return "Research task"
+    
+    if 'Morning' in entry_type or 'Evening' in entry_type:
+        return "Planning cycle"
+    
+    return entry_type[:30]
+
+# ==== GIT TODAY ====
+today_commits = []
 try:
-    import subprocess
     result = subprocess.run(
-        ['git', 'log', '--oneline', '-10'],
+        ['git', 'log', '--oneline', '--since="2026-02-26 00:00:00"', '--until="2026-02-26 23:59:59"'],
         cwd='/home/agent/.openclaw/workspace',
         capture_output=True, text=True, timeout=5
     )
-    git_log = result.stdout.strip()
+    for line in result.stdout.strip().split('\n'):
+        if line:
+            msg = re.sub(r'^[a-f0-9]+\s*', '', line)
+            if msg:
+                today_commits.append(msg[:50])
 except:
     pass
 
-# Parse today's commits
-today_commits = []
-if git_log:
-    for line in git_log.split('\n'):
-        if '2026-02-26' in line or 'Feb 26' in line:
-            today_commits.append(line)
-
-# ==== QUEUE PROGRESS ====
+# ==== QUEUE ====
 queue_path = "/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md"
 with open(queue_path) as f:
     queue_content = f.read()
 
-# Count completions today (look for today's date in completed items)
-today_completed = queue_content.count('2026-02-26')
+# Today's completed items
+today_completed = []
+for match in re.finditer(r'- \[x\] \[([^\]]+)\].*?(\d{4}-\d{2}-\d{2})', queue_content):
+    date = match.group(2)
+    if '2026-02-26' in date:
+        today_completed.append(match.group(1)[:35])
 
-# P0/P1 items
-p0_match = re.search(r'## P0 — Do Next Heartbeat\s*\n(.*?)(?=##|$)', queue_content, re.DOTALL)
-p0_items = []
-if p0_match:
-    for line in p0_match.group(1).strip().split('\n'):
-        if '- [ ]' in line:
-            task = re.sub(r'^- \[ \]\s*', '', line.split('—')[0] if '—' in line else line)
-            task = re.sub(r'\s*\(.*', '', task).strip()
-            if task:
-                p0_items.append(task)
+# Pending items
+p0_pending = []
+for match in re.finditer(r'- \[ \] \[([^\]]+)\]', queue_content):
+    if len(p0_pending) < 2:
+        p0_pending.append(match.group(1))
 
-p1_match = re.search(r'## P1 — This Week\s*\n(.*?)(?=##|$)', queue_content, re.DOTALL)
-p1_items = []
-if p1_match:
-    for line in p1_match.group(1).strip().split('\n'):
-        if '- [ ]' in line:
-            if '—' in line:
-                task = line.split('—')[1].split('(')[0].strip()
-            else:
-                task = re.sub(r'^- \[ \]\s*', '', line).strip()
-            task = re.sub(r'\s*\(.*', '', task).strip()
-            if task and len(task) < 50:
-                p1_items.append(task)
-
-# Research completed today
-research_section = re.search(r'=== COMPLETED ===.*?=== PRIORITY TRACKING ===', queue_content, re.DOTALL)
-completed_today = []
-if research_section:
-    for match in re.finditer(r'\[x\] (P\d+): (.+?) — (\d{4}-\d{2}-\d{2})', research_section.group(0)):
-        if '2026-02-26' in match.group(3):
-            completed_today.append((match.group(1), match.group(2)))
+# ==== RESEARCH ====
+research_done = []
+for i in range(1, 11):
+    if f'[x] P{i}:' in queue_content:
+        m = re.search(rf'\[x\] P{i}:\s*(.+?)\s*—', queue_content)
+        if m:
+            research_done.append(f"P{i}: {m.group(1)[:20]}")
 
 # ==== BRAIN STATS ====
 from brain import brain
 stats = brain.stats()
-
-# Get Phi if available (skip if slow/hanging)
-phi_score = "N/A"
-
-# Get goals
-goals = brain.get_goals()
 
 # ==== BUILD REPORT ====
 lines = []
@@ -130,88 +126,65 @@ lines.append("🌙 Clarvis Evening Report")
 lines.append("=" * 40)
 lines.append("")
 
-# Daytime activity summary
-lines.append("📅 TODAY'S ACTIVITY")
+# Today's activity
+lines.append("📅 TODAY'S WORK")
 lines.append("-" * 20)
 if daytime_entries:
-    # Group by type
-    autonomous = [e for e in daytime_entries if 'Autonomous' in e['type']]
-    research = [e for e in daytime_entries if 'Research' in e['type']]
-    morning = [e for e in daytime_entries if 'Morning' in e['type']]
-    
-    lines.append(f"  Autonomous cycles: {len(autonomous)}")
-    lines.append(f"  Research sessions: {len(research)}")
-    
-    # Show key results
-    for e in daytime_entries[:5]:
-        # Extract task/result
-        task_match = re.search(r'executed evolution task: \[([^\]]+)\]|Researched: (.+?)(?:\.|Result)', e['context'])
-        if task_match:
-            task = task_match.group(1) or task_match.group(2)
-            task = task[:40]
-        else:
-            task = e['type'][:40]
-        
+    for e in daytime_entries:
         result_match = re.search(r'Result: (\w+)', e['context'])
-        result = f"[{result_match.group(1)}]" if result_match else ""
-        
-        lines.append(f"  • {e['time']} {task} {result}")
+        result = result_match.group(1) if result_match else "?"
+        task = extract_task_details(e['context'], e['type'])
+        lines.append(f"  {e['time']} → {task} [{result}]")
 else:
-    lines.append("  (No activity logged)")
+    lines.append("  (No daytime activity)")
 lines.append("")
 
-# Queue progress
-lines.append("📋 QUEUE PROGRESS")
+# Completed today
+lines.append("✅ COMPLETED TODAY")
 lines.append("-" * 20)
-lines.append(f"  Items completed today: {today_completed}")
-lines.append(f"  P0 pending: {len(p0_items)}")
-if p0_items:
-    lines.append(f"    → {p0_items[0][:45]}")
-if p1_items:
-    lines.append(f"  P1: {p1_items[0][:40]}")
-    if len(p1_items) > 1:
-        lines.append(f"      {p1_items[1][:40]}")
+if today_completed:
+    for t in today_completed:
+        lines.append(f"  • {t}")
+else:
+    lines.append("  Nothing completed today")
+lines.append("")
+
+# Git commits
+lines.append("📝 GIT COMMITS")
+lines.append("-" * 20)
+if today_commits:
+    for c in today_commits[:4]:
+        lines.append(f"  • {c}")
+else:
+    lines.append("  None")
 lines.append("")
 
 # Research
 lines.append("🔬 RESEARCH")
 lines.append("-" * 20)
-lines.append(f"  Completed today: {len(completed_today)}")
-for p, topic in completed_today:
-    lines.append(f"    ✓ {p}: {topic[:30]}")
+lines.append(f"  Done: {len(research_done)}/10")
+for r in research_done[-3:]:
+    lines.append(f"    ✓ {r}")
 lines.append("")
 
-# Git commits
-lines.append("📝 GIT COMMITS TODAY")
+# Queue
+lines.append("📋 QUEUE")
 lines.append("-" * 20)
-if today_commits:
-    for commit in today_commits[:4]:
-        # Simplify: remove hash, keep message
-        msg = re.sub(r'^[a-f0-9]+\s*', '', commit)
-        lines.append(f"  • {msg[:45]}")
+if p0_pending:
+    lines.append(f"  P0: {', '.join(p0_pending)}")
 else:
-    lines.append("  (None)")
+    lines.append("  P0: empty")
+lines.append(f"  Today: {len(today_completed)} items done")
 lines.append("")
 
-# Brain state
-lines.append("🧠 BRAIN STATE")
+# Brain
+lines.append("🧠 BRAIN")
 lines.append("-" * 20)
-lines.append(f"  Total memories: {stats['total_memories']}")
-lines.append(f"  Phi Score: {phi_score}")
-
-# Show goal progress
-lines.append("  Goals:")
-for g in goals[:3]:
-    doc = g.get('document', '')
-    prog_match = re.search(r'progress: (\d+)%', doc)
-    if prog_match:
-        prog = prog_match.group(1)
-        name = g.get('id', 'Unknown')[:20]
-        lines.append(f"    {name}: {prog}%")
+lines.append(f"  Memories: {stats['total_memories']}")
 
 lines.append("")
 lines.append("=" * 40)
-lines.append("Ready for nighttime evolution, sir.")
+lines.append("Good night, sir.")
 
 report = "\n".join(lines)
 
