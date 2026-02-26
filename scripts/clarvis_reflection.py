@@ -90,12 +90,31 @@ def generate_queue_tasks(lessons, content):
         ('self_model.py', 'Run self-assessment — update capability model based on today\'s successes and failures'),
     ]
 
+    # Non-Python improvements to consider
+    architectural_candidates = [
+        'Review and update HEARTBEAT.md protocol — are all 7 steps still optimal? Remove/add steps based on recent outcomes',
+        'Audit cron schedule timing — are there gaps or overlaps? Tune intervals based on actual completion times',
+        'Review task_selector.py scoring weights — do AGI_KEYWORDS and INTEGRATION_KEYWORDS reflect current priorities?',
+        'Update ROADMAP.md with actual progress measurements — are phase assessments still accurate?',
+        'Audit skills/ directory — are all skills documented and working? Create new skills for common operations',
+        'Review cron prompt templates — do they guide Claude Code toward the right kinds of work?',
+        'Tune openclaw.json settings — heartbeat interval, compaction mode, max concurrent based on usage data',
+        'Simplify or merge overlapping scripts — 90+ scripts may have redundancy',
+    ]
+
     for script, task in unwired_candidates:
         script_path = os.path.join(scripts_dir, script)
         if os.path.exists(script_path):
             # Check if it's mentioned in crontab or other scripts (rough check)
             if script not in content:  # not mentioned in today's memory = probably not running
                 tasks.append(task)
+
+    # Also suggest 1-2 architectural improvements (non-Python work)
+    import random
+    arch_sample = random.sample(architectural_candidates, min(2, len(architectural_candidates)))
+    for arch_task in arch_sample:
+        if arch_task[:40] not in content:  # not already discussed today
+            tasks.append(arch_task)
 
     # Generate tasks from lessons (what could improve based on what was learned)
     for lesson in lessons:

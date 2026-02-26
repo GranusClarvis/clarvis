@@ -71,6 +71,9 @@ echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] CONTEXT: compressed_queue=${#COMPRESSED_QU
     1. Review the compressed queue below — what's pending?
     2. Read the recent memory file (memory/$(date +%Y-%m-%d).md) — what happened today?
     3. Check data/plans/ — any unfinished research or ideas?
+    4. Review skills/ — any missing skills that would help M2.5 or the subconscious?
+    5. Check HEARTBEAT.md, ROADMAP.md — are protocols and phase assessments current?
+    6. Consider non-code improvements: config tuning, prompt engineering, cron schedule optimization, skill creation.
 
     $COMPRESSED_QUEUE
 
@@ -88,6 +91,9 @@ echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] CONTEXT: compressed_queue=${#COMPRESSED_QU
     - Format: - [ ] <concrete, actionable task>
     - Prioritize fixing the LOWEST capability score. Then: integration, feedback loops,
       consciousness metrics, and genuine cognitive capabilities.
+    - Include at least ONE non-Python task (config tune, protocol update, skill creation,
+      prompt improvement, architectural simplification, or cron optimization).
+    - Available runtimes: Python 3, Node.js, Bash. Can install Rust/Go/etc. Use the right tool for the job.
 
     Currently $PENDING_COUNT pending tasks in queue.
     Output: 1-paragraph analysis + list of tasks added." \

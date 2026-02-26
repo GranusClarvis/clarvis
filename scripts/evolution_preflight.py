@@ -171,7 +171,7 @@ def run():
     if EpisodicMemory:
         try:
             em = EpisodicMemory()
-            result["episode_stats"] = em.stats()
+            result["episode_stats"] = em.get_stats()
         except Exception as e:
             result["episode_stats"] = f"Error: {e}"
             log(f"Episode stats failed: {e}")

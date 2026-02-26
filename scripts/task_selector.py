@@ -52,6 +52,13 @@ INTEGRATION_KEYWORDS = [
     "into cron", "into daily", "run daily", "automat",
 ]
 
+# Keywords that signal architectural or strategic work (non-Python improvements)
+ARCHITECTURAL_KEYWORDS = [
+    "redesign", "refactor", "architecture", "simplify", "merge",
+    "config", "skill", "protocol", "tune", "audit", "review",
+    "heartbeat.md", "agents.md", "roadmap", "prompt", "schedule",
+]
+
 
 def parse_tasks(queue_file=QUEUE_FILE):
     """Parse unchecked tasks from QUEUE.md with their priority section."""
@@ -225,6 +232,12 @@ def score_tasks(tasks):
             if kw in text_lower:
                 integration_boost = min(0.2, integration_boost + 0.1)
 
+        # 5b. Architectural/strategic boost
+        architectural_boost = 0.0
+        for kw in ARCHITECTURAL_KEYWORDS:
+            if kw in text_lower:
+                architectural_boost = min(0.2, architectural_boost + 0.1)
+
         # 6. Spotlight alignment — coherence with current attention focus
         spotlight_align = _spotlight_alignment(text, theme_words, spotlight_texts)
 
@@ -254,7 +267,7 @@ def score_tasks(tasks):
         except Exception:
             pass
 
-        total_boost = agi_boost + integration_boost - failure_penalty
+        total_boost = agi_boost + integration_boost + architectural_boost - failure_penalty
 
         # Submit to attention system for proper salience calculation
         # Include spotlight alignment as part of relevance signal
@@ -286,6 +299,7 @@ def score_tasks(tasks):
                 "recent_relevance": round(recent_relevance, 3),
                 "agi_boost": round(agi_boost, 3),
                 "integration_boost": round(integration_boost, 3),
+                "architectural_boost": round(architectural_boost, 3),
                 "combined_relevance": round(relevance, 3),
                 "spotlight_alignment": round(spotlight_align, 3),
                 "somatic_bias": round(somatic_bias, 4),
@@ -358,6 +372,7 @@ if __name__ == "__main__":
             d = t["details"]
             print(f"     importance={d['section_importance']}  relevance={d['combined_relevance']}"
                   f"  agi={d['agi_boost']}  integration={d['integration_boost']}"
+                  f"  arch={d.get('architectural_boost', 0)}"
                   f"  spotlight={d.get('spotlight_alignment', 0)}"
                   f"  somatic={d.get('somatic_bias', 0)}({d.get('somatic_signal', 'n/a')})"
                   f"  fail_pen={d.get('failure_penalty', 0)}")

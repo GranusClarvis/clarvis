@@ -119,15 +119,25 @@ if [ "$PF_STATUS" = "queue_empty" ] || [ "$PF_STATUS" = "no_tasks" ]; then
         Here's what was recently completed and current state:
         $REPLENISH_CONTEXT
 
-        Check scripts/ directory to see what tools exist but may not be wired in.
-        Check data/plans/ for unfinished research.
+        Explore what can be improved across the FULL system:
+        - scripts/ — Python/Bash automation (brain, cron, cognitive architecture)
+        - skills/ — OpenClaw skill definitions (each has SKILL.md)
+        - HEARTBEAT.md, AGENTS.md, SOUL.md — operating protocols and identity
+        - openclaw.json — gateway config (model, heartbeat interval, compaction)
+        - memory/evolution/QUEUE.md — the queue itself (structure, priorities)
+        - Cron schedule (crontab) — timing, coverage, gaps
+        - data/plans/ — unfinished research or ideas
+
         Think: What's the biggest gap between current capabilities and AGI/consciousness?
+        Consider improvements to: architecture, configs, protocols, skills, prompts — not just new Python scripts.
+        You have access to: Python 3, Node.js, Bash, and can install Rust/Go/etc. Build in whatever language fits the task.
 
         Add 3-5 NEW unchecked tasks to QUEUE.md under '## NEW ITEMS' section.
         Format: - [ ] <concrete task description>
 
-        Focus on: wiring existing scripts into daily use, making capabilities persistent,
-        building feedback loops, improving autonomous learning.
+        Tasks can be ANY type: code changes, config tuning, protocol updates, skill creation,
+        documentation improvements, cron schedule changes, prompt engineering, architectural refactors.
+        Do NOT default to 'create a new .py script' unless that's genuinely the right solution.
         Do NOT duplicate completed tasks. Be concrete and actionable." \
         --dangerously-skip-permissions >> "$LOGFILE" 2>&1
 
@@ -244,8 +254,8 @@ with open('$PREFLIGHT_FILE', 'w') as f:
 
     TASK: $NEXT_TASK
 
-    Do the work. Be concrete. Write code if needed. Test it.
-    When done, output a summary listing what you did, comma-separated. Example: created scripts/foo.py, added bar() to brain.py, wired into cron postflight, tested via python3 foo.py" \
+    Do the work. Be concrete. Write code, edit configs, update protocols — whatever fits. Test it.
+    When done, output a summary listing what you did, comma-separated. Example outputs: 'updated HEARTBEAT.md protocol step 4', 'tuned openclaw.json heartbeat interval', 'created skills/new-skill/SKILL.md', 'fixed cron_autonomous.sh prompt bias', 'refactored brain.py recall weights', 'added task type to clarvis_reflection.py'" \
             --dangerously-skip-permissions > "$TASK_OUTPUT_FILE" 2>&1
         TASK_EXIT=$?
     fi
@@ -272,8 +282,8 @@ elif [ "$ROUTE_EXECUTOR" = "gemini" ]; then
 
     TASK: $NEXT_TASK
 
-    Do the work. Be concrete. Write code if needed. Test it.
-    When done, output a summary listing what you did, comma-separated. Example: created scripts/foo.py, added bar() to brain.py, wired into cron postflight, tested via python3 foo.py" \
+    Do the work. Be concrete. Write code, edit configs, update protocols — whatever fits. Test it.
+    When done, output a summary listing what you did, comma-separated. Example outputs: 'updated HEARTBEAT.md protocol step 4', 'tuned openclaw.json heartbeat interval', 'created skills/new-skill/SKILL.md', 'fixed cron_autonomous.sh prompt bias', 'refactored brain.py recall weights', 'added task type to clarvis_reflection.py'" \
             --dangerously-skip-permissions > "$TASK_OUTPUT_FILE" 2>&1
         TASK_EXIT=$?
     fi
@@ -291,8 +301,8 @@ else
 
     TASK: $NEXT_TASK
 
-    Do the work. Be concrete. Write code if needed. Test it.
-    When done, output a summary listing what you did, comma-separated. Example: created scripts/foo.py, added bar() to brain.py, wired into cron postflight, tested via python3 foo.py" \
+    Do the work. Be concrete. Write code, edit configs, update protocols — whatever fits. Test it.
+    When done, output a summary listing what you did, comma-separated. Example outputs: 'updated HEARTBEAT.md protocol step 4', 'tuned openclaw.json heartbeat interval', 'created skills/new-skill/SKILL.md', 'fixed cron_autonomous.sh prompt bias', 'refactored brain.py recall weights', 'added task type to clarvis_reflection.py'" \
         --dangerously-skip-permissions > "$TASK_OUTPUT_FILE" 2>&1
     TASK_EXIT=$?
 fi

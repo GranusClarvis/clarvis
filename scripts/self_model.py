@@ -320,8 +320,8 @@ CAPABILITY_DOMAINS = {
         "description": "Execute evolution tasks via cron without human intervention",
     },
     "code_generation": {
-        "label": "Code Generation & Editing",
-        "description": "Write, modify, and test Python/Bash scripts",
+        "label": "Code Generation & Engineering",
+        "description": "Write, modify, and test code in any language (Python, Bash, JavaScript, Rust, etc.), edit configs, create skills, build tools and applications",
     },
     "self_reflection": {
         "label": "Self-Reflection & Meta-Cognition",
