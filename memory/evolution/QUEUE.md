@@ -13,7 +13,7 @@ _Completed items archived to QUEUE_ARCHIVE.md (100+ items since 2026-02-18)._
 - [ ] [PLAN_CLOSE] Close out data/plans/plan-20260219_232719.json ("Design brain architecture") — steps 4-5 already done (attention consolidation, power-law decay). Mark completed steps, execute step 7 (benchmark before/after), update status to completed.
 
 ## P0 — Do Next Heartbeat
-- [ ] [BRAIN_TO_SUBCONSCIOUS] Wire brain directly to subconscious — current architecture gap
+- [x] [BRAIN_TO_SUBCONSCIOUS] Wire brain directly to subconscious — current architecture gap (2026-02-26 02:36 UTC)
 
 **Problem:**
 - Subconscious (Claude Code via cron) gets TEXT summary from QUEUE.md + context_compressor.py
@@ -34,7 +34,7 @@ _Completed items archived to QUEUE_ARCHIVE.md (100+ items since 2026-02-18)._
 
 **Reference:** brain.search() at scripts/brain.py:1194 — returns list of matching memories with document, collection, importance
 
-- [ ] [BRAIN_AWARENESS] Research and reason how to properly wire all functions and developed memory system into the subconscious — think about proper skill that could help the conscious mind use all features in-depth of Brain / ClarvisDB. What can the brain do? What should subconscious know? How to surface relevant knowledge at decision time?
+- [x] [BRAIN_AWARENESS] Research and reason how to properly wire all functions and developed memory system into the subconscious — think about proper skill that could help the conscious mind use all features in-depth of Brain / ClarvisDB. What can the brain do? What should subconscious know? How to surface relevant knowledge at decision time? (2026-02-26 05:30 UTC — Implemented brain_introspect.py: self-awareness layer with domain detection, targeted collection search, goal alignment, identity/preference surfacing, infrastructure awareness, associative recall via graph edges, meta-awareness, bridge noise filter, budget tiers. Wired into heartbeat_preflight.py step 8.7.)
 
 - [ ] [SPAWN_FIX] Fix Claude Code spawning for conscious — current issues: (1) Conscious spawning via exec doesn't produce output to user/TG, (2) cron jobs work correctly and deliver to TG, (3) spawn_claude.sh exists but format differs from cron (needs: full path, env -u CLAUDECODE, log to file), (4) Need consistent delivery: user should get TG message when Claude Code completes. Check and fix SOUL.md spawn instructions + spawn_claude.sh script to match cron pattern.
 
