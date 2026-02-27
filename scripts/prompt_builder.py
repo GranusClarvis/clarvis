@@ -206,8 +206,7 @@ def _get_attention_spotlight(task=None, limit=5):
     """
     try:
         from attention import AttentionSpotlight
-        attn = AttentionSpotlight()
-        attn.load()
+        attn = AttentionSpotlight()  # Constructor auto-loads from disk
 
         # If task provided, boost related items first
         if task:

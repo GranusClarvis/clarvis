@@ -112,6 +112,27 @@ JOBS = {
         "max_age_hours": 10,
         "timeout": 1800,
     },
+    "graph_compaction": {
+        "script": "scripts/cron_graph_compaction.sh",
+        "log": "memory/cron/graph_compaction.log",
+        "lock": "/tmp/clarvis_graph_compaction.lock",
+        "max_age_hours": 26,
+        "timeout": 300,
+    },
+    "db_vacuum": {
+        "script": "scripts/cron_chromadb_vacuum.sh",
+        "log": "memory/cron/chromadb_vacuum.log",
+        "lock": "/tmp/clarvis_chromadb_vacuum.lock",
+        "max_age_hours": 26,
+        "timeout": 300,
+    },
+    "research_discovery": {
+        "script": "scripts/cron_research_discovery.sh",
+        "log": "memory/cron/research.log",
+        "lock": "/tmp/clarvis_research_discovery.lock",
+        "max_age_hours": 26,
+        "timeout": 900,
+    },
 }
 
 # Backoff multiplier for retries (seconds): attempt 1 = 30s wait, attempt 2 = 120s, etc.
