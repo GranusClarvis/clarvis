@@ -19,7 +19,7 @@ import sys
 
 sys.path.insert(0, '/home/agent/.openclaw/workspace/scripts')
 
-from attention import attention
+from attention import attention, get_codelet_competition
 from brain import brain
 
 try:
@@ -147,9 +147,10 @@ def _spotlight_alignment(task_text, theme_words, spotlight_texts):
     return round(min(1.0, 0.6 * overlap_score + 0.4 * activation_score), 4)
 
 
-def score_tasks(tasks):
+def score_tasks(tasks, codelet_result=None):
     """
-    Score each task using attention-based salience + brain context + spotlight alignment.
+    Score each task using attention-based salience + brain context + spotlight alignment
+    + LIDA codelet domain bias.
 
     Scoring factors:
       1. Section importance: P0=0.9, P1=0.6, P2=0.3
@@ -157,7 +158,8 @@ def score_tasks(tasks):
       3. Recent activity relevance: overlap with last day's memories
       4. AGI/consciousness boost: tasks advancing core goals
       5. Integration boost: tasks wiring existing components together
-      6. Spotlight alignment: coherence with current attention focus (NEW)
+      6. Spotlight alignment: coherence with current attention focus
+      7. Codelet domain bias: LIDA competing codelets boost matching domains
     """
     # Get current brain context for relevance scoring
     try:
@@ -252,7 +254,16 @@ def score_tasks(tasks):
             except Exception:
                 pass
 
-        # 8. Failure penalty — check if similar tasks have failed before
+        # 8. Codelet domain bias — LIDA competing codelets
+        codelet_bias = 0.0
+        if codelet_result:
+            try:
+                competition = get_codelet_competition()
+                codelet_bias = competition.bias_for_task(text)
+            except Exception:
+                pass
+
+        # 9. Failure penalty — check if similar tasks have failed before
         failure_penalty = 0.0
         try:
             failure_lessons = brain.recall(
@@ -282,11 +293,14 @@ def score_tasks(tasks):
 
         salience = item.salience()
 
-        # Final score: 80% base salience + 10% spotlight + 10% somatic bias
+        # Final score: 70% base salience + 10% spotlight + 10% somatic + 10% codelet bias
         # Somatic markers bias toward tasks with positive past outcomes,
         # and away from task patterns that previously caused pain/frustration
+        # Codelet bias amplifies tasks matching the winning attention domain
         somatic_component = max(0.0, min(1.0, 0.5 + somatic_bias))  # map [-1,1] to [0,1]
-        final_score = 0.80 * salience + 0.10 * spotlight_align + 0.10 * somatic_component
+        codelet_component = max(0.0, min(1.0, 0.5 + codelet_bias))  # map [-0.2,+0.3] to [0.3,0.8]
+        final_score = (0.70 * salience + 0.10 * spotlight_align
+                       + 0.10 * somatic_component + 0.10 * codelet_component)
 
         scored.append({
             "text": text,
@@ -304,6 +318,7 @@ def score_tasks(tasks):
                 "spotlight_alignment": round(spotlight_align, 3),
                 "somatic_bias": round(somatic_bias, 4),
                 "somatic_signal": somatic_signal,
+                "codelet_bias": round(codelet_bias, 4),
                 "failure_penalty": round(failure_penalty, 3),
                 "base_salience": round(salience, 4),
             }
@@ -375,6 +390,7 @@ if __name__ == "__main__":
                   f"  arch={d.get('architectural_boost', 0)}"
                   f"  spotlight={d.get('spotlight_alignment', 0)}"
                   f"  somatic={d.get('somatic_bias', 0)}({d.get('somatic_signal', 'n/a')})"
+                  f"  codelet={d.get('codelet_bias', 0)}"
                   f"  fail_pen={d.get('failure_penalty', 0)}")
         print(f"{'='*70}")
     else:

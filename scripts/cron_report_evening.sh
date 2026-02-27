@@ -188,10 +188,24 @@ lines.append("Good night, sir.")
 
 report = "\n".join(lines)
 
-# Send to Telegram
-data = urllib.parse.urlencode({"chat_id": "REDACTED_CHAT_ID", "text": report})
+# Send to Telegram — Reports topic in group + DM fallback
+GROUP_CHAT_ID = "REDACTED_GROUP_ID"
+REPORTS_TOPIC = "5"
+DM_CHAT_ID = "REDACTED_CHAT_ID"
+
+# Primary: send to Reports topic in group
+params = {"chat_id": GROUP_CHAT_ID, "text": report, "message_thread_id": REPORTS_TOPIC}
+data = urllib.parse.urlencode(params)
 req = urllib.request.Request(f"https://api.telegram.org/bot{TOKEN}/sendMessage", data=data.encode())
-urllib.request.urlopen(req, timeout=10)
+try:
+    urllib.request.urlopen(req, timeout=10)
+    print("[report_evening] Sent to Reports topic")
+except Exception as e:
+    # Fallback: send to DM if group delivery fails
+    print(f"[report_evening] Group delivery failed ({e}), falling back to DM")
+    data = urllib.parse.urlencode({"chat_id": DM_CHAT_ID, "text": report})
+    req = urllib.request.Request(f"https://api.telegram.org/bot{TOKEN}/sendMessage", data=data.encode())
+    urllib.request.urlopen(req, timeout=10)
 
 print(report)
 PYEOF

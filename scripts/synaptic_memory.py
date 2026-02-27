@@ -696,7 +696,7 @@ class SynapticMemory:
             # Compute histogram buckets in SQL
             bin_width = (W_MAX - W_MIN) / bins
             counts = [0] * bins
-            rows = conn.execute(f"""
+            rows = conn.execute("""
                 SELECT CAST((weight - ?) / ? AS INTEGER) AS bucket, COUNT(*)
                 FROM synapses
                 GROUP BY bucket

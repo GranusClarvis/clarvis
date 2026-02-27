@@ -72,3 +72,6 @@ __pycache__/
 .docker/
 docker-compose.override.yml
 data/
+
+# --- Agent worktrees (managed by agent_lifecycle.py) ---
+.claude/worktrees/

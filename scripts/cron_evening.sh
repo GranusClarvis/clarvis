@@ -86,7 +86,15 @@ python3 /home/agent/.openclaw/workspace/scripts/dashboard.py >> "$LOGFILE" 2>&1 
 
 # === EXISTING: Claude Code evening audit ===
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running evening audit..." >> "$LOGFILE"
-/home/agent/.local/bin/claude -p "Review today's work: check git status, memory/$(date +%Y-%m-%d).md, any errors in logs. What's working? Any bugs? Output: brief audit + 1 fix if needed." --dangerously-skip-permissions >> "$LOGFILE" 2>&1
+EVENING_PROMPT_FILE=$(mktemp)
+cat > "$EVENING_PROMPT_FILE" << 'ENDPROMPT'
+Review today's work: check git status, recent memory files, any errors in logs.
+What's working? Any bugs? Output: brief audit + 1 fix if needed.
+ENDPROMPT
+timeout 600 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \
+    /home/agent/.local/bin/claude -p "$(cat "$EVENING_PROMPT_FILE")" \
+    --dangerously-skip-permissions --model claude-opus-4-6 >> "$LOGFILE" 2>&1
+rm -f "$EVENING_PROMPT_FILE"
 
 # === DIGEST: Write first-person summary for M2.5 agent ===
 PHI_DIGEST=$(echo "$PHI_OUTPUT" | grep -oP 'Phi\s*=\s*[\d.]+' | head -1 || echo "Phi not measured")

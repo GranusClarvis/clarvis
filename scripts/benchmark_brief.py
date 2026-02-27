@@ -29,7 +29,6 @@ Usage:
 """
 
 import json
-import os
 import re
 import sys
 from datetime import datetime, timezone
@@ -136,7 +135,6 @@ def seed_from_log():
     current_task = ""
     current_route_tier = "complex"
     current_route_score = 0.5
-    current_executor = "claude"
 
     for line in lines:
         # Track brief version from PREFLIGHT lines
@@ -158,7 +156,6 @@ def seed_from_log():
         route_match = re.search(r'PREFLIGHT: Route: tier=(\w+) executor=(\w+) score=([0-9.]+)', line)
         if route_match:
             current_route_tier = route_match.group(1)
-            current_executor = route_match.group(2)
             current_route_score = float(route_match.group(3))
             continue
 
@@ -353,7 +350,7 @@ def report():
         print(f"    Escalation rate: {data['escalation_rate']:.0%}")
         print(f"    Avg duration:    {data['avg_duration_s']}s")
         if data.get("by_tier"):
-            print(f"    By route tier:")
+            print("    By route tier:")
             for tier, td in sorted(data["by_tier"].items()):
                 print(f"      {tier}: {td['success_rate']:.0%} ({td['heartbeats']} tasks)")
         print()

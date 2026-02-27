@@ -289,6 +289,10 @@ log "Verifying backup integrity..."
 VERIFY_PASS=0
 VERIFY_FAIL=0
 for path in "${!CHANGED_FILES[@]}"; do
+  # Skip self-referential log files (they change during backup, causing false mismatch)
+  case "$path" in
+    memory/cron/backup.log|memory/cron/backup_verify.log) ((VERIFY_PASS++)) || true; continue ;;
+  esac
   expected="${CHANGED_FILES[$path]}"
   actual=$(sha256_file "$BACKUP_DIR/$path")
   if [ "$expected" = "$actual" ]; then

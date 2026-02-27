@@ -409,14 +409,368 @@ class AttentionSpotlight:
         }
 
 
+# === ATTENTION CODELETS (LIDA-inspired) ===
+#
+# Each codelet monitors one cognitive domain, scores attention items within
+# that domain, and competes with other codelets for broadcast access.
+# Coalitions form when multiple codelets activate on the same item.
+# Winner-take-all: the strongest coalition determines heartbeat focus.
+
+# Domain keyword definitions — each codelet recognizes its own domain
+DOMAIN_KEYWORDS = {
+    "memory": {
+        "keywords": {"memory", "brain", "recall", "store", "chromadb", "clarvisdb",
+                      "episodic", "semantic", "hebbian", "consolidat", "forget",
+                      "retriev", "embed", "vector", "collection", "dedup"},
+        "weight": 1.0,
+    },
+    "code": {
+        "keywords": {"code", "script", "python", "function", "class", "refactor",
+                      "bug", "fix", "implement", "test", "import", "module",
+                      "syntax", "error", "package", "pip", "git", "pr"},
+        "weight": 0.9,
+    },
+    "research": {
+        "keywords": {"research", "paper", "arxiv", "bundle", "ingest", "learn",
+                      "theory", "model", "lida", "gwt", "agi", "consciousness",
+                      "phi", "neural", "cognitive", "architecture", "framework"},
+        "weight": 0.95,
+    },
+    "infrastructure": {
+        "keywords": {"cron", "gateway", "systemd", "backup", "health", "monitor",
+                      "watchdog", "telegram", "budget", "cost", "update", "config",
+                      "schedule", "vacuum", "compaction", "disk", "permission"},
+        "weight": 0.85,
+    },
+}
+
+CODELET_STATE_FILE = ATTENTION_DIR / "codelets.json"
+
+
+class AttentionCodelet:
+    """
+    A LIDA-style attention codelet that monitors one cognitive domain.
+
+    Each codelet:
+      - Scans attention items for domain-relevant content
+      - Computes an activation level based on how many relevant items it finds
+      - Proposes items for the global workspace broadcast
+    """
+
+    def __init__(self, domain, keywords, weight=1.0):
+        self.domain = domain
+        self.keywords = keywords  # set of keyword stems
+        self.weight = weight      # domain priority weight
+        self.activation = 0.0     # current activation level [0-1]
+        self.proposed_items = []  # items this codelet wants to broadcast
+        self.wins = 0             # historical win count
+        self.activations_history = []  # last N activation levels
+
+    def scan(self, items):
+        """
+        Scan attention items and compute activation for this domain.
+
+        Args:
+            items: dict of id -> AttentionItem from the spotlight
+
+        Returns:
+            activation level (float 0-1)
+        """
+        self.proposed_items = []
+        total_relevance = 0.0
+        match_count = 0
+
+        for item in items.values():
+            content_lower = item.content.lower()
+            # Count keyword matches (partial/stem matching)
+            matches = sum(1 for kw in self.keywords if kw in content_lower)
+            if matches > 0:
+                # Item is relevant to this domain
+                domain_relevance = min(1.0, matches / 3.0)  # saturates at 3 keywords
+                combined = item.salience() * 0.6 + domain_relevance * 0.4
+                total_relevance += combined
+                match_count += 1
+                self.proposed_items.append({
+                    "item_id": item.id,
+                    "content": item.content,
+                    "salience": item.salience(),
+                    "domain_relevance": round(domain_relevance, 3),
+                    "combined": round(combined, 3),
+                })
+
+        # Activation: weighted combination of match density and total relevance
+        if match_count > 0 and len(items) > 0:
+            density = match_count / len(items)
+            avg_relevance = total_relevance / match_count
+            self.activation = round(
+                min(1.0, (0.5 * density + 0.5 * avg_relevance) * self.weight),
+                4,
+            )
+        else:
+            self.activation = 0.0
+
+        # Sort proposed items by combined score
+        self.proposed_items.sort(key=lambda x: x["combined"], reverse=True)
+
+        # Keep activation history (last 20)
+        self.activations_history.append(self.activation)
+        if len(self.activations_history) > 20:
+            self.activations_history = self.activations_history[-20:]
+
+        return self.activation
+
+    def trend(self):
+        """Activation trend: positive = gaining attention, negative = fading."""
+        h = self.activations_history
+        if len(h) < 2:
+            return 0.0
+        recent = sum(h[-3:]) / min(3, len(h[-3:]))
+        older = sum(h[:-3]) / max(1, len(h[:-3])) if len(h) > 3 else recent
+        return round(recent - older, 4)
+
+    def to_dict(self):
+        return {
+            "domain": self.domain,
+            "activation": self.activation,
+            "weight": self.weight,
+            "proposed_count": len(self.proposed_items),
+            "wins": self.wins,
+            "trend": self.trend(),
+            "top_items": self.proposed_items[:3],
+        }
+
+    @classmethod
+    def from_dict(cls, d):
+        c = cls(
+            domain=d["domain"],
+            keywords=DOMAIN_KEYWORDS.get(d["domain"], {}).get("keywords", set()),
+            weight=d.get("weight", 1.0),
+        )
+        c.activation = d.get("activation", 0.0)
+        c.wins = d.get("wins", 0)
+        c.activations_history = d.get("activations_history", [])
+        return c
+
+
+class CodeletCompetition:
+    """
+    Runs competing attention codelets (LIDA cognitive cycle).
+
+    1. Each codelet scans attention items independently
+    2. Codelets with overlapping proposed items form coalitions
+    3. Winner-take-all: strongest coalition broadcasts to workspace
+    4. Result: the winning domain(s) bias heartbeat task selection
+    """
+
+    def __init__(self, spotlight):
+        self.spotlight = spotlight
+        self.codelets = {}
+        self._load()
+
+        # Ensure all domains have codelets
+        for domain, config in DOMAIN_KEYWORDS.items():
+            if domain not in self.codelets:
+                self.codelets[domain] = AttentionCodelet(
+                    domain=domain,
+                    keywords=config["keywords"],
+                    weight=config["weight"],
+                )
+
+    def _load(self):
+        """Load codelet state from disk."""
+        if CODELET_STATE_FILE.exists():
+            try:
+                data = json.loads(CODELET_STATE_FILE.read_text())
+                for cd in data.get("codelets", []):
+                    codelet = AttentionCodelet.from_dict(cd)
+                    self.codelets[codelet.domain] = codelet
+            except (json.JSONDecodeError, KeyError):
+                pass
+
+    def _save(self):
+        """Persist codelet state."""
+        data = {
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "codelets": [c.to_dict() for c in self.codelets.values()],
+        }
+        CODELET_STATE_FILE.write_text(json.dumps(data, indent=2))
+
+    def compete(self):
+        """
+        Run one competition cycle.
+
+        Returns:
+            dict with competition results:
+            - winner: domain name of winning codelet (or coalition)
+            - coalition: list of domains in winning coalition
+            - activations: {domain: activation_level}
+            - broadcast_items: items the winner proposes for broadcast
+            - domain_bias: dict mapping domain -> bias score for task selection
+        """
+        items = self.spotlight.items
+
+        # Phase 1: Each codelet scans independently
+        activations = {}
+        for domain, codelet in self.codelets.items():
+            act = codelet.scan(items)
+            activations[domain] = act
+
+        # Phase 2: Coalition detection — codelets that share proposed items
+        # build coalitions (reinforcing each other)
+        coalitions = self._find_coalitions()
+
+        # Phase 3: Winner-take-all — strongest activation wins
+        # Coalition members get their activations summed (capped at 1.0)
+        coalition_scores = {}
+        for coalition_id, members in coalitions.items():
+            score = min(1.0, sum(self.codelets[m].activation for m in members))
+            coalition_scores[coalition_id] = {
+                "members": members,
+                "score": round(score, 4),
+            }
+
+        # Find winning coalition
+        if coalition_scores:
+            winner_id = max(coalition_scores, key=lambda k: coalition_scores[k]["score"])
+            winner = coalition_scores[winner_id]
+        else:
+            # Fallback: single strongest codelet wins
+            best_domain = max(activations, key=activations.get) if activations else "memory"
+            winner = {"members": [best_domain], "score": activations.get(best_domain, 0.0)}
+
+        # Record win
+        for domain in winner["members"]:
+            self.codelets[domain].wins += 1
+
+        # Phase 4: Compute domain bias for task selection
+        # Winner gets full bias, runner-up gets partial, others get minimal
+        sorted_domains = sorted(activations.items(), key=lambda x: x[1], reverse=True)
+        domain_bias = {}
+        for rank, (domain, act) in enumerate(sorted_domains):
+            if domain in winner["members"]:
+                domain_bias[domain] = round(min(1.0, act + 0.2), 3)  # winner bonus
+            elif rank < 2:
+                domain_bias[domain] = round(act * 0.7, 3)  # runner-up
+            else:
+                domain_bias[domain] = round(act * 0.3, 3)  # suppressed
+
+        # Gather broadcast items from winning coalition
+        broadcast_items = []
+        for domain in winner["members"]:
+            broadcast_items.extend(self.codelets[domain].proposed_items[:2])
+        broadcast_items.sort(key=lambda x: x["combined"], reverse=True)
+
+        self._save()
+
+        return {
+            "winner": winner["members"][0],
+            "coalition": winner["members"],
+            "coalition_score": winner["score"],
+            "activations": {d: round(a, 4) for d, a in activations.items()},
+            "domain_bias": domain_bias,
+            "broadcast_items": broadcast_items[:5],
+            "trends": {d: c.trend() for d, c in self.codelets.items()},
+        }
+
+    def _find_coalitions(self):
+        """
+        Detect coalitions: codelets that share proposed items form a coalition.
+        Returns dict of coalition_id -> list of domain names.
+        """
+        # Build item -> domains map
+        item_domains = {}
+        for domain, codelet in self.codelets.items():
+            for proposed in codelet.proposed_items:
+                iid = proposed["item_id"]
+                if iid not in item_domains:
+                    item_domains[iid] = set()
+                item_domains[iid].add(domain)
+
+        # Find clusters of overlapping domains
+        coalitions = {}
+        seen = set()
+        coalition_id = 0
+
+        for domains in item_domains.values():
+            if len(domains) > 1:
+                key = frozenset(domains)
+                if key not in seen:
+                    seen.add(key)
+                    coalitions[coalition_id] = sorted(domains)
+                    coalition_id += 1
+
+        # Also add singleton codelets (each domain is its own minimal coalition)
+        for domain, codelet in self.codelets.items():
+            if codelet.activation > 0 and not any(domain in members for members in coalitions.values()):
+                coalitions[coalition_id] = [domain]
+                coalition_id += 1
+
+        return coalitions
+
+    def bias_for_task(self, task_text):
+        """
+        Compute how much the current codelet state biases toward a given task.
+
+        Returns:
+            float: bias score (-0.2 to +0.3) to add to task salience.
+            Positive = task aligns with winning domain.
+            Negative = task is off-focus.
+        """
+        text_lower = task_text.lower()
+
+        # Which domains does this task match?
+        task_domains = {}
+        for domain, config in DOMAIN_KEYWORDS.items():
+            matches = sum(1 for kw in config["keywords"] if kw in text_lower)
+            if matches > 0:
+                task_domains[domain] = min(1.0, matches / 3.0)
+
+        if not task_domains:
+            return 0.0  # neutral — task doesn't match any domain
+
+        # Weight by codelet activation: tasks matching active codelets get boosted
+        bias = 0.0
+        for domain, relevance in task_domains.items():
+            if domain in self.codelets:
+                codelet = self.codelets[domain]
+                # Active codelet + relevant task = positive bias
+                bias += codelet.activation * relevance * 0.3
+                # Trend bonus: rising domains get extra lift
+                if codelet.trend() > 0:
+                    bias += codelet.trend() * relevance * 0.1
+
+        # Clamp to range
+        return round(max(-0.2, min(0.3, bias)), 4)
+
+    def stats(self):
+        """Return codelet stats summary."""
+        return {
+            domain: {
+                "activation": c.activation,
+                "wins": c.wins,
+                "trend": c.trend(),
+                "proposed": len(c.proposed_items),
+            }
+            for domain, c in self.codelets.items()
+        }
+
+
 # --- Singleton ---
 _attention = None
+_codelet_competition = None
 
 def get_attention():
     global _attention
     if _attention is None:
         _attention = AttentionSpotlight()
     return _attention
+
+def get_codelet_competition():
+    """Get the codelet competition system (lazy init)."""
+    global _codelet_competition
+    if _codelet_competition is None:
+        _codelet_competition = CodeletCompetition(get_attention())
+    return _codelet_competition
 
 attention = get_attention()
 
@@ -440,6 +794,9 @@ if __name__ == "__main__":
         print("  load             - Reload state from disk")
         print("  save             - Persist state to disk")
         print("  clear            - Reset spotlight")
+        print("  compete          - Run codelet competition cycle (LIDA)")
+        print("  codelets         - Show codelet stats")
+        print("  bias <text>      - Show codelet bias for a task")
         sys.exit(0)
 
     cmd = sys.argv[1]
@@ -501,6 +858,43 @@ if __name__ == "__main__":
     elif cmd == "clear":
         a.clear()
         print("Spotlight cleared.")
+
+    elif cmd == "compete":
+        comp = get_codelet_competition()
+        result = comp.compete()
+        print("=== Codelet Competition (LIDA) ===")
+        print(f"  Winner: {result['winner']} (coalition: {', '.join(result['coalition'])})")
+        print(f"  Coalition score: {result['coalition_score']:.3f}")
+        print("  Activations:")
+        for domain, act in sorted(result['activations'].items(), key=lambda x: x[1], reverse=True):
+            trend = result['trends'].get(domain, 0)
+            trend_arrow = "↑" if trend > 0.01 else ("↓" if trend < -0.01 else "→")
+            print(f"    {domain:15s} {act:.3f} {trend_arrow} (bias={result['domain_bias'].get(domain, 0):.3f})")
+        if result['broadcast_items']:
+            print(f"  Broadcast items ({len(result['broadcast_items'])}):")
+            for bi in result['broadcast_items'][:3]:
+                print(f"    [{bi['combined']:.3f}] {bi['content'][:70]}")
+
+    elif cmd == "codelets":
+        comp = get_codelet_competition()
+        stats = comp.stats()
+        print("=== Codelet Stats ===")
+        for domain, s in sorted(stats.items(), key=lambda x: x[1]['activation'], reverse=True):
+            trend_arrow = "↑" if s['trend'] > 0.01 else ("↓" if s['trend'] < -0.01 else "→")
+            print(f"  {domain:15s} act={s['activation']:.3f} {trend_arrow}  "
+                  f"wins={s['wins']}  proposed={s['proposed']}")
+
+    elif cmd == "bias" and len(sys.argv) > 2:
+        task_text = " ".join(sys.argv[2:])
+        comp = get_codelet_competition()
+        comp.compete()  # refresh activations
+        bias = comp.bias_for_task(task_text)
+        print(f"Codelet bias for task: {bias:+.4f}")
+        for domain, s in comp.stats().items():
+            kws = DOMAIN_KEYWORDS[domain]["keywords"]
+            matches = sum(1 for kw in kws if kw in task_text.lower())
+            if matches > 0:
+                print(f"  {domain}: {matches} keyword hits, activation={s['activation']:.3f}")
 
     else:
         print(f"Unknown command: {cmd}")

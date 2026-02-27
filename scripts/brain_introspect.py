@@ -43,7 +43,6 @@ import os
 import re
 import sys
 import time
-from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -194,7 +193,7 @@ def introspect_for_task(task_text, budget="standard"):
         - meta_awareness: self-assessment of knowledge state for this task
     """
     from brain import get_brain, IDENTITY, PREFERENCES, INFRASTRUCTURE, LEARNINGS
-    from brain import GOALS, PROCEDURES, EPISODES, AUTONOMOUS_LEARNING, MEMORIES
+    from brain import EPISODES, AUTONOMOUS_LEARNING, MEMORIES
 
     result = {
         "domain_knowledge": "",
@@ -634,7 +633,7 @@ if __name__ == "__main__":
         formatted = format_introspection_for_prompt(result, budget)
         print(formatted)
 
-        print(f"\n--- Timings ---")
+        print("\n--- Timings ---")
         for k, v in result["timings"].items():
             print(f"  {k}: {v*1000:.1f}ms")
 
@@ -650,7 +649,6 @@ if __name__ == "__main__":
         domains = _detect_task_domains(text)
         print(f"Detected domains: {domains}")
 
-        from brain import LEARNINGS  # noqa - verify import works
         collections = _select_collections(domains, budget="full")
         print(f"Collections to search: {[c.replace('clarvis-', '') for c in collections]}")
 

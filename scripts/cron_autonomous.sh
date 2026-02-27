@@ -1,6 +1,6 @@
 #!/bin/bash
 # Autonomous Evolution Loop — Clarvis Executive Function (OPTIMIZED)
-# Runs 6x/day at hours 7,10,13,16,19,22.
+# Runs 8x/day at hours 7,9,11,13,15,17,19,22.
 #
 # OPTIMIZATION (2026-02-23): Replaced ~25 individual Python subprocess spawns
 # with 2 batched Python processes (heartbeat_preflight.py + heartbeat_postflight.py).
@@ -39,6 +39,15 @@ trap "rm -f $LOCKFILE" EXIT
 #           reasoning_chain open, confidence predict, episodic recall,
 #           context_compressor, task_router — all in ONE import + execution.
 # ============================================================================
+# === PRE-HEARTBEAT: Self-healing — detect and kill stuck agents ===
+STUCK_COUNT=$(python3 "$SCRIPTS/agent_orchestrator.py" detect-stuck 2>/dev/null | grep -c "STUCK:" 2>/dev/null || true)
+STUCK_COUNT=${STUCK_COUNT:-0}
+STUCK_COUNT=$(echo "$STUCK_COUNT" | tr -d '[:space:]' | head -c 5)
+if [ "$STUCK_COUNT" -gt 0 ] 2>/dev/null; then
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] SELF-HEALING: $STUCK_COUNT stuck agents detected, healing..." >> "$LOGFILE"
+    python3 "$SCRIPTS/agent_orchestrator.py" heal >> "$LOGFILE" 2>&1
+fi
+
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Heartbeat starting (optimized batched pipeline) ===" >> "$LOGFILE"
 
 PREFLIGHT_FILE=$(mktemp --suffix=.json)
@@ -172,12 +181,49 @@ EXECUTOR_USED="$ROUTE_EXECUTOR"
 
 COMPRESSED_EPISODES="$EPISODIC_HINTS"
 
+# Shared function: build Claude Code prompt and execute
+# Deduplicates the 3 identical prompt blocks below (escalation, fallback, direct)
+run_claude_code() {
+    local _timeout="$1"
+    local _output_file="$2"
+
+    # Build prompt via file (shell-safe, avoids heredoc expansion issues)
+    local _prompt_file
+    _prompt_file=$(mktemp --suffix=.txt)
+    cat > "$_prompt_file" << ENDPROMPT
+You are Clarvis's executive function.
+
+${TIME_BUDGET_HINT}
+${CONTEXT_BRIEF}
+${PROC_HINT:+
+PROCEDURAL HINT: $PROC_HINT}
+
+TASK: $NEXT_TASK
+
+Do the work. Be concrete. Write code, edit configs, update protocols — whatever fits. Test it.
+When done, output a summary listing what you did, comma-separated.
+ENDPROMPT
+
+    timeout "$_timeout" env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \
+        /home/agent/.local/bin/claude -p "$(cat "$_prompt_file")" \
+        --dangerously-skip-permissions --model claude-opus-4-6 \
+        > "$_output_file" 2>&1
+    local _exit=$?
+    rm -f "$_prompt_file"
+    return $_exit
+}
+
 # Tier-aware timeout: reasoning tasks get more time, complex tasks get moderate
 case "$ROUTE_TIER" in
     reasoning) CLAUDE_TIMEOUT=1800 ;;
-    complex)   CLAUDE_TIMEOUT=900  ;;
-    *)         CLAUDE_TIMEOUT=600  ;;
+    complex)   CLAUDE_TIMEOUT=1200  ;;
+    *)         CLAUDE_TIMEOUT=900  ;;
 esac
+
+# BUG FIX (2026-02-27): When OpenRouter escalates to Claude Code, the timeout
+# must be upgraded to at least the Claude Code minimum (900s). Previously,
+# "medium" tier tasks kept their 600s timeout after escalation, causing timeouts.
+# This is applied later when EXECUTOR_USED changes to "claude" after escalation.
 
 # Check if this task previously timed out (from retry tracker)
 RETRY_FILE="/home/agent/.openclaw/workspace/data/task_retries.json"
@@ -242,21 +288,14 @@ with open('$PREFLIGHT_FILE', 'w') as f:
 
     # Check if task needs escalation to Claude Code
     if grep -q "NEEDS_CLAUDE_CODE: true" "$OPENROUTER_STDERR" 2>/dev/null || grep -q "NEEDS_CLAUDE_CODE: true" "$TASK_OUTPUT_FILE" 2>/dev/null || [ $TASK_EXIT -ne 0 ]; then
-        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] ROUTER: OpenRouter escalated to Claude Code (fallback)" >> "$LOGFILE"
+        # Upgrade timeout: escalated tasks need Claude Code minimum (900s)
+        if [ "$CLAUDE_TIMEOUT" -lt 900 ]; then
+            echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] ESCALATION: upgrading timeout ${CLAUDE_TIMEOUT}s → 900s (Claude Code minimum)" >> "$LOGFILE"
+            CLAUDE_TIMEOUT=900
+        fi
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] ROUTER: OpenRouter escalated to Claude Code (fallback, timeout=${CLAUDE_TIMEOUT}s)" >> "$LOGFILE"
         EXECUTOR_USED="claude"
-        timeout $CLAUDE_TIMEOUT env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT /home/agent/.local/bin/claude -p \
-            "You are Clarvis's executive function.
-
-    ${TIME_BUDGET_HINT}
-    ${CONTEXT_BRIEF}
-    ${PROC_HINT:+
-    PROCEDURAL HINT: $PROC_HINT}
-
-    TASK: $NEXT_TASK
-
-    Do the work. Be concrete. Write code, edit configs, update protocols — whatever fits. Test it.
-    When done, output a summary listing what you did, comma-separated. Example outputs: 'updated HEARTBEAT.md protocol step 4', 'tuned openclaw.json heartbeat interval', 'created skills/new-skill/SKILL.md', 'fixed cron_autonomous.sh prompt bias', 'refactored brain.py recall weights', 'added task type to clarvis_reflection.py'" \
-            --dangerously-skip-permissions > "$TASK_OUTPUT_FILE" 2>&1
+        run_claude_code "$CLAUDE_TIMEOUT" "$TASK_OUTPUT_FILE"
         TASK_EXIT=$?
     fi
 
@@ -270,40 +309,21 @@ elif [ "$ROUTE_EXECUTOR" = "gemini" ]; then
     TASK_EXIT=$?
 
     if grep -q "NEEDS_CLAUDE_CODE: true" "$TASK_OUTPUT_FILE" 2>/dev/null || [ $TASK_EXIT -ne 0 ]; then
-        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] ROUTER: OpenRouter escalated to Claude Code (fallback)" >> "$LOGFILE"
+        # Upgrade timeout: escalated tasks need Claude Code minimum (900s)
+        if [ "$CLAUDE_TIMEOUT" -lt 900 ]; then
+            echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] ESCALATION: upgrading timeout ${CLAUDE_TIMEOUT}s → 900s (Claude Code minimum)" >> "$LOGFILE"
+            CLAUDE_TIMEOUT=900
+        fi
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] ROUTER: OpenRouter escalated to Claude Code (fallback, timeout=${CLAUDE_TIMEOUT}s)" >> "$LOGFILE"
         EXECUTOR_USED="claude"
-        timeout $CLAUDE_TIMEOUT env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT /home/agent/.local/bin/claude -p \
-            "You are Clarvis's executive function.
-
-    ${TIME_BUDGET_HINT}
-    ${CONTEXT_BRIEF}
-    ${PROC_HINT:+
-    PROCEDURAL HINT: $PROC_HINT}
-
-    TASK: $NEXT_TASK
-
-    Do the work. Be concrete. Write code, edit configs, update protocols — whatever fits. Test it.
-    When done, output a summary listing what you did, comma-separated. Example outputs: 'updated HEARTBEAT.md protocol step 4', 'tuned openclaw.json heartbeat interval', 'created skills/new-skill/SKILL.md', 'fixed cron_autonomous.sh prompt bias', 'refactored brain.py recall weights', 'added task type to clarvis_reflection.py'" \
-            --dangerously-skip-permissions > "$TASK_OUTPUT_FILE" 2>&1
+        run_claude_code "$CLAUDE_TIMEOUT" "$TASK_OUTPUT_FILE"
         TASK_EXIT=$?
     fi
 else
     # === CLAUDE CODE (complex/reasoning tasks) ===
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] ROUTING to Claude Code (tier=$ROUTE_TIER, score=$ROUTE_SCORE, timeout=${CLAUDE_TIMEOUT}s)" >> "$LOGFILE"
 
-    timeout $CLAUDE_TIMEOUT env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT /home/agent/.local/bin/claude -p \
-        "You are Clarvis's executive function.
-
-    ${TIME_BUDGET_HINT}
-    ${CONTEXT_BRIEF}
-    ${PROC_HINT:+
-    PROCEDURAL HINT: $PROC_HINT}
-
-    TASK: $NEXT_TASK
-
-    Do the work. Be concrete. Write code, edit configs, update protocols — whatever fits. Test it.
-    When done, output a summary listing what you did, comma-separated. Example outputs: 'updated HEARTBEAT.md protocol step 4', 'tuned openclaw.json heartbeat interval', 'created skills/new-skill/SKILL.md', 'fixed cron_autonomous.sh prompt bias', 'refactored brain.py recall weights', 'added task type to clarvis_reflection.py'" \
-        --dangerously-skip-permissions > "$TASK_OUTPUT_FILE" 2>&1
+    run_claude_code "$CLAUDE_TIMEOUT" "$TASK_OUTPUT_FILE"
     TASK_EXIT=$?
 fi
 
@@ -329,8 +349,20 @@ POSTFLIGHT_EXIT=$?
 if [ $POSTFLIGHT_EXIT -ne 0 ]; then
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WARN: Postflight failed (exit $POSTFLIGHT_EXIT)" >> "$LOGFILE"
 else
-    # Log postflight timings
-    PF_POST_TIME=$(echo "$POSTFLIGHT_OUTPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('timings',{}).get('total','?'))" 2>/dev/null || echo "?")
+    # Log postflight timings — extract JSON from potentially mixed output
+    PF_POST_TIME=$(echo "$POSTFLIGHT_OUTPUT" | python3 -c "
+import sys, json
+for line in sys.stdin:
+    line = line.strip()
+    if line.startswith('{'):
+        try:
+            d = json.loads(line)
+            print(d.get('timings', {}).get('total', '?'))
+            sys.exit(0)
+        except json.JSONDecodeError:
+            pass
+print('?')
+" 2>/dev/null || echo "?")
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] POSTFLIGHT: complete in ${PF_POST_TIME}s" >> "$LOGFILE"
 fi
 

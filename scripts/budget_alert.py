@@ -76,14 +76,17 @@ def save_state(state: dict):
     os.replace(tmp, STATE_FILE)
 
 
-def send_telegram(bot_token: str, chat_id: str, message: str) -> bool:
-    """Send a message via Telegram Bot API."""
+def send_telegram(bot_token: str, chat_id: str, message: str, topic_id: str = "") -> bool:
+    """Send a message via Telegram Bot API. Optionally to a topic thread."""
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-    data = json.dumps({
+    payload = {
         "chat_id": chat_id,
         "text": message,
         "parse_mode": "HTML",
-    }).encode()
+    }
+    if topic_id and topic_id != "1":
+        payload["message_thread_id"] = int(topic_id)
+    data = json.dumps(payload).encode()
 
     req = urllib.request.Request(url, data=data, headers={
         "Content-Type": "application/json",
@@ -144,11 +147,17 @@ def check_and_alert(test_mode=False) -> dict:
         if test_mode:
             msg = f"<b>[TEST] {msg.lstrip('<b>')}"
 
-        # Send alert
+        # Send alert — to Reports topic in group, fallback to DM
         bot_token = config.get("telegram_bot_token", "")
         chat_id = config.get("telegram_chat_id", "")
+        group_id = "REDACTED_GROUP_ID"
+        reports_topic = "5"
         if bot_token and chat_id:
-            if send_telegram(bot_token, chat_id, msg):
+            # Try group Reports topic first, then DM
+            sent = send_telegram(bot_token, group_id, msg, reports_topic)
+            if not sent:
+                sent = send_telegram(bot_token, chat_id, msg)
+            if sent:
                 alerts_sent += 1
                 state.setdefault("last_alerts", {})[name] = now
                 print(f"Alert sent: {name}", file=sys.stderr)
@@ -177,11 +186,11 @@ def main():
             msg += f"Remaining: ${usage['remaining']:.2f} / ${usage.get('limit', '?')}\n"
         msg += f"\nTimestamp: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}"
 
-        ok = send_telegram(
-            config.get("telegram_bot_token", ""),
-            config.get("telegram_chat_id", ""),
-            msg
-        )
+        bot_token = config.get("telegram_bot_token", "")
+        # Send test to Reports topic in group, fallback to DM
+        ok = send_telegram(bot_token, "REDACTED_GROUP_ID", msg, "5")
+        if not ok:
+            ok = send_telegram(bot_token, config.get("telegram_chat_id", ""), msg)
         print(f"Test alert: {'sent successfully' if ok else 'FAILED'}")
         return
 

@@ -22,17 +22,20 @@ echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Morning routine started ===" >> "$LOGF
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running session open..." >> "$LOGFILE"
 python3 /home/agent/.openclaw/workspace/scripts/session_hook.py open >> "$LOGFILE" 2>&1
 
-# === MORNING PLANNING (with context compression) ===
+# === MORNING PLANNING (with context from prompt_builder) ===
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running morning planning..." >> "$LOGFILE"
-COMPRESSOR="/home/agent/.openclaw/workspace/scripts/context_compressor.py"
-MORNING_CONTEXT=$(python3 "$COMPRESSOR" brief 2>> "$LOGFILE")
-echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Compressed context: ${#MORNING_CONTEXT} bytes" >> "$LOGFILE"
+SCRIPTS="/home/agent/.openclaw/workspace/scripts"
+MORNING_PROMPT=$(python3 "$SCRIPTS/prompt_builder.py" build \
+    --task "It's morning. Pick top 3 priorities for today from the pending tasks. Update brain.set_context() with today's focus. Output: 3 priorities with brief reasoning." \
+    --role "morning planner" --tier standard 2>> "$LOGFILE")
+MORNING_PROMPT_FILE=$(mktemp)
+echo "$MORNING_PROMPT" > "$MORNING_PROMPT_FILE"
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Prompt: ${#MORNING_PROMPT} bytes" >> "$LOGFILE"
 MORNING_OUTPUT_FILE=$(mktemp)
-/home/agent/.local/bin/claude -p "It's morning. Here's the compressed evolution queue:
-
-$MORNING_CONTEXT
-
-Pick top 3 priorities for today from the pending tasks. Update brain.set_context() with today's focus. Output: 3 priorities with brief reasoning." --dangerously-skip-permissions > "$MORNING_OUTPUT_FILE" 2>&1
+timeout 600 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \
+    /home/agent/.local/bin/claude -p "$(cat "$MORNING_PROMPT_FILE")" \
+    --dangerously-skip-permissions --model claude-opus-4-6 > "$MORNING_OUTPUT_FILE" 2>&1
+rm -f "$MORNING_PROMPT_FILE"
 cat "$MORNING_OUTPUT_FILE" >> "$LOGFILE"
 
 # === DIGEST: Write first-person summary for M2.5 agent ===

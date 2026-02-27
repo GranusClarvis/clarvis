@@ -286,10 +286,29 @@ class EpisodicMemory:
             self._save_causal()
         return created
 
+    @staticmethod
+    def _keyword_overlap(text_a, text_b, min_len=4):
+        """Compute overlap using meaningful keywords (ignoring short/stop words).
+
+        More robust than raw word overlap for diverse task descriptions
+        because it strips brackets, tags, and short words.
+        """
+        import re as _re
+        def extract(t):
+            return set(
+                w.lower() for w in _re.split(r'[\s\-_/.,;:()[\]]+', t)
+                if len(w) >= min_len and w.isalpha()
+            )
+        ka, kb = extract(text_a), extract(text_b)
+        if not ka or not kb:
+            return 0.0
+        return len(ka & kb) / max(1, len(ka | kb))
+
     def _auto_link_against(self, new_episode, candidates):
         """Heuristically detect causal links between new_episode and candidates.
 
-        Same rules as _auto_link but accepts an explicit candidate list.
+        Uses both raw word overlap and keyword overlap (ignoring tags/short words)
+        to catch relationships between diverse task descriptions.
         """
         if not candidates:
             return
@@ -300,9 +319,12 @@ class EpisodicMemory:
 
         for prior in reversed(candidates):
             prior_words = set(prior["task"].lower().split())
-            overlap = len(new_words & prior_words) / max(1, len(new_words | prior_words))
+            raw_overlap = len(new_words & prior_words) / max(1, len(new_words | prior_words))
+            kw_overlap = self._keyword_overlap(new_episode["task"], prior["task"])
+            # Use the higher of the two overlap measures
+            overlap = max(raw_overlap, kw_overlap)
 
-            if (overlap > 0.5
+            if (overlap > 0.35
                     and prior["outcome"] in ("failure", "timeout")
                     and prior["section"] == new_section):
                 self.causal_link(prior, new_episode, "retried", confidence=round(overlap, 2))
@@ -310,21 +332,19 @@ class EpisodicMemory:
 
             if (new_outcome == "success"
                     and prior["outcome"] in ("failure", "timeout", "soft_failure")
-                    and overlap > 0.3):
+                    and overlap > 0.20):
                 self.causal_link(prior, new_episode, "fixed", confidence=round(overlap, 2))
                 break
 
             if (prior["outcome"] == "success"
-                    and prior["section"] == new_section
-                    and overlap > 0.2
+                    and overlap > 0.15
                     and new_outcome == "success"):
-                self.causal_link(prior, new_episode, "enabled", confidence=round(min(0.8, overlap), 2))
+                self.causal_link(prior, new_episode, "enabled", confidence=round(min(0.7, overlap), 2))
                 break
 
             if (prior["outcome"] in ("failure", "timeout")
                     and new_outcome in ("failure", "timeout")
-                    and prior["section"] == new_section
-                    and overlap > 0.3):
+                    and overlap > 0.20):
                 self.causal_link(prior, new_episode, "blocked", confidence=round(overlap, 2))
                 break
 
@@ -450,6 +470,68 @@ class EpisodicMemory:
                 pass  # Attention module unavailable — degrade gracefully
 
         return top_episodes
+
+    def conflict_resolution(self, candidates, goal_context=None):
+        """ACT-R conflict resolution for competing production candidates.
+
+        When multiple episodes/procedures could apply, ACT-R selects
+        via expected utility: U(i) = P(i)*G - C(i) + noise
+          P(i) = probability of success (from past outcomes)
+          G = goal value (from context)
+          C(i) = expected cost (from past duration)
+          noise = stochastic for exploration
+
+        Args:
+            candidates: List of episode/procedure dicts with 'outcome', 'activation', 'duration_s'
+            goal_context: Optional goal string for relevance scoring
+
+        Returns:
+            Ranked list of candidates with 'utility' field added
+        """
+        import random
+
+        if not candidates:
+            return []
+
+        # Default goal value
+        G = 1.0
+
+        # Boost goal value if context provided and aligns
+        if goal_context:
+            try:
+                from soar_engine import soar
+                alignment = soar.align_task(goal_context)
+                if alignment.get("aligned"):
+                    G = 1.0 + alignment.get("boost", 0)
+            except Exception:
+                pass
+
+        for c in candidates:
+            # P(i): probability of success based on outcome history
+            if c.get("outcome") == "success":
+                p_success = 0.8
+            elif c.get("outcome") == "failure":
+                p_success = 0.2
+            else:
+                p_success = 0.5
+
+            # C(i): cost proportional to duration (normalized to [0, 1])
+            duration = c.get("duration_s", 60)
+            cost = min(1.0, duration / 600.0)  # 600s = max expected duration
+
+            # Activation bonus from ACT-R base-level learning
+            activation_bonus = max(0, c.get("activation", 0)) * 0.1
+
+            # Stochastic noise for exploration (ACT-R uses logistic noise)
+            noise = random.gauss(0, 0.05)
+
+            # Expected utility
+            utility = p_success * G - cost + activation_bonus + noise
+            c["utility"] = round(utility, 4)
+
+        # Sort by utility (highest first)
+        candidates.sort(key=lambda c: c.get("utility", 0), reverse=True)
+        return candidates
 
     def recall_failures(self, n=5):
         """Recall recent failure episodes (high learning value).
@@ -658,6 +740,26 @@ class EpisodicMemory:
         now = datetime.now(timezone.utc)
         goals_generated: list = []
 
+        # GUARDRAIL: Check existing goal count before creating new ones
+        try:
+            existing_goals = brain.get_goals()
+            existing_goal_count = len(existing_goals)
+            existing_goal_names = {g.get("metadata", {}).get("goal", g.get("id", "")).lower() for g in existing_goals}
+        except Exception:
+            existing_goal_count = 0
+            existing_goal_names = set()
+
+        if existing_goal_count >= 20:
+            # Too many goals already — skip goal creation entirely
+            return {
+                "total_episodes": total,
+                "real_episodes": real_total,
+                "success_rate": round(success_rate, 2),
+                "outcome_counts": outcome_counts,
+                "goals_generated": [],
+                "skipped_reason": f"goal_cap_reached ({existing_goal_count} goals exist)",
+            }
+
         # Goal: fix domains with >30% REAL failure rate
         # Soft failures are observational notes (shallow reasoning, long duration, etc.)
         # and should not inflate domain failure rates or trigger corrective goals.
@@ -669,6 +771,11 @@ class EpisodicMemory:
                 fail_rate = d_hard_failures / d_real_total
                 if fail_rate > 0.3:
                     goal_name = f"Reduce {domain.replace('_', ' ')} failure rate"
+                    # GUARDRAIL: Skip if goal already exists with progress > 0
+                    if goal_name.lower() in existing_goal_names:
+                        matching = [g for g in existing_goals if g.get("metadata", {}).get("goal", "").lower() == goal_name.lower()]
+                        if matching and matching[0].get("metadata", {}).get("progress", 0) > 0:
+                            continue
                     brain.set_goal(goal_name, 0, subtasks={
                         "source": "episodic_synthesis",
                         "domain": domain,

@@ -31,10 +31,7 @@ Integration:
 
 import json
 import random
-import subprocess
 import sys
-import textwrap
-from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -181,12 +178,12 @@ def propose_deduction(episodes: list) -> dict | None:
 
     # Build the prediction challenge
     prompt = (
-        f"Predict the outcome of this autonomous task:\n"
+        "Predict the outcome of this autonomous task:\n"
         f"  Task: {task_text[:120]}\n"
         f"  Priority: {section}\n"
-        f"  Context: Clarvis autonomous heartbeat execution\n"
-        f"What was the outcome? Choose: success, failure, timeout, soft_failure\n"
-        f"Also predict: approximate duration (seconds) and whether errors occurred."
+        "  Context: Clarvis autonomous heartbeat execution\n"
+        "What was the outcome? Choose: success, failure, timeout, soft_failure\n"
+        "Also predict: approximate duration (seconds) and whether errors occurred."
     )
 
     gold = {
@@ -218,10 +215,10 @@ def propose_abduction(episodes: list) -> dict | None:
             return None
         ep = random.choice(episodes)
         prompt = (
-            f"Abductive reasoning challenge:\n"
+            "Abductive reasoning challenge:\n"
             f"  Task '{ep.get('task', '')[:100]}' completed with outcome '{ep.get('outcome', '')}'.\n"
-            f"  If this task had FAILED, what would be the most likely root cause?\n"
-            f"  Consider: dependency issues, timeout risks, data corruption, import errors."
+            "  If this task had FAILED, what would be the most likely root cause?\n"
+            "  Consider: dependency issues, timeout risks, data corruption, import errors."
         )
         gold = {
             "reasoning_type": "counterfactual_abduction",
@@ -231,12 +228,12 @@ def propose_abduction(episodes: list) -> dict | None:
         ep = random.choice(failures)
         error_msg = ep.get("error", "no error message recorded")
         prompt = (
-            f"Abductive reasoning challenge:\n"
+            "Abductive reasoning challenge:\n"
             f"  Task: {ep.get('task', '')[:100]}\n"
             f"  Outcome: {ep.get('outcome', '')}\n"
             f"  Error: {error_msg[:200]}\n"
             f"  Duration: {ep.get('duration_s', 0)}s\n"
-            f"What is the root cause? Provide a specific diagnosis."
+            "What is the root cause? Provide a specific diagnosis."
         )
 
         # Get causal chain if available
@@ -285,14 +282,14 @@ def propose_induction(episodes: list) -> dict | None:
         episode_summaries.append(summary)
 
     prompt = (
-        f"Inductive reasoning challenge:\n"
+        "Inductive reasoning challenge:\n"
         f"Given these {len(sample)} episodes from Clarvis's history:\n"
         + "\n".join(episode_summaries) + "\n"
-        f"\nSynthesize a general principle or pattern that explains these observations.\n"
-        f"The principle should be:\n"
-        f"  1. Specific enough to be actionable\n"
-        f"  2. General enough to apply beyond these specific episodes\n"
-        f"  3. Testable (we could verify it against future episodes)"
+        "\nSynthesize a general principle or pattern that explains these observations.\n"
+        "The principle should be:\n"
+        "  1. Specific enough to be actionable\n"
+        "  2. General enough to apply beyond these specific episodes\n"
+        "  3. Testable (we could verify it against future episodes)"
     )
 
     # Gold: compute observable patterns
@@ -475,7 +472,6 @@ def run_cycle() -> dict:
     if not episodes:
         return {"error": "no_episodes", "message": "No episodes to generate tasks from"}
 
-    cycle_results = []
     task_type = random.choice(TASK_TYPES)
 
     # ── Propose Phase ──
@@ -726,7 +722,7 @@ def _synthesize_principle(success_rate: float, avg_duration: float,
     if success_rate >= 0.8:
         principles.append(
             f"Tasks in this category have high success ({success_rate:.0%}). "
-            f"The system is well-calibrated for this type of work."
+            "The system is well-calibrated for this type of work."
         )
     elif success_rate <= 0.4:
         # Identify what's failing
@@ -734,23 +730,23 @@ def _synthesize_principle(success_rate: float, avg_duration: float,
         dominant = max(failure_types, key=failure_types.get) if failure_types else "unknown"
         principles.append(
             f"Low success rate ({success_rate:.0%}) dominated by '{dominant}' outcomes. "
-            f"This capability gap needs targeted improvement."
+            "This capability gap needs targeted improvement."
         )
     else:
         principles.append(
             f"Moderate success rate ({success_rate:.0%}) suggests these tasks are at "
-            f"the edge of current capability — optimal for learning."
+            "the edge of current capability — optimal for learning."
         )
 
     if avg_duration > 300:
         principles.append(
             f"Average duration ({avg_duration}s) is high; consider breaking tasks "
-            f"into smaller subtasks or improving execution efficiency."
+            "into smaller subtasks or improving execution efficiency."
         )
     elif avg_duration < 30:
         principles.append(
             f"Very fast execution ({avg_duration}s avg) suggests tasks may be too simple "
-            f"or not exercising deep reasoning."
+            "or not exercising deep reasoning."
         )
 
     return " ".join(principles)
@@ -865,11 +861,11 @@ def _extract_insight(task_type: str, task: dict, result: dict,
                 f"Prediction miscalibration: predicted '{pred.get('outcome')}' "
                 f"but actual was '{gold.get('outcome')}'. "
                 f"Learnability={learnability:.2f} — this outcome pattern "
-                f"should be studied for better prediction."
+                "should be studied for better prediction."
             )
         else:
             return (
-                f"Outcome prediction calibrated for this task type "
+                "Outcome prediction calibrated for this task type "
                 f"(learnability={learnability:.2f}). "
                 f"Duration prediction: {'correct' if pred.get('duration_range') == gold.get('duration_range') else 'off'}"
             )
@@ -899,13 +895,13 @@ def _inject_improvement_task(insights: list, avg_learnability: float):
     try:
         from queue_writer import add_task
         task_desc = (
-            f"[AZR] Self-improvement: AZR cycle found capability gap "
+            "[AZR] Self-improvement: AZR cycle found capability gap "
             f"(avg_learnability={avg_learnability:.2f}). "
             f"Insights: {'; '.join(i[:80] for i in insights[:2] if i)}. "
-            f"Investigate and address the weakest prediction/diagnosis area."
+            "Investigate and address the weakest prediction/diagnosis area."
         )
         add_task(task_desc, priority="P1", source="absolute_zero")
-        print(f"  [AZR] Injected improvement task into QUEUE.md P1")
+        print("  [AZR] Injected improvement task into QUEUE.md P1")
     except Exception as e:
         print(f"  [AZR] Could not inject task: {e}")
 
@@ -987,7 +983,7 @@ if __name__ == "__main__":
         n = int(sys.argv[2]) if len(sys.argv) > 2 else 3
         print(f"[AZR] Running {n} Absolute Zero Reasoner cycle(s)...")
         result = run_n_cycles(n)
-        print(f"\n[AZR] Complete:")
+        print("\n[AZR] Complete:")
         print(f"  Cycles: {result['cycles_run']}")
         print(f"  Avg learnability: {result['avg_learnability']:.3f}")
         print(f"  Insights: {result['insights_generated']}")

@@ -105,10 +105,13 @@ def smart_recall(query: str, n: int = 5, max_distance: float = 1.5, **kwargs):
 
     # Step 3: Boost results from primary collections (reduce their distance score)
     for r in raw_results:
-        if r.get("collection") in primary_collections and r.get("distance") is not None:
-            r["_boosted_distance"] = r["distance"] * 0.8  # 20% boost
+        dist = r.get("distance")
+        if dist is None:
+            r["_boosted_distance"] = 999
+        elif r.get("collection") in primary_collections:
+            r["_boosted_distance"] = dist * 0.8  # 20% boost
         else:
-            r["_boosted_distance"] = r.get("distance", 999)
+            r["_boosted_distance"] = dist
 
     # Step 4: Re-sort by boosted distance
     raw_results.sort(key=lambda x: x.get("_boosted_distance", 999))

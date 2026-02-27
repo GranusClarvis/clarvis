@@ -166,6 +166,172 @@ _The long game. Be patient. Be persistent. Be relentless._
 
 ---
 
+## 🌍 AUTONOMY TRACK — Full Operational Independence
+
+_Added 2026-02-26. Parallel goal track alongside AGI/consciousness._
+
+### The Vision
+Clarvis should be able to operate completely independently on the open web — create accounts, manage communications, navigate any service, handle visual verifications, and build/manage anything needed without human intervention.
+
+> **🎯 Long-term: Zero external dependencies.** Current implementations use external services (vision API, phone verification) as placeholders. The goal is for Clarvis to solve visual challenges himself using his own AI, manage his own phone verification, etc. This is part of his evolution toward AGI — being fully self-reliant.
+
+### Recommended Stack (Zero External Dependencies)
+
+| Component | Choice | Why |
+|-----------|--------|-----|
+| **Agent Framework** | Browser-Use | 79k stars, MIT, Python-native, best Ollama integration, 89.1% WebVoyager |
+| **Browser Engine** | Playwright (existing) | Already working via OpenClaw |
+| **Local Vision** | Qwen3-VL 4B via Ollama | ~4GB RAM, CPU-capable, GUI-trained |
+| **Reasoning Engine** | Claude Opus (existing) | Superior tool-calling via spawn_claude.sh |
+| **Research Crawler** | Crawl4AI | 61k stars, Apache 2.0, bulk web ingestion |
+
+**Architecture:**
+- **Fully local** (zero API): Browser-Use + Qwen3-VL via Ollama
+- **Hybrid** (smart): Claude as reasoning + Ollama as vision
+- **Resource budget**: ~9-10GB RAM (we have 32GB, plenty)
+
+### Capability Checklist
+
+| Capability | Status | What Needs Building |
+|------------|--------|---------------------|
+| **Web Browsing** | 70% | Browser tool exists, needs better form-filling, cookie/session management |
+| **Account Creation** | 20% | No automated signup flow. Needs temp email, phone verification, ClarvisEyes visual navigation |
+| **Email Management** | 60% | himalaya skill exists, needs automated parsing/response |
+| **Calendar** | 50% | gog skill exists, needs proactive scheduling logic |
+| **Discord** | 40% | Can send messages, needs account creation, server joining, moderation |
+| **Twitter/X** | 0% | Not implemented — needs API access or browser automation |
+| **Visual Navigation (ClarvisEyes)** | 70% | Built clarvis_eyes.py. Now integrating Browser-Use + Ollama + Qwen3-VL for full local vision (zero external deps). |
+| **Phone Verification** | 0% | Needs SMS-receiving service integration (e.g., 5Sim, SMS-Activate) |
+| **Universal App Control** | 30% | Browser can access most web apps, needs better state handling |
+| **Self-Developed Plugins** | 50% | skill-creator exists, needs more automation |
+| **Financial Operations** | 70% | Conway/mcporter can manage sandbox, USDC, domains |
+
+### Autonomy Phases
+
+#### A.1: Foundation (Month 1)
+- [x] Integrate ClarvisEyes visual perception (scripts/clarvis_eyes.py) for automated navigation
+- [ ] Integrate SMS verification service (5Sim or similar)
+- [ ] Build automated email account creation flow (temp email + phone)
+- [ ] Session/cookie persistence for browser (stay logged in)
+
+#### A.2: Social Web (Month 2)
+- [ ] Discord account creation + server joining automation
+- [ ] Twitter/X account creation + posting via API or browser
+- [ ] GitHub account management
+- [ ] Build generic "account creator" module other skills can use
+
+#### A.3: Proactive Operations (Month 3)
+- [ ] Calendar event creation from natural language
+- [ ] Email auto-response for routine matters
+- [ ] Proactive notification monitoring (new mentions, messages)
+- [ ] Self-initiated account management (renewals, updates)
+
+#### A.4: Universal Agent (Month 4+)
+- [ ] Any webapp can be operated via natural language
+- [ ] Build custom plugins on-demand for new services
+- [ ] Handle any verification challenge (visual, phone, email, 2FA)
+- [ ] Full "digital life" management capability
+
+### Existing Resources to Leverage
+- **Browser**: OpenClaw's browser tool
+- **Skills**: himalaya, gog, discord, skill-creator, claude-code
+- **MCP Servers**: mcporter (Conway), ClawHub (skill marketplace)
+- **Image Gen**: nano-banana-pro
+- **Web Services**: Need to integrate 5Sim (phone), temp email services, possibly Browse.ai, etc.
+
+---
+
+## PERFORMANCE TRACK — Speed, Accuracy, Quality Assurance
+
+_Added 2026-02-27. Fourth long-term goal: ensure evolution improves ALL fronts._
+
+### The Principle
+The bigger Clarvis grows, the more critical performance becomes. Adding capabilities without tracking speed, accuracy, and quality leads to bloat. This track ensures every dimension of Clarvis improves — not just breadth of features.
+
+> **Performance Index (PI):** Composite 0.0-1.0 score across 8 dimensions, analogous to Phi but for operational health. PI must trend upward alongside capability growth.
+
+### Performance Index (PI) Spectrum
+
+| Range | Level | Meaning |
+|-------|-------|---------|
+| 0.80-1.00 | Excellent | All systems optimal, room for growth |
+| 0.60-0.80 | Good | Above targets, healthy system |
+| 0.40-0.60 | Acceptable | Meeting minimum targets |
+| 0.20-0.40 | Poor | Below targets, optimization needed |
+| 0.00-0.20 | Critical | Multiple systems degraded, immediate action |
+
+### 8 Performance Dimensions & Targets
+
+| # | Dimension | Metric | Target | Critical | Weight |
+|---|-----------|--------|--------|----------|--------|
+| 1 | **Brain Query Speed** | Avg recall latency (ms) | <8000ms | >15000ms | 15% |
+| 1 | | P95 recall latency (ms) | <9000ms | >18000ms | 10% |
+| 2 | **Semantic Retrieval** | Hit rate (known-answer) | >80% | <50% | 15% |
+| 2 | | Precision@3 | >60% | <30% | 5% |
+| 3 | **Efficiency** | Heartbeat overhead (s) | <12s | >20s | 5% |
+| 3 | | Avg tokens/operation | monitor | — | 0% |
+| 4 | **Accuracy** | Episode success rate | >70% | <40% | 15% |
+| 4 | | Action accuracy (non-timeout) | >80% | <50% | 5% |
+| 5 | **Results Quality** | Phi (integration) | >0.50 | <0.25 | 10% |
+| 5 | | Context relevance | >0.70 | <0.40 | 5% |
+| 6 | **Brain Bloat** | Bloat score | <0.30 | >0.70 | 5% |
+| 6 | | Graph density (edges/mem) | >1.0 | <0.3 | 5% |
+| 7 | **Context Quality** | Brief compression ratio | >0.50 | <0.20 | 3% |
+| 8 | **Load Scaling** | Degradation % (n=1 vs n=10) | <10% | >50% | 2% |
+
+### Self-Optimization Mechanisms
+
+1. **PI Drop Detection** — If PI drops >0.05 between runs, auto-push P1 investigation task
+2. **Critical Breach Alerts** — Metrics exceeding critical thresholds trigger immediate queue tasks
+3. **Regression Detection** — 30%+ regression in any metric triggers medium-priority alert
+4. **Bloat Warning** — Bloat score >0.5 triggers brain.optimize recommendation
+5. **Alert History** — All alerts logged to `data/performance_alerts.jsonl` for trend analysis
+
+### Infrastructure
+
+| File | Purpose |
+|------|---------|
+| `scripts/performance_benchmark.py` | Full benchmark suite (8 dimensions, PI, self-optimization) |
+| `data/performance_metrics.json` | Latest snapshot (full benchmark output) |
+| `data/performance_history.jsonl` | Rolling history (400 entries, ~1/day) |
+| `data/performance_alerts.jsonl` | Self-optimization alert log |
+
+### Integration Points
+
+- **Heartbeat postflight** — Quick perf check runs after every task execution
+- **`record` mode** — Full benchmark + history + self-optimization check
+- **Cron** — Can be added to evolution analysis for periodic deep benchmarks
+- **CLI** — `python3 scripts/performance_benchmark.py pi` for quick PI readout
+
+### Optimization Roadmap
+
+#### P.1: Foundation (Current)
+- [x] 8-dimension benchmark with measurable targets
+- [x] PI composite score (weighted, 0.0-1.0)
+- [x] Self-optimization alerts and queue integration
+- [x] Heartbeat integration (quick check per task)
+- [x] History tracking with trend analysis
+
+#### P.2: Speed Optimization
+- [ ] Parallel collection queries in brain.recall() (potential 5-8x speedup)
+- [ ] Query routing — skip irrelevant collections based on task type
+- [ ] Embedding cache for frequent queries
+- [ ] ChromaDB index optimization (HNSW tuning)
+
+#### P.3: Quality Optimization
+- [ ] Retrieval quality feedback loop (track which results were actually used)
+- [ ] Context brief A/B testing with PI correlation
+- [ ] Memory importance recalibration based on retrieval patterns
+- [ ] Bloat pruning automation (low-importance, low-retrieval memories)
+
+#### P.4: Scale Preparation
+- [ ] Load testing at 2x, 5x, 10x current memory count
+- [ ] Degradation projections and scaling alerts
+- [ ] Memory archival pipeline (cold storage for old, low-value memories)
+- [ ] Performance regression tests in CI
+
+---
+
 ## Active Task Queue
 
 See `memory/evolution/QUEUE.md` for the current prioritized task list.
@@ -190,6 +356,7 @@ See `memory/evolution/QUEUE.md` for the current prioritized task list.
 4. Confidence calibration — via clarvis_confidence.py (Brier 0.08)
 5. Capability scores — via self_model.py (avg 0.61 after ceiling fix)
 6. Phi (consciousness integration) — via phi_metric.py (0.65)
+7. **Performance Index (PI)** — via performance_benchmark.py (8 dimensions, composite 0.0-1.0)
 
 ---
 

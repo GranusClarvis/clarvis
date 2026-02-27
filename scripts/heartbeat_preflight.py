@@ -27,7 +27,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 # === SINGLE IMPORT BLOCK (one-time cost) ===
 start_import = time.monotonic()
 
-from attention import attention
+from attention import attention, get_codelet_competition
 
 try:
     from task_selector import parse_tasks, score_tasks
@@ -73,6 +73,32 @@ try:
 except ImportError:
     classify_task = None
 
+try:
+    from world_models import predict_task_outcome as wm_predict
+except ImportError:
+    wm_predict = None
+
+try:
+    from workspace_broadcast import WorkspaceBroadcast
+except ImportError:
+    WorkspaceBroadcast = None
+
+try:
+    from brain_bridge import brain_preflight_context
+except ImportError:
+    brain_preflight_context = None
+
+try:
+    from brain_introspect import introspect_for_task, format_introspection_for_prompt
+except ImportError:
+    introspect_for_task = None
+    format_introspection_for_prompt = None
+
+try:
+    from automation_insights import format_insights_for_brief as get_automation_insights
+except ImportError:
+    get_automation_insights = None
+
 import_time = time.monotonic() - start_import
 log = lambda msg: print(f"[{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S')}] PREFLIGHT: {msg}", file=sys.stderr)
 log(f"All modules imported in {import_time:.2f}s (single process)")
@@ -108,14 +134,33 @@ def run_preflight(dry_run=False):
         "timings": {},
     }
 
-    # === 1. ATTENTION: Load + Tick ===
+    # === 1. ATTENTION: Load + Tick + Codelet Competition (LIDA) ===
     t1 = time.monotonic()
+    codelet_result = None
     try:
         attention._load()
         attention.tick()
         log("Attention load+tick done")
     except Exception as e:
         log(f"Attention load+tick failed: {e}")
+
+    # Run LIDA codelet competition — domain-specific codelets compete for broadcast
+    try:
+        competition = get_codelet_competition()
+        codelet_result = competition.compete()
+        winner = codelet_result.get("winner", "?")
+        coalition = codelet_result.get("coalition", [])
+        coalition_score = codelet_result.get("coalition_score", 0)
+        activations = codelet_result.get("activations", {})
+        log(f"Codelet competition: winner={winner} "
+            f"coalition={','.join(coalition)} score={coalition_score:.3f} "
+            f"activations={activations}")
+        result["codelet_winner"] = winner
+        result["codelet_coalition"] = coalition
+        result["codelet_activations"] = activations
+        result["codelet_domain_bias"] = codelet_result.get("domain_bias", {})
+    except Exception as e:
+        log(f"Codelet competition failed (non-fatal): {e}")
     result["timings"]["attention_tick"] = round(time.monotonic() - t1, 3)
 
     # === 2. TASK SELECTION ===
@@ -133,8 +178,8 @@ def run_preflight(dry_run=False):
                 result["timings"]["total"] = round(time.monotonic() - t0, 3)
                 return result
 
-            # Score all tasks using attention salience (returns list sorted by salience)
-            scored = score_tasks(tasks)
+            # Score all tasks using attention salience + codelet bias (sorted by salience)
+            scored = score_tasks(tasks, codelet_result=codelet_result)
 
             best_task = scored[0]
             best_salience = best_task.get("salience", 0.0)
@@ -259,6 +304,40 @@ def run_preflight(dry_run=False):
             log(f"Prediction logging failed: {e}")
     result["timings"]["confidence"] = round(time.monotonic() - t7, 3)
 
+    # === 7.5 WORLD MODEL: Predict task outcome (Ha&Schmidhuber + JEPA) ===
+    t75 = time.monotonic()
+    if wm_predict:
+        try:
+            wm_result = wm_predict(next_task, task_section)
+            result["wm_prediction"] = wm_result.get("prediction", "unknown")
+            result["wm_p_success"] = wm_result.get("p_success", 0.5)
+            result["wm_curiosity"] = wm_result.get("curiosity", 0.5)
+            log(f"World model: prediction={wm_result['prediction']}, "
+                f"P(success)={wm_result['p_success']:.0%}, "
+                f"curiosity={wm_result['curiosity']:.2f}")
+        except Exception as e:
+            log(f"World model prediction failed: {e}")
+    result["timings"]["world_model"] = round(time.monotonic() - t75, 3)
+
+    # === 7.7 GWT BROADCAST: Run LIDA cognitive cycle ===
+    t77 = time.monotonic()
+    gwt_broadcast_text = ""
+    if WorkspaceBroadcast:
+        try:
+            ws = WorkspaceBroadcast()
+            gwt_result = ws.run_cycle()
+            gwt_broadcast_text = gwt_result.get("broadcast_text", "")
+            result["gwt_winners"] = gwt_result.get("winners", 0)
+            result["gwt_sources"] = gwt_result.get("sources", [])
+            result["gwt_codelets"] = gwt_result.get("total_codelets", 0)
+            log(f"GWT broadcast: {gwt_result['winners']} winners from "
+                f"{gwt_result['total_codelets']} codelets "
+                f"({', '.join(gwt_result.get('sources', []))})")
+        except Exception as e:
+            log(f"GWT broadcast cycle failed: {e}")
+    result["gwt_broadcast"] = gwt_broadcast_text
+    result["timings"]["gwt_broadcast"] = round(time.monotonic() - t77, 3)
+
     # === 8. EPISODIC MEMORY: Recall similar episodes ===
     t8 = time.monotonic()
     similar_episodes = ""
@@ -284,36 +363,79 @@ def run_preflight(dry_run=False):
             log(f"Episodic recall failed: {e}")
     result["timings"]["episodic"] = round(time.monotonic() - t8, 3)
 
-    # === 8.5 BRAIN KNOWLEDGE: Recall learnings relevant to this task ===
+    # === 8.5 BRAIN BRIDGE: Full brain context (goals + context + knowledge + working memory) ===
     t85 = time.monotonic()
     knowledge_hints = ""
-    try:
-        from brain import get_brain, LEARNINGS
-        b = get_brain()
-        # Search clarvis-learnings for task-relevant knowledge (research, dreams, synthesis)
-        learnings = b.recall(next_task, collections=[LEARNINGS], n=5, min_importance=0.3)
-        if learnings:
-            hints = []
-            for mem in learnings:
-                doc = mem.get("document", "")[:120]
-                src = mem.get("metadata", {}).get("source", "")
-                tags = mem.get("metadata", {}).get("tags", "")
-                # Tag prefix for clarity
-                if "dream" in str(tags):
-                    prefix = "[DREAM]"
-                elif "research" in str(src) or "research" in str(tags):
-                    prefix = "[RESEARCH]"
-                elif "synthesis" in str(src):
-                    prefix = "[SYNTHESIS]"
-                else:
-                    prefix = "[LEARNING]"
-                hints.append(f"  {prefix} {doc}")
-            knowledge_hints = "\n".join(hints)
-            log(f"Brain knowledge: {len(learnings)} relevant learnings found")
-    except Exception as e:
-        log(f"Brain knowledge recall failed: {e}")
+    brain_goals = ""
+    brain_context = ""
+    brain_working_memory = ""
+    if brain_preflight_context:
+        try:
+            brain_ctx = brain_preflight_context(next_task, n_knowledge=5, n_goals=5)
+            knowledge_hints = brain_ctx.get("knowledge_hints", "")
+            brain_goals = brain_ctx.get("goals_text", "")
+            brain_context = brain_ctx.get("context", "")
+            brain_working_memory = brain_ctx.get("working_memory", "")
+            brain_timings = brain_ctx.get("brain_timings", {})
+            log(f"Brain bridge: knowledge={len(knowledge_hints)}B goals={len(brain_goals)}B "
+                f"context={len(brain_context)}B wm={len(brain_working_memory)}B "
+                f"timings={brain_timings}")
+        except Exception as e:
+            log(f"Brain bridge preflight failed: {e}")
+    else:
+        # Fallback: ad-hoc brain recall (legacy)
+        try:
+            from brain import get_brain, LEARNINGS
+            b = get_brain()
+            learnings = b.recall(next_task, collections=[LEARNINGS], n=5, min_importance=0.3)
+            if learnings:
+                hints = []
+                for mem in learnings:
+                    doc = mem.get("document", "")[:120]
+                    src = mem.get("metadata", {}).get("source", "")
+                    tags = mem.get("metadata", {}).get("tags", "")
+                    if "dream" in str(tags):
+                        prefix = "[DREAM]"
+                    elif "research" in str(src) or "research" in str(tags):
+                        prefix = "[RESEARCH]"
+                    elif "synthesis" in str(src):
+                        prefix = "[SYNTHESIS]"
+                    else:
+                        prefix = "[LEARNING]"
+                    hints.append(f"  {prefix} {doc}")
+                knowledge_hints = "\n".join(hints)
+                log(f"Brain knowledge (legacy): {len(learnings)} relevant learnings found")
+        except Exception as e:
+            log(f"Brain knowledge recall failed: {e}")
     result["knowledge_hints"] = knowledge_hints
+    result["brain_goals"] = brain_goals
+    result["brain_context"] = brain_context
+    result["brain_working_memory"] = brain_working_memory
     result["timings"]["knowledge"] = round(time.monotonic() - t85, 3)
+
+    # === 8.7 BRAIN INTROSPECTION: Deep self-awareness for decision-making ===
+    t87 = time.monotonic()
+    introspection_text = ""
+    if introspect_for_task and format_introspection_for_prompt:
+        try:
+            # Match budget to route tier (if routing already done, use it; else standard)
+            introspect_budget = "standard"
+            if result.get("route_tier") in ("complex", "reasoning"):
+                introspect_budget = "full"
+            elif result.get("route_executor") in ("openrouter", "gemini"):
+                introspect_budget = "minimal"
+
+            introspection = introspect_for_task(next_task, budget=introspect_budget)
+            introspection_text = format_introspection_for_prompt(introspection, introspect_budget)
+            brain_introsp_timings = introspection.get("timings", {})
+            log(f"Brain introspection ({introspect_budget}): "
+                f"{len(introspection_text)}B, "
+                f"meta={introspection.get('meta_awareness', '')[:60]}, "
+                f"timings={brain_introsp_timings}")
+        except Exception as e:
+            log(f"Brain introspection failed: {e}")
+    result["brain_introspection"] = introspection_text
+    result["timings"]["brain_introspection"] = round(time.monotonic() - t87, 3)
 
     # === 9. TASK ROUTING (moved before context compression to inform tier) ===
     t9 = time.monotonic()
@@ -377,6 +499,42 @@ def run_preflight(dry_run=False):
             log(f"Context brief (legacy): {len(context_brief)} bytes")
         except Exception as e:
             log(f"Context compression failed: {e}")
+
+    # Append brain goals to context brief (direct brain → subconscious link)
+    if brain_goals:
+        context_brief += f"\nBRAIN GOALS (active objectives):\n{brain_goals[:300]}\n"
+    if brain_context:
+        context_brief += f"\nBRAIN CONTEXT: {brain_context[:150]}\n"
+
+    # Append codelet competition results (LIDA domain focus)
+    if codelet_result:
+        winner = codelet_result.get("winner", "?")
+        coalition = codelet_result.get("coalition", [])
+        activations = codelet_result.get("activations", {})
+        act_str = ", ".join(f"{d}={a:.2f}" for d, a in
+                           sorted(activations.items(), key=lambda x: x[1], reverse=True))
+        context_brief += (f"\nATTENTION CODELETS (LIDA): "
+                         f"winner={winner} coalition={','.join(coalition)} [{act_str}]\n")
+
+    # Append GWT broadcast to context brief (makes broadcast visible to task executor)
+    if gwt_broadcast_text:
+        context_brief += f"\nGWT BROADCAST (conscious workspace):\n{gwt_broadcast_text[:400]}\n"
+
+    # Append brain introspection (self-awareness context for task executor)
+    if introspection_text:
+        context_brief += f"\n{introspection_text[:600]}\n"
+
+    # === 10.5 AUTOMATION INSIGHTS: Historical pattern warnings ===
+    t105 = time.monotonic()
+    if get_automation_insights:
+        try:
+            insights_text = get_automation_insights(next_task)
+            if insights_text:
+                context_brief += f"\n{insights_text[:400]}\n"
+                log(f"Automation insights: {len(insights_text)}B")
+        except Exception as e:
+            log(f"Automation insights failed: {e}")
+    result["timings"]["automation_insights"] = round(time.monotonic() - t105, 3)
 
     result["episodic_hints"] = compressed_episodes
     result["context_brief"] = context_brief

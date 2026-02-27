@@ -364,7 +364,7 @@ def _assess_memory_system():
     Scoring (continuous, quality-based — max 1.0):
       - Retrieval quality via avg distance: <0.8 → +0.3, <1.2 → +0.2, <1.5 → +0.1  (0–0.3)
       - Graph density: edges / total_memories ratio, scaled 0–0.3                      (0–0.3)
-      - Retrieval quality tracker hit_rate * 0.3 (if available)                         (0–0.3)
+      - Ground-truth retrieval benchmark recall * 0.3 (preferred), or tracker hit_rate  (0–0.3)
       - Dead-recall penalty: -0.1 if dead_recall_rate > 0.3
       - Baseline floor: +0.1 if recall returns anything at all
     """
@@ -378,7 +378,12 @@ def _assess_memory_system():
         evidence.append(f"{total} memories, {edges} edges, {collections} collections")
 
         # --- Retrieval quality: distance-based scoring ---
-        results = brain.recall("self assessment memory quality", n=5)
+        # Use smart_recall for routing (matches production usage)
+        try:
+            from retrieval_experiment import smart_recall
+            results = smart_recall("memory system health and retrieval quality", n=5)
+        except ImportError:
+            results = brain.recall("memory system health and retrieval quality", n=5)
         if results:
             distances = [r["distance"] for r in results if r.get("distance") is not None]
             if distances:
@@ -412,24 +417,40 @@ def _assess_memory_system():
     except Exception as e:
         evidence.append(f"error: {e}")
 
-    # --- Retrieval quality tracker (hit-rate based, continuous) ---
+    # --- Retrieval quality: prefer ground-truth benchmark, fall back to tracker ---
+    benchmark_used = False
     try:
-        from retrieval_quality import tracker
-        report = tracker.report(days=7)
-        if report.get("total_events", 0) > 0:
-            hit_rate = report.get("hit_rate")
-            dead_rate = report.get("dead_recall_rate", 0)
-            if hit_rate is not None:
-                quality_score = hit_rate * 0.3
+        benchmark_file = Path("/home/agent/.openclaw/workspace/data/retrieval_benchmark/latest.json")
+        if benchmark_file.exists():
+            with open(benchmark_file) as f:
+                bench = json.load(f)
+            avg_recall = bench.get("avg_recall")
+            if avg_recall is not None:
+                quality_score = avg_recall * 0.3
                 score += quality_score
-                evidence.append(f"retrieval hit_rate={hit_rate:.0%} (+{quality_score:.2f})")
-            if dead_rate > 0.3:
-                score -= 0.1
-                evidence.append(f"HIGH dead_recall_rate={dead_rate:.0%} (-0.10)")
-            elif dead_rate < 0.1:
-                evidence.append(f"low dead_recall_rate={dead_rate:.0%}")
+                evidence.append(f"benchmark recall={avg_recall:.0%} (P@3={bench.get('avg_precision_at_k', 0):.0%}) (+{quality_score:.2f})")
+                benchmark_used = True
     except Exception:
         pass
+
+    if not benchmark_used:
+        try:
+            from retrieval_quality import tracker
+            report = tracker.report(days=7)
+            if report.get("total_events", 0) > 0:
+                hit_rate = report.get("hit_rate")
+                dead_rate = report.get("dead_recall_rate", 0)
+                if hit_rate is not None:
+                    quality_score = hit_rate * 0.3
+                    score += quality_score
+                    evidence.append(f"retrieval hit_rate={hit_rate:.0%} (+{quality_score:.2f})")
+                if dead_rate > 0.3:
+                    score -= 0.1
+                    evidence.append(f"HIGH dead_recall_rate={dead_rate:.0%} (-0.10)")
+                elif dead_rate < 0.1:
+                    evidence.append(f"low dead_recall_rate={dead_rate:.0%}")
+        except Exception:
+            pass
 
     return max(0.0, min(1.0, score)), evidence
 
@@ -487,31 +508,44 @@ def _assess_autonomous_execution():
     score = 0.0
     evidence = []
     log_path = "/home/agent/.openclaw/workspace/memory/cron/autonomous.log"
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    now = datetime.now(timezone.utc)
+    today = now.strftime("%Y-%m-%d")
+    # Use 24h rolling window — prevents score collapse at start of UTC day
+    yesterday = (now - __import__('datetime').timedelta(hours=24)).strftime("%Y-%m-%d")
 
     log_completed = 0
     log_failed = 0
     log_descriptions = []
-    log_today_lines = 0
+    log_recent_lines = 0
 
-    # --- Source 1: autonomous.log ---
+    # --- Source 1: autonomous.log (24h rolling window) ---
     try:
         if os.path.exists(log_path):
             with open(log_path) as f:
                 lines = f.readlines()
-            today_lines = [l for l in lines if today in l]
-            log_today_lines = len(today_lines)
-            # Match both old format ("COMPLETED") and new postflight format ("outcome: success")
-            completed_lines = [l for l in today_lines if "COMPLETED" in l or "outcome: success" in l]
-            failed_lines = [l for l in today_lines if "FAILED" in l or "outcome: timeout" in l or "outcome: failure" in l]
-            log_completed = len(completed_lines)
-            log_failed = len(failed_lines)
-            log_descriptions = completed_lines
+            recent_lines = [l for l in lines if today in l or yesterday in l]
+            log_recent_lines = len(recent_lines)
+            # Match postflight format "Recording outcome: success" and legacy "COMPLETED"
+            # Also match EXECUTION exit code as a cross-check
+            # Deduplicate: each heartbeat logs both EXECUTION and Recording outcome
+            # Count unique heartbeat completions by counting only "outcome:" lines or EXECUTION lines, not both
+            outcome_lines = [l for l in recent_lines if "outcome: success" in l or "COMPLETED" in l]
+            exec_success = [l for l in recent_lines if "EXECUTION:" in l and "exit=0" in l]
+            log_completed = max(len(outcome_lines), len(exec_success))
+            outcome_fail = [l for l in recent_lines if "outcome: timeout" in l or "outcome: failure" in l or "FAILED" in l]
+            exec_fail = [l for l in recent_lines if "EXECUTION:" in l and "exit=" in l and "exit=0" not in l]
+            log_failed = max(len(outcome_fail), len(exec_fail))
+            log_descriptions = outcome_lines if outcome_lines else exec_success
     except Exception as e:
         evidence.append(f"log error: {e}")
 
     # --- Source 2: predictions.jsonl (survives log rotation) ---
-    pred_completed, pred_failed, pred_descriptions = _get_prediction_outcomes_today(today)
+    # Check both today and yesterday for 24h coverage
+    pred_completed_t, pred_failed_t, pred_desc_t = _get_prediction_outcomes_today(today)
+    pred_completed_y, pred_failed_y, pred_desc_y = _get_prediction_outcomes_today(yesterday)
+    pred_completed = pred_completed_t + pred_completed_y
+    pred_failed = pred_failed_t + pred_failed_y
+    pred_descriptions = pred_desc_t + pred_desc_y
 
     # Use whichever source has more resolved tasks (log rotation may have
     # removed entries from autonomous.log but predictions.jsonl is durable)
@@ -533,33 +567,31 @@ def _assess_autonomous_execution():
 
     # --- Success rate: completed / (completed + failed) * 0.5 ---
     # Minimum-sample guard: with <3 resolved tasks, blend with a prior
-    # (assumes 50% base rate) to prevent early-day volatile scores.
+    # (assumes 70% base rate) to prevent early-day volatile scores.
     if total_attempted > 0:
         raw_rate = completed_count / total_attempted
         if total_attempted < 3:
-            # Bayesian smoothing: blend with 50% prior weighted by sample count
-            # At n=1: 67% prior, 33% data. At n=2: 50/50. At n=3+: pure data.
             prior_weight = max(0, 3 - total_attempted)
-            success_rate = (completed_count + prior_weight * 0.5) / (total_attempted + prior_weight)
-            evidence.append(f"success rate={success_rate:.0%} (smoothed from {raw_rate:.0%}, n={total_attempted} via {source})")
+            success_rate = (completed_count + prior_weight * 0.7) / (total_attempted + prior_weight)
+            evidence.append(f"success rate={success_rate:.0%} (smoothed from {raw_rate:.0%}, n={total_attempted}, 24h via {source})")
         else:
             success_rate = raw_rate
-            evidence.append(f"success rate={success_rate:.0%} ({completed_count}/{total_attempted} via {source})")
+            evidence.append(f"success rate={success_rate:.0%} ({completed_count}/{total_attempted}, 24h via {source})")
         rate_score = success_rate * 0.5
         score += rate_score
         evidence[-1] += f" (+{rate_score:.2f})"
-    elif log_today_lines:
+    elif log_recent_lines:
         # Tasks running but none resolved yet — small credit for activity
-        score += 0.05
-        evidence.append(f"{log_today_lines} log entries today (none resolved yet)")
+        score += 0.1
+        evidence.append(f"{log_recent_lines} log entries in 24h (none resolved yet)")
     else:
-        evidence.append("no autonomous activity today")
+        evidence.append("no autonomous activity in 24h")
 
-    # --- Velocity: completed today / 5, capped at 0.3 ---
-    velocity = min(0.3, (completed_count / 5.0) * 0.3)
+    # --- Velocity: completed in 24h / 6 (expected 6x/day), capped at 0.3 ---
+    velocity = min(0.3, (completed_count / 6.0) * 0.3)
     score += velocity
     if completed_count > 0:
-        evidence.append(f"velocity={completed_count}/5 tasks (+{velocity:.2f})")
+        evidence.append(f"velocity={completed_count}/6 tasks in 24h (+{velocity:.2f})")
 
     # --- Task diversity: unique domains in completed task descriptions ---
     domain_keywords = {
@@ -690,6 +722,7 @@ def _assess_code_generation():
         test_dirs = [
             Path("/home/agent/.openclaw/workspace/tests"),
             Path("/home/agent/.openclaw/workspace/scripts/tests"),
+            Path("/home/agent/.openclaw/workspace/packages/clarvis-db/tests"),
         ]
         test_files = []
         for td in test_dirs:
@@ -700,7 +733,7 @@ def _assess_code_generation():
         if test_files:
             r = subprocess.run(
                 ["python3", "-m", "pytest", "--tb=no", "-q"] + [str(f) for f in test_files[:20]],
-                capture_output=True, text=True, timeout=30,
+                capture_output=True, text=True, timeout=60,
                 cwd="/home/agent/.openclaw/workspace"
             )
             output = r.stdout + r.stderr

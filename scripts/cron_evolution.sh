@@ -65,39 +65,46 @@ echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] CONTEXT: compressed_queue=${#COMPRESSED_QU
 # ============================================================================
 # CLAUDE CODE ANALYSIS (the actual expensive part — this is the core work)
 # ============================================================================
-/home/agent/.local/bin/claude -p \
-    "You are Clarvis's strategic evolution engine. Do a deep analysis:
+EVO_PROMPT_FILE=$(mktemp)
+cat > "$EVO_PROMPT_FILE" << 'ENDPROMPT'
+You are Clarvis's strategic evolution engine. Do a deep analysis:
 
-    1. Review the compressed queue below — what's pending?
-    2. Read the recent memory file (memory/$(date +%Y-%m-%d).md) — what happened today?
-    3. Check data/plans/ — any unfinished research or ideas?
-    4. Review skills/ — any missing skills that would help M2.5 or the subconscious?
-    5. Check HEARTBEAT.md, ROADMAP.md — are protocols and phase assessments current?
-    6. Consider non-code improvements: config tuning, prompt engineering, cron schedule optimization, skill creation.
+1. Review the compressed queue below — what's pending?
+2. Read the recent memory file — what happened today?
+3. Check data/plans/ — any unfinished research or ideas?
+4. Review skills/ — any missing skills that would help M2.5 or the subconscious?
+5. Check HEARTBEAT.md, ROADMAP.md — are protocols and phase assessments current?
+6. Consider non-code improvements: config tuning, prompt engineering, cron schedule optimization, skill creation.
 
-    $COMPRESSED_QUEUE
+ANALYSIS:
+- What's working well in the evolution toward AGI/consciousness?
+- What's the biggest bottleneck based on the capability scores?
+- Which capability has the LOWEST score? Design a task to improve it.
+- How is Phi trending? What would increase information integration?
 
-    $COMPRESSED_HEALTH
+ACTION (MANDATORY):
+- If there are fewer than 5 pending tasks in QUEUE.md, ADD 3-5 new ones.
+- Add them under '## NEW ITEMS' for urgent ones, '## Cost Efficiency' for optimization.
+- Format: - [ ] <concrete, actionable task>
+- Prioritize fixing the LOWEST capability score. Then: integration, feedback loops,
+  consciousness metrics, and genuine cognitive capabilities.
+- Include at least ONE non-Python task (config tune, protocol update, skill creation,
+  prompt improvement, architectural simplification, or cron optimization).
+- Available runtimes: Python 3, Node.js, Bash. Can install Rust/Go/etc. Use the right tool for the job.
+ENDPROMPT
+# Append dynamic context
+echo "" >> "$EVO_PROMPT_FILE"
+echo "$COMPRESSED_QUEUE" >> "$EVO_PROMPT_FILE"
+echo "" >> "$EVO_PROMPT_FILE"
+echo "$COMPRESSED_HEALTH" >> "$EVO_PROMPT_FILE"
+echo "" >> "$EVO_PROMPT_FILE"
+echo "Currently $PENDING_COUNT pending tasks in queue." >> "$EVO_PROMPT_FILE"
+echo "Output: 1-paragraph analysis + list of tasks added." >> "$EVO_PROMPT_FILE"
 
-    ANALYSIS:
-    - What's working well in the evolution toward AGI/consciousness?
-    - What's the biggest bottleneck based on the capability scores?
-    - Which capability has the LOWEST score? Design a task to improve it.
-    - How is Phi trending? What would increase information integration?
-
-    ACTION (MANDATORY):
-    - If there are fewer than 5 pending tasks in QUEUE.md, ADD 3-5 new ones.
-    - Add them under '## NEW ITEMS' for urgent ones, '## Cost Efficiency' for optimization.
-    - Format: - [ ] <concrete, actionable task>
-    - Prioritize fixing the LOWEST capability score. Then: integration, feedback loops,
-      consciousness metrics, and genuine cognitive capabilities.
-    - Include at least ONE non-Python task (config tune, protocol update, skill creation,
-      prompt improvement, architectural simplification, or cron optimization).
-    - Available runtimes: Python 3, Node.js, Bash. Can install Rust/Go/etc. Use the right tool for the job.
-
-    Currently $PENDING_COUNT pending tasks in queue.
-    Output: 1-paragraph analysis + list of tasks added." \
-    --dangerously-skip-permissions >> "$LOGFILE" 2>&1
+timeout 900 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \
+    /home/agent/.local/bin/claude -p "$(cat "$EVO_PROMPT_FILE")" \
+    --dangerously-skip-permissions --model claude-opus-4-6 >> "$LOGFILE" 2>&1
+rm -f "$EVO_PROMPT_FILE"
 
 # ============================================================================
 # DIGEST (lightweight — single subprocess)

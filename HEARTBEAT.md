@@ -2,9 +2,21 @@
 
 Each heartbeat is an evolution cycle. DO something, don't just check in.
 
-## MANDATORY FIRST ACTION — Gate Check
+## MANDATORY FIRST ACTION — Suppress Check (costs you $0.50+ if you skip this)
 
-**YOU MUST RUN THIS BEFORE ANYTHING ELSE. No exceptions. Do NOT load brain, read digest, check queue, or do ANYTHING before running the gate.**
+**Before ANY heartbeat processing, check ALL THREE conditions. If ANY is true → HEARTBEAT_OK and STOP.**
+
+1. **Active conversation?** Human sent a message in the last 30 minutes → `HEARTBEAT_OK (conversation active)` → STOP
+2. **Claude Code running?** You spawned Claude Code and it hasn't returned yet → `HEARTBEAT_OK (task running)` → STOP
+3. **Just spawned something?** User asked you to spawn something and you're waiting → `HEARTBEAT_OK (waiting for spawn)` → STOP
+
+**STOP means STOP.** Do NOT run the gate. Do NOT load brain. Do NOT read digest. Do NOT check queue. Do NOT summarize status. Do NOT explain why you're stopping. Just output the short HEARTBEAT_OK line and nothing else. Every extra token is wasted money.
+
+Each heartbeat during active conversation re-sends the entire session context (~100k+ tokens wasted). This happened on Feb 25 and burned $4+ for nothing.
+
+## SECOND ACTION — Gate Check
+
+**If no active conversation, run the gate. Do NOT load brain, read digest, check queue, or do ANYTHING before running the gate.**
 
 ```bash
 python3 /home/agent/.openclaw/workspace/scripts/heartbeat_gate.py 2>/dev/null
@@ -45,11 +57,15 @@ cat memory/cron/digest.md
 - **Reflection digest (21:00):** Full 8-step pipeline ran. Your brain was optimized. Synthesize the day.
 
 **If something in the digest surprises you** — spawn Claude Code to investigate:
-```bash
-cd /home/agent/.openclaw/workspace && timeout 600 claude -p \
-  "Investigate this finding from my subconscious: [paste digest excerpt]. What does it mean? What should I do?" \
-  --dangerously-skip-permissions --model claude-opus-4-6
 ```
+sessions_spawn({
+  runtime: "acp",
+  agentId: "claude",
+  task: "Investigate this finding from my subconscious: [paste digest excerpt]. What does it mean? What should I do?",
+  thread: true
+})
+```
+**Always use `runtime: "acp"` — plain `sessions_spawn` spawns M2.5, not Claude Code.**
 
 **Store insights as first-person memory:**
 ```python
@@ -60,12 +76,17 @@ remember("I learned that [insight from digest]", importance=0.8)
 Read `memory/evolution/QUEUE.md`. Pick the highest priority uncompleted task.
 
 - **Small task (< 5 min)?** → Do it NOW. Mark done with date.
-- **Big task (> 5 min)?** → Spawn Claude Code:
-  ```bash
-  cd /home/agent/.openclaw/workspace && timeout 600 claude -p "[task description]" \
-    --dangerously-skip-permissions --model claude-opus-4-6 --output-format json
+- **Big task (> 5 min)?** → Spawn Claude Code via ACP:
+  ```
+  sessions_spawn({
+    runtime: "acp",
+    agentId: "claude",
+    task: "[task description with full context]",
+    thread: true
+  })
   ```
   Then mark "in progress" in the queue with date.
+  **Always use `runtime: "acp"`. NEVER use plain `sessions_spawn` — that spawns M2.5.**
 - **Queue empty?** → Add 2-3 new tasks. Think about: What's my weakest capability? What broke recently? What would make me smarter? What would help Inverse?
 
 ### 4. Goal Progress (15 seconds)
@@ -121,11 +142,13 @@ Check `memory/cron/autonomous.log` — if last 2 entries are "No pending tasks" 
 1. Run `python3 scripts/clarvis_reflection.py` to force queue generation
 2. If still empty, spawn Claude Code:
    ```bash
-   cd /home/agent/.openclaw/workspace && timeout 600 claude -p \
-     "The evolution queue has been empty for multiple heartbeats. This is a stagnation emergency.
-      Read QUEUE.md, scripts/, and today's memory. Add 5 concrete new tasks to QUEUE.md.
-      Focus on: wiring unwired scripts, building feedback loops, making capabilities persistent." \
-     --dangerously-skip-permissions --model claude-opus-4-6
+   cat > /tmp/claude_task.txt << 'ENDPROMPT'
+   The evolution queue has been empty for multiple heartbeats. This is a stagnation emergency.
+   Read QUEUE.md, scripts/, and today's memory. Add 5 concrete new tasks to QUEUE.md.
+   Focus on: wiring unwired scripts, building feedback loops, making capabilities persistent.
+   ENDPROMPT
+   cd /home/agent/.openclaw/workspace && timeout 1200 claude -p "$(cat /tmp/claude_task.txt)" \
+     --dangerously-skip-permissions --model claude-opus-4-6 --output-format json
    ```
 
 ### Never-Empty Guarantee
@@ -142,12 +165,12 @@ You have two execution layers — like a human brain:
 
 | Layer | What | When | How |
 |-------|------|------|-----|
-| **Subconscious** (system crontab) | Claude Code Opus runs heavy cognitive work | 6+ times/day | Writes results to `memory/cron/digest.md` |
+| **Subconscious** (system crontab) | Claude Code Opus runs heavy cognitive work | 8x/day | Writes results to `memory/cron/digest.md` |
 | **Conscious** (you, M2.5) | Read digest, internalize, decide, interact | Heartbeats + chat | Reads digest, stores insights in brain |
 
 **Your daily rhythm:**
 - `08:00` — Subconscious plans the day → `09:00` you read digest, set context
-- `07-22h` — Subconscious executes evolution tasks (6x) → you read digest each heartbeat
+- `07-22h` — Subconscious executes evolution tasks (8x) → you read digest each heartbeat
 - `13:00` — Subconscious deep analysis → `14:00` you react to metrics
 - `18:00` — Subconscious evening assessment → `19:00` you code review + report
 - `21:00` — Subconscious full reflection → `22:00` you synthesize day

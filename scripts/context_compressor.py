@@ -429,11 +429,28 @@ def _build_decision_context(current_task, tier="standard"):
         for t in targets[:4]:
             parts.append(f"  - {t}")
 
+    # --- Wire task guidance (wire strategy has 30% success rate) ---
+    wire_guidance = _build_wire_guidance(current_task)
+    if wire_guidance:
+        parts.append(wire_guidance)
+
     # --- Failure patterns from recent episodes ---
     failure_patterns = _get_failure_patterns(current_task, n=3 if tier == "full" else 2)
     if failure_patterns:
         parts.append("AVOID THESE FAILURE PATTERNS:")
         parts.extend(failure_patterns)
+
+    # --- Meta-gradient RL recommendations ---
+    try:
+        from meta_gradient_rl import load_meta_params
+        mg_params = load_meta_params()
+        explore = mg_params.get("exploration_rate", 0.3)
+        weights = mg_params.get("strategy_weights", {})
+        best_strategy = max(weights, key=weights.get) if weights else None
+        if best_strategy and weights[best_strategy] > 1.2:
+            parts.append(f"META-GRADIENT: Prefer '{best_strategy}' strategy (weight={weights[best_strategy]:.2f}), explore={explore:.0%}")
+    except Exception:
+        pass
 
     # --- Constraints: common quality issues from code_quality scores ---
     scores = get_latest_scores()
@@ -464,7 +481,6 @@ def _get_failure_patterns(current_task, n=3):
         if not failures:
             return []
 
-        task_words = set(re.findall(r'[a-z]{3,}', current_task.lower()))
         seen = set()
 
         for ep in failures:
@@ -492,6 +508,96 @@ def _get_failure_patterns(current_task, n=3):
         pass
 
     return patterns
+
+
+def _detect_wire_task(task_text):
+    """Detect if a task is a 'wire' strategy task (integration/hooking).
+
+    Wire tasks have a 30% success rate (vs 55% for build tasks) because they
+    require multi-file integration across bash/Python boundaries. Returns
+    (is_wire, source_script, target_script) tuple.
+    """
+    task_lower = task_text.lower()
+    wire_verbs = ["wire", "connect", "integrate", "hook", "link"]
+    if not any(v in task_lower for v in wire_verbs):
+        return False, None, None
+
+    # Extract source (what to wire) and target (where to wire it)
+    source = None
+    target = None
+    # Pattern: "Wire X into Y", "Integrate X into Y", "Hook X into Y"
+    m = re.search(r'(?:wire|integrate|hook|connect|link)\s+(\S+\.(?:py|sh))\s+(?:into|to|with)\s+(\S+\.(?:py|sh))', task_lower)
+    if m:
+        source = m.group(1)
+        target = m.group(2)
+    else:
+        # Pattern: "Wire X into Y" where X/Y are descriptive names
+        m = re.search(r'(?:wire|integrate|hook|connect|link)\s+(.+?)\s+(?:into|to|with)\s+(.+?)(?:\s*[-—]|$)', task_lower)
+        if m:
+            source = m.group(1).strip()
+            target = m.group(2).strip()
+
+    return True, source, target
+
+
+def _build_wire_guidance(task_text):
+    """Generate explicit integration sub-steps for wire tasks.
+
+    Wire tasks fail 70% of the time due to:
+      - shallow_reasoning (57%): vague "Wire X into Y" with no specifics
+      - long_duration (29%): excessive exploration of unfamiliar architecture
+
+    This function generates concrete steps that eliminate ambiguity.
+    """
+    is_wire, source, target = _detect_wire_task(task_text)
+    if not is_wire:
+        return ""
+
+    # Known integration targets and their structure
+    KNOWN_TARGETS = {
+        "cron_reflection.sh": {
+            "path": "/home/agent/.openclaw/workspace/scripts/cron_reflection.sh",
+            "structure": "Steps 0.5-7, each runs a python3 script. Add new steps between existing ones.",
+            "pattern": "# Step N: Description\necho ... >> \"$LOGFILE\"\npython3 /path/to/script.py >> \"$LOGFILE\" 2>&1 || true",
+        },
+        "cron_autonomous.sh": {
+            "path": "/home/agent/.openclaw/workspace/scripts/cron_autonomous.sh",
+            "structure": "3 phases: preflight (heartbeat_preflight.py) → execution → postflight (heartbeat_postflight.py).",
+            "pattern": "Modify heartbeat_preflight.py (add import + call) or heartbeat_postflight.py, NOT the bash script directly.",
+        },
+        "heartbeat_preflight.py": {
+            "path": "/home/agent/.openclaw/workspace/scripts/heartbeat_preflight.py",
+            "structure": "Sections 1-10, each with timing. Import at top (try/except), call in run_preflight().",
+            "pattern": "try:\n    from module import func\nexcept ImportError:\n    func = None\n# ... then in run_preflight(): if func: try: result = func(...)",
+        },
+        "heartbeat_postflight.py": {
+            "path": "/home/agent/.openclaw/workspace/scripts/heartbeat_postflight.py",
+            "structure": "Post-execution steps. Import at top, call in run_postflight().",
+            "pattern": "Same pattern as preflight: try/except import at top, guarded call in main function.",
+        },
+    }
+
+    parts = ["WIRE TASK GUIDANCE (wire tasks have 30% success — follow these steps carefully):"]
+
+    # Add target-specific guidance if we recognize the target
+    if target:
+        for known_name, info in KNOWN_TARGETS.items():
+            if known_name in (target or ""):
+                parts.append(f"  TARGET: {info['path']}")
+                parts.append(f"  STRUCTURE: {info['structure']}")
+                parts.append(f"  PATTERN: {info['pattern']}")
+                break
+
+    # Always add the explicit sub-steps that successful wire tasks follow
+    parts.append("  REQUIRED SUB-STEPS (do each one explicitly):")
+    parts.append("    1. READ the target file first — find the exact insertion point (step number, function, line)")
+    parts.append("    2. READ the source script — verify the function/class to import exists and its signature")
+    parts.append("    3. ADD the import (with try/except fallback for resilience)")
+    parts.append("    4. ADD the call at the correct location (with timing + logging + error handling)")
+    parts.append("    5. TEST: run the target script (or python3 -c 'import ...') to verify no import/syntax errors")
+    parts.append("    6. VERIFY: confirm the integration point is reached (check log output or return value)")
+
+    return "\n".join(parts)
 
 
 def _build_reasoning_scaffold(tier="standard"):

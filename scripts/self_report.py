@@ -3,6 +3,7 @@
 Self-Assessment Script - Track cognitive growth metrics
 v1 MVP
 """
+import re
 import sys
 import json
 from datetime import datetime
@@ -62,12 +63,11 @@ def run_assessment():
     goal_progress = {}
     for g in goals:
         doc = g.get("document", "")
-        # Extract percentage if present (e.g., "ClarvisDB: 90%")
-        if ":" in doc:
-            name, rest = doc.split(":", 1)
-            if "%" in rest:
-                pct = int(rest.split("%")[0].strip())
-                goal_progress[name.strip()] = pct
+        # Extract percentage using regex (handles multi-colon docs like "Name — description: 90%")
+        pct_match = re.search(r'(\d+)%', doc)
+        if pct_match:
+            name = doc.split("—")[0].split(":")[0].strip()
+            goal_progress[name] = int(pct_match.group(1))
     
     # Store daily snapshot
     snapshot = {

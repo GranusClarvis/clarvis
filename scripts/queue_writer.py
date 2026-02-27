@@ -206,6 +206,67 @@ def add_tasks(tasks: list, priority: str = "P0", source: str = "unknown") -> lis
         lock_fd.close()
 
 
+def archive_completed():
+    """Move all [x] completed items from QUEUE.md to QUEUE_ARCHIVE.md.
+
+    Called at end of each heartbeat postflight to keep QUEUE.md lean.
+    Deduplicates against existing archive entries.
+
+    Returns number of items archived.
+    """
+    archive_file = os.path.join(os.path.dirname(QUEUE_FILE), "QUEUE_ARCHIVE.md")
+    lock_path = QUEUE_FILE + ".lock"
+    os.makedirs(os.path.dirname(lock_path), exist_ok=True)
+    lock_fd = open(lock_path, "w")
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX)
+
+        content = _read_queue()
+        if not content:
+            return 0
+
+        # Extract completed items and their full lines
+        completed = []
+        new_lines = []
+        for line in content.split("\n"):
+            m = re.match(r'^- \[x\] (.+)', line.strip())
+            if m:
+                completed.append(m.group(1))
+            else:
+                new_lines.append(line)
+
+        if not completed:
+            return 0
+
+        # Read existing archive for dedup
+        archive_content = ""
+        if os.path.exists(archive_file):
+            with open(archive_file) as f:
+                archive_content = f.read()
+
+        # Append new items to archive
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        archive_entries = []
+        for item in completed:
+            if item[:50] not in archive_content:
+                archive_entries.append(f"- [x] {item}")
+
+        if archive_entries:
+            with open(archive_file, "a") as f:
+                f.write(f"\n## Archived {today}\n")
+                f.write("\n".join(archive_entries) + "\n")
+
+        # Rewrite QUEUE.md without completed items
+        with open(QUEUE_FILE, "w") as f:
+            f.write("\n".join(new_lines))
+
+        return len(completed)
+
+    finally:
+        fcntl.flock(lock_fd, fcntl.LOCK_UN)
+        lock_fd.close()
+
+
 def tasks_added_today() -> int:
     """How many auto-generated tasks were added today."""
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -242,6 +303,10 @@ if __name__ == "__main__":
     elif cmd == "status":
         count = tasks_added_today()
         print(f"Auto-generated tasks today: {count}/{MAX_AUTO_TASKS_PER_DAY}")
+
+    elif cmd == "archive":
+        archived = archive_completed()
+        print(f"Archived {archived} completed items from QUEUE.md")
 
     else:
         print(f"Unknown command: {cmd}")

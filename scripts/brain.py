@@ -20,6 +20,7 @@ import chromadb
 import json
 import os
 import time
+import fcntl
 from datetime import datetime, timezone
 
 # Single database location
@@ -45,8 +46,35 @@ AUTONOMOUS_LEARNING = "autonomous-learning"
 EPISODES = "clarvis-episodes"
 
 ALL_COLLECTIONS = [IDENTITY, PREFERENCES, LEARNINGS, INFRASTRUCTURE, GOALS, CONTEXT, MEMORIES, PROCEDURES, AUTONOMOUS_LEARNING, EPISODES]
-# Fast defaults - excludes identity/infra (rarely needed in queries)
-DEFAULT_COLLECTIONS = [LEARNINGS, MEMORIES, GOALS, CONTEXT, PREFERENCES, AUTONOMOUS_LEARNING, EPISODES]
+# Fast defaults - includes identity/procedures (needed for accurate recall)
+DEFAULT_COLLECTIONS = [IDENTITY, LEARNINGS, MEMORIES, GOALS, CONTEXT, PREFERENCES, PROCEDURES, AUTONOMOUS_LEARNING, EPISODES]
+
+# === QUERY ROUTING ===
+# Route queries to the most relevant collections for better hit rates.
+import re as _re
+_ROUTE_PATTERNS = [
+    (_re.compile(r'\b(goals?|objectives?|targets?|milestones?|progress)\b', _re.I), [GOALS]),
+    (_re.compile(r'\b(procedur\w*|how to|steps? for|recipe|workflow)\b', _re.I), [PROCEDURES, LEARNINGS]),
+    (_re.compile(r'\b(who am i|my identity|my name|about me|self model|who created|creator|capabilit\w+|what am i)\b', _re.I), [IDENTITY, MEMORIES]),
+    (_re.compile(r'\b(cron|script|server|system|infra|config)\b', _re.I), [INFRASTRUCTURE, LEARNINGS]),
+    (_re.compile(r'\b(current|right now|working on|context|today|last|recent|previous|heartbeat)\b', _re.I), [CONTEXT, MEMORIES]),
+    (_re.compile(r'\b(learned|lesson|insight|pattern|discovery|found that)\b', _re.I), [LEARNINGS]),
+    (_re.compile(r'\b(prefer|like|style|format|convention)\b', _re.I), [PREFERENCES]),
+    (_re.compile(r'\b(episode|session|conversation|happened|did|bug|fixed|error)\b', _re.I), [EPISODES, MEMORIES]),
+]
+
+def route_query(query: str) -> list:
+    """Route query to relevant collections. Returns None if no specific route matches."""
+    matched = set()
+    for pattern, collections in _ROUTE_PATTERNS:
+        if pattern.search(query):
+            matched.update(collections)
+    if matched:
+        # Always include LEARNINGS and MEMORIES as broad fallback
+        matched.add(LEARNINGS)
+        matched.add(MEMORIES)
+        return list(matched)
+    return None  # No routing — use default
 
 
 def get_local_embedding_function():
@@ -94,17 +122,66 @@ class ClarvisBrain:
                 self.collections[name] = self.client.get_or_create_collection(name)
     
     def _load_graph(self):
-        """Load relationship graph"""
+        """Load relationship graph with corruption recovery + file locking"""
         if os.path.exists(self.graph_file):
-            with open(self.graph_file, 'r') as f:
-                self.graph = json.load(f)
-        else:
-            self.graph = {"nodes": {}, "edges": []}
-    
+            try:
+                with open(self.graph_file, 'r') as f:
+                    fcntl.flock(f.fileno(), fcntl.LOCK_SH)  # Shared lock for reading
+                    self.graph = json.load(f)
+                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+                return
+            except (json.JSONDecodeError, IOError, OSError):
+                # Rename corrupt file and attempt partial recovery
+                broken_path = self.graph_file + ".broken"
+                os.rename(self.graph_file, broken_path)
+                try:
+                    with open(broken_path, 'r') as f:
+                        raw = f.read()
+                    last_brace = raw.rfind('},')
+                    if last_brace > 0:
+                        valid = raw[:last_brace+1] + '\n  ]\n}'
+                        self.graph = json.loads(valid)
+                        self._save_graph()  # persist the recovered version
+                        return
+                except Exception:
+                    pass
+        self.graph = {"nodes": {}, "edges": []}
+
     def _save_graph(self):
-        """Save relationship graph"""
-        with open(self.graph_file, 'w') as f:
+        """Save relationship graph atomically with file locking to prevent race conditions"""
+        # Read current file to detect concurrent modifications
+        if os.path.exists(self.graph_file):
+            try:
+                with open(self.graph_file, 'r') as f:
+                    fcntl.flock(f.fileno(), fcntl.LOCK_SH)
+                    on_disk = json.load(f)
+                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+                
+                # Merge: add edges from on-disk that we don't have
+                on_disk_edges = {(e['from'], e['to'], e.get('type')) for e in on_disk.get('edges', [])}
+                our_edges = {(e['from'], e['to'], e.get('type')) for e in self.graph.get('edges', [])}
+                merged_edges = on_disk_edges | our_edges
+                
+                if len(merged_edges) > len(our_edges):
+                    # Reconstruct edge list with merged set
+                    edge_map = {(e['from'], e['to'], e.get('type')): e for e in self.graph.get('edges', [])}
+                    for e in on_disk.get('edges', []):
+                        key = (e['from'], e['to'], e.get('type'))
+                        if key not in edge_map:
+                            edge_map[key] = e
+                    self.graph['edges'] = list(edge_map.values())
+            except (json.JSONDecodeError, IOError, OSError):
+                pass  # Proceed with our version if read fails
+        
+        # Atomic write with exclusive lock
+        tmp_path = self.graph_file + ".tmp"
+        with open(tmp_path, 'w') as f:
+            fcntl.flock(f.fileno(), fcntl.LOCK_EX)  # Exclusive lock for writing
             json.dump(self.graph, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+            fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+        os.replace(tmp_path, self.graph_file)
     
     # === CORE OPERATIONS ===
     
@@ -228,7 +305,9 @@ class ClarvisBrain:
             List of matching documents
         """
         if collections is None:
-            collections = DEFAULT_COLLECTIONS  # Fast default - excludes identity/infra
+            # Try query routing first — directs to relevant collections
+            routed = route_query(query)
+            collections = routed if routed else DEFAULT_COLLECTIONS
         
         all_results = []
         cutoff_date = None
@@ -295,7 +374,8 @@ class ClarvisBrain:
         # Sort by combined relevance score:
         # Primary signal: semantic distance (lower = more relevant)
         # Secondary signal: importance + attention boost
-        # Formula: relevance = (1 / (1 + distance)) * 0.7 + importance * 0.3
+        # Formula: relevance = (1 / (1 + distance)) * 0.85 + importance * 0.15
+        # Distance-heavy weighting prevents importance from overriding semantic match
         def sort_key(x):
             distance = x.get("distance")
             if distance is not None:
@@ -305,7 +385,7 @@ class ClarvisBrain:
                 semantic_relevance = 0.5  # Unknown distance = neutral
             importance = x["metadata"].get("importance", 0.5)
             boost = x["metadata"].get("_attention_boost", 0)
-            return semantic_relevance * 0.7 + (importance + boost) * 0.3
+            return semantic_relevance * 0.85 + (importance + boost) * 0.15
         all_results.sort(key=sort_key, reverse=True)
 
         final_results = all_results[:n * len(collections)]
@@ -390,11 +470,15 @@ class ClarvisBrain:
     
     # === GOAL TRACKING ===
 
-    def get_goals(self):
+    def get_goals(self, include_archived=False):
         """Get all tracked goals with normalized name/progress fields.
 
         Every goal is returned with metadata containing 'goal' (str) and
         'progress' (int), regardless of how it was originally stored.
+
+        Args:
+            include_archived: If False (default), excludes goals with
+                metadata 'archived': 'true'. Archived = 0% for >7 days.
 
         Returns list of dicts with 'document', 'metadata', 'id'.
         """
@@ -416,6 +500,9 @@ class ClarvisBrain:
                 progress = 0
             meta["goal"] = name
             meta["progress"] = progress
+
+        if not include_archived:
+            raw = [g for g in raw if str(g.get("metadata", {}).get("archived", "")).lower() != "true"]
         return raw
 
     def migrate_goals(self):
@@ -451,13 +538,36 @@ class ClarvisBrain:
         return migrated
 
     def set_goal(self, goal_name, progress, subtasks=None):
-        """Set or update a goal. Rejects garbage goals (too short, bridge artifacts)."""
+        """Set or update a goal. Rejects garbage goals (too short, bridge artifacts).
+
+        Guardrails:
+        - Rejects goals shorter than 10 chars or matching bridge patterns
+        - Max 25 active goals — new goals rejected if cap reached (updates still allowed)
+        - Goals at 0% for >7 days auto-archived on next get_goals() call
+        """
         # Validate: reject garbage goals
         if not goal_name or len(goal_name.strip()) < 10:
             return
         reject_patterns = ["bridge", "sbridge", "BRIDGE", "Sbridge", "Connection between"]
         if any(p.lower() in goal_name.lower() for p in reject_patterns):
             return
+
+        col = self.collections[GOALS]
+
+        # Check if this is an update (goal already exists) vs new goal
+        existing = col.get(ids=[goal_name])
+        is_update = bool(existing and existing.get("ids"))
+
+        # Max goal cap: reject NEW goals if over 25 active (non-archived)
+        if not is_update:
+            all_goals = col.get()
+            active_count = 0
+            for i, gid in enumerate(all_goals.get("ids", [])):
+                meta = all_goals["metadatas"][i] if all_goals.get("metadatas") else {}
+                if str(meta.get("archived", "")).lower() != "true":
+                    active_count += 1
+            if active_count >= 25:
+                return  # Cap reached, reject new goal
 
         goal_data = {
             "goal": goal_name,
@@ -467,12 +577,49 @@ class ClarvisBrain:
         if subtasks:
             goal_data["subtasks"] = json.dumps(subtasks)
 
-        col = self.collections[GOALS]
         col.upsert(
             ids=[goal_name],
             documents=[f"{goal_name}: {progress}%"],
             metadatas=[goal_data]
         )
+
+    def archive_stale_goals(self, max_age_days=7):
+        """Archive goals stuck at 0% for more than max_age_days.
+
+        Sets metadata 'archived': 'true' so get_goals() excludes them.
+        Returns number of goals archived.
+        """
+        col = self.collections[GOALS]
+        all_goals = col.get()
+        now = datetime.now(timezone.utc)
+        archived = 0
+
+        for i, gid in enumerate(all_goals.get("ids", [])):
+            meta = all_goals["metadatas"][i] if all_goals.get("metadatas") else {}
+            if str(meta.get("archived", "")).lower() == "true":
+                continue
+            progress = meta.get("progress", 0)
+            if isinstance(progress, str):
+                try:
+                    progress = int(progress)
+                except ValueError:
+                    progress = 0
+            if progress > 0:
+                continue
+            updated = meta.get("updated", "")
+            if not updated:
+                continue
+            try:
+                updated_dt = datetime.fromisoformat(updated.replace("Z", "+00:00"))
+                age_days = (now - updated_dt).days
+                if age_days >= max_age_days:
+                    meta["archived"] = "true"
+                    col.update(ids=[gid], metadatas=[meta])
+                    archived += 1
+            except (ValueError, TypeError):
+                continue
+
+        return archived
     
     # === CONTEXT MANAGEMENT ===
     
@@ -688,31 +835,32 @@ class ClarvisBrain:
         
         return decayed
     
-    def prune_low_importance(self, threshold=0.15, preserve_tags=None):
+    def prune_low_importance(self, threshold=0.12, preserve_tags=None):
         """
         Remove memories below importance threshold.
-        
+        Conservative: only prune genuinely low-value entries.
+
         Args:
-            threshold: Importance below which to delete (default 0.15)
-            preserve_tags: Tags that prevent deletion (e.g., ["genesis", "critical"])
-        
+            threshold: Importance below which to delete (default 0.12, lowered from 0.15)
+            preserve_tags: Tags that prevent deletion
+
         Returns:
             Number of memories deleted
         """
         if preserve_tags is None:
-            preserve_tags = ["genesis", "critical", "identity"]
-        
+            preserve_tags = ["genesis", "critical", "identity", "learning", "insight"]
+
         deleted = 0
-        
+
         for col_name, col in self.collections.items():
             results = col.get()
-            
+
             to_delete = []
-            
+
             for i, mem_id in enumerate(results.get("ids", [])):
                 meta = results["metadatas"][i] if results.get("metadatas") else {}
                 importance = meta.get("importance", 0.5)
-                
+
                 if importance < threshold:
                     # Check if has preserve tag
                     tags_json = meta.get("tags", "[]")
@@ -720,14 +868,21 @@ class ClarvisBrain:
                         tags = json.loads(tags_json) if isinstance(tags_json, str) else tags_json
                     except:
                         tags = []
-                    
+
                     if not any(t in tags for t in preserve_tags):
                         to_delete.append(mem_id)
-            
+
             if to_delete:
+                # Log what we're pruning for auditability
+                import sys
+                for mid in to_delete:
+                    idx = results["ids"].index(mid)
+                    doc_preview = (results["documents"][idx] or "")[:80]
+                    meta_i = results["metadatas"][idx] if results.get("metadatas") else {}
+                    print(f"PRUNE: {col_name}/{mid} imp={meta_i.get('importance','?')} '{doc_preview}'", file=sys.stderr)
                 col.delete(ids=to_delete)
                 deleted += len(to_delete)
-        
+
         return deleted
     
     def get_stale_memories(self, days=30):
