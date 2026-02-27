@@ -57,11 +57,17 @@ cat memory/cron/digest.md
 - **Reflection digest (21:00):** Full 8-step pipeline ran. Your brain was optimized. Synthesize the day.
 
 **If something in the digest surprises you** — spawn Claude Code to investigate:
-```bash
-exec: /home/agent/.openclaw/workspace/scripts/spawn_claude.sh "Investigate this finding from my subconscious: [paste digest excerpt]. What does it mean? What should I do?" 1200
+
+First, build enriched prompt:
 ```
-spawn_claude.sh auto-injects brain context (vector DB, goals, episodes, graph associations) via prompt_builder.py.
-**NEVER use `sessions_spawn` — it spawns M2.5, not Claude Code.**
+exec: python3 /home/agent/.openclaw/workspace/scripts/prompt_builder.py build --task "Investigate this finding: [paste digest excerpt]" --tier standard
+```
+Then spawn Claude Code via ACP with the enriched prompt:
+```
+sessions_spawn({runtime: "acp", agentId: "claude", task: "<enriched prompt from above>", thread: true})
+```
+This injects brain context (vector DB, goals, episodes, graph associations) into the prompt.
+**NEVER use `sessions_spawn` WITHOUT `runtime: "acp"` — that spawns M2.5, not Claude Code.**
 
 **Store insights as first-person memory:**
 ```python
@@ -72,12 +78,14 @@ remember("I learned that [insight from digest]", importance=0.8)
 Read `memory/evolution/QUEUE.md`. Pick the highest priority uncompleted task.
 
 - **Small task (< 5 min)?** → Do it NOW. Mark done with date.
-- **Big task (> 5 min)?** → Spawn Claude Code:
-  ```bash
-  exec: /home/agent/.openclaw/workspace/scripts/spawn_claude.sh "[task description with full context]" 1200
+- **Big task (> 5 min)?** → Spawn Claude Code via ACP:
   ```
-  spawn_claude.sh injects brain context automatically. Then mark "in progress" in the queue with date.
-  **NEVER use `sessions_spawn` — it spawns M2.5, not Claude Code.**
+  Step 1: exec: python3 scripts/prompt_builder.py build --task "[task description]" --tier standard
+  Step 2: sessions_spawn({runtime: "acp", agentId: "claude", task: "<enriched prompt>", thread: true})
+  ```
+  Or use `/spawn [task]` which routes through spawn_claude.sh with auto context injection.
+  Then mark "in progress" in the queue with date.
+  **NEVER use `sessions_spawn` WITHOUT `runtime: "acp"` — that spawns M2.5, not Claude Code.**
 - **Queue empty?** → Add 2-3 new tasks. Think about: What's my weakest capability? What broke recently? What would make me smarter? What would help Inverse?
 
 ### 4. Goal Progress (15 seconds)

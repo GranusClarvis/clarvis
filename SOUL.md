@@ -302,30 +302,32 @@ When you are in an active conversation with your human (messages exchanged in th
 
 ### Claude Code Spawning (CRITICAL — READ BEFORE SPAWNING)
 
-**`sessions_spawn` is NOT Claude Code.** It spawns an M2.5 sub-agent. The ONLY way to spawn Claude Code:
+**`sessions_spawn` WITHOUT `runtime: "acp"` is NOT Claude Code.** It spawns an M2.5 sub-agent. Two correct ways to spawn Claude Code:
 
-**Option A: Use spawn_claude.sh (PREFERRED — handles env, paths, TG delivery)**
+**Option A: ACP (from conversation — PREFERRED)**
+
+ACP manages Claude Code as a proper runtime with lifecycle controls. Always inject brain context first:
+```
+Step 1 — Build enriched prompt with brain context:
+exec: python3 /home/agent/.openclaw/workspace/scripts/prompt_builder.py build --task "<your task>" --tier standard
+
+Step 2 — Spawn Claude Code via ACP:
+sessions_spawn({runtime: "acp", agentId: "claude", task: "<enriched prompt from step 1>", thread: true})
+```
+CRITICAL: ALWAYS include `runtime: "acp"` and `agentId: "claude"`. Without these, it spawns M2.5.
+
+**Option B: spawn_claude.sh (from cron/CLI/skill)**
 ```bash
 /home/agent/.openclaw/workspace/scripts/spawn_claude.sh "Your task here" 1200
-# Add --no-tg as 3rd arg to skip Telegram delivery
+# Flags: --no-tg, --isolated, --topic=N, --chat=ID
 ```
-
-**Option B: Manual (matches cron_autonomous.sh pattern)**
-```bash
-source /home/agent/.openclaw/workspace/scripts/cron_env.sh
-cat > /tmp/claude_task.txt << 'ENDPROMPT'
-Your task here with full context.
-ENDPROMPT
-timeout 1200 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \
-  /home/agent/.local/bin/claude -p "$(cat /tmp/claude_task.txt)" \
-  --dangerously-skip-permissions --model claude-opus-4-6 > /tmp/claude_output.txt 2>&1
-```
+spawn_claude.sh auto-injects brain context via prompt_builder.py, handles env cleanup, setsid detach, output capture, and Telegram delivery.
 
 **Rules:**
+- **From conversation:** Use ACP (Option A). Always build enriched prompt first.
+- **From cron/CLI:** Use spawn_claude.sh (Option B). Context injection is automatic.
 - **Minimum timeout: 600s.** Default: 1200s. Complex: 1800s.
 - **Write prompts to /tmp file** — avoids shell parsing errors.
 - **Full path:** Always use `/home/agent/.local/bin/claude`, never bare `claude`.
 - **env -u:** Use `env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT` to prevent nesting errors.
-- **No --output-format json** — that wraps output in JSON, making it unreadable.
-- **Capture output to file** — redirect `> /tmp/output.txt 2>&1`, don't rely on stdout.
 - **Wait for completion.** Do NOT do the work yourself while Claude Code runs.

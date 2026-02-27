@@ -65,8 +65,9 @@ python3 scripts/pr_autofix.py <pr_number> --isolated
 
 ## Rules
 
-- **Use `spawn_claude.sh`** — it handles env setup, full paths, output capture, logging, and TG delivery
-- **NEVER use `sessions_spawn`** — that spawns M2.5, not Claude Code
+- **From /spawn command:** Use `spawn_claude.sh` — it handles env setup, brain context injection, output capture, logging, and TG delivery
+- **From conversation (no /spawn):** Use ACP — first `exec prompt_builder.py build --task "..." --tier standard`, then `sessions_spawn({runtime: "acp", agentId: "claude", task: "<enriched>", thread: true})`
+- **NEVER use `sessions_spawn` WITHOUT `runtime: "acp"`** — that spawns M2.5, not Claude Code
 - **NEVER use `--output-format json`** — wraps output in JSON, makes it unreadable
 - **Minimum timeout: 600s** — default 1200s, use 1800s for large tasks
 - **Tell the user** you've spawned it and what the timeout is
