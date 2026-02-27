@@ -67,7 +67,7 @@ fi
 
 # Get context brief from prompt builder (enriches prompt with brain, goals, episodes)
 SCRIPTS_DIR="/home/agent/.openclaw/workspace/scripts"
-CONTEXT_BRIEF=$(python3 "$SCRIPTS_DIR/prompt_builder.py" context-brief --tier standard 2>/dev/null || echo "")
+CONTEXT_BRIEF=$(python3 "$SCRIPTS_DIR/prompt_builder.py" context-brief --task "$TASK" --tier standard 2>/dev/null || echo "")
 
 # Write prompt to file using Python for shell-safety (no heredoc expansion issues)
 python3 -c "

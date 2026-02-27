@@ -57,15 +57,11 @@ cat memory/cron/digest.md
 - **Reflection digest (21:00):** Full 8-step pipeline ran. Your brain was optimized. Synthesize the day.
 
 **If something in the digest surprises you** — spawn Claude Code to investigate:
+```bash
+exec: /home/agent/.openclaw/workspace/scripts/spawn_claude.sh "Investigate this finding from my subconscious: [paste digest excerpt]. What does it mean? What should I do?" 1200
 ```
-sessions_spawn({
-  runtime: "acp",
-  agentId: "claude",
-  task: "Investigate this finding from my subconscious: [paste digest excerpt]. What does it mean? What should I do?",
-  thread: true
-})
-```
-**Always use `runtime: "acp"` — plain `sessions_spawn` spawns M2.5, not Claude Code.**
+spawn_claude.sh auto-injects brain context (vector DB, goals, episodes, graph associations) via prompt_builder.py.
+**NEVER use `sessions_spawn` — it spawns M2.5, not Claude Code.**
 
 **Store insights as first-person memory:**
 ```python
@@ -76,17 +72,12 @@ remember("I learned that [insight from digest]", importance=0.8)
 Read `memory/evolution/QUEUE.md`. Pick the highest priority uncompleted task.
 
 - **Small task (< 5 min)?** → Do it NOW. Mark done with date.
-- **Big task (> 5 min)?** → Spawn Claude Code via ACP:
+- **Big task (> 5 min)?** → Spawn Claude Code:
+  ```bash
+  exec: /home/agent/.openclaw/workspace/scripts/spawn_claude.sh "[task description with full context]" 1200
   ```
-  sessions_spawn({
-    runtime: "acp",
-    agentId: "claude",
-    task: "[task description with full context]",
-    thread: true
-  })
-  ```
-  Then mark "in progress" in the queue with date.
-  **Always use `runtime: "acp"`. NEVER use plain `sessions_spawn` — that spawns M2.5.**
+  spawn_claude.sh injects brain context automatically. Then mark "in progress" in the queue with date.
+  **NEVER use `sessions_spawn` — it spawns M2.5, not Claude Code.**
 - **Queue empty?** → Add 2-3 new tasks. Think about: What's my weakest capability? What broke recently? What would make me smarter? What would help Inverse?
 
 ### 4. Goal Progress (15 seconds)

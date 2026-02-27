@@ -1,16 +1,27 @@
 #!/usr/bin/env python3
 """Shared prompt builder for all Claude Code spawning scripts.
 
-Builds structured prompts with contextual intelligence from brain,
-attention, episodic memory, and working memory.
+Builds structured prompts with deep contextual intelligence from the brain's
+vector DB, semantic graph, synaptic network, episodic memory, and attention
+system. Every Claude Code spawn — whether from cron, ACP, or manual — gets
+the richest possible context for the task at hand.
+
+Architecture:
+    1. brain_introspect.introspect_for_task() — domain detection, targeted
+       vector recall across collections, graph traversal, goal alignment,
+       identity/preference constraints, infrastructure awareness
+    2. EpisodicMemory — recent episodes with causal chains for failures
+    3. SynapticMemory.spread() — neural spreading activation from recalled IDs
+    4. AttentionSpotlight — live working memory spotlight + task-relevant boost
+    5. Somatic markers — failure avoidance signals
+    6. context_compressor — compressed queue for pending task awareness
 
 Usage:
-    # CLI: get just the context brief
-    python3 prompt_builder.py context-brief
-    python3 prompt_builder.py context-brief --tier full
+    # CLI: get context brief for a task
+    python3 prompt_builder.py context-brief --task "Fix retrieval" --tier standard
 
     # CLI: build full prompt
-    python3 prompt_builder.py build --task "Fix retrieval" --role executive --tier standard
+    python3 prompt_builder.py build --task "Fix retrieval" --role executive --tier full
 
     # Python API
     from prompt_builder import build_prompt, get_context_brief
@@ -20,22 +31,51 @@ Usage:
 import json
 import os
 import sys
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 WORKSPACE = "/home/agent/.openclaw/workspace"
 SOMATIC_FILE = os.path.join(WORKSPACE, "data/somatic_markers.json")
-EPISODE_FILE = os.path.join(WORKSPACE, "data/episodes.json")
+
+
+# ---------------------------------------------------------------------------
+# Section builders — each queries a different cognitive subsystem
+# ---------------------------------------------------------------------------
+
+def _introspect_for_task(task, tier):
+    """Deep brain introspection: vector search + graph traversal + goal alignment.
+
+    This is the heavyweight — calls brain_introspect.introspect_for_task() which:
+    - Detects task domains (code, infrastructure, research, identity, etc.)
+    - Selects relevant collections to search
+    - Runs brain.recall() with attention_boost=True across those collections
+    - Checks goal alignment via word overlap
+    - Queries identity/preferences if relevant
+    - Follows graph edges from top results (associative recall)
+    - Builds meta-awareness assessment (KNOWLEDGE GAP/LOW/AVAILABLE)
+
+    Returns formatted string or empty string.
+    """
+    if not task:
+        return ""
+    try:
+        from brain_introspect import introspect_for_task, format_introspection_for_prompt
+        budget = "minimal" if tier == "minimal" else tier
+        introspection = introspect_for_task(task, budget=budget)
+        formatted = format_introspection_for_prompt(introspection, budget=budget)
+        return formatted or ""
+    except Exception:
+        return ""
 
 
 def _get_brain_goals(limit=5):
-    """Get top goals by progress from brain."""
+    """Get top goals by progress from brain vector DB."""
     try:
         from brain import brain
         goals = brain.get_goals()
         if not goals:
             return ""
-        # Sort by progress descending, take top N
         goals.sort(
             key=lambda g: g.get("metadata", {}).get("progress", 0),
             reverse=True,
@@ -46,58 +86,199 @@ def _get_brain_goals(limit=5):
             name = meta.get("goal", g.get("id", "?"))
             progress = meta.get("progress", 0)
             lines.append(f"  - {name}: {progress}%")
-        return "GOALS:\n" + "\n".join(lines)
+        return "ACTIVE GOALS:\n" + "\n".join(lines)
     except Exception:
         return ""
 
 
-def _get_recent_episodes(limit=3):
-    """Get recent episode outcomes."""
+def _get_brain_context():
+    """Get current working context from brain."""
     try:
-        if not os.path.exists(EPISODE_FILE):
+        from brain import brain
+        ctx = brain.get_context()
+        if ctx and len(ctx.strip()) > 10:
+            return f"WORKING CONTEXT: {ctx.strip()[:200]}"
+        return ""
+    except Exception:
+        return ""
+
+
+def _get_episodic_recall(task=None, limit=3):
+    """Get recent episodes via EpisodicMemory class (not flat file).
+
+    If task is provided, shows episodes most relevant to the task.
+    Also includes causal chains for recent failures.
+    """
+    try:
+        from episodic_memory import EpisodicMemory
+        em = EpisodicMemory()
+        if not em.episodes:
             return ""
-        with open(EPISODE_FILE) as f:
-            episodes = json.load(f)
-        if not episodes:
-            return ""
-        recent = episodes[-limit:]
+
         lines = []
+
+        # Recent episodes (last N)
+        recent = em.episodes[-limit:]
         for ep in reversed(recent):
-            task = ep.get("task", "?")[:60]
+            task_text = ep.get("task", ep.get("context", "?"))[:60]
             outcome = ep.get("outcome", "?")
-            lines.append(f"  - [{outcome}] {task}")
-        return "RECENT EPISODES:\n" + "\n".join(lines)
-    except Exception:
-        return ""
+            valence = ep.get("valence", 0)
+            lines.append(f"  - [{outcome} v={valence:.1f}] {task_text}")
 
-
-def _get_failure_patterns(limit=3):
-    """Get failure patterns to avoid from somatic markers."""
-    try:
-        if not os.path.exists(SOMATIC_FILE):
-            return ""
-        with open(SOMATIC_FILE) as f:
-            markers = json.load(f)
-        # Filter for avoidance signals
-        avoidance = [
-            m for m in markers
-            if m.get("signal") == "avoidance" and m.get("strength", 0) > 0.3
+        # For recent failures, include causal chain
+        recent_failures = [
+            ep for ep in em.episodes[-10:]
+            if ep.get("outcome") == "failure"
         ]
-        if not avoidance:
-            return ""
-        avoidance.sort(key=lambda m: m.get("strength", 0), reverse=True)
-        lines = []
-        for m in avoidance[:limit]:
-            snippet = m.get("task_snippet", "?")[:60]
-            emotion = m.get("emotion", "?")
-            lines.append(f"  - AVOID: {snippet} ({emotion})")
-        return "FAILURE PATTERNS:\n" + "\n".join(lines)
+        if recent_failures:
+            lines.append("  Failure causal chains:")
+            for fail in recent_failures[-2:]:  # last 2 failures
+                fail_id = fail.get("id", "")
+                task_text = fail.get("task", fail.get("context", "?"))[:50]
+                lines.append(f"    FAIL: {task_text}")
+                # Get causes
+                try:
+                    causes = em.causes_of(fail_id)
+                    for link, cause_ep in causes[:2]:
+                        rel = link.get("relationship", "?")
+                        cause_text = cause_ep.get("task", cause_ep.get("context", "?"))[:50]
+                        lines.append(f"      <- {rel}: {cause_text}")
+                except Exception:
+                    pass
+
+        return "EPISODIC MEMORY:\n" + "\n".join(lines)
     except Exception:
         return ""
+
+
+def _get_synaptic_associations(task, recalled_ids):
+    """Neural spreading activation via synaptic network.
+
+    Takes memory IDs from brain introspection recall and spreads activation
+    through the STDP synaptic network to find strongly connected memories
+    that weren't directly retrieved by vector search.
+    """
+    if not recalled_ids:
+        return ""
+    try:
+        from synaptic_memory import SynapticMemory
+        syn = SynapticMemory()
+        if syn.stats().get("total_synapses", 0) == 0:
+            return ""
+
+        spread_results = syn.spread(recalled_ids[:5], n=5, min_weight=0.1)
+        if not spread_results:
+            return ""
+
+        # Resolve memory IDs to documents
+        from brain import brain
+        lines = []
+        for mem_id, activation in spread_results:
+            if mem_id in recalled_ids:
+                continue  # Skip already-recalled
+            # Try to fetch the document
+            try:
+                for col_name, col in brain.collections.items():
+                    try:
+                        got = col.get(ids=[mem_id])
+                        if got["ids"] and got["documents"] and got["documents"][0]:
+                            doc = got["documents"][0][:100]
+                            if not doc.startswith("Connection between "):
+                                lines.append(f"  - [syn={activation:.2f}] {doc}")
+                            break
+                    except Exception:
+                        continue
+            except Exception:
+                continue
+
+        if not lines:
+            return ""
+        return "SYNAPTIC ASSOCIATIONS (neural spread):\n" + "\n".join(lines[:5])
+    except Exception:
+        return ""
+
+
+def _get_attention_spotlight(task=None, limit=5):
+    """Get live attention spotlight + task-relevant boosting.
+
+    Uses the AttentionSpotlight module directly (not stale JSON file).
+    If task is provided, runs spreading_activation to boost related items.
+    """
+    try:
+        from attention import AttentionSpotlight
+        attn = AttentionSpotlight()
+        attn.load()
+
+        # If task provided, boost related items first
+        if task:
+            boosted = attn.spreading_activation(task, n=limit)
+            if boosted:
+                lines = []
+                for item in boosted[:limit]:
+                    content = item.get("content", "?")[:80]
+                    salience = item.get("salience", item.get("combined_score", 0))
+                    lines.append(f"  - [{salience:.2f}] {content}")
+                return "ATTENTION (task-boosted):\n" + "\n".join(lines)
+
+        # Fallback to regular spotlight
+        summary = attn.focus_summary()
+        if summary and "empty" not in summary:
+            return f"ATTENTION:\n  {summary}"
+        return ""
+    except Exception:
+        return ""
+
+
+def _get_failure_patterns(task=None, limit=3):
+    """Get failure avoidance signals from somatic markers + brain search.
+
+    Somatic markers are the canonical source for emotional avoidance signals.
+    If task is provided, also queries brain for failure-related memories.
+    """
+    lines = []
+
+    # Somatic markers (flat file — this IS the canonical source)
+    try:
+        if os.path.exists(SOMATIC_FILE):
+            with open(SOMATIC_FILE) as f:
+                markers = json.load(f)
+            avoidance = [
+                m for m in markers
+                if m.get("signal") == "avoidance" and m.get("strength", 0) > 0.3
+            ]
+            avoidance.sort(key=lambda m: m.get("strength", 0), reverse=True)
+            for m in avoidance[:limit]:
+                snippet = m.get("task_snippet", "?")[:60]
+                emotion = m.get("emotion", "?")
+                lines.append(f"  - AVOID: {snippet} ({emotion})")
+    except Exception:
+        pass
+
+    # Brain search for failure lessons relevant to this task
+    if task:
+        try:
+            from brain import brain, LEARNINGS, EPISODES
+            failure_memories = brain.recall(
+                f"failure lesson: {task}",
+                collections=[LEARNINGS, EPISODES],
+                n=2,
+                min_importance=0.3,
+                caller="prompt_builder_failures",
+            )
+            for mem in failure_memories:
+                doc = mem.get("document", "")
+                if "fail" in doc.lower() or "error" in doc.lower() or "lesson" in doc.lower():
+                    lines.append(f"  - LESSON: {doc[:80]}")
+        except Exception:
+            pass
+
+    if not lines:
+        return ""
+    return "FAILURE PATTERNS:\n" + "\n".join(lines[:limit + 2])
 
 
 def _get_capability_scores():
-    """Get current capability scores from self_model."""
+    """Get current capability scores (weakest-first for self-awareness)."""
     try:
         history_file = os.path.join(WORKSPACE, "data/capability_history.json")
         if not os.path.exists(history_file):
@@ -118,87 +299,140 @@ def _get_capability_scores():
         return ""
 
 
-def _get_spotlight_items(limit=5):
-    """Get current attention spotlight items."""
+def _get_compressed_queue(tier):
+    """Get compressed pending tasks from QUEUE.md."""
     try:
-        spotlight_file = os.path.join(WORKSPACE, "data/attention_spotlight.json")
-        if not os.path.exists(spotlight_file):
+        from context_compressor import compress_queue
+        queue = compress_queue()
+        if not queue or len(queue) <= 20:
             return ""
-        with open(spotlight_file) as f:
-            data = json.load(f)
-        items = data.get("items", [])
-        if not items:
-            return ""
-        # Sort by salience descending
-        items.sort(key=lambda i: i.get("salience", 0), reverse=True)
-        lines = []
-        for item in items[:limit]:
-            text = item.get("text", "?")[:60]
-            salience = item.get("salience", 0)
-            lines.append(f"  - [{salience:.2f}] {text}")
-        return "ATTENTION SPOTLIGHT:\n" + "\n".join(lines)
+        max_len = 600 if tier == "standard" else 1200
+        if len(queue) > max_len:
+            queue = queue[:max_len] + "\n  ... (truncated)"
+        return queue
     except Exception:
         return ""
 
 
-def get_context_brief(tier="standard"):
-    """Build a context brief for Claude Code prompts.
+def _extract_recalled_ids(introspection_text):
+    """Extract memory IDs from introspection text for synaptic spreading.
+
+    brain_introspect stores recall results internally. We re-query the brain
+    to get IDs for the top recalled memories matching the introspection text.
+    """
+    # We can't easily extract IDs from the formatted text.
+    # Instead, return empty — synaptic spreading will use a fresh recall.
+    return []
+
+
+# ---------------------------------------------------------------------------
+# Main API
+# ---------------------------------------------------------------------------
+
+def get_context_brief(tier="standard", task=None):
+    """Build a context brief for Claude Code prompts using the full brain.
+
+    This is the core function — every Claude Code spawn should call this
+    to get task-aware context from the brain's vector DB, semantic graph,
+    synaptic network, episodic memory, and attention system.
 
     Tiers:
-        minimal  - Task-only + 2-line context (for simple/OpenRouter tasks)
-        standard - Goals + recent episodes + failure patterns (default)
-        full     - Everything: goals + episodes + failures + capabilities + attention
+        minimal  — Goals + working context only (~200 tokens)
+        standard — Introspection + goals + episodes + failures + queue (~1K tokens)
+        full     — Everything: introspection + synaptic + attention + capabilities (~2K tokens)
+
+    Args:
+        tier: Context depth level.
+        task: The task about to be executed. CRITICAL for task-relevant recall.
 
     Returns:
         str: Multi-line context block suitable for prompt injection.
     """
+    t0 = time.monotonic()
     sections = []
+    recalled_ids = []
 
-    # All tiers get goals
+    # === 1. BRAIN INTROSPECTION (the heavyweight) ===
+    # Domain detection → targeted vector recall → graph traversal →
+    # goal alignment → identity/preferences → infrastructure → meta-awareness
+    if task and tier != "minimal":
+        introspection = _introspect_for_task(task, tier)
+        if introspection:
+            sections.append(introspection)
+            # Try to get recalled memory IDs for synaptic spreading
+            try:
+                from brain_introspect import introspect_for_task as _raw_introspect
+                raw = _raw_introspect(task, budget=tier)
+                # Extract IDs from the raw domain_knowledge recall
+                # (introspect stores results but doesn't expose IDs in formatted output)
+                # We do a lightweight follow-up recall just for IDs
+                from brain import brain
+                id_results = brain.recall(task, n=5, caller="prompt_builder_ids")
+                recalled_ids = [r.get("id", "") for r in id_results if r.get("id")]
+            except Exception:
+                pass
+
+    # === 2. ACTIVE GOALS ===
     goals = _get_brain_goals(limit=5 if tier != "minimal" else 2)
     if goals:
         sections.append(goals)
 
+    # === 3. WORKING CONTEXT ===
+    context = _get_brain_context()
+    if context:
+        sections.append(context)
+
+    # === 4. EPISODIC MEMORY (with causal chains) ===
     if tier in ("standard", "full"):
-        episodes = _get_recent_episodes(limit=3)
+        episodes = _get_episodic_recall(task=task, limit=3)
         if episodes:
             sections.append(episodes)
 
-        failures = _get_failure_patterns(limit=3)
+    # === 5. SYNAPTIC SPREADING ACTIVATION ===
+    # Uses STDP synapse weights to find neurally-connected memories
+    # that vector search might miss
+    if tier == "full" and task:
+        synaptic = _get_synaptic_associations(task, recalled_ids)
+        if synaptic:
+            sections.append(synaptic)
+
+    # === 6. FAILURE AVOIDANCE (somatic markers + brain search) ===
+    if tier in ("standard", "full"):
+        failures = _get_failure_patterns(task=task, limit=3)
         if failures:
             sections.append(failures)
 
+    # === 7. ATTENTION SPOTLIGHT ===
+    if tier == "full":
+        spotlight = _get_attention_spotlight(task=task, limit=5)
+        if spotlight:
+            sections.append(spotlight)
+
+    # === 8. CAPABILITY SCORES ===
     if tier == "full":
         caps = _get_capability_scores()
         if caps:
             sections.append(caps)
 
-        spotlight = _get_spotlight_items(limit=5)
-        if spotlight:
-            sections.append(spotlight)
-
-    # Also try to get compressed queue context from context_compressor
+    # === 9. COMPRESSED QUEUE ===
     if tier in ("standard", "full"):
-        try:
-            from context_compressor import compress_queue
-            queue = compress_queue()
-            if queue and len(queue) > 20:
-                # Truncate for standard tier
-                max_len = 800 if tier == "standard" else 1500
-                if len(queue) > max_len:
-                    queue = queue[:max_len] + "\n  ... (truncated)"
-                sections.append(queue)
-        except Exception:
-            pass
+        queue = _get_compressed_queue(tier)
+        if queue:
+            sections.append(queue)
+
+    elapsed_ms = int((time.monotonic() - t0) * 1000)
 
     if not sections:
         return "No context available — brain may be initializing."
 
-    return "\n\n".join(sections)
+    footer = f"\n[Context built in {elapsed_ms}ms, tier={tier}]"
+    return "\n\n".join(sections) + footer
 
 
 def build_prompt(task, role="executive", tier="standard", time_budget=None):
     """Build a complete prompt for Claude Code spawning.
+
+    This assembles: ROLE + TIME BUDGET + CONTEXT (from full brain) + TASK + INSTRUCTIONS.
 
     Args:
         task: The task description to execute.
@@ -209,7 +443,7 @@ def build_prompt(task, role="executive", tier="standard", time_budget=None):
     Returns:
         str: Complete prompt ready for Claude Code.
     """
-    context_brief = get_context_brief(tier=tier)
+    context_brief = get_context_brief(tier=tier, task=task)
 
     parts = []
     parts.append(f"ROLE: You are Clarvis's {role} function (Claude Code Opus).")
@@ -261,8 +495,9 @@ def write_prompt_file(task, **kwargs):
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Usage:")
-        print("  prompt_builder.py context-brief [--tier minimal|standard|full]")
+        print("  prompt_builder.py context-brief --task 'description' [--tier minimal|standard|full]")
         print("  prompt_builder.py build --task 'description' [--role executive] [--tier standard] [--time-budget 900]")
+        print("  prompt_builder.py write --task 'description' [--role executive] [--tier standard]")
         sys.exit(0)
 
     cmd = sys.argv[1]
@@ -293,7 +528,7 @@ if __name__ == "__main__":
             i += 1
 
     if cmd == "context-brief":
-        print(get_context_brief(tier=tier))
+        print(get_context_brief(tier=tier, task=task))
 
     elif cmd == "build":
         if not task:

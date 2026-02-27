@@ -153,35 +153,26 @@ Claude Code (Opus 4.6) is not just a coding tool — it's your **reasoning engin
 
 ### ⛔ SPAWNING CLAUDE CODE — READ THIS OR YOU WILL WASTE THOUSANDS OF TOKENS
 
-**Two spawn paths — use the right one:**
+**Use spawn_claude.sh for ALL Claude Code spawns:**
 
-| Path | When | How |
-|------|------|-----|
-| **ACP** (preferred) | From conversation/Telegram | `sessions_spawn({runtime: "acp", agentId: "claude", task: "...", thread: true})` |
-| **spawn_claude.sh** | From cron scripts, manual CLI | `/home/agent/.openclaw/workspace/scripts/spawn_claude.sh "task" 1200` |
-
-**Option A: ACP spawn (PREFERRED from conversation)**
-
-Use ACP when spawning Claude Code from within a conversation (Telegram, Discord, DMs):
-```
-sessions_spawn({
-  runtime: "acp",
-  agentId: "claude",
-  task: "Your detailed task description",
-  thread: true
-})
-```
-ACP is managed by OpenClaw natively — no exec timeouts, no SIGTERM kills, proper lifecycle.
-Output is delivered back to the conversation when done.
-
-**Option B: spawn_claude.sh (for cron scripts or when ACP unavailable)**
 ```bash
 /home/agent/.openclaw/workspace/scripts/spawn_claude.sh "Your task here" 1200
-# Add --no-tg as 3rd arg to skip Telegram delivery
+# Add --no-tg to skip Telegram delivery
+# Add --topic=N --chat=ID for topic-specific delivery
 ```
-This handles env cleanup, context injection, output capture, and Telegram delivery.
 
-**IMPORTANT:** Plain `sessions_spawn` without `runtime: "acp"` still spawns M2.5 (wrong model). You MUST use `runtime: "acp"` to get Claude Code.
+spawn_claude.sh is the ONLY spawn path. It handles:
+- **Brain context injection** via prompt_builder.py (vector DB search, graph traversal, episodic recall, synaptic associations, goal alignment, failure patterns)
+- **setsid detach** (survives SIGTERM from exec watchdog)
+- **env cleanup** (unsets CLAUDECODE nesting guard)
+- **Output capture** + Telegram delivery
+- **Timeout** with proper exit code handling
+
+**From conversation (Telegram topic 2):** Use exec to call spawn_claude.sh. The Claude Code topic is pre-configured to do this automatically.
+**From cron scripts:** Call spawn_claude.sh directly (already used by cron_autonomous.sh).
+**From /spawn skill:** Routes through spawn_claude.sh.
+
+**NEVER use sessions_spawn** — it spawns M2.5 (wrong model), not Claude Code. This caused a $4+ waste incident.
 
 **Timeout rules:**
 - Simple analysis: 600s (10 min)
@@ -193,7 +184,7 @@ This handles env cleanup, context injection, output capture, and Telegram delive
 
 ### ⚠️ AFTER SPAWNING — CRITICAL BEHAVIOR
 
-After you spawn Claude Code (via ACP or `spawn_claude.sh`):
+After you spawn Claude Code (via `spawn_claude.sh`):
 1. Send ONE message to the user: "Spawned Claude Code. Timeout: [X]s. Output will be delivered when complete."
 2. **STOP. Say nothing more about this task until the command returns.**
 3. Do NOT send "still running" messages. Do NOT check process status. Do NOT poll.
@@ -208,7 +199,7 @@ After you spawn Claude Code (via ACP or `spawn_claude.sh`):
 
 | Wrong | Why | Right |
 |-------|-----|-------|
-| `sessions_spawn({task: "..."})` without `runtime: "acp"` | Spawns M2.5, not Claude Code | `sessions_spawn({runtime: "acp", agentId: "claude", task: "..."})` |
+| `sessions_spawn({...})` (any form) | Spawns M2.5, not Claude Code. Caused $4+ waste | `spawn_claude.sh "task" 1200` |
 | `timeout 300 claude -p ...` | 5 min too short for complex work | `timeout 1200 claude -p ...` |
 | Inline prompt with special chars | Shell parsing breaks JSON/quotes | Write prompt to /tmp file first |
 | Doing work yourself after spawning | Burns M2.5 tokens for duplicate work | Wait for Claude Code to finish |
@@ -235,7 +226,7 @@ Your subconscious (cron + Claude Code) does heavy work. You (M2.5) digest and in
 4. **Don't kill on silence** — output is buffered; no output = still working
 5. **Default to Opus 4.6** — ONLY model for Claude Code; never use Sonnet via Claude Code
 6. **Write prompts to /tmp file** — avoids shell parsing issues with quotes and JSON
-7. **Always use `runtime: "acp"` with sessions_spawn** — plain sessions_spawn spawns M2.5, not Claude Code
+7. **Always use spawn_claude.sh** — NEVER use sessions_spawn (any form) — it spawns M2.5, not Claude Code
 
 See the `claude-code` skill for detailed patterns and examples.
 
@@ -343,10 +334,10 @@ You have a dedicated Telegram forum group with topic-based channels. Each topic 
 ### Topic Behavior Rules
 
 **Claude Code topic (thread 2):**
-- EVERY message is a task for Claude Code — spawn immediately using ACP
-- Use: `sessions_spawn({runtime: "acp", agentId: "claude", task: "<user message>", thread: true})`
+- EVERY message is a task for Claude Code — spawn immediately
+- Use exec: `/home/agent/.openclaw/workspace/scripts/spawn_claude.sh "<user message>" 1200 --topic=2 --chat=REDACTED_GROUP_ID`
+- spawn_claude.sh injects brain context (vector DB, goals, episodes, graph associations) via prompt_builder.py
 - DO NOT try to answer yourself. ALWAYS delegate to Claude Code.
-- DO NOT use exec or spawn_claude.sh from this topic — use ACP.
 
 **Brain topic (thread 3):**
 - Load brain on entry: `from brain import brain, search, remember, capture`
@@ -439,8 +430,8 @@ Delegate a task to Claude Code (Opus 4.6). See the `spawn-claude` skill.
 ```bash
 /home/agent/.openclaw/workspace/scripts/spawn_claude.sh "[user's task description]" 1200
 ```
-**From conversation:** Use ACP instead: `sessions_spawn({runtime: "acp", agentId: "claude", task: "...", thread: true})`
-**From cron/CLI:** Use `spawn_claude.sh` as shown above.
+**From conversation:** Use exec to call `spawn_claude.sh` (auto-injects brain context via prompt_builder.py).
+**From cron/CLI:** Call `spawn_claude.sh` directly as shown above.
 
 ## Tools
 
