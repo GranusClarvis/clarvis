@@ -154,7 +154,35 @@ def benchmark_brain_speed():
 
 
 def benchmark_retrieval_quality():
-    """Dimension 2: Semantic retrieval accuracy and precision."""
+    """Dimension 2: Semantic retrieval accuracy and precision.
+
+    Prefers reading the latest retrieval_benchmark result file (from cron_evening.sh)
+    to avoid re-running the expensive 20-query benchmark and risking contention.
+    Falls back to running it live, then to a lightweight accuracy check.
+    """
+    # Prefer cached results from the most recent retrieval_benchmark run (cron_evening.sh)
+    latest_file = os.path.join(WORKSPACE, "data/retrieval_benchmark/latest.json")
+    if os.path.exists(latest_file):
+        try:
+            with open(latest_file) as f:
+                report = json.load(f)
+            # Only use if less than 36 hours old
+            ts = report.get("timestamp", "")
+            if ts:
+                from datetime import datetime, timezone
+                age_h = (datetime.now(timezone.utc) - datetime.fromisoformat(ts)).total_seconds() / 3600
+                if age_h < 36:
+                    return {
+                        "hit_rate": report.get("avg_recall", 0.0),
+                        "precision_at_3": report.get("avg_precision_at_k", 0.0),
+                        "n_pairs": report.get("num_queries", 0),
+                        "category_scores": report.get("by_category", {}),
+                        "source": "retrieval_benchmark_cached",
+                    }
+        except Exception:
+            pass
+
+    # Live run if no cache available
     try:
         from retrieval_benchmark import run_benchmark
         report = run_benchmark()
@@ -165,35 +193,44 @@ def benchmark_retrieval_quality():
             "category_scores": report.get("by_category", {}),
             "source": "retrieval_benchmark",
         }
-    except Exception:
+    except Exception as e1:
         # Fallback: test against known-answer pairs
-        from brain import brain
-        hits = 0
-        for query, expected in ACCURACY_QUERIES:
-            results = brain.recall(query, n=3)
-            for r in results:
-                doc = r.get("document", "").lower()
-                if any(exp.lower() in doc for exp in expected):
-                    hits += 1
-                    break
-        hit_rate = round(hits / len(ACCURACY_QUERIES), 3) if ACCURACY_QUERIES else 0.0
-        # Estimate precision@3 from same data
-        precision_hits = 0
-        precision_total = 0
-        for query, expected in ACCURACY_QUERIES[:5]:
-            results = brain.recall(query, n=3)
-            for r in results:
-                precision_total += 1
-                doc = r.get("document", "").lower()
-                if any(exp.lower() in doc for exp in expected):
-                    precision_hits += 1
-        precision_at_3 = round(precision_hits / max(precision_total, 1), 3)
-        return {
-            "hit_rate": hit_rate,
-            "precision_at_3": precision_at_3,
-            "n_pairs": len(ACCURACY_QUERIES),
-            "source": "accuracy_fallback",
-        }
+        try:
+            from brain import brain
+            hits = 0
+            for query, expected in ACCURACY_QUERIES:
+                results = brain.recall(query, n=3)
+                for r in results:
+                    doc = r.get("document", "").lower()
+                    if any(exp.lower() in doc for exp in expected):
+                        hits += 1
+                        break
+            hit_rate = round(hits / len(ACCURACY_QUERIES), 3) if ACCURACY_QUERIES else 0.0
+            precision_hits = 0
+            precision_total = 0
+            for query, expected in ACCURACY_QUERIES[:5]:
+                results = brain.recall(query, n=3)
+                for r in results:
+                    precision_total += 1
+                    doc = r.get("document", "").lower()
+                    if any(exp.lower() in doc for exp in expected):
+                        precision_hits += 1
+            precision_at_3 = round(precision_hits / max(precision_total, 1), 3)
+            return {
+                "hit_rate": hit_rate,
+                "precision_at_3": precision_at_3,
+                "n_pairs": len(ACCURACY_QUERIES),
+                "source": "accuracy_fallback",
+            }
+        except Exception as e2:
+            # Both paths failed — return error state instead of crashing
+            return {
+                "hit_rate": None,
+                "precision_at_3": None,
+                "n_pairs": 0,
+                "source": "error",
+                "error": f"primary: {e1}, fallback: {e2}",
+            }
 
 
 def benchmark_efficiency():
@@ -295,7 +332,12 @@ def benchmark_phi():
 
 
 def benchmark_episodes():
-    """Dimension 4: Episode success rate and action accuracy."""
+    """Dimension 4: Episode success rate and action accuracy.
+
+    IMPORTANT: Excludes soft_failures from success rate calculation.
+    soft_failures are manufactured by failure_amplifier (observational annotations),
+    not real execution failures. Including them inflates the failure rate.
+    """
     try:
         from episodic_memory import EpisodicMemory
         em = EpisodicMemory()
@@ -303,15 +345,21 @@ def benchmark_episodes():
         outcomes = stats.get("outcomes", {})
         total = stats.get("total", 0)
         successes = outcomes.get("success", 0)
-        success_rate = round(successes / max(total, 1), 3)
 
-        # Action accuracy = (success + partial) / total non-timeout
+        # Exclude soft_failures (manufactured by failure_amplifier, not real failures)
+        soft_failures = outcomes.get("soft_failure", 0)
+        real_total = max(total - soft_failures, 1)
+        success_rate = round(successes / real_total, 3)
+
+        # Action accuracy = success / (real total - timeouts)
         timeouts = outcomes.get("timeout", 0)
-        non_timeout = max(total - timeouts, 1)
+        non_timeout = max(real_total - timeouts, 1)
         action_accuracy = round(successes / non_timeout, 3)
 
         return {
             "total_episodes": total,
+            "real_episodes": real_total,
+            "soft_failures_excluded": soft_failures,
             "success_rate": success_rate,
             "action_accuracy": action_accuracy,
             "outcomes": outcomes,
@@ -456,23 +504,31 @@ def benchmark_autonomy():
     return result
 
 
-def benchmark_consciousness():
-    """Consciousness benchmarks: Phi composite, goal progress velocity."""
+def benchmark_consciousness(phi_data=None):
+    """Consciousness benchmarks: Phi composite, goal progress velocity.
+
+    Accepts pre-computed phi data to avoid duplicate compute_phi() call.
+    """
     result = {
         "phi_composite": 0.0,
         "cross_collection_overlap": 0.0,
         "goal_progress_velocity": 0.0,
     }
 
-    # Phi from existing benchmark
-    try:
-        from phi_metric import compute_phi
-        phi_data = compute_phi()
+    # Phi — use passed-in data (no duplicate call)
+    if phi_data:
         result["phi_composite"] = phi_data.get("phi", 0.0)
         components = phi_data.get("components", {})
         result["cross_collection_overlap"] = components.get("semantic_cross_collection", 0.0)
-    except Exception:
-        pass
+    else:
+        try:
+            from phi_metric import compute_phi
+            phi_result = compute_phi()
+            result["phi_composite"] = phi_result.get("phi", 0.0)
+            components = phi_result.get("components", {})
+            result["cross_collection_overlap"] = components.get("semantic_cross_collection", 0.0)
+        except Exception:
+            pass
 
     # Goal progress velocity (avg weekly delta)
     try:
@@ -490,8 +546,11 @@ def benchmark_consciousness():
     return result
 
 
-def benchmark_intelligence():
-    """Intelligence benchmarks: retrieval, query speed, confidence calibration, context compression."""
+def benchmark_intelligence(retrieval_data=None, speed_data=None):
+    """Intelligence benchmarks: retrieval, query speed, confidence calibration, context compression.
+
+    Accepts pre-computed retrieval and speed data to avoid duplicate benchmark calls.
+    """
     result = {
         "retrieval_hit_rate": 0.0,
         "retrieval_precision3": 0.0,
@@ -500,20 +559,14 @@ def benchmark_intelligence():
         "context_compression_ratio": 0.0,
     }
 
-    # Retrieval from existing benchmark
-    try:
-        rq = benchmark_retrieval_quality()
-        result["retrieval_hit_rate"] = rq.get("hit_rate", 0.0)
-        result["retrieval_precision3"] = rq.get("precision_at_3", 0.0)
-    except Exception:
-        pass
+    # Retrieval — use passed-in data (no duplicate call)
+    if retrieval_data:
+        result["retrieval_hit_rate"] = retrieval_data.get("hit_rate", 0.0) or 0.0
+        result["retrieval_precision3"] = retrieval_data.get("precision_at_3", 0.0) or 0.0
 
-    # Brain query speed
-    try:
-        sp = benchmark_brain_speed()
-        result["brain_query_speed_avg_s"] = round(sp["avg_ms"] / 1000, 3)
-    except Exception:
-        pass
+    # Brain query speed — use passed-in data (no duplicate call)
+    if speed_data:
+        result["brain_query_speed_avg_s"] = round(speed_data.get("avg_ms", 0) / 1000, 3)
 
     # Confidence calibration Brier score
     try:
@@ -803,6 +856,16 @@ def write_alerts(alerts):
     os.replace(tmp, ALERTS_FILE)
 
 
+def _safe_bench(fn, name):
+    """Run a benchmark function safely, returning empty dict on failure."""
+    try:
+        result = fn()
+        return result if isinstance(result, dict) else {}
+    except Exception as e:
+        print(f"  WARN: benchmark_{name} failed: {e}", file=sys.stderr)
+        return {}
+
+
 def push_optimization_tasks(alerts):
     """Push critical/high alerts to the evolution queue for autonomous fix."""
     actionable = [a for a in alerts if a.get("severity") in ("critical", "high")]
@@ -832,33 +895,40 @@ def push_optimization_tasks(alerts):
 # ============================================================
 
 def run_full_benchmark():
-    """Run all benchmarks and return unified report with PI."""
+    """Run all benchmarks and return unified report with PI.
+
+    Each benchmark is individually wrapped in try/except so one failure
+    doesn't prevent others from running. Duplicate calls are eliminated
+    by passing pre-computed data to composite benchmarks.
+    """
     timestamp = datetime.now(timezone.utc).isoformat()
     t0 = time.monotonic()
 
-    speed = benchmark_brain_speed()
-    retrieval = benchmark_retrieval_quality()
-    efficiency = benchmark_efficiency()
-    brain_stats = benchmark_brain_stats()
-    phi = benchmark_phi()
-    episodes = benchmark_episodes()
-    context = benchmark_context_quality()
-    load = benchmark_load_scaling()
+    # Core benchmarks (run once, results shared with composite benchmarks)
+    _empty = lambda: {}
+    speed = _safe_bench(benchmark_brain_speed, "brain_speed")
+    retrieval = _safe_bench(benchmark_retrieval_quality, "retrieval")
+    efficiency = _safe_bench(benchmark_efficiency, "efficiency")
+    brain_stats = _safe_bench(benchmark_brain_stats, "brain_stats")
+    phi = _safe_bench(benchmark_phi, "phi")
+    episodes = _safe_bench(benchmark_episodes, "episodes")
+    context = _safe_bench(benchmark_context_quality, "context")
+    load = _safe_bench(benchmark_load_scaling, "load")
 
-    # New dimensions (2026-02-27)
-    autonomy = benchmark_autonomy()
-    consciousness = benchmark_consciousness()
-    intelligence = benchmark_intelligence()
-    self_improvement = benchmark_self_improvement()
+    # Composite benchmarks — pass pre-computed data to avoid duplicate calls
+    autonomy = _safe_bench(benchmark_autonomy, "autonomy")
+    consciousness = _safe_bench(lambda: benchmark_consciousness(phi_data=phi), "consciousness")
+    intelligence = _safe_bench(lambda: benchmark_intelligence(retrieval_data=retrieval, speed_data=speed), "intelligence")
+    self_improvement = _safe_bench(benchmark_self_improvement, "self_improvement")
 
     bench_duration = round(time.monotonic() - t0, 2)
 
-    # Flatten key metrics
+    # Flatten key metrics (use .get() with defaults for resilience)
     metrics = {
-        "brain_query_avg_ms":   speed["avg_ms"],
-        "brain_query_p95_ms":   speed["p95_ms"],
-        "retrieval_hit_rate":   retrieval["hit_rate"],
-        "retrieval_precision3": retrieval.get("precision_at_3", 0.0),
+        "brain_query_avg_ms":   speed.get("avg_ms", 0),
+        "brain_query_p95_ms":   speed.get("p95_ms", 0),
+        "retrieval_hit_rate":   retrieval.get("hit_rate") or 0.0,  # None → 0.0
+        "retrieval_precision3": retrieval.get("precision_at_3") or 0.0,
         "avg_tokens_per_op":    efficiency.get("avg_tokens_per_op"),
         "heartbeat_overhead_s": efficiency.get("heartbeat_overhead_s"),
         "episode_success_rate": episodes["success_rate"],

@@ -99,6 +99,16 @@ try:
 except ImportError:
     get_automation_insights = None
 
+try:
+    from synaptic_memory import SynapticMemory
+except ImportError:
+    SynapticMemory = None
+
+try:
+    from somatic_markers import SomaticMarkerSystem
+except ImportError:
+    SomaticMarkerSystem = None
+
 import_time = time.monotonic() - start_import
 log = lambda msg: print(f"[{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S')}] PREFLIGHT: {msg}", file=sys.stderr)
 log(f"All modules imported in {import_time:.2f}s (single process)")
@@ -437,6 +447,97 @@ def run_preflight(dry_run=False):
     result["brain_introspection"] = introspection_text
     result["timings"]["brain_introspection"] = round(time.monotonic() - t87, 3)
 
+    # === 8.8 SYNAPTIC SPREADING ACTIVATION: Neural associations beyond vector search ===
+    t88 = time.monotonic()
+    synaptic_associations = ""
+    if SynapticMemory:
+        try:
+            sm = SynapticMemory()
+            # Collect memory IDs from brain introspection (which does vector recall with IDs)
+            recalled_ids = []
+            if introspect_for_task and introspection_text:
+                try:
+                    # Re-use the introspection result — it has recalled memory IDs
+                    from brain import get_brain, LEARNINGS
+                    b_syn = get_brain()
+                    syn_results = b_syn.recall(next_task, collections=[LEARNINGS], n=5, min_importance=0.3)
+                    if syn_results:
+                        for mem in syn_results:
+                            mid = mem.get("id", "")
+                            if mid:
+                                recalled_ids.append(mid)
+                except Exception:
+                    pass
+            if recalled_ids:
+                spread_results = sm.spread(recalled_ids[:5], n=5, min_weight=0.1)
+                if spread_results:
+                    # spread() returns list of (memory_id, activation) tuples
+                    # Resolve IDs to documents for context
+                    lines = []
+                    for mem_id, activation in spread_results[:5]:
+                        try:
+                            doc_results = b_syn.recall(mem_id[:30], n=1)
+                            doc_text = doc_results[0].get("document", mem_id)[:80] if doc_results else mem_id[:40]
+                        except Exception:
+                            doc_text = mem_id[:40]
+                        lines.append(f"  [{activation:.2f}] {doc_text}")
+                    synaptic_associations = "SYNAPTIC ASSOCIATIONS (neural co-activation):\n" + "\n".join(lines)
+                    log(f"Synaptic spread: {len(spread_results)} associations from {len(recalled_ids)} seeds")
+        except Exception as e:
+            log(f"Synaptic spreading activation failed: {e}")
+    result["synaptic_associations"] = synaptic_associations
+    result["timings"]["synaptic_spread"] = round(time.monotonic() - t88, 3)
+
+    # === 8.9 SOMATIC MARKERS + EPISODIC CAUSAL CHAINS: Failure avoidance signals ===
+    t89 = time.monotonic()
+    failure_avoidance = ""
+    try:
+        avoidance_lines = []
+
+        # Somatic markers: emotional signals from past experiences
+        if SomaticMarkerSystem:
+            try:
+                somatic = SomaticMarkerSystem()
+                bias = somatic.get_bias(next_task)
+                if bias and bias.get("valence", 0) < -0.1:
+                    markers = bias.get("markers", [])
+                    for m in markers[:3]:
+                        stimulus = m.get("stimulus", "")[:60]
+                        val = m.get("valence", 0)
+                        if val < -0.1:
+                            avoidance_lines.append(f"  AVOID [{val:.2f}]: {stimulus}")
+            except Exception:
+                pass
+
+        # Episodic causal chains: root causes of recent failures
+        if EpisodicMemory:
+            try:
+                em_causal = EpisodicMemory()
+                recent_failures = em_causal.recall_failures(n=3)
+                if recent_failures:
+                    for fail_ep in (recent_failures if isinstance(recent_failures, list) else [recent_failures]):
+                        fail_id = fail_ep.get("id", "")
+                        fail_task = fail_ep.get("task", "")[:60]
+                        if fail_id:
+                            causes = em_causal.causes_of(fail_id)
+                            if causes:
+                                cause_text = causes[0].get("task", causes[0].get("description", ""))[:60]
+                                avoidance_lines.append(f"  FAIL: {fail_task} <- caused by: {cause_text}")
+                            else:
+                                lesson = fail_ep.get("lesson", fail_ep.get("error", ""))[:60]
+                                if lesson:
+                                    avoidance_lines.append(f"  FAIL: {fail_task} — {lesson}")
+            except Exception:
+                pass
+
+        if avoidance_lines:
+            failure_avoidance = "FAILURE AVOIDANCE (somatic markers + causal chains):\n" + "\n".join(avoidance_lines[:5])
+            log(f"Failure avoidance: {len(avoidance_lines)} signals")
+    except Exception as e:
+        log(f"Failure avoidance assembly failed: {e}")
+    result["failure_avoidance"] = failure_avoidance
+    result["timings"]["failure_avoidance"] = round(time.monotonic() - t89, 3)
+
     # === 9. TASK ROUTING (moved before context compression to inform tier) ===
     t9 = time.monotonic()
     if classify_task:
@@ -502,9 +603,32 @@ def run_preflight(dry_run=False):
 
     # Append brain goals to context brief (direct brain → subconscious link)
     if brain_goals:
-        context_brief += f"\nBRAIN GOALS (active objectives):\n{brain_goals[:300]}\n"
+        context_brief += f"\nBRAIN GOALS (active objectives):\n{brain_goals[:500]}\n"
     if brain_context:
-        context_brief += f"\nBRAIN CONTEXT: {brain_context[:150]}\n"
+        context_brief += f"\nBRAIN CONTEXT: {brain_context[:200]}\n"
+
+    # Append brain working memory (what recent heartbeats were doing)
+    if brain_working_memory:
+        context_brief += f"\nWORKING MEMORY (recent activity):\n{brain_working_memory[:300]}\n"
+
+    # Append world model prediction (success probability + novelty signal)
+    wm_p = result.get("wm_p_success")
+    wm_curiosity = result.get("wm_curiosity")
+    if wm_p is not None:
+        wm_hint = f"WORLD MODEL: P(success)={wm_p:.0%}"
+        if wm_curiosity and wm_curiosity > 0.6:
+            wm_hint += f", novelty={wm_curiosity:.2f} (explore broadly)"
+        elif wm_p < 0.4:
+            wm_hint += " (low — tread carefully, check prior failures)"
+        context_brief += f"\n{wm_hint}\n"
+
+    # Append failure avoidance signals (somatic markers + causal chains)
+    if failure_avoidance:
+        context_brief += f"\n{failure_avoidance}\n"
+
+    # Append synaptic associations (neural co-activation patterns)
+    if synaptic_associations:
+        context_brief += f"\n{synaptic_associations}\n"
 
     # Append codelet competition results (LIDA domain focus)
     if codelet_result:
@@ -520,9 +644,9 @@ def run_preflight(dry_run=False):
     if gwt_broadcast_text:
         context_brief += f"\nGWT BROADCAST (conscious workspace):\n{gwt_broadcast_text[:400]}\n"
 
-    # Append brain introspection (self-awareness context for task executor)
+    # Append brain introspection (self-awareness context — raised from 600 to 1200 chars)
     if introspection_text:
-        context_brief += f"\n{introspection_text[:600]}\n"
+        context_brief += f"\n{introspection_text[:1200]}\n"
 
     # === 10.5 AUTOMATION INSIGHTS: Historical pattern warnings ===
     t105 = time.monotonic()

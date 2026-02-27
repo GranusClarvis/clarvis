@@ -641,9 +641,9 @@ def _assess_code_generation():
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     try:
-        # Use --after with yesterday to catch all of today
+        # Use 24-hour rolling window (not calendar day) to avoid time-of-day crashes
         result = subprocess.run(
-            ["git", "log", "--oneline", f"--after={today} 00:00:00", "--format=%s"],
+            ["git", "log", "--oneline", "--since=24 hours ago", "--format=%s"],
             capture_output=True, text=True, timeout=10,
             cwd="/home/agent/.openclaw/workspace"
         )
@@ -1296,6 +1296,9 @@ def check_weekly_regression(current_scores, history):
 
     for snap in snapshots:
         try:
+            # Only compare against snapshots with same scoring methodology
+            if snap.get("scoring_version", 1) != 2:
+                continue
             ts = snap.get("timestamp", "")
             snap_dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
             if snap_dt.tzinfo is None:
@@ -1397,10 +1400,11 @@ def daily_update():
         if data["score"] < ALERT_THRESHOLD:
             alerts.append(f"ALERT: {data['label']} score {data['score']:.2f} below threshold {ALERT_THRESHOLD}")
 
-    # Save snapshot to history
+    # Save snapshot to history (scoring_version tracks methodology changes)
     snapshot = {
         "date": today,
         "timestamp": datetime.now(timezone.utc).isoformat(),
+        "scoring_version": 2,  # v2: quality-based continuous scoring (2026-02-27+)
         "scores": {d: current[d]["score"] for d in current},
         "evidence": {d: current[d]["evidence"] for d in current},
     }
@@ -1453,7 +1457,18 @@ def daily_update():
     regression_tasks = regression["tasks"]
     alerts.extend(regression_alerts)
     if regression_tasks:
-        inject_tasks_to_queue(regression_tasks)
+        # Dedup: don't inject regression tasks for domains already in the queue
+        try:
+            queue_file = "/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md"
+            with open(queue_file) as f:
+                queue_content = f.read().lower()
+            deduped = [t for t in regression_tasks
+                       if "regression-alert" not in queue_content
+                       or t.split("]")[1].split("dropped")[0].strip().lower() not in queue_content]
+            if deduped:
+                inject_tasks_to_queue(deduped)
+        except Exception:
+            inject_tasks_to_queue(regression_tasks)
 
     result = {
         "date": today,
