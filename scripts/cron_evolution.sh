@@ -101,7 +101,7 @@ echo "" >> "$EVO_PROMPT_FILE"
 echo "Currently $PENDING_COUNT pending tasks in queue." >> "$EVO_PROMPT_FILE"
 echo "Output: 1-paragraph analysis + list of tasks added." >> "$EVO_PROMPT_FILE"
 
-timeout 900 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \
+timeout 1200 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \
     /home/agent/.local/bin/claude -p "$(cat "$EVO_PROMPT_FILE")" \
     --dangerously-skip-permissions --model claude-opus-4-6 >> "$LOGFILE" 2>&1
 rm -f "$EVO_PROMPT_FILE"

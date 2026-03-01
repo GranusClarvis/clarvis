@@ -638,7 +638,6 @@ def _assess_code_generation():
     """
     score = 0.0
     evidence = []
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     try:
         # Use 24-hour rolling window (not calendar day) to avoid time-of-day crashes

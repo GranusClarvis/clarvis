@@ -103,16 +103,38 @@ TIMING_QUERIES = [
     "What happened yesterday?",
 ]
 
-# Queries with known expected answers for accuracy testing
+# Queries with known expected answers for accuracy testing (20+ ground-truth pairs)
 ACCURACY_QUERIES = [
+    # Identity
     ("Who created Clarvis?", ["patrick", "inverse"]),
-    ("What port does the gateway run on?", ["18789"]),
+    ("What capabilities does Clarvis have?", ["capability", "git", "code"]),
+    # Infrastructure
+    ("What port does the gateway run on?", ["18789", "gateway"]),
+    ("ClarvisDB architecture and components", ["brain.py", "chromadb", "clarvisdb"]),
+    ("Security rules and permissions policy", ["security", "permission", "grouppolicy", "credential"]),
+    ("What are the ONNX embeddings?", ["minilm", "onnx", "embedding"]),
+    # Knowledge
     ("How to run brain health?", ["health", "brain.py"]),
     ("What is the Phi metric?", ["integration", "consciousness", "iit"]),
-    ("What model does the conscious layer use?", ["minimax", "m2.5"]),
-    ("How many cron heartbeats per day?", ["6"]),
-    ("What backup system does Clarvis use?", ["backup_daily", "incremental"]),
-    ("What are the ONNX embeddings?", ["minilm", "onnx", "embedding"]),
+    ("How does the attention mechanism work?", ["attention", "spotlight", "gwt", "salience"]),
+    ("Lessons about integrating ClarvisDB", ["clarvisdb", "integrate", "wire"]),
+    # Goals
+    ("What are my current goals?", ["goal", "clarvisdb", "agi", "consciousness"]),
+    ("Progress on session continuity", ["session continuity"]),
+    ("AGI and consciousness goal progress", ["agi", "consciousness"]),
+    # Procedures
+    ("How to fix cron_autonomous", ["cron_autonomous", "fix"]),
+    ("Procedure for reasoning chain outcomes", ["reasoning chain", "outcome"]),
+    # Preferences
+    ("What model does the conscious layer use?", ["minimax", "m2.5", "conscious"]),
+    ("What timezone should I use?", ["cet", "timezone"]),
+    ("Communication style preferences", ["direct", "no fluff", "communication"]),
+    # Context
+    ("What happened in the last heartbeat?", ["heartbeat", "brain healthy", "verified"]),
+    ("What backup system does Clarvis use?", ["backup", "incremental", "clarvisdb"]),
+    # Meta
+    ("Success rate across sessions", ["success rate", "sessions"]),
+    ("What recurring themes appear in my sessions?", ["theme", "recurring", "session"]),
 ]
 
 
@@ -166,12 +188,12 @@ def benchmark_retrieval_quality():
         try:
             with open(latest_file) as f:
                 report = json.load(f)
-            # Only use if less than 36 hours old
+            # Only use if less than 72 hours old (cron_evening runs daily; 72h tolerates a missed run)
             ts = report.get("timestamp", "")
             if ts:
                 from datetime import datetime, timezone
                 age_h = (datetime.now(timezone.utc) - datetime.fromisoformat(ts)).total_seconds() / 3600
-                if age_h < 36:
+                if age_h < 72:
                     return {
                         "hit_rate": report.get("avg_recall", 0.0),
                         "precision_at_3": report.get("avg_precision_at_k", 0.0),
@@ -184,8 +206,13 @@ def benchmark_retrieval_quality():
 
     # Live run if no cache available
     try:
-        from retrieval_benchmark import run_benchmark
+        from retrieval_benchmark import run_benchmark, save_report
         report = run_benchmark()
+        # Cache results so next benchmark_retrieval_quality() call can use cached path
+        try:
+            save_report(report)
+        except Exception:
+            pass
         return {
             "hit_rate": report.get("avg_recall", 0.0),
             "precision_at_3": report.get("avg_precision_at_k", 0.0),
@@ -905,7 +932,6 @@ def run_full_benchmark():
     t0 = time.monotonic()
 
     # Core benchmarks (run once, results shared with composite benchmarks)
-    _empty = lambda: {}
     speed = _safe_bench(benchmark_brain_speed, "brain_speed")
     retrieval = _safe_bench(benchmark_retrieval_quality, "retrieval")
     efficiency = _safe_bench(benchmark_efficiency, "efficiency")

@@ -258,3 +258,94 @@ _Last archived: 2026-02-23_
 - [x] Bundle S: Autonomous Code Evolution — Auto-fixing PR review comments, Git worktree isolation per task, Agent lifecycle management (spawn/resume/kill/restore) (2026-02-26 — Implemented scripts/agent_lifecycle.py: full spawn/list/status/kill/restore/merge/cleanup with git worktree isolation per agent. scripts/pr_autofix.py: fetches GH PR review comments via gh CLI, groups by file, filters actionable, spawns Claude Code to fix. spawn_claude.sh: added --isolated flag for worktree-isolated spawns with auto-commit and branch preservation. Updated spawn-claude skill docs.)
 - [x] Bundle T: Plugin & Config Patterns — Swappable component patterns (runtime/agent/tracker), Interface-driven plugin system, Configuration-driven orchestration (YAML) (2026-02-27 — Three topics converge on the Plugin-Config-Strategy Triangle: Interface defines contract (what), Registry maps keys to implementations (which), Config drives selection at runtime (how). Key patterns: Python Protocol-based plugin interfaces over ABCs for structural typing; Registry pattern replacing if/else chains in task_router.py; declarative YAML pipeline DAGs with hot-reload (PayPal research: 67% dev time reduction, 74% code reduction). Implementations: ExecutorRegistry for task_router.py model selection, YAML-driven heartbeat pipeline. Research note: memory/research/ingested/bundle-t-plugin-config-patterns.md)
 - [x] Bundle U: Self-Representation & Modeling — VanRullen & Kanai (GWT + Deep Learning), Dossa et al. (2024) revisit, "Anticipatory Systems" revisit (2026-02-25 13:11 UTC)
+
+## Archived 2026-02-27
+- [x] [CRON_OVERLAP_AUDIT] Audit cron schedule for overlap. Reduce research from 3x to 2x/day, use freed slot for implementation sprint. (2026-02-27)
+
+## Archived 2026-02-27
+- [x] [RECONSOLIDATION_MEMORY] Implement reconsolidation-inspired memory updating: when retrieved, make memory labile for brief window. Add brain.reconsolidate(memory_id, updated_text). (2026-02-27 17:09 UTC)
+
+## Archived 2026-02-27
+- [x] 2026-02-27: World Models — Internal representations of physical world enabling AI to predict consequences, reason, and plan. Key insight: addresses "body problem" by simulating real-world scenarios without physical embodiment.
+
+## Archived 2026-02-27
+- [x] [RESEARCH_REINGEST] Create .md research notes for 4 partially-stored topics (DGM, Friston, World Models, AZR) and formally ingest into clarvis-learnings. (2026-02-27)
+
+## Archived 2026-02-27
+- [x] [SELF_TEST_HARNESS] Automated self-testing after code-modifying heartbeats: run pytest + brain.health_check() in postflight. (2026-02-27 22:07 UTC)
+
+## Archived 2026-02-27
+- [x] [AUTONOMY_FILE_PIPELINE] End-to-end file pipeline: download a file from URL → process/transform → save locally. Test with: PDF text extraction, image download + analysis, JSON API fetch + filter. (2026-02-27 23:05 UTC)
+
+## Archived 2026-02-28
+- [x] [AUTONOMY_NAV] Navigation benchmark — given a URL, navigate to it, extract page title + main content, save structured output to file. Measure: success rate, time-to-extract. Test with 5 diverse sites (Wikipedia, HN, weather, docs, blog). (2026-02-28 01:06 UTC)
+
+## Archived 2026-02-28
+- [x] [BROWSER_SESSION_PERSIST] Browser session persistence — persist cookies/sessionStorage across sessions. Required for all autonomy benchmarks that involve logged-in state.
+- [x] [AUTONOMY_DATA_EXTRACT] Given a URL with tabular/structured data, extract it into clean JSON/CSV. Test with: Wikipedia tables, HN front page, weather data, API docs. (2026-02-28 05:35 UTC)
+- [x] [META_LEARNING 2026-02-28] [Meta-learning/strategy] Investigate 'wire' strategy — only 42% success rate (12 tasks). Root causes: shallow_reasoning (57%, jumps to edits without reading), long_duration (29%, explores broadly), missing imports (14%). Fix v2: expanded KNOWN_TARGETS 4→8 (all cron scripts), added INSERT_HINT per target, added target file pre-read (first/last lines to eliminate exploration), time-budgeted sub-steps with explicit output requirements ("Output: 'Inserting at line N'"), added anti-pattern warnings ("Do NOT explore broadly", "Do NOT refactor source"), auto-detect unknown targets via glob. All 12 historical wire task descriptions detected correctly. (2026-02-28 UTC)
+
+## Archived 2026-02-28
+- [x] [AUTONOMY_ERROR_RECOVERY] Error recovery benchmark — intentionally navigate to a 404/broken page, detect the error state, and recover (go back, try alternative). Measure: detection accuracy, recovery success. (2026-02-28 07:09 UTC)
+
+## Archived 2026-02-28
+- [x] [AUTONOMY_FORM] Form interaction benchmark — given a form URL (e.g. httpbin.org/forms/post), fill all fields and submit autonomously. Measure: field detection accuracy, submission success.
+- [x] [RESEARCH_DISCOVERY 2026-02-28] Research: Intrinsic Metacognitive Learning for Self-Improving Agents — Agents that evaluate, reflect on, and adapt their own learning strategies. Covers SPIRAL self-play framework, SWE-RL for software agents, and autocurricula. Applicable to Clarvis meta-learning insights and strategy success tracking. Sources: openreview.net/forum?id=4KhDd0Ozqe, arxiv.org/abs/2512.18552, arxiv.org/abs/2507.06466 ✅ 2026-02-28
+- [x] [RESEARCH_DISCOVERY 2026-02-28] Research: ACT-R Cognitive Architecture for Agent Memory — Vector-based activation with temporal decay, semantic similarity, and probabilistic noise for human-like remembering/forgetting. Covers ACT-R+LLM integration, Ebbinghaus forgetting curves (MemoryBank), and A-Mem agentic memory. Directly applicable to Clarvis hebbian_memory.py decay functions and brain.py retrieval scoring. Sources: dl.acm.org/doi/10.1145/3765766.3765803, arxiv.org/abs/2502.12110, arxiv.org/abs/2504.02441 (2026-02-28 09:11 UTC)
+
+## Archived 2026-02-28
+- [x] [RESEARCH_DISCOVERY 2026-02-28] Research: Sleep-Cycle Memory Consolidation for LLM Agents — Wake/sleep paradigm where episodic memories from active tasks are periodically consolidated into semantic knowledge during offline phases. Covers SimpleMem (30x efficiency), MemAgents (ICLR 2026 workshop), and sleep-time adapter fine-tuning. Directly applicable to Clarvis dream_engine.py and memory_consolidation.py. Sources: arxiv.org/abs/2510.18866, openreview.net/pdf?id=U51WxL382H, letta.com/blog/agent-memory (2026-02-28 11:12 UTC)
+
+### Research Discovery (2026-02-28)
+- [x] [RESEARCH_DISCOVERY] Self-Evolving Agent Architectures (EvoAgentX Survey) — Ingested 2 major surveys (arXiv:2507.21046, arXiv:2508.07407), EvoAgentX framework, Lifelong Agents workshop. Produced comprehensive taxonomy (what/when/how to evolve), Clarvis gap analysis (3 HIGH-priority gaps: prompt self-optimization, golden trace replay, novelty task scoring), and 3 new queue items in Pillar 4. File: memory/research/ingested/self-evolving-agent-architectures.md
+
+## Archived 2026-02-28
+- [x] [RESEARCH_DISCOVERY 2026-02-28] Research: Self-Evolving Agent Architectures (EvoAgentX Survey) — DONE. Ingested to memory/research/ingested/self-evolving-agent-architectures.md. 3 HIGH-priority implementation tasks added to Pillar 4.
+
+## Archived 2026-02-28
+- [x] [PHI_DECOMPOSITION_DASHBOARD] Extend phi_metric.py with decomposed reporting: intra_density per collection, cross_connectivity per pair. Write to data/phi_decomposition.json. (2026-02-28 15:06 UTC)
+- [x] [IIT_CONSCIOUSNESS] Research Integrated Information Theory — completed 2026-02-28. Φ (phi) represents quantity of consciousness as irreducible cause-effect structure. Proposed by Tononi 2004, controversial but clinically useful.
+
+## Archived 2026-02-28
+- [x] [ROADMAP_REFRESH] ~~Update ROADMAP.md current state table~~ — DONE (2026-02-28). Updated all scores, added PI track, marked ACT-R research done, 141 episodes, 1698 memories.
+
+## Archived 2026-02-28
+- [x] [RESEARCH_AST] Research: Attention Schema Theory (Graziano, Princeton) — DONE 2026-02-28. Full synthesis ingested, AttentionSchema class added to attention.py, wired into heartbeat preflight/postflight, AST-1 Butlin indicator implemented, 5 brain memories stored.
+
+## Archived 2026-02-28
+- [x] [RESEARCH_GLW] Research: Global (Latent) Workspace / Global Workspace agents (Devillers et al. 2024; embodied GW agent 2024) — cycle-consistency enables cross-modal alignment/translation with 4–7× less paired data; tight workspace bottleneck improves robustness + integration. (2026-02-28)
+- [x] [RESEARCH_GRAPHRAG] Research: GraphRAG (Microsoft, Edge et al. 2024) — DONE: Implemented Leiden community detection (4 levels, 8-91 communities), extractive summaries, global_search() + enhanced_local_search(). New: scripts/graphrag_communities.py, brain.py global_search(). Dependencies: python-igraph + leidenalg.
+
+## Archived 2026-02-28
+- [x] [PARALLEL_BRAIN_RECALL] Fix load degradation (389.9% → <50%). Refactor brain.py recall() to query collections in parallel using concurrent.futures.ThreadPoolExecutor. Sequential 10-collection queries are the root cause. This alone should bring PI from 0.58 to 0.70+. (2026-02-28 22:18 UTC)
+- [x] [RESEARCH_REFLEXION] Research: Reflexion (Shinn et al., NeurIPS 2023) *(completed 2026-02-28: 3 gaps identified vs Clarvis — no per-failure verbal reflections, no reflection injection into retry prompts, no dedicated reflection LLM call. Two implementation ideas: add reflection_text to episodes + inject into preflight. See memory/research/reflexion-verbal-reinforcement-learning.md)*
+
+## Archived 2026-02-28
+- [x] [ACTR_BRAIN_INTEGRATION] Integrate today's ACT-R activation model (scripts/actr_activation.py) into brain.py recall(). Replace linear decay with power-law activation (60% recency + 40% frequency). Research was done, code exists — wire it in. (2026-02-28 23:04 UTC)
+
+## Archived 2026-03-01
+- [x] [STABILITY_SPRINT] Freeze net-new features for 24h. Only: consolidate duplicates, delete/trash dead experiments, add tests, fix flakiness, and measure latency. (2026-03-01 01:08 UTC)
+
+## Archived 2026-03-01
+- [x] [BENCHMARK_GATE] Add a single "performance gate" script that runs: brain.health_check, retrieval_benchmark, performance_benchmark, browser smoke (nav+form), and fails if regressions exceed thresholds. (2026-03-01 05:41 UTC)
+
+## Archived 2026-03-01
+- [x] [FEEDBACK_LOOP_TIGHTENING] Improve learning_feedback score (0.73→0.80+). The failure→learning pipeline leaks — only 6 failures captured vs 50 episodes with <0.5 valence. Wire failure_amplifier.py output directly into procedural_memory.py so every failure produces a concrete procedure. Target: resolution rate 60%→80%. (2026-03-01 06:06 UTC)
+
+## Archived 2026-03-01
+- [x] [LATENCY_BUDGET] Define p50/p95 budgets (brain.recall, smart_recall, ClarvisBrowser actions). Track and write to data/perf_budget.json + daily trend. (2026-03-01 07:08 UTC)
+- [x] [RESEARCH_MEMGPT] Research: MemGPT/Letta OS (Packer et al. 2023) — Virtual context management with OS-inspired tiered memory (core/archival/recall) and self-editing memory via tool use. Patterns for working_memory + brain.py context management. (2026-03-01: deep dive complete, 5 insights stored, note at memory/research/memgpt-letta-os-virtual-context.md)
+
+## Archived 2026-03-01
+- [x] [RESEARCH_TTC_SCALING] Research: Test-Time Compute Scaling (Snell et al. 2024, ICLR 2025) — Compute-optimal adaptive inference: when to think longer vs. respond quickly, process-based verifiers, prompt-dependent strategies. Maps to QUICK/STANDARD/DEEP heartbeat modes. Sources: arxiv.org/abs/2408.03314, arxiv.org/abs/2512.02008 (completed 2026-03-01)
+- [x] [PI_RETRIEVAL_FIX] Fix retrieval hit rate showing 0.0 in performance_benchmark.py. The known-answer test suite is either empty or broken. Populate 20+ ground-truth query→expected_doc pairs, verify benchmark reports real hit rates. Target: 80%+. (2026-03-01 09:12 UTC)
+
+## Archived 2026-03-01
+- [x] [CODE_PATTERN_LIB] Improve code generation score (0.57→0.70+). Build procedural memory of code patterns. Store in clarvis-procedures with [CODE_PATTERN: ...] tags. (2026-03-01 11:10 UTC)
+
+## Archived 2026-03-01
+- [x] [RESEARCH_DISCOVERY 2026-03-01] Research: Skill Lifecycle & Self-Evolving Libraries (SoK 2025) — Systematization of agentic skill design patterns: discovery→practice→distillation→storage→composition→evaluation→update. 7 patterns including metadata-driven progressive disclosure, executable code skills, marketplace distribution. Maps to procedural_memory.py + skills/ architecture. Sources: arxiv.org/html/2602.20867v1, arxiv.org/html/2602.12430 (2026-03-01 12:07 UTC)
+
+## Archived 2026-03-01
+- [x] [RESEARCH 2026-03-01] Research: Integrated World Modeling Theory (IWMT) — Safron’s proposal to unify IIT + GNWT within Free Energy Principle / Active Inference; argues integration + global availability are necessary but not sufficient without embodied generative world-modeling.
+- [x] [RESEARCH_DISCOVERY 2026-03-01] Research: Lifelong Agent Memory — Forgetting Prevention & Replay — EWC protects crucial parameters via Fisher information, SuRe (Surprise-Driven Prioritised Replay) for continual LLM learning, selection vs integration error decomposition. Critical for long-running agents. Maps to hebbian_memory.py decay, brain.py consolidation, dream_engine replay. Sources: arxiv.org/html/2504.01241v1, arxiv.org/pdf/2511.22367, arxiv.org/html/2505.05946v1 (2026-03-01 15:11 UTC)

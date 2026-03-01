@@ -139,11 +139,18 @@ def add_tasks(tasks: list, priority: str = "P0", source: str = "unknown") -> lis
         if remaining_cap <= 0:
             return []
 
-        # Read existing queue items
+        # Read existing queue items + archive for deduplication
         content = _read_queue()
         existing_items = _extract_all_items(content)
 
-        # Filter: deduplicate against existing items
+        # Also check archive to prevent re-adding completed/researched topics
+        archive_file = os.path.join(os.path.dirname(QUEUE_FILE), "QUEUE_ARCHIVE.md")
+        if os.path.exists(archive_file):
+            with open(archive_file) as f:
+                archive_items = _extract_all_items(f.read())
+            existing_items.extend(archive_items)
+
+        # Filter: deduplicate against existing items + archive
         new_tasks = []
         for task in tasks:
             if len(new_tasks) >= remaining_cap:

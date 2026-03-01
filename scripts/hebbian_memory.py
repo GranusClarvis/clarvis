@@ -47,6 +47,7 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 ACCESS_LOG_FILE = DATA_DIR / "access_log.jsonl"
 COACTIVATION_FILE = DATA_DIR / "coactivation.json"
 EVOLUTION_HISTORY_FILE = DATA_DIR / "evolution_history.jsonl"
+FISHER_FILE = DATA_DIR / "fisher_importance.json"
 STATS_FILE = DATA_DIR / "stats.json"
 
 # === CONSTANTS ===
@@ -72,12 +73,21 @@ DECAY_FLOOR_MULTIPLIER = 0.3   # Never decay below 30% of original importance
 STRENGTHEN_THRESHOLD = 3        # Min accesses to be considered "strong"
 WEAKEN_THRESHOLD_DAYS = 14      # Days without access before weakening starts
 
+# EWC-inspired Fisher importance parameters (arXiv:2504.01241, Kirkpatrick 2017)
+# Maps neural EWC to vector memory: Fisher_i ∝ freq × uniqueness × downstream_impact
+FISHER_LAMBDA = 5.0             # Consolidation strength — how much Fisher shields decay
+FISHER_FREQ_WEIGHT = 0.4       # Weight for retrieval frequency in Fisher score
+FISHER_UNIQ_WEIGHT = 0.3       # Weight for semantic uniqueness (irreplaceability)
+FISHER_IMPACT_WEIGHT = 0.3     # Weight for downstream task impact (confidence delta)
+FISHER_RECOMPUTE_HOURS = 24    # Recompute Fisher scores at most once per day
+
 
 class HebbianMemory:
-    """Hebbian-style memory evolution engine."""
+    """Hebbian-style memory evolution engine with EWC-inspired forgetting prevention."""
 
     def __init__(self):
         self._coactivation = self._load_coactivation()
+        self._fisher_scores = self._load_fisher()
 
     # === ACCESS TRACKING ===
 
@@ -175,11 +185,23 @@ class HebbianMemory:
 
             new_importance = min(MAX_IMPORTANCE, current_importance + boost)
 
+            # Track access times for ACT-R activation scoring
+            access_times = meta.get("access_times", [])
+            if isinstance(access_times, str):
+                try:
+                    access_times = json.loads(access_times)
+                except (json.JSONDecodeError, ValueError):
+                    access_times = []
+            access_times.append(now.timestamp())
+            # Keep last 30 access times (sufficient for ACT-R activation)
+            access_times = access_times[-30:]
+
             # Update metadata
             meta["access_count"] = access_count
             meta["last_accessed"] = now.isoformat()
             meta["importance"] = round(new_importance, 4)
             meta["hebbian_boost"] = round(boost, 6)
+            meta["access_times"] = json.dumps(access_times)
 
             col.upsert(
                 ids=[mem_id],
@@ -239,6 +261,136 @@ class HebbianMemory:
 
         self._save_coactivation()
 
+    # === EWC-INSPIRED FISHER IMPORTANCE ===
+    # Adapted from Kirkpatrick et al. 2017 (arXiv:1612.00796)
+    # Maps neural EWC to vector memory: Fisher_i = freq × uniqueness × impact
+    # High Fisher score → memory resists decay (like high F_i protects weights)
+
+    def _load_fisher(self):
+        """Load cached Fisher importance scores."""
+        if FISHER_FILE.exists():
+            try:
+                with open(FISHER_FILE) as f:
+                    return json.load(f)
+            except (json.JSONDecodeError, OSError):
+                pass
+        return {"scores": {}, "computed_at": None}
+
+    def _save_fisher(self):
+        """Save Fisher importance scores."""
+        with open(FISHER_FILE, "w") as f:
+            json.dump(self._fisher_scores, f)
+
+    def compute_fisher(self):
+        """Compute Fisher-analog importance for all memories.
+
+        EWC uses F_i = E[(∂L/∂θ_i)²] to identify critical parameters.
+        Our analog for vector memory entries:
+          F_m = w_freq * freq_score + w_uniq * uniqueness + w_impact * impact
+
+        Where:
+          - freq_score: retrieval frequency (how often this memory is accessed)
+          - uniqueness: 1 - max_similarity_to_neighbors (irreplaceability)
+          - impact: downstream confidence delta when this memory was retrieved
+
+        Returns:
+            Dict mapping memory_id → fisher_score (0.0 to 1.0)
+        """
+        from brain import brain
+
+        # Check if recomputation is needed
+        last_computed = self._fisher_scores.get("computed_at")
+        if last_computed:
+            try:
+                last_dt = datetime.fromisoformat(last_computed.replace("Z", "+00:00"))
+                if last_dt.tzinfo is None:
+                    last_dt = last_dt.replace(tzinfo=timezone.utc)
+                hours_since = (datetime.now(timezone.utc) - last_dt).total_seconds() / 3600
+                if hours_since < FISHER_RECOMPUTE_HOURS:
+                    return self._fisher_scores["scores"]
+            except (ValueError, TypeError):
+                pass
+
+        # Compute access frequency from log
+        access_counts = defaultdict(int)
+        total_accesses = 0
+        if ACCESS_LOG_FILE.exists():
+            with open(ACCESS_LOG_FILE) as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        event = json.loads(line)
+                        access_counts[event["memory_id"]] += 1
+                        total_accesses += 1
+                    except (json.JSONDecodeError, KeyError):
+                        continue
+
+        scores = {}
+        for col_name, col in brain.collections.items():
+            try:
+                results = col.get()
+            except Exception:
+                continue
+
+            ids = results.get("ids", [])
+            metas = results.get("metadatas", [])
+
+            for i, mem_id in enumerate(ids):
+                meta = metas[i] if i < len(metas) else {}
+
+                # Component 1: Retrieval frequency (normalized)
+                freq = access_counts.get(mem_id, 0)
+                freq_score = min(1.0, freq / max(1, total_accesses) * len(ids))
+
+                # Component 2: Uniqueness — approximated from coactivation patterns
+                # Memories with many coactivation partners are less unique
+                coact_count = 0
+                for pair_key, entry in self._coactivation.items():
+                    if mem_id in entry.get("ids", []):
+                        coact_count += 1
+                # Invert: many coactivation partners = less unique
+                uniqueness = 1.0 / (1.0 + coact_count * 0.2)
+
+                # Component 3: Downstream impact — proxy from importance trajectory
+                # If importance has been boosted by accesses, it has downstream impact
+                current_imp = meta.get("importance", 0.5)
+                original_imp = meta.get("original_importance", current_imp)
+                if isinstance(current_imp, str):
+                    try:
+                        current_imp = float(current_imp)
+                    except ValueError:
+                        current_imp = 0.5
+                if isinstance(original_imp, str):
+                    try:
+                        original_imp = float(original_imp)
+                    except ValueError:
+                        original_imp = current_imp
+                # Impact = how much importance grew from original (capped at 1.0)
+                impact = min(1.0, max(0.0, (current_imp - original_imp * 0.5) / 0.5))
+
+                # Combine: Fisher-analog score
+                fisher = (
+                    FISHER_FREQ_WEIGHT * freq_score
+                    + FISHER_UNIQ_WEIGHT * uniqueness
+                    + FISHER_IMPACT_WEIGHT * impact
+                )
+                scores[mem_id] = round(min(1.0, fisher), 4)
+
+        self._fisher_scores = {
+            "scores": scores,
+            "computed_at": datetime.now(timezone.utc).isoformat(),
+            "total_memories": len(scores),
+            "total_accesses": total_accesses,
+        }
+        self._save_fisher()
+        return scores
+
+    def get_fisher_score(self, mem_id):
+        """Get Fisher importance for a single memory (cached)."""
+        return self._fisher_scores.get("scores", {}).get(mem_id, 0.0)
+
     # === EVOLUTION CYCLE ===
 
     def evolve(self, dry_run=False):
@@ -263,13 +415,17 @@ class HebbianMemory:
             "timestamp": now.isoformat(),
             "strengthened": 0,
             "weakened": 0,
+            "fisher_protected": 0,
             "associations_strengthened": 0,
             "associations_decayed": 0,
             "total_memories_scanned": 0,
             "dry_run": dry_run,
         }
 
-        # --- 1. Power-law decay of neglected memories ---
+        # --- 0. Compute EWC Fisher importance (shields critical memories) ---
+        fisher_scores = self.compute_fisher()
+
+        # --- 1. Power-law decay with EWC protection of neglected memories ---
         for col_name, col in brain.collections.items():
             try:
                 results = col.get()
@@ -335,9 +491,28 @@ class HebbianMemory:
                 if effective_days <= DECAY_GRACE_DAYS:
                     continue
 
-                # Power-law decay: importance *= (effective_days)^(-exponent)
-                decay_factor = effective_days ** (-DECAY_EXPONENT)
+                # Ebbinghaus-ACT-R hybrid decay:
+                # R = e^(-t/S) where S = memory_strength from access count
+                # Blended with power-law: importance *= blend(R, t^(-d))
+                memory_strength = 1.0 + math.log1p(access_count) * 2.0  # S grows with access
+                ebbinghaus_R = math.exp(-effective_days / max(1.0, memory_strength))
+                power_law_factor = effective_days ** (-DECAY_EXPONENT)
+                # Blend: 60% Ebbinghaus (smooth curve) + 40% power-law (ACT-R style)
+                decay_factor = 0.6 * ebbinghaus_R + 0.4 * power_law_factor
                 decay_factor = max(0.5, min(1.0, decay_factor))  # Bounded decay per cycle
+
+                # EWC protection: high Fisher importance shields from decay
+                # Analogous to EWC penalty: L += (λ/2) * F_i * (θ_i - θ*_i)²
+                # Here: effective_decay_rate /= (1 + λ * F_i)
+                fisher_i = fisher_scores.get(mem_id, 0.0)
+                if fisher_i > 0.1:  # Only apply protection to non-trivial Fisher
+                    # Decay factor moves closer to 1.0 (less decay) with high Fisher
+                    ewc_shield = 1.0 / (1.0 + FISHER_LAMBDA * fisher_i)
+                    # Interpolate: decay_factor → 1.0 as Fisher increases
+                    decay_factor = decay_factor + (1.0 - decay_factor) * (1.0 - ewc_shield)
+                    if decay_factor > 0.99:
+                        stats["fisher_protected"] += 1
+                        continue  # Fully protected — skip decay
 
                 new_importance = current_importance * decay_factor
                 floor = max(MIN_IMPORTANCE, original_importance * DECAY_FLOOR_MULTIPLIER)
@@ -577,15 +752,16 @@ hebbian = HebbianMemory()
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: hebbian_memory.py <evolve|stats|diagnose|access|history>")
+        print("Usage: hebbian_memory.py <evolve|stats|diagnose|access|history|fisher>")
         print()
         print("Commands:")
-        print("  evolve     Run full Hebbian evolution cycle (strengthen + decay)")
+        print("  evolve     Run full Hebbian evolution cycle (strengthen + decay + EWC)")
         print("  evolve-dry Dry run — compute changes without applying")
         print("  stats      Show latest evolution stats")
         print("  diagnose   Diagnose memory health (over/under-strengthened)")
         print("  access     Show access pattern analysis (last 7 days)")
         print("  history    Show evolution history")
+        print("  fisher     Compute and show EWC Fisher importance scores")
         sys.exit(1)
 
     cmd = sys.argv[1]
@@ -597,6 +773,7 @@ if __name__ == "__main__":
         print(f"  Memories scanned:          {result['total_memories_scanned']}")
         print(f"  Strengthened:              {result['strengthened']}")
         print(f"  Weakened (power-law decay): {result['weakened']}")
+        print(f"  Fisher-protected (EWC):    {result['fisher_protected']}")
         print(f"  Associations strengthened: {result['associations_strengthened']}")
         print(f"  Associations decayed:      {result['associations_decayed']}")
 
@@ -607,6 +784,7 @@ if __name__ == "__main__":
         print(f"  Memories scanned:          {result['total_memories_scanned']}")
         print(f"  Would strengthen:          {result['strengthened']}")
         print(f"  Would weaken:              {result['weakened']}")
+        print(f"  Fisher-protected (EWC):    {result['fisher_protected']}")
         print(f"  Would strengthen assoc:    {result['associations_strengthened']}")
         print(f"  Would decay assoc:         {result['associations_decayed']}")
 
@@ -668,6 +846,25 @@ if __name__ == "__main__":
                       f"~{entry.get('associations_strengthened', 0)} assoc")
         else:
             print("No evolution history yet. Run 'evolve' first.")
+
+    elif cmd == "fisher":
+        print("Computing EWC Fisher importance scores...")
+        # Force recompute by clearing cache timestamp
+        hebbian._fisher_scores["computed_at"] = None
+        scores = hebbian.compute_fisher()
+        print(f"\n=== EWC Fisher Importance (λ={FISHER_LAMBDA}) ===")
+        print(f"  Total memories scored: {len(scores)}")
+        if scores:
+            sorted_scores = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+            high = sum(1 for _, s in sorted_scores if s > 0.5)
+            med = sum(1 for _, s in sorted_scores if 0.1 < s <= 0.5)
+            low = sum(1 for _, s in sorted_scores if s <= 0.1)
+            print(f"  High Fisher (>0.5):    {high} (strongly protected)")
+            print(f"  Medium (0.1-0.5):      {med} (partially protected)")
+            print(f"  Low (<0.1):            {low} (unprotected, free to decay)")
+            print("\n  Top 10 most protected memories:")
+            for mem_id, score in sorted_scores[:10]:
+                print(f"    F={score:.4f}  {mem_id[:60]}")
 
     else:
         print(f"Unknown command: {cmd}")

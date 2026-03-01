@@ -2,6 +2,48 @@
 
 _Curated knowledge. Distilled wisdom. Updated regularly._
 
+## Research Insights
+
+### Integrated Information Theory (2026-02-28)
+- Φ (phi) represents quantity of consciousness as irreducible cause-effect structure
+- Proposed by Giulio Tononi in 2004, starts from phenomenological axioms and maps to physical postulates
+- Five axioms: Intrinsicality, Information, Integration, Exclusion, Composition
+- Controversial (some call it pseudoscience), but clinically useful for assessing consciousness in unresponsive patients
+- Calculation is computationally intractable for real systems, driving research into proxy measures
+
+### Intrinsic Metacognitive Learning (2026-02-28)
+- Self-improvement requires INTRINSIC metacognition, not just extrinsic (human-designed) loops
+- Three components: (1) Metacognitive Knowledge: self-assessment of capabilities/tasks/strategies; (2) Metacognitive Planning: deciding what/how to learn; (3) Metacognitive Evaluation: reflecting on experiences to improve future learning
+- Current agents rely on extrinsic mechanisms - fixed loops that limit scalability and adaptability
+- Autocurricula: agents generate their own progressively challenging tasks
+- SPIRAL: uses zero-sum self-play to create autocurriculum for reasoning
+- SWE-RL: applies this to software engineering via real-world GitHub PR data
+- **Key insight**: Clarvis needs intrinsic metacognition about its own learning processes, not just human-designed improvement loops
+
+### World Models (2026-02-27)
+- Internal neural representations of physical world (gravity, inertia, dynamics)
+- Enable AI to predict consequences, reason, and plan
+- Yann LeCun argues they're better for human-level intelligence than LLMs
+- Major players: Nvidia Cosmos, Meta V-JEPA 2
+- Solve "body problem" by simulating real-world scenarios without physical embodiment
+- Potential path to AGI by teaching core physical principles vs step-by-step instructions
+
+### Global (Latent) Workspace (2026-02-28)
+- Devillers et al. (TNNLS 2024/2025): freeze unimodal encoders, map into a shared workspace; train with self-supervised cycle-consistency so encode→decode chains approximate identity
+- Practical effect: aligns/translates modalities with 4–7× less paired multimodal data vs fully supervised training
+- Embodied GW agents (multimodal 3D navigation): tight workspace bottleneck improves robustness and yields more integrated/mixed attention patterns; gains disappear when workspace gets too large
+- **Key implementation hint:** keep the workspace bottleneck intentionally small; let modules compete for broadcast (winner-take-all), and use cycle-consistency as the glue across latent spaces
+
+### Integrated World Modeling Theory (IWMT) (2026-03-01)
+- Adam Safron’s IWMT tries to reconcile **IIT** (integration/phi) and **GNWT** (global broadcast/ignition) inside the **Free Energy Principle / Active Inference** framing.
+- Core claim: “integration” and “global availability” are likely **necessary but not sufficient**; phenomenal consciousness requires *embodied, coherence-making generative world modeling* (space/time/cause, self/other) that supports cybernetic control.
+- Practical take: treat “workspace ignition” as Bayesian model selection/broadcast over a *shared latent world model*; evaluate candidate workspace modules both by information integration and by contribution to prediction-control (free-energy reduction).
+
+### Test-Time Compute Scaling (2026-03-01)
+- Snell et al. (arXiv 2408.03314 / ICLR 2025): test-time compute gains depend strongly on prompt difficulty.
+- Different regimes want different inference: easier prompts benefit from *sequential self-revision* (improving the proposal distribution), while harder prompts benefit more from *parallel sampling* and/or *search* guided by dense process-based reward models (PRMs).
+- A practical takeaway is a **compute-optimal policy**: allocate compute per prompt (and even pick the method) based on a difficulty estimate, yielding ~4× better compute-efficiency vs best-of-N and sometimes letting a smaller model + extra inference FLOPs beat a much larger model (when the base model has non-trivial success).
+
 ## Infrastructure
 
 | Asset | Details |
@@ -216,6 +258,62 @@ Critical long-term goal: Clarvis must grow SMARTER as he evolves — not lighter
 - 30GB RAM, 1.8TB disk, 16 cores
 - Can run Docker, Rust, any Ubuntu software
 - Full self-evolution potential — install anything needed
+
+## Agent Orchestrator — Multi-Project Command Center (2026-03-01, refined)
+
+**5th long-term goal: Clarvis as orchestrator / command center for specialized project agents.**
+
+### Architecture
+- Clarvis = orchestrator. Project agents = specialized workers with isolated brains.
+- Agent root: `/opt/clarvis-agents/<name>/` (preferred) or `/home/agent/agents/<name>/` (fallback)
+- Structure: `workspace/`, `data/brain/`, `data/golden_qa.json`, `memory/`, `logs/`, `configs/`
+- Each agent has its own ChromaDB (5 collections) — NEVER shares with Clarvis core brain.
+- Lite brain: `project-learnings`, `project-procedures`, `project-context`, `project-episodes`, `project-goals`
+
+### Protocol
+1. Clarvis sends: task brief + constraints + context via `project_agent.py spawn`
+2. Agent executes in its repo workspace (Claude Code Opus, `--dangerously-skip-permissions`)
+3. Agent returns structured JSON: `{status, pr_url, branch, summary, files_changed, procedures, follow_ups, tests_passed}`
+4. `project_agent.py promote <name>` distills results to `memory/cron/agent_<name>_digest.md`
+
+### Hard Isolation
+- Separate ChromaDB directories, no shared collections, no cross-imports
+- Only structured summaries + procedures flow back to Clarvis (never raw memories)
+- Benchmarked: structural isolation + embedding overlap < 0.05
+
+### Benchmarks (5 dimensions, weighted composite score)
+| Dimension | Weight | Target | Current (SWO) |
+|-----------|--------|--------|---------------|
+| Isolation | 0.20 | overlap < 0.05 | 1.0 (pass) |
+| Latency | 0.20 | p95 < 600s | 1.0 (22.4s) |
+| PR Success | 0.25 | > 50% PR rate | 0.0 (no PRs yet) |
+| Retrieval | 0.25 | P@3 > 60% | 1.0 (100% on golden QA) |
+| Cost | 0.10 | < $0.50/task | 1.0 |
+| **Composite** | | **> 0.70** | **0.75** |
+
+### Active Agents
+| Agent | Repo | Branch | Tasks | Successes | PRs | Score |
+|-------|------|--------|-------|-----------|-----|-------|
+| star-world-order | InverseAltruism/Star-World-Order | dev | 1 | 1 | 0 | 0.75 |
+
+### Key Commands
+```bash
+project_agent.py create <name> --repo <url> [--branch dev]
+project_agent.py spawn <name> "task" [--timeout 1200]
+project_agent.py seed <name>        # populate brain from golden_qa.json
+project_agent.py promote <name>     # pull summaries to Clarvis
+project_agent.py benchmark <name>   # run 5-dimension benchmark
+project_agent.py migrate <name>     # move agent to /opt/clarvis-agents
+orchestration_benchmark.py run <name>      # full benchmark
+orchestration_benchmark.py summary         # all agents summary
+```
+
+### Key Files
+- `scripts/project_agent.py` — Create, spawn, seed, promote, migrate, destroy agents
+- `scripts/lite_brain.py` — Lightweight ChromaDB with golden QA benchmarking
+- `scripts/orchestration_benchmark.py` — 5-dimension weighted benchmark suite
+- `data/orchestration_benchmarks/` — Benchmark results + history
+- `docs/clarvis_orchestrator_design.md` — Detailed architecture reference
 
 ## Next Priorities
 1. Execute evolution queue P0 items during heartbeats

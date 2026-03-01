@@ -33,6 +33,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from brain import ClarvisBrain, ALL_COLLECTIONS
 
 PHI_HISTORY_FILE = "/home/agent/.openclaw/workspace/data/phi_history.json"
+PHI_DECOMPOSITION_FILE = "/home/agent/.openclaw/workspace/data/phi_decomposition.json"
 
 # Legacy ID prefixes from early brain bootstrapping
 LEGACY_PREFIX_MAP = {
@@ -147,23 +148,27 @@ def cross_collection_integration(nodes, edge_list):
     Measure 2: Cross-collection connectivity.
 
     Ratio of edges connecting different collections to total edges.
+    Also tracks per-pair cross-connectivity counts.
     """
     if not edge_list:
-        return 0.0, {"cross": 0, "same": 0, "total": 0}
+        return 0.0, {"cross": 0, "same": 0, "total": 0, "per_pair": {}}
 
     cross = 0
     same = 0
+    pair_counts = defaultdict(int)
     for f, t, _ in edge_list:
         f_col = nodes.get(f, "unknown")
         t_col = nodes.get(t, "unknown")
         if f_col != t_col and f_col != "unknown" and t_col != "unknown":
             cross += 1
+            pair_key = " <-> ".join(sorted([f_col, t_col]))
+            pair_counts[pair_key] += 1
         else:
             same += 1
 
     total = cross + same
     score = cross / total if total > 0 else 0.0
-    return score, {"cross": cross, "same": same, "total": total}
+    return score, {"cross": cross, "same": same, "total": total, "per_pair": dict(pair_counts)}
 
 
 def semantic_cross_collection(brain):
@@ -551,6 +556,58 @@ def act_on_phi(result=None):
     return {"phi": current_phi, "delta": round(delta, 4), "actions": actions}
 
 
+def decompose_phi(brain_inst=None):
+    """
+    Compute Phi with full per-collection and per-pair decomposition.
+    Writes detailed breakdown to data/phi_decomposition.json.
+
+    Returns the decomposition dict.
+    """
+    if brain_inst is None:
+        brain_inst = _get_brain()
+
+    nodes, adj, edge_list = _build_adjacency(brain_inst)
+
+    # Intra-density per collection
+    _, intra_per_col = intra_collection_density(nodes, adj)
+
+    # Cross-connectivity per pair (edge counts)
+    cc_score, cc_details = cross_collection_integration(nodes, edge_list)
+    cross_per_pair = cc_details.get("per_pair", {})
+
+    # Semantic overlap per pair
+    _, semantic_per_pair = semantic_cross_collection(brain_inst)
+
+    # Reachability
+    cr_score, cr_reach = collection_reachability(nodes, adj)
+
+    # Collection sizes for context
+    col_sizes = {}
+    for col_name, col in brain_inst.collections.items():
+        col_sizes[col_name] = col.count()
+
+    # Full Phi for reference
+    result = compute_phi(brain_inst)
+
+    decomposition = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "phi": result["phi"],
+        "components": result["components"],
+        "intra_density_per_collection": intra_per_col,
+        "cross_connectivity_per_pair": cross_per_pair,
+        "semantic_overlap_per_pair": semantic_per_pair,
+        "collection_sizes": col_sizes,
+        "reachability": {k: sorted(v) for k, v in cr_reach.items()} if cr_reach else {},
+        "raw": result["raw"],
+    }
+
+    os.makedirs(os.path.dirname(PHI_DECOMPOSITION_FILE), exist_ok=True)
+    with open(PHI_DECOMPOSITION_FILE, 'w') as f:
+        json.dump(decomposition, f, indent=2)
+
+    return decomposition
+
+
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "compute"
 
@@ -604,6 +661,21 @@ if __name__ == "__main__":
         actions = act_on_phi(result)
         print(f"Actions: {json.dumps(actions, indent=2)}")
 
+    elif cmd == "decompose":
+        decomp = decompose_phi()
+        print(f"Φ (Phi) = {decomp['phi']}")
+        print("\nIntra-density per collection:")
+        for col, d in sorted(decomp["intra_density_per_collection"].items()):
+            bar = "█" * int(d * 100) + "░" * (10 - min(10, int(d * 100)))
+            print(f"  {col:35s} {bar} {d:.4f}")
+        print("\nCross-connectivity per pair (edge counts):")
+        for pair, count in sorted(decomp["cross_connectivity_per_pair"].items(), key=lambda x: -x[1]):
+            print(f"  {pair:60s} {count}")
+        print("\nSemantic overlap per pair:")
+        for pair, sim in sorted(decomp["semantic_overlap_per_pair"].items(), key=lambda x: -x[1]):
+            print(f"  {pair:60s} {sim:.4f}")
+        print(f"\nWritten to {PHI_DECOMPOSITION_FILE}")
+
     else:
-        print("Usage: phi_metric.py [compute|record|history|trend|act]")
+        print("Usage: phi_metric.py [compute|record|history|trend|act|decompose]")
         sys.exit(1)

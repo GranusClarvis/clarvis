@@ -1096,7 +1096,297 @@ def salience_report():
 
 
 # ---------------------------------------------------------------------------
-# 7. Stats
+# 7. Sleep-Cycle Episodic→Semantic Consolidation
+# ---------------------------------------------------------------------------
+#
+# Inspired by:
+# - LightMem (arXiv 2510.18866): offline "sleep-time" consolidation decoupled
+#   from online inference, 3-tier sensory→short→long memory, 30x token savings
+# - Letta Sleep-time Compute (arXiv 2504.13171): rethink_memory transforms
+#   raw context into "learned context" during offline phases, 5x compute reduction
+# - MemAgent (ICLR 2026): fixed-size memory panel with overwrite strategy,
+#   segmented read→write→aggregate, O(N) complexity
+#
+# During Clarvis "sleep" (02:45 cron), episodic memories from active tasks
+# are periodically consolidated into semantic knowledge in clarvis-learnings.
+# This mirrors biological sleep-cycle consolidation: hippocampal replays
+# (episodes) get compressed into neocortical schemas (semantic learnings).
+
+SLEEP_CONSOLIDATION_FILE = os.path.join(DATA_DIR, "sleep_consolidation_log.json")
+
+# Minimum episodes before consolidation triggers
+SLEEP_MIN_EPISODES = 5
+# Max semantic learnings produced per sleep cycle
+SLEEP_MAX_LEARNINGS = 10
+# Similarity threshold for grouping episodes into themes
+SLEEP_THEME_DISTANCE = 0.85
+
+
+def _load_sleep_log():
+    """Load sleep consolidation history."""
+    if os.path.exists(SLEEP_CONSOLIDATION_FILE):
+        try:
+            with open(SLEEP_CONSOLIDATION_FILE) as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            return {"cycles": [], "total_learnings": 0, "episodes_consolidated": 0}
+    return {"cycles": [], "total_learnings": 0, "episodes_consolidated": 0}
+
+
+def _save_sleep_log(log):
+    """Save sleep consolidation history (cap at 100 cycles)."""
+    log["cycles"] = log["cycles"][-100:]
+    with open(SLEEP_CONSOLIDATION_FILE, "w") as f:
+        json.dump(log, f, indent=2)
+
+
+def _extract_episode_theme(episodes):
+    """Extract common theme from a cluster of episodes.
+
+    Uses pattern-matching on task descriptions to identify recurring
+    domains, outcomes, and strategies — no LLM needed.
+    """
+    domain_keywords = {
+        "memory": ["brain", "memory", "recall", "store", "retrieval", "episodic", "consolidat"],
+        "infrastructure": ["cron", "schedule", "heartbeat", "health", "monitor", "backup", "gateway"],
+        "reasoning": ["reasoning", "chain", "thought", "analysis", "synthesis", "metacog"],
+        "research": ["research", "paper", "arxiv", "study", "discovery", "survey"],
+        "code": ["script", "function", "implement", "build", "fix", "refactor", "test"],
+        "metrics": ["phi", "capability", "score", "benchmark", "metric", "performance"],
+        "self-model": ["self", "reflection", "awareness", "identity", "model", "confidence"],
+    }
+
+    tasks = [ep.get("task", "").lower() for ep in episodes]
+    combined = " ".join(tasks)
+
+    # Count domain hits
+    domain_scores = {}
+    for domain, keywords in domain_keywords.items():
+        score = sum(1 for kw in keywords if kw in combined)
+        if score > 0:
+            domain_scores[domain] = score
+
+    if not domain_scores:
+        return "general"
+
+    return max(domain_scores, key=domain_scores.get)
+
+
+def _synthesize_semantic_learning(theme, episodes):
+    """Synthesize a semantic learning from a cluster of related episodes.
+
+    This is the core "rethink_memory" operation (Letta-inspired):
+    transform raw episodic context into learned, generalized context.
+
+    Uses rule-based abstraction (no LLM) — extracts success/failure patterns,
+    common strategies, and risk signals.
+    """
+    successes = [ep for ep in episodes if ep.get("outcome") == "success"]
+    failures = [ep for ep in episodes if ep.get("outcome") in ("failure", "soft_failure")]
+    total = len(episodes)
+    success_rate = len(successes) / total if total > 0 else 0
+
+    # Extract unique task verbs/actions
+    actions = set()
+    for ep in episodes:
+        task = ep.get("task", "")
+        # Extract first verb-like word
+        words = task.split()
+        if words:
+            actions.add(words[0].lower().rstrip(":"))
+
+    actions_str = ", ".join(sorted(actions)[:5])
+
+    # Compute average duration and confidence
+    durations = [ep.get("duration_s", 0) for ep in episodes if ep.get("duration_s")]
+    avg_duration = sum(durations) / len(durations) if durations else 0
+    confidences = [ep.get("confidence", 0) for ep in episodes if ep.get("confidence")]
+    avg_confidence = sum(confidences) / len(confidences) if confidences else 0
+
+    # Build the consolidated semantic learning
+    parts = [f"[SLEEP-CONSOLIDATED] Domain: {theme} ({total} episodes)."]
+
+    if success_rate >= 0.8:
+        parts.append(f"High reliability ({success_rate:.0%} success). "
+                     f"Core operations: {actions_str}.")
+    elif success_rate >= 0.5:
+        parts.append(f"Mixed reliability ({success_rate:.0%} success). "
+                     f"Operations: {actions_str}. Review failure patterns.")
+    else:
+        parts.append(f"Low reliability ({success_rate:.0%} success). "
+                     f"Operations: {actions_str}. Needs attention.")
+
+    if avg_duration > 0:
+        parts.append(f"Avg duration: {avg_duration:.0f}s.")
+
+    if avg_confidence > 0:
+        parts.append(f"Avg confidence: {avg_confidence:.2f}.")
+
+    # Extract failure lessons
+    if failures:
+        fail_tasks = [f.get("task", "")[:50] for f in failures[:3]]
+        parts.append(f"Failure cases: {'; '.join(fail_tasks)}.")
+
+    # Extract success patterns
+    if successes:
+        recent_success = successes[-1]
+        parts.append(f"Latest success: {recent_success.get('task', '')[:60]}.")
+
+    return " ".join(parts)
+
+
+def sleep_consolidate(dry_run=False):
+    """Run sleep-cycle episodic→semantic consolidation.
+
+    This is the "sleep phase" of the wake/sleep paradigm:
+    1. Load recent unconsolidated episodes
+    2. Cluster by semantic similarity into themes
+    3. For each theme cluster (≥3 episodes), synthesize a semantic learning
+    4. Store learning in clarvis-learnings with sleep-consolidation tag
+    5. Mark source episodes as consolidated (metadata flag)
+
+    Inspired by LightMem offline consolidation and Letta rethink_memory.
+
+    Returns:
+        dict with consolidation stats.
+    """
+    stats = {
+        "episodes_scanned": 0,
+        "themes_found": 0,
+        "learnings_created": 0,
+        "episodes_consolidated": 0,
+        "details": [],
+    }
+
+    # Load episodes from episodic memory
+    try:
+        from episodic_memory import episodic
+        episodes = episodic.episodes
+    except Exception as e:
+        print(f"[sleep] Cannot load episodic memory: {e}")
+        return stats
+
+    if len(episodes) < SLEEP_MIN_EPISODES:
+        print(f"[sleep] Only {len(episodes)} episodes, need {SLEEP_MIN_EPISODES}. Skipping.")
+        return stats
+
+    # Filter to unconsolidated episodes (no sleep_consolidated flag in brain)
+    # Use the last 100 episodes as working set (MemAgent-inspired fixed window)
+    working_set = episodes[-100:]
+    stats["episodes_scanned"] = len(working_set)
+
+    # Check which episodes have already been sleep-consolidated
+    sleep_log = _load_sleep_log()
+    consolidated_ids = set()
+    for cycle in sleep_log.get("cycles", []):
+        for ep_id in cycle.get("episode_ids", []):
+            consolidated_ids.add(ep_id)
+
+    unconsolidated = [ep for ep in working_set if ep.get("id") not in consolidated_ids]
+
+    if len(unconsolidated) < SLEEP_MIN_EPISODES:
+        print(f"[sleep] Only {len(unconsolidated)} unconsolidated episodes. Skipping.")
+        return stats
+
+    print(f"[sleep] {len(unconsolidated)} unconsolidated episodes in working set")
+
+    # Cluster episodes by theme (domain extraction)
+    theme_clusters = {}
+    for ep in unconsolidated:
+        theme = _extract_episode_theme([ep])
+        theme_clusters.setdefault(theme, []).append(ep)
+
+    # Refine: also check semantic similarity within themes using brain.recall
+    # (MemAgent overwrite strategy: keep only the most informative per theme)
+    learnings_created = 0
+    cycle_episode_ids = []
+
+    for theme, cluster in sorted(theme_clusters.items(), key=lambda x: -len(x[1])):
+        if len(cluster) < 3:
+            continue
+        if learnings_created >= SLEEP_MAX_LEARNINGS:
+            break
+
+        stats["themes_found"] += 1
+
+        # Synthesize semantic learning (rethink_memory operation)
+        learning_text = _synthesize_semantic_learning(theme, cluster)
+
+        # Check if a similar learning already exists (dedup against brain)
+        existing = brain.recall(learning_text, n=3, collections=["clarvis-learnings"])
+        already_exists = False
+        for ex in existing:
+            dist = ex.get("distance")
+            if dist is not None and dist < 0.5:
+                already_exists = True
+                break
+
+        if already_exists:
+            print(f"  [sleep] Theme '{theme}' ({len(cluster)} eps): similar learning exists, skipping")
+            # Still mark episodes as consolidated to avoid re-processing
+            for ep in cluster:
+                cycle_episode_ids.append(ep["id"])
+            stats["episodes_consolidated"] += len(cluster)
+            continue
+
+        detail = {
+            "theme": theme,
+            "episode_count": len(cluster),
+            "learning_preview": learning_text[:120],
+        }
+        stats["details"].append(detail)
+
+        if not dry_run:
+            # Store the consolidated learning
+            brain.store(
+                learning_text,
+                collection="clarvis-learnings",
+                importance=0.6,  # Moderate — earned importance, not assigned
+                tags=["sleep-consolidated", f"theme:{theme}",
+                      f"episodes:{len(cluster)}"],
+                source="sleep_consolidation",
+            )
+            for ep in cluster:
+                cycle_episode_ids.append(ep["id"])
+
+        learnings_created += 1
+        stats["learnings_created"] += 1
+        stats["episodes_consolidated"] += len(cluster)
+
+        print(f"  [sleep] Theme '{theme}': {len(cluster)} episodes → 1 semantic learning")
+
+    # Log this sleep cycle
+    if not dry_run and (learnings_created > 0 or cycle_episode_ids):
+        cycle_entry = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "episodes_scanned": stats["episodes_scanned"],
+            "themes_found": stats["themes_found"],
+            "learnings_created": stats["learnings_created"],
+            "episodes_consolidated": stats["episodes_consolidated"],
+            "episode_ids": cycle_episode_ids,
+        }
+        sleep_log["cycles"].append(cycle_entry)
+        sleep_log["total_learnings"] += learnings_created
+        sleep_log["episodes_consolidated"] += stats["episodes_consolidated"]
+        _save_sleep_log(sleep_log)
+
+    return stats
+
+
+def sleep_stats():
+    """Get sleep consolidation statistics."""
+    log = _load_sleep_log()
+    cycles = log.get("cycles", [])
+    return {
+        "total_cycles": len(cycles),
+        "total_learnings": log.get("total_learnings", 0),
+        "total_episodes_consolidated": log.get("episodes_consolidated", 0),
+        "last_cycle": cycles[-1].get("timestamp", "")[:19] if cycles else "never",
+    }
+
+
+# ---------------------------------------------------------------------------
+# 7.5. Stats
 # ---------------------------------------------------------------------------
 
 def get_consolidation_stats():
@@ -1192,6 +1482,142 @@ def get_consolidation_stats():
 
 
 # ---------------------------------------------------------------------------
+# 7.5. Retrieval Error Decomposition (xMemory-inspired)
+# ---------------------------------------------------------------------------
+# From "Beyond RAG for Agent Memory" (arXiv:2602.02007):
+#   Selection Error: retrieved the WRONG memories (redundancy, missing diversity)
+#   Integration Error: retrieved correct memories but failed to compose them
+# We track these to diagnose retrieval quality over time.
+
+RETRIEVAL_ERROR_FILE = os.path.join(DATA_DIR, "retrieval_errors.jsonl")
+
+
+def measure_retrieval_quality(query, results, expected_useful=None):
+    """Measure selection and integration error for a single retrieval.
+
+    Args:
+        query: The recall query
+        results: List of recall result dicts
+        expected_useful: If known, how many results were actually useful
+                         (e.g., from downstream task feedback)
+
+    Returns:
+        dict with selection_error, integration_error, evidence_density metrics
+    """
+    if not results:
+        return {"selection_error": 1.0, "integration_error": 1.0, "evidence_density": 0.0}
+
+    # --- Selection Error: redundancy in retrieved set ---
+    # High redundancy = wasted retrieval slots = selection failure
+    # Measured by pairwise Jaccard similarity of result texts
+    texts = [r.get("document", "")[:200].lower().split() for r in results]
+    pairwise_sims = []
+    for i in range(len(texts)):
+        for j in range(i + 1, len(texts)):
+            words_a = set(texts[i])
+            words_b = set(texts[j])
+            if words_a or words_b:
+                jaccard = len(words_a & words_b) / max(1, len(words_a | words_b))
+                pairwise_sims.append(jaccard)
+
+    avg_redundancy = sum(pairwise_sims) / max(1, len(pairwise_sims)) if pairwise_sims else 0.0
+    selection_error = avg_redundancy  # 0 = perfectly diverse, 1 = all identical
+
+    # --- Integration Error: topic coverage vs query ---
+    # Do the results collectively cover the query's key concepts?
+    query_words = set(query.lower().split())
+    covered_words = set()
+    for text_words in texts:
+        covered_words.update(set(text_words) & query_words)
+    coverage = len(covered_words) / max(1, len(query_words))
+    integration_error = 1.0 - coverage  # 0 = full coverage, 1 = no coverage
+
+    # --- Evidence density: useful info per result ---
+    # How many results contain query-relevant tokens?
+    results_with_hits = 0
+    for text_words in texts:
+        hits = len(set(text_words) & query_words)
+        if hits >= 2:
+            results_with_hits += 1
+    evidence_density = results_with_hits / max(1, len(results))
+
+    # If we have ground truth feedback (expected_useful), refine
+    if expected_useful is not None:
+        actual_useful = min(expected_useful, len(results))
+        selection_precision = actual_useful / max(1, len(results))
+        selection_error = 1.0 - selection_precision
+
+    metrics = {
+        "selection_error": round(selection_error, 4),
+        "integration_error": round(integration_error, 4),
+        "evidence_density": round(evidence_density, 4),
+        "redundancy": round(avg_redundancy, 4),
+        "coverage": round(coverage, 4),
+        "results_count": len(results),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "query_preview": query[:100] if query else "",
+    }
+
+    # Append to tracking log
+    try:
+        with open(RETRIEVAL_ERROR_FILE, "a") as f:
+            f.write(json.dumps(metrics) + "\n")
+    except OSError:
+        pass
+
+    return metrics
+
+
+def retrieval_error_report(days=7):
+    """Aggregate retrieval error metrics over recent period.
+
+    Returns:
+        dict with avg selection_error, integration_error, trends
+    """
+    if not os.path.exists(RETRIEVAL_ERROR_FILE):
+        return {"entries": 0, "message": "No retrieval error data yet"}
+
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    entries = []
+    with open(RETRIEVAL_ERROR_FILE) as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+                if entry.get("timestamp", "") >= cutoff:
+                    entries.append(entry)
+            except (json.JSONDecodeError, KeyError):
+                continue
+
+    if not entries:
+        return {"entries": 0, "period_days": days}
+
+    avg_sel = sum(e["selection_error"] for e in entries) / len(entries)
+    avg_int = sum(e["integration_error"] for e in entries) / len(entries)
+    avg_dens = sum(e["evidence_density"] for e in entries) / len(entries)
+    avg_red = sum(e["redundancy"] for e in entries) / len(entries)
+    avg_cov = sum(e["coverage"] for e in entries) / len(entries)
+
+    return {
+        "entries": len(entries),
+        "period_days": days,
+        "avg_selection_error": round(avg_sel, 4),
+        "avg_integration_error": round(avg_int, 4),
+        "avg_evidence_density": round(avg_dens, 4),
+        "avg_redundancy": round(avg_red, 4),
+        "avg_coverage": round(avg_cov, 4),
+        "diagnosis": (
+            "HIGH selection error" if avg_sel > 0.5
+            else "HIGH integration error" if avg_int > 0.5
+            else "HEALTHY" if avg_sel < 0.3 and avg_int < 0.3
+            else "MODERATE — check redundancy and coverage"
+        ),
+    }
+
+
+# ---------------------------------------------------------------------------
 # 8. Integration Hook
 # ---------------------------------------------------------------------------
 
@@ -1249,11 +1675,31 @@ def run_consolidation():
     print(f"  Pruned {ap['pruned']}, spared {ap['spared_by_salience']} by salience "
           f"(evaluated {ap['candidates_evaluated']})")
 
+    print("[consolidation] Phase 6.5: Sleep-cycle episodic→semantic consolidation...")
+    results["sleep"] = sleep_consolidate(dry_run=False)
+    sl = results["sleep"]
+    print(f"  Scanned {sl['episodes_scanned']} episodes, "
+          f"found {sl['themes_found']} themes, "
+          f"created {sl['learnings_created']} semantic learnings")
+
     print("[consolidation] Phase 7: GWT broadcast survivors...")
     results["gwt_promoted"] = gwt_broadcast_survivors(top_n=3)
     print(f"  Promoted {len(results['gwt_promoted'])} memories to spotlight")
     for p in results["gwt_promoted"]:
         print(f"    [{p['collection']}] {p['preview'][:60]} (score={p['score']})")
+
+    # Phase 8: Retrieval error report (diagnostic only, no mutations)
+    print("[consolidation] Phase 8: Retrieval error report...")
+    results["retrieval_errors"] = retrieval_error_report(days=7)
+    re = results["retrieval_errors"]
+    if re.get("entries", 0) > 0:
+        print(f"  {re['entries']} retrievals analyzed: "
+              f"sel_err={re['avg_selection_error']:.3f} "
+              f"int_err={re['avg_integration_error']:.3f} "
+              f"density={re['avg_evidence_density']:.3f} "
+              f"→ {re['diagnosis']}")
+    else:
+        print("  No retrieval error data yet")
 
     # Summary
     total_actions = (
@@ -1266,6 +1712,7 @@ def run_consolidation():
         + results["attention_decay"]["decayed"]
         + results["attention_decay"]["salience_boosted"]
         + results["attention_prune"]["pruned"]
+        + results["sleep"]["learnings_created"]
         + len(results["gwt_promoted"])
     )
     results["total_actions"] = total_actions
@@ -1372,6 +1819,25 @@ def main():
             for d in results["details"][:15]:
                 print(f"  [{d['collection']}] score={d['score']} {d['preview']}")
 
+    elif cmd == "sleep":
+        is_dry = "--dry-run" in sys.argv
+        results = sleep_consolidate(dry_run=is_dry)
+        prefix = "Would create" if is_dry else "Created"
+        print(f"{'DRY RUN: ' if is_dry else ''}Sleep consolidation: "
+              f"{prefix} {results['learnings_created']} semantic learnings "
+              f"from {results['episodes_consolidated']} episodes "
+              f"({results['themes_found']} themes)")
+        for d in results["details"]:
+            print(f"  [{d['theme']}] {d['episode_count']} eps → {d['learning_preview'][:80]}")
+
+    elif cmd == "sleep-stats":
+        ss = sleep_stats()
+        print("=== Sleep Consolidation Stats ===")
+        print(f"Total cycles: {ss['total_cycles']}")
+        print(f"Total learnings created: {ss['total_learnings']}")
+        print(f"Total episodes consolidated: {ss['total_episodes_consolidated']}")
+        print(f"Last cycle: {ss['last_cycle']}")
+
     elif cmd == "stats":
         stats = get_consolidation_stats()
         print("=== Memory Consolidation Stats ===")
@@ -1388,6 +1854,22 @@ def main():
         print("\nCollections:")
         for name, count in stats["brain"]["collections"].items():
             print(f"  {name}: {count}")
+
+    elif cmd == "retrieval-errors":
+        days = int(sys.argv[2]) if len(sys.argv) > 2 else 7
+        report = retrieval_error_report(days=days)
+        print(f"=== Retrieval Error Report (last {days} days) ===")
+        if report.get("entries", 0) == 0:
+            print("  No retrieval error data yet. Errors are tracked automatically")
+            print("  when measure_retrieval_quality() is called after brain.recall().")
+        else:
+            print(f"  Retrievals analyzed:     {report['entries']}")
+            print(f"  Avg selection error:     {report['avg_selection_error']:.4f} (0=diverse, 1=redundant)")
+            print(f"  Avg integration error:   {report['avg_integration_error']:.4f} (0=full coverage, 1=none)")
+            print(f"  Avg evidence density:    {report['avg_evidence_density']:.4f}")
+            print(f"  Avg redundancy:          {report['avg_redundancy']:.4f}")
+            print(f"  Avg coverage:            {report['avg_coverage']:.4f}")
+            print(f"  Diagnosis:               {report['diagnosis']}")
 
     elif cmd == "dry-run":
         print("=== DRY RUN (no changes will be made) ===\n")
@@ -1446,7 +1928,7 @@ def main():
         print(f"Unknown command: {cmd}")
         print("Valid commands: consolidate, dedup, merge, prune, archive, caps, "
               "attention-prune, attention-decay, salience, gwt-broadcast, "
-              "stats, dry-run")
+              "sleep, sleep-stats, stats, dry-run")
         sys.exit(1)
 
 

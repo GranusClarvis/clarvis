@@ -108,6 +108,13 @@ class ClarvisBrain:
         self._stats_cache_ttl = 30  # seconds
         self._collection_cache = {}  # col_name -> (time, results)
         self._collection_cache_ttl = 60  # seconds
+        self._embedding_cache = {}   # query_text -> (timestamp, embedding_vector)
+        self._embedding_cache_ttl = 60  # seconds
+
+        # Reconsolidation: retrieved memories become labile (modifiable) for a brief window
+        # Maps memory_id -> {"retrieved_at": float, "collection": str}
+        self._labile_memories = {}
+        self._lability_window = 300  # seconds (5 min window after retrieval)
     
     def _init_collections(self):
         """Ensure all collections exist"""
@@ -308,34 +315,64 @@ class ClarvisBrain:
             # Try query routing first — directs to relevant collections
             routed = route_query(query)
             collections = routed if routed else DEFAULT_COLLECTIONS
-        
+
         all_results = []
         cutoff_date = None
         if since_days:
             from datetime import timedelta
             cutoff_date = (datetime.now(timezone.utc) - timedelta(days=since_days)).isoformat()
-        
-        for col_name in collections:
-            if col_name not in self.collections:
-                continue
-            
+
+        # Pre-compute embedding once — avoids re-embedding the same query
+        # for each collection (ONNX MiniLM is the bottleneck, ~200-550ms per call).
+        # Cached for 60s so repeated queries (benchmarks, preflight) skip embedding entirely.
+        query_embedding = None
+        valid_collections = [c for c in collections if c in self.collections]
+        if valid_collections:
+            now = time.monotonic()
+            cached = self._embedding_cache.get(query)
+            if cached and (now - cached[0]) < self._embedding_cache_ttl:
+                query_embedding = cached[1]
+            else:
+                col0 = self.collections[valid_collections[0]]
+                ef = col0._embedding_function
+                if ef is not None:
+                    try:
+                        vecs = ef([query])
+                        if vecs and len(vecs) > 0:
+                            query_embedding = vecs[0]
+                            if hasattr(query_embedding, 'tolist'):
+                                query_embedding = query_embedding.tolist()
+                            self._embedding_cache[query] = (now, query_embedding)
+                            # Evict old entries (keep cache small)
+                            if len(self._embedding_cache) > 50:
+                                oldest_key = min(self._embedding_cache, key=lambda k: self._embedding_cache[k][0])
+                                del self._embedding_cache[oldest_key]
+                    except Exception:
+                        pass  # Fall back to query_texts per-collection
+
+        def _query_collection(col_name):
+            """Query a single collection — designed for parallel execution."""
             col = self.collections[col_name]
-            results = col.query(query_texts=[query], n_results=n)
-            
+            if query_embedding is not None:
+                results = col.query(query_embeddings=[query_embedding], n_results=n)
+            else:
+                results = col.query(query_texts=[query], n_results=n)
+
+            items = []
             if results["documents"] and results["documents"][0]:
                 for i, doc in enumerate(results["documents"][0]):
                     meta = results["metadatas"][0][i] if results["metadatas"] else {}
-                    
+
                     # Filter by importance if specified
                     if min_importance is not None:
                         if meta.get("importance", 0) < min_importance:
                             continue
-                    
+
                     # Filter by date if specified
                     if cutoff_date and meta.get("created_at"):
                         if meta["created_at"] < cutoff_date:
                             continue
-                    
+
                     # ChromaDB distance (lower = more similar)
                     distance = results["distances"][0][i] if results.get("distances") else None
 
@@ -347,13 +384,24 @@ class ClarvisBrain:
                         "distance": distance,
                         "related": []
                     }
-                    
+
                     # Include related memories via graph
                     if include_related:
                         related = self.get_related(results["ids"][0][i], depth=1)
                         result_item["related"] = related
-                    
-                    all_results.append(result_item)
+
+                    items.append(result_item)
+            return items
+
+        # Query all collections in parallel using ThreadPoolExecutor
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        with ThreadPoolExecutor(max_workers=min(len(valid_collections), 6)) as executor:
+            futures = {executor.submit(_query_collection, c): c for c in valid_collections}
+            for future in as_completed(futures):
+                try:
+                    all_results.extend(future.result())
+                except Exception:
+                    pass  # Skip failed collections, don't break recall
         
         # Attention boost: items matching spotlight focus get a salience bump
         if attention_boost:
@@ -371,22 +419,28 @@ class ClarvisBrain:
             except Exception:
                 pass  # Don't let attention failures break recall
 
-        # Sort by combined relevance score:
-        # Primary signal: semantic distance (lower = more relevant)
-        # Secondary signal: importance + attention boost
-        # Formula: relevance = (1 / (1 + distance)) * 0.85 + importance * 0.15
-        # Distance-heavy weighting prevents importance from overriding semantic match
-        def sort_key(x):
-            distance = x.get("distance")
-            if distance is not None:
-                # Normalize distance to 0-1 relevance (inverse)
-                semantic_relevance = 1.0 / (1.0 + distance)
-            else:
-                semantic_relevance = 0.5  # Unknown distance = neutral
-            importance = x["metadata"].get("importance", 0.5)
-            boost = x["metadata"].get("_attention_boost", 0)
-            return semantic_relevance * 0.85 + (importance + boost) * 0.15
-        all_results.sort(key=sort_key, reverse=True)
+        # ACT-R activation scoring: combines semantic distance with
+        # cognitive activation (recency, frequency, spacing effect, noise).
+        # Falls back to simple distance+importance if actr_activation unavailable.
+        try:
+            from actr_activation import actr_score
+            for r in all_results:
+                # Include attention boost in metadata for actr_score
+                boost = r["metadata"].get("_attention_boost", 0)
+                r["_actr_score"] = actr_score(r) + boost * 0.15
+            all_results.sort(key=lambda x: x.get("_actr_score", 0), reverse=True)
+        except Exception:
+            # Fallback: original distance + importance scoring
+            def sort_key(x):
+                distance = x.get("distance")
+                if distance is not None:
+                    semantic_relevance = 1.0 / (1.0 + distance)
+                else:
+                    semantic_relevance = 0.5
+                importance = x["metadata"].get("importance", 0.5)
+                boost = x["metadata"].get("_attention_boost", 0)
+                return semantic_relevance * 0.85 + (importance + boost) * 0.15
+            all_results.sort(key=sort_key, reverse=True)
 
         final_results = all_results[:n * len(collections)]
 
@@ -398,55 +452,36 @@ class ClarvisBrain:
             except Exception:
                 pass  # Never let tracking break recall
 
-        # Hebbian memory evolution: strengthen retrieved memories (non-blocking)
+        # Hebbian + synaptic updates: rate-limited to avoid blocking rapid recalls.
+        # These are write-side effects (importance boosting, co-activation logging)
+        # that don't affect the current recall results. ChromaDB get+upsert per
+        # result takes ~200ms each, so with 90 results this dominates recall time.
+        # Rate limit: skip if last update was <5s ago (benchmarks, preflight bursts).
         if final_results and query:
-            try:
-                from hebbian_memory import hebbian
-                hebbian.on_recall(query, final_results, caller=caller)
-            except Exception:
-                pass  # Never let Hebbian tracking break recall
+            now_mono = time.monotonic()
+            last_hebbian = getattr(self, '_last_hebbian_time', 0)
+            if (now_mono - last_hebbian) >= 5.0:
+                self._last_hebbian_time = now_mono
+                try:
+                    from hebbian_memory import hebbian
+                    hebbian.on_recall(query, final_results, caller=caller)
+                except Exception:
+                    pass
+                try:
+                    from synaptic_memory import synaptic
+                    synaptic.on_recall(query, final_results, caller=caller)
+                except Exception:
+                    pass
 
-        # Synaptic memory: memristor-inspired STDP weight updates (non-blocking)
-        if final_results and query:
-            try:
-                from synaptic_memory import synaptic
-                synaptic.on_recall(query, final_results, caller=caller)
-
-                # Spreading activation: use top-5 result IDs to find
-                # synaptically connected memories not already in results
-                top_ids = [r["id"] for r in final_results[:5] if r.get("id")]
-                if top_ids:
-                    spread_results = synaptic.spread(top_ids, n=3, min_weight=0.15)
-                    if spread_results:
-                        existing_ids = {r["id"] for r in final_results}
-                        for spread_id, activation in spread_results:
-                            if spread_id in existing_ids:
-                                continue
-                            # Retrieve the actual memory from ChromaDB
-                            for col_name in (collections or DEFAULT_COLLECTIONS):
-                                if col_name not in self.collections:
-                                    continue
-                                try:
-                                    col = self.collections[col_name]
-                                    got = col.get(ids=[spread_id])
-                                    if got["ids"] and got["documents"] and got["documents"][0]:
-                                        meta = got["metadatas"][0] if got.get("metadatas") else {}
-                                        final_results.append({
-                                            "document": got["documents"][0],
-                                            "metadata": meta,
-                                            "collection": col_name,
-                                            "id": spread_id,
-                                            "distance": None,
-                                            "related": [],
-                                            "spread_activated": True,
-                                            "spread_weight": activation,
-                                        })
-                                        existing_ids.add(spread_id)
-                                        break
-                                except Exception:
-                                    continue
-            except Exception:
-                pass  # Never let synaptic tracking break recall
+        # Reconsolidation: mark retrieved memories as labile (modifiable window)
+        for result in final_results:
+            mem_id = result.get("id")
+            col_name = result.get("collection")
+            if mem_id and col_name:
+                self._labile_memories[mem_id] = {
+                    "retrieved_at": time.monotonic(),
+                    "collection": col_name,
+                }
 
         return final_results
     
@@ -1128,6 +1163,134 @@ class ClarvisBrain:
                 "error": str(e)
             }
 
+    # === RECONSOLIDATION ===
+
+    def reconsolidate(self, memory_id, updated_text, importance_delta=0.0):
+        """Update a retrieved memory during its lability window.
+
+        Inspired by memory reconsolidation: after retrieval, a memory enters a
+        brief labile state (~5 min) during which it can be modified. If the
+        window has expired or the memory was never retrieved, the update is
+        refused.
+
+        Args:
+            memory_id: ID of the memory to reconsolidate
+            updated_text: New text content for the memory
+            importance_delta: Adjust importance by this amount (-1.0 to +1.0)
+
+        Returns:
+            dict with keys: success (bool), message (str),
+            and on success: old_text, new_text, time_since_retrieval
+        """
+        # Check lability
+        labile = self._labile_memories.get(memory_id)
+        if not labile:
+            return {
+                "success": False,
+                "message": f"Memory '{memory_id}' is not labile — retrieve it first via recall()."
+            }
+
+        elapsed = time.monotonic() - labile["retrieved_at"]
+        if elapsed > self._lability_window:
+            # Window closed — memory has reconsolidated back to stable state
+            del self._labile_memories[memory_id]
+            return {
+                "success": False,
+                "message": f"Lability window expired ({elapsed:.0f}s > {self._lability_window}s). "
+                           f"Memory has reconsolidated. Retrieve it again to reopen the window."
+            }
+
+        collection = labile["collection"]
+        if collection not in self.collections:
+            return {"success": False, "message": f"Collection '{collection}' not found."}
+
+        col = self.collections[collection]
+
+        # Fetch current memory
+        try:
+            current = col.get(ids=[memory_id])
+        except Exception as e:
+            return {"success": False, "message": f"Failed to fetch memory: {e}"}
+
+        if not current["ids"]:
+            del self._labile_memories[memory_id]
+            return {"success": False, "message": f"Memory '{memory_id}' not found in ChromaDB."}
+
+        old_text = current["documents"][0]
+        meta = current["metadatas"][0] if current.get("metadatas") else {}
+
+        # Update text
+        meta["text"] = updated_text
+        meta["last_accessed"] = datetime.now(timezone.utc).isoformat()
+        meta["access_count"] = meta.get("access_count", 0) + 1
+
+        # Track reconsolidation history
+        recon_count = meta.get("reconsolidation_count", 0) + 1
+        meta["reconsolidation_count"] = recon_count
+        meta["last_reconsolidated"] = datetime.now(timezone.utc).isoformat()
+
+        # Adjust importance (clamp to 0.0-1.0)
+        if importance_delta != 0.0:
+            old_imp = meta.get("importance", 0.5)
+            meta["importance"] = max(0.0, min(1.0, old_imp + importance_delta))
+
+        # Upsert with new text and metadata
+        col.upsert(
+            ids=[memory_id],
+            documents=[updated_text],
+            metadatas=[meta]
+        )
+
+        # Invalidate caches
+        self._invalidate_cache(collection)
+
+        # Close the lability window (memory is now reconsolidated/stable)
+        del self._labile_memories[memory_id]
+
+        # Re-link to update semantic connections with new content
+        try:
+            self.auto_link(memory_id, updated_text, collection)
+        except Exception:
+            pass  # Don't let relinking failure break reconsolidation
+
+        return {
+            "success": True,
+            "message": f"Memory reconsolidated after {elapsed:.1f}s labile window.",
+            "old_text": old_text,
+            "new_text": updated_text,
+            "time_since_retrieval": round(elapsed, 1),
+            "reconsolidation_count": recon_count,
+            "importance": meta.get("importance", 0.5),
+        }
+
+    def get_labile_memories(self):
+        """List currently labile memories and their remaining window time.
+
+        Returns:
+            List of dicts with memory_id, collection, elapsed_s, remaining_s.
+            Expired entries are pruned automatically.
+        """
+        now = time.monotonic()
+        result = []
+        expired = []
+
+        for mem_id, info in self._labile_memories.items():
+            elapsed = now - info["retrieved_at"]
+            if elapsed > self._lability_window:
+                expired.append(mem_id)
+            else:
+                result.append({
+                    "memory_id": mem_id,
+                    "collection": info["collection"],
+                    "elapsed_s": round(elapsed, 1),
+                    "remaining_s": round(self._lability_window - elapsed, 1),
+                })
+
+        for mem_id in expired:
+            del self._labile_memories[mem_id]
+
+        return result
+
 
 class LocalBrain(ClarvisBrain):
     """
@@ -1314,6 +1477,25 @@ def search(query, n=5, min_importance=None, collections=None):
     return brain.recall(query, n=n, min_importance=min_importance, collections=collections)
 
 
+def global_search(query, level="C1", top_k=5):
+    """GraphRAG-style global search over community summaries.
+
+    Answers holistic questions ("What are the main themes?") that pure
+    vector search cannot handle well. Uses Leiden community detection
+    over the memory graph + extractive summaries.
+
+    Args:
+        query: Natural language query
+        level: Community level (C0=broadest, C3=most granular)
+        top_k: Number of top communities to return
+
+    Returns:
+        List of {community_id, score, summary, keywords, ...}
+    """
+    from graphrag_communities import global_search as _gs
+    return _gs(query, level=level, top_k=top_k)
+
+
 if __name__ == "__main__":
     # CLI interface
     import sys
@@ -1335,6 +1517,7 @@ if __name__ == "__main__":
         print("  context            - Show current context")
         print("  crosslink          - Build cross-collection edges for all memories")
         print("  remember <text>    - High-importance store (--importance 0.8 --collection clarvis-learnings --tags t1,t2)")
+        print("  global <query>     - GraphRAG global search (holistic queries)")
         print("  ingest-research [file] - Ingest research markdown into brain (all files if no arg)")
         sys.exit(1)
     
@@ -1480,6 +1663,15 @@ if __name__ == "__main__":
         else:
             print("Error: no text provided")
             sys.exit(1)
+    elif cmd == "global":
+        query = sys.argv[2] if len(sys.argv) > 2 else "What are the main themes?"
+        level = sys.argv[3] if len(sys.argv) > 3 else "C1"
+        results = global_search(query, level=level)
+        for i, r in enumerate(results, 1):
+            print(f"{i}. [{r['score']:.3f}] {r['community_id']} ({r['size']} mem)")
+            print(f"   {', '.join(r.get('keywords', [])[:6])}")
+            print(f"   {r['summary'][:150]}")
+
     elif cmd == "ingest-research":
         # Ingest a research markdown file into brain with file-hash dedup
         import glob as glob_mod

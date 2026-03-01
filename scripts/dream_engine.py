@@ -159,25 +159,118 @@ def _save_dream_log(log):
         json.dump(log, f, indent=2)
 
 
+def compute_surprise(episode, all_episodes):
+    """Compute SuRe-inspired surprise score for an episode.
+
+    Adapted from SuRe (arXiv:2511.22367): Surprise = how poorly the system
+    "predicted" this episode's outcome, measured as semantic distance from
+    nearest neighbors (analog to NLL in neural systems).
+
+    High surprise = episode violates expectations → most valuable for replay.
+
+    Components:
+      1. Outcome surprise: failures are more surprising than successes
+      2. Duration anomaly: unusually fast/slow episodes are surprising
+      3. Semantic novelty: episodes unlike their neighbors carry more information
+      4. Confidence gap: low-confidence outcomes are more surprising
+
+    Returns:
+        float: surprise score (0.0 to 1.0, higher = more surprising)
+    """
+    outcome = episode.get("outcome", "success")
+    duration = episode.get("duration_s", 60)
+    confidence = episode.get("confidence", 0.5)
+    task = episode.get("task", "")
+
+    # Component 1: Outcome surprise — failures are rarer, hence more surprising
+    outcome_surprise = 0.7 if outcome != "success" else 0.2
+
+    # Component 2: Duration anomaly — how far from the mean duration?
+    durations = [ep.get("duration_s", 60) for ep in all_episodes if ep.get("duration_s")]
+    if durations:
+        mean_dur = sum(durations) / len(durations)
+        std_dur = max(1.0, (sum((d - mean_dur)**2 for d in durations) / len(durations)) ** 0.5)
+        duration_anomaly = min(1.0, abs(duration - mean_dur) / (2 * std_dur))
+    else:
+        duration_anomaly = 0.0
+
+    # Component 3: Semantic novelty — task text distance from neighbors
+    # (proxy for NLL: novel content = high "prediction error")
+    task_lower = task.lower()
+    similarities = []
+    for other in all_episodes:
+        if other["id"] == episode["id"]:
+            continue
+        other_task = other.get("task", "").lower()
+        if not other_task:
+            continue
+        # Jaccard similarity on word sets as fast proxy
+        words_a = set(task_lower.split())
+        words_b = set(other_task.split())
+        if words_a or words_b:
+            jaccard = len(words_a & words_b) / max(1, len(words_a | words_b))
+            similarities.append(jaccard)
+    # Novelty = 1 - max_similarity (most unique episodes are most novel)
+    semantic_novelty = 1.0 - max(similarities[:10]) if similarities else 1.0
+
+    # Component 4: Confidence gap — low confidence = high surprise
+    confidence_surprise = 1.0 - min(1.0, max(0.0, confidence))
+
+    # Weighted combination (SuRe emphasizes prediction error most)
+    surprise = (
+        0.30 * outcome_surprise
+        + 0.15 * duration_anomaly
+        + 0.35 * semantic_novelty  # Heaviest weight — analog to NLL
+        + 0.20 * confidence_surprise
+    )
+    return round(min(1.0, surprise), 4)
+
+
 def select_episodes(n=10):
-    """Select n random episodes for dreaming, biased toward recent and high-valence."""
+    """Select n episodes for dreaming, prioritized by SuRe-style surprise.
+
+    Adapted from SuRe (arXiv:2511.22367): instead of random selection,
+    prioritize episodes that the system "predicted poorly" (high surprise).
+    These carry the most learning signal for counterfactual reasoning.
+
+    The top 70% of slots go to highest-surprise episodes.
+    The remaining 30% are sampled proportional to recency × valence
+    to maintain exploration diversity.
+    """
     episodes = episodic.episodes
     if not episodes:
         return []
 
-    # Weight selection: recent episodes and high-valence episodes are more likely
-    weights = []
-    for i, ep in enumerate(episodes):
-        recency = (i + 1) / len(episodes)  # 0..1, higher for recent
-        valence = ep.get("valence", 0.5)
-        weight = recency * 0.6 + valence * 0.4
-        weights.append(weight)
+    # Compute surprise scores for all episodes
+    surprise_scores = {}
+    for ep in episodes:
+        surprise_scores[ep["id"]] = compute_surprise(ep, episodes)
 
-    # Sample without replacement (or all if fewer than n)
-    k = min(n, len(episodes))
-    selected = random.choices(episodes, weights=weights, k=k)
+    # Split budget: 70% surprise-driven, 30% exploration
+    n_surprise = max(1, int(n * 0.7))
+    n_explore = n - n_surprise
 
-    # Deduplicate by episode id
+    # Top surprise episodes
+    sorted_eps = sorted(episodes, key=lambda ep: surprise_scores.get(ep["id"], 0), reverse=True)
+    surprise_picks = sorted_eps[:n_surprise]
+    picked_ids = {ep["id"] for ep in surprise_picks}
+
+    # Exploration: recency × valence weighted sampling from remainder
+    remaining = [ep for ep in episodes if ep["id"] not in picked_ids]
+    if remaining and n_explore > 0:
+        weights = []
+        for i, ep in enumerate(remaining):
+            recency = (episodes.index(ep) + 1) / len(episodes)
+            valence = ep.get("valence", 0.5)
+            weight = recency * 0.6 + valence * 0.4
+            weights.append(weight)
+        k = min(n_explore, len(remaining))
+        explore_picks = random.choices(remaining, weights=weights, k=k)
+    else:
+        explore_picks = []
+
+    # Combine and deduplicate
+    selected = surprise_picks + explore_picks
     seen = set()
     unique = []
     for ep in selected:
@@ -355,9 +448,13 @@ def dream(n_episodes=10):
     session_insights = []
     chains_created = []
 
+    # Compute surprise scores for logging
+    surprise_scores = {ep["id"]: compute_surprise(ep, episodes) for ep in episodes}
+
     # 2-3. For each episode, generate counterfactual and reason about it
     for i, episode in enumerate(episodes):
-        print(f"[dream] [{i+1}/{len(episodes)}] Dreaming about: {episode['task'][:60]}...")
+        ep_surprise = surprise_scores.get(episode["id"], 0.0)
+        print(f"[dream] [{i+1}/{len(episodes)}] Dreaming about: {episode['task'][:60]}... (surprise={ep_surprise:.3f})")
 
         # Generate counterfactual
         cf = generate_counterfactual(episode)
@@ -382,6 +479,7 @@ def dream(n_episodes=10):
             "template": cf["template_id"],
             "counterfactual": cf["scenario"][:150],
             "insight": insight[:200],
+            "surprise_score": ep_surprise,
             "chain_id": chain_id,
             "memory_id": dream_memory_id,
             "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -422,6 +520,125 @@ def dream(n_episodes=10):
         "insights_generated": len(session_insights),
         "chains_created": chains_created,
         "insights": [d["insight"][:100] for d in session_insights],
+    }
+
+
+def rethink_memory(n_episodes=20):
+    """Letta-inspired rethink_memory: consolidate raw episodes into learned context.
+
+    Unlike counterfactual dreaming (which stress-tests assumptions), rethink_memory
+    extracts positive knowledge — generalizing from successful episodes into
+    reusable semantic learnings.
+
+    Inspired by:
+    - Letta Sleep-time Compute (arXiv 2504.13171): rethink_memory transforms
+      raw context → learned context during offline phases
+    - LightMem (arXiv 2510.18866): offline consolidation with topic-aware grouping
+    - MemAgent (ICLR 2026): fixed-size overwrite strategy
+
+    Args:
+        n_episodes: Number of recent episodes to process
+
+    Returns:
+        dict with rethink stats
+    """
+    print(f"[rethink] Starting rethink_memory cycle ({n_episodes} episodes)...")
+
+    episodes = episodic.episodes
+    if not episodes:
+        print("[rethink] No episodes available.")
+        return {"error": "no_episodes", "learnings": 0}
+
+    # Take most recent episodes (recency-biased window)
+    recent = episodes[-n_episodes:]
+    successful = [ep for ep in recent if ep.get("outcome") == "success"]
+
+    if len(successful) < 3:
+        print(f"[rethink] Only {len(successful)} successful episodes. Need 3+.")
+        return {"learnings": 0, "episodes_checked": len(recent)}
+
+    print(f"[rethink] Processing {len(successful)} successful episodes from last {len(recent)}")
+
+    # Group by task type (first word of task)
+    groups = {}
+    for ep in successful:
+        task = ep.get("task", "")
+        # Extract category from task prefix patterns
+        category = "general"
+        for prefix in ["[RESEARCH", "[AUTONOMY", "[SELF-MODEL", "[CRAWL",
+                        "[SEMANTIC", "[RECONSOLIDATION", "Build", "Fix",
+                        "Implement", "Research", "Add", "Update"]:
+            if task.startswith(prefix):
+                category = prefix.strip("[").rstrip("]").lower()
+                break
+        groups.setdefault(category, []).append(ep)
+
+    learnings = []
+    log = _load_dream_log()
+
+    for category, eps in sorted(groups.items(), key=lambda x: -len(x[1])):
+        if len(eps) < 2:
+            continue
+        if len(learnings) >= 5:
+            break
+
+        # Synthesize a generalized learning from the group
+        tasks_summary = "; ".join(ep.get("task", "")[:40] for ep in eps[:5])
+        durations = [ep.get("duration_s", 0) for ep in eps if ep.get("duration_s")]
+        avg_dur = sum(durations) / len(durations) if durations else 0
+        confidences = [ep.get("confidence", 0) for ep in eps if ep.get("confidence")]
+        avg_conf = sum(confidences) / len(confidences) if confidences else 0
+
+        learning_text = (
+            f"[RETHINK] Learned pattern in '{category}' ({len(eps)} episodes): "
+            f"Tasks like [{tasks_summary}] succeed reliably "
+            f"(avg {avg_dur:.0f}s, conf {avg_conf:.2f}). "
+            f"This capability is stable and can be built upon."
+        )
+
+        # Check for duplicate in brain
+        existing = brain.recall(learning_text, n=2, collections=["clarvis-learnings"])
+        if existing and existing[0].get("distance", 1.0) < 0.5:
+            print(f"  [rethink] '{category}' already has similar learning. Skip.")
+            continue
+
+        memory_id = brain.store(
+            learning_text,
+            collection="clarvis-learnings",
+            importance=0.55,
+            tags=["rethink", f"category:{category}", "dream-rethink"],
+            source="dream_engine_rethink"
+        )
+
+        learnings.append({
+            "category": category,
+            "episode_count": len(eps),
+            "learning": learning_text[:120],
+            "memory_id": memory_id,
+        })
+
+        log["dreams"].append({
+            "episode_id": f"rethink_{category}",
+            "episode_task": f"rethink: {category}",
+            "template": "rethink_memory",
+            "counterfactual": "",
+            "insight": learning_text[:200],
+            "chain_id": None,
+            "memory_id": memory_id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+
+        print(f"  [rethink] '{category}': {len(eps)} eps → learned pattern stored")
+
+    log["total_insights"] += len(learnings)
+    _save_dream_log(log)
+
+    print(f"\n[rethink] Complete: {len(learnings)} learned patterns extracted")
+    return {
+        "episodes_checked": len(recent),
+        "successful_episodes": len(successful),
+        "learnings": len(learnings),
+        "details": learnings,
     }
 
 
@@ -476,9 +693,11 @@ def list_insights(n=10):
 # CLI
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: dream_engine.py <dream|stats|insights> [n_episodes]")
+        print("Usage: dream_engine.py <dream|rethink|sleep|stats|insights> [n_episodes]")
         print("Commands:")
         print("  dream [n]    Run counterfactual dream cycle (default: 10 episodes)")
+        print("  rethink [n]  Rethink memory: consolidate episodes into learned patterns")
+        print("  sleep [n]    Full sleep cycle: dream + rethink (default: 10)")
         print("  stats        Show dream history statistics")
         print("  insights     List stored dream insights")
         sys.exit(1)
@@ -489,6 +708,22 @@ if __name__ == "__main__":
         n = int(sys.argv[2]) if len(sys.argv) > 2 else 10
         result = dream(n)
         print(f"\n{json.dumps(result, indent=2)}")
+
+    elif cmd == "rethink":
+        n = int(sys.argv[2]) if len(sys.argv) > 2 else 20
+        result = rethink_memory(n)
+        print(f"\n{json.dumps(result, indent=2)}")
+
+    elif cmd == "sleep":
+        # Full sleep cycle: counterfactual dreaming + rethink memory
+        n = int(sys.argv[2]) if len(sys.argv) > 2 else 10
+        print("=== SLEEP CYCLE: Phase 1 — Counterfactual Dreaming ===")
+        dream_result = dream(n)
+        print("\n=== SLEEP CYCLE: Phase 2 — Rethink Memory ===")
+        rethink_result = rethink_memory(n * 2)
+        print("\n=== SLEEP CYCLE COMPLETE ===")
+        print(f"  Dreams: {dream_result.get('insights_generated', 0)} insights")
+        print(f"  Rethink: {rethink_result.get('learnings', 0)} learned patterns")
 
     elif cmd == "stats":
         stats = get_stats()

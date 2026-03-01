@@ -91,7 +91,7 @@ cat > "$EVENING_PROMPT_FILE" << 'ENDPROMPT'
 Review today's work: check git status, recent memory files, any errors in logs.
 What's working? Any bugs? Output: brief audit + 1 fix if needed.
 ENDPROMPT
-timeout 600 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \
+timeout 1200 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \
     /home/agent/.local/bin/claude -p "$(cat "$EVENING_PROMPT_FILE")" \
     --dangerously-skip-permissions --model claude-opus-4-6 >> "$LOGFILE" 2>&1
 rm -f "$EVENING_PROMPT_FILE"

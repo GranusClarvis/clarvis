@@ -1,0 +1,142 @@
+# Bundle M: Swarm & Collective Intelligence
+
+**Date**: 2026-02-27
+**Topics**: Stigmergy (Grassé), Swarm Intelligence (Bonabeau et al.), Open-Endedness (Stanley & Lehman)
+**Theme**: How collective systems coordinate without central control, and why objective-free search outperforms goal-directed optimization
+
+---
+
+## 1. Stigmergy (Pierre-Paul Grassé, 1959)
+
+### Core Mechanism
+Stigmergy is indirect coordination through environmental traces. An agent's action modifies the shared environment, and that modification stimulates the next action — by the same or a different agent. No direct communication between agents is required.
+
+Grassé discovered this observing termite nest-building: workers deposit pheromone-infused mud pellets. Larger piles attract more deposits (positive feedback), leading to emergent pillars, arches, tunnels, and chambers from purely local rules.
+
+### Two Types of Stigmergy
+- **Sematectonic**: The work product itself is the signal. A half-built wall stimulates further building. The trace *is* the result.
+- **Marker-based**: Signals are added specifically for communication (e.g., pheromone trails). More fine-grained but requires evolved conventions about marker meaning.
+
+### Two Dimensions
+- **Quantitative**: Signals vary in degree (stronger pheromone = more attractive). Scalar gradient.
+- **Qualitative**: Different traces stimulate *different types* of action. Discrete branching.
+
+### Key Properties
+- **Scalability**: Coordination cost doesn't grow with agent count (unlike direct messaging, which scales O(n²)).
+- **Robustness**: No single point of failure. Any agent can respond to any environmental trace.
+- **Persistence vs. Decay**: Traces can be persistent (sematectonic — a built wall stays) or transient (markers — pheromones evaporate), enabling both memory and adaptivity.
+
+### Digital Stigmergy
+Wikipedia is stigmergic: one editor modifies a page, another responds to the modification. Git commits work identically — push changes, others respond to the modified codebase. Modern implementations include "Stigmergic Blackboard Protocol" (SBP) where AI agents leave signals on shared blackboards rather than messaging each other directly.
+
+**Key insight**: As agent count grows, direct coordination overhead grows faster (more messages, more state, more conflicts). Stigmergy scales sublinearly.
+
+---
+
+## 2. Swarm Intelligence (Bonabeau, Dorigo, Theraulaz, 1999)
+
+### Definition
+Collective intelligence emerging from simple agents interacting with each other and their environment. Intelligence lies in the *network of interactions*, not in individual sophistication.
+
+### Four Pillars of Self-Organization
+1. **Positive feedback** — Amplification. Ants reinforce successful pheromone trails. Small advantages become large ones.
+2. **Negative feedback** — Stabilization. Pheromone evaporation prevents lock-in. Balances exploitation with exploration.
+3. **Randomness (fluctuations)** — Seeds of novelty. Random perturbations let the system discover new solutions. Without noise, systems crystallize prematurely.
+4. **Multiple interactions** — Enables collective behavior without centralized rules. No single agent directs; structure emerges from density of interaction.
+
+### Design Principles for Artificial Swarm Systems
+- Replace **control** with self-organization
+- Replace **preprogramming** with adaptive response
+- Replace **centralization** with distributed decision-making
+- Properties to achieve: **flexibility** (adapt to change), **robustness** (function despite failures), **decentralization** (no single point of control)
+
+### Algorithmic Instantiations
+- **Ant Colony Optimization (ACO)**: Virtual ants deposit pheromone on graph edges. Better solutions get stronger trails. Used for routing, scheduling, optimization.
+- **Particle Swarm Optimization (PSO)**: Agents move through solution space, influenced by personal best and swarm best. Balances local and global search.
+
+**Key insight**: Intelligence is an emergent property of interaction density, not agent complexity. Simple rules + many interactions = sophisticated collective behavior.
+
+---
+
+## 3. Open-Endedness (Kenneth Stanley & Joel Lehman)
+
+### The Myth of the Objective
+Stanley & Lehman's core thesis: ambitious objectives are *deceptive*. The gradient toward a complex goal often points away from the stepping stones needed to reach it. Like a Chinese finger trap — pulling toward the goal (freeing fingers) is counterproductive; the prerequisite is pushing *away* from it.
+
+### Novelty Search
+Instead of optimizing toward a fixed objective, novelty search rewards behavioral *difference* from all previously seen behaviors. Domain-independent novelty metric replaces task-specific fitness.
+
+**Counterintuitive result**: In maze navigation and bipedal walking tasks, novelty search *significantly outperforms* objective-based search. By ignoring the goal, the system explores more of the search space and stumbles upon solutions that objective-driven search would never reach (because intermediate stepping stones look like failures under objective metrics).
+
+### Stepping Stones
+Nature is a "stepping stone collector" — accumulating increasingly complex intermediates. Evolution doesn't optimize toward humans; it accumulates novelty, and complex organisms are side effects of open-ended exploration.
+
+Key requirements for stepping stones:
+- They cannot be predicted a priori for ambitious objectives
+- They often look like failures under the target objective's metric
+- The path through stepping stones is only legible in retrospect
+
+### Quality-Diversity (QD) Methods
+Modern successors like **MAP-Elites** combine novelty with quality: maintain a grid of behavioral niches, each filled with the highest-performing solution found for that niche. More stable than pure novelty search (niches are predefined), while preserving diversity pressure.
+
+**Practical concerns**: Systems risk *diversity collapse* (converging to a narrow region), *complexity saturation* (running out of steam), or failure to transcend existing complexity levels.
+
+### Picbreeder Evidence
+In Picbreeder (interactive evolution of images), users selecting for novelty/interest created far more impressive images than users trying to evolve toward a specific target. Goals *constrain*; open exploration *enables*.
+
+**Key insight**: For ambitious search, the objective function is the enemy. Reward novelty and collect stepping stones — breakthroughs emerge from exploration, not optimization.
+
+---
+
+## Cross-Topic Synthesis
+
+### Pattern 1: Environment as Shared Memory (Stigmergy → Swarm → Open-endedness)
+All three frameworks share a critical insight: **the medium (environment/archive/stepping stone collection) is the message**. Stigmergy uses the physical environment. Swarm intelligence uses pheromone trails and interaction networks. Novelty search uses the archive of previously-discovered behaviors. In each case, coordination and progress emerge from agents responding to accumulated traces rather than following centralized plans.
+
+### Pattern 2: The Four Pillars Apply Universally
+The swarm intelligence pillars (positive feedback, negative feedback, randomness, multiple interactions) map cleanly onto both stigmergy and open-ended evolution:
+- **Positive feedback**: Pheromone reinforcement / stepping stone accumulation / novelty archive growth
+- **Negative feedback**: Pheromone decay / diversity pressure / quality filtering
+- **Randomness**: Random ant exploration / mutation / behavioral perturbation
+- **Multiple interactions**: Agent-environment-agent loops / population-based search / archive comparison
+
+### Pattern 3: Anti-Objective Convergence
+Grassé showed termites build complex structures without blueprints. Bonabeau showed swarms solve problems without central planning. Stanley showed search succeeds better without objectives. The convergence is striking: **explicit goals and central control are not just unnecessary for complex emergence — they actively hinder it**.
+
+### Pattern 4: Scalable Coordination Through Indirection
+Direct agent-to-agent communication scales poorly (O(n²)). All three paradigms achieve coordination through *indirection* — environment modification, shared state, behavioral archives. This enables systems that scale gracefully.
+
+---
+
+## Implementation Ideas for Clarvis
+
+### 1. Stigmergic Task Coordination
+Replace the current QUEUE.md pull-based task system with a stigmergic model:
+- Each cron job / heartbeat leaves **traces** (results, partial work, discovered insights) in a shared "pheromone board" (a structured JSON or ChromaDB collection)
+- Future jobs **sense** the board and are attracted to traces: partially-completed work gets reinforced (positive feedback), stale traces decay (negative feedback), random perturbation occasionally explores new directions
+- Benefit: No central scheduler needed. Tasks self-organize around accumulated work products. Multiple heartbeats can contribute to the same emergent goal without explicit coordination.
+
+### 2. Novelty-Driven Evolution Queue
+Current evolution is somewhat objective-driven (Phi score, performance metrics). Add a **novelty pressure** component:
+- Maintain an **archive** of all past heartbeat outputs (behavioral signatures — what files changed, what capabilities were exercised, what domains were touched)
+- Score candidate tasks not just by expected performance gain, but by **behavioral distance** from the archive
+- Periodically prioritize tasks that explore untouched areas of the capability space, even if they don't obviously improve metrics
+- This prevents the system from getting trapped in local optima (endlessly optimizing brain query speed while neglecting novel capabilities)
+
+### 3. Quality-Diversity for Script/Code Generation
+When generating new scripts or modifying existing ones, use a MAP-Elites-inspired approach:
+- Define a behavioral grid (e.g., script-type × complexity × domain)
+- Track the best implementation found for each niche
+- When a heartbeat generates code, check if it fills an empty niche or improves an existing one
+- Prevent monoculture (all scripts looking the same) while maintaining quality
+
+---
+
+## References
+- Grassé, P-P. (1959). "La reconstruction du nid et les coordinations interindividuelles chez Bellicositermes natalensis et Cubitermes sp." *Insectes Sociaux*, 6(1), 41-80.
+- Heylighen, F. (2016). "Stigmergy as a Universal Coordination Mechanism" *Cognitive Systems Research*, 38, 50-59.
+- Bonabeau, E., Dorigo, M., & Theraulaz, G. (1999). *Swarm Intelligence: From Natural to Artificial Systems*. Oxford University Press.
+- Garnier, S., Gautrais, J., & Theraulaz, G. (2007). "The biological principles of swarm intelligence." *Swarm Intelligence*, 1(1), 3-31.
+- Stanley, K.O. & Lehman, J. (2015). *Why Greatness Cannot Be Planned: The Myth of the Objective*. Springer.
+- Lehman, J. & Stanley, K.O. (2011). "Abandoning Objectives: Evolution Through the Search for Novelty Alone." *Evolutionary Computation*, 19(2), 189-223.
+- Mouret, J-B. & Clune, J. (2015). "Illuminating search spaces by mapping elites." arXiv:1504.04909.

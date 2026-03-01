@@ -411,6 +411,10 @@ Otherwise, do the work. Be concrete. When done, output a 1-line summary."""
         choices = data.get("choices", [])
         text = choices[0]["message"]["content"] if choices else ""
 
+        # Sanitize: some models hallucinate tool-call XML (e.g. <minimax:tool_call>)
+        text = re.sub(r'<[a-zA-Z_]+:tool_call>.*?</[a-zA-Z_]+:tool_call>', '', text, flags=re.DOTALL).strip()
+        text = re.sub(r'<[a-zA-Z_]+:tool_call>.*', '', text, flags=re.DOTALL).strip()
+
         # Extract usage with real cost
         raw_usage = data.get("usage", {})
         gen_id = data.get("id", "")

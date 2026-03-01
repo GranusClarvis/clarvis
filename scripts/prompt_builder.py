@@ -361,7 +361,7 @@ def get_context_brief(tier="standard", task=None):
             # Try to get recalled memory IDs for synaptic spreading
             try:
                 from brain_introspect import introspect_for_task as _raw_introspect
-                raw = _raw_introspect(task, budget=tier)
+                _raw_introspect(task, budget=tier)
                 # Extract IDs from the raw domain_knowledge recall
                 # (introspect stores results but doesn't expose IDs in formatted output)
                 # We do a lightweight follow-up recall just for IDs

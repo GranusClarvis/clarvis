@@ -2,10 +2,11 @@
 # =============================================================================
 # Research Cron — Dedicated research execution from QUEUE.md roadmap
 # =============================================================================
-# Runs 2x/day at 10:00, 20:00 UTC
+# Runs 2x/day at 10:00, 20:00 CET
 # Picks ONE research task from QUEUE.md (any section with "Research:" prefix)
 # and executes it via Claude Code.
-# Research discovery (populating the queue) runs separately via cron_research_discovery.sh.
+# When no research tasks remain, falls back to DISCOVERY mode (was cron_research_discovery.sh).
+# This consolidation freed the 14:00 slot for cron_implementation_sprint.sh.
 # =============================================================================
 
 source /home/agent/.openclaw/workspace/scripts/cron_env.sh
@@ -64,7 +65,109 @@ if found:
 " 2>> "$LOGFILE")
 
 if [ -z "$RESEARCH_TASK" ]; then
-    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] No pending research tasks in QUEUE.md" >> "$LOGFILE"
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] No pending research tasks — running discovery fallback" >> "$LOGFILE"
+    # Discovery fallback: instead of a separate cron_research_discovery.sh slot,
+    # we discover new topics when the research queue is empty.
+    # This saves one Claude Code slot per day (was 14:00, now freed for implementation sprint).
+
+    DISC_LOCKFILE="/tmp/clarvis_research_discovery.lock"
+    if [ -f "$DISC_LOCKFILE" ]; then
+        disc_pid=$(cat "$DISC_LOCKFILE" 2>/dev/null)
+        if [ -n "$disc_pid" ] && kill -0 "$disc_pid" 2>/dev/null; then
+            echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] SKIP: Discovery already running (PID $disc_pid)" >> "$LOGFILE"
+            exit 0
+        fi
+    fi
+    echo $$ > "$DISC_LOCKFILE"
+    # Update trap to clean both lockfiles
+    trap "rm -f $LOCKFILE $DISC_LOCKFILE" EXIT
+
+    # Run discovery inline (same logic as cron_research_discovery.sh)
+    CONTEXT_BRIEF_DISC=$(python3 "$SCRIPTS/prompt_builder.py" context-brief --task "identify valuable research topics" --tier standard 2>/dev/null || echo "")
+
+    # Sources: research_ingested.json + QUEUE_ARCHIVE.md (completed research topics)
+    ALREADY_RESEARCHED=$(python3 -c "
+import json, os, re
+# 1. Topics from research ingestion tracker
+tracker_file = 'data/research_ingested.json'
+if os.path.exists(tracker_file):
+    with open(tracker_file) as f:
+        d = json.load(f)
+    for name in sorted(d.keys()):
+        print(f'  - {name.replace(\".md\", \"\").replace(\"-\", \" \")}')
+# 2. Completed research/bundle items from QUEUE_ARCHIVE.md
+archive_file = 'memory/evolution/QUEUE_ARCHIVE.md'
+if os.path.exists(archive_file):
+    with open(archive_file) as f:
+        for line in f:
+            m = re.match(r'^- \[x\] .*?(Research:|Bundle [A-Z]:)(.*?)$', line.strip())
+            if m:
+                title = re.sub(r'\[.*?\]\s*', '', m.group(1) + m.group(2)).strip()
+                if title:
+                    print(f'  - {title}')
+if not os.path.exists(tracker_file) and not os.path.exists(archive_file):
+    print('  (none)')
+" 2>/dev/null)
+
+    QUEUE_RESEARCH=$(grep -i 'research\|study\|paper\|explore\|investigate\|bundle' memory/evolution/QUEUE.md 2>/dev/null | head -10 || echo "(none)")
+
+    DISC_OUTPUT_FILE=$(mktemp)
+    DISC_START=$SECONDS
+
+    DISC_PROMPT_FILE=$(mktemp --suffix=.txt)
+    cat > "$DISC_PROMPT_FILE" << ENDDISC
+You are Clarvis's research strategist. Your job is to identify 3-5 HIGH-VALUE research topics that will advance Clarvis's goals.
+
+CONTEXT:
+$CONTEXT_BRIEF_DISC
+
+ALREADY RESEARCHED (do NOT duplicate these):
+$ALREADY_RESEARCHED
+
+CURRENTLY IN QUEUE:
+$QUEUE_RESEARCH
+
+RESEARCH PRIORITIES:
+1. AUTONOMOUS EXECUTION — browser automation, self-directed task execution, multi-step planning
+2. AGI ARCHITECTURE — cognitive architectures, meta-learning, self-modification, knowledge graphs
+3. CONSCIOUSNESS & INTEGRATION — IIT, Global Workspace Theory, phi metrics, information integration
+4. OPEN-SOURCE TOOLS — agent frameworks, browser automation, LLM orchestration, memory systems
+5. SELF-IMPROVEMENT — evolutionary algorithms, auto-ML, curriculum learning
+
+INSTRUCTIONS:
+1. Search the web for 3-5 specific research topics (not already researched)
+2. Add each to the research queue: python3 scripts/queue_writer.py add "Research: [topic] — [description]" --priority P1 --source research_discovery
+3. Output a summary of what you added.
+ENDDISC
+
+    timeout 1200 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT /home/agent/.local/bin/claude -p \
+        "$(cat "$DISC_PROMPT_FILE")" \
+        --dangerously-skip-permissions --model claude-opus-4-6 \
+        > "$DISC_OUTPUT_FILE" 2>&1
+    DISC_EXIT=$?
+    DISC_DURATION=$((SECONDS - DISC_START))
+    rm -f "$DISC_PROMPT_FILE"
+
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] DISCOVERY FALLBACK: exit=$DISC_EXIT duration=${DISC_DURATION}s" >> "$LOGFILE"
+    tail -c 1500 "$DISC_OUTPUT_FILE" >> "$LOGFILE" 2>/dev/null
+
+    DISC_SUMMARY=$(tail -c 300 "$DISC_OUTPUT_FILE" 2>/dev/null | tail -3)
+    {
+        echo ""
+        echo "### Research Discovery — $(date -u +%H:%M) UTC"
+        echo ""
+        if [ $DISC_EXIT -eq 0 ]; then
+            echo "Discovered research topics (via fallback). Summary: ${DISC_SUMMARY:0:200}"
+        else
+            echo "Discovery FAILED. Exit=$DISC_EXIT (${DISC_DURATION}s)."
+        fi
+        echo ""
+        echo "---"
+        echo ""
+    } >> "memory/cron/digest.md"
+
+    rm -f "$DISC_OUTPUT_FILE"
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Research discovery fallback complete (${DISC_DURATION}s) ===" >> "$LOGFILE"
     exit 0
 fi
 

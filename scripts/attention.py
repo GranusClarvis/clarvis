@@ -755,9 +755,296 @@ class CodeletCompetition:
         }
 
 
+# === ATTENTION SCHEMA (AST — Graziano) ===
+#
+# A simplified internal model OF the attention process itself.
+# While the Spotlight implements attention, the Schema models it:
+#   - Predicts what will enter the spotlight next
+#   - Tracks prediction accuracy over time
+#   - Provides "awareness" report (what the system models itself as attending to)
+#
+# This satisfies Butlin AST-1: "Predictive model representing and controlling attention"
+
+SCHEMA_FILE = ATTENTION_DIR / "attention_schema.json"
+SCHEMA_HISTORY_FILE = ATTENTION_DIR / "schema_history.jsonl"
+SCHEMA_HISTORY_MAX = 200
+
+
+class AttentionSchema:
+    """
+    Simplified internal model of our own attention process (AST, Graziano 2017).
+
+    The attention schema is to attention what the body schema is to the body:
+    a continuously updated, simplified representation that enables monitoring,
+    prediction, and control of the attention mechanism.
+    """
+
+    def __init__(self, spotlight):
+        self.spotlight = spotlight
+        self.predictions = []          # Pending predictions (not yet evaluated)
+        self.prediction_accuracy = []  # Rolling accuracy history (last N)
+        self.schema_state = {
+            "dominant_domain": None,    # What domain we model ourselves as focused on
+            "attention_trend": None,    # Shifting toward / away from what
+            "confidence": 0.5,         # How confident the schema is in its model
+            "last_prediction": None,   # Most recent prediction
+            "last_actual": None,       # Most recent actual state
+            "last_error": None,        # Most recent prediction error
+        }
+        self.total_predictions = 0
+        self.total_correct = 0
+        self._load()
+
+    def _load(self):
+        """Load persisted schema state."""
+        if SCHEMA_FILE.exists():
+            try:
+                data = json.loads(SCHEMA_FILE.read_text())
+                self.schema_state = data.get("schema_state", self.schema_state)
+                self.predictions = data.get("predictions", [])
+                self.prediction_accuracy = data.get("prediction_accuracy", [])
+                self.total_predictions = data.get("total_predictions", 0)
+                self.total_correct = data.get("total_correct", 0)
+            except (json.JSONDecodeError, KeyError):
+                pass
+
+    def _save(self):
+        """Persist schema state."""
+        data = {
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "schema_state": self.schema_state,
+            "predictions": self.predictions[-10:],  # Keep only recent pending
+            "prediction_accuracy": self.prediction_accuracy[-SCHEMA_HISTORY_MAX:],
+            "total_predictions": self.total_predictions,
+            "total_correct": self.total_correct,
+        }
+        SCHEMA_FILE.write_text(json.dumps(data, indent=2))
+
+    def predict_next_focus(self, context=""):
+        """
+        Predict what will capture attention next, based on current schema model.
+
+        Uses:
+          - Current spotlight state (what's salient now)
+          - Codelet activations (which domains are rising)
+          - Context hint (optional, e.g., time of day or current task)
+
+        Returns:
+            dict with prediction details
+        """
+        spotlight = self.spotlight.focus()
+
+        # Heuristic 1: Highest-salience item will likely stay in focus
+        top_item = spotlight[0]["content"][:80] if spotlight else "unknown"
+        top_salience = spotlight[0]["salience"] if spotlight else 0
+
+        # Heuristic 2: Source distribution → predicted dominant source
+        source_counts = {}
+        for item in spotlight:
+            src = item.get("source", "unknown")
+            source_counts[src] = source_counts.get(src, 0) + 1
+        dominant_source = max(source_counts, key=source_counts.get) if source_counts else "unknown"
+
+        # Heuristic 3: Codelet trends → predicted domain shift
+        predicted_domain = self.schema_state.get("dominant_domain", "unknown")
+        try:
+            comp = get_codelet_competition()
+            stats = comp.stats()
+            # Rising domains are predicted to win next
+            rising = [(d, s["activation"], s["trend"]) for d, s in stats.items() if s["trend"] > 0]
+            if rising:
+                rising.sort(key=lambda x: x[1] + x[2], reverse=True)
+                predicted_domain = rising[0][0]
+            else:
+                # No rising domain → predict current winner stays
+                best = max(stats.items(), key=lambda x: x[1]["activation"])
+                predicted_domain = best[0]
+        except Exception:
+            pass
+
+        # Heuristic 4: Predict salience distribution (will attention be focused or diffuse?)
+        saliences = [item["salience"] for item in spotlight] if spotlight else [0]
+        salience_spread = max(saliences) - min(saliences) if len(saliences) > 1 else 0
+        focus_type = "focused" if salience_spread > 0.15 else "diffuse"
+
+        prediction = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "predicted_top_item": top_item,
+            "predicted_domain": predicted_domain,
+            "predicted_source": dominant_source,
+            "predicted_focus_type": focus_type,
+            "predicted_top_salience": round(top_salience, 3),
+            "context": context[:100] if context else "",
+            "evaluated": False,
+        }
+
+        self.predictions.append(prediction)
+        self.schema_state["last_prediction"] = prediction
+        self._save()
+
+        return prediction
+
+    def evaluate_prediction(self, actual_task_domain=None, actual_task_text=None):
+        """
+        Compare the most recent prediction against actual outcome.
+        Called by heartbeat postflight after task execution.
+
+        Args:
+            actual_task_domain: The domain that actually won attention
+            actual_task_text: The task that was actually selected
+
+        Returns:
+            dict with evaluation results
+        """
+        # Find the most recent unevaluated prediction
+        pending = [p for p in self.predictions if not p.get("evaluated")]
+        if not pending:
+            return {"error": "no pending prediction to evaluate"}
+
+        pred = pending[-1]
+
+        # Compute prediction error
+        domain_correct = (pred["predicted_domain"] == actual_task_domain) if actual_task_domain else False
+
+        # Text similarity: simple word overlap
+        text_accuracy = 0.0
+        if actual_task_text and pred.get("predicted_top_item"):
+            pred_words = set(pred["predicted_top_item"].lower().split())
+            actual_words = set(actual_task_text.lower().split())
+            if pred_words:
+                text_accuracy = len(pred_words & actual_words) / max(len(pred_words), len(actual_words))
+
+        # Combined accuracy
+        accuracy = 0.6 * (1.0 if domain_correct else 0.0) + 0.4 * text_accuracy
+
+        pred["evaluated"] = True
+        pred["actual_domain"] = actual_task_domain
+        pred["actual_text"] = (actual_task_text or "")[:80]
+        pred["domain_correct"] = domain_correct
+        pred["text_accuracy"] = round(text_accuracy, 3)
+        pred["accuracy"] = round(accuracy, 3)
+
+        # Update rolling accuracy
+        self.prediction_accuracy.append(accuracy)
+        if len(self.prediction_accuracy) > SCHEMA_HISTORY_MAX:
+            self.prediction_accuracy = self.prediction_accuracy[-SCHEMA_HISTORY_MAX:]
+
+        self.total_predictions += 1
+        if accuracy >= 0.5:
+            self.total_correct += 1
+
+        # Update schema confidence based on recent accuracy
+        recent = self.prediction_accuracy[-10:]
+        self.schema_state["confidence"] = round(sum(recent) / len(recent), 3) if recent else 0.5
+        self.schema_state["last_actual"] = {
+            "domain": actual_task_domain,
+            "text": (actual_task_text or "")[:80],
+        }
+        self.schema_state["last_error"] = round(1.0 - accuracy, 3)
+        self.schema_state["dominant_domain"] = actual_task_domain or pred["predicted_domain"]
+
+        # Append to history file
+        try:
+            with open(SCHEMA_HISTORY_FILE, "a") as f:
+                record = {
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "predicted_domain": pred["predicted_domain"],
+                    "actual_domain": actual_task_domain,
+                    "accuracy": accuracy,
+                    "confidence": self.schema_state["confidence"],
+                }
+                f.write(json.dumps(record) + "\n")
+        except Exception:
+            pass
+
+        self._save()
+
+        return {
+            "accuracy": accuracy,
+            "domain_correct": domain_correct,
+            "text_accuracy": text_accuracy,
+            "confidence": self.schema_state["confidence"],
+            "total_predictions": self.total_predictions,
+            "lifetime_accuracy": round(self.total_correct / max(1, self.total_predictions), 3),
+        }
+
+    def report_awareness(self):
+        """
+        What is the system 'aware of'? Returns the schema's current model
+        of its own attention state — this IS the AST consciousness report.
+
+        In AST terms: this is what subjective awareness looks like from inside.
+        """
+        spotlight = self.spotlight.focus()
+        recent_acc = self.prediction_accuracy[-10:] if self.prediction_accuracy else []
+
+        return {
+            "attending_to": [item["content"][:60] for item in spotlight[:3]],
+            "dominant_domain": self.schema_state.get("dominant_domain"),
+            "attention_confidence": self.schema_state.get("confidence", 0.5),
+            "focus_items": len(spotlight),
+            "prediction_accuracy": round(sum(recent_acc) / len(recent_acc), 3) if recent_acc else 0.0,
+            "total_predictions": self.total_predictions,
+            "schema_model": (
+                f"I am primarily attending to {self.schema_state.get('dominant_domain', 'unknown')} tasks. "
+                f"My attention model predicts with {self.schema_state.get('confidence', 0.5):.0%} confidence. "
+                f"Currently {len(spotlight)} items compete for focus."
+            ),
+        }
+
+    def ast1_score(self):
+        """
+        Compute Butlin AST-1 indicator score (0-1).
+
+        AST-1: "Predictive model representing and controlling attention"
+        Scored on three sub-criteria:
+          (a) Model exists (binary)
+          (b) Model predicts attention (accuracy-based)
+          (c) Predictions influence control (history-based)
+        """
+        # (a) Schema exists and has been used
+        exists = 1.0 if self.total_predictions > 0 else 0.0
+
+        # (b) Prediction accuracy
+        recent = self.prediction_accuracy[-20:]
+        accuracy = sum(recent) / len(recent) if recent else 0.0
+
+        # (c) Control influence — proxy: does accuracy improve over time?
+        if len(self.prediction_accuracy) >= 10:
+            first_half = self.prediction_accuracy[:len(self.prediction_accuracy)//2]
+            second_half = self.prediction_accuracy[len(self.prediction_accuracy)//2:]
+            improvement = (sum(second_half)/len(second_half)) - (sum(first_half)/len(first_half))
+            control = min(1.0, max(0.0, 0.5 + improvement * 2))
+        else:
+            control = 0.3  # Minimal credit for having the infrastructure
+
+        score = 0.3 * exists + 0.4 * accuracy + 0.3 * control
+        return {
+            "ast1_score": round(score, 3),
+            "exists": exists,
+            "accuracy": round(accuracy, 3),
+            "control_influence": round(control, 3),
+            "total_predictions": self.total_predictions,
+        }
+
+    def stats(self):
+        """Get schema statistics."""
+        recent = self.prediction_accuracy[-20:]
+        return {
+            "total_predictions": self.total_predictions,
+            "total_correct": self.total_correct,
+            "lifetime_accuracy": round(self.total_correct / max(1, self.total_predictions), 3),
+            "recent_accuracy": round(sum(recent) / len(recent), 3) if recent else 0.0,
+            "confidence": self.schema_state.get("confidence", 0.5),
+            "dominant_domain": self.schema_state.get("dominant_domain"),
+            "ast1": self.ast1_score(),
+        }
+
+
 # --- Singleton ---
 _attention = None
 _codelet_competition = None
+_attention_schema = None
 
 def get_attention():
     global _attention
@@ -771,6 +1058,13 @@ def get_codelet_competition():
     if _codelet_competition is None:
         _codelet_competition = CodeletCompetition(get_attention())
     return _codelet_competition
+
+def get_attention_schema():
+    """Get the attention schema (AST meta-model, lazy init)."""
+    global _attention_schema
+    if _attention_schema is None:
+        _attention_schema = AttentionSchema(get_attention())
+    return _attention_schema
 
 attention = get_attention()
 
@@ -797,6 +1091,11 @@ if __name__ == "__main__":
         print("  compete          - Run codelet competition cycle (LIDA)")
         print("  codelets         - Show codelet stats")
         print("  bias <text>      - Show codelet bias for a task")
+        print("  schema           - Show attention schema (AST) status")
+        print("  predict [ctx]    - Predict next attention focus (AST)")
+        print("  evaluate <dom>   - Evaluate last prediction against actual domain")
+        print("  awareness        - Report what system is 'aware of' (AST)")
+        print("  ast1             - Compute Butlin AST-1 indicator score")
         sys.exit(0)
 
     cmd = sys.argv[1]
@@ -895,6 +1194,63 @@ if __name__ == "__main__":
             matches = sum(1 for kw in kws if kw in task_text.lower())
             if matches > 0:
                 print(f"  {domain}: {matches} keyword hits, activation={s['activation']:.3f}")
+
+    elif cmd == "schema":
+        schema = get_attention_schema()
+        s = schema.stats()
+        print("=== Attention Schema (AST) ===")
+        print(f"  Total predictions: {s['total_predictions']}")
+        print(f"  Lifetime accuracy: {s['lifetime_accuracy']:.1%}")
+        print(f"  Recent accuracy:   {s['recent_accuracy']:.1%}")
+        print(f"  Confidence:        {s['confidence']:.1%}")
+        print(f"  Dominant domain:   {s['dominant_domain']}")
+        print(f"  AST-1 score:       {s['ast1']['ast1_score']:.3f}")
+
+    elif cmd == "predict":
+        schema = get_attention_schema()
+        ctx = " ".join(sys.argv[2:]) if len(sys.argv) > 2 else ""
+        pred = schema.predict_next_focus(ctx)
+        print("=== AST Prediction ===")
+        print(f"  Predicted domain:    {pred['predicted_domain']}")
+        print(f"  Predicted top item:  {pred['predicted_top_item']}")
+        print(f"  Predicted source:    {pred['predicted_source']}")
+        print(f"  Predicted focus:     {pred['predicted_focus_type']}")
+        print(f"  Predicted salience:  {pred['predicted_top_salience']}")
+
+    elif cmd == "evaluate" and len(sys.argv) > 2:
+        schema = get_attention_schema()
+        domain = sys.argv[2]
+        text = " ".join(sys.argv[3:]) if len(sys.argv) > 3 else None
+        result = schema.evaluate_prediction(domain, text)
+        if "error" in result:
+            print(f"Error: {result['error']}")
+        else:
+            print("=== Schema Evaluation ===")
+            print(f"  Accuracy:           {result['accuracy']:.3f}")
+            print(f"  Domain correct:     {result['domain_correct']}")
+            print(f"  Text accuracy:      {result['text_accuracy']:.3f}")
+            print(f"  Schema confidence:  {result['confidence']:.3f}")
+            print(f"  Lifetime accuracy:  {result['lifetime_accuracy']:.1%}")
+
+    elif cmd == "awareness":
+        schema = get_attention_schema()
+        report = schema.report_awareness()
+        print("=== Awareness Report (AST) ===")
+        print(f"  {report['schema_model']}")
+        print("  Attending to:")
+        for item in report["attending_to"]:
+            print(f"    - {item}")
+        print(f"  Prediction accuracy: {report['prediction_accuracy']:.1%}")
+
+    elif cmd == "ast1":
+        schema = get_attention_schema()
+        ast1 = schema.ast1_score()
+        print("=== Butlin AST-1 Indicator ===")
+        print(f"  Score:             {ast1['ast1_score']:.3f}")
+        print(f"  Schema exists:     {ast1['exists']:.0f}")
+        print(f"  Accuracy:          {ast1['accuracy']:.3f}")
+        print(f"  Control influence: {ast1['control_influence']:.3f}")
+        print(f"  Total predictions: {ast1['total_predictions']}")
 
     else:
         print(f"Unknown command: {cmd}")

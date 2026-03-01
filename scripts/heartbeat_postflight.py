@@ -28,7 +28,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 # === SINGLE IMPORT BLOCK ===
 start_import = time.monotonic()
 
-from attention import attention
+from attention import attention, get_attention_schema
 
 try:
     from clarvis_confidence import outcome as conf_outcome
@@ -81,6 +81,16 @@ try:
     from performance_benchmark import run_heartbeat_check as perf_heartbeat_check
 except ImportError:
     perf_heartbeat_check = None
+
+try:
+    from performance_gate import run_gate as perf_gate_run
+except ImportError:
+    perf_gate_run = None
+
+try:
+    from latency_budget import quick_check as latency_quick_check
+except ImportError:
+    latency_quick_check = None
 
 try:
     from world_models import HierarchicalWorldModel
@@ -190,6 +200,23 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
         except Exception as e:
             log(f"Confidence outcome failed: {e}")
     timings["confidence"] = round(time.monotonic() - t1, 3)
+
+    # === 1.5 AST: Evaluate attention schema prediction ===
+    t15 = time.monotonic()
+    try:
+        schema = get_attention_schema()
+        # Determine actual domain from codelet data
+        actual_domain = preflight_data.get("codelet_winner", "unknown")
+        eval_result = schema.evaluate_prediction(actual_domain, task)
+        if "error" not in eval_result:
+            log(f"AST eval: accuracy={eval_result['accuracy']:.3f} "
+                f"domain_correct={eval_result['domain_correct']} "
+                f"confidence={eval_result['confidence']:.3f}")
+        else:
+            log(f"AST eval: {eval_result['error']}")
+    except Exception as e:
+        log(f"AST evaluation failed (non-fatal): {e}")
+    timings["ast_eval"] = round(time.monotonic() - t15, 3)
 
     # === 2. REASONING CHAIN: Close ===
     t2 = time.monotonic()
@@ -503,6 +530,118 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
         except Exception as e:
             log(f"Performance heartbeat check failed: {e}")
     timings["perf_benchmark"] = round(time.monotonic() - t73, 3)
+
+    # === 7.35 LATENCY BUDGET: Quick p50/p95 check ===
+    t735 = time.monotonic()
+    if latency_quick_check:
+        try:
+            lat_result = latency_quick_check()
+            if lat_result.get("critical"):
+                log(f"LATENCY CRITICAL: brain.recall p95={lat_result['p95_ms']:.0f}ms exceeds critical threshold")
+            elif not lat_result.get("p50_ok") or not lat_result.get("p95_ok"):
+                log(f"LATENCY WARN: brain.recall p50={lat_result['p50_ms']:.0f}ms p95={lat_result['p95_ms']:.0f}ms "
+                    f"(budget p50={lat_result['budget_p50_ms']}ms p95={lat_result['budget_p95_ms']}ms)")
+            else:
+                log(f"LATENCY: brain.recall p50={lat_result['p50_ms']:.0f}ms p95={lat_result['p95_ms']:.0f}ms [OK]")
+        except Exception as e:
+            log(f"Latency budget check failed: {e}")
+    timings["latency_budget"] = round(time.monotonic() - t735, 3)
+
+    # === 7.4 SELF-TEST HARNESS: Auto-run tests after code-modifying heartbeats ===
+    t74 = time.monotonic()
+    selftest_result = {"ran": False}
+    try:
+        # Detect code modifications in output (Edit/Write tool usage, file writes, etc.)
+        code_modified = False
+        if output_text:
+            code_indicators = [
+                "Edit(",  "Write(",  "Edit tool",  "Write tool",
+                "wrote to ",  "edited ",  "modified ",  "created ",
+                ".py\n",  "def ",  "class ",  "import ",
+                "scripts/",  "packages/",
+            ]
+            output_lower = output_text.lower()
+            hits = sum(1 for ind in code_indicators if ind.lower() in output_lower)
+            code_modified = hits >= 2  # Need at least 2 indicators
+
+        if code_modified and exit_code == 0:
+            import subprocess
+            selftest_result["ran"] = True
+            selftest_result["code_modified"] = True
+
+            # 1. Run pytest on clarvis-db
+            pytest_proc = subprocess.run(
+                ["python3", "-m", "pytest", "packages/clarvis-db/tests/", "-q", "--tb=short"],
+                cwd="/home/agent/.openclaw/workspace",
+                capture_output=True, text=True, timeout=60
+            )
+            selftest_result["pytest_exit"] = pytest_proc.returncode
+            selftest_result["pytest_summary"] = pytest_proc.stdout.strip().split('\n')[-1] if pytest_proc.stdout.strip() else ""
+
+            # 2. Run brain.health_check()
+            try:
+                from brain import brain as brain_instance
+                hc = brain_instance.health_check()
+                selftest_result["brain_healthy"] = hc.get("status") == "healthy"
+                selftest_result["brain_memories"] = hc.get("total_memories", 0)
+            except Exception as e:
+                selftest_result["brain_healthy"] = False
+                selftest_result["brain_error"] = str(e)
+
+            # Determine overall pass/fail
+            tests_passed = selftest_result.get("pytest_exit", 1) == 0
+            brain_ok = selftest_result.get("brain_healthy", False)
+            selftest_result["all_passed"] = tests_passed and brain_ok
+
+            if selftest_result["all_passed"]:
+                log(f"SELF-TEST PASSED: pytest={selftest_result['pytest_summary']}, brain=healthy ({selftest_result.get('brain_memories', '?')} memories)")
+            else:
+                log(f"SELF-TEST FAILED: pytest_exit={selftest_result.get('pytest_exit')}, brain_ok={brain_ok}")
+                # Store regression alert in brain
+                try:
+                    from brain import brain as brain_instance
+                    alert = (
+                        f"REGRESSION ALERT: Self-test failed after task '{task[:80]}'. "
+                        f"pytest_exit={selftest_result.get('pytest_exit')}, brain_ok={brain_ok}. "
+                        f"pytest: {selftest_result.get('pytest_summary', 'N/A')}"
+                    )
+                    brain_instance.store(alert, collection="clarvis-learnings",
+                                        importance=0.95, tags=["regression", "self-test"],
+                                        source="self_test_harness")
+                    log("Stored regression alert in brain")
+                except Exception:
+                    pass
+                # Push P0 fix task to QUEUE.md
+                try:
+                    from queue_writer import add_task
+                    fix_task = f"FIX REGRESSION: Self-test failed after '{task[:60]}'. Review and fix immediately."
+                    add_task(fix_task, priority="P0", source="self_test_harness")
+                    log("Pushed P0 regression fix task to QUEUE.md")
+                except Exception:
+                    pass
+        else:
+            selftest_result["code_modified"] = code_modified
+            if not code_modified:
+                log("Self-test: skipped (no code modifications detected)")
+    except Exception as e:
+        log(f"Self-test harness failed: {e}")
+        selftest_result["error"] = str(e)
+    timings["self_test"] = round(time.monotonic() - t74, 3)
+
+    # === 7.45 PERFORMANCE GATE: Run after code-modifying heartbeats ===
+    t745 = time.monotonic()
+    _code_mod = selftest_result.get("code_modified", False) or selftest_result.get("ran", False)
+    if perf_gate_run and _code_mod and exit_code == 0:
+        try:
+            gate_report = perf_gate_run(skip_browser=True, verbose=False)
+            if gate_report.get("all_passed"):
+                log(f"PERF GATE: PASS ({gate_report['passed']}/{gate_report['total']} gates, {gate_report['elapsed_s']}s)")
+            else:
+                failed_gates = [g["gate"] for g in gate_report.get("gates", []) if not g["passed"]]
+                log(f"PERF GATE: FAIL — {', '.join(failed_gates)} ({gate_report['elapsed_s']}s)")
+        except Exception as e:
+            log(f"Performance gate failed: {e}")
+    timings["perf_gate"] = round(time.monotonic() - t745, 3)
 
     # === 7.5 COST TRACKING ===
     t75 = time.monotonic()

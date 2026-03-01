@@ -27,7 +27,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 # === SINGLE IMPORT BLOCK (one-time cost) ===
 start_import = time.monotonic()
 
-from attention import attention, get_codelet_competition
+from attention import attention, get_codelet_competition, get_attention_schema
 
 try:
     from task_selector import parse_tasks, score_tasks
@@ -171,6 +171,17 @@ def run_preflight(dry_run=False):
         result["codelet_domain_bias"] = codelet_result.get("domain_bias", {})
     except Exception as e:
         log(f"Codelet competition failed (non-fatal): {e}")
+
+    # AST: Attention Schema prediction — predict what will capture attention next
+    try:
+        schema = get_attention_schema()
+        prediction = schema.predict_next_focus(context="heartbeat preflight")
+        result["ast_prediction"] = prediction.get("predicted_domain", "unknown")
+        log(f"AST prediction: domain={prediction['predicted_domain']} "
+            f"focus={prediction['predicted_focus_type']}")
+    except Exception as e:
+        log(f"AST prediction failed (non-fatal): {e}")
+
     result["timings"]["attention_tick"] = round(time.monotonic() - t1, 3)
 
     # === 2. TASK SELECTION ===

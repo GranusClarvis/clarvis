@@ -40,15 +40,27 @@ echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Research Discovery starting ===" >> "$
 CONTEXT_BRIEF=$(python3 "$SCRIPTS/prompt_builder.py" context-brief --task "identify valuable research topics" --tier standard 2>/dev/null || echo "")
 
 # Get list of already-researched topics to avoid duplicates
+# Sources: research_ingested.json + QUEUE_ARCHIVE.md (completed research topics)
 ALREADY_RESEARCHED=$(python3 -c "
-import json, os
+import json, os, re
+# 1. Topics from research ingestion tracker
 tracker_file = 'data/research_ingested.json'
 if os.path.exists(tracker_file):
     with open(tracker_file) as f:
         d = json.load(f)
     for name in sorted(d.keys()):
         print(f'  - {name.replace(\".md\", \"\").replace(\"-\", \" \")}')
-else:
+# 2. Completed research/bundle items from QUEUE_ARCHIVE.md
+archive_file = 'memory/evolution/QUEUE_ARCHIVE.md'
+if os.path.exists(archive_file):
+    with open(archive_file) as f:
+        for line in f:
+            m = re.match(r'^- \[x\] .*?(Research:|Bundle [A-Z]:)(.*?)$', line.strip())
+            if m:
+                title = re.sub(r'\[.*?\]\s*', '', m.group(1) + m.group(2)).strip()
+                if title:
+                    print(f'  - {title}')
+if not os.path.exists(tracker_file) and not os.path.exists(archive_file):
     print('  (none)')
 " 2>/dev/null)
 
@@ -97,7 +109,7 @@ INSTRUCTIONS:
 Be specific — "Research: MRKL Systems (Karpas et al. 2022) — modular reasoning and knowledge integration for LLM agents" is better than "Research: agent architectures".
 ENDPROMPT
 
-timeout 900 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT /home/agent/.local/bin/claude -p \
+timeout 1200 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT /home/agent/.local/bin/claude -p \
     "$(cat "$PROMPT_FILE")" \
     --dangerously-skip-permissions --model claude-opus-4-6 \
     > "$TASK_OUTPUT_FILE" 2>&1

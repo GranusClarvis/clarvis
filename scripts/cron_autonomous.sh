@@ -122,7 +122,7 @@ if [ "$PF_STATUS" = "queue_empty" ] || [ "$PF_STATUS" = "no_tasks" ]; then
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Queue empty — spawning task generation..." >> "$LOGFILE"
     COMPRESSOR="$SCRIPTS/context_compressor.py"
     REPLENISH_CONTEXT=$(python3 "$COMPRESSOR" brief 2>> "$LOGFILE")
-    timeout 300 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT /home/agent/.local/bin/claude -p \
+    timeout 1200 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT /home/agent/.local/bin/claude -p \
         "You are Clarvis's evolution engine. The evolution queue is EMPTY.
 
         Here's what was recently completed and current state:
@@ -214,10 +214,11 @@ ENDPROMPT
 }
 
 # Tier-aware timeout: reasoning tasks get more time, complex tasks get moderate
+# User mandate: minimum 4-10 min, max 25 min for complex work
 case "$ROUTE_TIER" in
-    reasoning) CLAUDE_TIMEOUT=1800 ;;
-    complex)   CLAUDE_TIMEOUT=1200  ;;
-    *)         CLAUDE_TIMEOUT=900  ;;
+    reasoning) CLAUDE_TIMEOUT=1800 ;;  # 30 min for deep reasoning
+    complex)   CLAUDE_TIMEOUT=1500 ;;  # 25 min for complex tasks
+    *)         CLAUDE_TIMEOUT=1200 ;;  # 20 min minimum
 esac
 
 # BUG FIX (2026-02-27): When OpenRouter escalates to Claude Code, the timeout
@@ -290,8 +291,8 @@ with open('$PREFLIGHT_FILE', 'w') as f:
     if grep -q "NEEDS_CLAUDE_CODE: true" "$OPENROUTER_STDERR" 2>/dev/null || grep -q "NEEDS_CLAUDE_CODE: true" "$TASK_OUTPUT_FILE" 2>/dev/null || [ $TASK_EXIT -ne 0 ]; then
         # Upgrade timeout: escalated tasks need Claude Code minimum (900s)
         if [ "$CLAUDE_TIMEOUT" -lt 900 ]; then
-            echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] ESCALATION: upgrading timeout ${CLAUDE_TIMEOUT}s → 900s (Claude Code minimum)" >> "$LOGFILE"
-            CLAUDE_TIMEOUT=900
+            echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] ESCALATION: upgrading timeout to 1200s (Claude Code minimum)" >> "$LOGFILE"
+            CLAUDE_TIMEOUT=1200
         fi
         echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] ROUTER: OpenRouter escalated to Claude Code (fallback, timeout=${CLAUDE_TIMEOUT}s)" >> "$LOGFILE"
         EXECUTOR_USED="claude"
@@ -311,8 +312,8 @@ elif [ "$ROUTE_EXECUTOR" = "gemini" ]; then
     if grep -q "NEEDS_CLAUDE_CODE: true" "$TASK_OUTPUT_FILE" 2>/dev/null || [ $TASK_EXIT -ne 0 ]; then
         # Upgrade timeout: escalated tasks need Claude Code minimum (900s)
         if [ "$CLAUDE_TIMEOUT" -lt 900 ]; then
-            echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] ESCALATION: upgrading timeout ${CLAUDE_TIMEOUT}s → 900s (Claude Code minimum)" >> "$LOGFILE"
-            CLAUDE_TIMEOUT=900
+            echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] ESCALATION: upgrading timeout to 1200s (Claude Code minimum)" >> "$LOGFILE"
+            CLAUDE_TIMEOUT=1200
         fi
         echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] ROUTER: OpenRouter escalated to Claude Code (fallback, timeout=${CLAUDE_TIMEOUT}s)" >> "$LOGFILE"
         EXECUTOR_USED="claude"

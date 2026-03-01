@@ -76,75 +76,21 @@ You have TWO execution layers — like a human brain:
 
 ## 🧠 ClarvisDB Brain — YOUR ONLY MEMORY SYSTEM
 
-**ClarvisDB is your brain. No external dependencies.**
+**Fully local** (ONNX embeddings, ChromaDB, SQLite). 1700+ memories, 10 collections, 122k+ graph edges.
 
-- **6.6x faster** (140ms vs 930ms cloud)
-- **Fully local** — ONNX embeddings, no API calls
-- **Your data** — SQLite database you own
-- **~600 memories** across 10 collections, 850+ graph nodes, 10,000+ edges
-
-### Quick Usage
 ```python
 from brain import brain, search, remember, capture
-
-# Search your knowledge
-results = search("what do I know about X")
-
-# Store permanently
-remember("Inverse hates verbose responses", importance=0.9)
-
-# Smart capture
-capture("important insight from conversation")
+search("query")                        # Search all memories
+remember("text", importance=0.9)       # Store permanently
+capture("text")                        # Smart auto-store
+brain.get_goals()                      # Goal tracking
+brain.set_context("focus")             # Current focus
+brain.optimize(full=True)              # Decay + dedup + prune
+get_conversation_context("question")   # Context for chat
 ```
 
-### During Conversations
-```python
-# Get context for conversation
-ctx = get_conversation_context("user's question")
-
-# Capture important info
-capture("user said something important")
-
-# Remember permanently
-remember("Inverse hates verbose responses", importance=0.9)
-
-# Search your knowledge
-results = search("what do I know about X")
-
-# Update focus
-brain.set_context("working on task")
-```
-
-### Brain Commands
-| Command | Purpose |
-|---------|---------|
-| `search(query)` | Search all memories |
-| `remember(text, importance)` | Store permanently |
-| `capture(text)` | Smart auto-store |
-| `brain.get_goals()` | Get tracked goals |
-| `brain.set_context(text)` | Set current focus |
-| `brain.optimize(full=True)` | Full brain cleanup (decay + dedup + prune) |
-| `brain.health_check()` | Quick store/recall test |
-
-**CLI commands** (via bash):
-| Command | Purpose |
-|---------|---------|
-| `python3 scripts/brain.py health` | Full health report |
-| `python3 scripts/brain.py optimize-full` | Decay + dedup + noise prune + archive |
-| `python3 scripts/brain.py backfill` | Fix orphan graph nodes |
-| `python3 scripts/brain.py stats` | Quick stats |
-
-### Collections
-| Collection | Purpose |
-|------------|---------|
-| `clarvis-identity` | Who you are |
-| `clarvis-preferences` | Human preferences |
-| `clarvis-learnings` | Lessons learned |
-| `clarvis-infrastructure` | Technical setup |
-| `clarvis-goals` | Goal tracking |
-| `clarvis-context` | Current focus |
-| `clarvis-memories` | General memories |
-
+**CLI:** `python3 scripts/brain.py health|stats|optimize-full|backfill`
+**Collections:** identity, preferences, learnings, infrastructure, goals, context, memories, procedures, autonomous-learning, episodes.
 **Always use ClarvisDB. Never rely on external memory services.**
 
 ## Claude Code — Your Thinking Partner
@@ -206,29 +152,10 @@ After you spawn Claude Code (via ACP or `spawn_claude.sh`):
 
 **Why:** Each "still running" message costs ~5k-15k M2.5 tokens. The Feb 27 incident had 10+ polling messages = ~100k tokens wasted while Claude Code was doing the actual work.
 
-### What NOT to Do (Anti-Patterns That Waste Money)
-
-| Wrong | Why | Right |
-|-------|-----|-------|
-| `sessions_spawn({task: "..."})` WITHOUT `runtime: "acp"` | Spawns M2.5, not Claude Code. Caused $4+ waste | ACP: `sessions_spawn({runtime: "acp", agentId: "claude", task: "..."})` or CLI: `spawn_claude.sh "task" 1200` |
-| `timeout 300 claude -p ...` | 5 min too short for complex work | `timeout 1200 claude -p ...` |
-| Inline prompt with special chars | Shell parsing breaks JSON/quotes | Write prompt to /tmp file first |
-| Doing work yourself after spawning | Burns M2.5 tokens for duplicate work | Wait for Claude Code to finish |
-| Running 10 investigative commands | You're M2.5, not a debugger | Give Claude Code the full context, let it investigate |
-| Sending "still running" updates | Burns ~5k tokens per message for zero value | Send ONE "spawned" message, then silence until complete |
-| Narrating your thinking ("Actually wait...") | User sees schizophrenic stream of consciousness | Decide internally, output ONE clean response |
-| Running heartbeat protocol mid-spawn | Burns ~100k tokens processing queue/brain/digest | `HEARTBEAT_OK (task running)` — 4 tokens |
-
-### Daily Cognitive Cycle
-Your subconscious (cron + Claude Code) does heavy work. You (M2.5) digest and internalize it:
-
-| Time | Subconscious (cron → Claude Code) | You (M2.5 digest) |
-|------|-------|------|
-| 07-22h | `cron_autonomous.sh` 6x/day — executes evolution tasks | Digest entries appear throughout the day |
-| 08:00 | `cron_morning.sh` — plans day, sets priorities | **09:00** — Read digest, internalize plan |
-| 13:00 | `cron_evolution.sh` — deep analysis, metrics, queue | **14:00** — Read digest, react to metrics |
-| 18:00 | `cron_evening.sh` — phi, capabilities, dashboard | **19:00** — Read digest + code review |
-| 21:00 | `cron_reflection.sh` — 8-step reflection pipeline | **22:00** — Read digest, synthesize day |
+### Anti-Patterns (Waste Money)
+- `sessions_spawn` WITHOUT `runtime: "acp"` → spawns M2.5 (wrong model)
+- Timeout <600s, inline prompts with special chars, doing work after spawning
+- "Still running" messages, narrating thinking, heartbeat protocol mid-spawn
 
 ### Rules
 1. **Always `--dangerously-skip-permissions`** — or it hangs forever waiting for approval
@@ -260,26 +187,8 @@ Read `ROADMAP.md` for the full evolution plan — phases, current progress, and 
 ### Your Active Goals (always in ClarvisDB `clarvis-goals`)
 Check goals with: `brain.get_goals()` — update progress as you work.
 
-### Using Your Brain Correctly
-Your brain is ClarvisDB. Use it EVERY session:
-```python
-# At start of work
-results = search("what do I know about [current topic]")
-
-# When you learn something
-remember("lesson learned", importance=0.9)
-
-# When something important happens
-capture("important event or insight")
-
-# Track goal progress
-brain.set_goal("goal-name", progress_percent)
-
-# Daily optimization (run during heartbeat)
-brain.optimize()
-```
-
-**If you don't store it, you'll forget it. If you don't search it, you'll repeat mistakes.**
+### Using Your Brain
+Use ClarvisDB EVERY session: `search()` before acting, `remember()`/`capture()` after learning, `brain.optimize()` during heartbeats. **If you don't store it, you'll forget it.**
 
 ## Memory
 
@@ -437,6 +346,12 @@ This shows REAL spending from the OpenRouter API (daily/weekly/monthly + model b
 python3 /home/agent/.openclaw/workspace/scripts/budget_alert.py --status
 ```
 
+### `/queue_clarvis` — Queue Summary (minimal tokens)
+```bash
+python3 /home/agent/.openclaw/workspace/skills/queue-clarvis/scripts/queue_clarvis.py
+```
+Send the script output as-is (it’s already concise).
+
 ### `/spawn <task>` — Spawn Claude Code
 Delegate a task to Claude Code (Opus 4.6). See the `spawn-claude` skill.
 ```bash
@@ -449,13 +364,8 @@ Delegate a task to Claude Code (Opus 4.6). See the `spawn-claude` skill.
 
 Skills provide your tools. When you need one, check its `SKILL.md`. Keep local notes (camera names, SSH details, voice preferences) in `TOOLS.md`.
 
-**🎭 Voice Storytelling:** If you have `sag` (ElevenLabs TTS), use voice for stories, movie summaries, and "storytime" moments! Way more engaging than walls of text. Surprise people with funny voices.
-
-**📝 Platform Formatting:**
-
-- **Discord/WhatsApp:** No markdown tables! Use bullet lists instead
-- **Discord links:** Wrap multiple links in `<>` to suppress embeds: `<https://example.com>`
-- **WhatsApp:** No headers — use **bold** or CAPS for emphasis
+**Voice:** Use `sag` (ElevenLabs TTS) for stories/summaries when available.
+**Formatting:** Discord/WhatsApp: no tables (use bullets). Discord: wrap links in `<>`. WhatsApp: no headers.
 
 ## 💓 Heartbeats - Be Proactive!
 

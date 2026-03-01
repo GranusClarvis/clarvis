@@ -32,7 +32,7 @@ MORNING_PROMPT_FILE=$(mktemp)
 echo "$MORNING_PROMPT" > "$MORNING_PROMPT_FILE"
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Prompt: ${#MORNING_PROMPT} bytes" >> "$LOGFILE"
 MORNING_OUTPUT_FILE=$(mktemp)
-timeout 600 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \
+timeout 1200 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \
     /home/agent/.local/bin/claude -p "$(cat "$MORNING_PROMPT_FILE")" \
     --dangerously-skip-permissions --model claude-opus-4-6 > "$MORNING_OUTPUT_FILE" 2>&1
 rm -f "$MORNING_PROMPT_FILE"

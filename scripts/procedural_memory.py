@@ -2,36 +2,40 @@
 """
 Procedural Memory — Reusable step sequences for recurring tasks
 
-Inspired by ACT-R procedural memory and Voyager's skill library.
-When a multi-step task succeeds, store the step sequence as a reusable procedure.
-Before starting similar tasks, check if a procedure already exists.
+Inspired by ACT-R procedural memory, Voyager's skill library, and the
+SoK on Agentic Skills (arxiv 2602.20867). Implements the 7-stage skill
+lifecycle: discovery → practice → distillation → storage → composition →
+evaluation → update.
 
-Procedures are stored in brain collection='clarvis-procedures' with metadata:
-  - name: short identifier
-  - steps: JSON list of step descriptions
-  - use_count: times this procedure was applied
-  - success_count: times it led to success
-  - source_task: original task that generated it
+Each procedure is stored as a skill tuple S = (C, π, T, R):
+  C — applicability: preconditions that must hold before running
+  π — policy: ordered step list (the procedure itself)
+  T — termination: success criteria to verify completion
+  R — interface: name, tags, dependencies, metadata for retrieval
+
+Metadata in brain collection='clarvis-procedures':
+  - name, steps (JSON), use_count, success_count, source_task
+  - preconditions: JSON list of conditions required before execution
+  - termination_criteria: JSON list of success verification checks
+  - dependencies: JSON list of other procedure IDs this composes
+  - quality_tier: "verified" | "candidate" | "stale" (lifecycle stage)
+  - created_at, last_used: ISO timestamps for staleness tracking
 
 Usage:
-    # Check for existing procedure before starting a task
     python3 procedural_memory.py check "Build a monitoring dashboard"
-
-    # Learn a new procedure from a successful task
     python3 procedural_memory.py learn "Build dashboard" '["Read requirements","Create script","Wire into cron","Test"]'
-
-    # Record that a procedure was used (success or failure)
     python3 procedural_memory.py used "proc_build_dashboard" success
-
-    # List all stored procedures
     python3 procedural_memory.py list
+    python3 procedural_memory.py retire      # Prune stale/low-quality procedures
+    python3 procedural_memory.py compose "deploy_feature" '["proc_write_code","proc_run_tests","proc_push"]'
+    python3 procedural_memory.py stats       # Library health metrics
 """
 
 import sys
 import os
 import json
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -41,6 +45,29 @@ try:
     from retrieval_experiment import smart_recall
 except ImportError:
     smart_recall = None
+
+try:
+    from failure_amplifier import (
+        parse_log_entries, scan_duplicate_tasks, scan_long_durations,
+        scan_skipped_learning, scan_prediction_misses, scan_retroactive_fixes,
+        scan_low_capability_scores, scan_low_confidence_predictions,
+        scan_uncompleted_tasks, scan_reasoning_chains, AUTONOMOUS_LOG,
+    )
+    _HAS_FAILURE_AMPLIFIER = True
+except ImportError:
+    _HAS_FAILURE_AMPLIFIER = False
+
+# Quality tiers for skill lifecycle (SoK Pattern 4: Self-Evolving Libraries)
+TIER_CANDIDATE = "candidate"   # Newly learned, not yet verified by reuse
+TIER_VERIFIED = "verified"     # Used 3+ times with >60% success rate
+TIER_STALE = "stale"           # Unused >30 days or success rate <30%
+
+# Thresholds for tier transitions
+VERIFY_MIN_USES = 3
+VERIFY_MIN_SUCCESS_RATE = 0.6
+STALE_DAYS = 30
+STALE_MAX_SUCCESS_RATE = 0.3
+RETIRE_DAYS = 60               # Remove after 60 days of no use + low quality
 
 
 def find_procedure(task_text: str, threshold: float = 0.8) -> dict | None:
@@ -134,6 +161,12 @@ def find_procedure(task_text: str, threshold: float = 0.8) -> dict | None:
     except Exception:
         pass
 
+    # Parse extended skill tuple fields (C, T, dependencies)
+    preconditions = _parse_json_field(meta.get("preconditions", "[]"))
+    termination_criteria = _parse_json_field(meta.get("termination_criteria", "[]"))
+    dependencies = _parse_json_field(meta.get("dependencies", "[]"))
+    quality_tier = meta.get("quality_tier", TIER_CANDIDATE)
+
     return {
         "id": best["id"],
         "name": meta.get("name", "unknown"),
@@ -143,21 +176,32 @@ def find_procedure(task_text: str, threshold: float = 0.8) -> dict | None:
         "success_count": success_count,
         "success_rate": success_rate,
         "source_task": meta.get("source_task", ""),
+        # Skill tuple extensions
+        "preconditions": preconditions,
+        "termination_criteria": termination_criteria,
+        "dependencies": dependencies,
+        "quality_tier": quality_tier,
     }
 
 
 def store_procedure(name: str, description: str, steps: list[str],
                     source_task: str = "", importance: float = 0.8,
-                    tags: list[str] | None = None) -> str:
-    """Store a new procedure (or update existing one with same name).
+                    tags: list[str] | None = None,
+                    preconditions: list[str] | None = None,
+                    termination_criteria: list[str] | None = None,
+                    dependencies: list[str] | None = None) -> str:
+    """Store a new procedure as a skill tuple S = (C, π, T, R).
 
     Args:
-        name: Short procedure name (e.g., "build_monitoring_dashboard")
+        name: Short procedure name (R.name)
         description: What this procedure does
-        steps: Ordered list of step descriptions
+        steps: Ordered list of step descriptions (π — policy)
         source_task: The original task text that generated this procedure
         importance: How important/reusable (default 0.8)
-        tags: Additional categorization tags
+        tags: Additional categorization tags (R.tags)
+        preconditions: Conditions required before execution (C — applicability)
+        termination_criteria: How to verify success (T — termination)
+        dependencies: IDs of other procedures this composes (R.deps)
 
     Returns:
         The procedure memory ID
@@ -173,6 +217,7 @@ def store_procedure(name: str, description: str, steps: list[str],
     # Check if procedure already exists — merge use stats
     existing_use_count = 0
     existing_success_count = 0
+    existing_tier = TIER_CANDIDATE
     try:
         col = brain.collections[PROCEDURES]
         existing = col.get(ids=[proc_id])
@@ -180,6 +225,7 @@ def store_procedure(name: str, description: str, steps: list[str],
             old_meta = existing["metadatas"][0] if existing.get("metadatas") else {}
             existing_use_count = int(old_meta.get("use_count", 0))
             existing_success_count = int(old_meta.get("success_count", 0))
+            existing_tier = old_meta.get("quality_tier", TIER_CANDIDATE)
     except Exception:
         pass
 
@@ -192,7 +238,7 @@ def store_procedure(name: str, description: str, steps: list[str],
         memory_id=proc_id,
     )
 
-    # Update with procedure-specific metadata
+    # Update with procedure-specific metadata (full skill tuple)
     col = brain.collections[PROCEDURES]
     existing = col.get(ids=[proc_id])
     if existing and existing["ids"]:
@@ -203,6 +249,13 @@ def store_procedure(name: str, description: str, steps: list[str],
         meta["use_count"] = existing_use_count
         meta["success_count"] = existing_success_count
         meta["step_count"] = len(steps)
+        # Skill tuple extensions
+        meta["preconditions"] = json.dumps(preconditions or [])
+        meta["termination_criteria"] = json.dumps(termination_criteria or [])
+        meta["dependencies"] = json.dumps(dependencies or [])
+        meta["quality_tier"] = existing_tier
+        if "created_at" not in meta:
+            meta["created_at"] = datetime.now(timezone.utc).isoformat()
         col.upsert(
             ids=[proc_id],
             documents=[doc_text],
@@ -235,9 +288,16 @@ def record_use(proc_id: str, success: bool) -> dict:
     meta["use_count"] = use_count
     meta["success_count"] = success_count
     meta["last_used"] = datetime.now(timezone.utc).isoformat()
-    # Boost importance for frequently-used successful procedures
-    if use_count >= 3 and success_count / use_count > 0.8:
+
+    # Quality tier transitions (SoK lifecycle: evaluation → update)
+    old_tier = meta.get("quality_tier", TIER_CANDIDATE)
+    success_rate = success_count / use_count
+    if use_count >= VERIFY_MIN_USES and success_rate >= VERIFY_MIN_SUCCESS_RATE:
+        meta["quality_tier"] = TIER_VERIFIED
+        # Boost importance for verified procedures
         meta["importance"] = min(1.0, float(meta.get("importance", 0.8)) + 0.05)
+    elif use_count >= VERIFY_MIN_USES and success_rate < STALE_MAX_SUCCESS_RATE:
+        meta["quality_tier"] = TIER_STALE
 
     col.upsert(
         ids=[proc_id],
@@ -248,7 +308,9 @@ def record_use(proc_id: str, success: bool) -> dict:
     return {
         "use_count": use_count,
         "success_count": success_count,
-        "success_rate": success_count / use_count,
+        "success_rate": success_rate,
+        "quality_tier": meta["quality_tier"],
+        "tier_changed": old_tier != meta["quality_tier"],
     }
 
 
@@ -275,6 +337,322 @@ def learn_from_task(task_text: str, steps: list[str], tags: list[str] | None = N
         source_task=task_text,
         tags=tags or [],
     )
+
+
+def learn_from_failures() -> dict:
+    """Convert soft failures from failure_amplifier into corrective procedures.
+
+    Scans autonomous.log and reasoning chains for soft failures, then creates
+    a procedure for each failure type+task combo with avoidance steps.
+    This closes the failure→learning pipeline gap.
+
+    Returns:
+        Dict with counts: {scanned, failures_found, procedures_created, skipped}
+    """
+    if not _HAS_FAILURE_AMPLIFIER:
+        return {"error": "failure_amplifier not available", "procedures_created": 0}
+
+    if not AUTONOMOUS_LOG.exists():
+        return {"scanned": 0, "failures_found": 0, "procedures_created": 0, "skipped": 0}
+
+    log_text = AUTONOMOUS_LOG.read_text()
+    entries = parse_log_entries(log_text)
+
+    all_failures = []
+    all_failures.extend(scan_duplicate_tasks(entries))
+    all_failures.extend(scan_long_durations(entries))
+    all_failures.extend(scan_skipped_learning(entries))
+    all_failures.extend(scan_prediction_misses(entries))
+    all_failures.extend(scan_retroactive_fixes(entries))
+    all_failures.extend(scan_low_capability_scores(entries))
+    all_failures.extend(scan_low_confidence_predictions(entries))
+    all_failures.extend(scan_uncompleted_tasks(entries))
+
+    chain_failures, _ = scan_reasoning_chains()
+    all_failures.extend(chain_failures)
+
+    created = 0
+    skipped = 0
+
+    for sf in all_failures:
+        task_short = sf["task"][:120]
+        fail_type = sf["type"]
+        detail = sf["detail"]
+
+        # Build a corrective procedure name
+        proc_name = f"avoid_{fail_type}_{_sanitize_name(task_short)}"[:80]
+
+        # Check if we already have this procedure (avoid duplicates)
+        existing = find_procedure(f"avoid {fail_type} {task_short}", threshold=0.3)
+        if existing:
+            skipped += 1
+            continue
+
+        # Generate corrective steps based on failure type
+        steps = _failure_to_steps(fail_type, task_short, detail)
+
+        store_procedure(
+            name=proc_name,
+            description=f"Corrective procedure: {detail[:150]}",
+            steps=steps,
+            source_task=f"[FAILURE] {task_short}",
+            importance=min(0.9, 0.6 + sf["severity"] * 0.3),
+            tags=["corrective", "failure_learned", fail_type],
+        )
+        created += 1
+
+    return {
+        "scanned": len(entries),
+        "failures_found": len(all_failures),
+        "procedures_created": created,
+        "skipped": skipped,
+    }
+
+
+def retire_stale(dry_run: bool = False) -> dict:
+    """Prune stale and low-quality procedures (SoK Pattern 4: quality gates).
+
+    Marks unused/failing procedures as STALE, and deletes procedures that have
+    been stale for >RETIRE_DAYS. Prevents "skill debt" accumulation.
+
+    Args:
+        dry_run: If True, report what would happen without changing anything.
+
+    Returns:
+        Dict with counts: {checked, marked_stale, retired, kept}
+    """
+    now = datetime.now(timezone.utc)
+    results = brain.get(PROCEDURES, n=200)
+
+    marked_stale = 0
+    retired = 0
+    kept = 0
+
+    for r in results:
+        meta = r.get("metadata", {})
+        proc_id = r["id"]
+        use_count = int(meta.get("use_count", 0))
+        success_count = int(meta.get("success_count", 0))
+        success_rate = success_count / use_count if use_count > 0 else 1.0
+        tier = meta.get("quality_tier", TIER_CANDIDATE)
+
+        # Parse last_used / created_at for staleness
+        last_active = meta.get("last_used") or meta.get("created_at") or meta.get("timestamp", "")
+        try:
+            last_dt = datetime.fromisoformat(last_active.replace("Z", "+00:00"))
+        except (ValueError, AttributeError):
+            last_dt = now - timedelta(days=RETIRE_DAYS + 1)  # Unknown = treat as old
+
+        days_inactive = (now - last_dt).days
+
+        # Rule 1: Mark stale if unused >STALE_DAYS and not already verified
+        if days_inactive > STALE_DAYS and tier != TIER_VERIFIED:
+            if tier != TIER_STALE:
+                if not dry_run:
+                    meta["quality_tier"] = TIER_STALE
+                    col = brain.collections[PROCEDURES]
+                    col.upsert(ids=[proc_id], documents=[r["document"]], metadatas=[meta])
+                marked_stale += 1
+                continue
+
+        # Rule 2: Mark stale if used 3+ times but success rate <30%
+        if use_count >= VERIFY_MIN_USES and success_rate < STALE_MAX_SUCCESS_RATE:
+            if tier != TIER_STALE:
+                if not dry_run:
+                    meta["quality_tier"] = TIER_STALE
+                    col = brain.collections[PROCEDURES]
+                    col.upsert(ids=[proc_id], documents=[r["document"]], metadatas=[meta])
+                marked_stale += 1
+                continue
+
+        # Rule 3: Retire (delete) if stale + inactive > RETIRE_DAYS
+        if tier == TIER_STALE and days_inactive > RETIRE_DAYS:
+            if not dry_run:
+                col = brain.collections[PROCEDURES]
+                col.delete(ids=[proc_id])
+            retired += 1
+            continue
+
+        kept += 1
+
+    return {
+        "checked": len(results),
+        "marked_stale": marked_stale,
+        "retired": retired,
+        "kept": kept,
+        "dry_run": dry_run,
+    }
+
+
+def compose_procedures(name: str, description: str,
+                       procedure_ids: list[str],
+                       preconditions: list[str] | None = None,
+                       termination_criteria: list[str] | None = None) -> str:
+    """Create a composite procedure from existing ones (SoK: hierarchical composition).
+
+    The composed procedure stores references to sub-procedures and flattens
+    their steps into a single sequence with sub-procedure markers.
+
+    Args:
+        name: Name for the composite procedure
+        description: What the composed workflow does
+        procedure_ids: Ordered list of procedure IDs to compose
+        preconditions: Overall preconditions for the composite
+        termination_criteria: Overall success criteria
+
+    Returns:
+        The composite procedure ID
+    """
+    col = brain.collections[PROCEDURES]
+    composed_steps = []
+    valid_deps = []
+
+    for pid in procedure_ids:
+        existing = col.get(ids=[pid])
+        if not existing or not existing["ids"]:
+            composed_steps.append(f"[MISSING: {pid}]")
+            continue
+
+        meta = existing["metadatas"][0]
+        sub_name = meta.get("name", pid)
+        sub_steps = _parse_json_field(meta.get("steps", "[]"))
+
+        composed_steps.append(f"--- {sub_name} ---")
+        composed_steps.extend(sub_steps)
+        valid_deps.append(pid)
+
+    return store_procedure(
+        name=name,
+        description=description,
+        steps=composed_steps,
+        source_task=f"Composed from: {', '.join(valid_deps)}",
+        importance=0.85,
+        tags=["composite", "workflow"],
+        preconditions=preconditions,
+        termination_criteria=termination_criteria,
+        dependencies=valid_deps,
+    )
+
+
+def library_stats() -> dict:
+    """Return health metrics for the procedure library.
+
+    Tracks the distribution across quality tiers, composition depth,
+    and overall library utilization — SoK evaluation dimension.
+    """
+    results = brain.get(PROCEDURES, n=200)
+
+    tiers = {TIER_CANDIDATE: 0, TIER_VERIFIED: 0, TIER_STALE: 0}
+    total_uses = 0
+    total_successes = 0
+    composites = 0
+    with_preconditions = 0
+    with_termination = 0
+
+    for r in results:
+        meta = r.get("metadata", {})
+        tier = meta.get("quality_tier", TIER_CANDIDATE)
+        tiers[tier] = tiers.get(tier, 0) + 1
+        total_uses += int(meta.get("use_count", 0))
+        total_successes += int(meta.get("success_count", 0))
+        deps = _parse_json_field(meta.get("dependencies", "[]"))
+        if deps:
+            composites += 1
+        if _parse_json_field(meta.get("preconditions", "[]")):
+            with_preconditions += 1
+        if _parse_json_field(meta.get("termination_criteria", "[]")):
+            with_termination += 1
+
+    total = len(results)
+    return {
+        "total": total,
+        "tiers": tiers,
+        "verified_pct": round(tiers.get(TIER_VERIFIED, 0) / total * 100, 1) if total else 0,
+        "total_uses": total_uses,
+        "total_successes": total_successes,
+        "overall_success_rate": round(total_successes / total_uses, 3) if total_uses else 1.0,
+        "composites": composites,
+        "with_preconditions": with_preconditions,
+        "with_termination_criteria": with_termination,
+        "skill_tuple_completeness": round(
+            (with_preconditions + with_termination + total) / (total * 3) * 100, 1
+        ) if total else 0,
+    }
+
+
+def _parse_json_field(raw) -> list:
+    """Safely parse a JSON field that may be a string or already a list."""
+    if isinstance(raw, list):
+        return raw
+    try:
+        return json.loads(raw) if raw else []
+    except (json.JSONDecodeError, TypeError):
+        return []
+
+
+def _failure_to_steps(fail_type: str, task: str, detail: str) -> list[str]:
+    """Generate corrective steps based on the failure type."""
+    base_steps = {
+        "duplicate_execution": [
+            "Check if task was already attempted (search episodes)",
+            "Review prior attempt output before re-executing",
+            "Identify what was insufficient in first attempt",
+            "Address root cause, not just symptoms",
+            "Verify completion criteria before marking done",
+        ],
+        "long_duration": [
+            "Set explicit time budget before starting (max 5 min)",
+            "Break task into smaller sub-steps first",
+            "Check for existing procedures before attempting",
+            "If stuck >3 min, pivot to alternative approach",
+            "Record what caused the delay for future avoidance",
+        ],
+        "skipped_learning": [
+            "Ensure task output includes concrete, extractable steps",
+            "Write explicit step list in output summary",
+            "Avoid vague summaries — be specific about what was done",
+            "Include file paths and commands in step descriptions",
+        ],
+        "prediction_miss": [
+            "Record prediction ID when making predictions",
+            "Check for unresolved predictions at session end",
+            "Use explicit prediction format with trackable IDs",
+        ],
+        "retroactive_fix": [
+            "Add verification step after initial implementation",
+            "Test the actual behavior, not just syntax",
+            "Check edge cases before marking task complete",
+            "Run integration test if wiring new components",
+        ],
+        "low_capability": [
+            "Identify the specific capability gap",
+            "Search brain for relevant procedures/learnings",
+            "Consider if task needs a different approach or model",
+            "Record what capability needs improvement",
+        ],
+        "shallow_reasoning": [
+            "Use multi-step reasoning for non-trivial tasks",
+            "Record intermediate conclusions, not just final answer",
+            "Include evidence/reasoning for each step",
+        ],
+        "low_confidence": [
+            "Gather more evidence before making predictions",
+            "Only predict when confidence > 60%",
+            "State uncertainty explicitly rather than hedging",
+        ],
+        "uncompleted_task": [
+            "Set appropriate timeout for task complexity",
+            "Add checkpoint saves for long-running tasks",
+            "Log progress so partial work is recoverable",
+            "Check for lock files or resource conflicts before starting",
+        ],
+    }
+    return base_steps.get(fail_type, [
+        f"Analyze root cause of {fail_type} failure",
+        "Identify corrective action",
+        "Implement fix and verify",
+        "Record learnings for future avoidance",
+    ])
 
 
 def list_procedures(n: int = 50) -> list[dict]:
@@ -307,6 +685,8 @@ def list_procedures(n: int = 50) -> list[dict]:
             "success_count": success_count,
             "success_rate": success_count / use_count if use_count > 0 else 1.0,
             "importance": float(meta.get("importance", 0)),
+            "quality_tier": meta.get("quality_tier", TIER_CANDIDATE),
+            "dependencies": _parse_json_field(meta.get("dependencies", "[]")),
         })
 
     procedures.sort(key=lambda p: p["use_count"], reverse=True)
@@ -347,6 +727,10 @@ if __name__ == "__main__":
         print("  used <proc_id> <success|failure> - Record procedure usage")
         print("  list                       - List all procedures")
         print("  store <name> <desc> <steps> - Store a named procedure")
+        print("  failures                   - Learn procedures from soft failures")
+        print("  retire [--dry-run]         - Prune stale/low-quality procedures")
+        print("  compose <name> <proc_ids>  - Create composite from existing procs")
+        print("  stats                      - Library health metrics")
         sys.exit(1)
 
     cmd = sys.argv[1]
@@ -387,10 +771,22 @@ if __name__ == "__main__":
         else:
             for p in procs:
                 rate = f"{p['success_rate']:.0%}" if p['use_count'] > 0 else "new"
-                print(f"  [{p['id']}] {p['name']} ({p['step_count']} steps, used {p['use_count']}x, {rate})")
+                tier = p.get('quality_tier', '?')[0].upper()  # V/C/S
+                deps = p.get('dependencies', [])
+                dep_tag = f" [composed:{len(deps)}]" if deps else ""
+                print(f"  [{tier}] [{p['id']}] {p['name']} ({p['step_count']} steps, used {p['use_count']}x, {rate}){dep_tag}")
                 if p['steps']:
                     for i, step in enumerate(p['steps'], 1):
                         print(f"    {i}. {step}")
+
+    elif cmd == "failures" or cmd == "learn-failures":
+        result = learn_from_failures()
+        print(f"Scanned: {result.get('scanned', 0)} entries")
+        print(f"Failures found: {result.get('failures_found', 0)}")
+        print(f"Procedures created: {result.get('procedures_created', 0)}")
+        print(f"Skipped (already exists): {result.get('skipped', 0)}")
+        if result.get("error"):
+            print(f"Error: {result['error']}")
 
     elif cmd == "store":
         name = sys.argv[2] if len(sys.argv) > 2 else ""
@@ -402,6 +798,39 @@ if __name__ == "__main__":
             steps = [s.strip() for s in steps_json.split(";") if s.strip()]
         proc_id = store_procedure(name, desc, steps)
         print(f"Stored: {proc_id}")
+
+    elif cmd == "retire":
+        dry = "--dry-run" in sys.argv
+        result = retire_stale(dry_run=dry)
+        prefix = "[DRY RUN] " if dry else ""
+        print(f"{prefix}Checked: {result['checked']}")
+        print(f"{prefix}Marked stale: {result['marked_stale']}")
+        print(f"{prefix}Retired (deleted): {result['retired']}")
+        print(f"{prefix}Kept: {result['kept']}")
+
+    elif cmd == "compose":
+        name = sys.argv[2] if len(sys.argv) > 2 else ""
+        ids_json = sys.argv[3] if len(sys.argv) > 3 else "[]"
+        try:
+            proc_ids = json.loads(ids_json)
+        except json.JSONDecodeError:
+            proc_ids = [s.strip() for s in ids_json.split(",") if s.strip()]
+        desc = sys.argv[4] if len(sys.argv) > 4 else f"Composite: {name}"
+        proc_id = compose_procedures(name, desc, proc_ids)
+        print(f"Composed: {proc_id}")
+
+    elif cmd == "stats":
+        s = library_stats()
+        print(f"Procedure Library Stats:")
+        print(f"  Total: {s['total']}")
+        print(f"  Tiers: verified={s['tiers'].get('verified',0)}, candidate={s['tiers'].get('candidate',0)}, stale={s['tiers'].get('stale',0)}")
+        print(f"  Verified: {s['verified_pct']}%")
+        print(f"  Total uses: {s['total_uses']} ({s['total_successes']} successes)")
+        print(f"  Overall success rate: {s['overall_success_rate']:.1%}")
+        print(f"  Composites: {s['composites']}")
+        print(f"  Skill tuple completeness: {s['skill_tuple_completeness']}%")
+        print(f"    with preconditions: {s['with_preconditions']}")
+        print(f"    with termination criteria: {s['with_termination_criteria']}")
 
     else:
         print(f"Unknown command: {cmd}", file=sys.stderr)

@@ -1,0 +1,113 @@
+# Bundle O: Adaptive Control & Learning
+
+**Date**: 2026-02-27
+**Topics**: Adaptive Control Theory (Åström & Wittenmark), The Brain as a Prediction Machine of Time, Resource Rationality (Lieder & Griffiths)
+**Theme**: How agents adapt, predict, and allocate cognitive resources under uncertainty
+
+---
+
+## Topic 1: Adaptive Control Theory (Åström & Wittenmark)
+
+**Core Framework**: Adaptive control addresses systems with unknown or time-varying parameters by combining real-time parameter estimation with controller design in a continuous loop.
+
+**Key Concepts**:
+- **Self-Tuning Regulator (STR)**: Two-phase architecture — (1) recursive parameter estimation (RLS/ELS) identifies the plant model online, (2) controller synthesis uses those estimates to compute optimal control actions. The system "learns" the plant while controlling it simultaneously.
+- **Certainty Equivalence Principle**: Treat estimated parameters as if they were the true parameters. Despite being theoretically suboptimal (ignores estimation uncertainty), it produces surprisingly good practical results and converges to optimal behavior asymptotically.
+- **Dual Control (Fel'dbaum)**: Recognizes the fundamental tension between *exploitation* (control the system well based on current knowledge) and *exploration* (excite the system to learn its behavior). Optimal dual control is computationally intractable; practical solutions use suboptimal approximations.
+- **Model-Reference Adaptive Control (MRAC)**: Rather than estimating plant parameters, directly adjust controller gains so the closed-loop system matches a desired reference model. Uses MIT Rule or Lyapunov stability for adaptation.
+- **Gain Scheduling**: Pre-compute controllers for different operating regimes and interpolate between them — a practical middle ground between fixed and fully adaptive control.
+
+**Key Insight**: The explore/exploit tradeoff in adaptive control is formally identical to the problem faced by any learning agent. Certainty equivalence works because small estimation errors produce small control errors in well-conditioned systems.
+
+**Sources**: Åström & Wittenmark, *Adaptive Control* (2nd ed., 1995); Fel'dbaum dual control (1960); [GitHub implementation](https://github.com/DanielMartensson/Adaptive-Control)
+
+---
+
+## Topic 2: The Brain as a Prediction Machine of Time
+
+**Core Framework**: The brain operates as a hierarchical prediction engine, continuously generating expectations about future sensory input and using prediction errors (mismatches) as the primary signal for learning and adaptation.
+
+**Key Concepts**:
+- **Hierarchical Predictive Coding**: The brain is organized as a pyramid where higher cortical levels generate top-down predictions about lower-level activity. Mismatches (prediction errors) propagate upward via feedforward connections; predictions flow downward via feedback connections. This creates efficient filtering — expected signals are "explained away" while surprises get amplified.
+- **Prediction Errors as Learning Signals**: Mismatches between predicted and actual events have disproportionate informational value. They drive memory encoding (novelty advantage), synaptic weight updates, and behavioral adaptation. Dopaminergic and norepinergic pathways mediate these error signals.
+- **Multi-Scale Temporal Prediction**: The brain predicts across nested timescales — millisecond motor predictions (forward models using efference copies), second-scale behavioral regulation, and long-horizon planning/prospection. Each scale has different accuracy profiles and neural substrates.
+- **Free Energy Principle (Friston)**: Unifies predictive coding under a single objective: minimize surprise (free energy). The brain either updates its model (perception/learning) or acts on the world (active inference) to reduce prediction error. Generalized coordinates of motion represent not just state but velocity, acceleration, and jerk — embedding temporal dynamics directly into the prediction.
+- **Internal Forward Models**: Originally from motor neuroscience — predict sensory consequences of self-generated actions using efference copies. Self-generated sensory input is attenuated; deviations trigger enhanced processing.
+
+**Key Insight**: The brain doesn't process "what happened" — it processes "what's different from what I expected." Temporal prediction across nested scales is the computational backbone, and prediction error is the universal learning currency.
+
+**Sources**: [Prediction, Cognition and the Brain (PMC)](https://pmc.ncbi.nlm.nih.gov/articles/PMC2904053/); [Friston, Predictive coding under the free-energy principle](https://pmc.ncbi.nlm.nih.gov/articles/PMC2666703/); [Quanta Magazine overview](https://www.quantamagazine.org/to-make-sense-of-the-present-brains-may-predict-the-future-20180710/)
+
+---
+
+## Topic 3: Resource Rationality (Lieder & Griffiths)
+
+**Core Framework**: Resource-rational analysis reframes cognitive limitations not as defects but as optimal adaptations to finite computational resources. An agent is resource-rational if it achieves the best possible tradeoff between decision quality and computational cost given its hardware constraints.
+
+**Key Concepts**:
+- **Bounded Optimality**: A program is bounded-optimal for a given architecture if no other program the architecture could run would perform better. This shifts the normative standard from "unbounded rationality" to "best possible use of available resources."
+- **Speed-Accuracy Tradeoff**: Cognition is not free — every additional millisecond of deliberation has an opportunity cost. Resource-rational agents learn when to stop thinking: when expected improvement in accuracy falls below the cost of further computation.
+- **Meta-Reasoning / Strategy Selection**: Rather than always running one algorithm, resource-rational agents maintain a portfolio of strategies (quick heuristics to deep analysis) and select among them based on expected cost-benefit tradeoffs. This meta-cognitive layer learns which strategies work best in which contexts.
+- **Cognitive Biases as Rational**: Many apparent biases (anchoring, availability, representativeness) are predicted by resource-rational strategies. They're not errors — they're side effects of cost-effective reasoning under real constraints. People achieve ~86% of the optimal speed-accuracy tradeoff.
+- **Cognitive Cost Function**: Formalizes the cost of computation as part of the utility function. The agent optimizes `E[Utility(decision)] - Cost(computation)` rather than just `E[Utility(decision)]`.
+
+**Key Insight**: The "right" amount of thinking depends on the stakes, the difficulty, and the available time. A system that always thinks maximally is wasteful; one that never thinks deeply is reckless. Optimal cognition is about knowing when each mode is appropriate.
+
+**Sources**: [Lieder & Griffiths, *Resource-Rational Analysis* (BBS, 2020)](https://www.cambridge.org/core/journals/behavioral-and-brain-sciences/article/resourcerational-analysis-understanding-human-cognition-as-the-optimal-use-of-limited-computational-resources/586866D9AD1D1EA7A1EECE217D392F4A); [Précis (CogSci)](https://cognitivesciencesociety.org/wp-content/uploads/2020/04/precis_pdf_LIEDER.pdf)
+
+---
+
+## Cross-Topic Connections
+
+### Pattern 1: The Universal Explore/Exploit Tradeoff
+All three frameworks grapple with the same tension: act on current knowledge vs. invest in learning more.
+- **Adaptive control**: Dual control explicitly models exploit (control) vs. explore (excite to learn)
+- **Predictive brain**: Prediction errors signal where current models fail, directing attention (exploration) to surprising inputs
+- **Resource rationality**: Meta-reasoning decides when to "think more" (explore strategy space) vs. "act now" (exploit current best strategy)
+
+### Pattern 2: Certainty Equivalence and Predictive Confidence
+All three accept that acting on imperfect knowledge is necessary and formalize how to do it well.
+- **Adaptive control**: Certainty equivalence treats estimates as truth — works because estimation improves over time
+- **Predictive brain**: Acts on the best current prediction, using prediction error magnitude to gauge confidence
+- **Resource rationality**: Deploys heuristics when stakes are low, deep analysis when stakes are high — the degree of approximation is itself optimized
+
+### Pattern 3: Hierarchical, Multi-Scale Processing
+Complex environments require reasoning at multiple timescales simultaneously.
+- **Adaptive control**: Gain scheduling for different operating regimes; fast inner loops and slow outer adaptation
+- **Predictive brain**: Nested temporal prediction from milliseconds (motor) to hours (planning)
+- **Resource rationality**: Strategy portfolio from instant heuristics to slow deliberation, selected by meta-reasoning
+
+### Pattern 4: Error/Surprise as the Primary Learning Signal
+What's unexpected is more valuable than what's expected.
+- **Adaptive control**: Parameter estimation is driven by prediction residuals
+- **Predictive brain**: Prediction errors are the fundamental neural learning currency
+- **Resource rationality**: Surprising outcomes update strategy performance models, shifting future strategy selection
+
+---
+
+## Implementation Ideas for Clarvis
+
+### 1. Adaptive Task Router with Dual Control
+Current `task_router.py` uses static complexity classification. Upgrade to an adaptive controller:
+- **Self-tuning**: Track actual task outcomes (success, cost, quality) and recursively update the routing model's parameters using ELS-style estimation
+- **Dual control logic**: Occasionally route a task to a non-default model (exploration) to update cost/quality estimates, especially when confidence in current routing is low
+- **Certainty equivalence**: Use current best estimates for routing decisions, but maintain uncertainty bounds. When uncertainty exceeds a threshold, increase exploration rate
+- **Concrete**: Add a `routing_confidence` field. When confidence < 0.6, allocate ~10% of tasks to alternative models. Log outcomes. Update routing weights via exponential moving average.
+
+### 2. Resource-Rational Heartbeat Depth
+Current heartbeat pipeline runs the same depth regardless of task importance. Apply resource rationality:
+- **Meta-reasoning layer in `heartbeat_preflight.py`**: Score expected task value × difficulty. High-value + high-difficulty = full pipeline (brain search, episodic recall, context compression). Low-value + easy = minimal pipeline (skip expensive retrievals)
+- **Speed-accuracy tradeoff**: Define a "thinking budget" per task proportional to its importance score from `attention.py`. Cap brain queries, context tokens, and reasoning chain depth accordingly.
+- **Strategy portfolio**: Maintain 3 heartbeat modes — QUICK (skip brain search, minimal context), STANDARD (current), DEEP (extra retrieval, multi-query brain search, extended reasoning). Select based on attention salience score.
+
+### 3. Prediction Error Tracking for Brain Quality
+Apply predictive processing principles to the brain's retrieval system:
+- **Prediction error as quality signal**: Before retrieving, predict what the brain should return for a query. After retrieval, measure surprise (divergence between expected and actual results). High surprise = model drift or degraded embeddings.
+- **Temporal prediction**: Track how brain retrieval quality changes over time. If prediction error trends upward, trigger maintenance (re-embedding, dedup, decay).
+- **Explain-away mechanism**: For well-known queries (identity, procedures), expected results should be fully predicted — any deviation flags corruption. For novel queries, high prediction error is expected and not alarming.
+
+---
+
+## Summary
+
+These three frameworks converge on a unified picture of adaptive intelligence: an agent that (1) continuously estimates its environment's parameters while controlling it (adaptive control), (2) generates hierarchical temporal predictions and learns primarily from their failures (predictive brain), and (3) allocates its finite computational resources optimally across these processes (resource rationality). The combined insight is that *optimal cognition is not maximum cognition* — it's cognition calibrated to stakes, uncertainty, and available resources, with prediction error as the universal signal driving adaptation.

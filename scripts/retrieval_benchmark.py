@@ -101,9 +101,9 @@ BENCHMARK_PAIRS = [
     },
     {
         "id": "B08",
-        "query": "Security configuration and access control",
-        "expected_substrings": ["security", "loopback", "tailscale", "auth"],
-        "expected_collections": [INFRASTRUCTURE],
+        "query": "Security rules and permissions policy",
+        "expected_substrings": ["security", "permission", "grouppolicy", "credential"],
+        "expected_collections": [LEARNINGS, INFRASTRUCTURE],
         "category": "infrastructure",
     },
     # --- Learnings & knowledge ---

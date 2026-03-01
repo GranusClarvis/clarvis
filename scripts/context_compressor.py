@@ -513,29 +513,35 @@ def _get_failure_patterns(current_task, n=3):
 def _detect_wire_task(task_text):
     """Detect if a task is a 'wire' strategy task (integration/hooking).
 
-    Wire tasks have a 30% success rate (vs 55% for build tasks) because they
+    Wire tasks have ~42% success rate (vs 55% for build tasks) because they
     require multi-file integration across bash/Python boundaries. Returns
     (is_wire, source_script, target_script) tuple.
     """
     task_lower = task_text.lower()
-    wire_verbs = ["wire", "connect", "integrate", "hook", "link"]
-    if not any(v in task_lower for v in wire_verbs):
+    wire_verbs = ["wire", "connect", "integrate", "hook", "link", "plug", "add.*to cron", "add.*to heartbeat"]
+    if not any(re.search(v, task_lower) for v in wire_verbs):
         return False, None, None
 
     # Extract source (what to wire) and target (where to wire it)
     source = None
     target = None
-    # Pattern: "Wire X into Y", "Integrate X into Y", "Hook X into Y"
-    m = re.search(r'(?:wire|integrate|hook|connect|link)\s+(\S+\.(?:py|sh))\s+(?:into|to|with)\s+(\S+\.(?:py|sh))', task_lower)
+    # Pattern 1: "Wire script.py into target.sh"
+    m = re.search(r'(?:wire|integrate|hook|connect|link|plug)\s+(\S+\.(?:py|sh))\s+(?:into|to|with|in)\s+(\S+\.(?:py|sh))', task_lower)
     if m:
         source = m.group(1)
         target = m.group(2)
     else:
-        # Pattern: "Wire X into Y" where X/Y are descriptive names
-        m = re.search(r'(?:wire|integrate|hook|connect|link)\s+(.+?)\s+(?:into|to|with)\s+(.+?)(?:\s*[-—]|$)', task_lower)
+        # Pattern 2: "Add script.py to cron_evening.sh" / "Add X to heartbeat"
+        m = re.search(r'add\s+(\S+\.(?:py|sh))\s+(?:into|to|in)\s+(\S+\.(?:py|sh))', task_lower)
         if m:
-            source = m.group(1).strip()
-            target = m.group(2).strip()
+            source = m.group(1)
+            target = m.group(2)
+        else:
+            # Pattern 3: "Wire X into Y" where X/Y are descriptive names
+            m = re.search(r'(?:wire|integrate|hook|connect|link|plug)\s+(.+?)\s+(?:into|to|with|in)\s+(.+?)(?:\s*[-—,.]|$)', task_lower)
+            if m:
+                source = m.group(1).strip()
+                target = m.group(2).strip()
 
     return True, source, target
 
@@ -543,59 +549,127 @@ def _detect_wire_task(task_text):
 def _build_wire_guidance(task_text):
     """Generate explicit integration sub-steps for wire tasks.
 
-    Wire tasks fail 70% of the time due to:
-      - shallow_reasoning (57%): vague "Wire X into Y" with no specifics
-      - long_duration (29%): excessive exploration of unfamiliar architecture
+    Wire tasks historically have ~42% success rate due to:
+      - shallow_reasoning (57%): jumping to edits without reading files first
+      - long_duration (29%): exploring unfamiliar code without a plan
+      - missing imports (14%): wiring calls without verifying the source API
 
-    This function generates concrete steps that eliminate ambiguity.
+    Improvements v2 (2026-02-28):
+      - Expanded KNOWN_TARGETS from 4 to 8 (covers all cron scripts)
+      - Added INSERT_HINT per target (where exactly to add code)
+      - Added target file pre-read (first/last lines) to eliminate exploration
+      - Time-budgeted sub-steps with explicit output requirements
+      - Anti-patterns section to prevent scope creep
     """
     is_wire, source, target = _detect_wire_task(task_text)
     if not is_wire:
         return ""
 
-    # Known integration targets and their structure
+    SCRIPTS = "/home/agent/.openclaw/workspace/scripts"
+
+    # Known integration targets — expanded from 4 to 8
     KNOWN_TARGETS = {
         "cron_reflection.sh": {
-            "path": "/home/agent/.openclaw/workspace/scripts/cron_reflection.sh",
+            "path": f"{SCRIPTS}/cron_reflection.sh",
             "structure": "Steps 0.5-7, each runs a python3 script. Add new steps between existing ones.",
-            "pattern": "# Step N: Description\necho ... >> \"$LOGFILE\"\npython3 /path/to/script.py >> \"$LOGFILE\" 2>&1 || true",
+            "pattern": '# Step N: Description\necho "[$(date)] Step N: ..." >> "$LOGFILE"\npython3 {}/script.py >> "$LOGFILE" 2>&1 || true'.format(SCRIPTS),
+            "insert_hint": "Add between the last numbered step and the digest/cleanup section.",
         },
         "cron_autonomous.sh": {
-            "path": "/home/agent/.openclaw/workspace/scripts/cron_autonomous.sh",
-            "structure": "3 phases: preflight (heartbeat_preflight.py) → execution → postflight (heartbeat_postflight.py).",
-            "pattern": "Modify heartbeat_preflight.py (add import + call) or heartbeat_postflight.py, NOT the bash script directly.",
+            "path": f"{SCRIPTS}/cron_autonomous.sh",
+            "structure": "3 phases: preflight → execution → postflight. Do NOT edit this bash script directly.",
+            "pattern": "Modify heartbeat_preflight.py (add import + call) or heartbeat_postflight.py instead.",
+            "insert_hint": "Wire into preflight (before task) or postflight (after task), not the bash orchestrator.",
+        },
+        "cron_evening.sh": {
+            "path": f"{SCRIPTS}/cron_evening.sh",
+            "structure": "Sequential sections: PHI_METRIC → CODE_QUALITY → CAPABILITY_ASSESSMENT → RETRIEVAL → SELF_REPORT → DASHBOARD → Claude Code audit → DIGEST.",
+            "pattern": '# === SECTION_NAME ===\necho "[$(date)] Section ..." >> "$LOGFILE"\nOUTPUT=$(python3 {}/script.py 2>&1) || true\necho "$OUTPUT" >> "$LOGFILE"'.format(SCRIPTS),
+            "insert_hint": "Add new section BEFORE the '# === DIGEST' section (last step).",
+        },
+        "cron_morning.sh": {
+            "path": f"{SCRIPTS}/cron_morning.sh",
+            "structure": "Spawns Claude Code with day planning prompt. Pre-run metrics, then Claude Code execution.",
+            "pattern": "Add metric collection BEFORE the Claude Code spawn, or post-processing AFTER.",
+            "insert_hint": "New metric calls go between 'Morning routine started' and the Claude Code prompt.",
+        },
+        "cron_evolution.sh": {
+            "path": f"{SCRIPTS}/cron_evolution.sh",
+            "structure": "Batched preflight (evolution_preflight.py) → Claude Code deep analysis → digest.",
+            "pattern": "For new metrics: add to evolution_preflight.py, NOT to this bash script.",
+            "insert_hint": "Prefer editing evolution_preflight.py over this orchestrator.",
         },
         "heartbeat_preflight.py": {
-            "path": "/home/agent/.openclaw/workspace/scripts/heartbeat_preflight.py",
-            "structure": "Sections 1-10, each with timing. Import at top (try/except), call in run_preflight().",
-            "pattern": "try:\n    from module import func\nexcept ImportError:\n    func = None\n# ... then in run_preflight(): if func: try: result = func(...)",
+            "path": f"{SCRIPTS}/heartbeat_preflight.py",
+            "structure": "Sections 1-10 in run_preflight(). Each section has timing + try/except.",
+            "pattern": "try:\n    from module import func\nexcept ImportError:\n    func = None\n# In run_preflight(): if func: try: result = func(...) except: pass",
+            "insert_hint": "Import at file top with try/except. Call in run_preflight() inside try/except with timing.",
         },
         "heartbeat_postflight.py": {
-            "path": "/home/agent/.openclaw/workspace/scripts/heartbeat_postflight.py",
-            "structure": "Post-execution steps. Import at top, call in run_postflight().",
-            "pattern": "Same pattern as preflight: try/except import at top, guarded call in main function.",
+            "path": f"{SCRIPTS}/heartbeat_postflight.py",
+            "structure": "Post-execution steps in run_postflight(). Same pattern as preflight.",
+            "pattern": "try:\n    from module import func\nexcept ImportError:\n    func = None\n# In run_postflight(): if func: try: result = func(...) except: pass",
+            "insert_hint": "Import at top with try/except. Call in run_postflight() with timing.",
+        },
+        "cron_strategic_audit.sh": {
+            "path": f"{SCRIPTS}/cron_strategic_audit.sh",
+            "structure": "Runs Wed+Sat at 15:00. Spawns Claude Code for strategic analysis.",
+            "pattern": "Add metric collection before or post-processing after the Claude Code spawn.",
+            "insert_hint": "New analysis steps go before the main Claude Code invocation.",
         },
     }
 
-    parts = ["WIRE TASK GUIDANCE (wire tasks have 30% success — follow these steps carefully):"]
+    parts = ["WIRE TASK GUIDANCE (wire tasks have ~42% success — follow these steps carefully):"]
 
     # Add target-specific guidance if we recognize the target
+    target_found = False
+    target_path = None
     if target:
         for known_name, info in KNOWN_TARGETS.items():
             if known_name in (target or ""):
+                target_found = True
+                target_path = info["path"]
                 parts.append(f"  TARGET: {info['path']}")
                 parts.append(f"  STRUCTURE: {info['structure']}")
                 parts.append(f"  PATTERN: {info['pattern']}")
+                parts.append(f"  INSERT_HINT: {info['insert_hint']}")
                 break
 
-    # Always add the explicit sub-steps that successful wire tasks follow
-    parts.append("  REQUIRED SUB-STEPS (do each one explicitly):")
-    parts.append("    1. READ the target file first — find the exact insertion point (step number, function, line)")
-    parts.append("    2. READ the source script — verify the function/class to import exists and its signature")
-    parts.append("    3. ADD the import (with try/except fallback for resilience)")
-    parts.append("    4. ADD the call at the correct location (with timing + logging + error handling)")
-    parts.append("    5. TEST: run the target script (or python3 -c 'import ...') to verify no import/syntax errors")
-    parts.append("    6. VERIFY: confirm the integration point is reached (check log output or return value)")
+    # If target not in known list, try to auto-detect from filesystem
+    if not target_found and target:
+        import glob as _glob
+        candidates = _glob.glob(f"{SCRIPTS}/{target}") + _glob.glob(f"{SCRIPTS}/*{target}*")
+        if candidates:
+            target_path = candidates[0]
+            parts.append(f"  TARGET: {target_path} (auto-detected, read carefully before editing)")
+
+    # Pre-read: include first/last lines of target to reduce exploration overhead
+    if target_path:
+        try:
+            import os
+            if os.path.isfile(target_path):
+                with open(target_path) as f:
+                    lines = f.readlines()
+                if len(lines) > 30:
+                    snippet_lines = lines[:10] + ["    ...\n"] + lines[-10:]
+                else:
+                    snippet_lines = lines
+                snippet = "".join(f"    {l.rstrip()}\n" for l in snippet_lines[:25])
+                parts.append(f"  TARGET PREVIEW ({len(lines)} lines total):")
+                parts.append(snippet.rstrip())
+        except Exception:
+            pass
+
+    # Time-budgeted sub-steps with explicit output requirements
+    parts.append("  REQUIRED SUB-STEPS (do each one explicitly, ~3min per step):")
+    parts.append("    1. READ the target file — find the exact insertion point (line number). Output: 'Inserting at line N, after <context>'")
+    parts.append("    2. READ the source script — find the exact function/class to import and its call signature. Output: 'Will import <func> from <module>, signature: <sig>'")
+    parts.append("    3. ADD the import at the top of target (with try/except fallback for resilience)")
+    parts.append("    4. ADD the call at the identified insertion point (with try/except + timing if target uses timing)")
+    parts.append("    5. TEST: run `python3 -c 'import <module>'` or `bash -n <script>.sh` to verify no syntax errors")
+    parts.append("    6. VERIFY: run the target script in test mode (or grep for your added lines) to confirm integration")
+    parts.append("  AVOID: Do NOT explore the codebase broadly. The target and source are given — read only those two files.")
+    parts.append("  AVOID: Do NOT refactor or improve the source script. Only wire it in.")
 
     return "\n".join(parts)
 
