@@ -22,10 +22,10 @@ sys.path.insert(0, os.path.dirname(__file__))
 start_import = time.monotonic()
 
 try:
-    from clarvis_confidence import calibration_report, apply_calibration
+    from clarvis_confidence import calibration as calibration_report
 except ImportError:
     calibration_report = None
-    apply_calibration = None
+apply_calibration = None  # No separate apply function exists; calibration() is read-only
 
 try:
     from prediction_review import review_domains
@@ -33,12 +33,12 @@ except ImportError:
     review_domains = None
 
 try:
-    from phi_metric import get_trend
+    from phi_metric import trend_analysis as get_trend
 except ImportError:
     get_trend = None
 
 try:
-    from self_model import assess_capabilities
+    from self_model import assess_all_capabilities as assess_capabilities
 except ImportError:
     assess_capabilities = None
 

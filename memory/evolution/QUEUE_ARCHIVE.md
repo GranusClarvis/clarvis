@@ -349,3 +349,67 @@ _Last archived: 2026-02-23_
 ## Archived 2026-03-01
 - [x] [RESEARCH 2026-03-01] Research: Integrated World Modeling Theory (IWMT) — Safron’s proposal to unify IIT + GNWT within Free Energy Principle / Active Inference; argues integration + global availability are necessary but not sufficient without embodied generative world-modeling.
 - [x] [RESEARCH_DISCOVERY 2026-03-01] Research: Lifelong Agent Memory — Forgetting Prevention & Replay — EWC protects crucial parameters via Fisher information, SuRe (Surprise-Driven Prioritised Replay) for continual LLM learning, selection vs integration error decomposition. Critical for long-running agents. Maps to hebbian_memory.py decay, brain.py consolidation, dream_engine replay. Sources: arxiv.org/html/2504.01241v1, arxiv.org/pdf/2511.22367, arxiv.org/html/2505.05946v1 (2026-03-01 15:11 UTC)
+
+## Archived 2026-03-01
+- [x] [RESEARCH_DISCOVERY 2026-03-01] Research: Cognitive Workspace — Active Memory Management for Functional Infinite Context (Agarwal et al. 2025) — Beyond RAG: hierarchical cognitive buffers with metacognitive awareness, 58.6% memory reuse rate, task-driven context optimization. Draws on Baddeley working memory model + Clark extended mind thesis. Directly applicable to working_memory.py, context_compressor.py, and brain.py context management. Sources: arxiv.org/abs/2508.13171 (2026-03-01 16:09 UTC)
+- [x] [ORCH_GOLDEN_QA] Golden Q/A set created — 12 repo-specific queries, P@3=1.0, MRR=1.0. Done 2026-03-01.
+- [x] [ORCH_BENCHMARK_WIRE] Composite scoring (5 dims, weighted) + retrieval via lite_brain.py. Composite: 0.75. Done 2026-03-01.
+
+## Archived 2026-03-01
+- [x] [RESEARCH_DISCOVERY 2026-03-01] Research: Autonomous Tool Creation & Aggregation (LATM + ToolLibGen + ToolMaker, ACL 2025) — DONE: Built scripts/tool_maker.py (LATM extraction + ToolLibGen aggregation + ToolMaker validation), wired into heartbeat_postflight.py §4.5, full lifecycle tested
+
+## Archived 2026-03-01
+- [x] [CODE_GEN_TEMPLATES] Build code generation templates library — extract patterns from the 10 most-edited scripts (brain.py, heartbeat_preflight.py, etc.), create reusable scaffolds in procedural_memory with tag `code_template`. Wire into preflight: when task is CODE-type, inject matching templates. Target: raise code_generation score from 0.57 to 0.70+. Files: procedural_memory.py, heartbeat_preflight.py. (2026-03-01 19:07 UTC)
+- [x] [RESEARCH_CONSCIOUSNESS 2026-03-01] Research: Free Energy Principle (Friston 2009/2010) — Minimizing variational free energy unifies perception (approximate Bayesian inference), action (sampling predicted sensations), and learning (model update). Surprise/prediction error becomes the common “currency” behind value/utility and homeostatic self-organization; “active inference” frames behaviour as reducing expected free energy via epistemic (information gain) + pragmatic (goal) terms.
+
+## Archived 2026-03-01
+- [x] [RESEARCH_DISCOVERY 2026-03-01] Research: SICA — Self-Improving Coding Agent (Robeyns et al., ICLR 2025 Workshop) — completed 2026-03-01. Note: memory/research/sica_self_improving_coding_agent.md
+- [x] [CODE_GEN_SCORING_WIRE] Wire code_generation score to actual heartbeat outcomes — in heartbeat_postflight.py, when the task involved code changes (detect via git diff), measure: files touched, syntax errors (run `python3 -c "compile(open(f).read(), f, 'exec')"` on changed .py files), and whether the task succeeded. Feed results to self_model.py `_score_code_generation()`. Currently code_gen score is mostly static. (2026-03-01 22:04 UTC)
+
+## Archived 2026-03-01
+- [x] [ORCH_COST_TRACKING] Wire actual OpenRouter cost data per agent task window. (2026-03-01 23:05 UTC)
+
+## Archived 2026-03-02
+- [x] [GWT_BROADCAST_BUGFIX] Fix workspace_broadcast.py integration with self_representation.encode_self_state(): current code expects keys (summary/mode) that don't exist; should build summary from state['z'] dims or call broadcast_self_state(). Add a smoke test for broadcast cycle import. Files: workspace_broadcast.py, self_representation.py, scripts/tests/test_smoke.py. (2026-03-02 01:02 UTC)
+
+## Archived 2026-03-02
+- [x] [PROJECT_AGENT_PROMPT_FILE] Fix project_agent.cmd_spawn(): prompt is written to /tmp but claude is invoked with `-p <prompt_string>` (risk: command-length limits + bypasses file). Change to read prompt from file or pass via stdin; ensure output parsing still works. Add unit test for spawn prompt construction. Files: project_agent.py. (2026-03-02 05:35 UTC)
+
+## Archived 2026-03-02
+- [x] [ORCH_RETRY_LOGIC] Add retry/fallback: if task fails, re-queue with adjusted prompt (max 2 retries). ✓ 2026-03-02
+
+## Archived 2026-03-02
+- [x] [BRIEF_COMPRESSION] Fix brief_compression metric (0.249, target 0.5) — context_compressor.py produces bloated summaries. Implement extractive-then-abstractive compression: first extract key sentences by TF-IDF salience, then merge into compact brief. Measure: output_tokens/input_tokens ratio should drop below 0.3. Files: context_compressor.py. (2026-03-02 07:09 UTC)
+- [x] [RESEARCH_DISCOVERY 2026-03-01] Research: Multi-Agent Debate for Reasoning Verification (Du et al. 2024 + A-HMAD 2025) — completed 2026-03-02. Deep dive: 5 papers synthesized (Du et al., arXiv:2511.07784, A-HMAD, arXiv:2601.19921, ICLR 2025 eval). Key: debate is a martingale unless confidence+diversity are added; intrinsic reasoning strength dominates structure; A-HMAD role specialization works. Note: memory/research/multi_agent_debate_reasoning_verification.md
+
+## Archived 2026-03-02
+- [x] [RESEARCH 2026-03-02] Research: Active inference (Sajid, Ball, Parr, Friston; arXiv:1909.10863 / Neural Computation 2021) — discrete active inference compared to RL; expected free energy yields intrinsic epistemic exploration; reward treated as observation; preferences can be learned.
+- [x] [ORCH_SWO_BUILD] Run build+test: `project_agent.py spawn star-world-order "Run npm install, npm run build, npm run test. Store procedures."`. _(completed 2026-03-02: 69/69 tests passed, build OK, 13 procedures stored+promoted)_
+
+## Archived 2026-03-02
+- [x] [ORCH_SWO_PR] First PR: spawn code-change task, push branch, `gh pr create`. Validate end-to-end PR pipeline. (2026-03-02 11:05 UTC)
+- [x] [RESEARCH_DISCOVERY 2026-03-01] Research: LATS — Language Agent Tree Search (Zhou et al., ICML 2024) — Completed 2026-03-02. Key: MCTS over LLM actions with triple-role LLM (agent + value function + self-reflector). Maps to Clarvis via beam task selection + verbal self-reflection in postflight. Note: memory/research/lats_language_agent_tree_search.md
+
+## Archived 2026-03-02
+- [x] [ORCH_PROMOTION_BRAIN] After promote, store top procedures in Clarvis brain with tag `project:<name>`. (2026-03-02 12:05 UTC)
+
+## Archived 2026-03-02
+- [x] [CONTEXT_RELEVANCE_FIX] Fix context relevance (PI metric: 0.6, target 0.7) — the preflight brain search returns partially-relevant memories. Add MMR (Maximal Marginal Relevance) reranking to context_compressor.py: after initial retrieval, re-score by cosine similarity to task description AND penalize redundancy between selected items. Files: context_compressor.py, heartbeat_preflight.py. (2026-03-02 15:11 UTC)
+- [x] [RESEARCH 2026-03-02] Research: Integrated World Modeling Theory (IWMT) expanded (Safron 2022) — Bridges IIT + GNWT inside FEP/Active Inference; reframes “workspace ignition” as iterated Bayesian model selection and suggests Φ proxy estimation via graphical models / flow networks / game theory. Source: PubMed PMID 36507308 (doi:10.3389/fncom.2022.642397)
+
+## Archived 2026-03-02
+- [x] [PROCEDURE_INJECTION] Fix learning_feedback (0.77, lowest capability) — procedural_memory has 50 procedures but only 9 uses. Wire auto-injection into heartbeat_preflight: after task selection, query `procedural_memory.find(task_description)`, inject top-2 matching procedures as "Recommended approach:" block in the Claude Code prompt. Track injection→outcome in postflight. Files: heartbeat_preflight.py, heartbeat_postflight.py, procedural_memory.py. (2026-03-02 16:08 UTC)
+
+## Archived 2026-03-02
+- [x] [ROADMAP_REFRESH] Update ROADMAP.md metrics — stale since 2026-02-28. Current: PI=0.976 (was 0.579), Phi=0.760 (was 0.739), memories=1884 (was 1698), edges=109k (was 121k — compacted), success_rate=100% (20/20 24h). Update phase assessments: Phase 2 should be 95% (brief_compression fixed), Phase 3 autonomy scores need orchestrator milestone-1 marked complete, add Cognitive Workspace to Phase 5. Also update "Remaining P1 Tasks" section. Pure markdown edit, no code. (2026-03-02 17:08 UTC)
+
+## Archived 2026-03-02
+- [x] [SEMANTIC_BRIDGE_TARGETED] Six collection pairs have overlap <0.463 dragging Phi down (infrastructure↔autonomous-learning=0.42, infrastructure↔memories=0.43, goals↔autonomous-learning=0.44, preferences↔infrastructure=0.44, preferences↔goals=0.45, context↔memories=0.46). For each pair: find 3-5 memories in collection A that have natural semantic relevance to collection B, create explicit bridging memories or cross-reference annotations. Use `brain.store()` with metadata tagging the bridge purpose. Measure: re-run phi_metric, target semantic_cross_collection > 0.55. Files: phi_metric.py (measurement), brain.py (storage). (2026-03-02 19:22 UTC)
+- [x] [RESEARCH_CONSCIOUSNESS_IIT_PROXY 2026-03-02] Research: Φ approximations & PCI — In small systems, several heuristics correlate with Φ but still don’t remove compute barriers; PCI/LZ-style complexity is better viewed as a “capacity for high-Φ” proxy than a direct Φ measure.
+
+## Archived 2026-03-02
+- [x] [SKILL_PROJECT_AGENT] Create skills/project-agent/SKILL.md so M2.5 can spawn/manage project agents directly. Commands: spawn (delegate task), status (check running), promote (pull results), list (show agents). This unlocks orchestrator capability for the conscious layer without needing Claude Code. Files: skills/project-agent/SKILL.md (new). (2026-03-02 22:04 UTC)
+- [x] [RESEARCH_DISCOVERY 2026-03-02] Research: Cognitive Load Framework for Tool-Use Agent Boundaries (arXiv:2601.20412) — completed 2026-03-02. 5 insights stored, research note written. Key: P_succ = exp(-(k*CL+b)), TIG formalism for task complexity, model-specific performance cliffs.
+
+## Archived 2026-03-02
+- [x] [PREDICTION_RESOLUTION] Fix 71% prediction resolution rate (learning_feedback bottleneck) — build auto-resolver: after each episode closes in postflight, scan open predictions whose `task_id` matches the episode, resolve them with the episode's success/fail outcome. Clears stale unresolved predictions. Files: heartbeat_postflight.py, clarvis_confidence.py. (2026-03-02 23:03 UTC)

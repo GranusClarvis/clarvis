@@ -109,3 +109,48 @@ class TestLatency:
         brain.stats()
         elapsed = time.time() - t0
         assert elapsed < 1.0, f"Warm stats took {elapsed:.1f}s (limit 1s)"
+
+
+# ── GWT Broadcast cycle smoke test ──
+
+class TestBroadcastCycle:
+    """Smoke test that workspace_broadcast + self_representation integrate correctly."""
+
+    def test_broadcast_imports(self):
+        """Both modules import and key classes/functions exist."""
+        from workspace_broadcast import WorkspaceBroadcast, Codelet, Coalition
+        from self_representation import encode_self_state, broadcast_self_state
+        assert WorkspaceBroadcast is not None
+        assert encode_self_state is not None
+        assert broadcast_self_state is not None
+
+    def test_self_state_has_z_dims(self):
+        """encode_self_state() returns dict with 'z' containing latent dims, not 'summary'/'mode'."""
+        from self_representation import encode_self_state
+        state = encode_self_state()
+        assert isinstance(state, dict)
+        assert "z" in state
+        z = state["z"]
+        assert isinstance(z, dict)
+        assert len(z) > 0
+        # Must NOT have the old keys that workspace_broadcast previously expected
+        assert "summary" not in state, "state should not have top-level 'summary' key"
+        assert "mode" not in state, "state should not have top-level 'mode' key"
+        # Dims should be floats in [0,1]
+        for dim, val in z.items():
+            assert 0.0 <= val <= 1.0, f"{dim}={val} out of range"
+
+    def test_collect_self_codelet(self):
+        """WorkspaceBroadcast.collect() produces a self_model codelet without error."""
+        from workspace_broadcast import WorkspaceBroadcast
+        ws = WorkspaceBroadcast()
+        codelets = ws.collect()
+        # At least some codelets collected (self_model may or may not be present
+        # depending on other module availability, but no crash)
+        assert isinstance(codelets, list)
+        # If self_model codelet exists, verify it has the new format
+        self_codelets = [c for c in codelets if c.source == "self_model"]
+        for c in self_codelets:
+            assert "Self-state:" in c.content
+            # Must NOT contain old "mode=unknown" pattern from broken code
+            assert "mode=unknown" not in c.content

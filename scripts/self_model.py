@@ -674,86 +674,129 @@ def _assess_code_generation():
     except Exception:
         pass
 
-    # Code quality gate: use pyflakes clean_ratio from nightly quality gate
-    # Falls back to py_compile check if no quality gate data exists
-    quality_gate_used = False
+    # Live heartbeat outcomes: actual code quality from heartbeat postflight recordings
+    # (primary signal — syntax check results + task success from real executions)
+    outcomes_used = False
     try:
-        qg_file = Path("/home/agent/.openclaw/workspace/data/code_quality_history.json")
-        if qg_file.exists():
-            with open(qg_file) as f:
-                qg_history = json.load(f)
-            if qg_history:
-                latest = qg_history[-1]
-                clean_ratio = latest.get("clean_ratio", 0)
-                syntax_errs = latest.get("syntax_errors", 0)
-                total_issues = latest.get("total_issues", 0)
-                # Scale: 0.0 clean_ratio = 0, 1.0 clean_ratio = 0.2
-                qg_score = clean_ratio * 0.2
-                score += qg_score
-                evidence.append(f"quality gate: {clean_ratio:.0%} clean ({total_issues} issues, {syntax_errs} syntax errs) (+{qg_score:.2f})")
-                quality_gate_used = True
-    except Exception:
-        pass
+        outcomes_file = Path("/home/agent/.openclaw/workspace/data/code_gen_outcomes.jsonl")
+        if outcomes_file.exists():
+            from datetime import timedelta
+            cutoff = datetime.now(timezone.utc) - timedelta(hours=48)
+            recent = []
+            with open(outcomes_file) as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        entry = json.loads(line)
+                        ts = datetime.fromisoformat(entry["timestamp"].replace("Z", "+00:00"))
+                        if ts >= cutoff:
+                            recent.append(entry)
+                    except (json.JSONDecodeError, KeyError, ValueError):
+                        continue
 
-    if not quality_gate_used:
-        # Fallback: check key scripts compile
+            if recent:
+                outcomes_used = True
+                # Syntax ratio across recent outcomes (0–0.25)
+                total_ok = sum(e.get("syntax_ok", 0) for e in recent)
+                total_fail = sum(e.get("syntax_fail", 0) for e in recent)
+                total_checked = total_ok + total_fail
+                if total_checked > 0:
+                    syntax_ratio = total_ok / total_checked
+                    syntax_score = syntax_ratio * 0.25
+                    score += syntax_score
+                    evidence.append(f"heartbeat syntax: {total_ok}/{total_checked} clean ({syntax_ratio:.0%}) (+{syntax_score:.2f})")
+                else:
+                    score += 0.15  # Had code outcomes but no files to check
+                    evidence.append("heartbeat outcomes exist, no syntax checks needed (+0.15)")
+
+                # Task success rate for code-touching heartbeats (0–0.25)
+                successes = sum(1 for e in recent if e.get("task_status") == "success")
+                success_rate = successes / len(recent)
+                success_score = success_rate * 0.25
+                score += success_score
+                evidence.append(f"heartbeat success: {successes}/{len(recent)} ({success_rate:.0%}) (+{success_score:.2f})")
+    except Exception as e:
+        evidence.append(f"heartbeat outcomes error: {e}")
+
+    if not outcomes_used:
+        # Fallback: static code quality checks (when no heartbeat data exists)
+        # Code quality gate: use pyflakes clean_ratio from nightly quality gate
+        quality_gate_used = False
         try:
-            key_scripts = ["brain.py", "self_model.py", "attention.py", "working_memory.py"]
-            clean = 0
-            checked = 0
-            for s in key_scripts:
-                path = f"/home/agent/.openclaw/workspace/scripts/{s}"
-                if os.path.exists(path):
-                    checked += 1
-                    r = subprocess.run(["python3", "-m", "py_compile", path],
-                                       capture_output=True, text=True, timeout=5)
-                    if r.returncode == 0:
-                        clean += 1
-            if checked > 0:
-                compile_score = (clean / checked) * 0.2
-                score += compile_score
-                evidence.append(f"{clean}/{checked} key scripts compile clean (+{compile_score:.2f})")
+            qg_file = Path("/home/agent/.openclaw/workspace/data/code_quality_history.json")
+            if qg_file.exists():
+                with open(qg_file) as f:
+                    qg_history = json.load(f)
+                if qg_history:
+                    latest = qg_history[-1]
+                    clean_ratio = latest.get("clean_ratio", 0)
+                    syntax_errs = latest.get("syntax_errors", 0)
+                    total_issues = latest.get("total_issues", 0)
+                    qg_score = clean_ratio * 0.2
+                    score += qg_score
+                    evidence.append(f"quality gate: {clean_ratio:.0%} clean ({total_issues} issues, {syntax_errs} syntax errs) (+{qg_score:.2f})")
+                    quality_gate_used = True
         except Exception:
             pass
 
-    # Test pass rate (if test infrastructure exists)
-    try:
-        test_dirs = [
-            Path("/home/agent/.openclaw/workspace/tests"),
-            Path("/home/agent/.openclaw/workspace/scripts/tests"),
-            Path("/home/agent/.openclaw/workspace/packages/clarvis-db/tests"),
-        ]
-        test_files = []
-        for td in test_dirs:
-            if td.exists():
-                test_files.extend(td.glob("test_*.py"))
-                test_files.extend(td.glob("*_test.py"))
+        if not quality_gate_used:
+            try:
+                key_scripts = ["brain.py", "self_model.py", "attention.py", "working_memory.py"]
+                clean = 0
+                checked = 0
+                for s in key_scripts:
+                    path = f"/home/agent/.openclaw/workspace/scripts/{s}"
+                    if os.path.exists(path):
+                        checked += 1
+                        r = subprocess.run(["python3", "-m", "py_compile", path],
+                                           capture_output=True, text=True, timeout=5)
+                        if r.returncode == 0:
+                            clean += 1
+                if checked > 0:
+                    compile_score = (clean / checked) * 0.2
+                    score += compile_score
+                    evidence.append(f"{clean}/{checked} key scripts compile clean (+{compile_score:.2f})")
+            except Exception:
+                pass
 
-        if test_files:
-            r = subprocess.run(
-                ["python3", "-m", "pytest", "--tb=no", "-q"] + [str(f) for f in test_files[:20]],
-                capture_output=True, text=True, timeout=60,
-                cwd="/home/agent/.openclaw/workspace"
-            )
-            output = r.stdout + r.stderr
-            # Parse pytest summary: "X passed, Y failed" or "X passed"
-            import re
-            passed_m = re.search(r'(\d+) passed', output)
-            failed_m = re.search(r'(\d+) failed', output)
-            passed = int(passed_m.group(1)) if passed_m else 0
-            failed = int(failed_m.group(1)) if failed_m else 0
-            total_tests = passed + failed
-            if total_tests > 0:
-                pass_rate = passed / total_tests
-                test_score = pass_rate * 0.3
-                score += test_score
-                evidence.append(f"test pass rate={pass_rate:.0%} ({passed}/{total_tests}) (+{test_score:.2f})")
-            elif r.returncode == 0:
-                # pytest ran but no tests collected — small credit for having infra
-                score += 0.05
-                evidence.append("test infra exists but no tests collected (+0.05)")
-    except Exception:
-        pass  # No test infra — that's fine, other metrics carry the weight
+        # Test pass rate (if test infrastructure exists)
+        try:
+            test_dirs = [
+                Path("/home/agent/.openclaw/workspace/tests"),
+                Path("/home/agent/.openclaw/workspace/scripts/tests"),
+                Path("/home/agent/.openclaw/workspace/packages/clarvis-db/tests"),
+            ]
+            test_files = []
+            for td in test_dirs:
+                if td.exists():
+                    test_files.extend(td.glob("test_*.py"))
+                    test_files.extend(td.glob("*_test.py"))
+
+            if test_files:
+                r = subprocess.run(
+                    ["python3", "-m", "pytest", "--tb=no", "-q"] + [str(f) for f in test_files[:20]],
+                    capture_output=True, text=True, timeout=60,
+                    cwd="/home/agent/.openclaw/workspace"
+                )
+                output = r.stdout + r.stderr
+                import re
+                passed_m = re.search(r'(\d+) passed', output)
+                failed_m = re.search(r'(\d+) failed', output)
+                passed = int(passed_m.group(1)) if passed_m else 0
+                failed = int(failed_m.group(1)) if failed_m else 0
+                total_tests = passed + failed
+                if total_tests > 0:
+                    pass_rate = passed / total_tests
+                    test_score = pass_rate * 0.3
+                    score += test_score
+                    evidence.append(f"test pass rate={pass_rate:.0%} ({passed}/{total_tests}) (+{test_score:.2f})")
+                elif r.returncode == 0:
+                    score += 0.05
+                    evidence.append("test infra exists but no tests collected (+0.05)")
+        except Exception:
+            pass
 
     return max(0.0, min(1.0, score)), evidence
 

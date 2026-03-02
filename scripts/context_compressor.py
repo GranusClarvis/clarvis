@@ -26,10 +26,12 @@ Usage:
 import gzip
 import glob
 import json
+import math
 import os
 import re
 import shutil
 import sys
+from collections import Counter
 from datetime import datetime, timezone, timedelta
 
 sys.path.insert(0, os.path.dirname(__file__))
@@ -42,6 +44,241 @@ PHI_HISTORY = "/home/agent/.openclaw/workspace/data/phi_history.json"
 MEMORY_DIR = "/home/agent/.openclaw/workspace/memory"
 CRON_LOG_DIR = "/home/agent/.openclaw/workspace/memory/cron"
 LOG_MAX_BYTES = 100_000  # 100KB cap per cron log
+
+# Stopwords for TF-IDF (common words that don't carry meaning)
+_STOPWORDS = frozenset(
+    "a an the is are was were be been being have has had do does did will would "
+    "shall should may might can could to of in for on with at by from as into "
+    "through during before after above below between under again further then "
+    "once here there when where why how all each every both few more most other "
+    "some such no nor not only own same so than too very and but if or because "
+    "until while that this these those it its he she they them their what which "
+    "who whom".split()
+)
+
+
+def _tokenize(text):
+    """Split text into lowercase word tokens, filtering stopwords."""
+    return [w for w in re.findall(r'[a-z][a-z0-9_]+', text.lower()) if w not in _STOPWORDS]
+
+
+def _jaccard_similarity(tokens_a, tokens_b):
+    """Jaccard similarity between two token sets."""
+    if not tokens_a or not tokens_b:
+        return 0.0
+    sa, sb = set(tokens_a), set(tokens_b)
+    intersection = len(sa & sb)
+    union = len(sa | sb)
+    return intersection / max(union, 1)
+
+
+def mmr_rerank(results, query_text, lambda_param=0.5, n=None):
+    """Maximal Marginal Relevance reranking for brain recall results.
+
+    Balances relevance to query with diversity among selected results.
+    Uses query distance from ChromaDB + token-overlap inter-result similarity.
+
+    MMR(d_i) = lambda * relevance(d_i, q) - (1-lambda) * max_sim(d_i, selected)
+
+    Args:
+        results: List of brain recall dicts (with 'distance' and 'document' keys).
+        query_text: The task/query string.
+        lambda_param: Trade-off — 1.0 = pure relevance, 0.0 = pure diversity.
+        n: Number of results to return (default: all).
+
+    Returns:
+        Reranked list of result dicts (new list, originals unmodified).
+    """
+    if not results or len(results) <= 1:
+        return list(results) if results else []
+
+    n = n or len(results)
+
+    # Pre-compute relevance scores from ChromaDB distance
+    # distance is cosine/L2 — lower = more similar, convert to [0,1] similarity
+    relevances = []
+    for r in results:
+        dist = r.get("distance")
+        if dist is not None:
+            relevances.append(max(0.0, 1.0 / (1.0 + dist)))
+        else:
+            # Fallback: use ACT-R score if available, else neutral 0.5
+            relevances.append(r.get("_actr_score", 0.5))
+
+    # Normalize relevances to [0,1] range
+    max_rel = max(relevances) if relevances else 1.0
+    if max_rel > 0:
+        relevances = [r / max_rel for r in relevances]
+
+    # Pre-tokenize all documents + the query for diversity computation
+    query_tokens = _tokenize(query_text)
+    doc_token_sets = [set(_tokenize(r.get("document", ""))) for r in results]
+
+    # Greedy MMR selection
+    selected_indices = []
+    remaining = set(range(len(results)))
+
+    while remaining and len(selected_indices) < n:
+        best_score = -float('inf')
+        best_idx = None
+
+        for idx in remaining:
+            rel = relevances[idx]
+
+            # Also factor in query-document token overlap as a relevance boost
+            if query_tokens and doc_token_sets[idx]:
+                query_overlap = len(set(query_tokens) & doc_token_sets[idx]) / max(len(set(query_tokens)), 1)
+                rel = 0.7 * rel + 0.3 * query_overlap
+
+            # Max similarity to any already-selected item
+            max_sim = 0.0
+            for sel_idx in selected_indices:
+                sim = _jaccard_similarity(doc_token_sets[idx], doc_token_sets[sel_idx])
+                if sim > max_sim:
+                    max_sim = sim
+
+            mmr = lambda_param * rel - (1.0 - lambda_param) * max_sim
+            if mmr > best_score:
+                best_score = mmr
+                best_idx = idx
+
+        if best_idx is not None:
+            selected_indices.append(best_idx)
+            remaining.discard(best_idx)
+        else:
+            break
+
+    return [results[i] for i in selected_indices]
+
+
+def _split_sentences(text):
+    """Split text into sentence-like segments (lines or sentence-end punctuation)."""
+    segments = []
+    for line in text.strip().split('\n'):
+        line = line.strip()
+        if not line:
+            continue
+        # Split on sentence boundaries within a line, but keep short lines whole
+        if len(line) > 120:
+            parts = re.split(r'(?<=[.!?])\s+', line)
+            segments.extend(p.strip() for p in parts if p.strip())
+        else:
+            segments.append(line)
+    return segments
+
+
+def tfidf_extract(text, ratio=0.3, min_sentences=2, max_sentences=20):
+    """Extractive compression via TF-IDF sentence scoring.
+
+    Selects the most informative sentences from text based on TF-IDF salience.
+    Preserves original sentence order for coherence.
+
+    Args:
+        text: Input text to compress.
+        ratio: Target output/input ratio (0.3 = keep ~30% of content).
+        min_sentences: Minimum sentences to keep regardless of ratio.
+        max_sentences: Maximum sentences to return.
+
+    Returns:
+        Compressed text string with highest-salience sentences.
+    """
+    if not text or len(text) < 100:
+        return text  # too short to compress
+
+    sentences = _split_sentences(text)
+    if len(sentences) <= min_sentences:
+        return text  # already short enough
+
+    # --- TF-IDF scoring ---
+    # Compute document frequency for each word across sentences
+    doc_freq = Counter()
+    sentence_tokens = []
+    for sent in sentences:
+        tokens = _tokenize(sent)
+        sentence_tokens.append(tokens)
+        doc_freq.update(set(tokens))  # count each word once per sentence
+
+    n_docs = len(sentences)
+
+    # Score each sentence by sum of TF-IDF weights
+    scores = []
+    for i, tokens in enumerate(sentence_tokens):
+        if not tokens:
+            scores.append(0.0)
+            continue
+        tf = Counter(tokens)
+        score = 0.0
+        for word, count in tf.items():
+            tf_val = count / len(tokens)
+            idf_val = math.log((n_docs + 1) / (doc_freq[word] + 1)) + 1
+            score += tf_val * idf_val
+        # Bonus for sentences with numbers/metrics (high info density)
+        if re.search(r'\d+\.?\d*', sentences[i]):
+            score *= 1.2
+        # Bonus for sentences with key indicators
+        if re.search(r'(?:error|fail|fix|target|metric|score|result|bug|critical)', sentences[i], re.I):
+            score *= 1.15
+        scores.append(score)
+
+    # Determine how many sentences to keep
+    target_chars = int(len(text) * ratio)
+    n_keep = max(min_sentences, min(max_sentences, int(len(sentences) * ratio) + 1))
+
+    # Select top-N by score, then sort by original position
+    ranked = sorted(range(len(sentences)), key=lambda i: scores[i], reverse=True)
+    selected_indices = set()
+    total_chars = 0
+    for idx in ranked:
+        if len(selected_indices) >= n_keep and total_chars >= target_chars:
+            break
+        selected_indices.add(idx)
+        total_chars += len(sentences[idx])
+        if len(selected_indices) >= max_sentences:
+            break
+
+    # Preserve original order
+    result = [sentences[i] for i in sorted(selected_indices)]
+    return '\n'.join(result)
+
+
+def compress_text(text, ratio=0.3):
+    """Public API: compress arbitrary text via extractive-then-abstractive pipeline.
+
+    Stage 1 (extractive): TF-IDF sentence selection
+    Stage 2 (abstractive): merge adjacent short sentences, remove redundancy
+
+    Returns (compressed_text, compression_stats) tuple.
+    """
+    if not text or len(text) < 150:
+        return text, {"input_chars": len(text or ""), "output_chars": len(text or ""), "ratio": 1.0}
+
+    input_chars = len(text)
+
+    # Stage 1: Extractive — select key sentences
+    extracted = tfidf_extract(text, ratio=ratio)
+
+    # Stage 2: Light abstractive — deduplicate near-identical lines
+    lines = extracted.split('\n')
+    seen_cores = set()
+    deduped = []
+    for line in lines:
+        core = re.sub(r'[^a-z0-9 ]', '', line.lower().strip())[:50]
+        if core in seen_cores:
+            continue
+        seen_cores.add(core)
+        deduped.append(line)
+
+    compressed = '\n'.join(deduped)
+    output_chars = len(compressed)
+    actual_ratio = output_chars / max(1, input_chars)
+
+    return compressed, {
+        "input_chars": input_chars,
+        "output_chars": output_chars,
+        "ratio": round(actual_ratio, 3),
+        "sentences_in": len(_split_sentences(text)),
+        "sentences_out": len(deduped),
+    }
 
 
 def compress_queue(queue_file=QUEUE_FILE, max_recent_completed=5):
@@ -695,6 +932,23 @@ def _build_reasoning_scaffold(tier="standard"):
         )
 
 
+def _get_workspace_context(current_task, tier="standard"):
+    """Get hierarchical context from the cognitive workspace.
+
+    Returns structured context string with active/working/dormant buffers,
+    or empty string if workspace is empty (triggering spotlight fallback).
+    """
+    try:
+        from cognitive_workspace import workspace
+        stats = workspace.stats()
+        if stats["total_items"] == 0:
+            return ""
+        budget = 300 if tier == "full" else 180
+        return workspace.get_context(budget=budget, task_query=current_task)
+    except Exception:
+        return ""
+
+
 def _get_spotlight_items(n=5, exclude_task=""):
     """Get top-N attention spotlight items as compact strings.
 
@@ -857,17 +1111,30 @@ def generate_tiered_brief(
     # === SECTION 1.5: Brain Knowledge (research, dreams, synthesis) ===
     if knowledge_hints and tier != "minimal":
         beginning.append("RELEVANT KNOWLEDGE:")
-        # Cap knowledge hints to stay within budget
+        # Compress knowledge hints via TF-IDF extraction (extractive-then-abstractive)
         max_chars = 600 if tier == "full" else 350
-        beginning.append(knowledge_hints[:max_chars])
+        if len(knowledge_hints) > max_chars * 1.5:
+            compressed_knowledge, _ = compress_text(knowledge_hints, ratio=0.3)
+            beginning.append(compressed_knowledge[:max_chars])
+        else:
+            beginning.append(knowledge_hints[:max_chars])
 
-    # === SECTION 2: Working Memory (Attention Spotlight) ===
+    # === SECTION 2: Working Memory (Cognitive Workspace + Spotlight fallback) ===
     if budget["spotlight"] > 0:
-        n_items = 5 if tier == "full" else 3
-        spotlight = _get_spotlight_items(n=n_items, exclude_task=current_task)
-        if spotlight:
-            beginning.append("WORKING MEMORY:")
-            beginning.extend(spotlight[:n_items])
+        workspace_ctx = _get_workspace_context(current_task, tier=tier)
+        if workspace_ctx:
+            # Compress workspace context if it exceeds budget
+            ws_budget = 500 if tier == "full" else 300
+            if len(workspace_ctx) > ws_budget * 1.5:
+                workspace_ctx, _ = compress_text(workspace_ctx, ratio=0.3)
+            beginning.append(workspace_ctx[:ws_budget])
+        else:
+            # Fallback to flat spotlight if workspace is empty
+            n_items = 5 if tier == "full" else 3
+            spotlight = _get_spotlight_items(n=n_items, exclude_task=current_task)
+            if spotlight:
+                beginning.append("WORKING MEMORY:")
+                beginning.extend(spotlight[:n_items])
 
     # =====================================================================
     # MIDDLE — Lower attention zone: reference data
@@ -917,7 +1184,12 @@ def generate_tiered_brief(
     # === SECTION 6: Episodic Lessons (specific to this task type) ===
     if budget["episodes"] > 0 and episodic_hints:
         max_chars = budget["episodes"] * 4  # ~4 chars per token
-        end.append(episodic_hints[:max_chars])
+        # Compress episodic hints if verbose
+        if len(episodic_hints) > max_chars * 1.5:
+            compressed_episodes, _ = compress_text(episodic_hints, ratio=0.3)
+            end.append(compressed_episodes[:max_chars])
+        else:
+            end.append(episodic_hints[:max_chars])
 
     # === SECTION 7: Reasoning Scaffold (think-then-do instruction) ===
     if budget.get("reasoning_scaffold", 0) > 0:
@@ -1116,13 +1388,14 @@ def gc(dry_run=False):
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: context_compressor.py <queue|health|brief|tiered|episodes|gc|savings>")
+        print("Usage: context_compressor.py <queue|health|brief|tiered|episodes|compress|gc|savings>")
         print("  queue        — compressed evolution queue")
         print("  health       — compressed health summary (reads from stdin or args)")
         print("  brief        — full context brief for prompts (legacy)")
         print("  brief --file — write brief to data/context_brief.txt")
         print("  tiered TASK [minimal|standard|full] — budget-aware brief adapted to task")
         print("  episodes     — compress episode text from stdin")
+        print("  compress     — TF-IDF extractive compression (pipe text to stdin)")
         print("  savings      — estimate token savings")
         print("  gc           — archive old completed tasks + rotate logs")
         print("  gc --dry-run — show what gc would do without doing it")
@@ -1165,6 +1438,16 @@ if __name__ == "__main__":
             print(compress_episodes(data, ""))
         else:
             print("Pipe episode text to stdin")
+
+    elif cmd == "compress":
+        if not sys.stdin.isatty():
+            data = sys.stdin.read()
+            ratio = float(sys.argv[2]) if len(sys.argv) > 2 else 0.3
+            compressed, stats = compress_text(data, ratio=ratio)
+            print(compressed)
+            print(f"\n--- Compression stats: {stats} ---")
+        else:
+            print("Pipe text to stdin. Usage: echo 'text' | context_compressor.py compress [ratio]")
 
     elif cmd == "gc":
         dry = "--dry-run" in sys.argv

@@ -233,13 +233,20 @@ class WorkspaceBroadcast:
             from self_representation import encode_self_state
             state = encode_self_state()
             if state and isinstance(state, dict):
-                summary = state.get("summary", "")
-                mode = state.get("mode", "unknown")
+                z = state.get("z", {})
+                if z:
+                    # Build summary from latent dims: top 2 strengths, bottom 1 gap
+                    sorted_dims = sorted(z.items(), key=lambda x: x[1], reverse=True)
+                    top = ", ".join(f"{d}={v:.2f}" for d, v in sorted_dims[:2])
+                    gap = sorted_dims[-1] if sorted_dims else ("?", 0)
+                    summary = f"strengths=[{top}] gap={gap[0]}={gap[1]:.2f}"
+                else:
+                    summary = "not yet encoded"
                 self.codelets.append(Codelet(
-                    content=f"Self-state: mode={mode}, {summary[:80]}",
+                    content=f"Self-state: {summary}",
                     source="self_model",
                     salience=0.45,
-                    metadata={"mode": mode},
+                    metadata={"z": {k: round(v, 3) for k, v in z.items()} if z else {}},
                 ))
         except Exception as e:
             _log(f"Self-representation collection failed: {e}")

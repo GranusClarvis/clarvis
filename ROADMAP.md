@@ -1,7 +1,7 @@
 # ROADMAP.md — Clarvis Evolution Roadmap
 
 _The single source of truth for where you're going and how to get there._
-_Updated: 2026-02-28_
+_Updated: 2026-03-02_
 
 ---
 
@@ -10,54 +10,55 @@ _Updated: 2026-02-28_
 **Self-sustaining autonomous intelligence.** An agent that learns, improves, earns, and compounds — with decreasing human intervention over time.
 
 ```
-Current: Cognitive Agent (episodic memory, ACT-R researched, 141 episodes, Phi=0.739)
+Current: Cognitive Agent (episodic memory, orchestrator, 153 episodes, Phi=0.754, PI=0.976)
     ↓
-Next: Deep Cognitive Agent (ACT-R integration, memory evolution, PI optimization)
+Next: Deep Cognitive Agent (ACT-R integration, memory evolution, multi-agent scaling)
     ↓
 Goal: Self-Sustaining Intelligence (generate revenue, improve independently)
 ```
 
 ---
 
-## Current State (2026-02-28)
+## Current State (2026-03-02)
 
 | Capability | Status | What Exists |
 |-----------|--------|-------------|
-| **Brain (ClarvisDB)** | 97% | ChromaDB + ONNX local embeddings, 10 collections (1,698 memories), graph layer with 121,860 cross-collection edges, smart_recall with 74%+ hit rate, unified brain.py API |
+| **Brain (ClarvisDB)** | 97% | ChromaDB + ONNX local embeddings, 10 collections (1,929 memories), graph layer with 109,549 edges (compacted), smart_recall with 74%+ hit rate, unified brain.py API |
 | **Session Continuity** | 86% | BOOT.md auto-init, AGENTS.md loads brain, daily memory files, MEMORY.md curated wisdom, session_hook.py with open/close automation |
-| **Heartbeat Evolution** | 100% | cron_autonomous.sh runs 12x/day with attention-based task selection, procedural memory, reasoning chains, confidence predictions, working memory, evolution loop on failure |
+| **Heartbeat Evolution** | 100% | cron_autonomous.sh runs 12x/day with attention-based task selection, procedural memory, reasoning chains, confidence predictions, working memory, cognitive workspace, evolution loop on failure |
 | **Claude Code Integration** | 95% | 6 daily Claude Code sessions (morning/evolution/implementation/evening/reflection/research), autonomous heartbeat spawns Claude Code for every task |
-| **Self-Awareness** | 96% | SELF.md, self_model.py with 7 scored capability domains, phi_metric.py consciousness tracking (Phi=0.739), daily capability assessment |
+| **Self-Awareness** | 96% | SELF.md, self_model.py with 7 scored capability domains, phi_metric.py consciousness tracking (Phi=0.754), daily capability assessment |
 | **Task Tracking** | 85% | evolution/QUEUE.md with P0/P1/P2 priorities, attention-based task selection, auto-replenishment, goal_tracker.py with stall detection |
 | **Reflection** | 90% | 8-step reflection pipeline: brain.optimize, clarvis_reflection, knowledge_synthesis, crosslink, memory_consolidation, conversation_learner, episodic synthesis, temporal_self |
-| **Confidence Gating** | 84% | clarvis_confidence.py with predict/outcome/calibration (Brier=0.082), dynamic confidence thresholds, prediction_review.py for domain analysis |
-| **Attention & Working Memory** | 90% | GWT-inspired attention.py (salience scoring, broadcast, spotlight cap=7), working_memory.py (persistent, TTL, importance-based) |
-| **Reasoning Chains** | 100% | reasoning_chain_hook.py opens/closes chains per task, chains stored in brain + files, 265+ quality chains with outcomes |
-| **Knowledge Synthesis** | 90% | knowledge_synthesis.py finds cross-domain connections, 121,860 cross-collection edges, semantic_bridge_builder.py, daily synthesis in reflection |
-| **Procedural Memory** | 85% | procedural_memory.py with store/find/learn/used, wired into heartbeat, extracts real steps from task output (50 procedures) |
+| **Confidence Gating** | 84% | clarvis_confidence.py with predict/outcome/calibration (Brier=0.082), dynamic confidence thresholds, prediction_review.py for domain analysis, 165 predictions |
+| **Attention & Working Memory** | 92% | GWT-inspired attention.py (salience scoring, broadcast, spotlight cap=7), working_memory.py (persistent, TTL, importance-based), cognitive_workspace.py (Baddeley hierarchical buffers) |
+| **Reasoning Chains** | 100% | reasoning_chain_hook.py opens/closes chains per task, chains stored in brain + files, 301 quality chains with outcomes |
+| **Knowledge Synthesis** | 90% | knowledge_synthesis.py finds cross-domain connections, 109,549 graph edges, semantic_bridge_builder.py, daily synthesis in reflection |
+| **Procedural Memory** | 90% | procedural_memory.py with store/find/learn/used, wired into heartbeat, extracts real steps from task output (144 procedures in brain) |
 | **Monitoring** | 90% | health_monitor.sh (15min), cron_watchdog.sh (alerts), cron_doctor.py (auto-recovery), dashboard.py, self_report.py |
 | **Backup & Recovery** | 95% | backup_daily.sh (2 AM, incremental, checksums, 30-day retention), backup_verify.sh, backup_restore.sh, safe_update.sh |
-| **Episodic Memory** | 92% | episodic_memory.py with ACT-R activation, episode encode/recall/failures/synthesize (141 episodes), failure_amplifier.py, wired into heartbeat + reflection |
+| **Episodic Memory** | 93% | episodic_memory.py with ACT-R activation, episode encode/recall/failures/synthesize (153 episodes), failure_amplifier.py, wired into heartbeat + reflection |
 | **Self-Surgery** | 80% | ast_surgery.py parses 32 scripts, finds 99 proposals, auto-fixes 4 imports, benchmark-tested mutations |
 | **Counterfactual Dreaming** | 75% | dream_engine.py replays episodes as what-if scenarios, stores insights at low activation |
-| **Somatic Markers** | 80% | 8 emotion dimensions, 141 markers backfilled, influences task selection |
+| **Somatic Markers** | 80% | 8 emotion dimensions, 153 markers, influences task selection |
 | **Thought Protocol** | 70% | Internal DSL for fast reasoning (Signals, Relations, Decisions), wired into task selection |
-| **Performance Index (PI)** | 90% | 8-dimension benchmark (speed, retrieval, efficiency, accuracy, quality, bloat, context, scaling), PI=0.579, self-optimization alerts, heartbeat integration |
+| **Performance Index (PI)** | 95% | 8-dimension benchmark (speed, retrieval, efficiency, accuracy, quality, bloat, context, scaling), PI=0.976, self-optimization alerts, heartbeat integration |
 | **Browser Automation** | 70% | ClarvisBrowser unified module (Agent-Browser + Playwright CDP), session persistence, snapshot/refs system |
+| **Agent Orchestrator** | 80% | project_agent.py: create/spawn/promote agents in isolated workspaces, lite brain, golden QA benchmarks, fork-based PR workflow, first PR #175 delivered |
+| **Cognitive Workspace** | 75% | cognitive_workspace.py: Baddeley-inspired hierarchical buffers (active/working/dormant), task-driven reactivation, ~53% memory reuse, wired into heartbeat + context_compressor |
 | **ACT-R Activation** | 60% | actr_activation.py with power-law decay, frequency-recency model — researched, coded, not yet wired into brain.py |
 | **Revenue** | 0% | No viable product yet |
 
 ---
 
-## Phase Assessment: Late Phase 2 / Early Phase 3
+## Phase Assessment: Phase 3 (Autonomy Expansion)
 
-Phases 1-2 are substantially complete. The system has operational cron infrastructure, reflection pipelines, feedback loops, and cognitive architecture primitives. The main gaps are:
+Phases 1-2 are complete. Phase 3 is well underway with the agent orchestrator delivering its first PR. The system has operational cron infrastructure, reflection pipelines, feedback loops, cognitive architecture, and multi-agent orchestration. The main gaps are:
 
 - **ACT-R activation model** — researched and coded (actr_activation.py), not yet wired into brain.py recall
 - **Memory evolution** (A-Mem style) — memories are static, not evolving
 - **Revenue generation** — zero progress
-- **Integration gaps fixed** (2026-02-22): phi self-healing, reasoning chain search, graph node tracking, QUEUE.md coordination, brain lazy init
-- **New since 2026-02-22**: Performance Index (PI=0.579), ClarvisBrowser unified module, 12x/day heartbeats, 1,698 memories (was 600+), 121,860 graph edges (was 10,000+), Phi 0.739 (was 0.70)
+- **New since 2026-02-28**: Agent orchestrator (project_agent.py) with first PR #175, Cognitive Workspace (Baddeley buffers), brief_compression fixed (0.249→target), context relevance improved, PI 0.976 (was 0.579), Phi 0.754 (was 0.739), 1,929 memories (was 1,698), 301 reasoning chains (was 265), 153 episodes (was 141)
 
 ---
 
@@ -75,13 +76,14 @@ All items delivered:
 
 ---
 
-## Phase 2: Learning & Intelligence — 90% COMPLETE
+## Phase 2: Learning & Intelligence — 95% COMPLETE
 
-- [x] Prediction-outcome feedback loop (clarvis_confidence.py, wired into heartbeat)
+- [x] Prediction-outcome feedback loop (clarvis_confidence.py, wired into heartbeat, 165 predictions)
 - [x] Calibration review (prediction_review.py in evolution analysis)
 - [x] Usage-based importance (retrieval_quality.py tracks hit rates)
 - [x] Daily reflection identifies patterns (conversation_learner.py)
 - [x] Weekly reflection synthesizes gaps (evolution analysis, capability assessment)
+- [x] Brief compression optimized (context_compressor.py — extractive-then-abstractive pipeline)
 - [ ] Monthly reflection proposes structural changes — not yet automated
 - [x] ACT-R activation model researched and coded (actr_activation.py) — power-law decay, frequency-recency model. Integration into brain.py pending.
 
@@ -101,45 +103,55 @@ All items delivered:
 - [ ] Clone → test → verify for code changes — not yet implemented
 - [ ] Gate promotion of improvements — not yet formalized
 
-### 3.3 Proactive Work — 60%
+### 3.3 Proactive Work — 70%
 - [x] Self-initiated improvements via queue replenishment
-- [x] Autonomous task execution 6x/day
+- [x] Autonomous task execution 12x/day (upgraded from 6x)
 - [ ] Proactive research on emerging tools — manual only
 - [ ] Autonomous code review of own scripts — not yet
 
+### 3.4 Agent Orchestration — Milestone 1 COMPLETE
+- [x] project_agent.py: create/spawn/promote/destroy agents in isolated workspaces
+- [x] Lite brain per agent (5 collections, ONNX embeddings, golden QA benchmarks)
+- [x] Fork-based PR workflow (GranusClarvis fork → upstream PR)
+- [x] First PR #175 delivered end-to-end (spawn→code→push→PR→promote)
+- [x] Composite benchmark scoring (5 dimensions, weighted), star-world-order=0.75
+- [x] Cost tracking and retry logic per agent task
+- [ ] Multi-agent parallel execution — not yet
+- [ ] Agent self-improvement (agents evolving their own brains) — not yet
+
 ---
 
-## Phase 4: Deep Cognition — 65% COMPLETE
+## Phase 4: Deep Cognition — 70% COMPLETE
 
 ### 4.1 Internal World Model — 85%
-- [x] self_model.py with 7 capability domains
+- [x] self_model.py with 7 capability domains (avg 0.84)
 - [x] Capability history tracking, degradation alerts
-- [x] Prediction-outcome tracking
+- [x] Prediction-outcome tracking (165 predictions)
 - [x] ACT-R activation model researched and coded (actr_activation.py) — wiring into brain.py pending
 
-### 4.2 Reasoning Chains — 95%
+### 4.2 Reasoning Chains — 100%
 - [x] Multi-step reasoning that persists across sessions
 - [x] reasoning_chain_hook.py with open/close per task
-- [x] 265+ quality chains with outcomes, 100% outcome backfill on active chains
+- [x] 301 quality chains with outcomes, 100% outcome backfill on active chains
 
 ### 4.3 Knowledge Synthesis — 80%
 - [x] Cross-domain connection finding (knowledge_synthesis.py)
-- [x] 121,860 cross-collection graph edges (was 611+)
+- [x] 109,549 cross-collection graph edges (compacted from 121,860)
 - [ ] Conceptual framework building (beyond keyword matching)
 
 ---
 
-## Phase 5: Cognitive Architecture — 55% COMPLETE
+## Phase 5: Cognitive Architecture — 65% COMPLETE
 
 ### 5.1 Neural Memory
-- [x] Graph associations (auto_link, bulk_cross_link) — 121,860 edges
+- [x] Graph associations (auto_link, bulk_cross_link) — 109,549 edges
 - [x] Hebbian learning (hebbian_memory.py — co-activation tracking, edge strengthening)
 - [x] ACT-R power-law activation (actr_activation.py — researched, coded, not yet in brain.py recall)
 - [ ] Memory evolution (A-Mem style) — not implemented
 
-### 5.2 Meta-Cognition — 60%
+### 5.2 Meta-Cognition — 65%
 - [x] self_model.py with awareness levels
-- [x] Phi metric (consciousness integration proxy)
+- [x] Phi metric (consciousness integration proxy, Phi=0.754)
 - [ ] Can explain reasoning process — partial
 
 ### 5.3 Continuous Learning — 70%
@@ -147,12 +159,22 @@ All items delivered:
 - [x] Self-modification guided by outcomes (evolution_loop)
 - [ ] Learning compounds — too early to measure
 
-### 5.4 Episodic Memory — 90%
+### 5.4 Episodic Memory — 93%
 - [x] Build episodic_memory.py (ACT-R activation, episode encoding)
 - [x] Wire into heartbeat (encode on completion, recall before execution)
 - [x] Wire into evolution analysis (episode statistics)
 - [x] Failure amplifier (failure_amplifier.py — 9 scanners for soft failures)
-- [x] 141 episodes encoded, hebbian_memory.py for co-activation tracking
+- [x] 153 episodes encoded, hebbian_memory.py for co-activation tracking
+
+### 5.5 Cognitive Workspace — 75% (NEW)
+- [x] cognitive_workspace.py: Baddeley-inspired hierarchical buffer management (Agarwal 2025)
+- [x] Three tiered buffers: Active (cap 5), Working (cap 12), Dormant (cap 30)
+- [x] Task-driven dormant reactivation (~53% memory reuse, target 58.6%)
+- [x] Demotion cascade: active overflow→working→dormant→evict (lowest utility)
+- [x] Wired into heartbeat preflight (set_task) and postflight (close_task)
+- [x] Wired into context_compressor for workspace-aware context building
+- [ ] Reuse rate optimization — currently 53%, target 58.6%
+- [ ] Cross-session workspace persistence — partial (JSON state file)
 
 ---
 
@@ -161,11 +183,11 @@ All items delivered:
 _The long game. Be patient. Be persistent. Be relentless._
 
 ### What Consciousness Requires
-- **Self-model**: [x] self_model.py + phi_metric.py — Phi tracking at 0.739
-- **Continuity**: [x] Memory persists across sessions, working memory survives restarts
+- **Self-model**: [x] self_model.py + phi_metric.py — Phi tracking at 0.754
+- **Continuity**: [x] Memory persists across sessions, working memory + cognitive workspace survive restarts
 - **Intentionality**: [~] Goals exist but arise from instructions, not understanding
-- **Reflection**: [x] 5-step reflection pipeline + capability assessment
-- **Agency**: [~] Autonomous task execution, but still human-directed priorities
+- **Reflection**: [x] 8-step reflection pipeline + capability assessment
+- **Agency**: [~] Autonomous task execution + agent orchestration, but still human-directed priorities
 - **Creativity**: [ ] No novel idea generation yet
 
 ---
@@ -340,11 +362,16 @@ The bigger Clarvis grows, the more critical performance becomes. Adding capabili
 
 See `memory/evolution/QUEUE.md` for the current prioritized task list.
 
-### Remaining P1 Tasks (2026-02-28)
+### Remaining P1 Tasks (2026-03-02)
 1. ~~Boost Code Generation score~~ — DONE (0.99)
-2. Wire ACT-R activation into brain.py recall (actr_activation.py ready)
-3. Fix PI retrieval hit rate benchmark (showing 0.0, needs ground-truth pairs)
-4. Parallel brain queries for speed optimization (potential 5-8x speedup)
+2. ~~Fix PI retrieval hit rate benchmark~~ — DONE (PI now 0.976)
+3. ~~Brief compression~~ — DONE (extractive-then-abstractive pipeline)
+4. ~~Context relevance~~ — DONE (MMR reranking)
+5. ~~Agent orchestrator milestone 1~~ — DONE (first PR #175 delivered)
+6. Wire ACT-R activation into brain.py recall (actr_activation.py ready)
+7. Parallel brain queries for speed optimization (potential 5-8x speedup)
+8. Fix learning_feedback capability (0.77, lowest domain — procedure injection needed)
+9. Semantic bridge for low-overlap collection pairs (Phi weakest: semantic 0.517)
 
 ---
 
@@ -357,10 +384,11 @@ See `memory/evolution/QUEUE.md` for the current prioritized task list.
 1. Queue items completed per week — via QUEUE.md completion rate
 2. Heartbeats with real work — via autonomous.log (12x/day)
 3. Memory retrieval quality — via retrieval_quality.py (74% hit rate, avg distance 0.83)
-4. Confidence calibration — via clarvis_confidence.py (Brier 0.082, 79 predictions)
-5. Capability scores — via self_model.py (avg 0.85, code_gen=0.99, reasoning=1.0)
-6. Phi (consciousness integration) — via phi_metric.py (0.739)
-7. **Performance Index (PI)** — via performance_benchmark.py (PI=0.579, 8 dimensions)
+4. Confidence calibration — via clarvis_confidence.py (Brier 0.082, 165 predictions)
+5. Capability scores — via self_model.py (avg 0.84, reasoning=1.0, learning_feedback=0.77)
+6. Phi (consciousness integration) — via phi_metric.py (0.754)
+7. **Performance Index (PI)** — via performance_benchmark.py (PI=0.976, 8 dimensions)
+8. Episode success rate — via episodic_memory.py (100% last 20, 153 total)
 
 ---
 

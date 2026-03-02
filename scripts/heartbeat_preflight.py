@@ -41,9 +41,11 @@ except ImportError:
     should_defer_task = None
 
 try:
-    from procedural_memory import find_procedure
+    from procedural_memory import find_procedure, find_code_templates, format_code_templates
 except ImportError:
     find_procedure = None
+    find_code_templates = None
+    format_code_templates = None
 
 try:
     from reasoning_chain_hook import open_chain
@@ -109,6 +111,11 @@ try:
 except ImportError:
     SomaticMarkerSystem = None
 
+try:
+    from cognitive_workspace import workspace as cog_workspace
+except ImportError:
+    cog_workspace = None
+
 import_time = time.monotonic() - start_import
 log = lambda msg: print(f"[{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S')}] PREFLIGHT: {msg}", file=sys.stderr)
 log(f"All modules imported in {import_time:.2f}s (single process)")
@@ -132,6 +139,8 @@ def run_preflight(dry_run=False):
         "should_defer": False,
         "procedure": None,
         "procedure_id": None,
+        "procedure_injected": False,
+        "procedures_for_injection": [],
         "chain_id": None,
         "prediction_event": None,
         "prediction_confidence": 0.7,
@@ -285,6 +294,73 @@ def run_preflight(dry_run=False):
         except Exception as e:
             log(f"Procedural memory check failed: {e}")
     result["timings"]["procedural"] = round(time.monotonic() - t5, 3)
+
+    # === 5.2 PROCEDURE INJECTION: Collect top-2 procedures for prompt injection ===
+    t52 = time.monotonic()
+    procs_for_injection = []
+    if result.get("procedure") and result["procedure"].get("steps"):
+        procs_for_injection.append(result["procedure"])
+    # Try to find a 2nd procedure match via direct brain query
+    if len(procs_for_injection) < 2:
+        try:
+            from brain import brain as _brain_proc, PROCEDURES as _PROCEDURES
+            extra = _brain_proc.recall(next_task, collections=[_PROCEDURES], n=3,
+                                       caller="preflight_proc_inject")
+            existing_ids = {p.get("id") for p in procs_for_injection}
+            for r in extra:
+                if r["id"] in existing_ids:
+                    continue
+                meta = r.get("metadata", {})
+                steps_raw = meta.get("steps", "[]")
+                try:
+                    steps = json.loads(steps_raw) if isinstance(steps_raw, str) else steps_raw
+                except (json.JSONDecodeError, TypeError):
+                    steps = []
+                if not steps:
+                    continue
+                dist = r.get("distance")
+                if dist is not None and dist > 0.8:
+                    continue
+                uc = int(meta.get("use_count", 0))
+                sc = int(meta.get("success_count", 0))
+                procs_for_injection.append({
+                    "id": r["id"],
+                    "name": meta.get("name", "unknown"),
+                    "steps": steps,
+                    "use_count": uc,
+                    "success_count": sc,
+                    "success_rate": sc / uc if uc > 0 else 1.0,
+                })
+                if len(procs_for_injection) >= 2:
+                    break
+        except Exception as e:
+            log(f"2nd procedure lookup failed (non-fatal): {e}")
+    result["procedures_for_injection"] = [p.get("id", "") for p in procs_for_injection]
+    result["timings"]["proc_injection_collect"] = round(time.monotonic() - t52, 3)
+
+    # === 5.5 CODE TEMPLATES: Inject scaffolds for CODE-type tasks ===
+    t55 = time.monotonic()
+    code_templates_hint = ""
+    if find_code_templates and format_code_templates:
+        try:
+            # Check if task has code-generation signals (keyword heuristic)
+            task_lower = next_task.lower()
+            code_signals = any(kw in task_lower for kw in [
+                "create script", "build module", "implement", "write function",
+                "new module", "wire into", "add to", "create.*py", "code",
+                "refactor", "test suite", "cron script",
+            ])
+            if code_signals:
+                templates = find_code_templates(next_task, top_n=2)
+                if templates:
+                    code_templates_hint = format_code_templates(templates)
+                    result["code_templates"] = [t["name"] for t in templates]
+                    log(f"Code templates: {len(templates)} matched "
+                        f"({', '.join(t['name'] for t in templates)})")
+        except Exception as e:
+            log(f"Code template lookup failed: {e}")
+    result["code_templates_hint"] = code_templates_hint
+    result["timings"]["code_templates"] = round(time.monotonic() - t55, 3)
 
     # === 6. REASONING CHAIN: Open ===
     t6 = time.monotonic()
@@ -637,6 +713,21 @@ def run_preflight(dry_run=False):
     if failure_avoidance:
         context_brief += f"\n{failure_avoidance}\n"
 
+    # Append recommended approach from procedural memory (top-2 procedures)
+    if procs_for_injection:
+        rec_lines = ["Recommended approach (from procedural memory):"]
+        for idx, proc in enumerate(procs_for_injection[:2]):
+            steps = proc.get("steps", [])
+            rate = f"{proc.get('success_rate', 0):.0%}"
+            name = proc.get("name", proc.get("id", "?"))
+            rec_lines.append(f"  Procedure {idx+1}: {name} (success rate: {rate})")
+            for si, step in enumerate(steps):
+                rec_lines.append(f"    {si+1}. {step}")
+        rec_lines.append("  Use these steps as a starting guide, adapt as needed.")
+        context_brief += "\n" + "\n".join(rec_lines) + "\n"
+        result["procedure_injected"] = True
+        log(f"Procedure injection: {len(procs_for_injection)} procedure(s) injected into prompt")
+
     # Append synaptic associations (neural co-activation patterns)
     if synaptic_associations:
         context_brief += f"\n{synaptic_associations}\n"
@@ -659,6 +750,10 @@ def run_preflight(dry_run=False):
     if introspection_text:
         context_brief += f"\n{introspection_text[:1200]}\n"
 
+    # Append code generation templates (scaffolds for CODE-type tasks)
+    if code_templates_hint:
+        context_brief += f"\n{code_templates_hint}\n"
+
     # === 10.5 AUTOMATION INSIGHTS: Historical pattern warnings ===
     t105 = time.monotonic()
     if get_automation_insights:
@@ -670,6 +765,20 @@ def run_preflight(dry_run=False):
         except Exception as e:
             log(f"Automation insights failed: {e}")
     result["timings"]["automation_insights"] = round(time.monotonic() - t105, 3)
+
+    # === 10.6 COGNITIVE WORKSPACE: Set task + reactivate dormant memory ===
+    t106 = time.monotonic()
+    if cog_workspace:
+        try:
+            cw_result = cog_workspace.set_task(next_task)
+            reactivated = cw_result.get("reactivated", [])
+            if reactivated:
+                log(f"Cognitive workspace: reactivated {len(reactivated)} dormant items")
+                # Sync spotlight → workspace for coherence
+                cog_workspace.sync_from_spotlight()
+        except Exception as e:
+            log(f"Cognitive workspace failed: {e}")
+    result["timings"]["cognitive_workspace"] = round(time.monotonic() - t106, 3)
 
     result["episodic_hints"] = compressed_episodes
     result["context_brief"] = context_brief

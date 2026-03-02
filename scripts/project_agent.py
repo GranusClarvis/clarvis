@@ -30,6 +30,7 @@ Usage:
 import argparse
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -45,6 +46,29 @@ CLARVIS_WORKSPACE = Path("/home/agent/.openclaw/workspace")
 CLAUDE_BIN = "/home/agent/.local/bin/claude"
 CRON_ENV = CLARVIS_WORKSPACE / "scripts" / "cron_env.sh"
 LOGFILE = CLARVIS_WORKSPACE / "memory" / "cron" / "project_agents.log"
+
+# Retry configuration
+MAX_RETRIES = 2              # Max retry attempts per task
+RETRY_BACKOFF_BASE = 15      # Seconds before first retry (doubles each attempt)
+
+# Cost tracking via OpenRouter API
+try:
+    sys.path.insert(0, str(CLARVIS_WORKSPACE / "scripts"))
+    from cost_api import fetch_usage as _fetch_openrouter_usage
+    _HAS_COST_API = True
+except ImportError:
+    _HAS_COST_API = False
+
+
+def _snapshot_cost() -> Optional[float]:
+    """Snapshot current OpenRouter total spend. Returns None on failure."""
+    if not _HAS_COST_API:
+        return None
+    try:
+        usage = _fetch_openrouter_usage()
+        return usage.get("total")
+    except Exception:
+        return None
 
 
 def _agents_root() -> Path:
@@ -304,36 +328,21 @@ def _write_initial_procedures(name: str):
 # SPAWN — execute a task in a project agent
 # =========================================================================
 
-def cmd_spawn(name: str, task: str, timeout: int = 1200,
-              context: str = "") -> dict:
-    """Spawn Claude Code to execute a task in the project agent's workspace."""
-    config = _load_config(name)
-    if not config:
-        return {"error": f"Agent '{name}' not found"}
+def build_spawn_prompt(name: str, task: str, config: dict,
+                       agent_dir: Path, context: str = "") -> str:
+    """Build the full prompt string for a project agent spawn.
 
-    if config.get("status") == "running":
-        return {"error": f"Agent '{name}' is already running a task"}
-
-    agent_dir = _agent_dir(name)
+    Extracted for testability. Returns the prompt text.
+    """
     workspace = agent_dir / "workspace"
-    task_id = _task_id()
 
-    # Enforce budget
-    max_timeout = config.get("budget", {}).get("max_timeout", 1800)
-    timeout = min(timeout, max_timeout)
-
-    _log(f"Spawning task {task_id} on agent '{name}': {task[:80]}")
-
-    # Update status
-    config["status"] = "running"
-    config["last_task"] = {"id": task_id, "task": task[:200], "started": datetime.now(timezone.utc).isoformat()}
-    _save_config(name, config)
-
-    # Build the prompt
     procedures = ""
     proc_file = agent_dir / "memory" / "procedures.md"
     if proc_file.exists():
-        procedures = proc_file.read_text()[:2000]
+        try:
+            procedures = proc_file.read_text()[:2000]
+        except OSError:
+            pass
 
     constraints = "\n".join(f"- {c}" for c in config.get("constraints", []))
 
@@ -392,9 +401,50 @@ def cmd_spawn(name: str, task: str, timeout: int = 1200,
         "```",
     ])
 
-    prompt = "\n".join(prompt_parts)
+    return "\n".join(prompt_parts)
 
-    # Write prompt to file
+
+def build_spawn_command(prompt_file: str, timeout: int) -> str:
+    """Build shell command that reads prompt from file (avoids ARG_MAX).
+
+    Uses $(cat file) pattern matching spawn_claude.sh convention.
+    Returns a shell command string (use with shell=True).
+    """
+    return (
+        f"timeout {timeout} env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT "
+        f"{shlex.quote(CLAUDE_BIN)} "
+        f"-p \"$(cat {shlex.quote(prompt_file)})\" "
+        f"--dangerously-skip-permissions --model claude-opus-4-6"
+    )
+
+
+def cmd_spawn(name: str, task: str, timeout: int = 1200,
+              context: str = "") -> dict:
+    """Spawn Claude Code to execute a task in the project agent's workspace."""
+    config = _load_config(name)
+    if not config:
+        return {"error": f"Agent '{name}' not found"}
+
+    if config.get("status") == "running":
+        return {"error": f"Agent '{name}' is already running a task"}
+
+    agent_dir = _agent_dir(name)
+    workspace = agent_dir / "workspace"
+    task_id = _task_id()
+
+    # Enforce budget
+    max_timeout = config.get("budget", {}).get("max_timeout", 1800)
+    timeout = min(timeout, max_timeout)
+
+    _log(f"Spawning task {task_id} on agent '{name}': {task[:80]}")
+
+    # Update status
+    config["status"] = "running"
+    config["last_task"] = {"id": task_id, "task": task[:200], "started": datetime.now(timezone.utc).isoformat()}
+    _save_config(name, config)
+
+    # Build prompt and write to file
+    prompt = build_spawn_prompt(name, task, config, agent_dir, context)
     prompt_file = f"/tmp/project_agent_{name}_{task_id}.txt"
     with open(prompt_file, "w") as f:
         f.write(prompt)
@@ -402,26 +452,24 @@ def cmd_spawn(name: str, task: str, timeout: int = 1200,
     output_file = f"/tmp/project_agent_{name}_{task_id}_output.txt"
     log_file = agent_dir / "logs" / f"{task_id}.log"
 
+    # Build shell command that reads prompt from file (avoids ARG_MAX)
+    cmd = build_spawn_command(prompt_file, timeout)
+
     # Spawn Claude Code
     env = os.environ.copy()
     env.pop("CLAUDECODE", None)
     env.pop("CLAUDE_CODE_ENTRYPOINT", None)
 
-    cmd = [
-        "timeout", str(timeout),
-        "env", "-u", "CLAUDECODE", "-u", "CLAUDE_CODE_ENTRYPOINT",
-        CLAUDE_BIN,
-        "-p", prompt,
-        "--dangerously-skip-permissions",
-        "--model", "claude-opus-4-6",
-    ]
-
     _log(f"Executing in {workspace} with {timeout}s timeout")
+
+    # Snapshot OpenRouter cost before task
+    cost_before = _snapshot_cost()
 
     start_time = time.time()
     try:
         result = subprocess.run(
             cmd,
+            shell=True,
             capture_output=True,
             text=True,
             timeout=timeout + 60,
@@ -441,6 +489,13 @@ def cmd_spawn(name: str, task: str, timeout: int = 1200,
         stderr = str(e)
 
     elapsed = time.time() - start_time
+
+    # Compute actual OpenRouter cost delta
+    cost_after = _snapshot_cost()
+    actual_cost_usd = None
+    if cost_before is not None and cost_after is not None:
+        actual_cost_usd = round(cost_after - cost_before, 6)
+        _log(f"Task {task_id} cost: ${actual_cost_usd:.6f} (before=${cost_before:.4f} after=${cost_after:.4f})")
 
     # Save output
     with open(output_file, "w") as f:
@@ -477,14 +532,17 @@ def cmd_spawn(name: str, task: str, timeout: int = 1200,
     # Store task summary
     summary_file = agent_dir / "memory" / "summaries" / f"{task_id}.json"
     summary_file.parent.mkdir(parents=True, exist_ok=True)
-    summary_file.write_text(json.dumps({
+    summary_data = {
         "task_id": task_id,
         "task": task[:500],
         "result": agent_result,
         "exit_code": exit_code,
         "elapsed": round(elapsed, 1),
         "timestamp": datetime.now(timezone.utc).isoformat(),
-    }, indent=2))
+    }
+    if actual_cost_usd is not None:
+        summary_data["actual_cost_usd"] = actual_cost_usd
+    summary_file.write_text(json.dumps(summary_data, indent=2))
 
     _log(f"Task {task_id} completed: exit={exit_code} elapsed={elapsed:.0f}s status={agent_result.get('status', 'unknown')}")
 
@@ -528,6 +586,129 @@ def _parse_agent_output(output: str) -> dict:
         "status": "unknown",
         "summary": output[-500:] if output else "No output",
     }
+
+
+def _is_task_failure(spawn_result: dict) -> bool:
+    """Determine if a spawn result represents a retryable failure."""
+    if spawn_result.get("error"):
+        return False  # config errors (agent not found, already running) aren't retryable
+    exit_code = spawn_result.get("exit_code", 1)
+    status = spawn_result.get("result", {}).get("status", "unknown")
+    return exit_code != 0 or status in ("failed", "unknown")
+
+
+def _build_retry_context(spawn_result: dict, attempt: int, max_retries: int) -> str:
+    """Build context string for retry prompt explaining previous failure."""
+    exit_code = spawn_result.get("exit_code", -1)
+    status = spawn_result.get("result", {}).get("status", "unknown")
+    summary = spawn_result.get("result", {}).get("summary", "")
+    output_tail = spawn_result.get("output_tail", "")
+
+    lines = [
+        f"## RETRY ATTEMPT {attempt}/{max_retries}",
+        "",
+        "The previous attempt FAILED. Adjust your approach.",
+        f"- Exit code: {exit_code}",
+        f"- Status: {status}",
+    ]
+    if summary:
+        lines.append(f"- Summary: {summary[:300]}")
+    if output_tail:
+        # Include last 500 chars of output for error context
+        tail = output_tail[-500:].strip()
+        if tail:
+            lines.extend(["", "Previous output (tail):", f"```", tail, "```"])
+    lines.extend([
+        "",
+        "Strategies for this retry:",
+        "- Read error messages carefully and fix the root cause",
+        "- Try a simpler approach if the previous one was too complex",
+        "- Check prerequisites (dependencies, permissions, branch state)",
+        "- If tests failed, fix the failing tests before creating a PR",
+    ])
+    return "\n".join(lines)
+
+
+def cmd_spawn_with_retry(name: str, task: str, timeout: int = 1200,
+                         context: str = "", max_retries: int = MAX_RETRIES) -> dict:
+    """Spawn a task with automatic retry on failure.
+
+    If the task fails, re-spawns with an adjusted prompt that includes
+    error context from the previous attempt. Max 2 retries by default.
+
+    Returns the final spawn result, augmented with retry metadata.
+    """
+    max_retries = min(max_retries, MAX_RETRIES)  # hard cap
+    attempts = []
+
+    current_context = context
+    for attempt in range(max_retries + 1):  # 0 = first try, 1..N = retries
+        if attempt > 0:
+            # Backoff before retry
+            backoff = RETRY_BACKOFF_BASE * (2 ** (attempt - 1))
+            _log(f"Retry {attempt}/{max_retries} for agent '{name}' "
+                 f"(backoff {backoff}s): {task[:60]}")
+            time.sleep(backoff)
+
+            # Build retry context from previous failure
+            retry_ctx = _build_retry_context(attempts[-1], attempt, max_retries)
+            current_context = (context + "\n\n" + retry_ctx).strip() if context else retry_ctx
+
+        result = cmd_spawn(name, task, timeout, current_context)
+
+        # Track attempt
+        attempt_record = {
+            "attempt": attempt,
+            "task_id": result.get("task_id"),
+            "exit_code": result.get("exit_code"),
+            "status": result.get("result", {}).get("status", "unknown"),
+            "elapsed": result.get("elapsed"),
+        }
+        attempts.append(result)
+
+        # Check for non-retryable errors (config issues)
+        if result.get("error"):
+            _log(f"Non-retryable error for agent '{name}': {result['error']}")
+            break
+
+        # Check if task succeeded
+        if not _is_task_failure(result):
+            if attempt > 0:
+                _log(f"Task succeeded on retry {attempt} for agent '{name}'")
+            break
+
+        # Log failure
+        _log(f"Attempt {attempt} failed for agent '{name}': "
+             f"exit={result.get('exit_code')} "
+             f"status={result.get('result', {}).get('status', 'unknown')}")
+
+    # Augment final result with retry metadata
+    result["retry_metadata"] = {
+        "total_attempts": len(attempts),
+        "max_retries": max_retries,
+        "succeeded_on_attempt": len(attempts) - 1 if not _is_task_failure(result) else None,
+        "attempts": [
+            {
+                "attempt": i,
+                "task_id": a.get("task_id"),
+                "exit_code": a.get("exit_code"),
+                "status": a.get("result", {}).get("status", "unknown"),
+                "elapsed": a.get("elapsed"),
+            }
+            for i, a in enumerate(attempts)
+        ],
+    }
+
+    # Save retry summary alongside regular task summary
+    if len(attempts) > 1:
+        agent_dir = _agent_dir(name)
+        retry_log = agent_dir / "logs" / f"retry_{result.get('task_id', 'unknown')}.json"
+        try:
+            retry_log.write_text(json.dumps(result["retry_metadata"], indent=2))
+        except OSError:
+            pass
+
+    return result
 
 
 # =========================================================================
@@ -604,6 +785,26 @@ def cmd_promote(name: str) -> dict:
 
     digest_file.write_text("\n".join(lines))
 
+    # Store top procedures in Clarvis brain with project tag
+    brain_stored = 0
+    if procedures_to_promote:
+        try:
+            sys.path.insert(0, str(CLARVIS_WORKSPACE / "scripts"))
+            from brain import brain as clarvis_brain
+            tag = f"project:{name}"
+            for proc in procedures_to_promote[:10]:  # cap at 10 per promotion
+                clarvis_brain.store(
+                    proc,
+                    collection="clarvis-procedures",
+                    importance=0.75,
+                    tags=[tag, "project-agent"],
+                    source="project-agent-promote",
+                )
+                brain_stored += 1
+            _log(f"Stored {brain_stored} procedures in Clarvis brain tagged '{tag}'")
+        except Exception as e:
+            _log(f"WARNING: Failed to store procedures in Clarvis brain: {e}")
+
     _log(f"Promoted {len(promoted)} results from agent '{name}'")
 
     return {
@@ -611,6 +812,7 @@ def cmd_promote(name: str) -> dict:
         "agent": name,
         "count": len(promoted),
         "procedures": len(procedures_to_promote),
+        "brain_stored": brain_stored,
         "digest": str(digest_file),
     }
 
@@ -910,6 +1112,8 @@ def main():
     sp.add_argument("task", help="Task description")
     sp.add_argument("--timeout", type=int, default=1200)
     sp.add_argument("--context", default="", help="Additional context from Clarvis")
+    sp.add_argument("--retries", type=int, default=0,
+                    help="Max retries on failure (0=no retry, max 2)")
 
     # status
     st = sub.add_parser("status", help="Quick agent status")
@@ -946,7 +1150,11 @@ def main():
     elif args.command == "info":
         result = cmd_info(args.name)
     elif args.command == "spawn":
-        result = cmd_spawn(args.name, args.task, args.timeout, args.context)
+        if args.retries > 0:
+            result = cmd_spawn_with_retry(args.name, args.task, args.timeout,
+                                          args.context, args.retries)
+        else:
+            result = cmd_spawn(args.name, args.task, args.timeout, args.context)
     elif args.command == "status":
         result = cmd_status(args.name)
     elif args.command == "promote":

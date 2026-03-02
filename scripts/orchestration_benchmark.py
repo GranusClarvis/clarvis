@@ -19,7 +19,6 @@ import argparse
 import json
 import os
 import sys
-import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -222,7 +221,12 @@ def benchmark_retrieval(name: str) -> dict:
 # =========================================================================
 
 def benchmark_cost(name: str) -> dict:
-    """Measure tokens + wall-clock per task."""
+    """Measure actual OpenRouter cost + wall-clock per task.
+
+    Reads actual_cost_usd from task summaries (populated by project_agent.py
+    via before/after OpenRouter API snapshots). Falls back to wall-clock
+    estimate when actual cost data is unavailable.
+    """
     summaries = _load_summaries(name)
     if not summaries:
         return {"status": "no_data"}
@@ -230,12 +234,42 @@ def benchmark_cost(name: str) -> dict:
     elapsed = [s["elapsed"] for s in summaries if "elapsed" in s]
     total_wall_clock = sum(elapsed)
 
-    return {
+    # Extract actual OpenRouter cost data from summaries
+    actual_costs = [s["actual_cost_usd"] for s in summaries if "actual_cost_usd" in s]
+    has_actual = len(actual_costs) > 0
+
+    result = {
         "total_tasks": len(summaries),
         "total_wall_clock_seconds": round(total_wall_clock, 1),
         "avg_wall_clock_seconds": round(total_wall_clock / max(len(elapsed), 1), 1),
-        "note": "Token tracking requires OpenRouter cost integration",
     }
+
+    if has_actual:
+        total_actual = sum(actual_costs)
+        result["tasks_with_cost_data"] = len(actual_costs),
+        result["total_actual_cost_usd"] = round(total_actual, 6)
+        result["avg_actual_cost_usd"] = round(total_actual / len(actual_costs), 6)
+        result["min_cost_usd"] = round(min(actual_costs), 6)
+        result["max_cost_usd"] = round(max(actual_costs), 6)
+        result["cost_source"] = "openrouter_api"
+    else:
+        # Fallback: estimate from wall-clock (~$0.015/min for Claude Opus)
+        est_total = total_wall_clock / 60 * 0.015
+        result["estimated_cost_usd"] = round(est_total, 4)
+        result["avg_estimated_cost_usd"] = round(est_total / max(len(elapsed), 1), 4)
+        result["cost_source"] = "wall_clock_estimate"
+        result["note"] = "No actual cost data yet. Run tasks to collect OpenRouter cost snapshots."
+
+    # Also fetch current OpenRouter usage for context
+    try:
+        from cost_api import fetch_usage
+        usage = fetch_usage()
+        result["openrouter_daily_spend"] = usage.get("daily")
+        result["openrouter_remaining"] = usage.get("remaining")
+    except Exception:
+        pass
+
+    return result
 
 
 # =========================================================================
@@ -289,10 +323,13 @@ def run_full_benchmark(name: str) -> dict:
     else:
         dim_scores["retrieval"] = 0.0
 
-    # Cost (weight: 0.10)
+    # Cost (weight: 0.10) — use actual OpenRouter cost when available
     cost = result["cost"]
-    if cost.get("avg_wall_clock_seconds", 0) > 0:
-        # Estimate cost: ~$0.015/min for Claude Opus
+    if cost.get("avg_actual_cost_usd", 0) > 0:
+        # Real cost from OpenRouter API snapshots
+        dim_scores["cost"] = min(1.0, TARGETS["cost_per_task_max"] / max(cost["avg_actual_cost_usd"], 0.001))
+    elif cost.get("avg_wall_clock_seconds", 0) > 0:
+        # Fallback: estimate cost from wall-clock (~$0.015/min for Claude Opus)
         est_cost = cost["avg_wall_clock_seconds"] / 60 * 0.015
         dim_scores["cost"] = min(1.0, TARGETS["cost_per_task_max"] / max(est_cost, 0.001))
     else:

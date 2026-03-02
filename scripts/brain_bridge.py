@@ -93,6 +93,13 @@ def brain_preflight_context(task_text, n_knowledge=5, n_goals=5):
             attention_boost=True,
             caller="brain_bridge_preflight",
         )
+        # MMR reranking: balance relevance with diversity to reduce redundant context
+        if knowledge and len(knowledge) > 1:
+            try:
+                from context_compressor import mmr_rerank
+                knowledge = mmr_rerank(knowledge, task_text, lambda_param=0.5)
+            except Exception:
+                pass  # fall through to unranked results
         if knowledge:
             hints = []
             actr_scores = []

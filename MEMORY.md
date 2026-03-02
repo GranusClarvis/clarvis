@@ -10,6 +10,7 @@ _Curated knowledge. Distilled wisdom. Updated regularly._
 - Five axioms: Intrinsicality, Information, Integration, Exclusion, Composition
 - Controversial (some call it pseudoscience), but clinically useful for assessing consciousness in unresponsive patients
 - Calculation is computationally intractable for real systems, driving research into proxy measures
+- 2026-03-02: Φ approximations study (small 3–6 node networks) found several heuristics correlate with max-Φ (e.g., decoder-based Φ*, state differentiation, Lempel–Ziv/PCI-like complexity), but they largely *don’t* reduce compute cost; best viewed as proxies for “capacity for high-Φ” and good at spotting low-Φ regimes, not replacements for Φ.
 
 ### Intrinsic Metacognitive Learning (2026-02-28)
 - Self-improvement requires INTRINSIC metacognition, not just extrinsic (human-designed) loops
@@ -38,6 +39,14 @@ _Curated knowledge. Distilled wisdom. Updated regularly._
 - Adam Safron’s IWMT tries to reconcile **IIT** (integration/phi) and **GNWT** (global broadcast/ignition) inside the **Free Energy Principle / Active Inference** framing.
 - Core claim: “integration” and “global availability” are likely **necessary but not sufficient**; phenomenal consciousness requires *embodied, coherence-making generative world modeling* (space/time/cause, self/other) that supports cybernetic control.
 - Practical take: treat “workspace ignition” as Bayesian model selection/broadcast over a *shared latent world model*; evaluate candidate workspace modules both by information integration and by contribution to prediction-control (free-energy reduction).
+- (Safron 2022 expansion) Concrete research direction: score *modules/workspaces* as both (1) integrated-information complexes and (2) arenas for iterated Bayesian model selection; explore Φ proxy estimation using probabilistic graphical models, flow networks, and game theory (instead of exact IIT computation).
+
+### Free Energy Principle / Active Inference (Friston 2009/2010) (2026-03-01)
+- The FEP proposes a single objective for self-organising systems: minimize **variational free energy**, an upper bound on sensory **surprise** (negative log evidence). This links “staying alive” to keeping sensory states within expected bounds.
+- In brains, this cashes out as a **generative model**: perception ≈ approximate Bayesian inference (update beliefs to explain sensations), learning ≈ model parameter update, and action ≈ changing the world to make sensations match predictions ("active inference").
+- Friston (Nat Rev Neurosci 2010) emphasizes that many “global” brain theories converge on optimizing one quantity: **value/utility** or, equivalently, minimizing **surprise/prediction error** — suggesting unification via FEP.
+- Later active-inference formalisms decompose **expected free energy** into epistemic (information gain) + pragmatic (goal/utility) terms — a clean bridge from world-model building to goal-directed control.
+- Sajid, Ball, Parr, Friston (arXiv:1909.10863; Neural Computation 2021) clarifies the *engineering mapping* to RL: rewards can be treated as **observations**, while “goals” live as **prior preferences** (which can be learned). Minimizing expected free energy yields built-in epistemic exploration and principled handling of uncertainty/non-stationarity without a hard-coded reward-max objective.
 
 ### Test-Time Compute Scaling (2026-03-01)
 - Snell et al. (arXiv 2408.03314 / ICLR 2025): test-time compute gains depend strongly on prompt difficulty.

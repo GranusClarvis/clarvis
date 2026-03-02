@@ -70,6 +70,280 @@ STALE_MAX_SUCCESS_RATE = 0.3
 RETIRE_DAYS = 60               # Remove after 60 days of no use + low quality
 
 
+# === CODE GENERATION TEMPLATES ===
+# Extracted from the 10 most-edited scripts (brain.py, self_model.py, task_selector.py,
+# episodic_memory.py, session_hook.py, reasoning_chain_hook.py, phi_metric.py,
+# clarvis_model_switch.py, retrieval_experiment.py, attention.py).
+# Each template is a reusable scaffold tagged 'code_template' in procedural_memory.
+
+CODE_TEMPLATES = {
+    "cognitive_module": {
+        "name": "cognitive_module",
+        "description": "New cognitive module with brain integration, CLI, and JSON persistence",
+        "match_keywords": ["create script", "build module", "new module", "implement.*script",
+                           "create.*py", "build.*system", "cognitive", "create.*monitor",
+                           "code", "build.*script"],
+        "scaffold": [
+            "Add shebang + docstring with purpose, usage examples, and CLI commands",
+            "Import stdlib (json, os, sys, time, pathlib, datetime)",
+            "sys.path.insert(0, os.path.dirname(__file__)) for local imports",
+            "Try/except import brain: from brain import brain, LEARNINGS (with fallback)",
+            "Try/except import optional deps (attention, episodic_memory, etc.)",
+            "Define DATA_FILE = Path('/home/agent/.openclaw/workspace/data/<name>.json')",
+            "Define constants/thresholds at module level",
+            "Implement core logic (class or functions based on complexity)",
+            "Add _load_state()/_save_state() helpers using json.dump(obj, f, indent=2, default=str)",
+            "Add if __name__ == '__main__' with sys.argv subcommand dispatch",
+            "Add usage/help on invalid args, sys.exit(0/1) on success/failure",
+        ],
+        "preconditions": ["scripts/ directory exists", "brain.py importable"],
+        "termination_criteria": ["python3 -c 'import <module>' succeeds", "CLI --help works"],
+    },
+    "brain_integration": {
+        "name": "brain_integration",
+        "description": "Wire a new data source into ClarvisDB brain (store/recall pattern)",
+        "match_keywords": ["wire into brain", "brain integration", "store in brain",
+                           "brain.store", "brain.recall", "add to brain", "remember"],
+        "scaffold": [
+            "Import brain: from brain import brain, get_brain, <COLLECTION>",
+            "Define collection constant if new: COLLECTION_NAME = 'clarvis-<name>'",
+            "Implement store function: brain.store(doc, collection=COL, importance=N, tags=[...])",
+            "Implement recall function: brain.recall(query, collections=[COL], n=5)",
+            "Add try/except around all brain calls (ChromaDB may be slow/unavailable)",
+            "Test with: python3 -c 'from brain import brain; print(brain.stats())'",
+        ],
+        "preconditions": ["brain.py accessible", "ChromaDB healthy"],
+        "termination_criteria": ["brain.store() succeeds", "brain.recall() returns results"],
+    },
+    "wire_integration": {
+        "name": "wire_integration",
+        "description": "Wire a new module into heartbeat pipeline (preflight/postflight)",
+        "match_keywords": ["wire into", "integrate into", "add to preflight",
+                           "add to postflight", "heartbeat integration", "wire.*heartbeat",
+                           "connect.*pipeline"],
+        "scaffold": [
+            "READ target file — find exact insertion point (line number, section comment)",
+            "READ source module — find function/class to import and its signature",
+            "Add try/except import at top of target: try: from <mod> import <func> except ImportError: <func> = None",
+            "Add call at insertion point with guard: if <func>: try: result = <func>(...) except Exception as e: log(f'failed: {e}')",
+            "Add timing wrapper: t = time.monotonic() ... result['timings']['<name>'] = round(time.monotonic() - t, 3)",
+            "Test: python3 -c 'import <target_module>' to verify no syntax errors",
+            "Verify: run target in --dry-run mode or grep for added lines",
+        ],
+        "preconditions": ["target file readable", "source module importable"],
+        "termination_criteria": ["import succeeds", "no syntax errors", "function called in pipeline"],
+    },
+    "data_processor": {
+        "name": "data_processor",
+        "description": "Script that processes JSONL/JSON data with load/transform/save pattern",
+        "match_keywords": ["process data", "parse log", "analyze", "transform",
+                           "jsonl", "data pipeline", "extract.*from", "scan.*log"],
+        "scaffold": [
+            "Define input/output paths as Path constants",
+            "Implement _load_data(path) with json.loads per line (JSONL) or json.load (JSON)",
+            "Implement processing/transform logic as pure functions",
+            "Implement _save_results(data, path) with json.dump(obj, f, indent=2, default=str)",
+            "Add os.makedirs(path.parent, exist_ok=True) before writes",
+            "Add CLI: if __name__ == '__main__' with subcommands (process, stats, export)",
+            "Add progress logging to stderr for cron visibility",
+        ],
+        "preconditions": ["input data file exists"],
+        "termination_criteria": ["output file created", "no data corruption"],
+    },
+    "class_with_state": {
+        "name": "class_with_state",
+        "description": "Stateful class with JSON persistence (like EpisodicMemory, AttentionSpotlight)",
+        "match_keywords": ["class", "stateful", "memory system", "tracker",
+                           "manager", "engine", "system with state"],
+        "scaffold": [
+            "Define class with __init__(self, data_path=DEFAULT_PATH)",
+            "Load state in __init__: self._state = self._load() or default_state()",
+            "Implement _load(self) -> dict: read JSON from self.data_path",
+            "Implement _save(self): json.dump(self._state, f, indent=2, default=str)",
+            "Implement core methods that modify self._state then call self._save()",
+            "Add stats(self) -> dict for health/status reporting",
+            "Add CLI wrapper in __main__ block instantiating the class",
+        ],
+        "preconditions": ["data directory writable"],
+        "termination_criteria": ["state persists across instantiations", "stats() returns valid data"],
+    },
+    "cron_orchestrator": {
+        "name": "cron_orchestrator",
+        "description": "Bash cron script that spawns Claude Code with a task prompt",
+        "match_keywords": ["cron script", "cron job", "autonomous", "scheduled task",
+                           "spawn claude", "cron_*.sh"],
+        "scaffold": [
+            "Add shebang: #!/usr/bin/env bash, set -euo pipefail",
+            "Source environment: source /home/agent/.openclaw/workspace/scripts/cron_env.sh",
+            "Add lockfile: LOCKFILE=/tmp/clarvis_<name>.lock with trap 'rm -f $LOCKFILE' EXIT",
+            "Check lock: [ -f $LOCKFILE ] && check_stale_lock || create lock",
+            "Build task prompt: write to /tmp/clarvis_<name>_prompt.txt",
+            "Run preflight: PREFLIGHT=$(python3 scripts/heartbeat_preflight.py)",
+            "Spawn Claude: timeout 1200 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT /home/agent/.local/bin/claude -p \"$(cat prompt)\" --dangerously-skip-permissions --model claude-opus-4-6",
+            "Run postflight: python3 scripts/heartbeat_postflight.py",
+            "Clean up lockfile on exit",
+        ],
+        "preconditions": ["cron_env.sh exists", "claude binary available"],
+        "termination_criteria": ["bash -n <script>.sh passes", "lockfile cleaned on exit"],
+    },
+    "metric_tracker": {
+        "name": "metric_tracker",
+        "description": "Track and score a numeric metric over time with history and thresholds",
+        "match_keywords": ["metric", "score", "benchmark", "track.*over time",
+                           "measure", "performance", "quality gate"],
+        "scaffold": [
+            "Define HISTORY_FILE = Path('data/<metric>_history.jsonl')",
+            "Define STATE_FILE = Path('data/<metric>.json') for current state",
+            "Define thresholds: TARGET, WARNING, CRITICAL as module constants",
+            "Implement compute() -> float that calculates current metric value",
+            "Implement record(): append {timestamp, value, details} to HISTORY_FILE",
+            "Implement trend(n=10) -> dict: load last N entries, compute delta/direction",
+            "Add alert logic: if value < CRITICAL, log warning or push to QUEUE.md",
+            "Add CLI: compute, record, trend, history subcommands",
+        ],
+        "preconditions": ["data directory writable"],
+        "termination_criteria": ["compute() returns float", "history file grows on record()"],
+    },
+    "test_suite": {
+        "name": "test_suite",
+        "description": "pytest test file for a Clarvis module",
+        "match_keywords": ["test", "pytest", "unit test", "test suite",
+                           "write tests", "add tests"],
+        "scaffold": [
+            "Import pytest and sys.path.insert for local imports",
+            "Import the module under test with try/except",
+            "Add fixtures: @pytest.fixture for common test data",
+            "Test happy path: def test_<func>_basic(): assert expected_result",
+            "Test edge cases: empty input, None, malformed data",
+            "Test error handling: ensure graceful failures (no crashes)",
+            "Run with: cd workspace && python3 -m pytest tests/ -v",
+        ],
+        "preconditions": ["pytest installed", "module importable"],
+        "termination_criteria": ["all tests pass", "no import errors"],
+    },
+}
+
+
+def find_code_templates(task_text: str, top_n: int = 2) -> list[dict]:
+    """Find matching code generation templates for a task.
+
+    Matches task text against keyword patterns in CODE_TEMPLATES,
+    then also checks procedural_memory for stored templates tagged 'code_template'.
+
+    Args:
+        task_text: Description of the coding task
+        top_n: Maximum number of templates to return
+
+    Returns:
+        List of template dicts with name, scaffold steps, and match score
+    """
+    task_lower = task_text.lower()
+    scored = []
+
+    # Score built-in templates by keyword matches
+    for key, tmpl in CODE_TEMPLATES.items():
+        score = 0
+        for kw in tmpl["match_keywords"]:
+            if kw in task_lower:
+                score += 1
+            elif re.search(kw, task_lower):
+                score += 0.8
+        if score > 0:
+            scored.append({
+                "name": tmpl["name"],
+                "description": tmpl["description"],
+                "scaffold": tmpl["scaffold"],
+                "preconditions": tmpl.get("preconditions", []),
+                "termination_criteria": tmpl.get("termination_criteria", []),
+                "score": score,
+                "source": "builtin",
+            })
+
+    # Also check stored procedures tagged 'code_template'
+    try:
+        results = brain.recall(
+            task_text,
+            collections=[PROCEDURES],
+            n=5,
+            caller="code_templates",
+        )
+        for r in results:
+            meta = r.get("metadata", {})
+            tags = meta.get("tags", "")
+            if "code_template" in str(tags):
+                steps = _parse_json_field(meta.get("steps", "[]"))
+                dist = r.get("distance", 1.0)
+                scored.append({
+                    "name": meta.get("name", "unknown"),
+                    "description": r.get("document", "")[:200],
+                    "scaffold": steps,
+                    "preconditions": _parse_json_field(meta.get("preconditions", "[]")),
+                    "termination_criteria": _parse_json_field(meta.get("termination_criteria", "[]")),
+                    "score": max(0, 2.0 - dist),  # Convert distance to score
+                    "source": "stored",
+                })
+    except Exception:
+        pass
+
+    # Deduplicate by name — prefer higher score
+    seen = {}
+    for tmpl in scored:
+        name = tmpl["name"]
+        if name not in seen or tmpl["score"] > seen[name]["score"]:
+            seen[name] = tmpl
+    deduped = sorted(seen.values(), key=lambda t: t["score"], reverse=True)
+    return deduped[:top_n]
+
+
+def format_code_templates(templates: list[dict]) -> str:
+    """Format code templates into a prompt-injectable hint string.
+
+    Args:
+        templates: List of template dicts from find_code_templates()
+
+    Returns:
+        Formatted string for injection into the task prompt
+    """
+    if not templates:
+        return ""
+
+    parts = ["CODE GENERATION TEMPLATES (matched scaffolds from top patterns):"]
+    for tmpl in templates:
+        parts.append(f"\n  [{tmpl['name']}] {tmpl['description']}")
+        for i, step in enumerate(tmpl["scaffold"], 1):
+            parts.append(f"    {i}. {step}")
+        if tmpl.get("preconditions"):
+            parts.append(f"    PRE: {', '.join(tmpl['preconditions'])}")
+        if tmpl.get("termination_criteria"):
+            parts.append(f"    VERIFY: {', '.join(tmpl['termination_criteria'])}")
+    return "\n".join(parts)
+
+
+def seed_code_templates() -> dict:
+    """Seed the built-in CODE_TEMPLATES into procedural_memory as stored procedures.
+
+    This makes them available via brain recall (semantic search) in addition to
+    keyword matching. Idempotent — re-running updates existing entries.
+
+    Returns:
+        Dict with count of templates seeded.
+    """
+    seeded = 0
+    for key, tmpl in CODE_TEMPLATES.items():
+        store_procedure(
+            name=tmpl["name"],
+            description=tmpl["description"],
+            steps=tmpl["scaffold"],
+            source_task="[SEED] code generation templates from top 10 scripts",
+            importance=0.85,
+            tags=["code_template", "scaffold", "procedure", "skill"],
+            preconditions=tmpl.get("preconditions"),
+            termination_criteria=tmpl.get("termination_criteria"),
+        )
+        seeded += 1
+    return {"seeded": seeded, "total_templates": len(CODE_TEMPLATES)}
+
+
 def find_procedure(task_text: str, threshold: float = 0.8) -> dict | None:
     """Search for a matching procedure for a given task.
 
@@ -818,6 +1092,26 @@ if __name__ == "__main__":
         desc = sys.argv[4] if len(sys.argv) > 4 else f"Composite: {name}"
         proc_id = compose_procedures(name, desc, proc_ids)
         print(f"Composed: {proc_id}")
+
+    elif cmd == "seed-templates":
+        result = seed_code_templates()
+        print(f"Seeded {result['seeded']} code templates into procedural memory")
+        print(f"Total built-in templates: {result['total_templates']}")
+
+    elif cmd == "templates":
+        task_text = sys.argv[2] if len(sys.argv) > 2 else ""
+        if not task_text:
+            # List all built-in templates
+            for key, tmpl in CODE_TEMPLATES.items():
+                print(f"  [{key}] {tmpl['description']}")
+                for kw in tmpl["match_keywords"][:3]:
+                    print(f"    keyword: {kw}")
+        else:
+            templates = find_code_templates(task_text)
+            if templates:
+                print(format_code_templates(templates))
+            else:
+                print("No matching templates found.")
 
     elif cmd == "stats":
         s = library_stats()

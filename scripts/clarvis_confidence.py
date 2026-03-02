@@ -360,6 +360,72 @@ def review() -> dict:
     return result
 
 
+def auto_resolve(task_text: str, task_outcome: str, max_age_days: int = 7) -> dict:
+    """Auto-resolve open predictions matching this task + expire stale ones.
+
+    Called by heartbeat_postflight after each episode closes.
+    Fixes the prediction resolution bottleneck by:
+      1. Matching the current task's sanitized event name against open predictions
+      2. Expiring predictions older than max_age_days as 'stale'
+
+    Args:
+        task_text: The task description (will be sanitized to match event names)
+        task_outcome: 'success' or 'failure'
+        max_age_days: Predictions older than this get expired as stale
+
+    Returns:
+        dict with keys: matched (int), stale_expired (int), remaining_open (int)
+    """
+    import re
+    entries = _load_predictions()
+    if not entries:
+        return {"matched": 0, "stale_expired": 0, "remaining_open": 0}
+
+    # Sanitize task_text the same way preflight does (line 384 of heartbeat_preflight.py)
+    task_event = re.sub(r'[^a-zA-Z0-9]', '_', task_text[:60])
+
+    now = datetime.now(timezone.utc)
+    cutoff = now.timestamp() - (max_age_days * 86400)
+    matched = 0
+    stale_expired = 0
+    modified = False
+
+    for entry in entries:
+        if entry["outcome"] is not None:
+            continue  # already resolved
+
+        # 1. Match by event name (exact or substring in either direction)
+        event = entry.get("event", "")
+        is_match = (
+            event == task_event
+            or (len(task_event) > 10 and task_event[:40] in event)
+            or (len(event) > 10 and event[:40] in task_event)
+        )
+        if is_match:
+            entry["outcome"] = task_outcome
+            entry["correct"] = task_outcome.lower().strip() == entry["expected"].lower().strip()
+            matched += 1
+            modified = True
+            continue
+
+        # 2. Expire stale predictions
+        try:
+            ts = datetime.fromisoformat(entry["timestamp"])
+            if ts.timestamp() < cutoff:
+                entry["outcome"] = "stale"
+                entry["correct"] = False
+                stale_expired += 1
+                modified = True
+        except (ValueError, KeyError):
+            pass
+
+    if modified:
+        _save_predictions(entries)
+
+    remaining = sum(1 for e in entries if e["outcome"] is None)
+    return {"matched": matched, "stale_expired": stale_expired, "remaining_open": remaining}
+
+
 THRESHOLDS_FILE = f"{CALIBRATION_DIR}/thresholds.json"
 
 
@@ -499,6 +565,13 @@ if __name__ == "__main__":
                 if result:
                     print(f"  {d}: predicted '{result['expected']}' @ {result['confidence']:.0%}")
 
+    elif cmd == "auto-resolve":
+        # Run auto-resolver to expire stale predictions
+        max_days = int(sys.argv[2]) if len(sys.argv) > 2 else 7
+        result = auto_resolve("", "", max_age_days=max_days)
+        print(f"Matched: {result['matched']}, Stale expired: {result['stale_expired']}, "
+              f"Remaining open: {result['remaining_open']}")
+
     else:
         print(f"Unknown command: {cmd}")
-        print("Try: predict, outcome, calibration, list, review, dynamic, apply, threshold, predict-specific")
+        print("Try: predict, outcome, calibration, list, review, dynamic, apply, threshold, predict-specific, auto-resolve")

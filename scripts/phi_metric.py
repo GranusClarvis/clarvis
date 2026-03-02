@@ -176,10 +176,10 @@ def semantic_cross_collection(brain):
     Measure 3: Semantic overlap across collection boundaries.
 
     For each collection pair, measure best-match similarity bidirectionally.
-    Uses a diverse sample (up to 8 docs) from each collection and queries
-    in both directions, taking the best match per doc. This captures the
-    true semantic bridge strength — even one highly similar pair per
-    direction indicates meaningful integration.
+    Uses a stratified sample (up to 12 docs, evenly spaced by ID) from each
+    collection and queries in both directions, taking the best match per doc.
+    Stratified sampling avoids ID-order bias and gives a representative view
+    of each collection's semantic content.
 
     Score = average across all collection pairs of (avg best-match similarity).
     """
@@ -190,10 +190,17 @@ def semantic_cross_collection(brain):
         count = col.count()
         if count > 0:
             active_collections.append(col_name)
-            # Get a larger, more representative sample
-            sample_size = min(8, count)
-            results = col.get(limit=sample_size)
-            col_samples[col_name] = results.get("documents", [])
+            # Stratified sampling: get all IDs, pick evenly spaced subset
+            all_results = col.get(include=["documents"])
+            all_docs = all_results.get("documents", [])
+            sample_size = min(12, len(all_docs))
+            if sample_size >= len(all_docs):
+                col_samples[col_name] = all_docs
+            else:
+                # Evenly spaced indices across the full collection
+                step = len(all_docs) / sample_size
+                indices = [int(i * step) for i in range(sample_size)]
+                col_samples[col_name] = [all_docs[i] for i in indices]
 
     if len(active_collections) < 2:
         return 0.0, {}
@@ -211,7 +218,7 @@ def semantic_cross_collection(brain):
             similarities = []
 
             # Direction 1: query c2 with samples from c1
-            for doc in col_samples[c1][:5]:
+            for doc in col_samples[c1][:8]:
                 try:
                     results = col2_obj.query(
                         query_texts=[doc], n_results=1, include=["distances"]
@@ -224,7 +231,7 @@ def semantic_cross_collection(brain):
                     pass
 
             # Direction 2: query c1 with samples from c2
-            for doc in col_samples[c2][:5]:
+            for doc in col_samples[c2][:8]:
                 try:
                     results = col1_obj.query(
                         query_texts=[doc], n_results=1, include=["distances"]

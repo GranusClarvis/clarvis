@@ -31,9 +31,10 @@ start_import = time.monotonic()
 from attention import attention, get_attention_schema
 
 try:
-    from clarvis_confidence import outcome as conf_outcome
+    from clarvis_confidence import outcome as conf_outcome, auto_resolve as conf_auto_resolve
 except ImportError:
     conf_outcome = None
+    conf_auto_resolve = None
 
 try:
     from reasoning_chain_hook import close_chain
@@ -133,6 +134,16 @@ except ImportError:
     brain_record_outcome = None
     brain_update_context = None
 
+try:
+    from cognitive_workspace import workspace as cog_workspace
+except ImportError:
+    cog_workspace = None
+
+try:
+    from tool_maker import postflight_extract as tool_maker_extract
+except ImportError:
+    tool_maker_extract = None
+
 # Cost tracking
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'packages', 'clarvis-cost'))
 try:
@@ -161,6 +172,7 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
 
     # Shared constants used by multiple sections
     QUEUE_FILE = "/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md"
+    QUEUE_ARCHIVE = "/home/agent/.openclaw/workspace/memory/evolution/QUEUE_ARCHIVE.md"
     RETRY_FILE = "/home/agent/.openclaw/workspace/data/task_retries.json"
     MAX_TASK_RETRIES = 3
 
@@ -345,6 +357,43 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
                 log(f"Procedural failure record failed: {e}")
     timings["procedural"] = round(time.monotonic() - t4, 3)
 
+    # === 4.3 PROCEDURE INJECTION TRACKING: Correlate injection → outcome ===
+    t43 = time.monotonic()
+    proc_injected = preflight_data.get("procedure_injected", False)
+    if proc_injected:
+        try:
+            injection_entry = {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "task": task[:200],
+                "procedure_id": proc_id or "",
+                "procedures_injected": preflight_data.get("procedures_for_injection", []),
+                "outcome": task_status,
+                "exit_code": exit_code,
+                "duration_s": task_duration,
+            }
+            injection_log = os.path.join(os.path.dirname(__file__), '..', 'data', 'procedure_injection_log.jsonl')
+            os.makedirs(os.path.dirname(injection_log), exist_ok=True)
+            with open(injection_log, "a") as ilf:
+                ilf.write(json.dumps(injection_entry) + "\n")
+            log(f"Procedure injection tracked: {proc_id} → {task_status}")
+        except Exception as e:
+            log(f"Procedure injection tracking failed: {e}")
+    timings["proc_injection_track"] = round(time.monotonic() - t43, 3)
+
+    # === 4.5 TOOL MAKER: Extract reusable tools (LATM pattern) ===
+    t45 = time.monotonic()
+    if tool_maker_extract and exit_code == 0:
+        try:
+            tm_result = tool_maker_extract(output_text, task, task_status)
+            extracted = tm_result.get("extracted", 0)
+            if extracted > 0:
+                log(f"Tool maker: extracted {extracted} tools from task output")
+            elif tm_result.get("skipped"):
+                pass  # silent skip — not every task produces reusable tools
+        except Exception as e:
+            log(f"Tool maker extraction failed (non-fatal): {e}")
+    timings["tool_maker"] = round(time.monotonic() - t45, 3)
+
     # === 5. EPISODIC MEMORY: Encode episode ===
     t5 = time.monotonic()
     if EpisodicMemory:
@@ -357,6 +406,21 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
         except Exception as e:
             log(f"Episodic encoding failed: {e}")
     timings["episodic"] = round(time.monotonic() - t5, 3)
+
+    # === 5.1 PREDICTION AUTO-RESOLVER: Resolve open predictions matching this task ===
+    t51 = time.monotonic()
+    if conf_auto_resolve:
+        try:
+            actual = "success" if exit_code == 0 else "failure"
+            ar = conf_auto_resolve(task, actual)
+            if ar["matched"] > 0 or ar["stale_expired"] > 0:
+                log(f"Prediction auto-resolve: matched={ar['matched']}, "
+                    f"stale_expired={ar['stale_expired']}, remaining={ar['remaining_open']}")
+            else:
+                log(f"Prediction auto-resolve: no matches, remaining={ar['remaining_open']}")
+        except Exception as e:
+            log(f"Prediction auto-resolve failed: {e}")
+    timings["prediction_auto_resolve"] = round(time.monotonic() - t51, 3)
 
     # === 5.5 WORLD MODEL: Record outcome for prediction accuracy ===
     t55 = time.monotonic()
@@ -628,6 +692,75 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
         selftest_result["error"] = str(e)
     timings["self_test"] = round(time.monotonic() - t74, 3)
 
+    # === 7.42 CODE_GEN OUTCOME: Record actual code quality metrics for self_model ===
+    t742 = time.monotonic()
+    try:
+        import subprocess
+        # Detect changed .py files via git diff (staged + unstaged from this heartbeat)
+        diff_proc = subprocess.run(
+            ["git", "diff", "--name-only", "--diff-filter=ACMR", "HEAD~1", "HEAD", "--", "*.py"],
+            capture_output=True, text=True, timeout=10,
+            cwd="/home/agent/.openclaw/workspace"
+        )
+        # Also check unstaged changes (task may not have committed)
+        diff_proc2 = subprocess.run(
+            ["git", "diff", "--name-only", "--diff-filter=ACMR", "--", "*.py"],
+            capture_output=True, text=True, timeout=10,
+            cwd="/home/agent/.openclaw/workspace"
+        )
+        changed_py = set()
+        for line in (diff_proc.stdout + "\n" + diff_proc2.stdout).strip().split("\n"):
+            line = line.strip()
+            if line.endswith(".py"):
+                changed_py.add(line)
+
+        if changed_py:
+            # Syntax-check each changed .py file
+            syntax_ok = 0
+            syntax_fail = 0
+            syntax_errors = []
+            ws = "/home/agent/.openclaw/workspace"
+            for relpath in changed_py:
+                fpath = os.path.join(ws, relpath)
+                if os.path.exists(fpath):
+                    try:
+                        with open(fpath, "r") as cf:
+                            compile(cf.read(), fpath, "exec")
+                        syntax_ok += 1
+                    except SyntaxError as se:
+                        syntax_fail += 1
+                        syntax_errors.append(f"{relpath}:{se.lineno}: {se.msg}")
+
+            total_files = syntax_ok + syntax_fail
+            outcome_entry = {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "task": task[:200],
+                "task_status": task_status,
+                "files_touched": len(changed_py),
+                "files_list": sorted(changed_py)[:20],
+                "syntax_ok": syntax_ok,
+                "syntax_fail": syntax_fail,
+                "syntax_errors": syntax_errors[:5],
+                "syntax_ratio": syntax_ok / total_files if total_files > 0 else 1.0,
+                "exit_code": exit_code,
+                "duration_s": task_duration,
+            }
+
+            # Append to outcomes JSONL
+            outcomes_file = os.path.join(ws, "data", "code_gen_outcomes.jsonl")
+            os.makedirs(os.path.dirname(outcomes_file), exist_ok=True)
+            with open(outcomes_file, "a") as of:
+                of.write(json.dumps(outcome_entry) + "\n")
+
+            log(f"Code-gen outcome: {len(changed_py)} files, "
+                f"syntax={syntax_ok}/{total_files} clean, "
+                f"task={task_status}")
+        else:
+            log("Code-gen outcome: no .py changes detected")
+    except Exception as e:
+        log(f"Code-gen outcome recording failed: {e}")
+    timings["code_gen_outcome"] = round(time.monotonic() - t742, 3)
+
     # === 7.45 PERFORMANCE GATE: Run after code-modifying heartbeats ===
     t745 = time.monotonic()
     _code_mod = selftest_result.get("code_modified", False) or selftest_result.get("ran", False)
@@ -779,7 +912,8 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
     t10 = time.monotonic()
 
     def _mark_task_in_queue(task_text, annotation):
-        """Mark a task as [x] in QUEUE.md with an annotation."""
+        """Mark a task as [x] in QUEUE.md with an annotation.
+        Returns: 'marked' if found and marked, 'archived' if already in archive, False if not found."""
         with open(QUEUE_FILE, 'r') as f:
             lines = f.readlines()
         task_prefix = task_text[:60]
@@ -788,7 +922,13 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
                 lines[i] = line.replace("- [ ] ", "- [x] ", 1).rstrip() + f" ({annotation})\n"
                 with open(QUEUE_FILE, 'w') as f:
                     f.writelines(lines)
-                return True
+                return "marked"
+        # Check if already archived (race: preflight archived before postflight ran)
+        if os.path.exists(QUEUE_ARCHIVE):
+            with open(QUEUE_ARCHIVE, 'r') as f:
+                archive = f.read()
+            if task_prefix in archive:
+                return "archived"
         return False
 
     if task and task != "unknown":
@@ -796,8 +936,11 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
             if exit_code == 0:
                 # Success — mark complete
                 timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-                if _mark_task_in_queue(task, timestamp):
+                result_mark = _mark_task_in_queue(task, timestamp)
+                if result_mark == "marked":
                     log("Marked task complete in QUEUE.md")
+                elif result_mark == "archived":
+                    log(f"Task already in QUEUE_ARCHIVE.md (archived by preflight): {task[:60]}")
                 else:
                     log(f"Task not found in QUEUE.md for completion: {task[:60]}...")
             elif exit_code == 124:
@@ -836,6 +979,20 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
             log(f"Queue hygiene: archived {archived} completed items")
     except Exception:
         pass
+
+    # === 13. COGNITIVE WORKSPACE: Close task, archive active→dormant ===
+    if cog_workspace:
+        try:
+            lesson = ""
+            if task_status == "success":
+                lesson = f"Completed successfully"
+            elif task_status == "failure":
+                lesson = f"Failed — check episode for details"
+            cw_result = cog_workspace.close_task(outcome=task_status, lesson=lesson)
+            reuse = cw_result.get("reuse_rate", 0)
+            log(f"Cognitive workspace: closed task, reuse_rate={reuse:.1%}, buffers={cw_result.get('buffers', {})}")
+        except Exception as e:
+            log(f"Cognitive workspace close failed: {e}")
 
     timings["total"] = round(time.monotonic() - t0, 3)
     log(f"Post-flight complete in {timings['total']:.2f}s")
