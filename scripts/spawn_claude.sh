@@ -69,27 +69,29 @@ fi
 SCRIPTS_DIR="/home/agent/.openclaw/workspace/scripts"
 CONTEXT_BRIEF=$(python3 "$SCRIPTS_DIR/prompt_builder.py" context-brief --task "$TASK" --tier standard 2>/dev/null || echo "")
 
-# Write prompt to file using Python for shell-safety (no heredoc expansion issues)
-python3 -c "
+# Write prompt to file using Python (shell-safe; avoids quoting issues)
+python3 - "$TASK" "$WORK_DIR" "$CONTEXT_BRIEF" "$PROMPT_FILE" <<'PY'
 import sys
+
 task = sys.argv[1]
 work_dir = sys.argv[2]
 context = sys.argv[3]
 prompt_file = sys.argv[4]
 
-parts = ['You are Clarvis'\''s executive function (Claude Code Opus).', '']
+parts = ["You are Clarvis's executive function (Claude Code Opus).", ""]
 if context:
-    parts.append('CONTEXT:')
-    parts.append(context)
-    parts.append('')
-parts.append(f'TASK: {task}')
-parts.append('')
-parts.append(f'Work in {work_dir} unless the task specifies another directory.')
-parts.append('Be thorough. Write code if needed. Test it. Report what you did concisely.')
+    parts += ["CONTEXT:", context, ""]
 
-with open(prompt_file, 'w') as f:
-    f.write('\n'.join(parts))
-" "$TASK" "$WORK_DIR" "$CONTEXT_BRIEF" "$PROMPT_FILE"
+parts += [
+    f"TASK: {task}",
+    "",
+    f"Work in {work_dir} unless the task specifies another directory.",
+    "Be thorough. Write code if needed. Test it. Report what you did concisely.",
+]
+
+with open(prompt_file, "w", encoding="utf-8") as f:
+    f.write("\n".join(parts))
+PY
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] Spawning with ${TIMEOUT}s timeout..." >> "$LOGFILE"
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] Task: ${TASK:0:100}..." >> "$LOGFILE"

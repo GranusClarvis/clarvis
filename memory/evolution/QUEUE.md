@@ -26,6 +26,17 @@ _Completed items auto-archived to QUEUE_ARCHIVE.md._
 
 ## Pillar 3: Performance & Reliability (PI > 0.70)
 
+### Codebase Restructuring (see docs/ARCHITECTURE.md)
+- [ ] [REFACTOR_PHASE0] Safety net: tag v0.9-pre-refactor, backup ChromaDB, fix import side effects (add `if __name__` guards to cost_tracker.py, digest_writer.py), standardize sys.path patterns. Run `import_health.py --strict` as baseline. No behavior change. Files: scripts/cost_tracker.py, scripts/digest_writer.py, all scripts sys.path lines.
+- [ ] [REFACTOR_PHASE1] Create `clarvis/` spine package skeleton — empty __init__.py in clarvis/, clarvis/brain/, clarvis/memory/, clarvis/cognition/, clarvis/context/, clarvis/metrics/, clarvis/heartbeat/, clarvis/orch/. Add workspace-level pyproject.toml. No behavior change yet.
+- [ ] [REFACTOR_PHASE2] Extract `clarvis.brain` — split brain.py (70KB, 58 fan-in, 7 fan-out) into clarvis/brain/store.py + graph.py + search.py. Break the 12-module SCC by removing hebbian/consolidation/actr imports from brain core (dependency inversion). Target: SCC=0, brain fan-out <= 2.
+- [ ] [REFACTOR_PHASE3] Extract memory layer — move episodic_memory.py, procedural_memory.py, working_memory.py, hebbian_memory.py, memory_consolidation.py into clarvis/memory/. Update scripts/ as thin wrappers. One commit per file, verify heartbeat after each.
+- [ ] [REFACTOR_BENCHMARK] Integrate import_health.py into heartbeat postflight (quick structural check). Track metrics over time: SCC count, max depth, fan-in, fan-out, import time. Add to performance_history.jsonl. Target: depth <= 5, fan-in <= 20, SCC = 0.
+- [ ] [LIFECYCLE_HOOKS_BUS] Replace "import-time wiring" with explicit lifecycle hooks: define `clarvis/heartbeat/hooks.py` (hook registry + execution order) and migrate 3 subsystems (procedural injection, consolidation, metrics) to register hooks instead of being imported implicitly. Add hook-order tests.
+- [ ] [DOCS_STRUCTURE] Establish docs structure: `docs/ARCHITECTURE.md` (layers + boundaries), `docs/CONVENTIONS.md` (imports/sys.path, logging, CLI patterns), `docs/DATA_LAYOUT.md` (what goes in memory/, data/, logs/, tmp/), `docs/RUNBOOK.md` (how to run heartbeats, benchmarks, restore backups).
+- [ ] [DEAD_CODE_AUDIT] Build `scripts/dead_code_audit.py`: static scan for scripts never imported, never referenced by cron, and not used as entrypoints. Output candidates list + last git touch. Mark as `deprecated/` or delete only after 7-day soak.
+- [ ] [FILE_HYGIENE_POLICY] Add workspace file-hygiene policy + automation: `scripts/cleanup_policy.py` (rotate logs, compress old daily memory, prune tmp artifacts), and document retention rules. Ensure cron/heartbeat calls it weekly.
+- [ ] [IMPORT_SIDE_EFFECTS_FIX] Reduce import-time side effects to 0: convert top-level `log()`/registry calls to functions or `if __name__ == '__main__'` blocks; add `import_health.py --strict` gate in CI/tests.
 
 ## Pillar 4: Self-Improvement Loop
 
