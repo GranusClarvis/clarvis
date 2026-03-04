@@ -21,6 +21,13 @@ class SearchMixin:
             routed = route_query(query)
             collections = routed if routed else DEFAULT_COLLECTIONS
 
+        # Result-level cache (30s TTL) — avoids repeated ChromaDB queries
+        cache_key = (query, tuple(sorted(collections)), n, min_importance, since_days, attention_boost)
+        now_cache = time.monotonic()
+        cached_result = self._recall_cache.get(cache_key)
+        if cached_result and (now_cache - cached_result[0]) < self._recall_cache_ttl:
+            return cached_result[1]
+
         all_results = []
         cutoff_date = None
         if since_days:
@@ -91,9 +98,9 @@ class SearchMixin:
                     items.append(result_item)
             return items
 
-        # Query all collections in parallel
+        # Query all collections in parallel (up to 10 workers to cover all collections)
         from concurrent.futures import ThreadPoolExecutor, as_completed
-        with ThreadPoolExecutor(max_workers=min(len(valid_collections), 6)) as executor:
+        with ThreadPoolExecutor(max_workers=min(len(valid_collections), 10)) as executor:
             futures = {executor.submit(_query_collection, c): c for c in valid_collections}
             for future in as_completed(futures):
                 try:
@@ -158,6 +165,12 @@ class SearchMixin:
                     "collection": col_name,
                 }
 
+        # Cache result (evict oldest if > 50 entries)
+        self._recall_cache[cache_key] = (time.monotonic(), final_results)
+        if len(self._recall_cache) > 50:
+            oldest = min(self._recall_cache, key=lambda k: self._recall_cache[k][0])
+            del self._recall_cache[oldest]
+
         return final_results
 
     def get(self, collection, n=100):
@@ -183,36 +196,45 @@ class SearchMixin:
         return self.recall("", collections=collections, n=n, since_days=days)
 
     def recall_from_date(self, start_date, end_date=None, collections=None, n=20):
-        """Get memories from a date range"""
+        """Get memories from a date range (parallel collection scan)."""
         if collections is None:
             collections = ALL_COLLECTIONS
 
-        all_results = []
+        valid = [c for c in collections if c in self.collections]
+        if not valid:
+            return []
 
-        for col_name in collections:
-            if col_name not in self.collections:
-                continue
-
+        def _scan_collection(col_name):
             col = self.collections[col_name]
             results = col.get()
-
+            items = []
             for i, doc in enumerate(results.get("documents", [])):
                 meta = results["metadatas"][i] if results.get("metadatas") else {}
                 created = meta.get("created_at", "")
-
                 if created:
                     try:
                         mem_date = created[:10]
                         if mem_date >= start_date:
                             if end_date is None or mem_date <= end_date:
-                                all_results.append({
+                                items.append({
                                     "document": doc,
                                     "metadata": meta,
                                     "collection": col_name,
-                                    "id": results["ids"][i]
+                                    "id": results["ids"][i],
                                 })
                     except Exception:
                         pass
+            return items
+
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        all_results = []
+        with ThreadPoolExecutor(max_workers=min(len(valid), 6)) as executor:
+            futures = {executor.submit(_scan_collection, c): c for c in valid}
+            for future in as_completed(futures):
+                try:
+                    all_results.extend(future.result())
+                except Exception:
+                    pass
 
         all_results.sort(key=lambda x: x["metadata"].get("created_at", ""), reverse=True)
         return all_results[:n]

@@ -1,10 +1,10 @@
 """clarvis heartbeat — heartbeat pipeline operations.
 
 The heartbeat pipeline is:
-  1. heartbeat_gate.py — zero-LLM pre-check
-  2. heartbeat_preflight.py — attention scoring, task selection, context
+  1. heartbeat gate — zero-LLM pre-check
+  2. heartbeat preflight — attention scoring, task selection, context
   3. Claude Code executes selected task
-  4. heartbeat_postflight.py — episode encoding, confidence, brain storage
+  4. heartbeat postflight — episode encoding, confidence, brain storage
 
 This CLI wraps the gate + preflight for diagnostics.
 Full heartbeat execution still happens via cron_autonomous.sh (spawns Claude Code).
@@ -29,23 +29,21 @@ def run(dry_run: bool = typer.Option(False, "--dry-run", help="Run gate + prefli
 
     With --dry-run: same but explicitly labeled as dry run.
     """
-    sys.path.insert(0, f"{WORKSPACE}/scripts")
-
-    # Step 1: Gate
+    # Step 1: Gate (use spine module)
     print("=== Heartbeat Gate ===")
     try:
-        import heartbeat_gate
-        gate_result = heartbeat_gate.run_gate()
-        decision = gate_result.get("decision", "UNKNOWN")
-        print(f"Decision: {decision}")
-        if decision == "SKIP":
-            print(f"Reason: {gate_result.get('reason', 'unknown')}")
+        from clarvis.heartbeat.gate import run_gate
+        decision, output = run_gate()
+        print(f"Decision: {decision.upper()}")
+        if decision == "skip":
+            print(f"Reason: {output.get('reason', 'unknown')}")
             return
     except Exception as e:
         print(f"Gate error (proceeding anyway): {e}")
 
-    # Step 2: Preflight
+    # Step 2: Preflight (still uses scripts/ — heavy cognitive imports)
     print("\n=== Heartbeat Preflight ===")
+    sys.path.insert(0, f"{WORKSPACE}/scripts")
     try:
         import heartbeat_preflight
         preflight_result = heartbeat_preflight.run_preflight()
@@ -70,11 +68,20 @@ def run(dry_run: bool = typer.Option(False, "--dry-run", help="Run gate + prefli
 @app.command()
 def gate():
     """Run only the heartbeat gate (zero-LLM pre-check)."""
-    sys.path.insert(0, f"{WORKSPACE}/scripts")
     try:
+        from clarvis.heartbeat.gate import run_gate
+        decision, output = run_gate()
+        print(json.dumps(output, default=str))
+        if decision == "skip":
+            raise typer.Exit(1)
+    except ImportError:
+        # Fallback to scripts/ if spine not available
+        sys.path.insert(0, f"{WORKSPACE}/scripts")
         import heartbeat_gate
         result = heartbeat_gate.run_gate()
-        print(json.dumps(result, indent=2, default=str))
+        print(json.dumps(result, default=str))
+    except typer.Exit:
+        raise
     except Exception as e:
         print(f"Gate error: {e}")
         raise typer.Exit(1)

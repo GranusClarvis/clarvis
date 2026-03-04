@@ -573,6 +573,40 @@ if __name__ == "__main__":
     elif cmd == "golden":
         show_golden()
 
+    elif cmd == "latency":
+        print("=== Brain Search Latency Benchmark ===\n")
+        from brain import brain
+        brain.stats()  # warm up ONNX + collections
+        queries = [
+            ("routed-narrow", "heartbeat efficiency"),
+            ("routed-wide", "brain architecture"),
+            ("cached-repeat", "brain architecture"),
+            ("identity", "Who created Clarvis?"),
+            ("goal-search", "AGI consciousness goal"),
+        ]
+        timings = []
+        for label, q in queries:
+            t0 = time.monotonic()
+            results = brain.recall(q, n=5)
+            ms = (time.monotonic() - t0) * 1000
+            timings.append({"label": label, "query": q, "ms": round(ms, 1), "results": len(results)})
+            print(f"  {label:20s}: {ms:8.1f}ms  ({len(results)} results)")
+        avg = sum(t["ms"] for t in timings) / len(timings)
+        p95 = sorted(t["ms"] for t in timings)[int(0.95 * len(timings))]
+        summary = {"avg_ms": round(avg, 1), "p95_ms": round(p95, 1), "queries": timings}
+        print(f"\n  Average: {avg:.1f}ms   P95: {p95:.1f}ms")
+        # Append to history
+        entry = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "type": "latency_benchmark",
+            "avg_ms": summary["avg_ms"],
+            "p95_ms": summary["p95_ms"],
+            "detail": timings,
+        }
+        with open(HISTORY_FILE, "a") as f:
+            f.write(json.dumps(entry) + "\n")
+        print(f"\n  Recorded to {HISTORY_FILE}")
+
     else:
         print(f"Unknown command: {cmd}")
         sys.exit(1)

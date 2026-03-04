@@ -1387,6 +1387,7 @@ def gc(dry_run=False):
 
 
 if __name__ == "__main__":
+    print("DEPRECATION: Core functions available via 'from clarvis.context import tfidf_extract, mmr_rerank, compress_text, compress_queue'.", file=sys.stderr)
     if len(sys.argv) < 2:
         print("Usage: context_compressor.py <queue|health|brief|tiered|episodes|compress|gc|savings>")
         print("  queue        — compressed evolution queue")

@@ -61,6 +61,10 @@ class ClarvisBrain(StoreMixin, GraphMixin, SearchMixin):
         self._embedding_cache = {}
         self._embedding_cache_ttl = 60
 
+        # Result-level recall cache (TTL 30s, avoids repeated ChromaDB queries)
+        self._recall_cache = {}
+        self._recall_cache_ttl = 30
+
         # Reconsolidation state
         self._labile_memories = {}
         self._lability_window = 300
