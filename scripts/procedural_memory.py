@@ -3,7 +3,6 @@
 import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-from clarvis.memory.procedural_memory import *  # noqa: F401,F403
 from clarvis.memory.procedural_memory import (  # noqa: F401
     find_procedure, find_code_templates, format_code_templates,
     store_procedure, record_use, learn_from_task, learn_from_failures,

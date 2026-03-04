@@ -19,8 +19,6 @@ import os
 import re
 import sys
 import time
-from datetime import datetime, timezone
-from pathlib import Path
 
 WORKSPACE = "/home/agent/.openclaw/workspace"
 PREDICTIONS_FILE = f"{WORKSPACE}/data/calibration/predictions.jsonl"

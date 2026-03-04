@@ -30,6 +30,22 @@ _Completed items auto-archived to QUEUE_ARCHIVE.md._
 
 ## Pillar 3: Performance & Reliability (PI > 0.70)
 
+### CLI Migration (see docs/CLI_MIGRATION_PLAN.md)
+
+- [ ] [CLI_CONSOLE_SCRIPT] Add `[project.scripts] clarvis = "clarvis.cli:main"` to `pyproject.toml` and `pip install -e .` so `clarvis` binary is on PATH. Test from non-workspace directory.
+- [ ] [CLI_TESTS] Write `tests/test_cli.py` — test `--help` for all subcommands + at least one real invocation per subgroup (`brain stats`, `queue status`, `bench pi`). Use `typer.testing.CliRunner`.
+- [ ] [CLI_BRAIN_LIVE] Verify `clarvis brain health` output matches `python3 scripts/brain.py health` exactly. Fix any discrepancies. Run both and diff.
+- [ ] [CLI_CRON_SUBCOMMAND] Add `clarvis cron run <job>` subcommand — wraps cron shell scripts. Start with `clarvis cron list` (parse crontab) and `clarvis cron status` (last run times from logs).
+- [ ] [CLI_CRON_PILOT] Migrate 1 cron entry (e.g. `cron_reflection.sh` — Python-only, no Claude spawn) to `clarvis cron run reflection`. Soak 7 days.
+- [ ] [CLI_DEPRECATION_WARNINGS] Add deprecation warnings to `scripts/brain.py`, `scripts/performance_benchmark.py`, `scripts/queue_writer.py` `__main__` blocks: "Use `python3 -m clarvis <subcommand>` instead."
+- [ ] [CLI_DOCS_UPDATE] After 30-day soak: update CLAUDE.md, RUNBOOK.md, AGENTS.md to reference `clarvis` CLI. Remove old `python3 scripts/brain.py` examples.
+- [ ] [CLI_SUBPKG_ABSORB] Evaluate absorbing `clarvis-db`, `clarvis-cost`, `clarvis-reasoning` CLIs into unified `clarvis db|cost|reasoning` subcommands. Requires Inverse decision.
+- [ ] [CLI_DEAD_SCRIPT_SWEEP] After CLI migration complete: audit which scripts/ `__main__` blocks have zero callers. Move to `scripts/deprecated/`.
+- [ ] [CLI_BENCH_EXPAND] Add missing bench subcommands: `record`, `trend [days]`, `check` (exit 1 on failures), `heartbeat` (quick check), `weakest` (weakest metric). All delegate to `scripts/performance_benchmark.py`.
+- [ ] [CLI_HEARTBEAT_EXPAND] Add `clarvis heartbeat preflight` (run preflight only, print JSON) and `clarvis heartbeat postflight` (accepts exit-code + output-file + preflight-file args). Currently only `run` and `gate` exist.
+- [ ] [CLI_BOOT_DRIFT] Audit AGENTS.md and BOOT.md for references to `scripts/deprecated/` or moved scripts. Update to use `clarvis` CLI or correct spine import paths.
+- [ ] [CLI_ROOT_PYPROJECT] Create root `pyproject.toml` for the `clarvis` package (if not already present). Define `[project.scripts] clarvis = "clarvis.cli:main"`, set `packages = ["clarvis"]`, pin deps. Prerequisite for CLI_CONSOLE_SCRIPT.
+- [ ] [CLI_CRON_STUB] Create `clarvis/cli_cron.py` stub with `clarvis cron list` (parse `crontab -l`) and `clarvis cron status` (last run from logs). Does NOT execute cron jobs — just status/inspection.
 
 ### Codebase Restructuring (see docs/ARCHITECTURE.md)
 (Primary: now tracked in P0.)
@@ -67,8 +83,6 @@ _Completed items auto-archived to QUEUE_ARCHIVE.md._
 ## P1
 
 
-- [x] [RESEARCH_DISCOVERY 2026-03-03] Research: LLM Confidence Calibration & Uncertainty Estimation — COMPLETED 2026-03-04. Stored 5 brain memories. Note: memory/research/llm_confidence_calibration_2026-03-04.md. Key: CoCoA hybrid method best (ECE 0.062), VCE outperforms logit-based, Flex-ECE for partial correctness, reflection-based calibration reduces overconfidence. 5 concrete implementation ideas for clarvis_confidence.py.
-- [ ] [RESEARCH_DISCOVERY 2026-03-03] Research: ATLAS — Continual Learning, Not Training (Jaglan & Barnes, arXiv:2511.01093) — Gradient-free online adaptation for deployed agents via dual-agent (Teacher/Student) architecture with persistent learning memory. Achieves 54% success beating GPT-5 while cutting cost 86%. Maps to Clarvis's conscious/subconscious dual-layer and inference-time adaptation via ClarvisDB. Sources: arxiv.org/abs/2511.01093
 - [ ] [RESEARCH_DISCOVERY 2026-03-03] Research: FLARE — Why Reasoning Fails to Plan (Guo et al., arXiv:2601.22311) — Step-wise LLM reasoning creates myopic commitments that cascade into long-horizon planning failures. FLARE introduces future-aware lookahead with value propagation, allowing LLaMA-8B to outperform GPT-4o. Directly applicable to heartbeat task selection (currently greedy) and autonomous execution pipeline. Sources: arxiv.org/abs/2601.22311
 - [ ] [RESEARCH_DISCOVERY 2026-03-02] Research: PALADIN — Self-Correcting Tool-Failure Recovery (ICLR 2026, arXiv:2509.25238) — Runtime failure detection, diagnosis, and recovery for tool-augmented agents. Systematic failure injection generates 50k+ recovery-annotated trajectories; taxonomy-driven retrieval of 55+ failure exemplars at inference. Addresses cascading reasoning errors from API timeouts/exceptions. Applicable to cron_doctor.py self-healing, heartbeat pipeline resilience, and autonomous task robustness. Sources: arxiv.org/abs/2509.25238 (UIUC, arXiv:2509.25370) — First systematic error taxonomy for LLM agents (memory/reflection/planning/action/system), AgentErrorBench dataset of 500+ annotated failure trajectories, and AgentDebug framework for root-cause isolation with corrective feedback (+24% accuracy). Directly applicable to Clarvis episodic failure tracking, postflight error analysis, and building active learning from failures. Sources: arxiv.org/abs/2509.25370, github.com/ulab-uiuc/AgentDebug
 - [ ] [RESEARCH_DISCOVERY 2026-03-01] Research: Neurosymbolic AI for Hybrid Agent Reasoning — Neural-symbolic integration patterns for LLM agents: Symbolic[Neural] (MCTS+neural eval like AlphaGo), Neural[Symbolic] (logical inference inside networks), and integration layers. 2025: Amazon deployed in Vulcan robots + Rufus. Addresses hallucination via symbolic grounding, enables explainable reasoning. IBM path-to-AGI framing. Applicable to clarvis_reasoning.py + brain.py knowledge graph. Sources: arxiv.org/html/2502.11269v1, sciencedirect.com/S2667305325000675, research.ibm.com/topics/neuro-symbolic-ai

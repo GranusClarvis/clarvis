@@ -3,7 +3,6 @@
 import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-from clarvis.cognition.attention import *  # noqa: F401,F403
 from clarvis.cognition.attention import (  # noqa: F401
     attention, get_attention, get_codelet_competition, get_attention_schema,
     AttentionItem, AttentionSpotlight, AttentionCodelet, CodeletCompetition,

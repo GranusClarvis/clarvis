@@ -3,7 +3,6 @@
 import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-from clarvis.memory.memory_consolidation import *  # noqa: F401,F403
 from clarvis.memory.memory_consolidation import (  # noqa: F401
     deduplicate, merge_clusters, enhanced_decay, prune_noise,
     archive_stale, enforce_memory_caps, attention_guided_prune,

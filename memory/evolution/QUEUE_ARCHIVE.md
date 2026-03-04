@@ -506,3 +506,8 @@ _Last archived: 2026-03-03_
 
 ## Archived 2026-03-04
 - [x] [CRON_PROMPT_TUNING] Review and tighten the 6 main cron spawner prompts (`cron_autonomous.sh`, `cron_morning.sh`, `cron_evolution.sh`, `cron_evening.sh`, `cron_reflection.sh`, `cron_research.sh`). Each prompt should: (1) reference QUEUE.md explicitly, (2) include the current weakest metric, (3) have a hard output format constraint. Measure: reduced token waste per spawn. (2026-03-04 15:08 UTC)
+
+## Archived 2026-03-04
+- [x] [CLI_SKELETON] Create canonical `clarvis` CLI skeleton — `clarvis/__main__.py` + `clarvis/cli.py` with Typer, subcommands: brain, bench, heartbeat, queue. COMPLETED 2026-03-04.
+- [x] [RESEARCH_DISCOVERY 2026-03-03] Research: LLM Confidence Calibration & Uncertainty Estimation — COMPLETED 2026-03-04. Stored 5 brain memories. Note: memory/research/llm_confidence_calibration_2026-03-04.md. Key: CoCoA hybrid method best (ECE 0.062), VCE outperforms logit-based, Flex-ECE for partial correctness, reflection-based calibration reduces overconfidence. 5 concrete implementation ideas for clarvis_confidence.py.
+- [x] [RESEARCH_DISCOVERY 2026-03-03] Research: ATLAS — Continual Learning, Not Training (Jaglan & Barnes, arXiv:2511.01093) — COMPLETED 2026-03-04. Key insight: shift continual learning from weight updates to system-level orchestration. A Teacher distills experience into persistent “pamphlets” that gate/shape a Student’s future execution at inference time; yields higher success with lower token cost and generates causally-annotated traces useful for world-model training. Sources: arxiv.org/abs/2511.01093
