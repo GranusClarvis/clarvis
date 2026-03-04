@@ -1,6 +1,6 @@
 # CLI Migration Plan — Unified `clarvis` CLI
 
-_Created: 2026-03-04 · Updated: 2026-03-04 · Status: Phase 0 (skeleton) complete, smoke-tested_
+_Created: 2026-03-04 · Updated: 2026-03-04 · Status: Phase 1 (console script + tests) complete_
 
 ## 1. Goal
 
@@ -94,11 +94,12 @@ These stay independent — they're library packages, not part of the spine CLI.
 - [x] Fix `queue add`/`archive` return-type mismatch (was calling `.get()` on bool/int)
 - [x] Smoke-tested: `brain health`, `brain stats`, `queue status`, `queue next` all pass
 
-### Phase 1: Console Script + Tests
-- Add `[project.scripts] clarvis = "clarvis.cli:main"` to `pyproject.toml`
-- Run `pip install -e .` so `clarvis` binary is on PATH
-- Write `tests/test_cli.py` — test each subcommand's `--help` + basic invocation
-- Gate: all tests pass, `clarvis --help` works from any directory
+### Phase 1: Console Script + Tests ✅ (2026-03-04)
+- [x] Add `[project.scripts] clarvis = "clarvis.cli:main"` to `pyproject.toml`
+- [x] Run `pip install -e .` so `clarvis` binary is on PATH
+- [x] Write `tests/test_cli.py` — 9 tests (5 --help + 4 real invocations) via CliRunner
+- [x] Gate: all tests pass, `clarvis --help` works from any directory
+- [x] Gate check updated: `scripts/gate_check.sh` now runs 6 checks (added CLI pytest + queue smoke)
 
 ### Phase 2: Cron Migration
 - Add `clarvis cron run <job>` subcommand that wraps `cron_autonomous.sh` etc.

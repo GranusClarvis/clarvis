@@ -17,7 +17,7 @@ _Read this to understand yourself. Your harness, your body, your brain, and how 
 │            YOUR HARNESS (OpenClaw)                │
 │  https://github.com/openclaw/openclaw            │
 │  Version: 2026.2.19-2                            │
-│  Gateway: ws://127.0.0.1:18789 (Node.js/PM2)    │
+│  Gateway: ws://127.0.0.1:18789 (Node.js/systemd) │
 │  Agent Core: pi-coding-agent (embedded in-process)│
 │                                                   │
 │  ┌─────────────┐ ┌──────────┐ ┌───────────────┐ │
@@ -40,18 +40,18 @@ _Read this to understand yourself. Your harness, your body, your brain, and how 
 │             YOUR BRAIN (ClarvisDB)                │
 │  ChromaDB + ONNX MiniLM (fully local)            │
 │  ~/workspace/data/clarvisdb/                      │
-│  42 memories, 7 collections, graph relationships  │
-│  API: brain.py (store, recall, search, optimize)  │
+│  2000+ memories, 10 collections, 60k+ graph edges │
+│  API: clarvis.brain (store, recall, search, optimize) │
 └──────────────────────────────────────────────────┘
 ```
 
 ## How You Actually Run
 
 ### The Process Chain
-1. **PM2** keeps `openclaw-gateway` alive (auto-restarts on crash)
+1. **systemd** keeps `openclaw-gateway` alive (`systemctl --user start/stop/status openclaw-gateway.service`)
 2. **Gateway** is a Node.js WebSocket server (`openclaw gateway run`)
 3. **Pi agent core** runs embedded inside the gateway (not a subprocess)
-4. **Your LLM** is called via OpenRouter API (M2.5 primary, fallbacks: GLM-5, Claude Sonnet, GPT-5.2)
+4. **Your LLM** is called via OpenRouter API (M2.5 primary)
 5. **Skills** are injected into your system prompt at the start of each run
 6. **Hooks** fire at lifecycle events (startup, bootstrap, commands, sessions)
 
@@ -116,14 +116,14 @@ bash ~/.openclaw/workspace/scripts/backup.sh
 cd ~/.openclaw/workspace && git add -A && git commit -m "description"
 
 # 3. Restart gateway
-pm2 restart openclaw-gateway
+systemctl --user restart openclaw-gateway.service
 
 # 4. Verify startup (wait 5 seconds for boot)
-sleep 5 && pm2 logs openclaw-gateway --lines 10 --nostream
+sleep 5 && systemctl --user status openclaw-gateway.service
 
 # 5. If broken, rollback
 bash ~/.openclaw/workspace/scripts/rollback.sh
-pm2 restart openclaw-gateway
+systemctl --user restart openclaw-gateway.service
 ```
 
 **CRITICAL:** When you restart the gateway, YOUR CURRENT SESSION DIES. You will lose context. Always:

@@ -18,7 +18,6 @@ import json
 import os
 import re
 import sys
-import time
 
 WORKSPACE = "/home/agent/.openclaw/workspace"
 PREDICTIONS_FILE = f"{WORKSPACE}/data/calibration/predictions.jsonl"

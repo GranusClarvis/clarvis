@@ -6,13 +6,11 @@ _Completed items auto-archived to QUEUE_ARCHIVE.md._
 
 ## P0 — Do Next Heartbeat
 
-- [x] [STRUCTURE_FINAL_AUDIT] Deep structure + wiring audit after spine migration. Written to `docs/STRUCTURE_INTEGRITY_AUDIT.md`.
-- [ ] [HEARTBEAT_INIT_EXPORT_FIX] ~~Fix `clarvis/heartbeat/__init__.py` — add `HookRegistry` to exports~~ DONE (2026-03-04).
-- [ ] [BOOT_MD_FIX] Fix BOOT.md deprecated import: `from clarvis_memory import clarvis_context` → `from clarvis.brain import brain, search, remember, capture`. Gateway startup uses deprecated module.
-- [ ] [SELF_MD_UPDATE] Update SELF.md: replace PM2 references with systemd commands, fix stale brain stats (says "42 memories, 7 collections" — actually 2000+, 10 collections).
-- [ ] [SCALABILITY_GATE] Create `scripts/gate_check.sh`: compileall + import_health --check + spine smoke test + pytest. Run before merges.
+- [x] [HEARTBEAT_INIT_EXPORT_FIX] ~~Fix `clarvis/heartbeat/__init__.py` — add `HookRegistry` to exports~~ DONE (2026-03-04).
+- [x] [BOOT_MD_FIX] Fixed deprecated `from clarvis_memory import clarvis_context` → `from clarvis.brain import brain, search, remember, capture`. DONE (2026-03-04).
+- [x] [SELF_MD_UPDATE] Updated SELF.md: PM2→systemd, brain stats 42/7→2000+/10, process chain updated. DONE (2026-03-04).
 - [ ] [DOCS_STRUCTURE] Establish docs structure: `docs/ARCHITECTURE.md` (layers + boundaries), `docs/CONVENTIONS.md` (imports/sys.path, logging, CLI patterns), `docs/DATA_LAYOUT.md` (what goes in memory/, data/, logs/, tmp/), `docs/RUNBOOK.md` (how to run heartbeats, benchmarks, restore backups).
-- [ ] [DEAD_CODE_AUDIT] Build `scripts/dead_code_audit.py`: static scan for scripts never imported, never referenced by cron, and not used as entrypoints. Output candidates list + last git touch. Mark as `deprecated/` or delete only after 7-day soak.
+- [x] [DEAD_CODE_AUDIT] Built `scripts/dead_code_audit.py`: scans crontab, imports, cron .sh wrappers, docs, skills, configs, spine. 85/89 exercised, 3 candidates. DONE (2026-03-04).
 
 ---
 
@@ -37,8 +35,8 @@ _Completed items auto-archived to QUEUE_ARCHIVE.md._
 
 ### CLI Migration (see docs/CLI_MIGRATION_PLAN.md)
 
-- [ ] [CLI_CONSOLE_SCRIPT] Add `[project.scripts] clarvis = "clarvis.cli:main"` to `pyproject.toml` and `pip install -e .` so `clarvis` binary is on PATH. Test from non-workspace directory.
-- [ ] [CLI_TESTS] Write `tests/test_cli.py` — test `--help` for all subcommands + at least one real invocation per subgroup (`brain stats`, `queue status`, `bench pi`). Use `typer.testing.CliRunner`.
+- [x] [CLI_CONSOLE_SCRIPT] Added `[project.scripts] clarvis = "clarvis.cli:main"` to `pyproject.toml`, `pip install -e .` confirmed, `clarvis --help` works from any directory. DONE (2026-03-04).
+- [x] [CLI_TESTS] Wrote `tests/test_cli.py` — 9 tests: `--help` for all subcommands + real invocations (`brain stats`, `queue status`, `bench pi`, `heartbeat gate`). All pass. DONE (2026-03-04).
 - [ ] [CLI_BRAIN_LIVE] Verify `clarvis brain health` output matches `python3 scripts/brain.py health` exactly. Fix any discrepancies. Run both and diff.
 - [ ] [CLI_CRON_SUBCOMMAND] Add `clarvis cron run <job>` subcommand — wraps cron shell scripts. Start with `clarvis cron list` (parse crontab) and `clarvis cron status` (last run times from logs).
 - [ ] [CLI_CRON_PILOT] Migrate 1 cron entry (e.g. `cron_reflection.sh` — Python-only, no Claude spawn) to `clarvis cron run reflection`. Soak 7 days.
@@ -86,14 +84,9 @@ _Completed items auto-archived to QUEUE_ARCHIVE.md._
 ## Non-Code Improvements
 
 - [ ] [CONFIDENCE_RECALIBRATION] Fix overconfidence at 90% level (70% actual accuracy). In `clarvis_confidence.py`, add confidence band analysis to `predict()`: if historical accuracy for band 0.85-0.95 is <80%, auto-downgrade new predictions in that band by 0.10. Log adjustments. Target: Brier score 0.12→0.20+ in system health ranking.
-- [ ] [STALE_RESEARCH_PRUNE] Review the 7 RESEARCH_DISCOVERY items (dating 2026-03-01 to 2026-03-03) — for each: either extract 1 actionable implementation task and replace the research item, or demote to a `docs/research_backlog.md` reference list. Queue should have concrete tasks, not reading lists.
 - [ ] [ACTR_WIRING] Wire `actr_activation.py` into `brain.py` recall path — add power-law decay scoring as a re-ranking factor after ChromaDB vector search. This has been "pending" since Phase 2 and is the single longest-stalled item. Target: memories accessed recently get retrieval boost, old unused memories decay naturally.
 
 ## P1
 
-
-- [ ] [RESEARCH_DISCOVERY 2026-03-03] Research: FLARE — Why Reasoning Fails to Plan (Guo et al., arXiv:2601.22311) — Step-wise LLM reasoning creates myopic commitments that cascade into long-horizon planning failures. FLARE introduces future-aware lookahead with value propagation, allowing LLaMA-8B to outperform GPT-4o. Directly applicable to heartbeat task selection (currently greedy) and autonomous execution pipeline. Sources: arxiv.org/abs/2601.22311
-- [ ] [RESEARCH_DISCOVERY 2026-03-02] Research: PALADIN — Self-Correcting Tool-Failure Recovery (ICLR 2026, arXiv:2509.25238) — Runtime failure detection, diagnosis, and recovery for tool-augmented agents. Systematic failure injection generates 50k+ recovery-annotated trajectories; taxonomy-driven retrieval of 55+ failure exemplars at inference. Addresses cascading reasoning errors from API timeouts/exceptions. Applicable to cron_doctor.py self-healing, heartbeat pipeline resilience, and autonomous task robustness. Sources: arxiv.org/abs/2509.25238 (UIUC, arXiv:2509.25370) — First systematic error taxonomy for LLM agents (memory/reflection/planning/action/system), AgentErrorBench dataset of 500+ annotated failure trajectories, and AgentDebug framework for root-cause isolation with corrective feedback (+24% accuracy). Directly applicable to Clarvis episodic failure tracking, postflight error analysis, and building active learning from failures. Sources: arxiv.org/abs/2509.25370, github.com/ulab-uiuc/AgentDebug
-- [ ] [RESEARCH_DISCOVERY 2026-03-01] Research: Neurosymbolic AI for Hybrid Agent Reasoning — Neural-symbolic integration patterns for LLM agents: Symbolic[Neural] (MCTS+neural eval like AlphaGo), Neural[Symbolic] (logical inference inside networks), and integration layers. 2025: Amazon deployed in Vulcan robots + Rufus. Addresses hallucination via symbolic grounding, enables explainable reasoning. IBM path-to-AGI framing. Applicable to clarvis_reasoning.py + brain.py knowledge graph. Sources: arxiv.org/html/2502.11269v1, sciencedirect.com/S2667305325000675, research.ibm.com/topics/neuro-symbolic-ai
-- [ ] [RESEARCH_DISCOVERY 2026-03-01] Research: Tree Search + Process Reward Models for Deliberative Reasoning — Unified framework (MCTS + reward models + transition functions) for structured LLM reasoning. ReST-MCTS* combines process reward guidance with tree search for higher-quality reasoning traces. Process Reward Models evaluate intermediate reasoning steps, enabling test-time compute scaling. Directly applicable to clarvis_reasoning.py and QUICK/STANDARD/DEEP heartbeat modes. Sources: arxiv.org/html/2510.09988v1, openreview.net/forum?id=8rcFOqEud5, arxiv.org/html/2503.10814v1
-- [ ] [RESEARCH_DISCOVERY 2026-03-01] Research: RAPTOR + Hierarchical RAG — Recursive Abstractive Processing for Tree-Organized Retrieval: recursively embed, cluster, summarize text into tree with multi-level abstraction. 20% improvement on complex QA via hierarchical retrieval. Recent 2025 enhancements: semantic chunking + Leiden-based adaptive graph clustering. Also covers A-RAG (agentic hierarchical retrieval interfaces). Directly applicable to brain.py retrieval quality and GraphRAG communities. Sources: arxiv.org/abs/2401.18059, arxiv.org/html/2602.03442v1, frontiersin.org/fcomp.2025.1710121
+- [ ] [FAILURE_TAXONOMY] Add error type classification to `heartbeat_postflight.py` failure handling. When a task fails, classify the error into one of 5 categories (memory/planning/action/system/timeout) using keyword matching on output. Store as `error_type` tag in episode metadata alongside existing "failure" tag. Enables failure pattern analysis across heartbeats. (Extracted from: AgentDebug research, arXiv:2509.25370)
+- [ ] [RECALL_GRAPH_CONTEXT] In `brain.py` recall/search methods, optionally expand results with 1-hop graph neighbors. When a memory is retrieved, also fetch memories connected via existing graph edges and include them as lower-weight "context" entries. No new clustering needed — uses existing 47k+ graph edges. Target: improve complex query recall by providing related context automatically. (Extracted from: RAPTOR/Hierarchical RAG research, arXiv:2401.18059)

@@ -29,7 +29,6 @@ import json
 import os
 import random
 import sys
-import time
 from datetime import datetime, timezone
 
 DATA_DIR = "/home/agent/.openclaw/workspace/data/prompt_optimization"

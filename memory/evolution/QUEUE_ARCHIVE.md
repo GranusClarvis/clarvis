@@ -511,3 +511,10 @@ _Last archived: 2026-03-03_
 - [x] [CLI_SKELETON] Create canonical `clarvis` CLI skeleton — `clarvis/__main__.py` + `clarvis/cli.py` with Typer, subcommands: brain, bench, heartbeat, queue. COMPLETED 2026-03-04.
 - [x] [RESEARCH_DISCOVERY 2026-03-03] Research: LLM Confidence Calibration & Uncertainty Estimation — COMPLETED 2026-03-04. Stored 5 brain memories. Note: memory/research/llm_confidence_calibration_2026-03-04.md. Key: CoCoA hybrid method best (ECE 0.062), VCE outperforms logit-based, Flex-ECE for partial correctness, reflection-based calibration reduces overconfidence. 5 concrete implementation ideas for clarvis_confidence.py.
 - [x] [RESEARCH_DISCOVERY 2026-03-03] Research: ATLAS — Continual Learning, Not Training (Jaglan & Barnes, arXiv:2511.01093) — COMPLETED 2026-03-04. Key insight: shift continual learning from weight updates to system-level orchestration. A Teacher distills experience into persistent “pamphlets” that gate/shape a Student’s future execution at inference time; yields higher success with lower token cost and generates causally-annotated traces useful for world-model training. Sources: arxiv.org/abs/2511.01093
+
+## Archived 2026-03-04
+- [x] [STRUCTURE_FINAL_AUDIT] Deep structure + wiring audit after spine migration. Written to `docs/STRUCTURE_INTEGRITY_AUDIT.md`.
+- [x] [STALE_RESEARCH_PRUNE] Review the 7 RESEARCH_DISCOVERY items (dating 2026-03-01 to 2026-03-03) — for each: either extract 1 actionable implementation task and replace the research item, or demote to a `docs/research_backlog.md` reference list. Queue should have concrete tasks, not reading lists. DONE (2026-03-04): 2 items → concrete tasks, 4 items → docs/research_backlog.md.
+
+## Archived 2026-03-04
+- [x] [SCALABILITY_GATE] Create `scripts/gate_check.sh`: compileall + import_health --quick + spine smoke test + pytest. DONE (2026-03-04).

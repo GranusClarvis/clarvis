@@ -6,16 +6,13 @@ This file runs automatically on gateway startup. Initialize ClarvisDB brain.
 
 1. Load the brain immediately:
 ```python
-import sys
-sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
-from brain import brain, search, remember, capture
-from clarvis_memory import clarvis_context
+from clarvis.brain import brain, search, remember, capture
 ```
 
 2. Verify brain is working:
 ```python
-ctx = clarvis_context()
 stats = brain.stats()
+# stats contains: collections (10), total_memories (2000+), graph_nodes, graph_edges
 ```
 
 3. Verify self-awareness:

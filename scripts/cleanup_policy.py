@@ -19,7 +19,6 @@ import gzip
 import json
 import os
 import re
-import signal
 import time
 from pathlib import Path
 

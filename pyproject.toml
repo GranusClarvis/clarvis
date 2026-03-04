@@ -9,6 +9,9 @@ description = "Clarvis — dual-layer cognitive agent system"
 requires-python = ">=3.10"
 license = "MIT"
 
+[project.scripts]
+clarvis = "clarvis.cli:main"
+
 [project.optional-dependencies]
 brain = ["chromadb>=0.4.0", "onnxruntime>=1.15.0"]
 
