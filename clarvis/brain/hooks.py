@@ -91,10 +91,54 @@ def _make_consolidation_hook():
     return hook
 
 
+def _make_graphrag_booster():
+    """Create a GraphRAG community context booster.
+
+    When CLARVIS_GRAPHRAG_BOOST=1, appends community context keywords to
+    result metadata so downstream consumers see broader thematic context.
+    No-op when disabled (default).
+    """
+    import os
+    from graphrag_communities import enhanced_local_search, COMMUNITIES_FILE, SUMMARIES_FILE
+
+    def booster(results):
+        if os.environ.get("CLARVIS_GRAPHRAG_BOOST") != "1":
+            return
+        if not os.path.exists(COMMUNITIES_FILE) or not os.path.exists(SUMMARIES_FILE):
+            return
+        if not results:
+            return
+
+        # Load community mappings once per call
+        import json
+        with open(COMMUNITIES_FILE, 'r') as f:
+            communities = json.load(f)
+        with open(SUMMARIES_FILE, 'r') as f:
+            summaries = json.load(f)
+
+        node_comms = communities.get("node_community", {})
+        level = "C1"
+        level_summaries = summaries.get("levels", {}).get(level, {})
+
+        seen_comms = set()
+        for result in results:
+            rid = result.get("id", "")
+            comm_info = node_comms.get(rid, {})
+            comm_id = comm_info.get(level)
+            if comm_id and comm_id not in seen_comms:
+                seen_comms.add(comm_id)
+                comm_data = level_summaries.get(comm_id)
+                if comm_data:
+                    result["metadata"]["_graphrag_community"] = comm_id
+                    result["metadata"]["_graphrag_keywords"] = comm_data.get("keywords", [])[:6]
+    return booster
+
+
 # Registry of (name, factory, registration_method)
 _HOOK_DEFS = [
     ("actr_scorer", _make_actr_scorer, "register_recall_scorer"),
     ("attention_booster", _make_attention_booster, "register_recall_booster"),
+    ("graphrag_booster", _make_graphrag_booster, "register_recall_booster"),
     ("retrieval_quality", _make_retrieval_quality_observer, "register_recall_observer"),
     ("hebbian", _make_hebbian_observer, "register_recall_observer"),
     ("synaptic", _make_synaptic_observer, "register_recall_observer"),

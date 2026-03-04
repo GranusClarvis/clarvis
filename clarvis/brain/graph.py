@@ -1,6 +1,7 @@
-"""Brain graph operations — relationship storage, traversal, backfill."""
+"""Brain graph operations — relationship storage, traversal, backfill, decay."""
 
 import json
+import math
 import os
 import fcntl
 from datetime import datetime, timezone
@@ -227,4 +228,87 @@ class GraphMixin:
             "new_edges": new_edges,
             "memories_scanned": memories_scanned,
             "total_edges": len(self.graph.get("edges", [])),
+        }
+
+    def decay_edges(self, half_life_days=30, min_weight=0.05, prune_below=0.02,
+                    decay_types=None, dry_run=False):
+        """Apply age-based exponential decay to edge weights and prune weak edges.
+
+        Edges without an explicit weight get an initial weight of 1.0.
+        Weight decays as: w * 2^(-age_days / half_life_days).
+        Edges below prune_below are removed.
+
+        Args:
+            half_life_days: Days for weight to halve (default 30).
+            min_weight: Floor — weights below this still participate but are flagged.
+            prune_below: Remove edges with decayed weight below this threshold.
+            decay_types: Set of edge types to decay (default: hebbian_association only).
+                         Pass None or empty to decay only hebbian_association.
+            dry_run: If True, compute but don't modify the graph.
+
+        Returns:
+            dict: {decayed, pruned, total_before, total_after, avg_weight}
+        """
+        if decay_types is None:
+            decay_types = {"hebbian_association"}
+
+        now = datetime.now(timezone.utc)
+        edges = self.graph.get("edges", [])
+        total_before = len(edges)
+        decayed_count = 0
+        pruned_count = 0
+        weights_after = []
+        keep = []
+
+        for edge in edges:
+            etype = edge.get("type", "unknown")
+            if etype not in decay_types:
+                keep.append(edge)
+                continue
+
+            # Parse creation time
+            created_str = edge.get("created_at")
+            if created_str:
+                try:
+                    created = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
+                    age_days = (now - created).total_seconds() / 86400.0
+                except (ValueError, TypeError):
+                    age_days = 0.0
+            else:
+                age_days = 0.0
+
+            # Current weight (default 1.0 for legacy edges without weight)
+            current_weight = edge.get("weight", 1.0)
+
+            # Exponential decay: w * 2^(-age/half_life)
+            decay_factor = math.pow(2, -age_days / half_life_days)
+            new_weight = current_weight * decay_factor
+
+            if new_weight < prune_below:
+                pruned_count += 1
+                if not dry_run:
+                    continue  # skip — don't add to keep
+                else:
+                    keep.append(edge)
+                    continue
+            else:
+                decayed_count += 1
+                if not dry_run:
+                    edge["weight"] = round(new_weight, 6)
+                    edge["last_decay"] = now.isoformat()
+                weights_after.append(new_weight)
+                keep.append(edge)
+
+        if not dry_run and (decayed_count > 0 or pruned_count > 0):
+            self.graph["edges"] = keep
+            self._save_graph()
+
+        avg_weight = sum(weights_after) / len(weights_after) if weights_after else 0.0
+
+        return {
+            "decayed": decayed_count,
+            "pruned": pruned_count,
+            "total_before": total_before,
+            "total_after": len(keep),
+            "avg_weight": round(avg_weight, 4),
         }

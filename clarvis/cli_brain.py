@@ -160,3 +160,24 @@ def crosslink():
     print(f"  New edges: {result['new_edges']}")
     print(f"  Scanned: {result['memories_scanned']} memories")
     print(f"  Total edges: {result['total_edges']}")
+
+
+@app.command("edge-decay")
+def edge_decay(
+    half_life: int = 30,
+    prune_below: float = 0.02,
+    dry_run: bool = False,
+):
+    """Decay Hebbian edge weights by age and prune weak ones."""
+    b = _get_brain()
+    result = b.decay_edges(
+        half_life_days=half_life,
+        prune_below=prune_below,
+        dry_run=dry_run,
+    )
+    mode = "DRY RUN" if dry_run else "Applied"
+    print(f"Edge decay ({mode}):")
+    print(f"  Decayed: {result['decayed']}")
+    print(f"  Pruned: {result['pruned']}")
+    print(f"  Edges: {result['total_before']} → {result['total_after']}")
+    print(f"  Avg weight (hebbian): {result['avg_weight']}")

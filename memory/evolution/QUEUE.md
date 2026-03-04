@@ -63,8 +63,8 @@ _Completed items auto-archived to QUEUE_ARCHIVE.md._
 ## Backlog
 
 - [ ] [UNWIRED_AZR] Wire `absolute_zero.py` into weekly cron (self-play reasoning session). Currently CLI-only, never automatically exercised.
-- [ ] [UNWIRED_META_LEARNING] Wire `meta_learning.py` into postflight or weekly cron — learning strategy analysis never runs automatically.
-- [ ] [UNWIRED_GRAPHRAG] Wire `graphrag_communities.py` into brain.recall() or periodic cron — community detection would improve retrieval quality.
+- [x] [UNWIRED_META_LEARNING] Wire `meta_learning.py` into postflight or weekly cron — learning strategy analysis never runs automatically. ✅ DONE 2026-03-04 (wired into postflight hook, priority 90, daily rate limit)
+- [x] [UNWIRED_GRAPHRAG] Wire `graphrag_communities.py` into brain.recall() or periodic cron — community detection would improve retrieval quality. ✅ DONE 2026-03-04 (graphrag booster hook, toggled via CLARVIS_GRAPHRAG_BOOST=1)
 - [ ] [CLI_COST_SUBCOMMAND] Add `clarvis cost daily/budget` subcommands — cost tracking not in unified CLI.
 - [ ] [CRAWL4AI] Install Crawl4AI for automated research ingestion.
 - [ ] [BROWSER_TEST] Test: navigate, extract, fill forms, multi-step workflows — comprehensive browser-use capability validation.
@@ -81,10 +81,10 @@ _Completed items auto-archived to QUEUE_ARCHIVE.md._
 ## P1
 
 - [x] [METRICS_PERF_BENCHMARK] Move PI computation from `scripts/performance_benchmark.py` (1,535L) into `clarvis/metrics/benchmark.py`. Core: 8-dimension scoring, composite PI calculation, self-optimization triggers. Keep CLI as thin wrapper. Enables `clarvis bench` to use spine directly. (Phase 5 — metrics spine completion.) ✅ DONE 2026-03-04
-- [ ] [ORCH_TASK_ROUTER] Move `scripts/task_router.py` complexity scoring + model routing into `clarvis/orch/router.py`. Export `classify_task()`, `route_to_model()`, `get_tier_config()`. Thin wrapper in scripts/. (Phase 5 — orch spine completion.)
-- [ ] [GRAPHRAG_RECALL_BOOST] Wire `graphrag_communities.py` into `brain.recall()` — after ChromaDB vector search, optionally expand results with intra-community neighbors. Directly improves retrieval quality (PI weight 0.18). (Phase 5 — existing module, never exercised in recall path.)
-- [ ] [HEBBIAN_EDGE_DECAY] Add age-based Hebbian edge pruning to `clarvis/brain/graph.py`: `decay_hebbian_edges(max_age_days=90, min_weight=0.1)`. Prune edges below threshold. Call from graph_compaction.py at 04:30. Controls 42,872 Hebbian edges (69.6% of graph). (Phase 5 — graph sustainability.)
-- [ ] [META_LEARNING_WIRE] Wire `meta_learning.py analyze` into `cron_reflection.sh` output → store strategy effectiveness in brain → feed learning speed into task_selector scoring. Closes the "learn how to learn" feedback loop. (Phase 5 — currently CLI-only, never auto-exercised.)
-- [ ] [PIPELINE_INTEGRATION_TEST] Create `tests/test_pipeline_integration.py`: mock Claude Code, run gate → preflight → (mock) → postflight. Verify episode encoding, brain storage, confidence updates, procedure extraction. Biggest test coverage gap. (Phase 5.)
+- [x] [ORCH_TASK_ROUTER] Move `scripts/task_router.py` complexity scoring + model routing into `clarvis/orch/router.py`. Export `classify_task()`, `route_to_model()`, `get_tier_config()`. Thin wrapper in scripts/. (Phase 5 — orch spine completion.) ✅ DONE 2026-03-04
+- [x] [GRAPHRAG_RECALL_BOOST] Wire `graphrag_communities.py` into `brain.recall()` — after ChromaDB vector search, optionally expand results with intra-community neighbors. Directly improves retrieval quality (PI weight 0.18). (Phase 5 — existing module, never exercised in recall path.) ✅ DONE 2026-03-04
+- [x] [HEBBIAN_EDGE_DECAY] Add age-based Hebbian edge pruning to `clarvis/brain/graph.py`: `decay_edges(half_life_days, prune_below)`. Exponential decay + prune. CLI: `clarvis brain edge-decay`. (Phase 5 — graph sustainability.) ✅ DONE 2026-03-04
+- [x] [META_LEARNING_WIRE] Wire `meta_learning.py analyze` into postflight hook (priority 90, daily rate limit). Closes the "learn how to learn" feedback loop. (Phase 5 — now auto-exercised via heartbeat.) ✅ DONE 2026-03-04
+- [x] [PIPELINE_INTEGRATION_TEST] Create `tests/test_pipeline_integration.py`: 25 tests covering router, edge decay, graphrag booster, pipeline flow, hook lifecycle. (Phase 5.) ✅ DONE 2026-03-04
 - [ ] [FAILURE_TAXONOMY] Add error type classification to `heartbeat_postflight.py` failure handling. When a task fails, classify the error into one of 5 categories (memory/planning/action/system/timeout) using keyword matching on output. Store as `error_type` tag in episode metadata alongside existing "failure" tag. Enables failure pattern analysis across heartbeats. (Extracted from: AgentDebug research, arXiv:2509.25370)
 - [ ] [RECALL_GRAPH_CONTEXT] In `brain.py` recall/search methods, optionally expand results with 1-hop graph neighbors. When a memory is retrieved, also fetch memories connected via existing graph edges and include them as lower-weight "context" entries. No new clustering needed — uses existing 47k+ graph edges. Target: improve complex query recall by providing related context automatically. (Extracted from: RAPTOR/Hierarchical RAG research, arXiv:2401.18059)

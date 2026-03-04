@@ -195,6 +195,50 @@ def _structural_health(context):
 
 
 # ---------------------------------------------------------------------------
+# 4. META-LEARNING hook (postflight priority 90 — optional, daily max)
+# ---------------------------------------------------------------------------
+
+# Marker file for daily rate limiting
+_META_LEARNING_MARKER = os.path.join(_SCRIPTS_DIR, "..", "data", "meta_learning", ".last_postflight_run")
+
+
+def _meta_learning_analyze(context):
+    """Run meta-learning analysis (at most once per day via postflight)."""
+    # Daily rate limit check
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    if os.path.exists(_META_LEARNING_MARKER):
+        try:
+            with open(_META_LEARNING_MARKER) as f:
+                last_date = f.read().strip()
+            if last_date == today:
+                return {"action": "skip", "reason": "already_ran_today"}
+        except (IOError, OSError):
+            pass
+
+    from meta_learning import MetaLearner
+
+    ml = MetaLearner()
+    result = ml.analyze()
+    summary = result.get("summary", {})
+
+    # Update marker
+    os.makedirs(os.path.dirname(_META_LEARNING_MARKER), exist_ok=True)
+    with open(_META_LEARNING_MARKER, "w") as f:
+        f.write(today)
+
+    _log(f"META-LEARNING: {summary.get('strategy_count', 0)} strategies, "
+         f"{summary.get('total_recommendations', 0)} recommendations "
+         f"({summary.get('high_priority_recs', 0)} high-pri)")
+
+    return {
+        "action": "analyzed",
+        "strategies": summary.get("strategy_count", 0),
+        "recommendations": summary.get("total_recommendations", 0),
+        "high_priority": summary.get("high_priority_recs", 0),
+    }
+
+
+# ---------------------------------------------------------------------------
 # Registration
 # ---------------------------------------------------------------------------
 
@@ -216,8 +260,14 @@ def register_metrics():
     registry.register(HookPhase.POSTFLIGHT, "structural_health", _structural_health, priority=65)
 
 
+def register_meta_learning():
+    """Register meta-learning analysis hook (daily, priority 90)."""
+    registry.register(HookPhase.POSTFLIGHT, "meta_learning", _meta_learning_analyze, priority=90)
+
+
 def register_all():
     """Register all migrated subsystem hooks. Call once at startup."""
     register_procedural()
     register_consolidation()
     register_metrics()
+    register_meta_learning()
