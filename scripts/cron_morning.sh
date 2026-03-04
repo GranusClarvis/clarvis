@@ -1,37 +1,13 @@
 #!/bin/bash
 # Morning reasoning - plan the day with Claude Code
 source /home/agent/.openclaw/workspace/scripts/cron_env.sh
+source /home/agent/.openclaw/workspace/scripts/lock_helper.sh
 
 LOGFILE="memory/cron/morning.log"
-LOCKFILE="/tmp/clarvis_morning.lock"
 
-# Prevent overlapping runs
-if [ -f "$LOCKFILE" ]; then
-    pid=$(cat "$LOCKFILE" 2>/dev/null)
-    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] SKIP: Previous run still active (PID $pid)" >> "$LOGFILE"
-        exit 0
-    fi
-fi
-echo $$ > "$LOCKFILE"
-trap "rm -f $LOCKFILE" EXIT
-
-# === GLOBAL CLAUDE LOCK — mutual exclusion with all Claude Code spawners ===
-GLOBAL_LOCK="/tmp/clarvis_claude_global.lock"
-
-if [ -f "$GLOBAL_LOCK" ]; then
-    gpid=$(cat "$GLOBAL_LOCK" 2>/dev/null)
-    glock_age=$(( $(date +%s) - $(stat -c %Y "$GLOBAL_LOCK" 2>/dev/null || echo 0) ))
-    if [ -n "$gpid" ] && kill -0 "$gpid" 2>/dev/null && [ "$glock_age" -le 2400 ]; then
-        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] GLOBAL LOCK: Claude already running (PID $gpid, age=${glock_age}s) — deferring" >> "$LOGFILE"
-        exit 0
-    else
-        [ -n "$gpid" ] && echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] GLOBAL LOCK: Stale (age=${glock_age}s, PID $gpid) — reclaiming" >> "$LOGFILE"
-        rm -f "$GLOBAL_LOCK"
-    fi
-fi
-echo $$ > "$GLOBAL_LOCK"
-trap "rm -f $LOCKFILE $GLOBAL_LOCK" EXIT
+# Acquire locks: local + global Claude
+acquire_local_lock "/tmp/clarvis_morning.lock" "$LOGFILE"
+acquire_global_claude_lock "$LOGFILE"
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Morning routine started ===" >> "$LOGFILE"
 

@@ -2,37 +2,13 @@
 # Graph compaction — 04:30 UTC daily
 # Removes orphan edges, deduplicates, backfills nodes, reports health.
 source /home/agent/.openclaw/workspace/scripts/cron_env.sh
+source /home/agent/.openclaw/workspace/scripts/lock_helper.sh
 
 LOGFILE="memory/cron/graph_compaction.log"
-LOCKFILE="/tmp/clarvis_graph_compaction.lock"
 
-# Prevent overlapping runs
-if [ -f "$LOCKFILE" ]; then
-    pid=$(cat "$LOCKFILE" 2>/dev/null)
-    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] SKIP: Previous run still active (PID $pid)" >> "$LOGFILE"
-        exit 0
-    fi
-fi
-echo $$ > "$LOCKFILE"
-trap "rm -f $LOCKFILE" EXIT
-
-# === MAINTENANCE LOCK — mutual exclusion with graph_checkpoint + chromadb_vacuum ===
-MAINTENANCE_LOCK="/tmp/clarvis_maintenance.lock"
-
-if [ -f "$MAINTENANCE_LOCK" ]; then
-    mpid=$(cat "$MAINTENANCE_LOCK" 2>/dev/null)
-    mlock_age=$(( $(date +%s) - $(stat -c %Y "$MAINTENANCE_LOCK" 2>/dev/null || echo 0) ))
-    if [ -n "$mpid" ] && kill -0 "$mpid" 2>/dev/null && [ "$mlock_age" -le 600 ]; then
-        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] SKIP: Maintenance lock held (PID $mpid, age=${mlock_age}s)" >> "$LOGFILE"
-        exit 0
-    else
-        [ -n "$mpid" ] && echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] MAINTENANCE LOCK: Stale (age=${mlock_age}s) — reclaiming" >> "$LOGFILE"
-        rm -f "$MAINTENANCE_LOCK"
-    fi
-fi
-echo $$ > "$MAINTENANCE_LOCK"
-trap "rm -f $LOCKFILE $MAINTENANCE_LOCK" EXIT
+# Acquire locks: local + maintenance
+acquire_local_lock "/tmp/clarvis_graph_compaction.lock" "$LOGFILE"
+acquire_maintenance_lock "$LOGFILE"
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Graph compaction started ===" >> "$LOGFILE"
 

@@ -1,39 +1,13 @@
 #!/bin/bash
 # Daily reflection - consolidate memory AND generate new evolution tasks
 source /home/agent/.openclaw/workspace/scripts/cron_env.sh
+source /home/agent/.openclaw/workspace/scripts/lock_helper.sh
 
 LOGFILE="memory/cron/reflection.log"
-LOCKFILE="/tmp/clarvis_reflection.lock"
 
-# Prevent overlapping runs
-if [ -f "$LOCKFILE" ]; then
-    pid=$(cat "$LOCKFILE" 2>/dev/null)
-    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] SKIP: Previous run still active (PID $pid)" >> "$LOGFILE"
-        exit 0
-    fi
-fi
-echo $$ > "$LOCKFILE"
-trap "rm -f $LOCKFILE" EXIT
-
-# === GLOBAL LOCK — mutual exclusion with Claude Code spawners (autonomous, evolution, etc.) ===
-# Reflection writes heavily to brain (ChromaDB), QUEUE.md, graph.json — must not collide.
-GLOBAL_LOCK="/tmp/clarvis_claude_global.lock"
-
-if [ -f "$GLOBAL_LOCK" ]; then
-    gpid=$(cat "$GLOBAL_LOCK" 2>/dev/null)
-    glock_age=$(( $(date +%s) - $(stat -c %Y "$GLOBAL_LOCK" 2>/dev/null || echo 0) ))
-    if [ -n "$gpid" ] && kill -0 "$gpid" 2>/dev/null && [ "$glock_age" -le 2400 ]; then
-        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] GLOBAL LOCK: Claude/reflection already running (PID $gpid, age=${glock_age}s) — skipping" >> "$LOGFILE"
-        exit 0
-    else
-        # Stale global lock — reclaim
-        [ -n "$gpid" ] && echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] GLOBAL LOCK: Stale (age=${glock_age}s, PID $gpid) — reclaiming" >> "$LOGFILE"
-        rm -f "$GLOBAL_LOCK"
-    fi
-fi
-echo $$ > "$GLOBAL_LOCK"
-trap "rm -f $LOCKFILE $GLOBAL_LOCK" EXIT
+# Acquire locks: local + global Claude (reflection writes to brain/QUEUE/graph)
+acquire_local_lock "/tmp/clarvis_reflection.lock" "$LOGFILE"
+acquire_global_claude_lock "$LOGFILE"
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Reflection starting ===" >> "$LOGFILE"
 

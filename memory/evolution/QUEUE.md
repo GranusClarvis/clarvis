@@ -6,11 +6,10 @@ _Completed items auto-archived to QUEUE_ARCHIVE.md._
 
 ## P0 — Do Next Heartbeat
 
-- [x] [HEARTBEAT_INIT_EXPORT_FIX] ~~Fix `clarvis/heartbeat/__init__.py` — add `HookRegistry` to exports~~ DONE (2026-03-04).
-- [x] [BOOT_MD_FIX] Fixed deprecated `from clarvis_memory import clarvis_context` → `from clarvis.brain import brain, search, remember, capture`. DONE (2026-03-04).
-- [x] [SELF_MD_UPDATE] Updated SELF.md: PM2→systemd, brain stats 42/7→2000+/10, process chain updated. DONE (2026-03-04).
 - [ ] [DOCS_STRUCTURE] Establish docs structure: `docs/ARCHITECTURE.md` (layers + boundaries), `docs/CONVENTIONS.md` (imports/sys.path, logging, CLI patterns), `docs/DATA_LAYOUT.md` (what goes in memory/, data/, logs/, tmp/), `docs/RUNBOOK.md` (how to run heartbeats, benchmarks, restore backups).
-- [x] [DEAD_CODE_AUDIT] Built `scripts/dead_code_audit.py`: scans crontab, imports, cron .sh wrappers, docs, skills, configs, spine. 85/89 exercised, 3 candidates. DONE (2026-03-04).
+- [x] [CRON_LOCK_HELPER] Extract `scripts/lock_helper.sh` — shared functions for local/global/maintenance locks. Eliminates 309 lines of duplicated lock logic across 16 cron scripts. Functions: `acquire_local_lock <name>`, `acquire_global_lock`, `acquire_maintenance_lock`. Update all cron_*.sh to source it. (Phase 5 risk #5 — highest active duplication.) ✅ DONE 2026-03-04
+- [x] [METRICS_SELF_MODEL] Populate `clarvis/metrics/` — move `scripts/self_model.py` core classes (CapabilityDomain, SelfModel, 7-domain tracking) into `clarvis/metrics/self_model.py`. Thin re-export wrapper in scripts/. Wire into heartbeat postflight via adapter hook. (Phase 5 — fills largest empty spine stub.) ✅ DONE 2026-03-04
+- [x] [ORCH_TASK_SELECTOR] Populate `clarvis/orch/` — move `scripts/task_selector.py` scoring logic into `clarvis/orch/task_selector.py`. Export `select_task()`, `score_candidates()`, `apply_novelty_boost()`. Thin wrapper in scripts/. (Phase 5 — fills second empty spine stub with most impactful module.) ✅ DONE 2026-03-04
 
 ---
 
@@ -35,20 +34,13 @@ _Completed items auto-archived to QUEUE_ARCHIVE.md._
 
 ### CLI Migration (see docs/CLI_MIGRATION_PLAN.md)
 
-- [x] [CLI_CONSOLE_SCRIPT] Added `[project.scripts] clarvis = "clarvis.cli:main"` to `pyproject.toml`, `pip install -e .` confirmed, `clarvis --help` works from any directory. DONE (2026-03-04).
-- [x] [CLI_TESTS] Wrote `tests/test_cli.py` — 9 tests: `--help` for all subcommands + real invocations (`brain stats`, `queue status`, `bench pi`, `heartbeat gate`). All pass. DONE (2026-03-04).
 - [ ] [CLI_BRAIN_LIVE] Verify `clarvis brain health` output matches `python3 scripts/brain.py health` exactly. Fix any discrepancies. Run both and diff.
-- [x] [CLI_CRON_SUBCOMMAND] Added `clarvis cron list|status|run <job>` with `--dry-run`. Wraps existing cron_*.sh scripts. DONE (2026-03-04).
-- [x] [CLI_CRON_PILOT] Migrated `cron_reflection.sh` to `clarvis cron run reflection` in system crontab. Approved & applied 2026-03-04. Soak period: 7 days (ends 2026-03-11). DONE (2026-03-04).
-- [x] [CLI_DEPRECATION_WARNINGS] Added stderr deprecation warnings to `scripts/brain.py`, `scripts/performance_benchmark.py`, `scripts/queue_writer.py` `__main__` blocks. DONE (2026-03-04).
 - [ ] [CLI_DOCS_UPDATE] After 30-day soak: update CLAUDE.md, RUNBOOK.md, AGENTS.md to reference `clarvis` CLI. Remove old `python3 scripts/brain.py` examples.
 - [ ] [CLI_SUBPKG_ABSORB] Evaluate absorbing `clarvis-db`, `clarvis-cost`, `clarvis-reasoning` CLIs into unified `clarvis db|cost|reasoning` subcommands. Requires Inverse decision.
 - [ ] [CLI_DEAD_SCRIPT_SWEEP] After CLI migration complete: audit which scripts/ `__main__` blocks have zero callers. Move to `scripts/deprecated/`.
 - [ ] [CLI_BENCH_EXPAND] Add missing bench subcommands: `record`, `trend [days]`, `check` (exit 1 on failures), `heartbeat` (quick check), `weakest` (weakest metric). All delegate to `scripts/performance_benchmark.py`.
 - [ ] [CLI_HEARTBEAT_EXPAND] Add `clarvis heartbeat preflight` (run preflight only, print JSON) and `clarvis heartbeat postflight` (accepts exit-code + output-file + preflight-file args). Currently only `run` and `gate` exist.
-- [ ] [CLI_BOOT_DRIFT] Audit AGENTS.md and BOOT.md for references to `scripts/deprecated/` or moved scripts. Update to use `clarvis` CLI or correct spine import paths.
 - [ ] [CLI_ROOT_PYPROJECT] Create root `pyproject.toml` for the `clarvis` package (if not already present). Define `[project.scripts] clarvis = "clarvis.cli:main"`, set `packages = ["clarvis"]`, pin deps. Prerequisite for CLI_CONSOLE_SCRIPT.
-- [x] [CLI_CRON_STUB] Subsumed by CLI_CRON_SUBCOMMAND — `clarvis/cli_cron.py` includes list + status + run. DONE (2026-03-04).
 
 ### Codebase Restructuring (see docs/ARCHITECTURE.md)
 (Primary: now tracked in P0.)
@@ -84,14 +76,15 @@ _Completed items auto-archived to QUEUE_ARCHIVE.md._
 ## Non-Code Improvements
 
 - [ ] [CONFIDENCE_RECALIBRATION] Fix overconfidence at 90% level (70% actual accuracy). In `clarvis_confidence.py`, add confidence band analysis to `predict()`: if historical accuracy for band 0.85-0.95 is <80%, auto-downgrade new predictions in that band by 0.10. Log adjustments. Target: Brier score 0.12→0.20+ in system health ranking.
-- [ ] [ACTR_WIRING] Wire `actr_activation.py` into `brain.py` recall path — add power-law decay scoring as a re-ranking factor after ChromaDB vector search. This has been "pending" since Phase 2 and is the single longest-stalled item. Target: memories accessed recently get retrieval boost, old unused memories decay naturally.
+- [ ] [ACTR_WIRING] Wire `actr_activation.py` into `brain.py` recall path — add power-law decay scoring as a re-ranking factor after ChromaDB vector search. Longest-stalled item. Hook registration exists in `clarvis/brain/hooks.py` but scoring path needs testing + calibration. Target: recently-accessed memories get retrieval boost, old unused memories decay. (Phase 5 priority #10.)
 
 ## P1
 
+- [x] [METRICS_PERF_BENCHMARK] Move PI computation from `scripts/performance_benchmark.py` (1,535L) into `clarvis/metrics/benchmark.py`. Core: 8-dimension scoring, composite PI calculation, self-optimization triggers. Keep CLI as thin wrapper. Enables `clarvis bench` to use spine directly. (Phase 5 — metrics spine completion.) ✅ DONE 2026-03-04
+- [ ] [ORCH_TASK_ROUTER] Move `scripts/task_router.py` complexity scoring + model routing into `clarvis/orch/router.py`. Export `classify_task()`, `route_to_model()`, `get_tier_config()`. Thin wrapper in scripts/. (Phase 5 — orch spine completion.)
+- [ ] [GRAPHRAG_RECALL_BOOST] Wire `graphrag_communities.py` into `brain.recall()` — after ChromaDB vector search, optionally expand results with intra-community neighbors. Directly improves retrieval quality (PI weight 0.18). (Phase 5 — existing module, never exercised in recall path.)
+- [ ] [HEBBIAN_EDGE_DECAY] Add age-based Hebbian edge pruning to `clarvis/brain/graph.py`: `decay_hebbian_edges(max_age_days=90, min_weight=0.1)`. Prune edges below threshold. Call from graph_compaction.py at 04:30. Controls 42,872 Hebbian edges (69.6% of graph). (Phase 5 — graph sustainability.)
+- [ ] [META_LEARNING_WIRE] Wire `meta_learning.py analyze` into `cron_reflection.sh` output → store strategy effectiveness in brain → feed learning speed into task_selector scoring. Closes the "learn how to learn" feedback loop. (Phase 5 — currently CLI-only, never auto-exercised.)
+- [ ] [PIPELINE_INTEGRATION_TEST] Create `tests/test_pipeline_integration.py`: mock Claude Code, run gate → preflight → (mock) → postflight. Verify episode encoding, brain storage, confidence updates, procedure extraction. Biggest test coverage gap. (Phase 5.)
 - [ ] [FAILURE_TAXONOMY] Add error type classification to `heartbeat_postflight.py` failure handling. When a task fails, classify the error into one of 5 categories (memory/planning/action/system/timeout) using keyword matching on output. Store as `error_type` tag in episode metadata alongside existing "failure" tag. Enables failure pattern analysis across heartbeats. (Extracted from: AgentDebug research, arXiv:2509.25370)
 - [ ] [RECALL_GRAPH_CONTEXT] In `brain.py` recall/search methods, optionally expand results with 1-hop graph neighbors. When a memory is retrieved, also fetch memories connected via existing graph edges and include them as lower-weight "context" entries. No new clustering needed — uses existing 47k+ graph edges. Target: improve complex query recall by providing related context automatically. (Extracted from: RAPTOR/Hierarchical RAG research, arXiv:2401.18059)
-- [x] [SPINE_HEARTBEAT_ABSORB] Moved gate logic to `clarvis/heartbeat/gate.py`, runner to `clarvis/heartbeat/runner.py`. CLI uses spine gate. Scripts are thin wrappers. DONE (2026-03-04 Phase 4).
-- [x] [SPINE_CONTEXT_ABSORB] Moved core compression (tfidf_extract, mmr_rerank, compress_text, compress_queue, compress_episodes, generate_tiered_brief) to `clarvis/context/compressor.py`. Scripts wrapper has deprecation notice. DONE (2026-03-04 Phase 4).
-- [x] [BRAIN_PARALLEL_QUERY] recall() already parallel (ThreadPoolExecutor). Increased max_workers 6→10, added 30s result cache (0ms repeated queries), parallelized recall_from_date(). Avg latency: 7441→2092ms (72% reduction). Added `latency` subcommand to brain_eval_harness.py. DONE (2026-03-04 Phase 4).
-- [x] [TEST_COVERAGE_EXPAND] Added tests/test_spine_phase4.py: 31 tests covering heartbeat gate, context compressor, brain search perf, cron wrap-mode integration. All pass. Registered `slow` pytest mark. DONE (2026-03-04 Phase 4).
-- [x] [REFLECTION_GLOBAL_LOCK] Added `/tmp/clarvis_claude_global.lock` to `cron_reflection.sh` with standard stale detection (2400s). All 8 cron scripts now share global lock. DONE (2026-03-04 Phase 4).

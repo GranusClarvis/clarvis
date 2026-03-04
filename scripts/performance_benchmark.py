@@ -44,6 +44,16 @@ from datetime import datetime, timezone, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+# Ensure clarvis package is importable
+_workspace = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+if _workspace not in sys.path:
+    sys.path.insert(0, _workspace)
+
+# Import canonical TARGETS, compute_pi, and check_self_optimization from spine
+from clarvis.metrics.benchmark import (  # noqa: E402
+    TARGETS, compute_pi, check_self_optimization,
+)
+
 # === PATHS ===
 WORKSPACE = "/home/agent/.openclaw/workspace"
 METRICS_FILE = os.path.join(WORKSPACE, "data/performance_metrics.json")
@@ -54,40 +64,6 @@ os.makedirs(os.path.dirname(METRICS_FILE), exist_ok=True)
 # Rolling history cap
 MAX_HISTORY = 400
 MAX_ALERTS = 200
-
-# === TARGETS (measurable thresholds) ===
-# ⚠️ QUALITY OVER SPEED — Weights emphasize intelligence, not just performance
-# Speed is secondary — we don't want to dumb down for performance
-# We want: smarter connections, better retrieval, higher accuracy, growing Phi
-# NOT: faster but dumber, slimmed down brain, less context
-
-TARGETS = {
-    # Dimension 1: Brain Query Speed (reasonable targets for efficiency)
-    # Light query (single collection): target ~1s
-    # Heavy query (full multi-collection): target ~5s
-    "brain_query_avg_ms":   {"target": 8000.0, "direction": "lower",  "label": "Brain Query Avg (ms)",    "weight": 0.08, "critical": 12000.0},  # Calibrated to NUC hardware (ONNX CPU)
-    "brain_query_p95_ms":   {"target": 9000.0, "direction": "lower",  "label": "Brain Query P95 (ms)",    "weight": 0.05, "critical": 14000.0},  # Calibrated to NUC hardware (ONNX CPU)
-    # Dimension 2: Semantic Retrieval — CORE QUALITY
-    "retrieval_hit_rate":   {"target": 0.80,  "direction": "higher",  "label": "Retrieval Hit Rate",      "weight": 0.18, "critical": 0.40},  # Increased from 0.15
-    "retrieval_precision3": {"target": 0.60,  "direction": "higher",  "label": "Precision@3",             "weight": 0.08, "critical": 0.25},  # Increased from 0.05
-    # Dimension 3: Efficiency (tracked, not primary focus)
-    "avg_tokens_per_op":    {"target": None,   "direction": "monitor", "label": "Avg Tokens/Operation",    "weight": 0.00},
-    "heartbeat_overhead_s": {"target": 15.0,  "direction": "lower",   "label": "Heartbeat Overhead (s)",  "weight": 0.03, "critical": 30.0},  # Relaxed
-    # Dimension 4: Accuracy — CORE QUALITY
-    "episode_success_rate": {"target": 0.70,  "direction": "higher",  "label": "Episode Success Rate",    "weight": 0.18, "critical": 0.35},  # Increased from 0.15
-    "action_accuracy":      {"target": 0.80,  "direction": "higher",  "label": "Action Accuracy",         "weight": 0.08, "critical": 0.45},  # Increased from 0.05
-    # Dimension 5: Results Quality / Intelligence — CORE QUALITY
-    "phi":                  {"target": 0.50,  "direction": "higher",  "label": "Phi (Integration)",       "weight": 0.12, "critical": 0.20},  # Increased from 0.10
-    "context_relevance":    {"target": 0.70,  "direction": "higher",  "label": "Context Relevance",       "weight": 0.08, "critical": 0.35},  # Increased from 0.05
-    # Dimension 6: Brain Health (not bloat prevention — growth is good)
-    "graph_density":        {"target": 1.0,   "direction": "higher",  "label": "Graph Density (edges/mem)","weight": 0.05, "critical": 0.2},
-    "brain_total_memories": {"target": None,   "direction": "monitor", "label": "Brain Size (memories)",    "weight": 0.00},  # Monitor only, growth is good
-    "bloat_score":          {"target": 0.50,  "direction": "lower",   "label": "Bloat Score",             "weight": 0.02, "critical": 0.80},  # Relaxed - we want smart growth
-    # Dimension 7: Context/Prompt Quality
-    "brief_compression":    {"target": 0.50,  "direction": "higher",  "label": "Brief Compression Ratio", "weight": 0.02, "critical": 0.15},
-    # Dimension 8: Load Scaling (relaxed — growth is good)
-    "load_degradation_pct": {"target": 20.0,  "direction": "lower",   "label": "Load Degradation (%)",    "weight": 0.02, "critical": 70.0},  # Relaxed
-}
 
 # === TEST QUERIES ===
 TIMING_QUERIES = [
@@ -733,167 +709,15 @@ def benchmark_self_improvement():
 
 
 # ============================================================
-# PERFORMANCE INDEX (PI)
+# PERFORMANCE INDEX (PI) — imported from clarvis.metrics.benchmark
 # ============================================================
-
-def compute_pi(metrics):
-    """Compute the Performance Index (PI): 0.0-1.0 composite score.
-
-    Each metric contributes to PI based on its weight and how well it
-    meets its target. Metrics that exceed critical thresholds get 0.
-    Metrics that meet targets get full weight. In between is linear.
-
-    PI Spectrum:
-      0.00-0.20  Critical    — multiple systems degraded
-      0.20-0.40  Poor        — below targets
-      0.40-0.60  Acceptable  — meeting minimum targets
-      0.60-0.80  Good        — above targets
-      0.80-1.00  Excellent   — all systems optimal
-    """
-    total_weight = 0
-    weighted_score = 0
-
-    for key, meta in TARGETS.items():
-        weight = meta.get("weight", 0)
-        if weight == 0:
-            continue  # Monitor-only metric
-
-        target = meta["target"]
-        critical = meta.get("critical")
-        direction = meta["direction"]
-        value = metrics.get(key)
-
-        if value is None or target is None:
-            continue
-
-        total_weight += weight
-
-        if direction == "lower":
-            if value <= target:
-                score = 1.0
-            elif critical and value >= critical:
-                score = 0.0
-            elif critical:
-                # Linear interpolation between target and critical
-                score = max(0, 1.0 - (value - target) / (critical - target))
-            else:
-                score = max(0, 1.0 - (value - target) / target) if target > 0 else 0
-        else:  # higher
-            if value >= target:
-                score = 1.0
-            elif critical is not None and value <= critical:
-                score = 0.0
-            elif critical is not None:
-                score = max(0, (value - critical) / (target - critical))
-            else:
-                score = min(1.0, value / target) if target > 0 else 0
-
-        weighted_score += weight * score
-
-    pi = round(weighted_score / max(total_weight, 0.01), 4)
-
-    if pi >= 0.80:
-        interpretation = "Excellent — all systems optimal"
-    elif pi >= 0.60:
-        interpretation = "Good — above targets, healthy"
-    elif pi >= 0.40:
-        interpretation = "Acceptable — meeting minimum targets"
-    elif pi >= 0.20:
-        interpretation = "Poor — below targets, optimization needed"
-    else:
-        interpretation = "Critical — multiple systems degraded"
-
-    return {"pi": pi, "interpretation": interpretation}
+# compute_pi() is imported at module top from clarvis.metrics.benchmark
 
 
 # ============================================================
-# SELF-OPTIMIZATION
+# SELF-OPTIMIZATION — imported from clarvis.metrics.benchmark
 # ============================================================
-
-def check_self_optimization(report, prev_report=None):
-    """Check if any metrics regressed and generate optimization triggers.
-
-    Returns list of alerts/actions to take.
-    """
-    alerts = []
-    metrics = report.get("metrics", {})
-    pi_data = report.get("pi", {})
-    pi = pi_data.get("pi", 0)
-
-    # Check PI drop
-    if prev_report:
-        prev_pi = prev_report.get("pi", {}).get("pi", 0)
-        if prev_pi > 0 and pi < prev_pi - 0.05:
-            alerts.append({
-                "type": "pi_drop",
-                "severity": "high",
-                "message": f"PI dropped from {prev_pi:.3f} to {pi:.3f} (-{prev_pi - pi:.3f})",
-                "action": "investigate_regression",
-            })
-
-    # Check individual metrics against critical thresholds
-    for key, meta in TARGETS.items():
-        value = metrics.get(key)
-        critical = meta.get("critical")
-        direction = meta.get("direction")
-        if value is None or critical is None or direction == "monitor":
-            continue
-
-        breached = (direction == "lower" and value > critical) or \
-                   (direction == "higher" and value < critical)
-
-        if breached:
-            alerts.append({
-                "type": "critical_breach",
-                "severity": "critical",
-                "metric": key,
-                "value": value,
-                "critical_threshold": critical,
-                "message": f"{meta['label']}: {value} breached critical threshold {critical}",
-                "action": f"fix_{key}",
-            })
-
-    # Check for metric regression from previous run
-    if prev_report:
-        prev_metrics = prev_report.get("metrics", {})
-        for key, meta in TARGETS.items():
-            if meta.get("weight", 0) == 0:
-                continue
-            value = metrics.get(key)
-            prev_value = prev_metrics.get(key)
-            if value is None or prev_value is None:
-                continue
-            direction = meta["direction"]
-            if direction == "lower" and value > prev_value * 1.3:
-                alerts.append({
-                    "type": "regression",
-                    "severity": "medium",
-                    "metric": key,
-                    "prev": prev_value,
-                    "current": value,
-                    "message": f"{meta['label']}: regressed from {prev_value} to {value} (+{((value - prev_value) / max(prev_value, 0.01)) * 100:.0f}%)",
-                })
-            elif direction == "higher" and value < prev_value * 0.7:
-                alerts.append({
-                    "type": "regression",
-                    "severity": "medium",
-                    "metric": key,
-                    "prev": prev_value,
-                    "current": value,
-                    "message": f"{meta['label']}: regressed from {prev_value} to {value} ({((value - prev_value) / max(prev_value, 0.01)) * 100:.0f}%)",
-                })
-
-    # Brain bloat check
-    bloat = metrics.get("bloat_score", 0)
-    if bloat > 0.5:
-        alerts.append({
-            "type": "bloat_warning",
-            "severity": "medium",
-            "message": f"Brain bloat score {bloat:.2f} — consider pruning low-importance memories",
-            "action": "brain_optimize",
-        })
-
-    return alerts
+# check_self_optimization() is imported at module top from clarvis.metrics.benchmark
 
 
 def write_alerts(alerts):

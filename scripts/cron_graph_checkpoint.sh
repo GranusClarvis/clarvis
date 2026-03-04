@@ -3,27 +3,14 @@
 # Provides mid-cycle recovery point after heavy nightly reflection
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/lock_helper.sh"
 DATA_DIR="$SCRIPT_DIR/../data/clarvisdb"
 GRAPH_FILE="$DATA_DIR/relationships.json"
 CHECKPOINT_FILE="$DATA_DIR/relationships.checkpoint.json"
 LOG_FILE="$SCRIPT_DIR/../memory/cron/graph_checkpoint.log"
 
-# === MAINTENANCE LOCK — mutual exclusion with graph_compaction + chromadb_vacuum ===
-MAINTENANCE_LOCK="/tmp/clarvis_maintenance.lock"
-
-if [ -f "$MAINTENANCE_LOCK" ]; then
-    mpid=$(cat "$MAINTENANCE_LOCK" 2>/dev/null)
-    mlock_age=$(( $(date +%s) - $(stat -c %Y "$MAINTENANCE_LOCK" 2>/dev/null || echo 0) ))
-    if [ -n "$mpid" ] && kill -0 "$mpid" 2>/dev/null && [ "$mlock_age" -le 600 ]; then
-        echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] SKIP: Maintenance lock held (PID $mpid, age=${mlock_age}s)" >> "$LOG_FILE"
-        exit 0
-    else
-        [ -n "$mpid" ] && echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] MAINTENANCE LOCK: Stale (age=${mlock_age}s) — reclaiming" >> "$LOG_FILE"
-        rm -f "$MAINTENANCE_LOCK"
-    fi
-fi
-echo $$ > "$MAINTENANCE_LOCK"
-trap "rm -f $MAINTENANCE_LOCK" EXIT
+# Acquire maintenance lock (mutual exclusion with graph_compaction + chromadb_vacuum)
+acquire_maintenance_lock "$LOG_FILE"
 
 echo "=== Graph Checkpoint $(date -u +%Y-%m-%dT%H:%M:%SZ) ===" >> "$LOG_FILE"
 

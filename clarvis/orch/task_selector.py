@@ -1,0 +1,341 @@
+"""
+Clarvis Task Selector — attention-based task prioritization.
+
+Provides:
+  - parse_tasks(): parse unchecked tasks from QUEUE.md
+  - score_tasks(): 9-factor multi-modal salience scoring
+  - _get_spotlight_themes(), _spotlight_alignment(): attention coherence
+  - _check_quality_gate(), _is_repair_task(): gate enforcement
+
+Migrated from scripts/task_selector.py (Phase 5 spine refactor).
+"""
+
+import json
+import os
+import re
+import sys
+
+# Resolve scripts directory for dependency imports
+_SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'scripts')
+if _SCRIPTS_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPTS_DIR)
+
+from attention import attention, get_codelet_competition
+from brain import brain
+
+try:
+    from retrieval_experiment import smart_recall
+except ImportError:
+    smart_recall = None
+
+try:
+    from somatic_markers import somatic
+except ImportError:
+    somatic = None
+
+try:
+    from thought_protocol import thought as thought_proto
+except ImportError:
+    thought_proto = None
+
+QUEUE_FILE = "/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md"
+QUALITY_GATE_FILE = "/home/agent/.openclaw/workspace/data/memory_quality_gate.json"
+
+# Keywords that signal AGI/consciousness relevance (high-value work)
+AGI_KEYWORDS = [
+    "agi", "consciousness", "attention", "working memory", "self model",
+    "reasoning", "phi", "neural", "meta-cognition", "awareness", "gwt",
+    "spotlight", "global workspace", "prediction", "calibration",
+]
+
+# Keywords that signal integration work (connecting existing components)
+INTEGRATION_KEYWORDS = [
+    "wire", "integrate", "connect", "hook", "persistent", "feedback loop",
+    "into cron", "into daily", "run daily", "automat",
+]
+
+# Keywords that signal architectural or strategic work (non-Python improvements)
+ARCHITECTURAL_KEYWORDS = [
+    "redesign", "refactor", "architecture", "simplify", "merge",
+    "config", "skill", "protocol", "tune", "audit", "review",
+    "heartbeat.md", "agents.md", "roadmap", "prompt", "schedule",
+]
+
+
+def parse_tasks(queue_file=QUEUE_FILE):
+    """Parse unchecked tasks from QUEUE.md with their priority section."""
+    tasks = []
+    current_section = "P2"
+
+    with open(queue_file, 'r') as f:
+        for line_num, line in enumerate(f, 1):
+            stripped = line.strip()
+
+            # Detect section headers
+            if '## P0' in line:
+                current_section = "P0"
+            elif '## P1' in line:
+                current_section = "P1"
+            elif '## P2' in line:
+                current_section = "P2"
+            elif '## Completed' in line:
+                current_section = "completed"
+
+            # Match unchecked tasks
+            match = re.match(r'^- \[ \] (.+)$', stripped)
+            if match and current_section != "completed":
+                tasks.append({
+                    "line_num": line_num,
+                    "text": match.group(1),
+                    "section": current_section,
+                })
+
+    return tasks
+
+
+def _get_spotlight_themes():
+    """Extract themes from current attention spotlight.
+
+    Returns (theme_words, spotlight_texts) from the top-K items in the spotlight.
+    Only considers non-TASK items to avoid circular self-reinforcement.
+    """
+    try:
+        spotlight = attention.focus()
+    except Exception:
+        return set(), []
+
+    theme_words = set()
+    spotlight_texts = []
+    for item in spotlight:
+        content = item.get("content", "")
+        if content.startswith("TASK: ") or content.startswith("Task salience="):
+            continue
+        spotlight_texts.append(content)
+        words = set(w.lower() for w in content.split() if len(w) > 3)
+        theme_words.update(words)
+
+    return theme_words, spotlight_texts
+
+
+def _spotlight_alignment(task_text, theme_words, spotlight_texts):
+    """Score how well a task aligns with the current attention spotlight themes.
+
+    Uses word overlap + spreading activation for coherent focus.
+    Returns float 0.0-1.0 representing alignment strength.
+    """
+    if not theme_words:
+        return 0.0
+
+    task_words = set(w.lower() for w in task_text.split() if len(w) > 3)
+    if not task_words:
+        return 0.0
+
+    overlap = len(task_words & theme_words)
+    overlap_score = min(1.0, overlap / max(5, len(task_words)) * 2.0)
+
+    try:
+        activated = attention.spreading_activation(task_text, n=3)
+        activation_score = len(activated) / 3.0 if activated else 0.0
+    except Exception:
+        activation_score = 0.0
+
+    return round(min(1.0, 0.6 * overlap_score + 0.4 * activation_score), 4)
+
+
+def score_tasks(tasks, codelet_result=None):
+    """Score each task using attention-based salience + brain context + spotlight alignment.
+
+    Scoring factors:
+      1. Section importance: P0=0.9, P1=0.6, P2=0.3
+      2. Context relevance: word overlap with current brain context
+      3. Recent activity relevance: overlap with last day's memories
+      4. AGI/consciousness boost
+      5. Integration/wiring boost
+      6. Spotlight alignment: coherence with current attention focus
+      7. Somatic marker bias
+      8. Codelet domain bias
+      9. Failure penalty from learnings
+
+    Final: 70% salience + 10% spotlight + 10% somatic + 10% codelet
+    """
+    try:
+        context = brain.get_context()
+    except Exception:
+        context = ""
+
+    try:
+        if smart_recall is not None:
+            recent = smart_recall("recent activity and current work", n=10)
+        else:
+            recent = brain.recall_recent(days=1, n=10)
+        recent_text = " ".join([r["document"] for r in recent])
+    except Exception:
+        recent_text = ""
+
+    theme_words, spotlight_texts = _get_spotlight_themes()
+
+    try:
+        from retrieval_quality import tracker
+        if context and context != "idle":
+            tracker.rate_last("smart_recall", useful=True, reason="task_selector: has active context")
+        if recent_text and len(recent_text) > 50:
+            tracker.rate_last("smart_recall", useful=True, reason="task_selector: recent memories found")
+        elif recent_text:
+            tracker.rate_last("smart_recall", useful=False, reason="task_selector: sparse recent text")
+    except Exception:
+        pass
+
+    scored = []
+
+    for task in tasks:
+        text = task["text"]
+        section = task["section"]
+        text_lower = text.lower()
+
+        section_importance = {"P0": 0.9, "P1": 0.6, "P2": 0.3}.get(section, 0.3)
+
+        context_words = set(context.lower().split()) if context else set()
+        task_words = set(text_lower.split())
+        if task_words:
+            context_overlap = len(context_words & task_words) / len(task_words)
+            context_relevance = min(1.0, context_overlap * 2)
+        else:
+            context_relevance = 0.0
+
+        recent_words = set(recent_text.lower().split()) if recent_text else set()
+        if task_words:
+            recent_overlap = len(recent_words & task_words) / len(task_words)
+            recent_relevance = min(1.0, recent_overlap * 1.5)
+        else:
+            recent_relevance = 0.0
+
+        relevance = max(context_relevance, recent_relevance * 0.8, 0.3)
+
+        agi_boost = 0.0
+        for kw in AGI_KEYWORDS:
+            if kw in text_lower:
+                agi_boost = min(0.3, agi_boost + 0.1)
+
+        integration_boost = 0.0
+        for kw in INTEGRATION_KEYWORDS:
+            if kw in text_lower:
+                integration_boost = min(0.2, integration_boost + 0.1)
+
+        architectural_boost = 0.0
+        for kw in ARCHITECTURAL_KEYWORDS:
+            if kw in text_lower:
+                architectural_boost = min(0.2, architectural_boost + 0.1)
+
+        spotlight_align = _spotlight_alignment(text, theme_words, spotlight_texts)
+
+        somatic_bias = 0.0
+        somatic_signal = "neutral"
+        if somatic is not None:
+            try:
+                bias_result = somatic.get_bias(text)
+                somatic_bias = bias_result.get("bias_score", 0.0)
+                somatic_signal = bias_result.get("signal", "neutral")
+            except Exception:
+                pass
+
+        codelet_bias = 0.0
+        if codelet_result:
+            try:
+                competition = get_codelet_competition()
+                codelet_bias = competition.bias_for_task(text)
+            except Exception:
+                pass
+
+        failure_penalty = 0.0
+        try:
+            failure_lessons = brain.recall(
+                text, collections=["clarvis-learnings"], n=3, min_importance=0.5
+            )
+            for lesson in failure_lessons:
+                doc = lesson.get("document", "").lower()
+                dist = lesson.get("distance", 1.0)
+                if ("failure" in doc or "failed" in doc or "avoid" in doc) and dist < 0.8:
+                    failure_penalty = min(0.15, failure_penalty + 0.05)
+        except Exception:
+            pass
+
+        total_boost = agi_boost + integration_boost + architectural_boost - failure_penalty
+
+        effective_relevance = min(1.0, relevance + spotlight_align * 0.15)
+        item = attention.submit(
+            content=f"TASK: {text[:120]}",
+            source="evolution_queue",
+            importance=section_importance,
+            relevance=effective_relevance,
+            boost=total_boost,
+        )
+
+        salience = item.salience()
+
+        somatic_component = max(0.0, min(1.0, 0.5 + somatic_bias))
+        codelet_component = max(0.0, min(1.0, 0.5 + codelet_bias))
+        final_score = (0.70 * salience + 0.10 * spotlight_align
+                       + 0.10 * somatic_component + 0.10 * codelet_component)
+
+        scored.append({
+            "text": text,
+            "section": section,
+            "line_num": task["line_num"],
+            "salience": round(final_score, 4),
+            "details": {
+                "section_importance": section_importance,
+                "context_relevance": round(context_relevance, 3),
+                "recent_relevance": round(recent_relevance, 3),
+                "agi_boost": round(agi_boost, 3),
+                "integration_boost": round(integration_boost, 3),
+                "architectural_boost": round(architectural_boost, 3),
+                "combined_relevance": round(relevance, 3),
+                "spotlight_alignment": round(spotlight_align, 3),
+                "somatic_bias": round(somatic_bias, 4),
+                "somatic_signal": somatic_signal,
+                "codelet_bias": round(codelet_bias, 4),
+                "failure_penalty": round(failure_penalty, 3),
+                "base_salience": round(salience, 4),
+            }
+        })
+
+    scored.sort(key=lambda x: x["salience"], reverse=True)
+
+    if thought_proto and scored:
+        try:
+            best = scored[0]
+            thought_proto.task_decision(
+                best["text"][:120],
+                salience=best["salience"],
+                somatic_bias=best["details"].get("somatic_bias", 0.0),
+                spotlight_align=best["details"].get("spotlight_alignment", 0.0),
+            )
+        except Exception:
+            pass
+
+    return scored
+
+
+def _check_quality_gate():
+    """Check if memory quality gate is active (degraded).
+    Returns gate data dict if degraded, None if healthy."""
+    try:
+        if os.path.exists(QUALITY_GATE_FILE):
+            with open(QUALITY_GATE_FILE) as f:
+                gate = json.load(f)
+            if gate.get("status") == "DEGRADED":
+                return gate
+    except Exception:
+        pass
+    return None
+
+
+def _is_repair_task(task_text):
+    """Check if a task is a repair/fix/maintenance task (allowed during quality gate)."""
+    text_lower = task_text.lower()
+    repair_keywords = [
+        "memory_repair", "fix retrieval", "repair", "fix regression",
+        "brain eval", "retrieval quality", "memory quality",
+        "fix brain", "debug memory", "investigate failure",
+    ]
+    return any(kw in text_lower for kw in repair_keywords)
