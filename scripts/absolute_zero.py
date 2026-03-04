@@ -37,7 +37,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from brain import brain
-from episodic_memory import episodic
+try:
+    from episodic_memory import episodic
+except ImportError:
+    episodic = None
 
 # ── Storage ──────────────────────────────────────────────────────────────
 DATA_DIR = Path("/home/agent/.openclaw/workspace/data/absolute_zero")
