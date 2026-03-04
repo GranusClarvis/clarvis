@@ -324,8 +324,19 @@ def _auto_brain() -> Optional[LiteBrain]:
     return None
 
 
-# Singleton for easy import
-brain = _auto_brain()
+# Singleton (lazy — no filesystem probing until first access)
+class _LazyLiteBrain:
+    def __getattr__(self, name):
+        real = _auto_brain()
+        global brain
+        brain = real
+        if real is None:
+            raise AttributeError(f"No agent brain detected and attribute '{name}' accessed")
+        return getattr(real, name)
+    def __repr__(self):
+        return "<LazyLiteBrain (not yet initialized)>"
+
+brain = _LazyLiteBrain()
 
 if __name__ == "__main__":
     import argparse

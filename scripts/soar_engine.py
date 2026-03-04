@@ -712,7 +712,17 @@ def get_soar():
         _soar = SOAREngine()
     return _soar
 
-soar = get_soar()
+class _LazySoar:
+    """Lazy proxy — defers SOAREngine init until first access."""
+    def __getattr__(self, name):
+        real = get_soar()
+        global soar
+        soar = real
+        return getattr(real, name)
+    def __repr__(self):
+        return "<LazySoar (not yet initialized)>"
+
+soar = _LazySoar()
 
 
 # === CLI ===

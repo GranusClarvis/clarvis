@@ -24,3 +24,8 @@ export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNT
 # Workspace
 export CLARVIS_WORKSPACE="/home/agent/.openclaw/workspace"
 cd "$CLARVIS_WORKSPACE"
+
+# Shared helper: get current weakest performance metric (fast, reads cached file)
+get_weakest_metric() {
+    python3 "$CLARVIS_WORKSPACE/scripts/performance_benchmark.py" weakest 2>/dev/null || echo "unknown"
+}

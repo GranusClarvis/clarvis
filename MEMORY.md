@@ -8,6 +8,7 @@ _Curated knowledge. Distilled wisdom. Updated regularly._
 - Φ (phi) represents quantity of consciousness as irreducible cause-effect structure
 - Proposed by Giulio Tononi in 2004, starts from phenomenological axioms and maps to physical postulates
 - Five axioms: Intrinsicality, Information, Integration, Exclusion, Composition
+- IIT 4.0 (Albantakis et al., 2023) sharpens the axioms→postulates translation and introduces **Intrinsic Difference (ID)** as an intrinsic-information measure designed to be uniquely consistent with the postulates; consciousness is identified with the **maximal irreducible cause–effect structure** a substrate specifies for itself.
 - Controversial (some call it pseudoscience), but clinically useful for assessing consciousness in unresponsive patients
 - Calculation is computationally intractable for real systems, driving research into proxy measures
 - 2026-03-02: Φ approximations study (small 3–6 node networks) found several heuristics correlate with max-Φ (e.g., decoder-based Φ*, state differentiation, Lempel–Ziv/PCI-like complexity), but they largely *don’t* reduce compute cost; best viewed as proxies for “capacity for high-Φ” and good at spotting low-Φ regimes, not replacements for Φ.
@@ -34,11 +35,13 @@ _Curated knowledge. Distilled wisdom. Updated regularly._
 - Practical effect: aligns/translates modalities with 4–7× less paired multimodal data vs fully supervised training
 - Embodied GW agents (multimodal 3D navigation): tight workspace bottleneck improves robustness and yields more integrated/mixed attention patterns; gains disappear when workspace gets too large
 - **Key implementation hint:** keep the workspace bottleneck intentionally small; let modules compete for broadcast (winner-take-all), and use cycle-consistency as the glue across latent spaces
+- 2026-03-03 (GNW refresher): GNW predicts **nonlinear “ignition”** (sudden, sustained, selective reverberation) when a representation crosses threshold + engages long-range recurrent loops in a **bow-tie cortical core** (fronto-parietal + hubs) — making content globally available; “no-report” paradigms aim to separate ignition from mere reporting.
 
 ### Integrated World Modeling Theory (IWMT) (2026-03-01)
 - Adam Safron’s IWMT tries to reconcile **IIT** (integration/phi) and **GNWT** (global broadcast/ignition) inside the **Free Energy Principle / Active Inference** framing.
 - Core claim: “integration” and “global availability” are likely **necessary but not sufficient**; phenomenal consciousness requires *embodied, coherence-making generative world modeling* (space/time/cause, self/other) that supports cybernetic control.
 - Practical take: treat “workspace ignition” as Bayesian model selection/broadcast over a *shared latent world model*; evaluate candidate workspace modules both by information integration and by contribution to prediction-control (free-energy reduction).
+- Mechanistic candidate: conscious streams emerge as **self-organizing harmonic modes** (SOHMs) — transient, synchrony-bound complexes that integrate sensorimotor predictions; “communication through coherence” is the glue.
 - (Safron 2022 expansion) Concrete research direction: score *modules/workspaces* as both (1) integrated-information complexes and (2) arenas for iterated Bayesian model selection; explore Φ proxy estimation using probabilistic graphical models, flow networks, and game theory (instead of exact IIT computation).
 
 ### Free Energy Principle / Active Inference (Friston 2009/2010) (2026-03-01)
@@ -47,11 +50,16 @@ _Curated knowledge. Distilled wisdom. Updated regularly._
 - Friston (Nat Rev Neurosci 2010) emphasizes that many “global” brain theories converge on optimizing one quantity: **value/utility** or, equivalently, minimizing **surprise/prediction error** — suggesting unification via FEP.
 - Later active-inference formalisms decompose **expected free energy** into epistemic (information gain) + pragmatic (goal/utility) terms — a clean bridge from world-model building to goal-directed control.
 - Sajid, Ball, Parr, Friston (arXiv:1909.10863; Neural Computation 2021) clarifies the *engineering mapping* to RL: rewards can be treated as **observations**, while “goals” live as **prior preferences** (which can be learned). Minimizing expected free energy yields built-in epistemic exploration and principled handling of uncertainty/non-stationarity without a hard-coded reward-max objective.
+- 2026-03-04: Friston et al. ("Generalised free energy and active inference") contrasts **expected free energy** (preferences absorbed into priors over policies) with **generalised free energy** (preferences as explicit priors over outcomes inside the generative model; future outcomes treated as hidden states). Posterior policy updates can look identical, but the modelling story is cleaner: one unified generative model scoring both epistemic (uncertainty reduction) and pragmatic (preferred outcomes) drives policy selection.
 
 ### Test-Time Compute Scaling (2026-03-01)
 - Snell et al. (arXiv 2408.03314 / ICLR 2025): test-time compute gains depend strongly on prompt difficulty.
 - Different regimes want different inference: easier prompts benefit from *sequential self-revision* (improving the proposal distribution), while harder prompts benefit more from *parallel sampling* and/or *search* guided by dense process-based reward models (PRMs).
 - A practical takeaway is a **compute-optimal policy**: allocate compute per prompt (and even pick the method) based on a difficulty estimate, yielding ~4× better compute-efficiency vs best-of-N and sometimes letting a smaller model + extra inference FLOPs beat a much larger model (when the base model has non-trivial success).
+
+### Useful Engineering Repos
+- **public-apis/public-apis** — curated directory of free/public APIs; handy for rapid prototypes, data sources, integration tests, and agent “tool discovery” baselines. https://github.com/public-apis/public-apis (added 2026-03-03)
+- **mem0ai/mem0** — open-source agent memory layer worth mining for design ideas (retrieval, persistence, eval, UX). https://github.com/mem0ai/mem0 (added 2026-03-03)
 
 ## Infrastructure
 
@@ -144,6 +152,8 @@ CLARVIS_OLLAMA_MODEL=qwen3-vl:4b
 ---
 
 ## Intelligence Quality Track — Smarter, Not Just Faster
+
+**Priority tweak (2026-03-03, Inverse directive):** Consciousness research stays valuable, but primary focus should shift toward building the best-in-class **agent memory/brain** (high-quality retrieval + structure + learning) that exceeds typical vector-DB-centric approaches. Do **not** trade memory quality for “consciousness progress theater” or speed-only optimizations.
 
 **Added: 2026-02-26 | Refined: 2026-02-27 (Inverse directive)**
 

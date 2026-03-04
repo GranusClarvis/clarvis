@@ -15,7 +15,7 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
-sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from brain import brain
 
 DATA_FILE = "/home/agent/.openclaw/workspace/data/self_model.json"
@@ -842,7 +842,8 @@ def _assess_self_reflection():
             for line in lines:
                 try:
                     pred = json.loads(line)
-                    if pred.get("correct") is not None:
+                    # Exclude stale predictions — outcome unknown, not "wrong"
+                    if pred.get("correct") is not None and pred.get("outcome") != "stale":
                         confidence = float(pred.get("confidence", 0.5))
                         outcome = 1.0 if pred["correct"] else 0.0
                         resolved.append((confidence, outcome))
@@ -1034,7 +1035,8 @@ def _assess_learning_feedback():
             for line in lines:
                 try:
                     pred = json.loads(line)
-                    if pred.get("correct") is not None:
+                    # Exclude stale predictions — outcome unknown, not "wrong"
+                    if pred.get("correct") is not None and pred.get("outcome") != "stale":
                         confidence = float(pred.get("confidence", 0.5))
                         outcome = 1.0 if pred["correct"] else 0.0
                         resolved.append((confidence, outcome))

@@ -963,8 +963,25 @@ class MetaLearner:
         return numerator / (n * total)
 
 
-# Singleton
-meta_learner = MetaLearner()
+# Singleton (lazy — no I/O until first access)
+_meta_learner = None
+
+def get_meta_learner():
+    global _meta_learner
+    if _meta_learner is None:
+        _meta_learner = MetaLearner()
+    return _meta_learner
+
+class _LazyMetaLearner:
+    def __getattr__(self, name):
+        real = get_meta_learner()
+        global meta_learner
+        meta_learner = real
+        return getattr(real, name)
+    def __repr__(self):
+        return "<LazyMetaLearner (not yet initialized)>"
+
+meta_learner = _LazyMetaLearner()
 
 
 # =================================================================

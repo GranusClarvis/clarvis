@@ -385,7 +385,7 @@ class ClarvisBrowser:
     async def _get_playwright(self):
         """Lazy-load the Playwright-based BrowserAgent."""
         if self._pw_agent is None:
-            sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
+            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
             from browser_agent import BrowserAgent
             self._pw_agent = BrowserAgent(
                 cdp_url=f"http://127.0.0.1:{self.cdp_port}",

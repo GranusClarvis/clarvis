@@ -16,6 +16,23 @@ fi
 echo $$ > "$LOCKFILE"
 trap "rm -f $LOCKFILE" EXIT
 
+# === GLOBAL CLAUDE LOCK — mutual exclusion with all Claude Code spawners ===
+GLOBAL_LOCK="/tmp/clarvis_claude_global.lock"
+
+if [ -f "$GLOBAL_LOCK" ]; then
+    gpid=$(cat "$GLOBAL_LOCK" 2>/dev/null)
+    glock_age=$(( $(date +%s) - $(stat -c %Y "$GLOBAL_LOCK" 2>/dev/null || echo 0) ))
+    if [ -n "$gpid" ] && kill -0 "$gpid" 2>/dev/null && [ "$glock_age" -le 2400 ]; then
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] GLOBAL LOCK: Claude already running (PID $gpid, age=${glock_age}s) — deferring" >> "$LOGFILE"
+        exit 0
+    else
+        [ -n "$gpid" ] && echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] GLOBAL LOCK: Stale (age=${glock_age}s, PID $gpid) — reclaiming" >> "$LOGFILE"
+        rm -f "$GLOBAL_LOCK"
+    fi
+fi
+echo $$ > "$GLOBAL_LOCK"
+trap "rm -f $LOCKFILE $GLOBAL_LOCK" EXIT
+
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Morning routine started ===" >> "$LOGFILE"
 
 # Step 0: Session open — restore attention state and working memory from previous session
@@ -25,8 +42,9 @@ python3 /home/agent/.openclaw/workspace/scripts/session_hook.py open >> "$LOGFIL
 # === MORNING PLANNING (with context from prompt_builder) ===
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running morning planning..." >> "$LOGFILE"
 SCRIPTS="/home/agent/.openclaw/workspace/scripts"
+WEAKEST_METRIC=$(get_weakest_metric)
 MORNING_PROMPT=$(python3 "$SCRIPTS/prompt_builder.py" build \
-    --task "It's morning. Pick top 3 priorities for today from the pending tasks. Update brain.set_context() with today's focus. Output: 3 priorities with brief reasoning." \
+    --task "Morning planning. Read memory/evolution/QUEUE.md. Pick top 3 priorities for today from pending tasks. WEAKEST METRIC: $WEAKEST_METRIC — one priority MUST target this. Update brain.set_context() with today's focus. OUTPUT FORMAT (mandatory): PRIORITY 1: <task> | PRIORITY 2: <task> | PRIORITY 3: <task> — one line each with brief reasoning." \
     --role "morning planner" --tier standard 2>> "$LOGFILE")
 MORNING_PROMPT_FILE=$(mktemp)
 echo "$MORNING_PROMPT" > "$MORNING_PROMPT_FILE"

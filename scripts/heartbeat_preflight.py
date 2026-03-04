@@ -116,12 +116,16 @@ try:
 except ImportError:
     cog_workspace = None
 
-import_time = time.monotonic() - start_import
+try:
+    from prompt_optimizer import select_variant as po_select_variant
+except ImportError:
+    po_select_variant = None
+
+_import_time = time.monotonic() - start_import
 log = lambda msg: print(f"[{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S')}] PREFLIGHT: {msg}", file=sys.stderr)
-log(f"All modules imported in {import_time:.2f}s (single process)")
 
 
-QUEUE_FILE = "/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md"
+QUEUE_FILE = os.path.join(os.path.dirname(__file__), "..", "memory", "evolution", "QUEUE.md")
 
 
 def run_preflight(dry_run=False):
@@ -129,6 +133,7 @@ def run_preflight(dry_run=False):
 
     Returns a dict with all results needed by cron_autonomous.sh.
     """
+    log(f"All modules imported in {_import_time:.2f}s (single process)")
     t0 = time.monotonic()
     result = {
         "status": "ok",
@@ -150,6 +155,8 @@ def run_preflight(dry_run=False):
         "route_executor": "claude",
         "route_score": 0.5,
         "route_reason": "unknown",
+        "prompt_variant_id": "",
+        "prompt_variant_task_type": "",
         "timings": {},
     }
 
@@ -765,6 +772,22 @@ def run_preflight(dry_run=False):
         except Exception as e:
             log(f"Automation insights failed: {e}")
     result["timings"]["automation_insights"] = round(time.monotonic() - t105, 3)
+
+    # === 10.55 PROMPT OPTIMIZATION: Select best variant combo (APE/SPO) ===
+    t1055 = time.monotonic()
+    if po_select_variant:
+        try:
+            po_result = po_select_variant(next_task)
+            result["prompt_variant_id"] = po_result["variant_id"]
+            result["prompt_variant_task_type"] = po_result["task_type"]
+            meta_instr = po_result.get("meta_instruction", "")
+            if meta_instr:
+                context_brief += f"\n{meta_instr}\n"
+            log(f"Prompt variant: {po_result['variant_id'][:60]} "
+                f"(type={po_result['task_type']})")
+        except Exception as e:
+            log(f"Prompt optimizer failed (non-fatal): {e}")
+    result["timings"]["prompt_optimizer"] = round(time.monotonic() - t1055, 3)
 
     # === 10.6 COGNITIVE WORKSPACE: Set task + reactivate dormant memory ===
     t106 = time.monotonic()

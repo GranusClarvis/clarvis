@@ -14,7 +14,7 @@ import sys
 from collections import defaultdict
 from datetime import datetime, timezone
 
-sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 PREDICTIONS_FILE = "/home/agent/.openclaw/workspace/data/calibration/predictions.jsonl"
 QUEUE_FILE = "/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md"

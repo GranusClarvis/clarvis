@@ -7,11 +7,13 @@ Checks: circular imports, dependency depth, fan-in/fan-out, import side effects,
         sys.path patterns, import timing.
 
 Usage:
-    python3 import_health.py              # Full report
-    python3 import_health.py --cycles     # Circular import check only
-    python3 import_health.py --depth      # Dependency depth check only
-    python3 import_health.py --quick      # Quick pass/fail for heartbeat postflight
-    python3 import_health.py --json       # Machine-readable JSON output
+    python3 import_health.py                  # Full report (relaxed thresholds)
+    python3 import_health.py --strict         # CI gate: post-refactor thresholds, exit 1 on fail
+    python3 import_health.py --side-effects   # CI gate: only check import side effects (exit 1 if >0)
+    python3 import_health.py --cycles         # Circular import check only
+    python3 import_health.py --depth          # Dependency depth check only
+    python3 import_health.py --quick          # Quick pass/fail for heartbeat postflight
+    python3 import_health.py --json           # Machine-readable JSON output
 """
 import ast
 import json
@@ -150,9 +152,26 @@ def compute_fan_in(graph: dict[str, set[str]]) -> dict[str, int]:
     return dict(counts)
 
 
+def _extract_call_name(call_node: ast.Call) -> str:
+    """Extract the function/class name from a Call node."""
+    if isinstance(call_node.func, ast.Name):
+        return call_node.func.id
+    elif isinstance(call_node.func, ast.Attribute):
+        return call_node.func.attr
+    return ""
+
+
 def detect_side_effects(directory: Path) -> list[dict]:
-    """Detect modules with import-time side effects (unguarded top-level calls)."""
+    """Detect modules with import-time side effects (unguarded top-level calls).
+
+    Catches:
+      1. Bare function calls: ``log("msg")``
+      2. Assignment with function/class call: ``x = ClassName()`` or ``x = func()``
+    Skips known-safe patterns (constructors, lazy proxies, stdlib helpers).
+    """
     issues = []
+
+    # Safe bare-call names (standalone statements)
     SAFE_CALLS = {
         "getLogger", "Path", "dirname", "abspath", "join", "resolve",
         "set", "dict", "list", "tuple", "frozenset", "defaultdict",
@@ -161,6 +180,26 @@ def detect_side_effects(directory: Path) -> list[dict]:
         "mkdir",  # Path.mkdir() for data dirs is acceptable at module level
     }
 
+    # Safe RHS calls in assignments (constructors that don't do I/O)
+    SAFE_ASSIGN_CALLS = {
+        # Stdlib / data structures
+        "Path", "set", "dict", "list", "tuple", "frozenset", "defaultdict",
+        "namedtuple", "OrderedDict", "deque", "Counter",
+        "getLogger", "getenv", "environ", "Lock", "RLock", "Event",
+        "monotonic", "time", "compile",
+        # Type conversions
+        "int", "str", "float", "bool", "bytes",
+        # Path / string helpers (used to build constants)
+        "join", "dirname", "abspath", "resolve", "expanduser", "basename",
+        "get",  # dict.get / os.environ.get
+        "format", "encode", "decode", "strip", "replace",
+        # Lazy proxy wrappers (deferred init — no I/O on construction)
+        "_LazyBrain", "_LazyWorkspace", "_LazyLocalBrain",
+    }
+
+    # Prefixes that indicate a lazy/safe pattern
+    SAFE_ASSIGN_PREFIXES = ("_Lazy",)
+
     for f in sorted(directory.glob("*.py")):
         try:
             tree = ast.parse(f.read_text(encoding="utf-8"))
@@ -168,22 +207,36 @@ def detect_side_effects(directory: Path) -> list[dict]:
             continue
 
         for node in ast.iter_child_nodes(tree):
-            # Check for bare function calls at module level
+            # 1. Bare function calls at module level
             if isinstance(node, ast.Expr) and isinstance(node.value, ast.Call):
-                # Skip if inside if __name__ == "__main__"
-                call = node.value
-                func_name = ""
-                if isinstance(call.func, ast.Name):
-                    func_name = call.func.id
-                elif isinstance(call.func, ast.Attribute):
-                    func_name = call.func.attr
-
-                if func_name not in SAFE_CALLS and func_name:
+                func_name = _extract_call_name(node.value)
+                if func_name and func_name not in SAFE_CALLS:
                     issues.append({
                         "file": f.name,
                         "line": node.lineno,
                         "call": func_name,
+                        "kind": "bare_call",
                     })
+
+            # 2. Assignment with function/class call at module level
+            #    e.g., ``singleton = ClassName()`` or ``singleton = get_thing()``
+            elif isinstance(node, ast.Assign) and isinstance(node.value, ast.Call):
+                func_name = _extract_call_name(node.value)
+                if not func_name:
+                    continue
+                # Skip safe constructors and lazy proxies
+                if func_name in SAFE_ASSIGN_CALLS:
+                    continue
+                if any(func_name.startswith(p) for p in SAFE_ASSIGN_PREFIXES):
+                    continue
+                # Skip private/underscore target names that are just caching
+                # (e.g., _attention = None is fine, but _attention = get_attention() is not)
+                issues.append({
+                    "file": f.name,
+                    "line": node.lineno,
+                    "call": func_name,
+                    "kind": "assign_call",
+                })
 
     return issues
 
@@ -262,7 +315,7 @@ def full_report(graph, use_current_thresholds=True):
         "side_effects": {
             "count": len(side_effects),
             "threshold": thresholds["max_side_effects"],
-            "issues": side_effects[:10],
+            "issues": side_effects,
         },
         "violations": violations,
         "healthy": len(violations) == 0,
@@ -321,8 +374,10 @@ def print_report(report: dict):
     se = report["side_effects"]
     flag = "PASS" if se["count"] <= se["threshold"] else "FAIL"
     print(f"[{flag}] Import side effects: {se['count']} (threshold: {se['threshold']})")
-    for issue in se["issues"][:5]:
-        print(f"       {issue['file']}:{issue['line']} — {issue['call']}()")
+    for issue in se["issues"][:10]:
+        kind = issue.get("kind", "bare_call")
+        label = "assign" if kind == "assign_call" else "call"
+        print(f"       {issue['file']}:{issue['line']} — {issue['call']}() [{label}]")
 
     # Violations
     if report["violations"]:
@@ -342,7 +397,7 @@ def main(argv=None):
     graph = build_import_graph(SCRIPTS_DIR)
 
     if "--json" in argv:
-        report = full_report(graph, "--strict" in argv)
+        report = full_report(graph, use_current_thresholds="--strict" not in argv)
         print(json.dumps(report, indent=2, default=str))
     elif "--cycles" in argv:
         sccs = find_sccs(graph)
@@ -358,6 +413,17 @@ def main(argv=None):
         for name, d in sorted(depths.items(), key=lambda x: -x[1])[:15]:
             if d > 0:
                 print(f"  depth={d}: {name}")
+    elif "--side-effects" in argv:
+        # Focused CI gate: only check import-time side effects (exit 1 if any found)
+        side_effects = detect_side_effects(SCRIPTS_DIR)
+        if side_effects:
+            print(f"IMPORT SIDE EFFECTS: {len(side_effects)} found (threshold: 0)")
+            for issue in side_effects:
+                kind = issue.get("kind", "bare_call")
+                print(f"  {issue['file']}:{issue['line']} {issue['call']}() [{kind}]")
+            sys.exit(1)
+        else:
+            print("OK: 0 import side effects")
     elif "--quick" in argv:
         violations = quick_check()
         if violations:
@@ -365,15 +431,32 @@ def main(argv=None):
             sys.exit(1)
         else:
             print("OK")
+    elif "--strict" in argv:
+        # CI gate: use post-refactor (strict) thresholds, exit 1 on any violation
+        report = full_report(graph, use_current_thresholds=False)
+        print_report(report)
+
+        # Side-effects-only summary for quick CI feedback
+        se = report["side_effects"]
+        if se["count"] > 0:
+            print(f"\n--- Side Effects Detail ({se['count']} found) ---")
+            for issue in se["issues"]:
+                kind = issue.get("kind", "bare_call")
+                print(f"  {issue['file']}:{issue['line']} {issue['call']}() [{kind}]")
+
+        if not report["healthy"]:
+            print(f"\nSTRICT CHECK FAILED: {', '.join(report['violations'])}")
+            sys.exit(1)
+        else:
+            print(f"\nSTRICT CHECK PASSED")
     else:
-        use_current = "--strict" not in argv
-        report = full_report(graph, use_current_thresholds=use_current)
+        report = full_report(graph, use_current_thresholds=True)
         print_report(report)
 
         # Measure import time for brain
         print(f"\n--- Import Timing ---")
         brain_ms = measure_import_time("brain", SCRIPTS_DIR)
-        threshold = THRESHOLDS_CURRENT["max_import_time_ms"] if use_current else THRESHOLDS["max_import_time_ms"]
+        threshold = THRESHOLDS_CURRENT["max_import_time_ms"]
         flag = "PASS" if brain_ms <= threshold else "FAIL"
         print(f"[{flag}] brain.py import: {brain_ms:.0f}ms (threshold: {threshold}ms)")
 

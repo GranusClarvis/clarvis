@@ -20,6 +20,23 @@ fi
 echo $$ > "$LOCKFILE"
 trap "rm -f $LOCKFILE" EXIT
 
+# === GLOBAL CLAUDE LOCK — mutual exclusion with all Claude Code spawners ===
+GLOBAL_LOCK="/tmp/clarvis_claude_global.lock"
+
+if [ -f "$GLOBAL_LOCK" ]; then
+    gpid=$(cat "$GLOBAL_LOCK" 2>/dev/null)
+    glock_age=$(( $(date +%s) - $(stat -c %Y "$GLOBAL_LOCK" 2>/dev/null || echo 0) ))
+    if [ -n "$gpid" ] && kill -0 "$gpid" 2>/dev/null && [ "$glock_age" -le 2400 ]; then
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] GLOBAL LOCK: Claude already running (PID $gpid, age=${glock_age}s) — deferring" >> "$LOGFILE"
+        exit 0
+    else
+        [ -n "$gpid" ] && echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] GLOBAL LOCK: Stale (age=${glock_age}s, PID $gpid) — reclaiming" >> "$LOGFILE"
+        rm -f "$GLOBAL_LOCK"
+    fi
+fi
+echo $$ > "$GLOBAL_LOCK"
+trap "rm -f $LOCKFILE $GLOBAL_LOCK" EXIT
+
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === STRATEGIC AUDIT START ===" >> "$LOGFILE"
 
 # === STEP 0: AST SURGERY — auto-fix dead imports before audit ===

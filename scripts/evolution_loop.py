@@ -44,7 +44,7 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
-sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Directories
 DATA_DIR = Path("/home/agent/.openclaw/workspace/data/evolution")

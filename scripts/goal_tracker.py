@@ -12,11 +12,12 @@ Usage:
     python3 goal_tracker.py update-goals # Update goal progress from capability scores
 """
 import sys
+import os
 import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from brain import brain
 from self_model import assess_all_capabilities
 

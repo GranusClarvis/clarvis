@@ -1,7 +1,22 @@
 # Evolution Queue — Archive
 
 _Completed items archived from QUEUE.md to reduce token footprint._
-_Last archived: 2026-02-23_
+_Last archived: 2026-03-03_
+
+---
+
+## Refactor Phase 2 — Brain Split (2026-03-03)
+- [x] [REFACTOR_PHASE2] Extracted `clarvis.brain` package from monolithic brain.py (1780→1716 lines across 6 files)
+  - `clarvis/brain/constants.py` (63 lines) — paths, collection names, query routing
+  - `clarvis/brain/graph.py` (230 lines) — GraphMixin: relationships, traversal, backfill
+  - `clarvis/brain/search.py` (229 lines) — SearchMixin: recall, embedding cache, temporal queries
+  - `clarvis/brain/store.py` (510 lines) — StoreMixin: storage, goals, context, decay, stats, reconsolidation
+  - `clarvis/brain/hooks.py` (127 lines) — Hook registry: actr, attention, hebbian, synaptic, retrieval_quality, consolidation
+  - `clarvis/brain/__init__.py` (253 lines) — ClarvisBrain(StoreMixin, GraphMixin, SearchMixin) + singletons + convenience functions
+  - `scripts/brain.py` (304 lines) — thin wrapper + CLI (backward compatible, all 54 importers work unchanged)
+  - **SCC: 6→0** (dependency inversion via hook registry replaces direct imports)
+  - **Fan-out: 7→1** (only imports clarvis.brain, no direct script imports)
+  - All tests pass: import, stats, store, recall, health, hooks registration, CLI
 
 ---
 
@@ -413,3 +428,81 @@ _Last archived: 2026-02-23_
 
 ## Archived 2026-03-02
 - [x] [PREDICTION_RESOLUTION] Fix 71% prediction resolution rate (learning_feedback bottleneck) — build auto-resolver: after each episode closes in postflight, scan open predictions whose `task_id` matches the episode, resolve them with the episode's success/fail outcome. Clears stale unresolved predictions. Files: heartbeat_postflight.py, clarvis_confidence.py. (2026-03-02 23:03 UTC)
+
+## Archived 2026-03-03
+- [x] [CRON_OVERLAP_GUARD] Add mutual exclusion between cron_autonomous.sh and cron_implementation_sprint.sh — both can run at overlapping times and compete for Claude Code. Add a shared lockfile `/tmp/clarvis_claude_global.lock` checked by both scripts. If locked, the later job should queue its task to P0 and exit cleanly instead of blocking. Files: scripts/cron_autonomous.sh, scripts/cron_implementation_sprint.sh (Bash). (2026-03-03 01:02 UTC)
+
+## Archived 2026-03-03
+- [x] [REFACTOR_PHASE3] Extract memory layer — move episodic_memory.py, procedural_memory.py, working_memory.py, hebbian_memory.py, memory_consolidation.py into clarvis/memory/. Update scripts/ as thin wrappers. One commit per file, verify heartbeat after each. (2026-03-03 05:42 UTC)
+
+## Archived 2026-03-03
+- [x] [REFACTOR_PHASE2] Extract `clarvis.brain` — split brain.py into clarvis/brain/{constants,graph,search,store,hooks}.py + __init__.py. SCC=0 (was 6), brain fan-out=1 (was 7). Dependency inversion via hook registry. Done 2026-03-03.
+
+## Archived 2026-03-03
+- [x] [REFACTOR_BENCHMARK] Integrate import_health.py into heartbeat postflight (quick structural check). Track metrics over time: SCC count, max depth, fan-in, fan-out, import time. Add to performance_history.jsonl. Target: depth <= 5, fan-in <= 20, SCC = 0. (2026-03-03 07:03 UTC)
+- [x] [RESEARCH_DISCOVERY 2026-03-02] Research: Corrective RAG + Agentic RAG Patterns (Yan et al. 2024; Singh et al. 2025 Survey) — completed 2026-03-03. Note: memory/research/corrective_agentic_rag_2026-03-03.md. 5 insights stored in brain. Key takeaways: three-tier retrieval evaluator (CORRECT/AMBIGUOUS/INCORRECT), knowledge strip decomposition, query complexity routing, corrective fallback loops. Four concrete implementation phases identified for brain.recall() pipeline.
+
+## Archived 2026-03-03
+- [x] [RESEARCH 2026-03-03] Research: Integrated World Modeling Theory (IWMT, Safron 2020) — IIT + GNWT + FEP/Active Inference synthesis; consciousness as coherent generative world modeling + global broadcast.
+- [x] [LIFECYCLE_HOOKS_BUS] Replace "import-time wiring" with explicit lifecycle hooks: define `clarvis/heartbeat/hooks.py` (hook registry + execution order) and migrate 3 subsystems (procedural injection, consolidation, metrics) to register hooks instead of being imported implicitly. Add hook-order tests. (2026-03-03 09:07 UTC)
+
+## Archived 2026-03-03
+- [x] [REFACTOR_PHASE1] Create `clarvis/` spine package skeleton — empty __init__.py in clarvis/, clarvis/brain/, clarvis/memory/, clarvis/cognition/, clarvis/context/, clarvis/metrics/, clarvis/heartbeat/, clarvis/orch/. Add workspace-level pyproject.toml. No behavior change yet. (2026-03-03 11:03 UTC)
+- [x] [RESEARCH_DISCOVERY 2026-03-02] Research: AgentDebug — Where LLM Agents Fail & How They Learn From Failures (completed 2026-03-03)
+
+## Archived 2026-03-03
+- [x] [REFACTOR_PHASE0] Safety net: tag v0.9-pre-refactor, backup ChromaDB, fix import side effects (add `if __name__` guards to cost_tracker.py, digest_writer.py), standardize sys.path patterns. Run `import_health.py --strict` as baseline. No behavior change. Files: scripts/cost_tracker.py, scripts/digest_writer.py, all scripts sys.path lines. (2026-03-03 12:10 UTC)
+
+## Archived 2026-03-03
+- [x] [RESEARCH_GNW_IGNITION 2026-03-03] Research: Global Neuronal Workspace (GNW) — “ignition” as nonlinear recurrent broadcast (Mashour/Dehaene/Changeux review).
+- [x] [IMPORT_SIDE_EFFECTS_FIX] Reduce import-time side effects to 0: convert top-level `log()`/registry calls to functions or `if __name__ == '__main__'` blocks; add `import_health.py --strict` gate in CI/tests. (2026-03-03 15:11 UTC)
+
+## Archived 2026-03-03
+- [x] [ACTR_RECALL_WIRING] Wire actr_activation.py into brain.py recall pipeline via hook registry. ACT-R base-level activation (recency × frequency decay) should act as a recall_scorer hook in clarvis/brain/hooks.py, blending with embedding similarity. Currently coded but NOT integrated — identified as critical gap in ROADMAP. Expected impact: +0.02-0.05 retrieval distance improvement, indirect Phi boost via better cross-collection recall. (2026-03-03 16:03 UTC)
+
+## Archived 2026-03-03
+- [x] [REFACTOR_COGNITION_EXTRACT] Continue refactoring momentum: extract attention.py, clarvis_confidence.py, thought_protocol.py into `clarvis/cognition/`. Follow same mixin + hook registry pattern from brain/ extraction (SCC 6→0). Keep backward-compatible shims in scripts/. Fills the empty cognition/ placeholder created during Phase 2. (2026-03-03 17:09 UTC)
+
+## Archived 2026-03-03
+- [x] [CRON_SCHEDULE_REBALANCE] Audit and rebalance cron schedule. Current issues: (1) three autonomous slots cluster at 15/16/17h CET competing with the 14h implementation sprint and 15h strategic audit — spread them out; (2) the 03:00-05:30 window runs 4 maintenance jobs (graph checkpoint, compaction, vacuum) that could overlap on slow days — add mutual exclusion; (3) consider moving one of the two 10:00/14:00 research slots to an afternoon gap (e.g., 16:00) for better topic diversity. Output: updated crontab + validation that no two Claude Code spawners can overlap.
+- [x] [RESEARCH_CONSCIOUSNESS 2026-03-03] Research: Integrated Information Theory (IIT) 4.0 (Albantakis et al., PLOS Comp Bio 2023) — IIT 4.0 refines the axioms→postulates mapping and defines consciousness as a system’s maximal irreducible cause–effect structure from the intrinsic perspective, introducing Intrinsic Difference (ID) as a uniquely postulate-consistent intrinsic-information measure. Sources: https://doi.org/10.1371/journal.pcbi.1011465 , https://arxiv.org/abs/2212.14787
+
+## Archived 2026-03-03
+- [x] [TEST_COVERAGE_CLARVIS] Address Code Generation capability (0.60 — LOWEST domain). Create pytest test suite for `clarvis/` package: brain/ (store, search, graph, hooks), memory/ (episodic, procedural, working, hebbian), heartbeat/ (adapters, hooks). Use brain's existing test patterns from `packages/clarvis-db/tests/`. Target: 50%+ line coverage of extracted modules. Run via `cd workspace && python3 -m pytest tests/`. This directly raises the Code Generation score by adding the missing test coverage dimension. (2026-03-03 20:19 UTC)
+
+## Archived 2026-03-03
+- [x] [CALIBRATION_LOOP_CLOSE] Fix brier score (0.27 — LOWEST metric). Only 72% of predictions (118/165) resolve to outcomes. Build `scripts/prediction_resolver.py`: scan unresolved predictions in clarvis-episodes, match against completed tasks/episodes by embedding similarity, auto-resolve obvious matches (e.g., task predicted "will succeed" → task completed successfully). Add to postflight pipeline. Target: 90%+ resolution rate, brier score > 0.50. (2026-03-03 22:16 UTC)
+
+## Archived 2026-03-03
+- [x] [MEMORY_QUALITY_GATES] Add hard quality gates to postflight: if semantic link quality / retrieval relevance drops vs baseline, automatically open a P0 repair task and pause “new features” work. (2026-03-03 23:05 UTC)
+
+## Archived 2026-03-04
+- [x] [BRAIN_EVAL_HARNESS] Brain eval harness: create repeatable benchmark suite for memory quality (P@k, MRR, false-link rate, context usefulness) with ground-truth query→expected memory ids. Output JSON + trendline. Gate regressions. (2026-03-04 01:08 UTC)
+- [x] [RESEARCH 2026-03-04] Research: mem0 (mem0ai/mem0) — evaluated architecture, storage model, retrieval, evaluation. Extracted 5 concrete improvements (LLM conflict detection, mutation history, fact extraction on capture, graph edge weights+decay, Kuzu embedded graph DB) + 2 experiments (LOCOMO-style benchmark, LLM conflict detection prototype). Note: `memory/research/mem0_memory_layer_2026-03-04.md`
+
+## Archived 2026-03-04
+- [x] [STRUCTURE_FINAL_AUDIT] Final structure + wiring audit (after refactor): run full import/health checks and review the repo holistically (clarvis/, scripts/, docs/, skills/, packages/, tests/). Confirm all core features are correctly wired to the new spine (no hidden legacy coupling), identify deprecated/outdated files to archive/remove, validate naming/layout scalability, and ensure documentation/runbook is complete. Output: a punchlist of remaining fixes + suggested structure tweaks. (2026-03-04 05:36 UTC)
+
+## Archived 2026-03-04
+- [x] [ORCH_SECOND_AGENT] Add second project agent for another repo — test multi-agent benchmark aggregation. (2026-03-04 06:05 UTC)
+
+## Archived 2026-03-04
+- [x] [OLLAMA_TEST] Test Qwen3-VL with screenshots, verify CAPTCHA detection accuracy for local vision pipeline. (2026-03-04 07:18 UTC)
+
+## Archived 2026-03-04
+- [x] [RESEARCH_IIT4 2026-03-04] Research: Integrated Information Theory (IIT) 4.0 (Albantakis et al., 2023) — Key update is a stricter axioms→postulates mapping plus the Intrinsic Difference (ID) measure for intrinsic information; consciousness = maximal irreducible intrinsic cause–effect structure (maximally integrated complex) unfolded from the substrate’s TPM. Sources: https://pmc.ncbi.nlm.nih.gov/articles/PMC10581496/ ; https://arxiv.org/abs/2212.14787
+- [x] [BENCHMARK_RELIABILITY] Review performance_benchmark.py outputs after fixes — ensure no more phantom P0 tasks generated from stale data.
+
+## Archived 2026-03-04
+- [x] [FILE_HYGIENE_POLICY] Add workspace file-hygiene policy + automation: `scripts/cleanup_policy.py` (rotate logs, compress old daily memory, prune tmp artifacts), and document retention rules. Ensure cron/heartbeat calls it weekly. (2026-03-04 11:06 UTC)
+- [x] [RESEARCH_DISCOVERY 2026-03-04] Research: ACuRL — Autonomous Curriculum RL for Computer-Use Agent Adaptation (Xue et al., arXiv:2602.10356) — Deep dive completed. Three-phase pipeline: autonomous exploration → curriculum task generation (adaptive difficulty) → iterative GRPO training with CUAJudge (93% human agreement). 4-22% gains without catastrophic forgetting via sparse parameter updates. Research note: memory/research/acurl_autonomous_curriculum_rl_2026-03-04.md
+
+## Archived 2026-03-04
+- [x] [PROMPT_SELF_OPTIMIZE] Prompt self-optimization loop — record heartbeat prompt→outcome pairs in postflight, generate prompt variants for underperforming templates, A/B test across heartbeats. Inspired by APE/SPO from EvoAgentX survey. Files: heartbeat_preflight.py, heartbeat_postflight.py. (2026-03-04 12:07 UTC)
+
+## Archived 2026-03-04
+- [x] [GOLDEN_TRACE_REPLAY] Successful trajectory replay (STaR pattern) — extract golden traces from successful heartbeats in postflight, store in clarvis-procedures, inject matching traces into preflight prompts as reference approaches. Files: heartbeat_postflight.py, heartbeat_preflight.py, procedural_memory.py. (2026-03-04 14:06 UTC)
+- [x] [RESEARCH_FEP 2026-03-04] Research: Active Inference / Free Energy Principle (expected vs generalised free energy) — Key insight: planning-as-inference selects policies that trade off pragmatic value (prior preferences) with epistemic value (uncertainty reduction) under a generative world model; “generalised free energy” treats future outcomes as explicit hidden states, keeping preferences inside the generative model while yielding the same posterior policy form. Sources: https://pmc.ncbi.nlm.nih.gov/articles/PMC6848054/ , https://arxiv.org/abs/2401.12917
+
+## Archived 2026-03-04
+- [x] [CRON_PROMPT_TUNING] Review and tighten the 6 main cron spawner prompts (`cron_autonomous.sh`, `cron_morning.sh`, `cron_evolution.sh`, `cron_evening.sh`, `cron_reflection.sh`, `cron_research.sh`). Each prompt should: (1) reference QUEUE.md explicitly, (2) include the current weakest metric, (3) have a hard output format constraint. Measure: reduced token waste per spawn. (2026-03-04 15:08 UTC)

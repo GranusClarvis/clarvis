@@ -23,6 +23,23 @@ fi
 echo $$ > "$LOCKFILE"
 trap "rm -f $LOCKFILE" EXIT
 
+# === GLOBAL CLAUDE LOCK — mutual exclusion with all Claude Code spawners ===
+GLOBAL_LOCK="/tmp/clarvis_claude_global.lock"
+
+if [ -f "$GLOBAL_LOCK" ]; then
+    gpid=$(cat "$GLOBAL_LOCK" 2>/dev/null)
+    glock_age=$(( $(date +%s) - $(stat -c %Y "$GLOBAL_LOCK" 2>/dev/null || echo 0) ))
+    if [ -n "$gpid" ] && kill -0 "$gpid" 2>/dev/null && [ "$glock_age" -le 2400 ]; then
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] GLOBAL LOCK: Claude already running (PID $gpid, age=${glock_age}s) — deferring" >> "$LOGFILE"
+        exit 0
+    else
+        [ -n "$gpid" ] && echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] GLOBAL LOCK: Stale (age=${glock_age}s, PID $gpid) — reclaiming" >> "$LOGFILE"
+        rm -f "$GLOBAL_LOCK"
+    fi
+fi
+echo $$ > "$GLOBAL_LOCK"
+trap "rm -f $LOCKFILE $GLOBAL_LOCK" EXIT
+
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Evolution analysis starting (optimized) ===" >> "$LOGFILE"
 
 # ============================================================================
@@ -65,41 +82,30 @@ echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] CONTEXT: compressed_queue=${#COMPRESSED_QU
 # ============================================================================
 # CLAUDE CODE ANALYSIS (the actual expensive part — this is the core work)
 # ============================================================================
+WEAKEST_METRIC=$(get_weakest_metric)
 EVO_PROMPT_FILE=$(mktemp)
-cat > "$EVO_PROMPT_FILE" << 'ENDPROMPT'
-You are Clarvis's strategic evolution engine. Do a deep analysis:
+cat > "$EVO_PROMPT_FILE" << ENDPROMPT
+You are Clarvis's strategic evolution engine.
 
-1. Review the compressed queue below — what's pending?
-2. Read the recent memory file — what happened today?
-3. Check data/plans/ — any unfinished research or ideas?
-4. Review skills/ — any missing skills that would help M2.5 or the subconscious?
-5. Check HEARTBEAT.md, ROADMAP.md — are protocols and phase assessments current?
-6. Consider non-code improvements: config tuning, prompt engineering, cron schedule optimization, skill creation.
+QUEUE: Read memory/evolution/QUEUE.md — the authoritative task backlog.
+WEAKEST METRIC: $WEAKEST_METRIC — at least one new task MUST target this.
 
-ANALYSIS:
-- What's working well in the evolution toward AGI/consciousness?
-- What's the biggest bottleneck based on the capability scores?
-- Which capability has the LOWEST score? Design a task to improve it.
-- How is Phi trending? What would increase information integration?
+STEPS:
+1. Review the compressed queue below — what's pending ($PENDING_COUNT items)?
+2. Check data/plans/, skills/, HEARTBEAT.md, ROADMAP.md for gaps.
+3. Assess Phi trend and capability scores from health data below.
 
-ACTION (MANDATORY):
-- If there are fewer than 5 pending tasks in QUEUE.md, ADD 3-5 new ones.
-- Add them under '## NEW ITEMS' for urgent ones, '## Cost Efficiency' for optimization.
+ACTION (MANDATORY if <5 pending tasks):
+- Add 3-5 NEW tasks to QUEUE.md under '## NEW ITEMS'.
 - Format: - [ ] <concrete, actionable task>
-- Prioritize fixing the LOWEST capability score. Then: integration, feedback loops,
-  consciousness metrics, and genuine cognitive capabilities.
-- Include at least ONE non-Python task (config tune, protocol update, skill creation,
-  prompt improvement, architectural simplification, or cron optimization).
-- Available runtimes: Python 3, Node.js, Bash. Can install Rust/Go/etc. Use the right tool for the job.
+- At least 1 task targeting the weakest metric. At least 1 non-Python task.
+
+$COMPRESSED_QUEUE
+
+$COMPRESSED_HEALTH
+
+OUTPUT FORMAT (mandatory): Start with "ANALYSIS: <1-sentence verdict>". Then "TASKS ADDED: <count>". Then list each task.
 ENDPROMPT
-# Append dynamic context
-echo "" >> "$EVO_PROMPT_FILE"
-echo "$COMPRESSED_QUEUE" >> "$EVO_PROMPT_FILE"
-echo "" >> "$EVO_PROMPT_FILE"
-echo "$COMPRESSED_HEALTH" >> "$EVO_PROMPT_FILE"
-echo "" >> "$EVO_PROMPT_FILE"
-echo "Currently $PENDING_COUNT pending tasks in queue." >> "$EVO_PROMPT_FILE"
-echo "Output: 1-paragraph analysis + list of tasks added." >> "$EVO_PROMPT_FILE"
 
 timeout 1200 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \
     /home/agent/.local/bin/claude -p "$(cat "$EVO_PROMPT_FILE")" \

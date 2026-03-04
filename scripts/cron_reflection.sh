@@ -18,6 +18,13 @@ trap "rm -f $LOCKFILE" EXIT
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Reflection starting ===" >> "$LOGFILE"
 
+# Step 0: QUEUE.md scan — count pending/completed for digest metrics
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Scanning QUEUE.md..." >> "$LOGFILE"
+QUEUE_PENDING=$(grep -c '^\- \[ \]' memory/evolution/QUEUE.md 2>/dev/null || echo 0)
+QUEUE_DONE=$(grep -c '^\- \[x\]' memory/evolution/QUEUE.md 2>/dev/null || echo 0)
+WEAKEST_METRIC=$(get_weakest_metric)
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] QUEUE: $QUEUE_PENDING pending, $QUEUE_DONE completed. Weakest: $WEAKEST_METRIC" >> "$LOGFILE"
+
 # Step 0.5: Context window GC — archive old completed tasks, rotate oversized logs
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running context window GC..." >> "$LOGFILE"
 python3 /home/agent/.openclaw/workspace/scripts/context_compressor.py gc >> "$LOGFILE" 2>&1 || true
@@ -107,7 +114,7 @@ fi
 
 # === DIGEST: Write first-person summary for M2.5 agent ===
 python3 /home/agent/.openclaw/workspace/scripts/digest_writer.py reflection \
-    "Nightly reflection complete. Ran full 8-step pipeline: brain.optimize, clarvis_reflection, knowledge_synthesis, crosslink, memory_consolidation, conversation_learner, failure_amplifier, episodic_synthesis, temporal_self. Session state saved. Ready for tomorrow." \
+    "REFLECTION: complete. QUEUE: ${QUEUE_PENDING} pending, ${QUEUE_DONE} done. WEAKEST: ${WEAKEST_METRIC}. Pipeline: optimize, reflect, synthesize, crosslink, consolidate, learn, amplify, episodic, temporal, meta-learn, AZR, causal. Session saved." \
     >> "$LOGFILE" 2>&1 || true
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Reflection complete ===" >> "$LOGFILE"

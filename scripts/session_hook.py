@@ -8,11 +8,12 @@ Called by cron scripts:
   - cron_reflection.sh → session_hook.py close (save state, store learnings)
 """
 import json
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from brain import brain
 from attention import attention
 

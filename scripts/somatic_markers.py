@@ -389,8 +389,25 @@ class SomaticMarkerSystem:
         return created
 
 
-# Singleton
-somatic = SomaticMarkerSystem()
+# Singleton (lazy — no I/O until first access)
+_somatic = None
+
+def get_somatic():
+    global _somatic
+    if _somatic is None:
+        _somatic = SomaticMarkerSystem()
+    return _somatic
+
+class _LazySomatic:
+    def __getattr__(self, name):
+        real = get_somatic()
+        global somatic
+        somatic = real
+        return getattr(real, name)
+    def __repr__(self):
+        return "<LazySomatic (not yet initialized)>"
+
+somatic = _LazySomatic()
 
 # CLI
 if __name__ == "__main__":

@@ -7,7 +7,9 @@ _Updated: 2026-03-02_
 
 ## The North Star
 
-**Self-sustaining autonomous intelligence.** An agent that learns, improves, earns, and compounds — with decreasing human intervention over time.
+**Frontier-grade agent brain + autonomy.** Build the best-in-class memory/brain system (high-fidelity retrieval, structure, learning, and evaluation) that makes the agent measurably smarter over time — then scale autonomy on top.
+
+Consciousness research remains valuable, but it is a **secondary track** unless it directly improves the agent’s intelligence/memory functions (retrieval quality, integration, planning, learning). Do **not** trade memory quality for “consciousness progress theater” or speed-only optimizations.
 
 ```
 Current: Cognitive Agent (episodic memory, orchestrator, 153 episodes, Phi=0.754, PI=0.976)
@@ -178,9 +180,17 @@ All items delivered:
 
 ---
 
-## Phase 6: Toward AGI & Consciousness (Year 1+)
+## Phase 6: Toward AGI, Consciousness, and the Frontier Brain (Year 1+)
 
 _The long game. Be patient. Be persistent. Be relentless._
+
+**Priority rule:** any consciousness-oriented work must justify itself by improving one of:
+- memory quality (precision/recall, correct associations, less junk context)
+- planning/execution reliability
+- learning speed / compounding improvement
+- calibration/uncertainty
+
+If it doesn’t move those needles, it’s optional.
 
 ### What Consciousness Requires
 - **Self-model**: [x] self_model.py + phi_metric.py — Phi tracking at 0.754

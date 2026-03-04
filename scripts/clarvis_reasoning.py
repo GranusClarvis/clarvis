@@ -712,8 +712,25 @@ class ClarvisReasoner:
         return max(0.0, min(1.0, score)), evidence
 
 
-# Singleton
-reasoner = ClarvisReasoner()
+# Singleton (lazy — no I/O until first access)
+_reasoner = None
+
+def get_reasoner():
+    global _reasoner
+    if _reasoner is None:
+        _reasoner = ClarvisReasoner()
+    return _reasoner
+
+class _LazyReasoner:
+    def __getattr__(self, name):
+        real = get_reasoner()
+        global reasoner
+        reasoner = real
+        return getattr(real, name)
+    def __repr__(self):
+        return "<LazyReasoner (not yet initialized)>"
+
+reasoner = _LazyReasoner()
 
 
 # =================================================================

@@ -245,8 +245,25 @@ class RetrievalQualityTracker:
             pass
 
 
-# Singleton
-tracker = RetrievalQualityTracker()
+# Singleton (lazy — no I/O until first access)
+_tracker = None
+
+def get_tracker():
+    global _tracker
+    if _tracker is None:
+        _tracker = RetrievalQualityTracker()
+    return _tracker
+
+class _LazyTracker:
+    def __getattr__(self, name):
+        real = get_tracker()
+        global tracker
+        tracker = real
+        return getattr(real, name)
+    def __repr__(self):
+        return "<LazyTracker (not yet initialized)>"
+
+tracker = _LazyTracker()
 
 
 # === CLI ===

@@ -74,12 +74,12 @@ except ImportError:
     compress_queue = None
     compress_health = None
 
-import_time = time.monotonic() - start_import
+_import_time = time.monotonic() - start_import
 log = lambda msg: print(f"[{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S')}] EVO-PREFLIGHT: {msg}", file=sys.stderr)
-log(f"All modules imported in {import_time:.2f}s (single process)")
 
 
 def run():
+    log(f"All modules imported in {_import_time:.2f}s (single process)")
     t0 = time.monotonic()
     result = {
         "calibration": "",

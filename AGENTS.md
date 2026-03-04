@@ -360,6 +360,19 @@ Delegate a task to Claude Code (Opus 4.6). See the `spawn-claude` skill.
 **From conversation:** ACP is preferred (two-step: prompt_builder → sessions_spawn with runtime: "acp"). The `/spawn` skill uses `spawn_claude.sh` which also injects brain context.
 **From cron/CLI:** Call `spawn_claude.sh` directly as shown above.
 
+### `/iteration1` `/iteration2` `/iteration3` `/iteration4` — Fast-track Evolution (Autonomous Cron)
+Run 1–4 **back-to-back** evolution cycles *exactly like* `scripts/cron_autonomous.sh` (the scheduled autonomous evolution loop), but on-demand.
+
+Implementation rule:
+- Use `functions.cron.add` to create a **one-shot** job (schedule.kind=`at`) in an **isolated** session with `payload.kind="agentTurn"`.
+- The payload prompt must run **N cycles in sequence** by invoking:
+  - `bash /home/agent/.openclaw/workspace/scripts/cron_autonomous.sh`
+  - wait for completion
+  - repeat
+- Set `timeoutSeconds` ≈ `900*N` (buffer included; Claude runs can be slow).
+- Delivery: announce to Telegram.
+- Prefer naming: `iterationN-YYYYMMDD-HHMM`.
+
 ## Tools
 
 Skills provide your tools. When you need one, check its `SKILL.md`. Keep local notes (camera names, SSH details, voice preferences) in `TOOLS.md`.

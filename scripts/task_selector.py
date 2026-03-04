@@ -14,10 +14,11 @@ Usage:
 """
 
 import json
+import os
 import re
 import sys
 
-sys.path.insert(0, '/home/agent/.openclaw/workspace/scripts')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from attention import attention, get_codelet_competition
 from brain import brain
@@ -38,6 +39,7 @@ except ImportError:
     thought_proto = None
 
 QUEUE_FILE = "/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md"
+QUALITY_GATE_FILE = "/home/agent/.openclaw/workspace/data/memory_quality_gate.json"
 
 # Keywords that signal AGI/consciousness relevance (high-value work)
 AGI_KEYWORDS = [
@@ -343,6 +345,31 @@ def score_tasks(tasks, codelet_result=None):
     return scored
 
 
+def _check_quality_gate():
+    """Check if memory quality gate is active (degraded).
+    Returns gate data dict if degraded, None if healthy."""
+    try:
+        if os.path.exists(QUALITY_GATE_FILE):
+            with open(QUALITY_GATE_FILE) as f:
+                gate = json.load(f)
+            if gate.get("status") == "DEGRADED":
+                return gate
+    except Exception:
+        pass
+    return None
+
+
+def _is_repair_task(task_text):
+    """Check if a task is a repair/fix/maintenance task (allowed during quality gate)."""
+    text_lower = task_text.lower()
+    repair_keywords = [
+        "memory_repair", "fix retrieval", "repair", "fix regression",
+        "brain eval", "retrieval quality", "memory quality",
+        "fix brain", "debug memory", "investigate failure",
+    ]
+    return any(kw in text_lower for kw in repair_keywords)
+
+
 def select_best_task():
     """Main entry: parse, score, return best task as JSON on stdout."""
     tasks = parse_tasks()
@@ -353,6 +380,17 @@ def select_best_task():
         return None
 
     scored = score_tasks(tasks)
+
+    # Check memory quality gate — if degraded, only allow repair/P0 tasks
+    gate = _check_quality_gate()
+    if gate:
+        print(f"QUALITY GATE ACTIVE: {gate.get('violations', [])}", file=sys.stderr)
+        repair_tasks = [t for t in scored if t["section"] == "P0" or _is_repair_task(t["text"])]
+        if repair_tasks:
+            scored = repair_tasks
+            print(f"QUALITY GATE: filtered to {len(scored)} repair/P0 tasks", file=sys.stderr)
+        else:
+            print("QUALITY GATE: no repair tasks found, allowing best task anyway", file=sys.stderr)
 
     # Log all scores to stderr (captured in cron log)
     for t in scored:

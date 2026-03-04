@@ -24,6 +24,18 @@ import time
 from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+# === LIFECYCLE HOOKS: explicit registration replaces import-time wiring ===
+try:
+    from clarvis.heartbeat.hooks import registry as hook_registry, HookPhase
+    from clarvis.heartbeat.adapters import register_all as _register_hooks
+    _register_hooks()
+    _hooks_available = True
+except ImportError:
+    hook_registry = None
+    HookPhase = None
+    _hooks_available = False
 
 # === SINGLE IMPORT BLOCK ===
 start_import = time.monotonic()
@@ -35,6 +47,11 @@ try:
 except ImportError:
     conf_outcome = None
     conf_auto_resolve = None
+
+try:
+    from prediction_resolver import resolve_with_episodes as pred_resolve_enhanced
+except ImportError:
+    pred_resolve_enhanced = None
 
 try:
     from reasoning_chain_hook import close_chain
@@ -144,6 +161,23 @@ try:
 except ImportError:
     tool_maker_extract = None
 
+try:
+    from import_health import build_import_graph, full_report as import_health_report, SCRIPTS_DIR as IH_SCRIPTS_DIR
+except ImportError:
+    build_import_graph = None
+    import_health_report = None
+    IH_SCRIPTS_DIR = None
+
+try:
+    from retrieval_quality import tracker as rq_tracker
+except ImportError:
+    rq_tracker = None
+
+try:
+    from prompt_optimizer import record_outcome as po_record_outcome
+except ImportError:
+    po_record_outcome = None
+
 # Cost tracking
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'packages', 'clarvis-cost'))
 try:
@@ -153,9 +187,8 @@ try:
 except ImportError:
     cost_tracker = None
 
-import_time = time.monotonic() - start_import
+_import_time = time.monotonic() - start_import
 log = lambda msg: print(f"[{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S')}] POSTFLIGHT: {msg}", file=sys.stderr)
-log(f"All modules imported in {import_time:.2f}s (single process)")
 
 
 def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
@@ -167,6 +200,7 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
         preflight_data: dict, the JSON output from heartbeat_preflight.py
         task_duration: int, seconds the task took
     """
+    log(f"All modules imported in {_import_time:.2f}s (single process)")
     t0 = time.monotonic()
     timings = {}
 
@@ -322,63 +356,57 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
         pass
     timings["attention_outcome"] = round(time.monotonic() - t3, 3)
 
-    # === 4. PROCEDURAL MEMORY ===
+    # === 4. PROCEDURAL MEMORY (via lifecycle hooks) ===
     t4 = time.monotonic()
-    if exit_code == 0:
-        if proc_id and record_use:
-            try:
-                record_use(proc_id, True)
-                log(f"Recorded successful use of procedure {proc_id}")
-            except Exception as e:
-                log(f"Procedural record_use failed: {e}")
-        elif learn_from_task:
-            # Try to extract steps and learn a new procedure
-            try:
-                steps = None
-                if extract_steps:
-                    # Truncate to last 2000 chars — extract_steps looks at the
-                    # summary line near the end; a huge blob confuses the splitter
-                    extraction_text = output_text[-2000:] if len(output_text) > 2000 else output_text
-                    steps = extract_steps(extraction_text)
-                if steps:
-                    learn_from_task(task, steps)
-                    log(f"Learned new procedure from task output ({len(steps)} steps)")
-                else:
-                    log("Skipped procedure learning — no concrete steps extracted")
-            except Exception as e:
-                log(f"Procedural learning failed: {e}")
+    _hook_results = {}  # collected from single registry.run() below
+    if _hooks_available:
+        # Build context for all postflight hooks (runs procedural + consolidation + metrics in one pass)
+        hook_ctx = {
+            "exit_code": exit_code, "task": task, "output_text": output_text,
+            "procedure_id": proc_id, "task_status": task_status,
+            "task_duration": task_duration,
+            "procedure_injected": preflight_data.get("procedure_injected", False),
+            "procedures_for_injection": preflight_data.get("procedures_for_injection", []),
+        }
+        _hook_results = hook_registry.run(HookPhase.POSTFLIGHT, hook_ctx)
+        for hname, hr in _hook_results.items():
+            if "error" in hr:
+                log(f"Hook {hname} failed: {hr['error']}")
+            timings[f"hook_{hname}"] = hr.get("elapsed_s", 0)
+        hook_summary = ", ".join(
+            f"{n}={r.get('elapsed_s', 0):.3f}s" for n, r in _hook_results.items()
+        )
+        log(f"Lifecycle hooks: {len(_hook_results)} hooks ran ({hook_summary})")
     else:
-        # Record failure against procedure if used
-        if proc_id and record_use:
-            try:
-                record_use(proc_id, False)
-                log(f"Recorded failed use of procedure {proc_id}")
-            except Exception as e:
-                log(f"Procedural failure record failed: {e}")
+        # Legacy fallback — import-time wired procedural memory
+        if exit_code == 0:
+            if proc_id and record_use:
+                try:
+                    record_use(proc_id, True)
+                    log(f"Recorded successful use of procedure {proc_id}")
+                except Exception as e:
+                    log(f"Procedural record_use failed: {e}")
+            elif learn_from_task:
+                try:
+                    steps = None
+                    if extract_steps:
+                        extraction_text = output_text[-2000:] if len(output_text) > 2000 else output_text
+                        steps = extract_steps(extraction_text)
+                    if steps:
+                        learn_from_task(task, steps)
+                        log(f"Learned new procedure from task output ({len(steps)} steps)")
+                    else:
+                        log("Skipped procedure learning — no concrete steps extracted")
+                except Exception as e:
+                    log(f"Procedural learning failed: {e}")
+        else:
+            if proc_id and record_use:
+                try:
+                    record_use(proc_id, False)
+                    log(f"Recorded failed use of procedure {proc_id}")
+                except Exception as e:
+                    log(f"Procedural failure record failed: {e}")
     timings["procedural"] = round(time.monotonic() - t4, 3)
-
-    # === 4.3 PROCEDURE INJECTION TRACKING: Correlate injection → outcome ===
-    t43 = time.monotonic()
-    proc_injected = preflight_data.get("procedure_injected", False)
-    if proc_injected:
-        try:
-            injection_entry = {
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "task": task[:200],
-                "procedure_id": proc_id or "",
-                "procedures_injected": preflight_data.get("procedures_for_injection", []),
-                "outcome": task_status,
-                "exit_code": exit_code,
-                "duration_s": task_duration,
-            }
-            injection_log = os.path.join(os.path.dirname(__file__), '..', 'data', 'procedure_injection_log.jsonl')
-            os.makedirs(os.path.dirname(injection_log), exist_ok=True)
-            with open(injection_log, "a") as ilf:
-                ilf.write(json.dumps(injection_entry) + "\n")
-            log(f"Procedure injection tracked: {proc_id} → {task_status}")
-        except Exception as e:
-            log(f"Procedure injection tracking failed: {e}")
-    timings["proc_injection_track"] = round(time.monotonic() - t43, 3)
 
     # === 4.5 TOOL MAKER: Extract reusable tools (LATM pattern) ===
     t45 = time.monotonic()
@@ -407,11 +435,44 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
             log(f"Episodic encoding failed: {e}")
     timings["episodic"] = round(time.monotonic() - t5, 3)
 
-    # === 5.1 PREDICTION AUTO-RESOLVER: Resolve open predictions matching this task ===
-    t51 = time.monotonic()
-    if conf_auto_resolve:
+    # === 5.05 PROMPT OPTIMIZATION: Record prompt→outcome pair (APE/SPO loop) ===
+    t505 = time.monotonic()
+    variant_id = preflight_data.get("prompt_variant_id", "")
+    variant_task_type = preflight_data.get("prompt_variant_task_type", "")
+    if po_record_outcome and variant_id:
         try:
-            actual = "success" if exit_code == 0 else "failure"
+            po_record_outcome(variant_id, variant_task_type, task_status,
+                              task_duration, task)
+            log(f"Prompt optimization: recorded {task_status} for variant "
+                f"{variant_id[:50]}")
+        except Exception as e:
+            log(f"Prompt optimization recording failed (non-fatal): {e}")
+    timings["prompt_optimization"] = round(time.monotonic() - t505, 3)
+
+    # === 5.1 PREDICTION AUTO-RESOLVER: String match + embedding fallback ===
+    t51 = time.monotonic()
+    actual = "success" if exit_code == 0 else "failure"
+    if pred_resolve_enhanced:
+        try:
+            ar = pred_resolve_enhanced(task, actual)
+            parts = [f"string={ar['matched']}"]
+            if ar.get("embedding_matched", 0) > 0:
+                parts.append(f"embed={ar['embedding_matched']}")
+            if ar["stale_expired"] > 0:
+                parts.append(f"stale={ar['stale_expired']}")
+            parts.append(f"remaining={ar['remaining_open']}")
+            log(f"Prediction resolve: {', '.join(parts)}")
+        except Exception as e:
+            log(f"Prediction resolve (enhanced) failed: {e}")
+            # Fallback to string-only resolver
+            if conf_auto_resolve:
+                try:
+                    ar = conf_auto_resolve(task, actual)
+                    log(f"Prediction resolve (fallback): matched={ar['matched']}, remaining={ar['remaining_open']}")
+                except Exception as e2:
+                    log(f"Prediction resolve (fallback) also failed: {e2}")
+    elif conf_auto_resolve:
+        try:
             ar = conf_auto_resolve(task, actual)
             if ar["matched"] > 0 or ar["stale_expired"] > 0:
                 log(f"Prediction auto-resolve: matched={ar['matched']}, "
@@ -579,37 +640,38 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
             log(f"Benchmark recording failed: {e}")
     timings["benchmark"] = round(time.monotonic() - t725, 3)
 
-    # === 7.3 PERFORMANCE BENCHMARK: Quick health check ===
+    # === 7.3-7.35 PERFORMANCE METRICS (via lifecycle hooks if available) ===
     t73 = time.monotonic()
-    if perf_heartbeat_check:
-        try:
-            perf_result = perf_heartbeat_check()
-            if not perf_result.get("speed_ok", True):
-                log(f"PERF WARNING: brain query avg {perf_result.get('brain_query_avg_ms', '?')}ms exceeds critical threshold")
-            else:
-                log(f"PERF: query={perf_result.get('brain_query_avg_ms', '?')}ms, "
-                    f"memories={perf_result.get('brain_memories', '?')}, "
-                    f"density={perf_result.get('graph_density', '?')}, "
-                    f"prev_pi={perf_result.get('prev_pi', 'N/A')}")
-        except Exception as e:
-            log(f"Performance heartbeat check failed: {e}")
-    timings["perf_benchmark"] = round(time.monotonic() - t73, 3)
+    if not _hooks_available:
+        # Legacy fallback — hooks already ran metrics in §4 when available
+        if perf_heartbeat_check:
+            try:
+                perf_result = perf_heartbeat_check()
+                if not perf_result.get("speed_ok", True):
+                    log(f"PERF WARNING: brain query avg {perf_result.get('brain_query_avg_ms', '?')}ms exceeds critical threshold")
+                else:
+                    log(f"PERF: query={perf_result.get('brain_query_avg_ms', '?')}ms, "
+                        f"memories={perf_result.get('brain_memories', '?')}, "
+                        f"density={perf_result.get('graph_density', '?')}, "
+                        f"prev_pi={perf_result.get('prev_pi', 'N/A')}")
+            except Exception as e:
+                log(f"Performance heartbeat check failed: {e}")
+        timings["perf_benchmark"] = round(time.monotonic() - t73, 3)
 
-    # === 7.35 LATENCY BUDGET: Quick p50/p95 check ===
-    t735 = time.monotonic()
-    if latency_quick_check:
-        try:
-            lat_result = latency_quick_check()
-            if lat_result.get("critical"):
-                log(f"LATENCY CRITICAL: brain.recall p95={lat_result['p95_ms']:.0f}ms exceeds critical threshold")
-            elif not lat_result.get("p50_ok") or not lat_result.get("p95_ok"):
-                log(f"LATENCY WARN: brain.recall p50={lat_result['p50_ms']:.0f}ms p95={lat_result['p95_ms']:.0f}ms "
-                    f"(budget p50={lat_result['budget_p50_ms']}ms p95={lat_result['budget_p95_ms']}ms)")
-            else:
-                log(f"LATENCY: brain.recall p50={lat_result['p50_ms']:.0f}ms p95={lat_result['p95_ms']:.0f}ms [OK]")
-        except Exception as e:
-            log(f"Latency budget check failed: {e}")
-    timings["latency_budget"] = round(time.monotonic() - t735, 3)
+        t735 = time.monotonic()
+        if latency_quick_check:
+            try:
+                lat_result = latency_quick_check()
+                if lat_result.get("critical"):
+                    log(f"LATENCY CRITICAL: brain.recall p95={lat_result['p95_ms']:.0f}ms exceeds critical threshold")
+                elif not lat_result.get("p50_ok") or not lat_result.get("p95_ok"):
+                    log(f"LATENCY WARN: brain.recall p50={lat_result['p50_ms']:.0f}ms p95={lat_result['p95_ms']:.0f}ms "
+                        f"(budget p50={lat_result['budget_p50_ms']}ms p95={lat_result['budget_p95_ms']}ms)")
+                else:
+                    log(f"LATENCY: brain.recall p50={lat_result['p50_ms']:.0f}ms p95={lat_result['p95_ms']:.0f}ms [OK]")
+            except Exception as e:
+                log(f"Latency budget check failed: {e}")
+        timings["latency_budget"] = round(time.monotonic() - t735, 3)
 
     # === 7.4 SELF-TEST HARNESS: Auto-run tests after code-modifying heartbeats ===
     t74 = time.monotonic()
@@ -776,6 +838,153 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
             log(f"Performance gate failed: {e}")
     timings["perf_gate"] = round(time.monotonic() - t745, 3)
 
+    # === 7.46 MEMORY QUALITY GATES: Hard gate on retrieval quality ===
+    t746 = time.monotonic()
+    QUALITY_GATE_FILE = "/home/agent/.openclaw/workspace/data/memory_quality_gate.json"
+    QUALITY_BASELINE_FILE = "/home/agent/.openclaw/workspace/data/memory_quality_baseline.json"
+    try:
+        if rq_tracker:
+            rq_report = rq_tracker.report(days=1)
+            if rq_report.get("status") != "no_data" and rq_report.get("total_events", 0) >= 5:
+                # Load or initialize baseline
+                baseline = None
+                if os.path.exists(QUALITY_BASELINE_FILE):
+                    with open(QUALITY_BASELINE_FILE) as bf:
+                        baseline = json.load(bf)
+
+                current_hit_rate = rq_report.get("hit_rate")
+                current_dead_rate = rq_report.get("dead_recall_rate", 0)
+                current_avg_dist = rq_report.get("avg_distance_overall")
+
+                if baseline is None:
+                    # First run — establish baseline from current data
+                    baseline = {
+                        "hit_rate": current_hit_rate,
+                        "dead_recall_rate": current_dead_rate,
+                        "avg_distance": current_avg_dist,
+                        "established_at": datetime.now(timezone.utc).isoformat(),
+                        "sample_size": rq_report.get("total_events", 0),
+                    }
+                    os.makedirs(os.path.dirname(QUALITY_BASELINE_FILE), exist_ok=True)
+                    with open(QUALITY_BASELINE_FILE, "w") as bf:
+                        json.dump(baseline, bf, indent=2)
+                    log(f"QUALITY GATE: baseline established (hit_rate={current_hit_rate}, "
+                        f"dead_rate={current_dead_rate:.3f}, avg_dist={current_avg_dist})")
+                else:
+                    # Compare against baseline — check for degradation
+                    violations = []
+                    bl_hit = baseline.get("hit_rate")
+                    bl_dead = baseline.get("dead_recall_rate", 0)
+                    bl_dist = baseline.get("avg_distance")
+
+                    # Gate 1: Hit rate dropped >15% from baseline (or absolute <40%)
+                    if current_hit_rate is not None and bl_hit is not None:
+                        if current_hit_rate < bl_hit - 0.15 or current_hit_rate < 0.40:
+                            violations.append(f"hit_rate={current_hit_rate:.3f} (baseline={bl_hit:.3f})")
+
+                    # Gate 2: Dead recall rate increased >10% from baseline (or absolute >35%)
+                    if current_dead_rate > bl_dead + 0.10 or current_dead_rate > 0.35:
+                        violations.append(f"dead_recall_rate={current_dead_rate:.3f} (baseline={bl_dead:.3f})")
+
+                    # Gate 3: Average distance increased >0.2 from baseline (or absolute >1.6)
+                    if current_avg_dist is not None and bl_dist is not None:
+                        if current_avg_dist > bl_dist + 0.20 or current_avg_dist > 1.6:
+                            violations.append(f"avg_distance={current_avg_dist:.4f} (baseline={bl_dist:.4f})")
+
+                    if violations:
+                        log(f"QUALITY GATE VIOLATION: {'; '.join(violations)}")
+
+                        # Write gate file — task_selector reads this to pause new features
+                        gate_data = {
+                            "status": "DEGRADED",
+                            "violations": violations,
+                            "current": {
+                                "hit_rate": current_hit_rate,
+                                "dead_recall_rate": current_dead_rate,
+                                "avg_distance": current_avg_dist,
+                            },
+                            "baseline": baseline,
+                            "triggered_at": datetime.now(timezone.utc).isoformat(),
+                            "triggered_by_task": task[:120],
+                        }
+                        os.makedirs(os.path.dirname(QUALITY_GATE_FILE), exist_ok=True)
+                        with open(QUALITY_GATE_FILE, "w") as gf:
+                            json.dump(gate_data, gf, indent=2)
+
+                        # Push P0 repair task
+                        try:
+                            from queue_writer import add_task
+                            repair_desc = (
+                                f"[MEMORY_REPAIR] Memory quality degraded — {'; '.join(violations)}. "
+                                f"Run retrieval_quality.py baseline, check recent brain changes, "
+                                f"fix retrieval before resuming new features."
+                            )
+                            added = add_task(repair_desc, priority="P0", source="memory_quality_gate")
+                            if added:
+                                log("QUALITY GATE: pushed P0 repair task to QUEUE.md")
+                        except Exception as qe:
+                            log(f"QUALITY GATE: failed to push repair task: {qe}")
+                    else:
+                        # Quality is fine — clear any existing gate
+                        if os.path.exists(QUALITY_GATE_FILE):
+                            os.remove(QUALITY_GATE_FILE)
+                        log(f"QUALITY GATE: PASS (hit_rate={current_hit_rate}, "
+                            f"dead_rate={current_dead_rate:.3f}, avg_dist={current_avg_dist})")
+
+                        # Update baseline if current is better (rolling improvement)
+                        updated = False
+                        if current_hit_rate is not None and bl_hit is not None and current_hit_rate > bl_hit + 0.05:
+                            baseline["hit_rate"] = current_hit_rate
+                            updated = True
+                        if current_dead_rate < bl_dead - 0.05:
+                            baseline["dead_recall_rate"] = current_dead_rate
+                            updated = True
+                        if updated:
+                            baseline["updated_at"] = datetime.now(timezone.utc).isoformat()
+                            with open(QUALITY_BASELINE_FILE, "w") as bf:
+                                json.dump(baseline, bf, indent=2)
+                            log("QUALITY GATE: baseline improved, updated")
+            else:
+                log(f"QUALITY GATE: insufficient data ({rq_report.get('total_events', 0)} events, need >=5)")
+    except Exception as e:
+        log(f"Memory quality gate failed (non-fatal): {e}")
+    timings["memory_quality_gate"] = round(time.monotonic() - t746, 3)
+
+    # === 7.47 STRUCTURAL HEALTH: Import graph metrics (via hook when available) ===
+    t747 = time.monotonic()
+    if not _hooks_available:
+        # Legacy fallback — hooks already ran structural_health in §4 when available
+        if build_import_graph and import_health_report and IH_SCRIPTS_DIR:
+            try:
+                ih_graph = build_import_graph(IH_SCRIPTS_DIR)
+                ih_report = import_health_report(ih_graph, use_current_thresholds=True)
+                ih_metrics = {
+                    "scc_count": ih_report["circular_imports"]["scc_count"],
+                    "max_scc_size": ih_report["circular_imports"]["max_scc_size"],
+                    "max_depth": ih_report["dependency_depth"]["max"],
+                    "max_fan_in": ih_report["fan_in"]["max"],
+                    "max_fan_out": ih_report["fan_out"]["max"],
+                    "side_effects": ih_report["side_effects"]["count"],
+                    "total_modules": ih_report["total_modules"],
+                    "violations": ih_report["violations"],
+                    "healthy": ih_report["healthy"],
+                }
+                struct_hist_file = os.path.join(os.path.dirname(__file__), '..', 'data', 'structural_health_history.jsonl')
+                ih_entry = {
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "type": "structural_health",
+                    "metrics": ih_metrics,
+                }
+                with open(struct_hist_file, "a") as hf:
+                    hf.write(json.dumps(ih_entry) + "\n")
+                status_str = "HEALTHY" if ih_metrics["healthy"] else f"DEGRADED ({', '.join(ih_metrics['violations'])})"
+                log(f"STRUCTURAL: {status_str} — SCCs={ih_metrics['scc_count']}, "
+                    f"depth={ih_metrics['max_depth']}, fan_in={ih_metrics['max_fan_in']}, "
+                    f"fan_out={ih_metrics['max_fan_out']}, modules={ih_metrics['total_modules']}")
+            except Exception as e:
+                log(f"Structural health check failed: {e}")
+        timings["structural_health"] = round(time.monotonic() - t747, 3)
+
     # === 7.5 COST TRACKING ===
     t75 = time.monotonic()
     if cost_tracker:
@@ -875,23 +1084,23 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
             log(f"Evolution timeout capture failed: {e}")
     timings["evolution"] = round(time.monotonic() - t8, 3)
 
-    # === 8.5 PERIODIC SYNTHESIS: Re-analyze episode patterns every 10th run ===
+    # === 8.5 PERIODIC SYNTHESIS (via lifecycle hook when available) ===
     t85_synth = time.monotonic()
-    if EpisodicMemory:
-        try:
-            em_synth = EpisodicMemory()
-            # Run synthesis every 10 episodes (cheap, keeps insights fresh)
-            if len(em_synth.episodes) % 10 == 0 and len(em_synth.episodes) > 0:
-                synth = em_synth.synthesize()
-                log(f"Periodic synthesis: {synth.get('goals_count', 0)} goals, "
-                    f"success_rate={synth.get('success_rate', '?')}")
-                # Also backfill causal links
-                backfilled = em_synth.backfill_causal_links()
-                if backfilled:
-                    log(f"Causal backfill: +{backfilled} links")
-        except Exception as e:
-            log(f"Periodic synthesis failed: {e}")
-    timings["periodic_synthesis"] = round(time.monotonic() - t85_synth, 3)
+    if not _hooks_available:
+        # Legacy fallback — hooks already ran periodic_synthesis in §4 when available
+        if EpisodicMemory:
+            try:
+                em_synth = EpisodicMemory()
+                if len(em_synth.episodes) % 10 == 0 and len(em_synth.episodes) > 0:
+                    synth = em_synth.synthesize()
+                    log(f"Periodic synthesis: {synth.get('goals_count', 0)} goals, "
+                        f"success_rate={synth.get('success_rate', '?')}")
+                    backfilled = em_synth.backfill_causal_links()
+                    if backfilled:
+                        log(f"Causal backfill: +{backfilled} links")
+            except Exception as e:
+                log(f"Periodic synthesis failed: {e}")
+        timings["periodic_synthesis"] = round(time.monotonic() - t85_synth, 3)
 
     # === 9. DIGEST WRITER ===
     t9 = time.monotonic()

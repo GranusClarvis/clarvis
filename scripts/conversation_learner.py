@@ -22,7 +22,7 @@ import os
 import re
 from collections import Counter
 
-sys.path.insert(0, '/home/agent/.openclaw/workspace/scripts')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from brain import brain, AUTONOMOUS_LEARNING
 
 

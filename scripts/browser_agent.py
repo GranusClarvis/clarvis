@@ -849,7 +849,7 @@ class BrowserAgent:
 def store_browse_result(result: BrowseResult, importance: float = 0.6):
     """Store a browse result in ClarvisDB."""
     try:
-        sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
         from brain import remember
         text = f"Browsed {result.url}: {result.title}\n{result.text[:500]}"
         remember(text, importance=importance)

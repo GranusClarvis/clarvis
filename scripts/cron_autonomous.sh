@@ -33,6 +33,26 @@ fi
 echo $$ > "$LOCKFILE"
 trap "rm -f $LOCKFILE" EXIT
 
+# === GLOBAL CLAUDE LOCK — mutual exclusion with cron_implementation_sprint ===
+GLOBAL_LOCK="/tmp/clarvis_claude_global.lock"
+
+if [ -f "$GLOBAL_LOCK" ]; then
+    gpid=$(cat "$GLOBAL_LOCK" 2>/dev/null)
+    glock_age=$(( $(date +%s) - $(stat -c %Y "$GLOBAL_LOCK" 2>/dev/null || echo 0) ))
+    if [ -n "$gpid" ] && kill -0 "$gpid" 2>/dev/null && [ "$glock_age" -le 2400 ]; then
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] GLOBAL LOCK: Claude already running (PID $gpid, age=${glock_age}s) — deferring" >> "$LOGFILE"
+        # Queue deferred heartbeat as P0 so it runs next cycle
+        python3 "$SCRIPTS/queue_writer.py" add "Deferred autonomous heartbeat (global lock conflict at $(date -u +%H:%M))" --priority P0 --source cron_overlap_guard 2>> "$LOGFILE" || true
+        exit 0
+    else
+        # Stale global lock — reclaim
+        [ -n "$gpid" ] && echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] GLOBAL LOCK: Stale (age=${glock_age}s, PID $gpid) — reclaiming" >> "$LOGFILE"
+        rm -f "$GLOBAL_LOCK"
+    fi
+fi
+echo $$ > "$GLOBAL_LOCK"
+trap "rm -f $LOCKFILE $GLOBAL_LOCK" EXIT
+
 # ============================================================================
 # PHASE 1: BATCHED PRE-FLIGHT (single Python process)
 # Replaces: attention load/tick, task_selector, cognitive_load, procedural_memory,
@@ -47,6 +67,9 @@ if [ "$STUCK_COUNT" -gt 0 ] 2>/dev/null; then
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] SELF-HEALING: $STUCK_COUNT stuck agents detected, healing..." >> "$LOGFILE"
     python3 "$SCRIPTS/agent_orchestrator.py" heal >> "$LOGFILE" 2>&1
 fi
+
+# Pre-compute weakest metric for prompt injection
+WEAKEST_METRIC=$(get_weakest_metric)
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Heartbeat starting (optimized batched pipeline) ===" >> "$LOGFILE"
 
@@ -123,31 +146,15 @@ if [ "$PF_STATUS" = "queue_empty" ] || [ "$PF_STATUS" = "no_tasks" ]; then
     COMPRESSOR="$SCRIPTS/context_compressor.py"
     REPLENISH_CONTEXT=$(python3 "$COMPRESSOR" brief 2>> "$LOGFILE")
     timeout 1200 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT /home/agent/.local/bin/claude -p \
-        "You are Clarvis's evolution engine. The evolution queue is EMPTY.
+        "You are Clarvis's evolution engine. The evolution queue (memory/evolution/QUEUE.md) is EMPTY.
+WEAKEST METRIC: $WEAKEST_METRIC — at least one new task MUST target this.
 
-        Here's what was recently completed and current state:
-        $REPLENISH_CONTEXT
+Recent state: $REPLENISH_CONTEXT
 
-        Explore what can be improved across the FULL system:
-        - scripts/ — Python/Bash automation (brain, cron, cognitive architecture)
-        - skills/ — OpenClaw skill definitions (each has SKILL.md)
-        - HEARTBEAT.md, AGENTS.md, SOUL.md — operating protocols and identity
-        - openclaw.json — gateway config (model, heartbeat interval, compaction)
-        - memory/evolution/QUEUE.md — the queue itself (structure, priorities)
-        - Cron schedule (crontab) — timing, coverage, gaps
-        - data/plans/ — unfinished research or ideas
-
-        Think: What's the biggest gap between current capabilities and AGI/consciousness?
-        Consider improvements to: architecture, configs, protocols, skills, prompts — not just new Python scripts.
-        You have access to: Python 3, Node.js, Bash, and can install Rust/Go/etc. Build in whatever language fits the task.
-
-        Add 3-5 NEW unchecked tasks to QUEUE.md under '## NEW ITEMS' section.
-        Format: - [ ] <concrete task description>
-
-        Tasks can be ANY type: code changes, config tuning, protocol updates, skill creation,
-        documentation improvements, cron schedule changes, prompt engineering, architectural refactors.
-        Do NOT default to 'create a new .py script' unless that's genuinely the right solution.
-        Do NOT duplicate completed tasks. Be concrete and actionable." \
+Scan the system for gaps: scripts/, skills/, HEARTBEAT.md, AGENTS.md, openclaw.json, crontab, data/plans/.
+Add 3-5 NEW unchecked tasks to QUEUE.md under '## NEW ITEMS'. Format: - [ ] <task>
+Rules: no duplicates, at least 1 non-Python task, at least 1 targeting the weakest metric.
+OUTPUT FORMAT (mandatory): TASKS ADDED: <count>. Then list each task on its own line." \
         --dangerously-skip-permissions >> "$LOGFILE" 2>&1
 
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Queue replenished — will execute on next run" >> "$LOGFILE"
@@ -194,6 +201,8 @@ run_claude_code() {
 You are Clarvis's executive function.
 
 ${TIME_BUDGET_HINT}
+WEAKEST METRIC: $WEAKEST_METRIC — consider if your task can improve this.
+QUEUE: Read memory/evolution/QUEUE.md for task backlog. Mark your task [x] when done.
 ${CONTEXT_BRIEF}
 ${PROC_HINT:+
 PROCEDURAL HINT: $PROC_HINT}
@@ -201,7 +210,7 @@ PROCEDURAL HINT: $PROC_HINT}
 TASK: $NEXT_TASK
 
 Do the work. Be concrete. Write code, edit configs, update protocols — whatever fits. Test it.
-When done, output a summary listing what you did, comma-separated.
+OUTPUT FORMAT (mandatory): Start with "RESULT: success|partial|fail — <what changed>". Then 1-3 lines of detail. End with "NEXT: <suggested follow-up or none>".
 ENDPROMPT
 
     timeout "$_timeout" env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \

@@ -840,8 +840,25 @@ class SynapticMemory:
             json.dump(stats, f, indent=2)
 
 
-# Singleton
-synaptic = SynapticMemory()
+# Singleton (lazy — no I/O until first access)
+_synaptic = None
+
+def get_synaptic():
+    global _synaptic
+    if _synaptic is None:
+        _synaptic = SynapticMemory()
+    return _synaptic
+
+class _LazySynaptic:
+    def __getattr__(self, name):
+        real = get_synaptic()
+        global synaptic
+        synaptic = real
+        return getattr(real, name)
+    def __repr__(self):
+        return "<LazySynaptic (not yet initialized)>"
+
+synaptic = _LazySynaptic()
 
 
 # === CLI ===

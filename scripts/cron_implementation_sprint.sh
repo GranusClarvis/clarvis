@@ -34,6 +34,24 @@ fi
 echo $$ > "$LOCKFILE"
 trap "rm -f $LOCKFILE" EXIT
 
+# === GLOBAL CLAUDE LOCK — mutual exclusion with cron_autonomous ===
+GLOBAL_LOCK="/tmp/clarvis_claude_global.lock"
+
+if [ -f "$GLOBAL_LOCK" ]; then
+    gpid=$(cat "$GLOBAL_LOCK" 2>/dev/null)
+    glock_age=$(( $(date +%s) - $(stat -c %Y "$GLOBAL_LOCK" 2>/dev/null || echo 0) ))
+    if [ -n "$gpid" ] && kill -0 "$gpid" 2>/dev/null && [ "$glock_age" -le 2400 ]; then
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] GLOBAL LOCK: Claude already running (PID $gpid, age=${glock_age}s) — deferring" >> "$LOGFILE"
+        python3 "$SCRIPTS/queue_writer.py" add "Deferred implementation sprint (global lock conflict at $(date -u +%H:%M))" --priority P0 --source cron_overlap_guard 2>> "$LOGFILE" || true
+        exit 0
+    else
+        [ -n "$gpid" ] && echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] GLOBAL LOCK: Stale (age=${glock_age}s, PID $gpid) — reclaiming" >> "$LOGFILE"
+        rm -f "$GLOBAL_LOCK"
+    fi
+fi
+echo $$ > "$GLOBAL_LOCK"
+trap "rm -f $LOCKFILE $GLOBAL_LOCK" EXIT
+
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Implementation Sprint starting ===" >> "$LOGFILE"
 
 # Extract the FIRST unchecked IMPLEMENTATION task from QUEUE.md

@@ -15,6 +15,23 @@ fi
 echo $$ > "$LOCKFILE"
 trap "rm -f $LOCKFILE" EXIT
 
+# === GLOBAL CLAUDE LOCK — mutual exclusion with all Claude Code spawners ===
+GLOBAL_LOCK="/tmp/clarvis_claude_global.lock"
+
+if [ -f "$GLOBAL_LOCK" ]; then
+    gpid=$(cat "$GLOBAL_LOCK" 2>/dev/null)
+    glock_age=$(( $(date +%s) - $(stat -c %Y "$GLOBAL_LOCK" 2>/dev/null || echo 0) ))
+    if [ -n "$gpid" ] && kill -0 "$gpid" 2>/dev/null && [ "$glock_age" -le 2400 ]; then
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] GLOBAL LOCK: Claude already running (PID $gpid, age=${glock_age}s) — deferring" >> "$LOGFILE"
+        exit 0
+    else
+        [ -n "$gpid" ] && echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] GLOBAL LOCK: Stale (age=${glock_age}s, PID $gpid) — reclaiming" >> "$LOGFILE"
+        rm -f "$GLOBAL_LOCK"
+    fi
+fi
+echo $$ > "$GLOBAL_LOCK"
+trap "rm -f $LOCKFILE $GLOBAL_LOCK" EXIT
+
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Evening routine started ===" >> "$LOGFILE"
 
 # === PHI METRIC: RECORD AND ACT ===
@@ -86,10 +103,19 @@ python3 /home/agent/.openclaw/workspace/scripts/dashboard.py >> "$LOGFILE" 2>&1 
 
 # === EXISTING: Claude Code evening audit ===
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running evening audit..." >> "$LOGFILE"
+WEAKEST_METRIC=$(get_weakest_metric)
 EVENING_PROMPT_FILE=$(mktemp)
-cat > "$EVENING_PROMPT_FILE" << 'ENDPROMPT'
-Review today's work: check git status, recent memory files, any errors in logs.
-What's working? Any bugs? Output: brief audit + 1 fix if needed.
+cat > "$EVENING_PROMPT_FILE" << ENDPROMPT
+You are Clarvis's evening auditor.
+QUEUE: Check memory/evolution/QUEUE.md — note any stale or blocked tasks.
+WEAKEST METRIC: $WEAKEST_METRIC — flag if today's work helped or hurt this.
+
+STEPS:
+1. Run git status + git log --oneline -10 to see today's changes.
+2. Scan memory/cron/*.log for errors (grep -i 'error\|fail\|warn' in last 100 lines).
+3. If a bug is found, fix it (1 fix max). If no bugs, skip.
+
+OUTPUT FORMAT (mandatory): "AUDIT: pass|issues_found — <1 sentence>. FIXES: <count>. METRIC_IMPACT: improved|neutral|degraded."
 ENDPROMPT
 timeout 1200 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \
     /home/agent/.local/bin/claude -p "$(cat "$EVENING_PROMPT_FILE")" \

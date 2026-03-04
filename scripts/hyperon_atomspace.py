@@ -707,7 +707,17 @@ def get_atomspace():
         _atomspace = AtomSpace()
     return _atomspace
 
-atomspace = get_atomspace()
+class _LazyAtomSpace:
+    """Lazy proxy — defers AtomSpace init until first access."""
+    def __getattr__(self, name):
+        real = get_atomspace()
+        global atomspace
+        atomspace = real
+        return getattr(real, name)
+    def __repr__(self):
+        return "<LazyAtomSpace (not yet initialized)>"
+
+atomspace = _LazyAtomSpace()
 
 
 # === CLI ===

@@ -7,7 +7,8 @@ and creates synthesized insights about non-obvious relationships.
 """
 
 import sys
-sys.path.insert(0, '/home/agent/.openclaw/workspace/scripts')
+import os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from brain import brain, ALL_COLLECTIONS
 from collections import defaultdict
 import re

@@ -1161,12 +1161,23 @@ def record(report=None):
     if report is None:
         report = run_full_benchmark()
 
-    # Load previous report for comparison
+    # Load previous report for comparison (with staleness guard)
     prev_report = None
     if os.path.exists(METRICS_FILE):
         try:
             with open(METRICS_FILE) as f:
                 prev_report = json.load(f)
+            # Staleness guard: skip regression comparison if prev_report > 3 days old
+            prev_ts = prev_report.get("timestamp", "")
+            if prev_ts:
+                from datetime import datetime as _dt
+                try:
+                    prev_time = _dt.fromisoformat(prev_ts.replace("Z", "+00:00"))
+                    age = datetime.now(timezone.utc) - prev_time
+                    if age.total_seconds() > 3 * 86400:
+                        prev_report = None  # Too stale for regression comparison
+                except (ValueError, TypeError):
+                    prev_report = None
         except Exception:
             pass
 
@@ -1189,7 +1200,11 @@ def record(report=None):
                 line = line.strip()
                 if line:
                     try:
-                        history.append(json.loads(line))
+                        parsed = json.loads(line)
+                        # Filter out foreign entries (e.g. structural_health)
+                        if parsed.get("type") and parsed["type"] != "performance":
+                            continue
+                        history.append(parsed)
                     except json.JSONDecodeError:
                         continue
 
@@ -1225,7 +1240,11 @@ def show_trend(days=30):
             line = line.strip()
             if line:
                 try:
-                    history.append(json.loads(line))
+                    entry = json.loads(line)
+                    # Skip foreign entries (e.g. structural_health) that lack performance metrics
+                    if entry.get("type") and entry["type"] != "performance":
+                        continue
+                    history.append(entry)
                 except json.JSONDecodeError:
                     continue
 
@@ -1241,7 +1260,7 @@ def show_trend(days=30):
     # Metric trends
     trends = {}
     for key in TARGETS:
-        values = [h["metrics"].get(key, 0) for h in recent if key in h.get("metrics", {})]
+        values = [v for h in recent for v in [h.get("metrics", {}).get(key)] if v is not None]
         if len(values) < 2:
             trends[key] = {"trend": "insufficient_data", "values": values}
             continue
@@ -1478,6 +1497,37 @@ if __name__ == "__main__":
         report = run_full_benchmark()
         pi = report.get("pi", {})
         print(f"PI: {pi.get('pi', 0):.4f} — {pi.get('interpretation', '')}")
+
+    elif cmd == "weakest":
+        # Fast: reads last recorded metrics, no re-benchmark
+        if os.path.exists(METRICS_FILE):
+            with open(METRICS_FILE) as f:
+                stored = json.load(f)
+            metrics = stored.get("metrics", {})
+            # Compute margin-to-target ratio for each scored metric
+            worst_name, worst_margin = None, float("inf")
+            for key, meta in TARGETS.items():
+                target = meta.get("target")
+                if target is None or meta.get("direction") == "monitor":
+                    continue
+                val = metrics.get(key)
+                if val is None:
+                    continue
+                if meta["direction"] == "higher":
+                    margin = (val - target) / max(target, 0.001)
+                else:  # lower is better
+                    margin = (target - val) / max(target, 0.001)
+                if margin < worst_margin:
+                    worst_margin = margin
+                    worst_name = key
+            if worst_name:
+                meta = TARGETS[worst_name]
+                val = metrics[worst_name]
+                print(f"{meta['label']}={val:.3f} (target: {meta['target']})")
+            else:
+                print("unknown")
+        else:
+            print("unknown")
 
     else:
         print(__doc__)

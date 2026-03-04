@@ -2,7 +2,7 @@
 # =============================================================================
 # Research Cron — Dedicated research execution from QUEUE.md roadmap
 # =============================================================================
-# Runs 2x/day at 10:00, 20:00 CET
+# Runs 2x/day at 10:00, 16:00 CET (AM + PM for topic diversity)
 # Picks ONE research task from QUEUE.md (any section with "Research:" prefix)
 # and executes it via Claude Code.
 # When no research tasks remain, falls back to DISCOVERY mode (was cron_research_discovery.sh).
@@ -33,6 +33,23 @@ if [ -f "$LOCKFILE" ]; then
 fi
 echo $$ > "$LOCKFILE"
 trap "rm -f $LOCKFILE" EXIT
+
+# === GLOBAL CLAUDE LOCK — mutual exclusion with all Claude Code spawners ===
+GLOBAL_LOCK="/tmp/clarvis_claude_global.lock"
+
+if [ -f "$GLOBAL_LOCK" ]; then
+    gpid=$(cat "$GLOBAL_LOCK" 2>/dev/null)
+    glock_age=$(( $(date +%s) - $(stat -c %Y "$GLOBAL_LOCK" 2>/dev/null || echo 0) ))
+    if [ -n "$gpid" ] && kill -0 "$gpid" 2>/dev/null && [ "$glock_age" -le 2400 ]; then
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] GLOBAL LOCK: Claude already running (PID $gpid, age=${glock_age}s) — deferring" >> "$LOGFILE"
+        exit 0
+    else
+        [ -n "$gpid" ] && echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] GLOBAL LOCK: Stale (age=${glock_age}s, PID $gpid) — reclaiming" >> "$LOGFILE"
+        rm -f "$GLOBAL_LOCK"
+    fi
+fi
+echo $$ > "$GLOBAL_LOCK"
+trap "rm -f $LOCKFILE $GLOBAL_LOCK" EXIT
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Research session starting ===" >> "$LOGFILE"
 
@@ -114,30 +131,20 @@ if not os.path.exists(tracker_file) and not os.path.exists(archive_file):
     DISC_OUTPUT_FILE=$(mktemp)
     DISC_START=$SECONDS
 
+    WEAKEST_METRIC=$(get_weakest_metric)
     DISC_PROMPT_FILE=$(mktemp --suffix=.txt)
     cat > "$DISC_PROMPT_FILE" << ENDDISC
-You are Clarvis's research strategist. Your job is to identify 3-5 HIGH-VALUE research topics that will advance Clarvis's goals.
+You are Clarvis's research strategist. Identify 3-5 HIGH-VALUE research topics.
+QUEUE: memory/evolution/QUEUE.md is the task backlog.
+WEAKEST METRIC: $WEAKEST_METRIC — at least 1 topic MUST relate to improving this.
+CONTEXT: $CONTEXT_BRIEF_DISC
 
-CONTEXT:
-$CONTEXT_BRIEF_DISC
+ALREADY RESEARCHED (do NOT duplicate): $ALREADY_RESEARCHED
+IN QUEUE: $QUEUE_RESEARCH
 
-ALREADY RESEARCHED (do NOT duplicate these):
-$ALREADY_RESEARCHED
-
-CURRENTLY IN QUEUE:
-$QUEUE_RESEARCH
-
-RESEARCH PRIORITIES:
-1. AUTONOMOUS EXECUTION — browser automation, self-directed task execution, multi-step planning
-2. AGI ARCHITECTURE — cognitive architectures, meta-learning, self-modification, knowledge graphs
-3. CONSCIOUSNESS & INTEGRATION — IIT, Global Workspace Theory, phi metrics, information integration
-4. OPEN-SOURCE TOOLS — agent frameworks, browser automation, LLM orchestration, memory systems
-5. SELF-IMPROVEMENT — evolutionary algorithms, auto-ML, curriculum learning
-
-INSTRUCTIONS:
-1. Search the web for 3-5 specific research topics (not already researched)
-2. Add each to the research queue: python3 scripts/queue_writer.py add "Research: [topic] — [description]" --priority P1 --source research_discovery
-3. Output a summary of what you added.
+PRIORITIES: autonomous execution, AGI architecture, consciousness/IIT, open-source tools, self-improvement.
+ACTION: Search web, add 3-5 topics via: python3 scripts/queue_writer.py add "Research: [topic]" --priority P1 --source research_discovery
+OUTPUT FORMAT (mandatory): TOPICS ADDED: <count>. Then list each topic on its own line.
 ENDDISC
 
     timeout 1200 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT /home/agent/.local/bin/claude -p \
@@ -173,6 +180,9 @@ fi
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] RESEARCH TASK: ${RESEARCH_TASK:0:120}" >> "$LOGFILE"
 
+# Pre-compute weakest metric for prompt injection
+WEAKEST_METRIC=$(get_weakest_metric)
+
 # Generate a minimal context brief
 CONTEXT_BRIEF=$(python3 "$SCRIPTS/context_compressor.py" brief 2>> "$LOGFILE")
 
@@ -187,52 +197,37 @@ if echo "$RESEARCH_TASK" | grep -q "^Bundle "; then
 fi
 
 if [ "$IS_BUNDLE" = "true" ]; then
-    RESEARCH_PROMPT="You are Clarvis's research engine. This is a BUNDLE session — scan 3 related topics.
-
-TIME BUDGET: ~25 minutes. Spend ~7 min per topic. Focus on patterns and connections between them.
-
-CURRENT CONTEXT:
-$CONTEXT_BRIEF
+    RESEARCH_PROMPT="You are Clarvis's research engine. BUNDLE session — scan 3 related topics.
+TIME BUDGET: ~25 min. ~7 min/topic.
+QUEUE: Mark this task [x] in memory/evolution/QUEUE.md when done.
+WEAKEST METRIC: $WEAKEST_METRIC — note if research findings relate to this.
+CONTEXT: $CONTEXT_BRIEF
 
 BUNDLE: $RESEARCH_TASK
 
-INSTRUCTIONS:
-1. The bundle lists 3 topics after the theme name (separated by commas). Research each one.
-2. For each topic: search the web, read abstract/key results, extract 2-3 core ideas.
-3. After all 3, write a COMBINED research note to memory/research/ (NOT memory/research/ingested/):
-   - One note per bundle, covering all 3 topics
-   - Focus on: how do these topics connect? What patterns emerge?
-   - 1-2 concrete implementation ideas for Clarvis from the combined insights
-   - IMPORTANT: Write to memory/research/ only. Postflight will ingest and move to ingested/.
-4. Store 3-5 key insights in the brain:
-   python3 scripts/brain.py remember 'I learned that [insight]' --importance 0.7 --collection clarvis-learnings
-5. Mark the bundle complete in QUEUE.md by changing '- [ ]' to '- [x]' and adding the date
+STEPS:
+1. Research each of the 3 topics (web search, abstracts, key results).
+2. Write ONE combined note to memory/research/ (NOT ingested/). Focus on cross-topic patterns.
+3. Store 3-5 insights: python3 scripts/brain.py remember 'I learned that [insight]' --importance 0.7 --collection clarvis-learnings
+4. Mark task [x] in QUEUE.md with date.
 
-Output a 2-3 line summary of what you learned and how it applies to Clarvis."
+OUTPUT FORMAT (mandatory): LEARNED: <1-sentence summary>. STORED: <count> brain memories. APPLIED: <how this helps Clarvis>."
 else
-    RESEARCH_PROMPT="You are Clarvis's research engine. This is a DEEP DIVE session — one topic, thorough study.
-
-TIME BUDGET: ~25 minutes. Go deep. Understand the core ideas thoroughly.
-
-CURRENT CONTEXT:
-$CONTEXT_BRIEF
+    RESEARCH_PROMPT="You are Clarvis's research engine. DEEP DIVE session — one topic, thorough.
+TIME BUDGET: ~25 min.
+QUEUE: Mark this task [x] in memory/evolution/QUEUE.md when done.
+WEAKEST METRIC: $WEAKEST_METRIC — note if research findings relate to this.
+CONTEXT: $CONTEXT_BRIEF
 
 RESEARCH TASK: $RESEARCH_TASK
 
-INSTRUCTIONS:
-1. Search the web for the key paper(s) or concept mentioned in the task
-2. Read and synthesize the core ideas (don't try to read entire papers — focus on abstracts, key results, and implications)
-3. Store 3-5 key insights in the brain:
-   python3 scripts/brain.py remember 'I learned that [insight]' --importance 0.8 --collection clarvis-learnings
-4. Write a brief research note to memory/research/ (NOT memory/research/ingested/):
-   - Title, authors, year
-   - 3-5 key ideas
-   - How this could apply to Clarvis's architecture
-   - 1-2 concrete implementation ideas
-   - IMPORTANT: Write to memory/research/ only. Postflight will ingest and move to ingested/.
-5. Mark the task complete in QUEUE.md by changing '- [ ]' to '- [x]' and adding the date
+STEPS:
+1. Search the web for the key paper(s) or concept. Focus on abstracts + key results.
+2. Store 3-5 insights: python3 scripts/brain.py remember 'I learned that [insight]' --importance 0.8 --collection clarvis-learnings
+3. Write research note to memory/research/ (NOT ingested/): title, 3-5 ideas, Clarvis application.
+4. Mark task [x] in QUEUE.md with date.
 
-Output a 2-3 line summary of what you learned and how it applies to Clarvis."
+OUTPUT FORMAT (mandatory): LEARNED: <1-sentence summary>. STORED: <count> brain memories. APPLIED: <how this helps Clarvis>."
 fi
 
 timeout 1800 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT /home/agent/.local/bin/claude -p \

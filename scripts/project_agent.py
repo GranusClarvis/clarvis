@@ -1041,10 +1041,64 @@ def _benchmark_isolation(name: str) -> dict:
 
 
 def _benchmark_retrieval(name: str) -> dict:
-    """Placeholder for retrieval quality benchmark."""
+    """Benchmark retrieval quality against golden QA pairs."""
+    agent_dir = _agent_dir(name)
+    golden_file = agent_dir / "data" / "golden_qa.json"
+    if not golden_file.exists():
+        return {
+            "status": "not_configured",
+            "note": "Create data/golden_qa.json with repo-specific Q/A pairs to enable",
+        }
+
+    try:
+        qa_pairs = json.loads(golden_file.read_text())
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+    from lite_brain import LiteBrain
+    brain = LiteBrain(str(agent_dir / "data" / "brain"))
+
+    hits_at_1 = 0
+    hits_at_3 = 0
+    reciprocal_ranks = []
+
+    for qa in qa_pairs:
+        query = qa["query"]
+        expected = [e.lower() for e in qa.get("expected_docs", [])]
+        collection = qa.get("collection")
+
+        results = brain.recall(query, n_results=5, collection=collection)
+        docs = [(r.get("document") or r.get("text") or "").lower() for r in results] if results else []
+
+        # Find first rank where any expected substring matches
+        found_rank = None
+        for rank, doc in enumerate(docs):
+            if any(exp in doc for exp in expected):
+                if found_rank is None:
+                    found_rank = rank + 1
+                break
+
+        if found_rank is not None:
+            reciprocal_ranks.append(1.0 / found_rank)
+            if found_rank <= 1:
+                hits_at_1 += 1
+                hits_at_3 += 1
+            elif found_rank <= 3:
+                hits_at_3 += 1
+        else:
+            reciprocal_ranks.append(0.0)
+
+    total = len(qa_pairs)
+    p_at_1 = hits_at_1 / total if total else 0
+    p_at_3 = hits_at_3 / total if total else 0
+    mrr = sum(reciprocal_ranks) / total if total else 0
+
     return {
-        "status": "not_configured",
-        "note": "Create data/golden_qa.json with repo-specific Q/A pairs to enable",
+        "status": "ok",
+        "total_queries": total,
+        "p_at_1": round(p_at_1, 3),
+        "p_at_3": round(p_at_3, 3),
+        "mrr": round(mrr, 3),
     }
 
 

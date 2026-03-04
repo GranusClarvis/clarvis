@@ -5,11 +5,12 @@ v1 MVP
 """
 import re
 import sys
+import os
 import json
 from datetime import datetime
 from pathlib import Path
 
-sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from brain import brain
 
 DATA_FILE = "/home/agent/.openclaw/workspace/data/self_report_metrics.json"

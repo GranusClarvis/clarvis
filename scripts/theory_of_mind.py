@@ -871,8 +871,25 @@ class TheoryOfMind:
         return round(min(1.0, score), 2), evidence
 
 
-# Singleton
-tom = TheoryOfMind()
+# Singleton (lazy — no I/O until first access)
+_tom = None
+
+def get_tom():
+    global _tom
+    if _tom is None:
+        _tom = TheoryOfMind()
+    return _tom
+
+class _LazyToM:
+    def __getattr__(self, name):
+        real = get_tom()
+        global tom
+        tom = real
+        return getattr(real, name)
+    def __repr__(self):
+        return "<LazyToM (not yet initialized)>"
+
+tom = _LazyToM()
 
 
 # ==================================================================
