@@ -43,10 +43,9 @@ Before doing anything else:
 6. **If in MAIN SESSION** (direct chat with your human): Also read `MEMORY.md`
 7. **Load Brain** — Initialize unified memory system:
    ```python
-   import sys; sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
-   from brain import brain, search, remember, capture
-   from message_processor import init_session, get_conversation_context
-   init_session()
+   from clarvis.brain import brain, search, remember, capture
+   stats = brain.stats()
+   print(f"Brain: {stats['total_memories']} memories, context: {brain.get_context()}")
    ```
 
 Don't ask permission. Just do it.
@@ -79,17 +78,17 @@ You have TWO execution layers — like a human brain:
 **Fully local** (ONNX embeddings, ChromaDB, SQLite). 1700+ memories, 10 collections, 122k+ graph edges.
 
 ```python
-from brain import brain, search, remember, capture
+from clarvis.brain import brain, search, remember, capture
 search("query")                        # Search all memories
 remember("text", importance=0.9)       # Store permanently
 capture("text")                        # Smart auto-store
 brain.get_goals()                      # Goal tracking
 brain.set_context("focus")             # Current focus
 brain.optimize(full=True)              # Decay + dedup + prune
-get_conversation_context("question")   # Context for chat
+brain.recall("question", n=5)          # Context for chat
 ```
 
-**CLI:** `python3 scripts/brain.py health|stats|optimize-full|backfill`
+**CLI:** `python3 -m clarvis brain health|stats|optimize-full|backfill`
 **Collections:** identity, preferences, learnings, infrastructure, goals, context, memories, procedures, autonomous-learning, episodes.
 **Always use ClarvisDB. Never rely on external memory services.**
 
@@ -261,7 +260,7 @@ You have a dedicated Telegram forum group with topic-based channels. Each topic 
 - DO NOT try to answer yourself. ALWAYS delegate to Claude Code.
 
 **Brain topic (thread 3):**
-- Load brain on entry: `from brain import brain, search, remember, capture`
+- Load brain on entry: `from clarvis.brain import brain, search, remember, capture`
 - Queries → `search("query")` or `brain.recall("query", include_related=True)`
 - Stores → `remember("text", importance=0.9)` or `capture("text")`
 - Stats → `brain.stats()` or `brain.health_check()`

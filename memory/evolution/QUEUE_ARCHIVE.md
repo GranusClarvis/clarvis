@@ -518,3 +518,21 @@ _Last archived: 2026-03-03_
 
 ## Archived 2026-03-04
 - [x] [SCALABILITY_GATE] Create `scripts/gate_check.sh`: compileall + import_health --quick + spine smoke test + pytest. DONE (2026-03-04).
+
+## Archived 2026-03-04
+- [x] [HEARTBEAT_INIT_EXPORT_FIX] ~~Fix `clarvis/heartbeat/__init__.py` — add `HookRegistry` to exports~~ DONE (2026-03-04).
+- [x] [BOOT_MD_FIX] Fixed deprecated `from clarvis_memory import clarvis_context` → `from clarvis.brain import brain, search, remember, capture`. DONE (2026-03-04).
+- [x] [SELF_MD_UPDATE] Updated SELF.md: PM2→systemd, brain stats 42/7→2000+/10, process chain updated. DONE (2026-03-04).
+- [x] [DEAD_CODE_AUDIT] Built `scripts/dead_code_audit.py`: scans crontab, imports, cron .sh wrappers, docs, skills, configs, spine. 85/89 exercised, 3 candidates. DONE (2026-03-04).
+- [x] [CLI_CONSOLE_SCRIPT] Added `[project.scripts] clarvis = "clarvis.cli:main"` to `pyproject.toml`, `pip install -e .` confirmed, `clarvis --help` works from any directory. DONE (2026-03-04).
+- [x] [CLI_TESTS] Wrote `tests/test_cli.py` — 9 tests: `--help` for all subcommands + real invocations (`brain stats`, `queue status`, `bench pi`, `heartbeat gate`). All pass. DONE (2026-03-04).
+- [x] [CLI_CRON_SUBCOMMAND] Added `clarvis cron list|status|run <job>` with `--dry-run`. Wraps existing cron_*.sh scripts. DONE (2026-03-04).
+- [x] [CLI_CRON_PILOT] Migrated `cron_reflection.sh` to `clarvis cron run reflection` in system crontab. Approved & applied 2026-03-04. Soak period: 7 days (ends 2026-03-11). DONE (2026-03-04).
+- [x] [CLI_DEPRECATION_WARNINGS] Added stderr deprecation warnings to `scripts/brain.py`, `scripts/performance_benchmark.py`, `scripts/queue_writer.py` `__main__` blocks. DONE (2026-03-04).
+- [x] [CLI_BOOT_DRIFT] Audited AGENTS.md and BOOT.md: updated 4 stale references — `from brain import` → `from clarvis.brain import`, `from message_processor import init_session` → inline brain.stats(), `python3 scripts/brain.py` → `python3 -m clarvis brain`. BOOT.md was already correct. DONE (2026-03-04).
+- [x] [CLI_CRON_STUB] Subsumed by CLI_CRON_SUBCOMMAND — `clarvis/cli_cron.py` includes list + status + run. DONE (2026-03-04).
+- [x] [SPINE_HEARTBEAT_ABSORB] Moved gate logic to `clarvis/heartbeat/gate.py`, runner to `clarvis/heartbeat/runner.py`. CLI uses spine gate. Scripts are thin wrappers. DONE (2026-03-04 Phase 4).
+- [x] [SPINE_CONTEXT_ABSORB] Moved core compression (tfidf_extract, mmr_rerank, compress_text, compress_queue, compress_episodes, generate_tiered_brief) to `clarvis/context/compressor.py`. Scripts wrapper has deprecation notice. DONE (2026-03-04 Phase 4).
+- [x] [BRAIN_PARALLEL_QUERY] recall() already parallel (ThreadPoolExecutor). Increased max_workers 6→10, added 30s result cache (0ms repeated queries), parallelized recall_from_date(). Avg latency: 7441→2092ms (72% reduction). Added `latency` subcommand to brain_eval_harness.py. DONE (2026-03-04 Phase 4).
+- [x] [TEST_COVERAGE_EXPAND] Added tests/test_spine_phase4.py: 31 tests covering heartbeat gate, context compressor, brain search perf, cron wrap-mode integration. All pass. Registered `slow` pytest mark. DONE (2026-03-04 Phase 4).
+- [x] [REFLECTION_GLOBAL_LOCK] Added `/tmp/clarvis_claude_global.lock` to `cron_reflection.sh` with standard stale detection (2400s). All 8 cron scripts now share global lock. DONE (2026-03-04 Phase 4).

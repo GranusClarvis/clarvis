@@ -120,3 +120,9 @@ I executed evolution task: "[SCALABILITY_GATE] Create `scripts/gate_check.sh`: c
 
 ---
 
+### ⚡ Autonomous — 22:08 UTC
+
+I executed evolution task: "[CLI_BOOT_DRIFT] Audit AGENTS.md and BOOT.md for references to `scripts/deprecated/` or moved scripts. Update to use `cl". Result: success (exit 0, 133s). Output: port clean).NEXT: CLI_DOCS_UPDATE  same treatment for CLAUDE.md, RUNBOOK.md, CONVENTIONS.md (waiting for 30-day soak per queue note, but these docs also have many scripts/brain.py
+
+---
+
