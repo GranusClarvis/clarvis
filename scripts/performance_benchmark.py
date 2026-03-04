@@ -1454,6 +1454,7 @@ def print_trend(trend_data):
 # ============================================================
 
 if __name__ == "__main__":
+    print("DEPRECATION: Use 'python3 -m clarvis bench <command>' instead of 'python3 scripts/performance_benchmark.py'.", file=sys.stderr)
     cmd = sys.argv[1] if len(sys.argv) > 1 else "run"
 
     if cmd in ("run", "full"):

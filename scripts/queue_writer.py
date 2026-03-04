@@ -284,6 +284,7 @@ def tasks_added_today() -> int:
 
 
 if __name__ == "__main__":
+    print("DEPRECATION: Use 'python3 -m clarvis queue <command>' instead of 'python3 scripts/queue_writer.py'.", file=sys.stderr)
     if len(sys.argv) < 2:
         print("Usage:")
         print("  queue_writer.py add <task> [--priority P0|P1] [--source name]")

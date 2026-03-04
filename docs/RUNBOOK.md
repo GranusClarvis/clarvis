@@ -259,7 +259,48 @@ cat /tmp/claude_output.txt
 
 ---
 
-## 13. Troubleshooting
+## 13. Cron Management (CLI)
+
+### Inspect Cron Jobs
+```bash
+clarvis cron list              # Show all clarvis cron entries from crontab
+clarvis cron status            # Last-run timestamps from memory/cron/*.log
+```
+
+### Run a Cron Job Manually
+```bash
+clarvis cron run reflection            # Execute scripts/cron_reflection.sh
+clarvis cron run autonomous            # Execute scripts/cron_autonomous.sh
+clarvis cron run reflection --dry-run  # Show what would be called
+```
+
+The `run` subcommand delegates to `scripts/cron_<job>.sh` via subprocess — no logic is rewritten.
+Lock acquisition, env bootstrap, and timeout handling remain in the shell scripts.
+
+### Cron Pilot Migration
+
+**Proposed pilot**: `cron_reflection.sh` — it runs Python-only steps (no Claude Code spawn), making it the safest candidate.
+
+To migrate one cron entry (after 7-day soak with no regressions):
+
+1. **Add parallel crontab entry** (do NOT remove the old one yet):
+   ```
+   # PILOT: clarvis CLI wrapper (added YYYY-MM-DD, soak 7 days)
+   # 0 21 * * * /home/agent/.openclaw/workspace/scripts/cron_reflection.sh >> .../reflection.log 2>&1
+   0 21 * * * cd /home/agent/.openclaw/workspace && python3 -m clarvis cron run reflection >> /home/agent/.openclaw/workspace/memory/cron/reflection.log 2>&1
+   ```
+
+2. **Monitor for 7 days**: compare `reflection.log` output, check for errors.
+
+3. **If clean**: remove the old `cron_reflection.sh` entry, keep the `clarvis cron run` entry.
+
+4. **If regression**: revert to old entry, investigate, fix, retry.
+
+**Important**: Do NOT edit crontab without explicit approval from Inverse.
+
+---
+
+## 14. Troubleshooting
 
 ### Claude Code Hangs
 - Check for missing `--dangerously-skip-permissions` flag

@@ -38,9 +38,9 @@ _Completed items auto-archived to QUEUE_ARCHIVE.md._
 - [x] [CLI_CONSOLE_SCRIPT] Added `[project.scripts] clarvis = "clarvis.cli:main"` to `pyproject.toml`, `pip install -e .` confirmed, `clarvis --help` works from any directory. DONE (2026-03-04).
 - [x] [CLI_TESTS] Wrote `tests/test_cli.py` — 9 tests: `--help` for all subcommands + real invocations (`brain stats`, `queue status`, `bench pi`, `heartbeat gate`). All pass. DONE (2026-03-04).
 - [ ] [CLI_BRAIN_LIVE] Verify `clarvis brain health` output matches `python3 scripts/brain.py health` exactly. Fix any discrepancies. Run both and diff.
-- [ ] [CLI_CRON_SUBCOMMAND] Add `clarvis cron run <job>` subcommand — wraps cron shell scripts. Start with `clarvis cron list` (parse crontab) and `clarvis cron status` (last run times from logs).
-- [ ] [CLI_CRON_PILOT] Migrate 1 cron entry (e.g. `cron_reflection.sh` — Python-only, no Claude spawn) to `clarvis cron run reflection`. Soak 7 days.
-- [ ] [CLI_DEPRECATION_WARNINGS] Add deprecation warnings to `scripts/brain.py`, `scripts/performance_benchmark.py`, `scripts/queue_writer.py` `__main__` blocks: "Use `python3 -m clarvis <subcommand>` instead."
+- [x] [CLI_CRON_SUBCOMMAND] Added `clarvis cron list|status|run <job>` with `--dry-run`. Wraps existing cron_*.sh scripts. DONE (2026-03-04).
+- [ ] [CLI_CRON_PILOT] Migrate 1 cron entry (`cron_reflection.sh`) to `clarvis cron run reflection`. Pilot instructions in docs/RUNBOOK.md §13. Awaiting Inverse approval to edit crontab. Soak 7 days after activation.
+- [x] [CLI_DEPRECATION_WARNINGS] Added stderr deprecation warnings to `scripts/brain.py`, `scripts/performance_benchmark.py`, `scripts/queue_writer.py` `__main__` blocks. DONE (2026-03-04).
 - [ ] [CLI_DOCS_UPDATE] After 30-day soak: update CLAUDE.md, RUNBOOK.md, AGENTS.md to reference `clarvis` CLI. Remove old `python3 scripts/brain.py` examples.
 - [ ] [CLI_SUBPKG_ABSORB] Evaluate absorbing `clarvis-db`, `clarvis-cost`, `clarvis-reasoning` CLIs into unified `clarvis db|cost|reasoning` subcommands. Requires Inverse decision.
 - [ ] [CLI_DEAD_SCRIPT_SWEEP] After CLI migration complete: audit which scripts/ `__main__` blocks have zero callers. Move to `scripts/deprecated/`.
@@ -48,7 +48,7 @@ _Completed items auto-archived to QUEUE_ARCHIVE.md._
 - [ ] [CLI_HEARTBEAT_EXPAND] Add `clarvis heartbeat preflight` (run preflight only, print JSON) and `clarvis heartbeat postflight` (accepts exit-code + output-file + preflight-file args). Currently only `run` and `gate` exist.
 - [ ] [CLI_BOOT_DRIFT] Audit AGENTS.md and BOOT.md for references to `scripts/deprecated/` or moved scripts. Update to use `clarvis` CLI or correct spine import paths.
 - [ ] [CLI_ROOT_PYPROJECT] Create root `pyproject.toml` for the `clarvis` package (if not already present). Define `[project.scripts] clarvis = "clarvis.cli:main"`, set `packages = ["clarvis"]`, pin deps. Prerequisite for CLI_CONSOLE_SCRIPT.
-- [ ] [CLI_CRON_STUB] Create `clarvis/cli_cron.py` stub with `clarvis cron list` (parse `crontab -l`) and `clarvis cron status` (last run from logs). Does NOT execute cron jobs — just status/inspection.
+- [x] [CLI_CRON_STUB] Subsumed by CLI_CRON_SUBCOMMAND — `clarvis/cli_cron.py` includes list + status + run. DONE (2026-03-04).
 
 ### Codebase Restructuring (see docs/ARCHITECTURE.md)
 (Primary: now tracked in P0.)

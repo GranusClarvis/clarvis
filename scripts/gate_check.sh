@@ -85,6 +85,13 @@ queue_rc=0
 (cd "$WORKSPACE" && python3 -m clarvis queue status >/dev/null 2>&1) || queue_rc=$?
 report "clarvis queue status" $queue_rc
 
+# --- 7. clarvis cron list (smoke) ---
+echo ""
+echo "--- clarvis cron list ---"
+cron_rc=0
+(cd "$WORKSPACE" && python3 -m clarvis cron list >/dev/null 2>&1) || cron_rc=$?
+report "clarvis cron list" $cron_rc
+
 # --- Summary ---
 echo ""
 echo "=== Gate Result: $PASSED/$TOTAL passed ==="

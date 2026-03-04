@@ -1,6 +1,6 @@
 # CLI Migration Plan — Unified `clarvis` CLI
 
-_Created: 2026-03-04 · Updated: 2026-03-04 · Status: Phase 1 (console script + tests) complete_
+_Created: 2026-03-04 · Updated: 2026-03-04 · Status: Phase 2 (cron subcommand + deprecation warnings) started_
 
 ## 1. Goal
 
@@ -101,10 +101,13 @@ These stay independent — they're library packages, not part of the spine CLI.
 - [x] Gate: all tests pass, `clarvis --help` works from any directory
 - [x] Gate check updated: `scripts/gate_check.sh` now runs 6 checks (added CLI pytest + queue smoke)
 
-### Phase 2: Cron Migration
-- Add `clarvis cron run <job>` subcommand that wraps `cron_autonomous.sh` etc.
-- Update 1–2 cron entries to use `python3 -m clarvis cron run autonomous` instead of `cron_autonomous.sh`
-- **Soak for 7 days** — compare output/success rate with old cron entries
+### Phase 2: Cron Migration (started 2026-03-04)
+- [x] Add `clarvis cron list` (parse crontab), `clarvis cron status` (last run from logs), `clarvis cron run <job>` (wrap mode)
+- [x] Add `--dry-run` flag to `clarvis cron run`
+- [x] Add deprecation warnings to `scripts/brain.py`, `scripts/performance_benchmark.py`, `scripts/queue_writer.py`
+- [x] Cron pilot proposal documented in `docs/RUNBOOK.md` §13 (candidate: `cron_reflection.sh`)
+- [ ] Wait for Inverse approval to edit crontab
+- [ ] Soak pilot entry for 7 days — compare output/success rate
 - Gate: 7 consecutive days with no regressions before migrating more
 
 ### Phase 3: Full Cron Cutover
@@ -112,9 +115,11 @@ These stay independent — they're library packages, not part of the spine CLI.
 - Shell wrappers (`cron_*.sh`) still exist but are marked deprecated
 - Gate: all cron jobs use `clarvis cron run <name>` for 14 days
 
-### Phase 4: Script CLI Deprecation
-- Add deprecation warning to `scripts/brain.py` `__main__` block: "Use `python3 -m clarvis brain` instead"
-- Same for `scripts/performance_benchmark.py`, `scripts/queue_writer.py`, etc.
+### Phase 4: Script CLI Deprecation (partially done — warnings added in Phase 2)
+- [x] Add deprecation warning to `scripts/brain.py` `__main__` block
+- [x] Add deprecation warning to `scripts/performance_benchmark.py` `__main__` block
+- [x] Add deprecation warning to `scripts/queue_writer.py` `__main__` block
+- [ ] Add deprecation warnings to remaining script entrypoints
 - Gate: no direct script invocation in cron, skills, or CLAUDE.md for 30 days
 
 ### Phase 5: Cleanup

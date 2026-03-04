@@ -32,6 +32,8 @@ from clarvis.brain import (  # noqa: F401
 import json
 
 if __name__ == "__main__":
+    print("DEPRECATION: Use 'python3 -m clarvis brain <command>' instead of 'python3 scripts/brain.py'.", file=sys.stderr)
+
     # Register hooks for CLI usage (so optimize-full, recall scoring etc. work)
     b = get_brain()
     try:
