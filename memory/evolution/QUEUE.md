@@ -6,6 +6,11 @@ _Completed items auto-archived to QUEUE_ARCHIVE.md._
 
 ## P0 — Do Next Heartbeat
 
+- [x] [STRUCTURE_FINAL_AUDIT] Deep structure + wiring audit after spine migration. Written to `docs/STRUCTURE_INTEGRITY_AUDIT.md`.
+- [ ] [HEARTBEAT_INIT_EXPORT_FIX] ~~Fix `clarvis/heartbeat/__init__.py` — add `HookRegistry` to exports~~ DONE (2026-03-04).
+- [ ] [BOOT_MD_FIX] Fix BOOT.md deprecated import: `from clarvis_memory import clarvis_context` → `from clarvis.brain import brain, search, remember, capture`. Gateway startup uses deprecated module.
+- [ ] [SELF_MD_UPDATE] Update SELF.md: replace PM2 references with systemd commands, fix stale brain stats (says "42 memories, 7 collections" — actually 2000+, 10 collections).
+- [ ] [SCALABILITY_GATE] Create `scripts/gate_check.sh`: compileall + import_health --check + spine smoke test + pytest. Run before merges.
 - [ ] [DOCS_STRUCTURE] Establish docs structure: `docs/ARCHITECTURE.md` (layers + boundaries), `docs/CONVENTIONS.md` (imports/sys.path, logging, CLI patterns), `docs/DATA_LAYOUT.md` (what goes in memory/, data/, logs/, tmp/), `docs/RUNBOOK.md` (how to run heartbeats, benchmarks, restore backups).
 - [ ] [DEAD_CODE_AUDIT] Build `scripts/dead_code_audit.py`: static scan for scripts never imported, never referenced by cron, and not used as entrypoints. Output candidates list + last git touch. Mark as `deprecated/` or delete only after 7-day soak.
 
@@ -67,6 +72,10 @@ _Completed items auto-archived to QUEUE_ARCHIVE.md._
 
 ## Backlog
 
+- [ ] [UNWIRED_AZR] Wire `absolute_zero.py` into weekly cron (self-play reasoning session). Currently CLI-only, never automatically exercised.
+- [ ] [UNWIRED_META_LEARNING] Wire `meta_learning.py` into postflight or weekly cron — learning strategy analysis never runs automatically.
+- [ ] [UNWIRED_GRAPHRAG] Wire `graphrag_communities.py` into brain.recall() or periodic cron — community detection would improve retrieval quality.
+- [ ] [CLI_COST_SUBCOMMAND] Add `clarvis cost daily/budget` subcommands — cost tracking not in unified CLI.
 - [ ] [CRAWL4AI] Install Crawl4AI for automated research ingestion.
 - [ ] [BROWSER_TEST] Test: navigate, extract, fill forms, multi-step workflows — comprehensive browser-use capability validation.
 - [ ] [VISION_FALLBACK] Add local vision fallback to clarvis_eyes.py — use Ollama when API vision unavailable.

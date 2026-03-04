@@ -178,20 +178,22 @@ The `clarvis cron run <job>` command would:
 
 **Risk**: Cron scripts do significant shell-level work (lock files, trap EXIT, timeout). Reimplementing in Python must be exact. Consider keeping the shell wrapper for Claude Code spawning and only migrating the prompt-building and post-processing.
 
-## 8. Questions for Inverse
+## 8. Decisions (Inverse confirmed)
 
-1. **Console script name**: Should the installed binary be `clarvis` or `clv` (shorter for daily use)? Or both (alias)?
+These decisions are now locked in as the canonical direction:
 
-2. **Typer vs Click**: I chose Typer because it's already installed. Any preference for raw Click or even stdlib argparse to minimize dependency surface?
+1. **Console script name**: Canonical binary will be **`clarvis`**. (`clv` may be added later as a convenience alias, but not required.)
 
-3. **Package install**: Should we `pip install -e .` the root clarvis package now, or keep using `sys.path` hacks until the package is more complete? Installing early means `clarvis` binary on PATH sooner.
+2. **CLI framework**: Use **Typer** (not raw Click or argparse).
 
-4. **Cron scripts in Python vs shell**: The cron `*.sh` scripts do real shell work (flock, trap, timeout, env manipulation). Should `clarvis cron run` fully rewrite them in Python, or just wrap them (`subprocess.run(["scripts/cron_autonomous.sh"])`)? Full rewrite is cleaner but riskier.
+3. **Package install timing**: Proceed with **`pip install -e .`** once Phase 1 gates exist (at minimum: `tests/test_cli.py` + smoke checks). Until then, `python3 -m clarvis …` remains supported.
 
-5. **Sub-package CLIs** (`clarvis-db`, `clarvis-cost`, `clarvis-reasoning`): Should they stay as independent `clarvis-db stats` / `clarvis-cost estimate` commands, or be absorbed into the unified CLI as `clarvis db stats` / `clarvis cost estimate`?
+4. **Cron migration strategy**: **Wrap first, rewrite later.** `clarvis cron run <job>` should initially shell out to existing `scripts/cron_<job>.sh` to preserve lock/env/timeout semantics. Only after a soak period + tests do we port logic into Python.
 
-6. **Scope of `clarvis brain` vs `scripts/brain.py`**: The script brain.py is a thin re-export wrapper. Should we eventually delete `scripts/brain.py` entirely and update all `from brain import brain` to `from clarvis.brain import brain`? That's ~50+ files to update.
+5. **Sub-package CLIs** (`clarvis-db`, `clarvis-cost`, `clarvis-reasoning`): Keep independent for now; later optionally absorb as `clarvis db|cost|reasoning …` wrappers.
 
-7. **CLAUDE.md examples**: When should CLAUDE.md switch from `python3 scripts/brain.py health` to `python3 -m clarvis brain health`? After Phase 1 (console script works) or Phase 4 (deprecation)?
+6. **`scripts/brain.py` and other wrappers**: Keep wrappers during migration + soak. Only remove after dead-code audit shows zero callers (cron/skills/docs) and bulk import migration is complete.
 
-8. **Heartbeat spawn commands**: Cron scripts spawn Claude Code with `--model claude-opus-4-6`. Should the CLI hardcode this, make it configurable via `--model`, or read from a config file?
+7. **Docs cutover timing**: Update CLAUDE.md/Runbook examples after **Phase 1** (when console script + tests are in place). Prior to that, prefer `python3 -m clarvis …`.
+
+8. **Claude model selection**: Default to Opus behavior, but make it **configurable** (CLI flag and/or config/env).
