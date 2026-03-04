@@ -6,11 +6,6 @@ _Completed items auto-archived to QUEUE_ARCHIVE.md._
 
 ## P0 — Do Next Heartbeat
 
-- [x] [DOCS_STRUCTURE] Establish docs structure: `docs/ARCHITECTURE.md` (layers + boundaries), `docs/CONVENTIONS.md`, `docs/DATA_LAYOUT.md`, `docs/RUNBOOK.md`. ✅ ARCHITECTURE.md rewritten 2026-03-04 (CONVENTIONS/DATA_LAYOUT/RUNBOOK already existed)
-- [x] [PYTEST_COLLECTION_HYGIENE] Fix global `pytest` collection — deprecated tests under `scripts/deprecated/` caused collection errors. Added `testpaths`/`norecursedirs` to `pyproject.toml`. Fixed 15 broken tests (brain fixture missing `_recall_cache`, heartbeat adapter count, spotlight mock target). Gate updated to include `test_pipeline_integration.py`. ✅ DONE 2026-03-04
-- [x] [CRON_LOCK_HELPER] Extract `scripts/lock_helper.sh` — shared functions for local/global/maintenance locks. ✅ DONE 2026-03-04
-- [x] [METRICS_SELF_MODEL] Populate `clarvis/metrics/` — move `scripts/self_model.py` core classes into `clarvis/metrics/self_model.py`. ✅ DONE 2026-03-04
-- [x] [ORCH_TASK_SELECTOR] Populate `clarvis/orch/` — move `scripts/task_selector.py` scoring logic into `clarvis/orch/task_selector.py`. ✅ DONE 2026-03-04
 
 ---
 
@@ -18,7 +13,7 @@ _Completed items auto-archived to QUEUE_ARCHIVE.md._
 
 (Constraint: pursue only where it improves the brain’s practical intelligence — retrieval quality, correct integration, planning reliability.)
 
-- [ ] [SEMANTIC_BRIDGE] Build semantic overlap booster for cross-collection pairs with overlap <0.40. Target: raise semantic_cross_collection from 0.477 to 0.55+.
+- [ ] [SEMANTIC_BRIDGE] Build semantic overlap booster for cross-collection pairs with overlap <0.50. Current: semantic_cross_collection=0.568 (Phi=0.708). Target: raise to 0.65+ to push Phi toward 0.80.
 
 ## Pillar 2: Autonomous Execution (Success > 85%)
 
@@ -32,6 +27,14 @@ _Completed items auto-archived to QUEUE_ARCHIVE.md._
 - [ ] [BROWSER_SKILL_DOC] Create skills/web-browse/SKILL.md documenting browser_agent.py capabilities for M2.5.
 
 ## Pillar 3: Performance & Reliability (PI > 0.70)
+
+### AGI-Readiness (from 2026-03-04 audit, see docs/AGI_READINESS_ARCHITECTURE_AUDIT.md)
+
+- [x] [GOLDEN_QA_MAIN_BRAIN] _(2026-03-04)_ Extended retrieval_benchmark.py with P@1, MRR metrics + golden_qa CLI. Results: P@1=1.0, P@3=0.867, MRR=1.0. Saved to data/benchmarks/golden_qa_results.json.
+- [x] [TASK_SIZING_CALIBRATION] _(2026-03-04)_ Added estimate_task_complexity() to cognitive_load.py, wired into heartbeat_preflight.py §4.5. Oversized tasks deferred to implementation sprint. Log: data/task_sizing_log.jsonl.
+- [x] [PARALLEL_BRAIN_QUERIES] _(2026-03-04)_ Already implemented in Phase 4 — clarvis/brain/search.py recall() uses ThreadPoolExecutor(max_workers=10), search() uses ThreadPoolExecutor(max_workers=6). No further work needed.
+- [x] [SAFETY_INVARIANTS] _(2026-03-04)_ Created docs/SAFETY_INVARIANTS.md (8 invariants) + scripts/safety_check.py (pre-commit, postflight, all modes). All invariants pass.
+- [x] [PI_CLI_FIX] _(2026-03-04)_ Fixed both clarvis bench pi (cli_bench.py) and performance_benchmark.py pi. Now reads cached PI from data/performance_metrics.json instantly. --fresh flag for recompute.
 
 ### CLI Migration (see docs/CLI_MIGRATION_PLAN.md)
 
@@ -63,9 +66,6 @@ _Completed items auto-archived to QUEUE_ARCHIVE.md._
 
 ## Backlog
 
-- [ ] [UNWIRED_AZR] Wire `absolute_zero.py` into weekly cron (self-play reasoning session). Currently CLI-only, never automatically exercised.
-- [x] [UNWIRED_META_LEARNING] Wire `meta_learning.py` into postflight or weekly cron — learning strategy analysis never runs automatically. ✅ DONE 2026-03-04 (wired into postflight hook, priority 90, daily rate limit)
-- [x] [UNWIRED_GRAPHRAG] Wire `graphrag_communities.py` into brain.recall() or periodic cron — community detection would improve retrieval quality. ✅ DONE 2026-03-04 (graphrag booster hook, toggled via CLARVIS_GRAPHRAG_BOOST=1)
 - [ ] [CLI_COST_SUBCOMMAND] Add `clarvis cost daily/budget` subcommands — cost tracking not in unified CLI.
 - [ ] [CRAWL4AI] Install Crawl4AI for automated research ingestion.
 - [ ] [BROWSER_TEST] Test: navigate, extract, fill forms, multi-step workflows — comprehensive browser-use capability validation.
@@ -81,11 +81,5 @@ _Completed items auto-archived to QUEUE_ARCHIVE.md._
 
 ## P1
 
-- [x] [METRICS_PERF_BENCHMARK] Move PI computation from `scripts/performance_benchmark.py` (1,535L) into `clarvis/metrics/benchmark.py`. Core: 8-dimension scoring, composite PI calculation, self-optimization triggers. Keep CLI as thin wrapper. Enables `clarvis bench` to use spine directly. (Phase 5 — metrics spine completion.) ✅ DONE 2026-03-04
-- [x] [ORCH_TASK_ROUTER] Move `scripts/task_router.py` complexity scoring + model routing into `clarvis/orch/router.py`. Export `classify_task()`, `route_to_model()`, `get_tier_config()`. Thin wrapper in scripts/. (Phase 5 — orch spine completion.) ✅ DONE 2026-03-04
-- [x] [GRAPHRAG_RECALL_BOOST] Wire `graphrag_communities.py` into `brain.recall()` — after ChromaDB vector search, optionally expand results with intra-community neighbors. Directly improves retrieval quality (PI weight 0.18). (Phase 5 — existing module, never exercised in recall path.) ✅ DONE 2026-03-04
-- [x] [HEBBIAN_EDGE_DECAY] Add age-based Hebbian edge pruning to `clarvis/brain/graph.py`: `decay_edges(half_life_days, prune_below)`. Exponential decay + prune. CLI: `clarvis brain edge-decay`. (Phase 5 — graph sustainability.) ✅ DONE 2026-03-04
-- [x] [META_LEARNING_WIRE] Wire `meta_learning.py analyze` into postflight hook (priority 90, daily rate limit). Closes the "learn how to learn" feedback loop. (Phase 5 — now auto-exercised via heartbeat.) ✅ DONE 2026-03-04
-- [x] [PIPELINE_INTEGRATION_TEST] Create `tests/test_pipeline_integration.py`: 25 tests covering router, edge decay, graphrag booster, pipeline flow, hook lifecycle. (Phase 5.) ✅ DONE 2026-03-04
 - [ ] [FAILURE_TAXONOMY] Add error type classification to `heartbeat_postflight.py` failure handling. When a task fails, classify the error into one of 5 categories (memory/planning/action/system/timeout) using keyword matching on output. Store as `error_type` tag in episode metadata alongside existing "failure" tag. Enables failure pattern analysis across heartbeats. (Extracted from: AgentDebug research, arXiv:2509.25370)
 - [ ] [RECALL_GRAPH_CONTEXT] In `brain.py` recall/search methods, optionally expand results with 1-hop graph neighbors. When a memory is retrieved, also fetch memories connected via existing graph edges and include them as lower-weight "context" entries. No new clustering needed — uses existing 47k+ graph edges. Target: improve complex query recall by providing related context automatically. (Extracted from: RAPTOR/Hierarchical RAG research, arXiv:2401.18059)

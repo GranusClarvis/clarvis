@@ -43,9 +43,28 @@ def quick():
 
 
 @app.command()
-def pi():
-    """Print Performance Index score only."""
+def pi(fresh: bool = typer.Option(False, "--fresh", help="Recompute PI (slow)")):
+    """Print Performance Index score (reads cached value by default)."""
+    import os
     pb = _get_benchmark()
+
+    if not fresh and os.path.exists(pb.METRICS_FILE):
+        try:
+            with open(pb.METRICS_FILE) as f:
+                stored = json.load(f)
+            pi_data = stored.get("pi", {})
+            pi_val = pi_data.get("pi", 0)
+            interp = pi_data.get("interpretation", "")
+            ts = stored.get("timestamp", "?")[:19]
+            print(f"PI: {pi_val:.4f} — {interp}")
+            print(f"  Last recorded: {ts}")
+            return
+        except Exception:
+            pass
+
+    # Fallback: quick benchmark
     report = pb.run_quick_benchmark()
-    score = report.get("pi", report.get("performance_index", "N/A"))
-    print(f"PI: {score}")
+    pi_data = report.get("pi_estimate", {})
+    pi_val = pi_data.get("pi", 0) if isinstance(pi_data, dict) else 0
+    interp = pi_data.get("interpretation", "") if isinstance(pi_data, dict) else ""
+    print(f"PI: {pi_val:.4f} — {interp} (estimate from quick benchmark)")

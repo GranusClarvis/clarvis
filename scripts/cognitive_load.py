@@ -319,6 +319,174 @@ def should_defer_task(task_section):
     return False, f"OK (load={score:.2f})"
 
 
+# ─── Task Sizing Estimation ──────────────────────────────────────────────
+
+# Complexity signals that indicate a task may exceed single-heartbeat capacity.
+# Derived from analysis of 184 episodes: timeouts avg 290 chars, multi-step keywords.
+COMPLEXITY_KEYWORDS = {
+    # High complexity: multi-step build tasks
+    "test suite": 3, "multi-step": 3, "comprehensive": 2, "refactor": 2,
+    "migrate": 2, "benchmark suite": 3, "full audit": 3,
+    # Medium complexity: creation tasks
+    "create scripts/": 1, "build module": 1, "implement": 1,
+    "create.*py": 1, "new module": 1,
+}
+
+# Implementation sprint slot allows longer tasks (1800s vs 1200s)
+IMPLEMENTATION_SLOT_HOURS = {14}  # cron_implementation_sprint at 14:00 CET
+
+
+def estimate_task_complexity(task_text):
+    """Estimate task complexity from description text.
+
+    Returns dict with:
+      - complexity: "simple" | "medium" | "complex" | "oversized"
+      - score: 0.0-1.0 composite
+      - signals: list of matched signals
+      - recommendation: "proceed" | "warn" | "defer_to_sprint"
+    """
+    task_lower = task_text.lower()
+    signals = []
+    score = 0.0
+
+    # Signal 1: Task description length (timeouts avg 290 chars, success avg 251)
+    length = len(task_text)
+    if length > 400:
+        score += 0.2
+        signals.append(f"long_description ({length} chars)")
+    elif length > 300:
+        score += 0.1
+        signals.append(f"medium_description ({length} chars)")
+
+    # Signal 2: Complexity keywords
+    for keyword, weight in COMPLEXITY_KEYWORDS.items():
+        if keyword in task_lower:
+            score += 0.15 * weight
+            signals.append(f"keyword:{keyword}")
+
+    # Signal 3: Step count indicators (numbered lists, multiple dashes)
+    step_indicators = task_lower.count(" — ") + task_lower.count("; ") + task_lower.count(". ")
+    if step_indicators >= 4:
+        score += 0.2
+        signals.append(f"multi_step ({step_indicators} separators)")
+    elif step_indicators >= 2:
+        score += 0.1
+        signals.append(f"some_steps ({step_indicators} separators)")
+
+    # Signal 4: Multiple file references
+    import re as _re
+    file_refs = len(_re.findall(r'\w+\.py|\w+\.sh|\w+\.js', task_text))
+    if file_refs >= 3:
+        score += 0.15
+        signals.append(f"multi_file ({file_refs} refs)")
+
+    # Signal 5: Check episodic memory for similar task failures/timeouts
+    ep_signal = _check_episodic_history(task_text)
+    if ep_signal:
+        score += ep_signal["penalty"]
+        signals.append(ep_signal["signal"])
+
+    score = min(1.0, score)
+
+    if score >= 0.7:
+        complexity = "oversized"
+        recommendation = "defer_to_sprint"
+    elif score >= 0.4:
+        complexity = "complex"
+        recommendation = "warn"
+    elif score >= 0.2:
+        complexity = "medium"
+        recommendation = "proceed"
+    else:
+        complexity = "simple"
+        recommendation = "proceed"
+
+    # If we're in an implementation sprint slot, allow complex tasks
+    now_hour = _now_utc().hour
+    if now_hour in IMPLEMENTATION_SLOT_HOURS and recommendation == "defer_to_sprint":
+        recommendation = "warn"
+        signals.append("implementation_sprint_slot")
+
+    return {
+        "complexity": complexity,
+        "score": round(score, 3),
+        "signals": signals,
+        "recommendation": recommendation,
+    }
+
+
+def _check_episodic_history(task_text):
+    """Check if similar tasks have failed or timed out."""
+    ep_file = BASE / "data" / "episodes.json"
+    if not ep_file.exists():
+        return None
+
+    try:
+        episodes = json.loads(ep_file.read_text())
+    except Exception:
+        return None
+
+    task_lower = task_text.lower()
+    # Extract key words for matching (>4 chars, not stopwords)
+    stopwords = {"the", "and", "for", "from", "with", "this", "that", "into", "create", "build"}
+    words = set(w for w in re.findall(r'[a-z_]{4,}', task_lower) if w not in stopwords)
+
+    if not words:
+        return None
+
+    for ep in reversed(episodes):  # Check most recent first
+        ep_task = ep.get("task", "").lower()
+        ep_words = set(re.findall(r'[a-z_]{4,}', ep_task))
+        overlap = words & ep_words
+        if len(overlap) < 3:
+            continue
+
+        outcome = ep.get("outcome", "")
+        if outcome == "timeout":
+            return {
+                "penalty": 0.3,
+                "signal": f"similar_task_timeout (ep={ep.get('id', '?')}, overlap={len(overlap)})",
+            }
+        elif outcome == "failure":
+            return {
+                "penalty": 0.15,
+                "signal": f"similar_task_failure (ep={ep.get('id', '?')}, overlap={len(overlap)})",
+            }
+
+    return None
+
+
+# ─── Tracking Metric ─────────────────────────────────────────────────
+
+SIZING_LOG = BASE / "data" / "task_sizing_log.jsonl"
+
+
+def log_sizing(task_text, sizing_result, actual_outcome=None):
+    """Log task sizing decisions for calibration tracking."""
+    entry = {
+        "timestamp": _now_utc().isoformat(),
+        "task_preview": task_text[:120],
+        "complexity": sizing_result["complexity"],
+        "score": sizing_result["score"],
+        "recommendation": sizing_result["recommendation"],
+        "signals": sizing_result["signals"],
+    }
+    if actual_outcome:
+        entry["actual_outcome"] = actual_outcome
+
+    SIZING_LOG.parent.mkdir(parents=True, exist_ok=True)
+    with open(SIZING_LOG, "a") as f:
+        f.write(json.dumps(entry) + "\n")
+
+    # Cap at 500 entries
+    try:
+        lines = SIZING_LOG.read_text().strip().split("\n")
+        if len(lines) > 500:
+            SIZING_LOG.write_text("\n".join(lines[-500:]) + "\n")
+    except Exception:
+        pass
+
+
 # ─── History Tracking ──────────────────────────────────────────────────
 
 def record_load(load_data):

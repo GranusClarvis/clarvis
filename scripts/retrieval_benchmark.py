@@ -209,10 +209,12 @@ def check_hit(result: dict, pair: dict) -> bool:
 
 def run_benchmark(use_smart=True, k=3) -> dict:
     """
-    Run all 20 benchmark queries. Measure precision@k and recall.
+    Run all 20 benchmark queries. Measure precision@k, recall, P@1, and MRR.
 
     precision@k = (# of hits in top-k results) / k
     recall = 1 if at least one hit in top-k, else 0
+    P@1 = 1 if first result is a hit, else 0
+    MRR = 1/rank of first hit (0 if no hit)
 
     Returns dict with per-query and aggregate metrics.
     """
@@ -221,7 +223,9 @@ def run_benchmark(use_smart=True, k=3) -> dict:
 
     query_results = []
     total_precision = 0.0
+    total_precision1 = 0.0
     total_recall = 0
+    total_mrr = 0.0
     category_stats = {}
 
     for pair in BENCHMARK_PAIRS:
@@ -229,19 +233,18 @@ def run_benchmark(use_smart=True, k=3) -> dict:
         bid = pair["id"]
         category = pair["category"]
 
-        # Run retrieval
-        if recall_fn == brain.recall:
-            results = recall_fn(query, n=k, caller="benchmark")
-        else:
-            results = recall_fn(query, n=k, caller="benchmark")
+        results = recall_fn(query, n=k, caller="benchmark")
 
         # Score each result
         hits_in_k = 0
+        first_hit_rank = 0
         result_details = []
         for i, r in enumerate(results[:k]):
             is_hit = check_hit(r, pair)
             if is_hit:
                 hits_in_k += 1
+                if first_hit_rank == 0:
+                    first_hit_rank = i + 1
             result_details.append({
                 "rank": i + 1,
                 "hit": is_hit,
@@ -251,16 +254,25 @@ def run_benchmark(use_smart=True, k=3) -> dict:
             })
 
         precision_at_k = hits_in_k / k if k > 0 else 0
+        precision_at_1 = 1.0 if first_hit_rank == 1 else 0.0
         recall_hit = 1 if hits_in_k > 0 else 0
+        rr = 1.0 / first_hit_rank if first_hit_rank > 0 else 0.0
 
         total_precision += precision_at_k
+        total_precision1 += precision_at_1
         total_recall += recall_hit
+        total_mrr += rr
 
         # Category tracking
         if category not in category_stats:
-            category_stats[category] = {"precision_sum": 0.0, "recall_sum": 0, "count": 0}
+            category_stats[category] = {
+                "precision_sum": 0.0, "precision1_sum": 0.0,
+                "recall_sum": 0, "mrr_sum": 0.0, "count": 0,
+            }
         category_stats[category]["precision_sum"] += precision_at_k
+        category_stats[category]["precision1_sum"] += precision_at_1
         category_stats[category]["recall_sum"] += recall_hit
+        category_stats[category]["mrr_sum"] += rr
         category_stats[category]["count"] += 1
 
         query_results.append({
@@ -268,14 +280,19 @@ def run_benchmark(use_smart=True, k=3) -> dict:
             "query": query,
             "category": category,
             "precision_at_k": round(precision_at_k, 3),
+            "precision_at_1": precision_at_1,
             "recall": recall_hit,
+            "reciprocal_rank": round(rr, 4),
             "hits_in_k": hits_in_k,
+            "first_hit_rank": first_hit_rank,
             "results": result_details,
         })
 
     n = len(BENCHMARK_PAIRS)
     avg_precision = round(total_precision / n, 4) if n > 0 else 0
+    avg_precision1 = round(total_precision1 / n, 4) if n > 0 else 0
     avg_recall = round(total_recall / n, 4) if n > 0 else 0
+    mrr = round(total_mrr / n, 4) if n > 0 else 0
 
     # Per-category aggregates
     category_report = {}
@@ -284,7 +301,9 @@ def run_benchmark(use_smart=True, k=3) -> dict:
         category_report[cat] = {
             "count": c,
             "avg_precision_at_k": round(stats["precision_sum"] / c, 3) if c > 0 else 0,
+            "avg_precision_at_1": round(stats["precision1_sum"] / c, 3) if c > 0 else 0,
             "avg_recall": round(stats["recall_sum"] / c, 3) if c > 0 else 0,
+            "mrr": round(stats["mrr_sum"] / c, 3) if c > 0 else 0,
         }
 
     # Failed queries (recall=0, i.e. no hit in top-k)
@@ -296,7 +315,9 @@ def run_benchmark(use_smart=True, k=3) -> dict:
         "k": k,
         "num_queries": n,
         "avg_precision_at_k": avg_precision,
+        "avg_precision_at_1": avg_precision1,
         "avg_recall": avg_recall,
+        "mrr": mrr,
         "total_hits": total_recall,
         "total_misses": n - total_recall,
         "by_category": category_report,
@@ -319,7 +340,9 @@ def save_report(report: dict):
         "method": report["method"],
         "k": report["k"],
         "avg_precision_at_k": report["avg_precision_at_k"],
+        "avg_precision_at_1": report.get("avg_precision_at_1", 0),
         "avg_recall": report["avg_recall"],
+        "mrr": report.get("mrr", 0),
         "total_hits": report["total_hits"],
         "total_misses": report["total_misses"],
         "by_category": report["by_category"],
@@ -375,17 +398,19 @@ def show_trend(days: int = 30):
         return
 
     print(f"=== Retrieval Benchmark Trend ({days} days, {len(recent)} runs) ===\n")
-    print(f"{'Date':>12s}  {'P@3':>6s}  {'Recall':>6s}  {'Hits':>4s}  {'Miss':>4s}  Failures")
-    print("-" * 70)
+    print(f"{'Date':>12s}  {'P@1':>6s}  {'P@3':>6s}  {'MRR':>6s}  {'Recall':>6s}  {'Hits':>4s}  {'Miss':>4s}  Failures")
+    print("-" * 85)
 
     for h in recent:
         ts = h.get("timestamp", "")[:10]
+        p1 = h.get("avg_precision_at_1", 0)
         p = h.get("avg_precision_at_k", 0)
+        m = h.get("mrr", 0)
         r = h.get("avg_recall", 0)
         hits = h.get("total_hits", 0)
         misses = h.get("total_misses", 0)
         fails = ",".join(h.get("failure_ids", []))
-        print(f"{ts:>12s}  {p:>6.3f}  {r:>6.3f}  {hits:>4d}  {misses:>4d}  {fails or '-'}")
+        print(f"{ts:>12s}  {p1:>6.3f}  {p:>6.3f}  {m:>6.3f}  {r:>6.3f}  {hits:>4d}  {misses:>4d}  {fails or '-'}")
 
     # Summary
     if len(recent) >= 2:
@@ -403,14 +428,18 @@ def print_report(report: dict):
     print("  RETRIEVAL BENCHMARK — Ground Truth Evaluation")
     print("=" * 65)
     print(f"  Method: {report['method']}  |  k={report['k']}  |  Queries: {report['num_queries']}")
-    print(f"  Precision@{report['k']}: {report['avg_precision_at_k']:.3f}")
+    print(f"  P@1:          {report.get('avg_precision_at_1', 0):.3f}")
+    print(f"  P@{report['k']}:          {report['avg_precision_at_k']:.3f}")
+    print(f"  MRR:          {report.get('mrr', 0):.3f}")
     print(f"  Recall:       {report['avg_recall']:.3f}  ({report['total_hits']}/{report['num_queries']} queries hit)")
     print()
 
     # Per-category
     print("  By category:")
     for cat, stats in sorted(report["by_category"].items()):
-        print(f"    {cat:16s}  P@3={stats['avg_precision_at_k']:.3f}  "
+        print(f"    {cat:16s}  P@1={stats.get('avg_precision_at_1', 0):.2f}  "
+              f"P@3={stats['avg_precision_at_k']:.3f}  "
+              f"MRR={stats.get('mrr', 0):.3f}  "
               f"Recall={stats['avg_recall']:.3f}  (n={stats['count']})")
 
     # Details
@@ -418,7 +447,8 @@ def print_report(report: dict):
     print("  Per-query results:")
     for q in report["details"]:
         marker = "HIT" if q["recall"] else "MISS"
-        print(f"    [{marker:4s}] {q['id']} P@3={q['precision_at_k']:.2f}  {q['query'][:50]}")
+        rr_str = f"RR={q.get('reciprocal_rank', 0):.2f}" if q["recall"] else "RR=0.00"
+        print(f"    [{marker:4s}] {q['id']} P@1={q.get('precision_at_1', 0):.0f} P@3={q['precision_at_k']:.2f} {rr_str}  {q['query'][:45]}")
         if not q["recall"]:
             # Show what we got for misses
             for r in q["results"][:2]:
@@ -429,6 +459,41 @@ def print_report(report: dict):
         print(f"\n  FAILURES ({len(report['failures'])}):")
         for f in report["failures"]:
             print(f"    {f['id']}: {f['query']}")
+
+
+GOLDEN_QA_FILE = os.path.join(
+    "/home/agent/.openclaw/workspace/data/benchmarks", "golden_qa_results.json"
+)
+
+
+def run_golden_qa():
+    """Run golden QA benchmark and save results to data/benchmarks/.
+
+    This is the main brain quality evaluation — P@1, P@3, MRR against
+    20 ground-truth query-answer pairs. Use periodically to track
+    retrieval quality regression.
+    """
+    report = run_benchmark(use_smart=True, k=3)
+    save_report(report)
+
+    # Save to data/benchmarks/ for cross-benchmark visibility
+    os.makedirs(os.path.dirname(GOLDEN_QA_FILE), exist_ok=True)
+    golden_summary = {
+        "timestamp": report["timestamp"],
+        "num_queries": report["num_queries"],
+        "precision_at_1": report.get("avg_precision_at_1", 0),
+        "precision_at_3": report["avg_precision_at_k"],
+        "mrr": report.get("mrr", 0),
+        "recall": report["avg_recall"],
+        "total_hits": report["total_hits"],
+        "total_misses": report["total_misses"],
+        "by_category": report["by_category"],
+        "failures": report["failures"],
+    }
+    with open(GOLDEN_QA_FILE, "w") as f:
+        json.dump(golden_summary, f, indent=2)
+
+    return report
 
 
 # === CLI ===
@@ -442,6 +507,12 @@ if __name__ == "__main__":
         print(f"\n  Results saved to {LATEST_FILE}")
         print(f"  History appended to {HISTORY_FILE}")
 
+    elif cmd == "golden_qa":
+        report = run_golden_qa()
+        print_report(report)
+        print(f"\n  Golden QA results saved to {GOLDEN_QA_FILE}")
+        print(f"  Full results saved to {LATEST_FILE}")
+
     elif cmd == "trend":
         days = int(sys.argv[2]) if len(sys.argv) > 2 else 30
         show_trend(days)
@@ -454,5 +525,6 @@ if __name__ == "__main__":
     else:
         print("Usage:")
         print("  retrieval_benchmark.py              Run benchmark (smart_recall)")
+        print("  retrieval_benchmark.py golden_qa     Run + save golden QA results")
         print("  retrieval_benchmark.py baseline      Run benchmark (raw brain.recall)")
         print("  retrieval_benchmark.py trend [days]  Show precision/recall trend")

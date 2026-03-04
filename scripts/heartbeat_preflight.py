@@ -36,9 +36,11 @@ except ImportError:
     score_tasks = None
 
 try:
-    from cognitive_load import should_defer_task
+    from cognitive_load import should_defer_task, estimate_task_complexity, log_sizing
 except ImportError:
     should_defer_task = None
+    estimate_task_complexity = None
+    log_sizing = None
 
 try:
     from procedural_memory import find_procedure, find_code_templates, format_code_templates
@@ -282,6 +284,35 @@ def run_preflight(dry_run=False):
         except Exception as e:
             log(f"Cognitive load check failed: {e}")
     result["timings"]["cognitive_load"] = round(time.monotonic() - t4, 3)
+
+    # === 4.5 TASK SIZING: Estimate complexity, defer oversized tasks to sprint ===
+    t45 = time.monotonic()
+    if estimate_task_complexity:
+        try:
+            sizing = estimate_task_complexity(next_task)
+            result["task_sizing"] = sizing
+            log(f"Task sizing: {sizing['complexity']} (score={sizing['score']:.2f}, "
+                f"signals={sizing['signals']}, rec={sizing['recommendation']})")
+
+            if log_sizing:
+                log_sizing(next_task, sizing)
+
+            if sizing["recommendation"] == "defer_to_sprint":
+                log(f"Task OVERSIZED — deferring to implementation sprint slot")
+                result["should_defer"] = True
+                result["defer_reason"] = "oversized_task"
+                try:
+                    attention.submit(
+                        f"OVERSIZED TASK deferred to sprint: {next_task[:80]}",
+                        source="heartbeat", importance=0.7)
+                except Exception:
+                    pass
+                result["timings"]["task_sizing"] = round(time.monotonic() - t45, 3)
+                result["timings"]["total"] = round(time.monotonic() - t0, 3)
+                return result
+        except Exception as e:
+            log(f"Task sizing failed (non-fatal): {e}")
+    result["timings"]["task_sizing"] = round(time.monotonic() - t45, 3)
 
     # === 5. PROCEDURAL MEMORY: Check for matching procedure ===
     t5 = time.monotonic()

@@ -1319,6 +1319,32 @@ if __name__ == "__main__":
         print(json.dumps(result))
 
     elif cmd == "pi":
+        fresh = "--fresh" in sys.argv
+        if not fresh and os.path.exists(METRICS_FILE):
+            # Fast path: read cached PI from last recorded benchmark
+            try:
+                with open(METRICS_FILE) as f:
+                    stored = json.load(f)
+                pi = stored.get("pi", {})
+                ts = stored.get("timestamp", "?")[:19]
+                age_h = 0
+                try:
+                    from datetime import datetime as _dt
+                    stored_time = _dt.fromisoformat(ts.replace("Z", "+00:00") if "Z" in ts else ts)
+                    age_h = (datetime.now(timezone.utc) - stored_time.replace(
+                        tzinfo=timezone.utc) if stored_time.tzinfo is None else stored_time
+                    ).total_seconds() / 3600
+                except Exception:
+                    pass
+                pi_val = pi.get("pi", 0)
+                interp = pi.get("interpretation", "")
+                stale = " (stale — use --fresh)" if age_h > 48 else ""
+                print(f"PI: {pi_val:.4f} — {interp}")
+                print(f"  Last recorded: {ts} ({age_h:.0f}h ago){stale}")
+                sys.exit(0)
+            except Exception:
+                pass
+        # Fresh computation
         report = run_full_benchmark()
         pi = report.get("pi", {})
         print(f"PI: {pi.get('pi', 0):.4f} — {pi.get('interpretation', '')}")
