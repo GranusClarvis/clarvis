@@ -78,6 +78,13 @@ cli_test_rc=0
 python3 -m pytest "$WORKSPACE/tests/test_cli.py" -q --tb=short 2>&1 | tail -10 || cli_test_rc=$?
 report "pytest (test_cli.py)" $cli_test_rc
 
+# --- 5b. pytest: pipeline integration tests ---
+echo ""
+echo "--- pytest (pipeline integration) ---"
+pipeline_test_rc=0
+python3 -m pytest "$WORKSPACE/tests/test_pipeline_integration.py" -q --tb=short 2>&1 | tail -10 || pipeline_test_rc=$?
+report "pytest (test_pipeline_integration.py)" $pipeline_test_rc
+
 # --- 6. clarvis queue status (smoke) ---
 echo ""
 echo "--- clarvis queue status ---"

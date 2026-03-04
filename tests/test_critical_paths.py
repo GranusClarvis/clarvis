@@ -587,8 +587,8 @@ class TestSpotlightAlignment:
         from task_selector import _spotlight_alignment
         theme_words = {"brain", "memory", "retrieval", "quality", "improvement"}
         spotlight_texts = ["Improve brain memory retrieval quality"]
-        # Mock spreading_activation to avoid DB dependency
-        with patch('task_selector.attention') as mock_attn:
+        # Mock spreading_activation in the canonical spine module
+        with patch('clarvis.orch.task_selector.attention') as mock_attn:
             mock_attn.spreading_activation.return_value = [1, 2, 3]
             score = _spotlight_alignment(
                 "brain memory retrieval optimization work",
@@ -601,7 +601,7 @@ class TestSpotlightAlignment:
         from task_selector import _spotlight_alignment
         theme_words = {"quantum", "physics", "astronomy"}
         spotlight_texts = ["quantum physics research"]
-        with patch('task_selector.attention') as mock_attn:
+        with patch('clarvis.orch.task_selector.attention') as mock_attn:
             mock_attn.spreading_activation.side_effect = Exception("no DB")
             score = _spotlight_alignment(
                 "cooking recipe database frontend",

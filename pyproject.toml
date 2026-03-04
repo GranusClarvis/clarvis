@@ -19,6 +19,8 @@ brain = ["chromadb>=0.4.0", "onnxruntime>=1.15.0"]
 include = ["clarvis*"]
 
 [tool.pytest.ini_options]
+testpaths = ["tests", "packages"]
+norecursedirs = ["scripts", "data", "memory", "monitoring", "skills", "docs", ".git"]
 markers = [
     "slow: marks tests that need ChromaDB (deselect with '-m \"not slow\"')",
 ]

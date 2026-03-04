@@ -124,6 +124,8 @@ def brain_instance(tmp_path):
     b._collection_cache_ttl = 60
     b._embedding_cache = {}
     b._embedding_cache_ttl = 60
+    b._recall_cache = {}
+    b._recall_cache_ttl = 30
 
     # Reconsolidation state
     b._labile_memories = {}

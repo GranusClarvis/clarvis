@@ -6,10 +6,11 @@ _Completed items auto-archived to QUEUE_ARCHIVE.md._
 
 ## P0 — Do Next Heartbeat
 
-- [ ] [DOCS_STRUCTURE] Establish docs structure: `docs/ARCHITECTURE.md` (layers + boundaries), `docs/CONVENTIONS.md` (imports/sys.path, logging, CLI patterns), `docs/DATA_LAYOUT.md` (what goes in memory/, data/, logs/, tmp/), `docs/RUNBOOK.md` (how to run heartbeats, benchmarks, restore backups).
-- [x] [CRON_LOCK_HELPER] Extract `scripts/lock_helper.sh` — shared functions for local/global/maintenance locks. Eliminates 309 lines of duplicated lock logic across 16 cron scripts. Functions: `acquire_local_lock <name>`, `acquire_global_lock`, `acquire_maintenance_lock`. Update all cron_*.sh to source it. (Phase 5 risk #5 — highest active duplication.) ✅ DONE 2026-03-04
-- [x] [METRICS_SELF_MODEL] Populate `clarvis/metrics/` — move `scripts/self_model.py` core classes (CapabilityDomain, SelfModel, 7-domain tracking) into `clarvis/metrics/self_model.py`. Thin re-export wrapper in scripts/. Wire into heartbeat postflight via adapter hook. (Phase 5 — fills largest empty spine stub.) ✅ DONE 2026-03-04
-- [x] [ORCH_TASK_SELECTOR] Populate `clarvis/orch/` — move `scripts/task_selector.py` scoring logic into `clarvis/orch/task_selector.py`. Export `select_task()`, `score_candidates()`, `apply_novelty_boost()`. Thin wrapper in scripts/. (Phase 5 — fills second empty spine stub with most impactful module.) ✅ DONE 2026-03-04
+- [x] [DOCS_STRUCTURE] Establish docs structure: `docs/ARCHITECTURE.md` (layers + boundaries), `docs/CONVENTIONS.md`, `docs/DATA_LAYOUT.md`, `docs/RUNBOOK.md`. ✅ ARCHITECTURE.md rewritten 2026-03-04 (CONVENTIONS/DATA_LAYOUT/RUNBOOK already existed)
+- [x] [PYTEST_COLLECTION_HYGIENE] Fix global `pytest` collection — deprecated tests under `scripts/deprecated/` caused collection errors. Added `testpaths`/`norecursedirs` to `pyproject.toml`. Fixed 15 broken tests (brain fixture missing `_recall_cache`, heartbeat adapter count, spotlight mock target). Gate updated to include `test_pipeline_integration.py`. ✅ DONE 2026-03-04
+- [x] [CRON_LOCK_HELPER] Extract `scripts/lock_helper.sh` — shared functions for local/global/maintenance locks. ✅ DONE 2026-03-04
+- [x] [METRICS_SELF_MODEL] Populate `clarvis/metrics/` — move `scripts/self_model.py` core classes into `clarvis/metrics/self_model.py`. ✅ DONE 2026-03-04
+- [x] [ORCH_TASK_SELECTOR] Populate `clarvis/orch/` — move `scripts/task_selector.py` scoring logic into `clarvis/orch/task_selector.py`. ✅ DONE 2026-03-04
 
 ---
 

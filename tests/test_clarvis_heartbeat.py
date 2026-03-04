@@ -210,7 +210,8 @@ class TestAdaptersRegistration:
         assert "perf_benchmark" in names
         assert "latency_budget" in names
         assert "structural_health" in names
-        assert len(names) == 6
+        assert "meta_learning" in names
+        assert len(names) == 7
 
     def test_register_procedural_only(self):
         from clarvis.heartbeat.adapters import register_procedural
