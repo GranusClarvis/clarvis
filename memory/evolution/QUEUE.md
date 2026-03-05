@@ -42,7 +42,7 @@ _(empty — no urgent bugs)_
 - [ ] [CLI_DEAD_SCRIPT_SWEEP] After CLI migration complete: audit which scripts/ `__main__` blocks have zero callers. Move to `scripts/deprecated/`.
 - [ ] [CLI_BENCH_EXPAND] Add missing bench subcommands: `record`, `trend [days]`, `check` (exit 1 on failures), `heartbeat` (quick check), `weakest` (weakest metric). All delegate to `scripts/performance_benchmark.py`.
 - [ ] [CLI_HEARTBEAT_EXPAND] Add `clarvis heartbeat preflight` (run preflight only, print JSON) and `clarvis heartbeat postflight` (accepts exit-code + output-file + preflight-file args). Currently only `run` and `gate` exist.
-- [ ] [CLI_ROOT_PYPROJECT] Create root `pyproject.toml` for the `clarvis` package (if not already present). Define `[project.scripts] clarvis = "clarvis.cli:main"`, set `packages = ["clarvis"]`, pin deps. Prerequisite for CLI_CONSOLE_SCRIPT.
+- [x] [CLI_ROOT_PYPROJECT] Create root `pyproject.toml` for the `clarvis` package (if not already present). Define `[project.scripts] clarvis = "clarvis.cli:main"`, set `packages = ["clarvis"]`, pin deps. Prerequisite for CLI_CONSOLE_SCRIPT. (2026-03-05: done — pyproject.toml had console_script, added clarvis-cost + clarvis-reasoning as dependencies, removed sys.path hack from cli_cost.py, fixed testpaths, verified editable install + CLI)
 
 ### Codebase Restructuring (see docs/ARCHITECTURE.md)
 (Primary: now tracked in P0.)
@@ -76,11 +76,11 @@ _(empty — no urgent bugs)_
 ## Non-Code Improvements
 
 - [x] [CONFIDENCE_RECALIBRATION] Fix overconfidence at 90% level (70% actual accuracy). In `clarvis_confidence.py`, add confidence band analysis to `predict()`: if historical accuracy for band 0.85-0.95 is <80%, auto-downgrade new predictions in that band by 0.10. Log adjustments. Target: Brier score 0.12→0.20+ in system health ranking. (2026-03-05: done — _band_accuracy() + auto-downgrade in predict(), also handles 95-100% band, logs recalibration with original_confidence)
-- [ ] [ACTR_WIRING] Wire `actr_activation.py` into `brain.py` recall path — add power-law decay scoring as a re-ranking factor after ChromaDB vector search. Longest-stalled item. Hook registration exists in `clarvis/brain/hooks.py` but scoring path needs testing + calibration. Target: recently-accessed memories get retrieval boost, old unused memories decay. (Phase 5 priority #10.)
-  - [ ] [ACTR_WIRING_1] Identify the *actual* recall call chain (brain.recall → collection query → merge → rerank) and the correct injection point (file+function names).
-  - [ ] [ACTR_WIRING_2] Implement rerank step: take recall results + per-result last_access/access_count, compute ACT-R activation, blend into final score with a tunable weight.
-  - [ ] [ACTR_WIRING_3] Add a small deterministic test fixture (5-10 fake memories with timestamps) proving recency/frequency boosts ordering.
-  - [ ] [ACTR_WIRING_4] Run real-world smoke benchmark: before/after on a fixed query set; ensure no regression in precision@3.
+- [ ] [ACTR_WIRING] Wire `actr_activation.py` into `brain.py` recall path — add power-law decay scoring as a re-ranking factor after ChromaDB vector search. Hook registration exists in `clarvis/brain/hooks.py` and scoring path works end-to-end. Remaining: calibration of RETRIEVAL_TAU (memories with <3 accesses get clipped to floor score). (Phase 5 priority #10.)
+  - [x] [ACTR_WIRING_1] Identify the *actual* recall call chain (brain.recall → collection query → merge → rerank) and the correct injection point (file+function names). (2026-03-05: confirmed — search.py:SearchMixin.recall() lines 128-139, hook via hooks.py:_make_actr_scorer)
+  - [x] [ACTR_WIRING_2] Implement rerank step: take recall results + per-result last_access/access_count, compute ACT-R activation, blend into final score with a tunable weight. (2026-03-05: confirmed already implemented — actr_score(r) called per result, 70/30/5 blend)
+  - [x] [ACTR_WIRING_3] Add a small deterministic test fixture (5-10 fake memories with timestamps) proving recency/frequency boosts ordering. (2026-03-05: done — test_actr_scorer_boosts_recent_and_frequent validates frequency, recency, accessed>never invariants + hook wiring)
+  - [ ] [ACTR_WIRING_4] Run real-world smoke benchmark: before/after on a fixed query set; ensure no regression in precision@3. Calibrate RETRIEVAL_TAU (current -2.0 clips single-access memories).
 
 ## P1
 
@@ -110,4 +110,4 @@ _(empty — no urgent bugs)_
 ## P2 — Reclassified
 
 - [ ] [CRON_AUTONOMOUS_BATCHING_CLEANUP] (was P0 CRON_AUTONOMOUS_BATCHING_BUG — reclassified after investigation: the `<<'PY'` heredoc + `NEXT_TASK` env var mechanism is correct, NOT a bug). Remaining cleanup: remove dead `is_subtask()` function (~lines 186-189), review `MAX_TOTAL_CHARS=900` limit. Low priority.
-- [ ] [PARALLEL_BRAIN_QUERIES] Implement parallel collection queries in `clarvis/brain/search.py` using `concurrent.futures.ThreadPoolExecutor`. Currently queries 10 collections sequentially (~7.5s avg). ONNX runtime is thread-safe. Merge and re-rank after parallel fetch. Target: <2s brain query latency. (Source: REFACTOR_COMPLETION_PLAN_2026-03-05, AGI_READINESS audit)
+- [x] [PARALLEL_BRAIN_QUERIES] Implement parallel collection queries in `clarvis/brain/search.py` using `concurrent.futures.ThreadPoolExecutor`. Target: <2s brain query latency. (2026-03-05: done — collection queries were already parallel; real bottleneck was synchronous observer hooks (hebbian: 1.5s, total: 4.8s). Fixed by running observers async in background ThreadPoolExecutor with deep-copied results. Benchmark: avg 0.85s, p95 1.49s, golden-qa P@1=1.000 unchanged)
