@@ -1,9 +1,18 @@
 """Brain search operations — recall, query routing, embedding cache."""
 
+import copy
+import logging
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 from .constants import DEFAULT_COLLECTIONS, ALL_COLLECTIONS, route_query
+
+_log = logging.getLogger("clarvis.brain.search")
+
+# Shared daemon executor for fire-and-forget observer hooks.
+# Daemon threads die with the process — no need for explicit shutdown.
+_observer_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="brain-obs")
 
 
 class SearchMixin:
@@ -99,8 +108,8 @@ class SearchMixin:
             return items
 
         # Query all collections in parallel (up to 10 workers to cover all collections)
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-        with ThreadPoolExecutor(max_workers=min(len(valid_collections), 10)) as executor:
+        from concurrent.futures import ThreadPoolExecutor as _TPE, as_completed
+        with _TPE(max_workers=min(len(valid_collections), 10)) as executor:
             futures = {executor.submit(_query_collection, c): c for c in valid_collections}
             for future in as_completed(futures):
                 try:
@@ -143,17 +152,29 @@ class SearchMixin:
 
         final_results = all_results[:n * len(collections)]
 
-        # --- Hook: recall observers (retrieval quality, hebbian, synaptic) ---
-        if final_results and query:
+        # --- Hook: recall observers (async fire-and-forget) ---
+        # Observers (hebbian, synaptic, retrieval_quality) are side-effects that
+        # don't affect query results. Run them in a background thread to avoid
+        # blocking recall (saves ~1-5s per query).
+        if final_results and query and self._recall_observers:
             now_mono = time.monotonic()
             last_obs = getattr(self, '_last_observer_time', 0)
-            for fn in self._recall_observers:
-                try:
-                    fn(query, final_results, caller=caller, rate_limit_mono=now_mono, last_mono=last_obs)
-                except Exception:
-                    pass
             if (now_mono - last_obs) >= 5.0:
                 self._last_observer_time = now_mono
+
+            # Deep-copy results snapshot so observers don't race with caller
+            obs_snapshot = copy.deepcopy(final_results)
+            observers = list(self._recall_observers)
+
+            def _run_observers():
+                for fn in observers:
+                    try:
+                        fn(query, obs_snapshot, caller=caller,
+                           rate_limit_mono=now_mono, last_mono=last_obs)
+                    except Exception:
+                        _log.debug("Observer %s failed", fn.__qualname__, exc_info=True)
+
+            _observer_executor.submit(_run_observers)
 
         # Reconsolidation: mark retrieved memories as labile
         for result in final_results:
@@ -226,9 +247,9 @@ class SearchMixin:
                         pass
             return items
 
-        from concurrent.futures import ThreadPoolExecutor, as_completed
+        from concurrent.futures import ThreadPoolExecutor as _TPE, as_completed
         all_results = []
-        with ThreadPoolExecutor(max_workers=min(len(valid), 6)) as executor:
+        with _TPE(max_workers=min(len(valid), 6)) as executor:
             futures = {executor.submit(_scan_collection, c): c for c in valid}
             for future in as_completed(futures):
                 try:

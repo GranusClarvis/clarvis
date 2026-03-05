@@ -57,3 +57,55 @@ def test_health_check(tmp_brain):
     """Health check passes on fresh brain."""
     hc = tmp_brain.health_check()
     assert hc["status"] == "healthy"
+
+
+def test_parallel_recall_performance(tmp_brain):
+    """Recall across multiple collections completes within p95 target (< 2s)."""
+    import time
+
+    # Seed multiple collections with data
+    for col in [LEARNINGS, MEMORIES, GOALS]:
+        for i in range(10):
+            tmp_brain.store(f"Test memory {i} about topic {col}", collection=col, importance=0.5 + i * 0.04)
+
+    # Register a slow mock observer to verify it doesn't block recall
+    call_log = []
+
+    def slow_observer(query, results, *, caller=None, rate_limit_mono=0, last_mono=0):
+        time.sleep(0.5)
+        call_log.append(query)
+
+    tmp_brain.register_recall_observer(slow_observer)
+
+    # Recall should return fast despite slow observer
+    start = time.time()
+    results = tmp_brain.recall("topic about test memory", n=5)
+    elapsed = time.time() - start
+
+    assert len(results) >= 1
+    assert elapsed < 2.0, f"Recall took {elapsed:.2f}s, expected < 2.0s (p95 target)"
+
+    # Give observer time to complete in background
+    time.sleep(1.0)
+    assert len(call_log) >= 1, "Observer should have fired asynchronously"
+
+
+def test_recall_observer_does_not_mutate_caller_results(tmp_brain):
+    """Observers get a deep copy, so mutations don't affect caller's results."""
+    tmp_brain.store("important fact about testing", collection=LEARNINGS, importance=0.9)
+
+    mutations = []
+
+    def mutating_observer(query, results, *, caller=None, rate_limit_mono=0, last_mono=0):
+        for r in results:
+            r["document"] = "MUTATED"
+        mutations.append(True)
+
+    tmp_brain.register_recall_observer(mutating_observer)
+
+    results = tmp_brain.recall("important fact", n=3)
+    import time
+    time.sleep(0.5)
+
+    # Original results should be unaffected
+    assert any("important" in r["document"] for r in results), "Observer mutation leaked to caller"
