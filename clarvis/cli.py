@@ -22,12 +22,14 @@ def _register_subcommands():
     """Lazy-register sub-apps to keep top-level import fast."""
     from clarvis.cli_brain import app as brain_app
     from clarvis.cli_bench import app as bench_app
+    from clarvis.cli_cost import app as cost_app
     from clarvis.cli_cron import app as cron_app
     from clarvis.cli_heartbeat import app as heartbeat_app
     from clarvis.cli_queue import app as queue_app
 
     app.add_typer(brain_app, name="brain", help="ClarvisDB brain operations.")
     app.add_typer(bench_app, name="bench", help="Performance benchmarks.")
+    app.add_typer(cost_app, name="cost", help="Cost tracking and budget monitoring.")
     app.add_typer(cron_app, name="cron", help="Cron job inspection and execution.")
     app.add_typer(heartbeat_app, name="heartbeat", help="Heartbeat pipeline.")
     app.add_typer(queue_app, name="queue", help="Evolution queue management.")

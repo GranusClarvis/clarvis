@@ -40,6 +40,7 @@ except ImportError:
 
 QUEUE_FILE = "/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md"
 QUALITY_GATE_FILE = "/home/agent/.openclaw/workspace/data/memory_quality_gate.json"
+EPISODES_FILE = "/home/agent/.openclaw/workspace/data/episodes.json"
 
 # Keywords that signal AGI/consciousness relevance (high-value work)
 AGI_KEYWORDS = [
@@ -60,6 +61,57 @@ ARCHITECTURAL_KEYWORDS = [
     "config", "skill", "protocol", "tune", "audit", "review",
     "heartbeat.md", "agents.md", "roadmap", "prompt", "schedule",
 ]
+
+
+def _compute_novelty(task_text, recent_tasks, min_words=3):
+    """Compute novelty score (0.0-1.0) as inverse Jaccard similarity to recent tasks.
+
+    Compares the candidate task's word set against the last N completed tasks.
+    High novelty = low overlap with recent work = prevents "more of the same".
+
+    Returns float 0.0 (identical to recent) to 1.0 (completely novel).
+    """
+    if not recent_tasks:
+        return 1.0  # No history = maximally novel
+
+    task_words = set(w.lower() for w in task_text.split() if len(w) > min_words)
+    if not task_words:
+        return 0.5
+
+    similarities = []
+    for rt in recent_tasks:
+        rt_words = set(w.lower() for w in rt.split() if len(w) > min_words)
+        if not rt_words:
+            continue
+        intersection = len(task_words & rt_words)
+        union = len(task_words | rt_words)
+        if union > 0:
+            similarities.append(intersection / union)
+
+    if not similarities:
+        return 1.0
+
+    # Use max similarity (most similar recent task) as the overlap measure
+    max_sim = max(similarities)
+    return round(1.0 - max_sim, 4)
+
+
+def _get_recent_completed_tasks(n=15):
+    """Load the last N completed task texts from episodes.json."""
+    try:
+        if not os.path.exists(EPISODES_FILE):
+            return []
+        with open(EPISODES_FILE) as f:
+            episodes = json.load(f)
+        # Get completed (success/failure/timeout) tasks, most recent first
+        completed = [
+            ep.get("task", "")
+            for ep in reversed(episodes)
+            if ep.get("task")
+        ]
+        return completed[:n]
+    except Exception:
+        return []
 
 
 def parse_tasks(queue_file=QUEUE_FILE):
@@ -174,6 +226,9 @@ def score_tasks(tasks, codelet_result=None):
 
     theme_words, spotlight_texts = _get_spotlight_themes()
 
+    # Load recent completed tasks for novelty scoring
+    recent_completed = _get_recent_completed_tasks(n=15)
+
     try:
         from retrieval_quality import tracker
         if context and context != "idle":
@@ -259,6 +314,9 @@ def score_tasks(tasks, codelet_result=None):
         except Exception:
             pass
 
+        # Novelty: boost tasks that differ from recent completed work
+        novelty = _compute_novelty(text, recent_completed)
+
         total_boost = agi_boost + integration_boost + architectural_boost - failure_penalty
 
         effective_relevance = min(1.0, relevance + spotlight_align * 0.15)
@@ -274,8 +332,12 @@ def score_tasks(tasks, codelet_result=None):
 
         somatic_component = max(0.0, min(1.0, 0.5 + somatic_bias))
         codelet_component = max(0.0, min(1.0, 0.5 + codelet_bias))
-        final_score = (0.70 * salience + 0.10 * spotlight_align
-                       + 0.10 * somatic_component + 0.10 * codelet_component)
+        base_final = (0.70 * salience + 0.10 * spotlight_align
+                      + 0.10 * somatic_component + 0.10 * codelet_component)
+
+        # Novelty boost: prevent "more of the same" trap
+        # final_score = base_score * (1 + 0.3 * novelty)
+        final_score = base_final * (1.0 + 0.3 * novelty)
 
         scored.append({
             "text": text,
@@ -295,6 +357,7 @@ def score_tasks(tasks, codelet_result=None):
                 "somatic_signal": somatic_signal,
                 "codelet_bias": round(codelet_bias, 4),
                 "failure_penalty": round(failure_penalty, 3),
+                "novelty": round(novelty, 4),
                 "base_salience": round(salience, 4),
             }
         })

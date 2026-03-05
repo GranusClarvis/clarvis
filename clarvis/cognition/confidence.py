@@ -57,6 +57,24 @@ def _save_predictions(entries):
     _predictions_cache_mtime = os.path.getmtime(PREDICTIONS_FILE)
 
 
+def _band_accuracy(band_lo, band_hi, min_samples=5):
+    """Compute historical accuracy for predictions in a given confidence band.
+
+    Returns (accuracy, sample_count) or (None, 0) if insufficient data.
+    """
+    entries = _load_predictions()
+    resolved = [
+        e for e in entries
+        if e["correct"] is not None
+        and e.get("outcome") != "stale"
+        and band_lo <= e["confidence"] < band_hi
+    ]
+    if len(resolved) < min_samples:
+        return None, len(resolved)
+    correct = sum(1 for e in resolved if e["correct"])
+    return correct / len(resolved), len(resolved)
+
+
 def predict(event: str, expected: str, confidence: float) -> dict:
     """
     Log a prediction.
@@ -68,6 +86,24 @@ def predict(event: str, expected: str, confidence: float) -> dict:
     """
     confidence = max(0.0, min(1.0, float(confidence)))
 
+    # Confidence recalibration: auto-downgrade in poorly-calibrated bands
+    original_confidence = confidence
+    recalibrated = False
+    if 0.85 <= confidence < 0.95:
+        acc, n = _band_accuracy(0.85, 0.95)
+        if acc is not None and acc < 0.80:
+            confidence = max(0.3, confidence - 0.10)
+            recalibrated = True
+            print(f"Recalibrated: {original_confidence:.0%} → {confidence:.0%} "
+                  f"(band 85-95% accuracy={acc:.0%}, n={n})", file=sys.stderr)
+    elif confidence >= 0.95:
+        acc, n = _band_accuracy(0.90, 1.01)
+        if acc is not None and acc < 0.85:
+            confidence = max(0.3, confidence - 0.10)
+            recalibrated = True
+            print(f"Recalibrated: {original_confidence:.0%} → {confidence:.0%} "
+                  f"(band 90-100% accuracy={acc:.0%}, n={n})", file=sys.stderr)
+
     entry = {
         "event": event,
         "expected": expected,
@@ -76,6 +112,9 @@ def predict(event: str, expected: str, confidence: float) -> dict:
         "outcome": None,  # filled by outcome()
         "correct": None,  # filled by outcome()
     }
+    if recalibrated:
+        entry["original_confidence"] = original_confidence
+        entry["recalibrated"] = True
 
     with open(PREDICTIONS_FILE, "a") as f:
         f.write(json.dumps(entry) + "\n")

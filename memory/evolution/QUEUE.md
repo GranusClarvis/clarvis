@@ -6,6 +6,7 @@ _Completed items auto-archived to QUEUE_ARCHIVE.md._
 
 ## P0 — Do Next Heartbeat
 
+- [ ] [CRON_AUTONOMOUS_BATCHING_BUG] Fix smart batching in scripts/cron_autonomous.sh: python heredoc uses <<'PY' so ${NEXT_TASK} isn’t expanded; pass NEXT_TASK via env var/argv and add a small smoke test that BATCH_COUNT>1 when multiple small tasks exist.
 
 ---
 
@@ -46,7 +47,7 @@ _Completed items auto-archived to QUEUE_ARCHIVE.md._
 
 ## Pillar 4: Self-Improvement Loop
 
-- [ ] [NOVELTY_TASK_SCORING] Novelty-weighted task selection — compute embedding distance between candidate tasks and last N completed tasks, boost high-novelty tasks with `final_score = base_score * (1 + 0.3 * novelty)`. Prevents "more of the same" trap. Files: task_selector.py (or heartbeat_preflight.py scoring section).
+- [x] [NOVELTY_TASK_SCORING] Novelty-weighted task selection — compute embedding distance between candidate tasks and last N completed tasks, boost high-novelty tasks with `final_score = base_score * (1 + 0.3 * novelty)`. Prevents "more of the same" trap. Files: task_selector.py (or heartbeat_preflight.py scoring section). (2026-03-05: done — Jaccard word similarity against last 15 episodes in clarvis/orch/task_selector.py, novelty exposed in scoring details)
 - [ ] [PREFLIGHT_SPEED] Optimize preflight overhead (currently ~100s). Profile task_selector scoring loop — brain lookups for failure penalties on every task is the bottleneck.
 
 ## Pillar 5: Agent Orchestrator (Multi-Project Command Center)
@@ -62,7 +63,7 @@ _Completed items auto-archived to QUEUE_ARCHIVE.md._
 ## Backlog
 
 - [x] [COST_PER_TASK_TRACKING] Tag each Claude Code invocation with task ID in cost logging. Create routing effectiveness report showing % of tasks routed to cheap models vs Claude Code. (Source: ARCH_AUDIT_2026-03-05) (2026-03-05: done — added task_costs() + routing_effectiveness() to CostTracker, created scripts/cost_per_task.py report, fixed cron_research.sh + cron_implementation_sprint.sh to pass actual task names)
-- [ ] [CLI_COST_SUBCOMMAND] Add `clarvis cost daily/budget` subcommands — cost tracking not in unified CLI.
+- [x] [CLI_COST_SUBCOMMAND] Add `clarvis cost daily/budget` subcommands — cost tracking not in unified CLI. (2026-03-05: done — 6 subcommands: daily, weekly, budget, realtime, summary, trend. Registered in clarvis/cli.py)
 - [ ] [CRAWL4AI] Install Crawl4AI for automated research ingestion.
 - [ ] [BROWSER_TEST] Test: navigate, extract, fill forms, multi-step workflows — comprehensive browser-use capability validation.
 - [ ] [VISION_FALLBACK] Add local vision fallback to clarvis_eyes.py — use Ollama when API vision unavailable.
@@ -72,7 +73,7 @@ _Completed items auto-archived to QUEUE_ARCHIVE.md._
 
 ## Non-Code Improvements
 
-- [ ] [CONFIDENCE_RECALIBRATION] Fix overconfidence at 90% level (70% actual accuracy). In `clarvis_confidence.py`, add confidence band analysis to `predict()`: if historical accuracy for band 0.85-0.95 is <80%, auto-downgrade new predictions in that band by 0.10. Log adjustments. Target: Brier score 0.12→0.20+ in system health ranking.
+- [x] [CONFIDENCE_RECALIBRATION] Fix overconfidence at 90% level (70% actual accuracy). In `clarvis_confidence.py`, add confidence band analysis to `predict()`: if historical accuracy for band 0.85-0.95 is <80%, auto-downgrade new predictions in that band by 0.10. Log adjustments. Target: Brier score 0.12→0.20+ in system health ranking. (2026-03-05: done — _band_accuracy() + auto-downgrade in predict(), also handles 95-100% band, logs recalibration with original_confidence)
 - [ ] [ACTR_WIRING] Wire `actr_activation.py` into `brain.py` recall path — add power-law decay scoring as a re-ranking factor after ChromaDB vector search. Longest-stalled item. Hook registration exists in `clarvis/brain/hooks.py` but scoring path needs testing + calibration. Target: recently-accessed memories get retrieval boost, old unused memories decay. (Phase 5 priority #10.)
   - [ ] [ACTR_WIRING_1] Identify the *actual* recall call chain (brain.recall → collection query → merge → rerank) and the correct injection point (file+function names).
   - [ ] [ACTR_WIRING_2] Implement rerank step: take recall results + per-result last_access/access_count, compute ACT-R activation, blend into final score with a tunable weight.
@@ -84,7 +85,7 @@ _Completed items auto-archived to QUEUE_ARCHIVE.md._
 - [ ] [RESEARCH_DISCOVERY 2026-03-05] Research: Agent Interoperability Protocols — MCP + A2A + ACP + ANP Survey (arxiv.org/abs/2505.02279). MCP (Anthropic→Linux Foundation AAIF) standardizes tool/data access; A2A (Google→LF, 100+ enterprises) enables secure agent delegation; ACP + ANP for discovery/routing. Directly applicable to project_agent.py orchestration architecture. Maps Clarvis agent protocol to industry standards. Sources: arxiv.org/abs/2505.02279, onereach.ai/blog/guide-choosing-mcp-vs-a2a-protocols
 - [ ] [RESEARCH_DISCOVERY 2026-03-05] Research: Runtime Verification & Metacognitive Self-Correction for Agents — MASC (step-level anomaly detection via next-execution reconstruction, ICLR 2026), AgentSpec (DSL for runtime constraint enforcement, 90%+ unsafe action prevention, ICSE 2026), AgentGuard (dynamic probabilistic assurance), SupervisorAgent (agent interaction monitoring). Improves action accuracy through real-time execution guards and self-correction loops. Sources: arxiv.org/abs/2510.14319, arxiv.org/abs/2503.18666, arxiv.org/abs/2509.23864, arxiv.org/abs/2510.26585
 - [ ] [RESEARCH_DISCOVERY 2026-03-05] Research: Process Reward Models for Agent Step Verification — ThinkPRM (generative CoT verification, 1% labels, +8% OOD), ToolPRMBench (tool-use PRM evaluation), Critical Step Optimization (verified decision-point preference learning), AgentPRM (actor-critic Monte Carlo). Directly improves action accuracy via step-level error detection before execution commits. Sources: arxiv.org/abs/2504.16828, arxiv.org/abs/2601.12294, arxiv.org/abs/2602.03412, arxiv.org/abs/2502.10325
-- [ ] [FAILURE_TAXONOMY] Add error type classification to `heartbeat_postflight.py` failure handling. When a task fails, classify the error into one of 5 categories (memory/planning/action/system/timeout) using keyword matching on output. Store as `error_type` tag in episode metadata alongside existing "failure" tag. Enables failure pattern analysis across heartbeats. (Extracted from: AgentDebug research, arXiv:2509.25370)
+- [x] [FAILURE_TAXONOMY] Add error type classification to `heartbeat_postflight.py` failure handling. When a task fails, classify the error into one of 5 categories (memory/planning/action/system/timeout) using keyword matching on output. Store as `error_type` tag in episode metadata alongside existing "failure" tag. Enables failure pattern analysis across heartbeats. (Extracted from: AgentDebug research, arXiv:2509.25370) (2026-03-05: done — _classify_error() function, tags in brain learnings + episodes + completeness JSONL)
 - [ ] [RECALL_GRAPH_CONTEXT] In `brain.py` recall/search methods, optionally expand results with 1-hop graph neighbors. When a memory is retrieved, also fetch memories connected via existing graph edges and include them as lower-weight "context" entries. No new clustering needed — uses existing 47k+ graph edges. Target: improve complex query recall by providing related context automatically. (Extracted from: RAPTOR/Hierarchical RAG research, arXiv:2401.18059)
 - [x] [POSTFLIGHT_COMPLETENESS] Add completeness scoring to `heartbeat_postflight.py`. Count stages executed vs. attempted (e.g. 11/14). Log to `data/postflight_completeness.jsonl`. Alert if <80% stages succeed. Currently, silent hook failures cause invisible data loss — no way to detect degraded postflight execution. (Source: ARCH_AUDIT_2026-03-05) (2026-03-05: done — tracks _pf_errors list, computes ratio, writes JSONL, warns if <80%)
 - [ ] [SPINE_SHADOW_DEPS] Migrate the 6 scripts imported by spine code via `sys.path` manipulation into proper spine submodules: `somatic_markers` → `clarvis/cognition/`, `clarvis_reasoning` → `clarvis/cognition/`, `graphrag_communities` → `clarvis/brain/`, `cost_api` → `clarvis/orch/`, `soar_engine` → `clarvis/memory/`, `meta_learning` → `clarvis/learning/`. Eliminates hidden `sys.path.insert()` in `clarvis/brain/hooks.py` and `clarvis/orch/*.py`. (Source: ARCH_AUDIT_2026-03-05)

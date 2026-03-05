@@ -191,6 +191,58 @@ _import_time = time.monotonic() - start_import
 log = lambda msg: print(f"[{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S')}] POSTFLIGHT: {msg}", file=sys.stderr)
 
 
+def _classify_error(exit_code, output_text):
+    """Classify error into one of 5 categories using keyword matching on output.
+
+    Categories:
+      - timeout: exit code 124 or timeout-related keywords
+      - memory: ChromaDB, embedding, brain, recall failures
+      - planning: task selection, queue, routing, preflight failures
+      - system: OS, network, permissions, disk, import errors
+      - action: everything else (code errors, assertion failures, etc.)
+
+    Returns: (error_type: str, evidence: str)
+    """
+    if exit_code == 124:
+        return "timeout", "exit code 124"
+
+    text_lower = (output_text or "")[-3000:].lower()
+
+    # Memory-related keywords
+    memory_kw = [
+        "chromadb", "chroma", "embedding", "brain.store", "brain.recall",
+        "collection", "vector", "onnx", "recall failed", "store failed",
+        "memory_consolidation", "hebbian", "graph edge", "relationships.json",
+    ]
+    memory_hits = sum(1 for kw in memory_kw if kw in text_lower)
+    if memory_hits >= 2:
+        return "memory", f"{memory_hits} memory keywords matched"
+
+    # Planning-related keywords
+    planning_kw = [
+        "task_selector", "queue.md", "preflight", "routing", "attention",
+        "salience", "task selection", "no tasks", "queue empty",
+        "codelet", "spotlight", "score_tasks",
+    ]
+    planning_hits = sum(1 for kw in planning_kw if kw in text_lower)
+    if planning_hits >= 2:
+        return "planning", f"{planning_hits} planning keywords matched"
+
+    # System-related keywords
+    system_kw = [
+        "permission denied", "no such file", "filenotfounderror", "oserror",
+        "connectionerror", "timeout", "disk", "importerror", "modulenotfounderror",
+        "killed", "oom", "memory error", "segfault", "errno",
+        "subprocess", "command not found", "systemctl",
+    ]
+    system_hits = sum(1 for kw in system_kw if kw in text_lower)
+    if system_hits >= 2:
+        return "system", f"{system_hits} system keywords matched"
+
+    # Default: action error (code bug, assertion, logic error)
+    return "action", "default classification"
+
+
 def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
     """Run all post-execution outcome recording in a single process.
 
@@ -237,6 +289,12 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
         task_status = "failure"
 
     log(f"Recording outcome: {task_status} (exit={exit_code}, duration={task_duration}s)")
+
+    # Classify error type for failure taxonomy
+    error_type = None
+    if task_status != "success":
+        error_type, error_evidence = _classify_error(exit_code, output_text)
+        log(f"Error taxonomy: {error_type} ({error_evidence})")
 
     # === 1. CONFIDENCE OUTCOME ===
     t1 = time.monotonic()
@@ -288,7 +346,7 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
             # Store a concise lesson in brain
             error_snippet = output_text[-300:] if output_text else "no output"
             error_snippet = re.sub(r'[^a-zA-Z0-9 _.,:;=+\-/()@#%\n]', '', error_snippet)[:250]
-            lesson = f"FAILURE LESSON: Attempted '{task[:100]}' — exit {exit_code}. Error: {error_snippet}"
+            lesson = f"FAILURE LESSON [{error_type}]: Attempted '{task[:100]}' — exit {exit_code}. Error: {error_snippet}"
             brain_mod = None
             try:
                 from brain import brain as brain_mod
@@ -299,7 +357,7 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
                     lesson,
                     collection="clarvis-learnings",
                     importance=0.8,
-                    tags=["failure", "lesson"],
+                    tags=["failure", "lesson", f"error_type:{error_type}"],
                     source="postflight_failure"
                 )
                 log("Stored failure lesson in brain")
@@ -437,7 +495,13 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
             error_msg = output_text[-200:] if task_status != "success" else None
             em.encode(task, task_section, best_salience, task_status,
                      duration_s=task_duration, error_msg=error_msg)
-            log(f"Encoded episode ({task_status}, {task_duration}s)")
+            # Tag episode with error_type for failure pattern analysis
+            if error_type and em.episodes:
+                latest = em.episodes[-1]
+                if latest.get("task", "")[:60] == task[:60]:
+                    latest.setdefault("tags", []).append(f"error_type:{error_type}")
+                    em._save()
+            log(f"Encoded episode ({task_status}, {task_duration}s{', type=' + error_type if error_type else ''})")
         except Exception as e:
             log(f"Episodic encoding failed: {e}")
             _pf_errors.append("episodic")
@@ -1247,6 +1311,7 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
             "stages_failed": stages_failed,
             "completeness": round(completeness, 4),
             "errors": _pf_errors,
+            "error_type": error_type,
             "total_time_s": timings["total"],
         }
         with open(completeness_file, "a") as cf:
@@ -1255,7 +1320,8 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
         pass  # Don't fail postflight over completeness logging
 
     return {"status": "ok", "task_status": task_status, "timings": timings,
-            "completeness": round(completeness, 4), "errors": _pf_errors}
+            "completeness": round(completeness, 4), "errors": _pf_errors,
+            "error_type": error_type}
 
 
 if __name__ == "__main__":
