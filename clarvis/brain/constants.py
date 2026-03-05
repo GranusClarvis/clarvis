@@ -9,9 +9,17 @@ LOCAL_DATA_DIR = "/home/agent/.openclaw/workspace/data/clarvisdb-local"
 os.makedirs(DATA_DIR, exist_ok=True)
 os.makedirs(LOCAL_DATA_DIR, exist_ok=True)
 
-# Graph file
+# Graph file (JSON — legacy default)
 GRAPH_FILE = os.path.join(DATA_DIR, "relationships.json")
 LOCAL_GRAPH_FILE = os.path.join(LOCAL_DATA_DIR, "relationships.json")
+
+# Graph SQLite database
+GRAPH_SQLITE_FILE = os.path.join(DATA_DIR, "graph.db")
+LOCAL_GRAPH_SQLITE_FILE = os.path.join(LOCAL_DATA_DIR, "graph.db")
+
+# Graph backend: "json" (default) or "sqlite"
+# Set CLARVIS_GRAPH_BACKEND=sqlite to switch to SQLite backend.
+GRAPH_BACKEND = os.environ.get("CLARVIS_GRAPH_BACKEND", "json")
 
 # Collection names
 IDENTITY = "clarvis-identity"
