@@ -203,6 +203,7 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
     log(f"All modules imported in {_import_time:.2f}s (single process)")
     t0 = time.monotonic()
     timings = {}
+    _pf_errors = []  # Track stage failures for completeness scoring
 
     # Shared constants used by multiple sections
     QUEUE_FILE = "/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md"
@@ -245,6 +246,7 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
             conf_outcome(task_event, actual)
         except Exception as e:
             log(f"Confidence outcome failed: {e}")
+            _pf_errors.append("confidence")
     timings["confidence"] = round(time.monotonic() - t1, 3)
 
     # === 1.5 AST: Evaluate attention schema prediction ===
@@ -262,6 +264,7 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
             log(f"AST eval: {eval_result['error']}")
     except Exception as e:
         log(f"AST evaluation failed (non-fatal): {e}")
+        _pf_errors.append("ast_eval")
     timings["ast_eval"] = round(time.monotonic() - t15, 3)
 
     # === 2. REASONING CHAIN: Close ===
@@ -275,6 +278,7 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
             log(f"Reasoning chain {chain_id} closed ({task_status})")
         except Exception as e:
             log(f"Reasoning chain close failed: {e}")
+            _pf_errors.append("reasoning_close")
     timings["reasoning_close"] = round(time.monotonic() - t2, 3)
 
     # === 2.5 FAILURE LESSONS: Store in brain + generate follow-up task ===
@@ -325,6 +329,7 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
                 log(f"Skipped follow-up task — {task_key[:40]}... failed {failure_count}+ times")
         except Exception as e:
             log(f"Failure lesson recording failed: {e}")
+            _pf_errors.append("failure_lessons")
     timings["failure_lessons"] = round(time.monotonic() - t25, 3)
 
     # === 2.7 BRAIN BRIDGE: Record ALL outcomes + update context ===
@@ -336,12 +341,14 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
                 log(f"Brain bridge: recorded {task_status} outcome → {mem_id}")
         except Exception as e:
             log(f"Brain bridge outcome recording failed: {e}")
+            _pf_errors.append("brain_bridge")
     if brain_update_context:
         try:
             brain_update_context(task, task_status)
             log("Brain bridge: context updated")
         except Exception as e:
             log(f"Brain bridge context update failed: {e}")
+            _pf_errors.append("brain_bridge_ctx")
     timings["brain_bridge"] = round(time.monotonic() - t27, 3)
 
     # === 3. ATTENTION: Record outcome ===
@@ -433,6 +440,7 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
             log(f"Encoded episode ({task_status}, {task_duration}s)")
         except Exception as e:
             log(f"Episodic encoding failed: {e}")
+            _pf_errors.append("episodic")
     timings["episodic"] = round(time.monotonic() - t5, 3)
 
     # === 5.05 PROMPT OPTIMIZATION: Record prompt→outcome pair (APE/SPO loop) ===
@@ -492,6 +500,7 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
             log(f"World model: recorded outcome '{task_status}' for prediction calibration")
         except Exception as e:
             log(f"World model outcome recording failed: {e}")
+            _pf_errors.append("world_model")
     timings["world_model"] = round(time.monotonic() - t55, 3)
 
     # === 5.6 META-GRADIENT RL: Adapt hyperparameters online ===
@@ -752,6 +761,7 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
     except Exception as e:
         log(f"Self-test harness failed: {e}")
         selftest_result["error"] = str(e)
+        _pf_errors.append("self_test")
     timings["self_test"] = round(time.monotonic() - t74, 3)
 
     # === 7.42 CODE_GEN OUTCOME: Record actual code quality metrics for self_model ===
@@ -821,6 +831,7 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
             log("Code-gen outcome: no .py changes detected")
     except Exception as e:
         log(f"Code-gen outcome recording failed: {e}")
+        _pf_errors.append("code_gen_outcome")
     timings["code_gen_outcome"] = round(time.monotonic() - t742, 3)
 
     # === 7.45 PERFORMANCE GATE: Run after code-modifying heartbeats ===
@@ -1037,6 +1048,7 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
                 log(f"Cost logged (est): ${entry.cost_usd:.6f} ({model}, in={est_input}, out={est_output})")
         except Exception as e:
             log(f"Cost tracking failed: {e}")
+            _pf_errors.append("cost_tracking")
     timings["cost_tracking"] = round(time.monotonic() - t75, 3)
 
     # === 7.6 BUDGET ALERT CHECK ===
@@ -1069,6 +1081,7 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
             log(f"Evolution: fix generated for {failure_id}")
         except Exception as e:
             log(f"Evolution loop failed: {e}")
+            _pf_errors.append("evolution")
     elif exit_code == 124 and EvolutionLoop:
         # Timeout: light capture only
         try:
@@ -1115,6 +1128,7 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
             log("Digest written")
         except Exception as e:
             log(f"Digest write failed: {e}")
+            _pf_errors.append("digest")
     timings["digest"] = round(time.monotonic() - t9, 3)
 
     # === 10. MARK TASK COMPLETE IN QUEUE.MD ===
@@ -1172,6 +1186,7 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
                     json.dump(retries, f)
         except Exception as e:
             log(f"Queue completion marking failed: {e}")
+            _pf_errors.append("queue_update")
     timings["queue_update"] = round(time.monotonic() - t10, 3)
 
     # === 11. SAVE ATTENTION STATE ===
@@ -1204,9 +1219,43 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
             log(f"Cognitive workspace close failed: {e}")
 
     timings["total"] = round(time.monotonic() - t0, 3)
-    log(f"Post-flight complete in {timings['total']:.2f}s")
 
-    return {"status": "ok", "task_status": task_status, "timings": timings}
+    # === COMPLETENESS SCORING ===
+    # Count stages that ran (from timings, excluding 'total') vs stages that errored
+    stages_attempted = len([k for k in timings if k != "total"])
+    stages_failed = len(_pf_errors)
+    stages_ok = stages_attempted - stages_failed
+    completeness = stages_ok / stages_attempted if stages_attempted > 0 else 1.0
+
+    if completeness < 0.80:
+        log(f"COMPLETENESS WARNING: {stages_ok}/{stages_attempted} stages succeeded "
+            f"({completeness:.0%}) — failed: {', '.join(_pf_errors)}")
+    else:
+        log(f"Post-flight complete in {timings['total']:.2f}s — "
+            f"{stages_ok}/{stages_attempted} stages OK ({completeness:.0%})")
+
+    # Persist completeness data
+    try:
+        completeness_file = os.path.join(os.path.dirname(__file__), '..', 'data', 'postflight_completeness.jsonl')
+        os.makedirs(os.path.dirname(completeness_file), exist_ok=True)
+        entry = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "task": task[:120],
+            "task_status": task_status,
+            "stages_attempted": stages_attempted,
+            "stages_ok": stages_ok,
+            "stages_failed": stages_failed,
+            "completeness": round(completeness, 4),
+            "errors": _pf_errors,
+            "total_time_s": timings["total"],
+        }
+        with open(completeness_file, "a") as cf:
+            cf.write(json.dumps(entry) + "\n")
+    except Exception:
+        pass  # Don't fail postflight over completeness logging
+
+    return {"status": "ok", "task_status": task_status, "timings": timings,
+            "completeness": round(completeness, 4), "errors": _pf_errors}
 
 
 if __name__ == "__main__":

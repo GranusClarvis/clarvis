@@ -8,8 +8,11 @@ Call register_default_hooks(brain_instance) once after brain initialization to
 wire up all available hooks. Missing modules are silently skipped.
 """
 
+import logging
 import sys
 import time
+
+_log = logging.getLogger("clarvis.brain.hooks")
 
 # Ensure scripts/ is importable
 _SCRIPTS_DIR = "/home/agent/.openclaw/workspace/scripts"
@@ -164,8 +167,18 @@ def register_default_hooks(brain_instance):
             fn = factory()
             getattr(brain_instance, method_name)(fn)
             results[name] = True
-        except Exception:
+        except Exception as e:
             results[name] = False
+            _log.debug("Hook '%s' failed to register: %s", name, e)
+
+    registered = [n for n, ok in results.items() if ok]
+    failed = [n for n, ok in results.items() if not ok]
+    summary = f"Registered {len(registered)}/{len(results)} hooks"
+    if failed:
+        summary += f" (failed: {', '.join(failed)})"
+    _log.info(summary)
+    # Also print for cron visibility (stderr often captured in logs)
+    print(f"[hooks] {summary}", file=sys.stderr)
 
     brain_instance._hooks_registered = True
     return results

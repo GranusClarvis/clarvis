@@ -30,7 +30,13 @@ from datetime import datetime, timezone
 from collections import defaultdict
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from brain import ClarvisBrain, ALL_COLLECTIONS
+
+# Use spine singleton (with hooks) instead of creating raw ClarvisBrain instances
+try:
+    from clarvis.brain import get_brain as _spine_get_brain, ALL_COLLECTIONS
+except ImportError:
+    from brain import ClarvisBrain, ALL_COLLECTIONS
+    _spine_get_brain = None
 
 PHI_HISTORY_FILE = "/home/agent/.openclaw/workspace/data/phi_history.json"
 PHI_DECOMPOSITION_FILE = "/home/agent/.openclaw/workspace/data/phi_decomposition.json"
@@ -53,7 +59,9 @@ LEGACY_PREFIX_MAP = {
 
 
 def _get_brain():
-    """Get a fresh brain instance."""
+    """Get brain singleton (with hooks registered) via spine, or fallback to legacy."""
+    if _spine_get_brain is not None:
+        return _spine_get_brain()
     return ClarvisBrain()
 
 

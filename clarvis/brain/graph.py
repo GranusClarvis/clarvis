@@ -1,10 +1,13 @@
 """Brain graph operations — relationship storage, traversal, backfill, decay."""
 
 import json
+import logging
 import math
 import os
 import fcntl
 from datetime import datetime, timezone
+
+_log = logging.getLogger("clarvis.brain.graph")
 
 from .constants import MEMORIES, GOALS, PROCEDURES, DEFAULT_COLLECTIONS
 
@@ -13,17 +16,30 @@ class GraphMixin:
     """Graph operations for ClarvisBrain (mixed into the main class)."""
 
     def _load_graph(self):
-        """Load relationship graph with corruption recovery + file locking"""
+        """Load relationship graph with corruption recovery + file locking + integrity check."""
         if os.path.exists(self.graph_file):
             try:
                 with open(self.graph_file, 'r') as f:
                     fcntl.flock(f.fileno(), fcntl.LOCK_SH)
                     self.graph = json.load(f)
                     fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+                # Integrity check: verify edge count matches header if present
+                actual_edges = len(self.graph.get("edges", []))
+                expected_edges = self.graph.get("_edge_count")
+                if expected_edges is not None and actual_edges != expected_edges:
+                    _log.warning(
+                        "Graph integrity mismatch: expected %d edges, found %d — "
+                        "possible silent corruption in %s",
+                        expected_edges, actual_edges, self.graph_file
+                    )
+                else:
+                    _log.debug("Graph loaded: %d edges (integrity OK)", actual_edges)
                 return
             except (json.JSONDecodeError, IOError, OSError):
                 broken_path = self.graph_file + ".broken"
                 os.rename(self.graph_file, broken_path)
+                _log.warning("Graph file corrupt, moved to %s — attempting recovery",
+                             broken_path)
                 try:
                     with open(broken_path, 'r') as f:
                         raw = f.read()
@@ -32,6 +48,8 @@ class GraphMixin:
                         valid = raw[:last_brace+1] + '\n  ]\n}'
                         self.graph = json.loads(valid)
                         self._save_graph()
+                        _log.info("Graph recovered from corruption (%d edges)",
+                                  len(self.graph.get("edges", [])))
                         return
                 except Exception:
                     pass
@@ -59,6 +77,9 @@ class GraphMixin:
                     self.graph['edges'] = list(edge_map.values())
             except (json.JSONDecodeError, IOError, OSError):
                 pass
+
+        # Write edge-count header for integrity verification on next load
+        self.graph["_edge_count"] = len(self.graph.get("edges", []))
 
         tmp_path = self.graph_file + ".tmp"
         with open(tmp_path, 'w') as f:
