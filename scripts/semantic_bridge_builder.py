@@ -8,10 +8,11 @@ creates explicit bridge memories that reference both sides. Bridges are stored
 in the sparser collection to boost its connectivity.
 
 Usage:
-    python semantic_bridge_builder.py              # Run bridge building (default threshold 0.30)
-    python semantic_bridge_builder.py --threshold 0.25  # Custom threshold
+    python semantic_bridge_builder.py              # Run bridge building (default threshold 0.50)
+    python semantic_bridge_builder.py --threshold 0.55  # Custom threshold
     python semantic_bridge_builder.py --dry-run    # Show what would be created without storing
-    python semantic_bridge_builder.py --top 5      # Top 5 pairs per weak link (default 3)
+    python semantic_bridge_builder.py --top 5      # Top 5 pairs per weak link (default 5)
+    python semantic_bridge_builder.py status        # Show current weak pairs without modifying
 """
 
 import json
@@ -25,10 +26,10 @@ from brain import brain as _brain_singleton
 BRIDGE_STATE_FILE = "/home/agent/.openclaw/workspace/data/bridge_builder_state.json"
 
 
-def find_weak_pairs(brain, threshold=0.30):
+def find_weak_pairs(brain, threshold=0.50):
     """
     Identify collection pairs with semantic overlap below threshold.
-    Uses the same bidirectional methodology as phi_metric for consistency.
+    Uses stratified sampling matching phi_metric.py for consistency.
     Skips existing bridge memories to measure organic overlap only.
 
     Returns list of (col1, col2, overlap_score) sorted by overlap ascending.
@@ -40,13 +41,21 @@ def find_weak_pairs(brain, threshold=0.30):
         count = col.count()
         if count > 0:
             active_collections.append(col_name)
-            # Get larger sample, filter out bridges
-            results = col.get(limit=min(15, count))
-            docs = []
-            for doc in results.get("documents", []):
-                if doc and not doc.startswith("BRIDGE [") and not doc.startswith("Connection between"):
-                    docs.append(doc)
-            col_samples[col_name] = docs[:8]
+            # Stratified sampling: get all docs, pick evenly spaced subset
+            # Matches phi_metric.py methodology (12 samples, evenly spaced)
+            all_results = col.get(include=["documents"])
+            all_docs = all_results.get("documents", [])
+            # Filter out bridge memories for organic measurement
+            organic_docs = [d for d in all_docs if d and
+                           not d.startswith("BRIDGE [") and
+                           not d.startswith("Connection between")]
+            sample_size = min(12, len(organic_docs))
+            if sample_size >= len(organic_docs):
+                col_samples[col_name] = organic_docs
+            else:
+                step = len(organic_docs) / sample_size
+                indices = [int(i * step) for i in range(sample_size)]
+                col_samples[col_name] = [organic_docs[i] for i in indices]
 
     weak_pairs = []
     for i, c1 in enumerate(active_collections):
@@ -55,9 +64,9 @@ def find_weak_pairs(brain, threshold=0.30):
                 continue
 
             similarities = []
-            # Bidirectional: c1->c2 and c2->c1 (matches phi_metric)
+            # Bidirectional: query 8 samples each way (matches phi_metric)
             col2_obj = brain.collections[c2]
-            for doc in col_samples[c1][:5]:
+            for doc in col_samples[c1][:8]:
                 try:
                     results = col2_obj.query(query_texts=[doc], n_results=1, include=["distances"])
                     if results["distances"] and results["distances"][0]:
@@ -68,7 +77,7 @@ def find_weak_pairs(brain, threshold=0.30):
                     pass
 
             col1_obj = brain.collections[c1]
-            for doc in col_samples[c2][:5]:
+            for doc in col_samples[c2][:8]:
                 try:
                     results = col1_obj.query(query_texts=[doc], n_results=1, include=["distances"])
                     if results["distances"] and results["distances"][0]:
@@ -87,10 +96,33 @@ def find_weak_pairs(brain, threshold=0.30):
     return weak_pairs
 
 
-def find_best_cross_pairs(brain, col1_name, col2_name, top_n=3):
+_BRIDGE_PREFIXES = (
+    "BRIDGE [", "Connection between", "Phi action:", "Phi integration",
+    "Cross-domain link:", "Cross-domain insight:", "Semantic bridge between",
+)
+_BRIDGE_MARKERS = (
+    "This connects to", " — relates to — ", " — related insight from ",
+    "perspective:", "In auto-learning:", "In episodes:",
+    "In memories ", "In procedures ", "In learnings ",
+)
+_BRIDGE_ID_PREFIXES = ("bridge_", "sbridge_", "cross_link_", "xlink_")
+
+
+def _is_bridge_memory(mid, doc):
+    """Check if a memory is a bridge/cross-link rather than organic content."""
+    if any(mid.startswith(p) for p in _BRIDGE_ID_PREFIXES):
+        return True
+    if any(doc.startswith(p) for p in _BRIDGE_PREFIXES):
+        return True
+    if any(m in doc for m in _BRIDGE_MARKERS):
+        return True
+    return False
+
+
+def find_best_cross_pairs(brain, col1_name, col2_name, top_n=5):
     """
-    For two collections, find the top-N most semantically similar memory pairs.
-    Skips existing bridge memories to avoid bridge-to-bridge matching.
+    For two collections, find the top-N most semantically similar organic memory pairs.
+    Skips bridge/cross-link memories to find genuine cross-domain connections.
 
     Returns list of dicts: {col1_id, col1_doc, col2_id, col2_doc, distance, similarity}
     """
@@ -102,23 +134,29 @@ def find_best_cross_pairs(brain, col1_name, col2_name, top_n=3):
     c1_ids = c1_data.get("ids", [])
     c1_docs = c1_data.get("documents", [])
 
+    # Filter to organic docs only
+    organic = [(mid, doc) for mid, doc in zip(c1_ids, c1_docs)
+               if doc and len(doc) >= 20 and not _is_bridge_memory(mid, doc)]
+
+    # Stratified subsample if too many (avoid excessive queries)
+    if len(organic) > 40:
+        step = len(organic) / 40
+        organic = [organic[int(i * step)] for i in range(40)]
+
     candidates = []
-    for idx, (mid, doc) in enumerate(zip(c1_ids, c1_docs)):
-        if not doc or len(doc) < 10:
-            continue
-        # Skip existing bridge memories
-        if mid.startswith("bridge_") or doc.startswith("BRIDGE ["):
-            continue
+    for mid, doc in organic:
         try:
-            results = col2.query(query_texts=[doc], n_results=3, include=["distances", "documents"])
+            results = col2.query(query_texts=[doc], n_results=5, include=["distances", "documents"])
             if (results["ids"] and results["ids"][0] and
                 results["distances"] and results["distances"][0] and
                 results["documents"] and results["documents"][0]):
                 # Find best non-bridge match
                 for ri in range(len(results["ids"][0])):
                     rid = results["ids"][0][ri]
-                    rdoc = results["documents"][0][ri]
-                    if rid.startswith("bridge_") or rdoc.startswith("BRIDGE ["):
+                    rdoc = results["documents"][0][ri] or ""
+                    if _is_bridge_memory(rid, rdoc):
+                        continue
+                    if len(rdoc) < 20:
                         continue
                     dist = results["distances"][0][ri]
                     sim = max(0, 1.0 - dist / 2.0)
@@ -219,7 +257,7 @@ def save_state(state):
         json.dump(state, f, indent=2)
 
 
-def run(threshold=0.30, top_n=3, dry_run=False, verbose=True):
+def run(threshold=0.50, top_n=5, dry_run=False, verbose=True):
     """
     Main bridge building pipeline.
 
@@ -314,9 +352,18 @@ def run(threshold=0.30, top_n=3, dry_run=False, verbose=True):
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Semantic Bridge Builder")
-    parser.add_argument("--threshold", type=float, default=0.30, help="Overlap threshold (default 0.30)")
-    parser.add_argument("--top", type=int, default=3, help="Top N pairs per weak link (default 3)")
+    parser.add_argument("cmd", nargs="?", default="run", help="Command: run (default) or status")
+    parser.add_argument("--threshold", type=float, default=0.50, help="Overlap threshold (default 0.50)")
+    parser.add_argument("--top", type=int, default=5, help="Top N pairs per weak link (default 5)")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be created without storing")
     args = parser.parse_args()
 
-    run(threshold=args.threshold, top_n=args.top, dry_run=args.dry_run)
+    if args.cmd == "status":
+        brain = _brain_singleton
+        weak = find_weak_pairs(brain, args.threshold)
+        print(f"Pairs with semantic overlap < {args.threshold}:")
+        for c1, c2, score in weak:
+            print(f"  {c1} <-> {c2}: {score:.4f}")
+        print(f"\nTotal weak pairs: {len(weak)}")
+    else:
+        run(threshold=args.threshold, top_n=args.top, dry_run=args.dry_run)

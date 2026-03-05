@@ -169,7 +169,21 @@ ChromaDB + ONNX MiniLM embeddings, fully local. 10 collections:
 | autonomous-learning | Auto-acquired knowledge |
 | clarvis-episodes | Episodic task records |
 
-Graph: 47k+ Hebbian edges. Recall pipeline: vector search → hook scoring (ACT-R) → hook boosting (attention) → observer notification (retrieval quality).
+### Graph Storage
+
+The relationship graph supports dual backends, controlled by `CLARVIS_GRAPH_BACKEND` env var:
+- **JSON** (default): `data/clarvisdb/relationships.json` — loaded into memory, O(n) traversal
+- **SQLite+WAL**: `data/clarvisdb/graph.db` — indexed (B-tree), ACID, hot-backup, O(log n) traversal
+
+When `CLARVIS_GRAPH_BACKEND=sqlite`: reads use SQLite indices, writes dual-write to both JSON and SQLite. Key files:
+- `clarvis/brain/graph.py` — `GraphMixin` with dual-write logic
+- `clarvis/brain/graph_store_sqlite.py` — `GraphStoreSQLite` (schema, CRUD, decay, import/export)
+- `scripts/graph_migrate_to_sqlite.py` — migration tool (`--safe` for snapshot+verify)
+- `scripts/graph_cutover.py` — cutover/rollback CLI
+
+See `RUNBOOK.md` for migration, cutover, and rollback procedures.
+
+Graph: 85k+ edges (Hebbian + cross-collection + intra-similar). Recall pipeline: vector search → hook scoring (ACT-R) → hook boosting (attention) → observer notification (retrieval quality).
 
 ---
 
