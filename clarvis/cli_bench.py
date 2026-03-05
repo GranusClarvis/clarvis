@@ -20,6 +20,13 @@ def _get_benchmark():
     return performance_benchmark
 
 
+def _get_retrieval_benchmark():
+    """Lazy-import retrieval_benchmark module."""
+    sys.path.insert(0, f"{WORKSPACE}/scripts")
+    import retrieval_benchmark
+    return retrieval_benchmark
+
+
 @app.command()
 def run():
     """Full benchmark — all 8 dimensions, record to history."""
@@ -68,3 +75,20 @@ def pi(fresh: bool = typer.Option(False, "--fresh", help="Recompute PI (slow)"))
     pi_val = pi_data.get("pi", 0) if isinstance(pi_data, dict) else 0
     interp = pi_data.get("interpretation", "") if isinstance(pi_data, dict) else ""
     print(f"PI: {pi_val:.4f} — {interp} (estimate from quick benchmark)")
+
+
+@app.command(name="golden-qa")
+def golden_qa(verbose: bool = typer.Option(False, "--verbose", "-v", help="Show per-query results")):
+    """Run golden QA retrieval benchmark (P@1, P@3, MRR)."""
+    rb = _get_retrieval_benchmark()
+    report = rb.run_benchmark(use_smart=True, k=3)
+    rb.print_report(report)
+    rb.save_report(report)
+    print(f"\n  Results saved to {rb.LATEST_FILE}")
+
+
+@app.command(name="golden-qa-trend")
+def golden_qa_trend(days: int = typer.Argument(30, help="Number of days to show")):
+    """Show golden QA retrieval benchmark trend."""
+    rb = _get_retrieval_benchmark()
+    rb.show_trend(days)
