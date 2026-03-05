@@ -251,6 +251,112 @@ class GraphMixin:
             "total_edges": len(self.graph.get("edges", [])),
         }
 
+    def bulk_intra_link(self, max_distance=1.2, max_links_per_memory=5,
+                        collections=None, verbose=False):
+        """Create intra-collection edges between semantically similar memories.
+
+        For each collection, query each memory against the same collection
+        to find nearest neighbors, and create 'intra_similar' edges for
+        pairs below max_distance. Skips bridge/boost memories.
+
+        Args:
+            max_distance: Maximum ChromaDB L2 distance to create an edge (default 1.2).
+            max_links_per_memory: Max intra-edges per memory (default 5).
+            collections: List of collection names to process (default: all).
+            verbose: Print progress.
+
+        Returns:
+            dict with new_edges, collections_processed, total_edges.
+        """
+        new_edges = 0
+        collections_processed = 0
+
+        # Build existing edge set for fast deduplication
+        existing_pairs = set()
+        for e in self.graph.get("edges", []):
+            if e.get("type") == "intra_similar":
+                existing_pairs.add((e["from"], e["to"]))
+                existing_pairs.add((e["to"], e["from"]))
+
+        target_collections = collections or list(self.collections.keys())
+        now_str = datetime.now(timezone.utc).isoformat()
+
+        for col_name in target_collections:
+            col = self.collections.get(col_name)
+            if col is None or col.count() < 3:
+                continue
+
+            collections_processed += 1
+            results = col.get(include=["documents"])
+            ids = results.get("ids", [])
+            docs = results.get("documents", [])
+
+            col_new = 0
+
+            for idx, (mem_id, doc) in enumerate(zip(ids, docs)):
+                if not doc or len(doc) < 10:
+                    continue
+                if mem_id.startswith(("bridge_", "sbridge_", "boost_")):
+                    continue
+
+                try:
+                    qr = col.query(
+                        query_texts=[doc],
+                        n_results=min(max_links_per_memory + 1, 10),
+                        include=["distances"],
+                    )
+                except Exception:
+                    continue
+
+                if not (qr["ids"] and qr["ids"][0]):
+                    continue
+
+                links_added = 0
+                for rid, dist in zip(qr["ids"][0], qr["distances"][0]):
+                    if rid == mem_id:
+                        continue
+                    if dist > max_distance:
+                        break
+                    if (mem_id, rid) in existing_pairs:
+                        continue
+
+                    # Register nodes
+                    if mem_id not in self.graph["nodes"]:
+                        self.graph["nodes"][mem_id] = {
+                            "collection": col_name, "added_at": now_str,
+                        }
+                    if rid not in self.graph["nodes"]:
+                        self.graph["nodes"][rid] = {
+                            "collection": col_name, "added_at": now_str,
+                        }
+                    self.graph["edges"].append({
+                        "from": mem_id, "to": rid,
+                        "type": "intra_similar", "created_at": now_str,
+                        "source_collection": col_name,
+                        "target_collection": col_name,
+                    })
+                    existing_pairs.add((mem_id, rid))
+                    existing_pairs.add((rid, mem_id))
+                    links_added += 1
+                    col_new += 1
+                    new_edges += 1
+
+                    if links_added >= max_links_per_memory:
+                        break
+
+            if verbose:
+                print(f"  {col_name}: {len(ids)} memories, {col_new} new intra-edges")
+
+        # Single save at end
+        if new_edges > 0:
+            self._save_graph()
+
+        return {
+            "new_edges": new_edges,
+            "collections_processed": collections_processed,
+            "total_edges": len(self.graph.get("edges", [])),
+        }
+
     def decay_edges(self, half_life_days=30, min_weight=0.05, prune_below=0.02,
                     decay_types=None, dry_run=False):
         """Apply age-based exponential decay to edge weights and prune weak edges.

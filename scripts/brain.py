@@ -81,7 +81,7 @@ if __name__ == "__main__":
         referenced_nodes.discard("")
         orphan_count = len(referenced_nodes - set(b.graph.get("nodes", {}).keys()))
         if orphan_count > 0:
-            print(f"  WARNING: {orphan_count} nodes referenced by edges but not in graph (run: brain.py backfill)")
+            print(f"  WARNING: {orphan_count} nodes referenced by edges but not in graph (run: clarvis brain backfill)")
         else:
             print("  Graph nodes: OK (all edge references resolved)")
 
@@ -94,7 +94,7 @@ if __name__ == "__main__":
             print(f"  Stale (archivable): {cs['stale_archivable']}")
             print(f"  Archived: {cs['archive_count']}")
             if cs['potential_duplicates'] > 0 or cs['potential_noise'] > 0:
-                print("  Recommendation: run 'brain.py optimize-full' to clean")
+                print("  Recommendation: run 'clarvis brain optimize-full' to clean")
         except Exception as e:
             print(f"\nConsolidation check failed: {e}")
 

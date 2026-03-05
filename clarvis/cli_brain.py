@@ -162,6 +162,24 @@ def crosslink():
     print(f"  Total edges: {result['total_edges']}")
 
 
+@app.command()
+def intralink(
+    max_distance: float = 1.2,
+    max_links: int = 5,
+):
+    """Build intra-collection edges between similar memories."""
+    b = _get_brain()
+    result = b.bulk_intra_link(
+        max_distance=max_distance,
+        max_links_per_memory=max_links,
+        verbose=True,
+    )
+    print("\nIntra-linking complete:")
+    print(f"  New edges: {result['new_edges']}")
+    print(f"  Collections processed: {result['collections_processed']}")
+    print(f"  Total edges: {result['total_edges']}")
+
+
 @app.command("edge-decay")
 def edge_decay(
     half_life: int = 30,
