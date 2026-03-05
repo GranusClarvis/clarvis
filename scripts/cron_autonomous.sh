@@ -141,7 +141,84 @@ if [ -z "$NEXT_TASK" ]; then
     exit 0
 fi
 
-echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] EXECUTING (salience=$BEST_SALIENCE, section=$TASK_SECTION, route=$ROUTE_EXECUTOR tier=$ROUTE_TIER): ${NEXT_TASK:0:100}" >> "$LOGFILE"
+# === SMART BATCHING (user directive 2026-03-05): if tasks are small, do up to 3 in ONE Claude prompt ===
+# We only batch when the selected executor is Claude (single long run); we do not multi-run Claude.
+BATCH_TASKS="$NEXT_TASK"
+BATCH_COUNT=1
+if [ "$ROUTE_EXECUTOR" = "claude" ]; then
+    eval $(NEXT_TASK="$NEXT_TASK" python3 - <<'PY'
+import os, re, shlex, sys
+sys.path.insert(0,'/home/agent/.openclaw/workspace/scripts')
+from cognitive_load import estimate_task_complexity
+
+QUEUE_FILE = '/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md'
+
+next_task = os.environ.get('NEXT_TASK', '').strip()
+if not next_task:
+    print("BATCH_COUNT=0")
+    print("BATCH_TASKS='' ")
+    raise SystemExit
+
+# Pull unchecked tasks in order, keep as written after checkbox
+try:
+    content = open(QUEUE_FILE, 'r').read().splitlines()
+except Exception:
+    content = []
+
+unchecked = []
+for line in content:
+    m = re.match(r'^- \[ \] (.+)$', line)
+    if not m:
+        continue
+    task = m.group(1).strip()
+    if not task:
+        continue
+    unchecked.append(task)
+
+# Ensure the current NEXT_TASK is first in the batch
+batch = [next_task]
+
+# Heuristics: only batch tasks that are not oversized and not too long.
+# Also skip the parent tag if it already has explicit subtasks (we want the subtasks to run instead).
+MAX_TASKS = 3
+MAX_TOTAL_CHARS = 900
+
+def is_subtask(t: str) -> bool:
+    # [TAG_1] style
+    m = re.match(r'^\[([^\]]+)\]$', re.match(r'^\[([^\]]+)\]', t).group(0)) if re.match(r'^\[[^\]]+\]', t) else None
+    return bool(re.search(r'\[[^\]]+_\d+\]', t))
+
+def ok_to_batch(t: str) -> bool:
+    sizing = estimate_task_complexity(t)
+    if sizing.get('recommendation') == 'defer_to_sprint':
+        return False
+    # avoid very long tasks even if not flagged
+    if len(t) > 320:
+        return False
+    return True
+
+# Prefer subtasks / simple items
+for t in unchecked:
+    if len(batch) >= MAX_TASKS:
+        break
+    if t == next_task:
+        continue
+    # Don't batch other big parent tasks; prefer subtasks or short tasks
+    if not ok_to_batch(t):
+        continue
+    # Cap total size
+    if sum(len(x) for x in batch) + len(t) > MAX_TOTAL_CHARS:
+        continue
+    batch.append(t)
+
+# Output shell-safe vars
+print(f"BATCH_COUNT={len(batch)}")
+print(f"BATCH_TASKS={shlex.quote(chr(10).join(batch))}")
+PY
+) 2>> "$LOGFILE" || true
+fi
+
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] EXECUTING (salience=$BEST_SALIENCE, section=$TASK_SECTION, route=$ROUTE_EXECUTOR tier=$ROUTE_TIER, batch=$BATCH_COUNT): ${NEXT_TASK:0:100}" >> "$LOGFILE"
 
 # ============================================================================
 # PHASE 2: TASK EXECUTION
@@ -174,10 +251,15 @@ ${CONTEXT_BRIEF}
 ${PROC_HINT:+
 PROCEDURAL HINT: $PROC_HINT}
 
-TASK: $NEXT_TASK
+TASKS (execute in order; if a task is already done/obsolete, mark it [x] with a brief note in QUEUE.md):
+$(printf '%s\n' "$BATCH_TASKS" | nl -w2 -s'. ')
 
 Do the work. Be concrete. Write code, edit configs, update protocols — whatever fits. Test it.
-OUTPUT FORMAT (mandatory): Start with "RESULT: success|partial|fail — <what changed>". Then 1-3 lines of detail. End with "NEXT: <suggested follow-up or none>".
+Rules:
+- You have one run. No second Claude invocation.
+- If you can finish 2-3 tasks safely within the time budget, do so.
+- After each task, update QUEUE.md (mark [x]) before moving to the next.
+OUTPUT FORMAT (mandatory): Start with "RESULT: success|partial|fail — <what changed>". Then list each task with status. End with "NEXT: <suggested follow-up or none>".
 ENDPROMPT
 
     timeout "$_timeout" env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \
