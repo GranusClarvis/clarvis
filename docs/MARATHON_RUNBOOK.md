@@ -41,11 +41,12 @@
    - Minimum timeout: 600s (will not start a batch with less)
 3. **Auto-commit** — if working tree is dirty after Claude finishes
 4. **Run invariants** — `invariants_check.py` (pytest, golden QA, brain health, hooks)
-   - If ANY check fails → writes `docs/MARATHON_STOP_REPORT.md` and exits
+   - If a check fails: **self-heal** (spawns a Claude remediation run) up to 2 times, auto-commits, then re-checks.
+   - Only stops (writes `docs/MARATHON_STOP_REPORT.md`) if invariants still fail after self-heal attempts.
 
 ### Stop Conditions
 - Time budget exhausted (< timeout + 180s remaining)
-- Queue empty or no eligible tasks
+- Queue empty or no eligible tasks (after one repopulation attempt)
 - Invariants check failure (writes stop report)
 
 ## Locking
