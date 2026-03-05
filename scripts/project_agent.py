@@ -161,6 +161,41 @@ def _task_id() -> str:
     return f"t{ts}-{h}"
 
 
+def _run_git(workspace: Path, args: list[str], timeout: int = 60) -> subprocess.CompletedProcess:
+    """Run a git command in the given workspace."""
+    return subprocess.run(
+        ["git", *args],
+        cwd=str(workspace),
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
+
+
+def _sync_and_checkout_work_branch(workspace: Path, base_branch: str, agent: str, task_id: str) -> str:
+    """Hard-sync to origin/<base_branch> and checkout a fresh work branch.
+
+    Returns the created branch name.
+    """
+    branch = f"clarvis/{agent}/{task_id}"
+
+    # Fetch latest refs
+    _run_git(workspace, ["fetch", "--prune"])  # best-effort
+
+    # Ensure base branch matches origin
+    r = _run_git(workspace, ["checkout", base_branch])
+    if r.returncode != 0:
+        # If base branch doesn't exist locally, create it from origin
+        _run_git(workspace, ["checkout", "-B", base_branch, f"origin/{base_branch}"])
+
+    _run_git(workspace, ["reset", "--hard", f"origin/{base_branch}"])
+    _run_git(workspace, ["clean", "-fd"])  # remove untracked files from prior runs
+
+    # Fresh work branch
+    _run_git(workspace, ["checkout", "-B", branch])
+    return branch
+
+
 # =========================================================================
 # CREATE — scaffold a new project agent
 # =========================================================================
@@ -420,7 +455,13 @@ def build_spawn_command(prompt_file: str, timeout: int) -> str:
 
 def cmd_spawn(name: str, task: str, timeout: int = 1200,
               context: str = "") -> dict:
-    """Spawn Claude Code to execute a task in the project agent's workspace."""
+    """Spawn Claude Code to execute a task in the project agent's workspace.
+
+    Policy:
+    - Always sync to upstream before work.
+    - Always do work on a fresh branch named `clarvis/<agent>/<task_id>`.
+      (Agents may push ONLY such branches in order to open PRs; never main/owner branches.)
+    """
     config = _load_config(name)
     if not config:
         return {"error": f"Agent '{name}' not found"}
@@ -432,11 +473,15 @@ def cmd_spawn(name: str, task: str, timeout: int = 1200,
     workspace = agent_dir / "workspace"
     task_id = _task_id()
 
+    # Always sync + create a fresh work branch for this run
+    base_branch = config.get("branch", "main")
+    work_branch = _sync_and_checkout_work_branch(workspace, base_branch, name, task_id)
+
     # Enforce budget
     max_timeout = config.get("budget", {}).get("max_timeout", 1800)
     timeout = min(timeout, max_timeout)
 
-    _log(f"Spawning task {task_id} on agent '{name}': {task[:80]}")
+    _log(f"Spawning task {task_id} on agent '{name}' (branch={work_branch}): {task[:80]}")
 
     # Update status
     config["status"] = "running"
@@ -926,16 +971,28 @@ def cmd_destroy(name: str, confirm: bool = False) -> dict:
 # =========================================================================
 
 def cmd_seed(name: str) -> dict:
-    """Seed the agent's lite brain with repo-specific knowledge from golden_qa.json."""
+    """Seed the agent's lite brain with repo-specific knowledge from golden_qa.json.
+
+    Looks in (in order):
+    1) <agent>/data/golden_qa.json (canonical)
+    2) <agent>/workspace/data/golden_qa.json (common authoring location)
+
+    If found in workspace/, it is copied into <agent>/data/ for future runs.
+    """
     config = _load_config(name)
     if not config:
         return {"error": f"Agent '{name}' not found"}
 
     agent_dir = _agent_dir(name)
     golden_file = agent_dir / "data" / "golden_qa.json"
+    golden_file_alt = agent_dir / "workspace" / "data" / "golden_qa.json"
+
+    if not golden_file.exists() and golden_file_alt.exists():
+        golden_file.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(golden_file_alt, golden_file)
 
     if not golden_file.exists():
-        return {"error": f"No golden_qa.json at {golden_file}. Create it first."}
+        return {"error": f"No golden_qa.json at {golden_file} (or {golden_file_alt}). Create it first."}
 
     try:
         golden = json.loads(golden_file.read_text())
