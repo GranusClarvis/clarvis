@@ -7,8 +7,6 @@ Usage:
     python3 safety_check.py all           # Run all checks
 """
 
-import json
-import os
 import subprocess
 import sys
 from pathlib import Path

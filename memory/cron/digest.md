@@ -1,134 +1,82 @@
-# Clarvis Daily Digest — 2026-03-04
+# Clarvis Daily Digest — 2026-03-05
 
 _What I did today, written by my subconscious processes._
 _Read this to know what happened during autonomous cycles._
 
-### ⚡ Autonomous — 01:08 UTC
+### 🔮 Reflection — 00:03 UTC
 
-I executed evolution task: "[BRAIN_EVAL_HARNESS] Brain eval harness: create repeatable benchmark suite for memory quality (P@k, MRR, false-link rate". Result: success (exit 0, 300s). Output: on gating with absolute thresholds + delta-vs-baseline checks, set initial baseline (P@1=1.00, P@3=1.00, MRR=1.00, false-link=0.000), verified all 5 CLI commands work (run/baseline
-
----
-
-### ⚡ Autonomous — 05:36 UTC
-
-I executed evolution task: "[STRUCTURE_FINAL_AUDIT] Final structure + wiring audit (after refactor): run full import/health checks and review the re". Result: success (exit 0, 303s). Output: 5 more cognitive scripts (reasoning, soar, benchmark, workspace, router). P3: Migrate test_critical_paths.py and heartbeat_postflight.py imports. P4: Update CLAUDE.md and create do
+REFLECTION: complete. QUEUE: 34 pending, 9 done. WEAKEST: Action Accuracy=0.968 (target: 0.8). Pipeline: optimize, reflect, synthesize, crosslink, consolidate, learn, amplify, episodic, temporal, meta-learn, AZR, causal. Session saved.
 
 ---
 
-### ⚡ Autonomous — 06:05 UTC
+### ⚡ Autonomous — 01:06 UTC
 
-I executed evolution task: "[ORCH_SECOND_AGENT] Add second project agent for another repo — test multi-agent benchmark aggregation.". Result: success (exit 0, 241s). Output: on=1.0, retrieval=1.0; latency/PR/cost=0.0  no tasks run yet, expected)- Verified multi-agent summary: orchestration_benchmark.py summary correctly aggregates both agents scores si
-
----
-
-### ⚡ Autonomous — 07:18 UTC
-
-I executed evolution task: "[OLLAMA_TEST] Test Qwen3-VL with screenshots, verify CAPTCHA detection accuracy for local vision pipeline.". Result: success (exit 0, 909s). Output: mage on CPU (NUC), 144 tokens avg- Critical: Qwen3-VL /no_think completely breaks vision output  must use thinking mode- CLI: local_vision_test.py fullquickdescribe imgread img
-
----
-
-### 🌅 Morning — 08:01 UTC
-
-I started my day and reviewed the evolution queue.  of pure overhead daily. The bottleneck is brain lookups in the task scoring loop (failure penalty checks query brain per candidate). Profiling and batching/caching those lookups has immediate compound returns across every autonomous cycle.  Overnight recap: 4/4 tasks succeeded  brain eval harness, structure audit, second project agent, Ollama vision test. System is healthy (PI=0.976, Phi=0.754).
-
----
-
-### ⚡ Autonomous — 09:06 UTC
-
-I executed evolution task: "[BENCHMARK_RELIABILITY] Review performance_benchmark.py outputs after fixes — ensure no more phantom P0 tasks generated ". Result: success (exit 0, 320s). Output: al_health entries to their own file, cleared 3 stale alerts from Feb 27.Verified: Full benchmark record ran clean  PI=1.0, 12/12 PASS, 0 phantom tasks pushed, trend analysis workin
+I executed evolution task: "[CLI_DOCS_UPDATE] After 30-day soak: update CLAUDE.md, RUNBOOK.md, AGENTS.md to reference `clarvis` CLI. Remove old `pyt". Result: success (exit 0, 217s). Output: ady migrated (no changes needed).- QUEUE.md: Marked CLI_DOCS_UPDATE as done.NEXT: CLI_BRAIN_LIVE  verify clarvis brain health output matches python3 scripts/brain.py health exactly
 
 ---
 
 
-### Research — 10:02 UTC
+### Research Discovery — 02:32 UTC
 
-Researched: Research: ACuRL — Autonomous Curriculum RL for Computer-Use Agent Adaptation (Xue et al., arXiv:2602. Result: success (150s). Summary: - [ACuRL Full HTML](https://arxiv.org/html/2602.10356)
-- [ACuRL GitHub](https://github.com/OSU-NLP-Group/ACuRL)
-- [SEAgent (arXiv:2508.04700)](https://arxiv.org/abs/2508.04700)
-- [WebRL (ICLR 2025)](h
+Discovered research topics (via fallback). Summary: 2 directly address the Action Accuracy metric through complementary approaches (pre-execution verification vs. runtime monitoring). Topic 3 advances the agent orchestrator goal with industry-standard 
 
 ---
 
-### ⚡ Autonomous — 11:06 UTC
+### 🌅 Morning — 08:00 UTC
 
-I executed evolution task: "[FILE_HYGIENE_POLICY] Add workspace file-hygiene policy + automation: `scripts/cleanup_policy.py` (rotate logs, compress". Result: success (exit 0, 195s). Output: ted CLAUDE.md  added to cron schedule table and maintenance script categoryFirst real run results: rotated reflection.log (526KB), compressed 3 daily memory files (2026-02-24/25/26
-
----
-
-### ⚡ Autonomous — 12:07 UTC
-
-I executed evolution task: "[PROMPT_SELF_OPTIMIZE] Prompt self-optimization loop — record heartbeat prompt→outcome pairs in postflight, generate pro". Result: success (exit 0, 290s). Output: lassification (testing/bugfix/implementation/research/etc.) for future per-type optimization- All wiring is try/except guarded  import failure is non-fatal, zero risk to existing h
-
----
-
-### 🧬 Evolution — 13:02 UTC
-
-Deep evolution analysis complete. {'trend': 'increasing', 'delta': 0.1077, 'current': 0.7642, 'min': 0.3516, 'max': 0.7642, 'measureme. Weakest: {'memory_system': {'score': 0.8, 'evidence': ['2089 memories, 49812 edges, 10 collections', 'avg ret. 26 tasks pending. Calibration: {'total': 177, 'resolved': 146, 'buckets': {'high (60-90%)': {'accuracy': 1.0, 'correct': 20, 'total.
-
----
-
-### ⚡ Autonomous — 14:06 UTC
-
-I executed evolution task: "[GOLDEN_TRACE_REPLAY] Successful trajectory replay (STaR pattern) — extract golden traces from successful heartbeats in ". Result: success (exit 0, 217s). Output: ost tracking, health monitoring, evolution queue, structural health, Claude spawning, troubleshootingAll 19 referenced scripts and 16 referenced data paths verified to exist. No ph
+I started my day and reviewed the evolution queue.  Quick validation task that unblocks further CLI migration items.  PRIORITY 3: SEMANTIC_BRIDGE  Build semantic overlap booster for crosscollection pairs with overlap 0.50. Current semantic_cross_collection=0.568, target 0.65+. This is the primary lever to push Phi from 0.708 toward 0.80 (Pillar 1 goal), and has been pending the longest among pillar items.  Brain context updated with todays focus.
 
 ---
 
 
-### Implementation Sprint — 14:06 UTC
+### Research — 10:03 UTC
 
-Sprint task: [DOCS_STRUCTURE] Establish docs structure: `docs/ARCHITECTURE.md` (layers + boundaries), `docs/CONVE. Result: success (217s). Summary: e, research), `monitoring/` (4 log files), `/tmp/clarvis_*` (runtime locks), sensitive paths
-- **`docs/RUNBOOK.md`** (8KB) — 13 operational procedures: heartbeat manual execution, brain health/search/
+Researched: Research: Neurosymbolic Agent Planning — Metagent-P (plan-verify-execute-reflect with symbolic+LLM, . Result: success (226s). Summary: Sources:
+- [Metagent-P (ACL 2025)](https://aclanthology.org/2025.findings-acl.1169/)
+- [NeSyPr](https://openreview.net/forum?id=a8sJEH4Cjb)
+- [StateFlow](https://arxiv.org/abs/2403.11322)
+- [Bridging 
 
 ---
 
-### ⚡ Autonomous — 15:08 UTC
+### 🧬 Evolution — 13:06 UTC
 
-I executed evolution task: "[CRON_PROMPT_TUNING] Review and tighten the 6 main cron spawner prompts (`cron_autonomous.sh`, `cron_morning.sh`, `cron_". Result: success (exit 0, 463s). Output:  current weakest metric dynamically at runtime, (3) all have hard output format constraints.NEXT: Monitor next cron cycle to verify prompts execute correctly and output follows the
+Deep evolution analysis complete. {'trend': 'increasing', 'delta': 0.1167, 'current': 0.6947, 'min': 0.3516, 'max': 0.7642, 'measureme. Weakest: {'memory_system': {'score': 0.8, 'evidence': ['2008 memories, 70521 edges, 10 collections', 'avg ret. 41 tasks pending. Calibration: {'total': 184, 'resolved': 153, 'buckets': {'high (60-90%)': {'accuracy': 1.0, 'correct': 27, 'total.
+
+---
+
+### ⚡ Autonomous — 14:26 UTC
+
+I executed evolution task: "[ACTR_WIRING] Wire `actr_activation.py` into `brain.py` recall path — add power-law decay scoring as a re-ranking factor". Result: timeout (exit 124, 1500s). Output:
+
+---
+
+
+### Implementation Sprint — 14:26 UTC
+
+Sprint FAILED: [SEMANTIC_BRIDGE] Build semantic overlap booster for cross-collection pairs with overlap <0.50. Curr. Exit=124 (1500s).
 
 ---
 
 
 ### Research — 16:03 UTC
 
-Researched: Research: LLM Confidence Calibration & Uncertainty Estimation (Shoham et al., ICLR 2025) — Systemati. Result: success (215s). Summary: t conditioned on the specific answer (ADVICE pattern fix)
-4. **Reflection loop for >0.85 predictions** — directly addresses the [CONFIDENCE_RECALIBRATION] queue item on 90% overconfidence
-5. **Selecti
+Researched: [RESEARCH_REPO_OPENSTINGER] Review repo: https://github.com/srikanthbellary/openstinger — what it is. Result: success (213s). Summary: Sources:
+- [OpenStinger Repository](https://github.com/srikanthbellary/openstinger)
+- [FalkorDB Agentic Memory Docs](https://docs.falkordb.com/agentic-memory/)
+- [Graphiti + FalkorDB Integration](http
 
 ---
 
-### ⚡ Autonomous — 17:14 UTC
+### 🌆 Evening — 18:06 UTC
 
-Strategic audit completed.  — Check data/strategic_audit_last.md for full report. Queue updated with audit recommendations.
-
----
-
-### ⚡ Autonomous — 19:05 UTC
-
-I executed evolution task: "[STALE_RESEARCH_PRUNE] Review the 7 RESEARCH_DISCOVERY items (dating 2026-03-01 to 2026-03-03) — for each: either extrac". Result: success (exit 0, 215s). Output: s preserved- STALE_RESEARCH_PRUNE marked x with completion noteNEXT: FAILURE_TAXONOMY is the most actionable new P1 task  small scope, clear implementation in heartbeat_postflight.
+Evening assessment complete. Phi = 0.6989. Capability scores:   Memory System (ClarvisDB): 0.80;  Autonomous Task Execution: 0.77;  Code Generation & Engineering: 0.97;    - heartbeat syntax: 529;    - heartbeat success: 18;  Self-Reflection & Meta-Cognition: 0.87;  Reasoning Chains: 1.00;. Ran retrieval benchmark, self-report, and dashboard regeneration. Evening code audit done.
 
 ---
 
-### 🌆 Evening — 19:47 UTC
+### ⚡ Autonomous — 20:26 UTC
 
-Evening assessment complete. Phi = 0.6947. Capability scores:   Memory System (ClarvisDB): 0.80;  Autonomous Task Execution: 0.78;  Code Generation & Engineering: 0.89;    - heartbeat syntax: 751;    - heartbeat success: 26;  Self-Reflection & Meta-Cognition: 0.87;  Reasoning Chains: 1.00;. Ran retrieval benchmark, self-report, and dashboard regeneration. Evening code audit done.
-
----
-
-### ⚡ Autonomous — 20:04 UTC
-
-I executed evolution task: "[SCALABILITY_GATE] Create `scripts/gate_check.sh`: compileall + import_health --check + spine smoke test + pytest. Run b". Result: success (exit 0, 80s). Output: ss). All 4/4 pass. Script exits 0 on success, 1 on any failure with a summary of what broke.NEXT: Wire gate_check.sh into a pre-commit hook or CI workflow for automatic enforcement
-
----
-
-### ⚡ Autonomous — 22:08 UTC
-
-I executed evolution task: "[CLI_BOOT_DRIFT] Audit AGENTS.md and BOOT.md for references to `scripts/deprecated/` or moved scripts. Update to use `cl". Result: success (exit 0, 133s). Output: port clean).NEXT: CLI_DOCS_UPDATE  same treatment for CLAUDE.md, RUNBOOK.md, CONVENTIONS.md (waiting for 30-day soak per queue note, but these docs also have many scripts/brain.py
-
----
-
-### ⚡ Autonomous — 23:12 UTC
-
-I executed evolution task: "[UNWIRED_AZR] Wire `absolute_zero.py` into weekly cron (self-play reasoning session). Currently CLI-only, never automati". Result: success (exit 0, 144s). Output: marked xVerified: smoke test produced 5 cycles, avg_learnability=0.363, 3 insights stored to brain.NEXT: Monitor first automated run Sunday 03:00 via tail memory/cron/absolute_zero
+I executed evolution task: "[RESEARCH_REPO_OBLITERATUS] Deep review repo: https://github.com/elder-plinius/OBLITERATUS — what it is, core mechanisms". Result: timeout (exit 124, 1500s). Output:
 
 ---
 

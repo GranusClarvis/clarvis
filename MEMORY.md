@@ -39,6 +39,7 @@ _Curated knowledge. Distilled wisdom. Updated regularly._
 
 ### Integrated World Modeling Theory (IWMT) (2026-03-01)
 - Adam Safron’s IWMT tries to reconcile **IIT** (integration/phi) and **GNWT** (global broadcast/ignition) inside the **Free Energy Principle / Active Inference** framing.
+- 2026-03-05 addendum (Safron 2020): IIT-style “integration” only implies experience for systems with **perspectival reference frames** that keep models tethered to external reality (coherent space/time/cause + self/world); otherwise you can, in principle, have arbitrarily high Φ-like integration that’s still “dark”.
 - Core claim: “integration” and “global availability” are likely **necessary but not sufficient**; phenomenal consciousness requires *embodied, coherence-making generative world modeling* (space/time/cause, self/other) that supports cybernetic control.
 - Practical take: treat “workspace ignition” as Bayesian model selection/broadcast over a *shared latent world model*; evaluate candidate workspace modules both by information integration and by contribution to prediction-control (free-energy reduction).
 - Mechanistic candidate: conscious streams emerge as **self-organizing harmonic modes** (SOHMs) — transient, synchrony-bound complexes that integrate sensorimotor predictions; “communication through coherence” is the glue.
