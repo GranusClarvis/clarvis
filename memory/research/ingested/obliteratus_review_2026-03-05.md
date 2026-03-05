@@ -2,7 +2,9 @@
 
 **Repo**: https://github.com/elder-plinius/OBLITERATUS
 **License**: AGPL-3.0
-**Verdict**: DISCARD — domain mismatch (safety-alignment removal tool, not applicable to API-based agent)
+**Verdict**: DISCARD for direct integration (weight-level safety removal tool; Clarvis is API-based + safety-aligned).
+
+**Keep (transferable patterns):** the *research/engineering loop* ideas (telemetry-driven benchmarking, analysis→action auto-configuration, iterative self-repair detection) are worth adapting to Clarvis’s self-evolution + benchmarks.
 
 ## 10-Bullet Summary
 
@@ -36,4 +38,14 @@
 
 3. **Scale mismatch**: Concept cone geometry for memory clustering could theoretically apply to ChromaDB embeddings, but a 2200-memory brain doesn't benefit from polyhedral SVD analysis — existing dedup/compaction suffices.
 
-**Inspirational note**: The iterative self-repair detection (Ouroboros) is an interesting pattern for any system that makes modifications that could revert — worth remembering as a concept even if the code is inapplicable.
+**Transferable patterns (useful for Clarvis):**
+
+1) **Telemetry + crowd-sourced benchmark dataset**: OBLITERATUS treats each run as a data point feeding a shared benchmark corpus. Clarvis analogue: every autonomous task run should emit a structured record `{task_id, route, outcome, error_type, time, cost, delta_metrics}` and we should trend it (this is partially in place: postflight completeness + cost_per_task).
+
+2) **Analysis-informed pipeline (closed loop)**: run diagnostics first, then pick the intervention parameters automatically. Clarvis analogue: before executing a queue item, run a fast “preflight analyzer” that selects *scope* (subtasks), budget, and which modules to activate; then execute; then re-measure (golden QA / PI / Phi) and decide if rollback needed.
+
+3) **Ouroboros self-repair detection**: they re-probe after each surgery pass to detect rotated residual directions. Clarvis analogue: after each major refactor or migration, automatically re-run invariants + parity checks (golden QA, graph parity, hook registration, CLI parity) and if drift occurs, auto-open a queue item to remediate.
+
+4) **Decision matrix discipline**: explicit axes (performance, correctness, ops risk) and a written decision doc. Clarvis is now doing this for graph storage; replicate the pattern for other storage decisions (Chroma singleton consolidation, episodic store, cost DB).
+
+**Non-transferable**: all weight/activation surgery mechanics (SVD refusal direction extraction, projection, Optuna tuning) — not applicable without local weights and contradicts safety stance.
