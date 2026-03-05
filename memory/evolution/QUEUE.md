@@ -32,8 +32,8 @@ _(empty — no urgent bugs)_
 
 ## Pillar 3: Performance & Reliability (PI > 0.70)
 
-  - [ ] [GRAPH_STORAGE_UPGRADE_5] Update consumers: `graph_compaction.py` (use DELETE WHERE instead of list filtering), `cron_graph_checkpoint.sh` (use `conn.backup()`), `graphrag_communities.py` (load from SQLite). Bench: load, add_edge, get_related, bulk_link before/after.
-  - [ ] [GRAPH_STORAGE_UPGRADE_6] Cutover: remove JSON write paths, archive `relationships.json` for 30 days, update RUNBOOK.md + ARCHITECTURE.md + CLAUDE.md references.
+  - [x] [GRAPH_STORAGE_UPGRADE_5] Update consumers: `graph_compaction.py` (SQL DELETE path), `cron_graph_checkpoint.sh` (SQLite backup API), `graphrag_communities.py` (load from SQLite). Safe migration (`--safe` flag), daily parity verification cron (`cron_graph_verify.sh`), soak enablement in `cron_env.sh`. RUNBOOK.md written. _(Phase 3, completed 2026-03-05)_
+  - [ ] [GRAPH_STORAGE_UPGRADE_6] Cutover: remove JSON write paths, archive `relationships.json` for 30 days, update RUNBOOK.md + ARCHITECTURE.md + CLAUDE.md references. _(Phase 4 — after soak period confirms parity)_
 
 ### AGI-Readiness (from 2026-03-04 audit, see docs/AGI_READINESS_ARCHITECTURE_AUDIT.md)
 
