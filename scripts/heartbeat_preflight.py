@@ -128,6 +128,86 @@ log = lambda msg: print(f"[{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:
 
 
 QUEUE_FILE = os.path.join(os.path.dirname(__file__), "..", "memory", "evolution", "QUEUE.md")
+WORKSPACE = os.path.join(os.path.dirname(__file__), "..")
+LOCK_DIR = "/tmp"
+
+
+def _verify_task_executable(task_text):
+    """Pre-execution verification gate.
+
+    Checks:
+    1. Task description parses to concrete steps (not empty/vague)
+    2. Referenced files/scripts exist
+    3. No conflicting lock held
+
+    Returns dict with passed, reason, hard_fail.
+    """
+    import re
+
+    checks_passed = 0
+    checks_total = 3
+    reasons = []
+
+    # 1. Format check: task has a tag and description
+    tag_match = re.match(r"\[([^\]]+)\]\s*(.+)", task_text.strip())
+    if tag_match:
+        tag = tag_match.group(1)
+        desc = tag_match.group(2)
+        if len(desc) < 10:
+            reasons.append(f"description too short ({len(desc)} chars)")
+        else:
+            checks_passed += 1
+    else:
+        # Untagged task — still valid if has substance
+        if len(task_text.strip()) >= 20:
+            checks_passed += 1
+        else:
+            reasons.append("task too short/vague")
+
+    # 2. File reference check: find referenced scripts/files and verify they exist
+    file_refs = re.findall(
+        r'(?:scripts/|clarvis/|packages/|data/|memory/)[\w/\-_.]+\.(?:py|sh|json|md|yaml)',
+        task_text,
+    )
+    missing_files = []
+    for ref in file_refs:
+        full_path = os.path.join(WORKSPACE, ref)
+        if not os.path.exists(full_path):
+            missing_files.append(ref)
+    if missing_files:
+        reasons.append(f"missing files: {', '.join(missing_files[:3])}")
+    else:
+        checks_passed += 1
+
+    # 3. Lock check: ensure no conflicting lock held
+    lock_conflict = False
+    for lockfile in ("clarvis_claude_global.lock", "clarvis_maintenance.lock"):
+        lock_path = os.path.join(LOCK_DIR, lockfile)
+        if os.path.exists(lock_path):
+            try:
+                with open(lock_path) as f:
+                    pid_str = f.read().strip()
+                pid = int(pid_str)
+                # Check if PID is alive
+                os.kill(pid, 0)
+                reasons.append(f"lock held: {lockfile} (pid {pid})")
+                lock_conflict = True
+            except (ValueError, ProcessLookupError, PermissionError):
+                pass  # stale lock or dead process — ignore
+    if not lock_conflict:
+        checks_passed += 1
+
+    passed = checks_passed == checks_total
+    hard_fail = bool(missing_files) and len(missing_files) > 2
+
+    return {
+        "passed": passed,
+        "reason": "; ".join(reasons) if reasons else "all checks passed",
+        "checks_passed": checks_passed,
+        "checks_total": checks_total,
+        "hard_fail": hard_fail,
+        "missing_files": missing_files,
+    }
 
 
 def run_preflight(dry_run=False):
@@ -298,6 +378,29 @@ def run_preflight(dry_run=False):
                 log_sizing(next_task, sizing)
 
             if sizing["recommendation"] == "defer_to_sprint":
+                # Self-heal: if a task is oversized and keeps getting deferred, auto-split
+                # it into subtasks (only once) so autonomous cycles can still make progress.
+                try:
+                    import re as _re
+                    m = _re.match(r"\[([^\]]+)\]", next_task.strip())
+                    parent_tag = m.group(1).strip() if m else ""
+                    if parent_tag:
+                        from queue_writer import ensure_subtasks_for_tag
+                        inserted = ensure_subtasks_for_tag(
+                            parent_tag,
+                            subtasks=[
+                                f"[{parent_tag}_1] Scope: locate the exact file/function injection point(s)",
+                                f"[{parent_tag}_2] Implement the core change in the smallest viable increment",
+                                f"[{parent_tag}_3] Add a small deterministic test fixture to lock behavior",
+                                f"[{parent_tag}_4] Run a smoke benchmark and confirm no precision@3 regression",
+                            ],
+                            source="auto_split",
+                        )
+                        if inserted:
+                            log(f"Auto-split: inserted subtasks for [{parent_tag}] into QUEUE.md")
+                except Exception as e:
+                    log(f"Auto-split failed (non-fatal): {e}")
+
                 log(f"Task OVERSIZED — deferring to implementation sprint slot")
                 result["should_defer"] = True
                 result["defer_reason"] = "oversized_task"
@@ -313,6 +416,26 @@ def run_preflight(dry_run=False):
         except Exception as e:
             log(f"Task sizing failed (non-fatal): {e}")
     result["timings"]["task_sizing"] = round(time.monotonic() - t45, 3)
+
+    # === 4.7 ACTION VERIFY GATE: Pre-execution task validation ===
+    t47 = time.monotonic()
+    try:
+        verification = _verify_task_executable(next_task)
+        result["verification"] = verification
+        if not verification["passed"]:
+            log(f"Verification FAILED: {verification['reason']}")
+            # Don't block — just log. Only block on hard failures (missing files).
+            if verification.get("hard_fail"):
+                result["should_defer"] = True
+                result["defer_reason"] = f"verification: {verification['reason']}"
+                result["timings"]["verification"] = round(time.monotonic() - t47, 3)
+                result["timings"]["total"] = round(time.monotonic() - t0, 3)
+                return result
+        else:
+            log(f"Verification OK: {verification['reason']}")
+    except Exception as e:
+        log(f"Verification gate failed (non-fatal): {e}")
+    result["timings"]["verification"] = round(time.monotonic() - t47, 3)
 
     # === 5. PROCEDURAL MEMORY: Check for matching procedure ===
     t5 = time.monotonic()

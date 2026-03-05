@@ -213,6 +213,84 @@ def add_tasks(tasks: list, priority: str = "P0", source: str = "unknown") -> lis
         lock_fd.close()
 
 
+def ensure_subtasks_for_tag(parent_tag: str, subtasks: list[str], source: str = "auto_split") -> bool:
+    """Ensure a parent task in QUEUE.md has subtasks.
+
+    Used as a self-healing mechanism when the preflight task sizer defers an
+    oversized item to a sprint slot. If the item has no indented subtasks,
+    we add a small canonical breakdown so autonomous cycles can make progress.
+
+    Args:
+        parent_tag: Tag inside the first brackets, e.g. "ACTR_WIRING".
+        subtasks: List of subtask strings (already include their own tags or not).
+        source: Marker for where the subtasks came from.
+
+    Returns:
+        True if subtasks were inserted, False if skipped (already present / not found).
+    """
+    if not parent_tag or not subtasks:
+        return False
+
+    # Atomic file lock to prevent race conditions
+    lock_path = QUEUE_FILE + ".lock"
+    os.makedirs(os.path.dirname(lock_path), exist_ok=True)
+    lock_fd = open(lock_path, "w")
+
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX)
+
+        content = _read_queue()
+        if not content:
+            return False
+
+        lines = content.split("\n")
+
+        # Find the parent line. We match the explicit tag first.
+        parent_re = re.compile(r"^\- \[[ x]\] \[" + re.escape(parent_tag) + r"\]\b")
+        parent_idx = None
+        for i, line in enumerate(lines):
+            if parent_re.search(line):
+                parent_idx = i
+                break
+
+        if parent_idx is None:
+            return False
+
+        # Check if subtasks already exist (indented checklist items directly under parent)
+        j = parent_idx + 1
+        while j < len(lines) and lines[j].strip() == "":
+            j += 1
+        if j < len(lines) and re.match(r"^\s{2,}\- \[[ x]\] ", lines[j]):
+            return False  # already has subtasks
+
+        # Insert subtasks immediately under parent
+        insert_at = parent_idx + 1
+        stamped = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        to_insert = []
+        for st in subtasks:
+            st_clean = re.sub(r"^\- \[[ x]\] ", "", st).strip()
+            if not st_clean:
+                continue
+            # Keep indentation consistent with existing manual subtasks (2 spaces)
+            to_insert.append(f"  - [ ] [{source.upper()} {stamped}] {st_clean}")
+
+        if not to_insert:
+            return False
+
+        lines[insert_at:insert_at] = to_insert
+
+        with open(QUEUE_FILE, "w") as f:
+            f.write("\n".join(lines))
+
+        return True
+
+    finally:
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_UN)
+        finally:
+            lock_fd.close()
+
+
 def archive_completed():
     """Move all [x] completed items from QUEUE.md to QUEUE_ARCHIVE.md.
 
