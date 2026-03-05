@@ -25,7 +25,7 @@ _(empty — no urgent bugs)_
 
 ## Research Sessions
 
-- [ ] [RESEARCH_REPO_OBLITERATUS] Deep review repo: https://github.com/elder-plinius/OBLITERATUS — what it is, core mechanisms, threat model (if any), and whether any components/patterns should be integrated into Clarvis (memory, autonomy, safety, orchestration). Output: 10 bullets + 3 concrete integration ideas or "discard" with reason.
+- [x] [RESEARCH_REPO_OBLITERATUS] Deep review repo: https://github.com/elder-plinius/OBLITERATUS — alignment removal toolkit. Verdict: selectively adopt patterns (analysis-driven config, perturbation-based redundancy detection, geometric fingerprinting). Full review: `memory/research/OBLITERATUS_review.md`.
 - [ ] [RESEARCH_REPO_AGENCY_AGENTS] Review repo: https://github.com/msitarzewski/agency-agents — evaluate for delegation/sub-agent orchestration patterns applicable to Clarvis. Output: summary + 3 adoptable patterns.
 - [ ] [BROWSER_SKILL_DOC] Create skills/web-browse/SKILL.md documenting browser_agent.py capabilities for M2.5.
 
@@ -35,7 +35,7 @@ _(empty — no urgent bugs)_
   - [x] [GRAPH_STORAGE_UPGRADE_1] Evaluate & decide — **SQLite + WAL** selected. Decision matrix in recommendation doc. JSON is 21MB/85k edges, full rewrite on every edge add (355ms). SQLite: <1ms per insert, indexed lookups, ACID transactions, zero new dependencies.
   - [x] [GRAPH_STORAGE_UPGRADE_2] Implement `clarvis/brain/graph_store_sqlite.py` — `GraphStoreSQLite` class wrapping SQLite. Schema: `nodes(id, collection, added_at, backfilled, metadata)`, `edges(id, from_id, to_id, type, created_at, source_collection, target_collection, weight, last_decay)` with UNIQUE(from_id, to_id, type). Indices on from_id, to_id, type, (from_id, type), (collection). WAL mode, busy_timeout=5000, synchronous=NORMAL. API mirrors GraphMixin. Config flag: `CLARVIS_GRAPH_BACKEND` env var in constants.py. 33 pytest tests pass.
   - [x] [GRAPH_STORAGE_UPGRADE_3] Migration tool: `scripts/graph_migrate_to_sqlite.py` — load `relationships.json`, bulk-insert into `data/clarvisdb/graph.db` via `executemany` in single transaction. Verified: 2595 nodes + 85164 edges migrated in 0.69s, 100/100 random edge sample match, 0 duplicates, PRAGMA integrity_check OK. DB size: 41MB.
-  - [ ] [GRAPH_STORAGE_UPGRADE_4] Dual-write/dual-read in `GraphMixin`: write to both JSON and SQLite, read from SQLite, periodic verification. Rollback via `CLARVIS_GRAPH_BACKEND=json` env var. Run for 1 week (7+ cron cycles).
+  - [x] [GRAPH_STORAGE_UPGRADE_4] Dual-write/dual-read in `GraphMixin`: write to both JSON and SQLite, read from SQLite, periodic verification. Rollback via `CLARVIS_GRAPH_BACKEND=json` env var. **Done 2026-03-05**: `graph.py` dual-writes all operations (add_relationship, backfill, bulk_intra_link, decay_edges) to SQLite when `CLARVIS_GRAPH_BACKEND=sqlite`. Reads use SQLite indexed lookups. `verify_graph_parity()` compares counts + random edge sample. CLI: `clarvis brain graph-verify`. 17 new tests + 33 existing pass. Soak period: set `CLARVIS_GRAPH_BACKEND=sqlite` to enable.
   - [ ] [GRAPH_STORAGE_UPGRADE_5] Update consumers: `graph_compaction.py` (use DELETE WHERE instead of list filtering), `cron_graph_checkpoint.sh` (use `conn.backup()`), `graphrag_communities.py` (load from SQLite). Bench: load, add_edge, get_related, bulk_link before/after.
   - [ ] [GRAPH_STORAGE_UPGRADE_6] Cutover: remove JSON write paths, archive `relationships.json` for 30 days, update RUNBOOK.md + ARCHITECTURE.md + CLAUDE.md references.
 

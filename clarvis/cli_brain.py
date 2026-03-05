@@ -199,3 +199,42 @@ def edge_decay(
     print(f"  Pruned: {result['pruned']}")
     print(f"  Edges: {result['total_before']} → {result['total_after']}")
     print(f"  Avg weight (hebbian): {result['avg_weight']}")
+
+
+@app.command("graph-verify")
+def graph_verify(
+    sample_n: int = 100,
+):
+    """Verify parity between JSON and SQLite graph stores."""
+    b = _get_brain()
+    result = b.verify_graph_parity(sample_n=sample_n)
+
+    if "error" in result:
+        print(f"ERROR: {result['error']}")
+        raise typer.Exit(1)
+
+    print("=== Graph Parity Verification ===\n")
+    print(f"Nodes:  JSON={result['json_nodes']}  SQLite={result['sqlite_nodes']}  delta={result['node_delta']}")
+    print(f"Edges:  JSON={result['json_edges']} (unique={result['json_unique_edges']}, dupes={result['json_duplicates']})")
+    print(f"        SQLite={result['sqlite_edges']}  delta={result['edge_delta']} (vs unique)")
+    print(f"\nSample: {result['sample_matched']}/{result['sample_size']} matched")
+
+    if result['sample_mismatched'] > 0:
+        print(f"  MISMATCHED ({result['sample_mismatched']}):")
+        for m in result['mismatched_edges']:
+            print(f"    {m['from']} -> {m['to']} [{m['type']}]")
+
+    print(f"\nEdge type distribution:")
+    all_types = set(list(result.get('json_edge_types', {}).keys()) +
+                    list(result.get('sqlite_edge_types', {}).keys()))
+    for t in sorted(all_types):
+        jc = result.get('json_edge_types', {}).get(t, 0)
+        sc = result.get('sqlite_edge_types', {}).get(t, 0)
+        marker = " *" if jc != sc else ""
+        print(f"  {t}: JSON={jc} SQLite={sc}{marker}")
+
+    status = "PASS" if result['parity_ok'] else "FAIL"
+    print(f"\nParity: {status}")
+
+    if not result['parity_ok']:
+        raise typer.Exit(1)
