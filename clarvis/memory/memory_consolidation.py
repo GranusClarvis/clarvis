@@ -40,10 +40,8 @@ import re
 import sys
 from datetime import datetime, timezone, timedelta
 
-sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
-
-from brain import brain, ALL_COLLECTIONS
-from attention import attention
+from clarvis.brain import brain, ALL_COLLECTIONS
+from clarvis.cognition.attention import attention
 
 DATA_DIR = "/home/agent/.openclaw/workspace/data"
 ARCHIVE_DIR = os.path.join(DATA_DIR, "memory_archive")

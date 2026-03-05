@@ -39,7 +39,7 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from collections import defaultdict
 
-sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
+_SCRIPTS_DIR = "/home/agent/.openclaw/workspace/scripts"
 
 DATA_DIR = Path("/home/agent/.openclaw/workspace/data/hebbian")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -147,7 +147,7 @@ class HebbianMemory:
         preventing any single memory from monopolizing importance.
         """
         try:
-            from brain import brain
+            from clarvis.brain import brain
 
             if collection not in brain.collections:
                 return
@@ -296,7 +296,7 @@ class HebbianMemory:
         Returns:
             Dict mapping memory_id → fisher_score (0.0 to 1.0)
         """
-        from brain import brain
+        from clarvis.brain import brain
 
         # Check if recomputation is needed
         last_computed = self._fisher_scores.get("computed_at")
@@ -408,7 +408,7 @@ class HebbianMemory:
         Returns:
             Dict with evolution statistics
         """
-        from brain import brain
+        from clarvis.brain import brain
 
         now = datetime.now(timezone.utc)
         stats = {
@@ -643,7 +643,7 @@ class HebbianMemory:
         Returns:
             Dict with diagnostic info.
         """
-        from brain import brain
+        from clarvis.brain import brain
 
         high_importance = []   # Memories that may be over-strengthened
         low_importance = []    # Memories at risk of being forgotten

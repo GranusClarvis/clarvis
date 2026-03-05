@@ -37,11 +37,13 @@ import json
 import re
 from datetime import datetime, timezone, timedelta
 
-sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
+from clarvis.brain import brain, PROCEDURES
 
-from brain import brain, PROCEDURES
+_SCRIPTS_DIR = "/home/agent/.openclaw/workspace/scripts"
 
 try:
+    if _SCRIPTS_DIR not in sys.path:
+        sys.path.insert(0, _SCRIPTS_DIR)
     from retrieval_experiment import smart_recall
 except ImportError:
     smart_recall = None

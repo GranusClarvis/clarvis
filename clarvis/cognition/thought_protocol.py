@@ -54,10 +54,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-# Ensure scripts/ importable for modules not yet extracted to clarvis/
 _SCRIPTS_DIR = "/home/agent/.openclaw/workspace/scripts"
-if _SCRIPTS_DIR not in sys.path:
-    sys.path.insert(0, _SCRIPTS_DIR)
 
 THOUGHT_LOG = Path("/home/agent/.openclaw/workspace/data/thought_log.jsonl")
 THOUGHT_LOG.parent.mkdir(parents=True, exist_ok=True)
@@ -434,7 +431,7 @@ class ThoughtProtocol:
 
         # 2. Emotional state from somatic markers
         try:
-            from somatic_markers import somatic
+            from clarvis.cognition.somatic_markers import somatic
             sm_stats = somatic.get_stats()
             signal_dist = sm_stats.get("signal_distribution", {})
             approach = signal_dist.get("approach", 0)

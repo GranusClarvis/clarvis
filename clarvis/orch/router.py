@@ -273,16 +273,11 @@ def execute_openrouter(task_text, model=None, context="", proc_hint="", episode_
     Returns:
         dict: {output, exit_code, model, usage, fallback}
     """
-    import sys
     import urllib.request
     import urllib.error
 
-    _SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'scripts')
-    if _SCRIPTS_DIR not in sys.path:
-        sys.path.insert(0, _SCRIPTS_DIR)
-
     try:
-        from cost_api import get_api_key
+        from clarvis.orch.cost_api import get_api_key
         api_key = get_api_key()
     except Exception as e:
         return {

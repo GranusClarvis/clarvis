@@ -15,27 +15,26 @@ import os
 import re
 import sys
 
-# Resolve scripts directory for dependency imports
-_SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'scripts')
-if _SCRIPTS_DIR not in sys.path:
-    sys.path.insert(0, _SCRIPTS_DIR)
+from clarvis.cognition.attention import attention, get_codelet_competition
+from clarvis.brain import brain
 
-from attention import attention, get_codelet_competition
-from brain import brain
+_SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'scripts')
 
 try:
+    if _SCRIPTS_DIR not in sys.path:
+        sys.path.insert(0, _SCRIPTS_DIR)
     from retrieval_experiment import smart_recall
 except ImportError:
     smart_recall = None
 
 try:
-    from somatic_markers import somatic
-except ImportError:
+    from clarvis.cognition.somatic_markers import somatic
+except Exception:
     somatic = None
 
 try:
-    from thought_protocol import thought as thought_proto
-except ImportError:
+    from clarvis.cognition.thought_protocol import thought as thought_proto
+except Exception:
     thought_proto = None
 
 QUEUE_FILE = "/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md"

@@ -257,7 +257,5 @@ def search(query, n=5, min_importance=None, collections=None):
 
 def global_search(query, level="C1", top_k=5):
     """GraphRAG-style global search over community summaries."""
-    import sys
-    sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
-    from graphrag_communities import global_search as _gs
+    from clarvis.brain.graphrag import global_search as _gs
     return _gs(query, level=level, top_k=top_k)

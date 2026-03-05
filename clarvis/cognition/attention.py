@@ -31,10 +31,6 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-# Ensure scripts/ importable for modules not yet extracted to clarvis/
-_SCRIPTS_DIR = "/home/agent/.openclaw/workspace/scripts"
-if _SCRIPTS_DIR not in sys.path:
-    sys.path.insert(0, _SCRIPTS_DIR)
 
 ATTENTION_DIR = Path("/home/agent/.openclaw/workspace/data/attention")
 ATTENTION_DIR.mkdir(parents=True, exist_ok=True)

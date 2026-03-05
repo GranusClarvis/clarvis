@@ -9,10 +9,6 @@ import os
 import sys
 from datetime import datetime, timezone
 
-# Ensure scripts/ importable for modules not yet extracted to clarvis/
-_SCRIPTS_DIR = "/home/agent/.openclaw/workspace/scripts"
-if _SCRIPTS_DIR not in sys.path:
-    sys.path.insert(0, _SCRIPTS_DIR)
 
 CALIBRATION_DIR = "/home/agent/.openclaw/workspace/data/calibration"
 PREDICTIONS_FILE = f"{CALIBRATION_DIR}/predictions.jsonl"

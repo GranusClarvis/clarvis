@@ -28,8 +28,9 @@ from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
 
-sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
-from brain import brain
+from clarvis.brain import brain
+
+_SCRIPTS_DIR = "/home/agent/.openclaw/workspace/scripts"
 
 EPISODES_FILE = Path("/home/agent/.openclaw/workspace/data/episodes.json")
 CAUSAL_LINKS_FILE = Path("/home/agent/.openclaw/workspace/data/causal_links.json")
@@ -407,7 +408,7 @@ class EpisodicMemory:
 
         # Create somatic markers (emotional tags for decision biasing)
         try:
-            from somatic_markers import somatic
+            from clarvis.cognition.somatic_markers import somatic
             somatic.tag_episode(episode)
         except Exception:
             pass  # Don't let somatic tagging break episode encoding
@@ -499,7 +500,7 @@ class EpisodicMemory:
         # Boost goal value if context provided and aligns
         if goal_context:
             try:
-                from soar_engine import soar
+                from clarvis.memory.soar import soar
                 alignment = soar.align_task(goal_context)
                 if alignment.get("aligned"):
                     G = 1.0 + alignment.get("boost", 0)

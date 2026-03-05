@@ -72,8 +72,7 @@ def budget(
 @app.command()
 def realtime():
     """Real costs from OpenRouter API."""
-    sys.path.insert(0, f"{WORKSPACE}/scripts")
-    from cost_api import fetch_usage, format_usage
+    from clarvis.orch.cost_api import fetch_usage, format_usage
     usage = fetch_usage()
     typer.echo(format_usage(usage))
 

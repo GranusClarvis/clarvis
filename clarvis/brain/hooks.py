@@ -14,14 +14,13 @@ import time
 
 _log = logging.getLogger("clarvis.brain.hooks")
 
-# Ensure scripts/ is importable
 _SCRIPTS_DIR = "/home/agent/.openclaw/workspace/scripts"
-if _SCRIPTS_DIR not in sys.path:
-    sys.path.insert(0, _SCRIPTS_DIR)
 
 
 def _make_actr_scorer():
     """Create an ACT-R scorer hook: fn(results) -> mutates with _actr_score."""
+    if _SCRIPTS_DIR not in sys.path:
+        sys.path.insert(0, _SCRIPTS_DIR)
     from actr_activation import actr_score
 
     def scorer(results):
@@ -50,6 +49,8 @@ def _make_attention_booster():
 
 def _make_retrieval_quality_observer():
     """Create a retrieval quality observer hook."""
+    if _SCRIPTS_DIR not in sys.path:
+        sys.path.insert(0, _SCRIPTS_DIR)
     from retrieval_quality import tracker
 
     def observer(query, results, *, caller=None, rate_limit_mono=0, last_mono=0):
@@ -70,6 +71,8 @@ def _make_hebbian_observer():
 
 def _make_synaptic_observer():
     """Create a synaptic memory observer hook (rate-limited)."""
+    if _SCRIPTS_DIR not in sys.path:
+        sys.path.insert(0, _SCRIPTS_DIR)
     from synaptic_memory import synaptic
 
     def observer(query, results, *, caller=None, rate_limit_mono=0, last_mono=0):
@@ -102,7 +105,7 @@ def _make_graphrag_booster():
     No-op when disabled (default).
     """
     import os
-    from graphrag_communities import enhanced_local_search, COMMUNITIES_FILE, SUMMARIES_FILE
+    from clarvis.brain.graphrag import enhanced_local_search, COMMUNITIES_FILE, SUMMARIES_FILE
 
     def booster(results):
         if os.environ.get("CLARVIS_GRAPHRAG_BOOST") != "1":

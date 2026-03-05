@@ -16,12 +16,9 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-# Import brain - try clarvis package first, fall back to scripts
-_scripts_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'scripts')
-if _scripts_dir not in sys.path:
-    sys.path.insert(0, _scripts_dir)
+from clarvis.brain import brain
 
-from brain import brain
+_scripts_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'scripts')
 
 DATA_FILE = "/home/agent/.openclaw/workspace/data/self_model.json"
 META_FILE = "/home/agent/.openclaw/workspace/data/meta_cognition.json"
@@ -877,7 +874,7 @@ def _assess_reasoning_chains():
     """
     # Try ClarvisReasoning first (richer meta-cognitive scoring)
     try:
-        from clarvis_reasoning import reasoner
+        from clarvis.cognition.reasoning import reasoner
         return reasoner.get_reasoning_score()
     except ImportError:
         pass

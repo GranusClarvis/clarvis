@@ -17,8 +17,7 @@ import json
 import sys
 from pathlib import Path
 
-sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
-from attention import attention, SPOTLIGHT_FILE
+from clarvis.cognition.attention import attention, SPOTLIGHT_FILE
 
 # Keep the old state file path for backward-compat reads during transition
 WORKING_MEM_FILE = Path("/home/agent/.openclaw/workspace/data/working_memory_state.json")
