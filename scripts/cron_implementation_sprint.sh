@@ -177,8 +177,9 @@ try:
     COST_LOG = os.path.join('$SCRIPTS', '..', 'data', 'costs.jsonl')
     ct = CostTracker(COST_LOG)
     duration_min = max(1, $TASK_DURATION // 60)
+    task_desc = '''${IMPL_TASK:0:150}'''
     ct.log('claude-code', 5000 * duration_min, 2000 * duration_min,
-           source='implementation_sprint', task='implementation', duration_s=$TASK_DURATION)
+           source='implementation_sprint', task=task_desc[:150], duration_s=$TASK_DURATION)
     print('Cost logged')
 except Exception as e:
     print(f'Cost log failed: {e}', file=sys.stderr)

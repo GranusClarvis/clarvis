@@ -307,6 +307,113 @@ class CostTracker:
             result.append({"date": day_str, **{k: round(v, 4) if isinstance(v, float) else v for k, v in b.items()}})
         return result
 
+    def task_costs(self, days: int = 7, top_n: int = 20) -> Dict:
+        """Per-task cost breakdown for the last N days.
+
+        Groups costs by task description (first 80 chars) and returns
+        sorted by total cost descending.
+
+        Returns:
+            {
+                "period_days": int,
+                "tasks": [{task, total_cost, calls, avg_cost, models, total_duration_s}],
+                "total_cost": float,
+                "unique_tasks": int,
+            }
+        """
+        since = datetime.now(timezone.utc) - timedelta(days=days)
+        entries = self._read_entries(since)
+
+        by_task: Dict[str, Dict] = {}
+        total = 0.0
+        for e in entries:
+            key = e.task[:80] if e.task else "(no task)"
+            total += e.cost_usd
+            if key not in by_task:
+                by_task[key] = {"cost": 0.0, "calls": 0, "models": set(), "duration": 0.0}
+            by_task[key]["cost"] += e.cost_usd
+            by_task[key]["calls"] += 1
+            by_task[key]["models"].add(e.model)
+            by_task[key]["duration"] += e.duration_s
+
+        tasks = []
+        for task_name, data in sorted(by_task.items(), key=lambda x: -x[1]["cost"]):
+            tasks.append({
+                "task": task_name,
+                "total_cost": round(data["cost"], 4),
+                "calls": data["calls"],
+                "avg_cost": round(data["cost"] / data["calls"], 4) if data["calls"] else 0,
+                "models": sorted(data["models"]),
+                "total_duration_s": round(data["duration"], 1),
+            })
+
+        return {
+            "period_days": days,
+            "tasks": tasks[:top_n],
+            "total_cost": round(total, 4),
+            "unique_tasks": len(by_task),
+        }
+
+    def routing_effectiveness(self, days: int = 7, router_log: str = "") -> Dict:
+        """Analyze routing effectiveness from cost log + optional router decisions.
+
+        Shows what % of tasks went to cheap vs expensive models,
+        and cost savings from routing.
+
+        Returns:
+            {
+                "period_days": int,
+                "total_calls": int,
+                "by_tier": {"cheap": {count, cost, pct}, "expensive": {count, cost, pct}},
+                "estimated_savings": float,
+                "routing_rate": float,
+            }
+        """
+        since = datetime.now(timezone.utc) - timedelta(days=days)
+        entries = self._read_entries(since)
+
+        CHEAP_MODELS = {
+            "minimax-m2.5", "minimax/minimax-m2.5", "openrouter/minimax/minimax-m2.5",
+            "gemini-2.0-flash", "gemini-3-flash", "google/gemini-3-flash-preview",
+            "glm-5", "z-ai/glm-5", "openrouter/z-ai/glm-5",
+            "moonshotai/kimi-k2.5", "kimi-k2.5",
+        }
+
+        cheap = {"count": 0, "cost": 0.0}
+        expensive = {"count": 0, "cost": 0.0}
+        routed_savings = 0.0
+
+        for e in entries:
+            if e.model in CHEAP_MODELS:
+                cheap["count"] += 1
+                cheap["cost"] += e.cost_usd
+                # Estimate what it would have cost on Claude Code
+                claude_cost = estimate_cost("claude-code", e.input_tokens, e.output_tokens)
+                routed_savings += claude_cost - e.cost_usd
+            else:
+                expensive["count"] += 1
+                expensive["cost"] += e.cost_usd
+
+        total = cheap["count"] + expensive["count"]
+        return {
+            "period_days": days,
+            "total_calls": total,
+            "by_tier": {
+                "cheap": {
+                    "count": cheap["count"],
+                    "cost": round(cheap["cost"], 4),
+                    "pct": round(cheap["count"] / total * 100, 1) if total else 0,
+                },
+                "expensive": {
+                    "count": expensive["count"],
+                    "cost": round(expensive["cost"], 4),
+                    "pct": round(expensive["count"] / total * 100, 1) if total else 0,
+                },
+            },
+            "estimated_savings": round(routed_savings, 4),
+            "routing_rate": round(cheap["count"] / total * 100, 1) if total else 0,
+        }
+
     def budget_check(self, daily_budget: float = 5.0) -> Dict:
         """Check if spending is within budget.
 

@@ -265,8 +265,9 @@ try:
     ct = CostTracker(COST_LOG)
     # Rough estimate: ~5k input + ~2k output tokens per minute of research
     duration_min = max(1, $TASK_DURATION // 60)
+    task_desc = '''${RESEARCH_TASK:0:150}'''
     ct.log('claude-code', 5000 * duration_min, 2000 * duration_min,
-           source='research', task='research', duration_s=$TASK_DURATION)
+           source='research', task=task_desc[:150], duration_s=$TASK_DURATION)
     print('Cost logged')
 except Exception as e:
     print(f'Cost log failed: {e}', file=sys.stderr)
