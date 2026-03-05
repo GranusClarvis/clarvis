@@ -4,7 +4,6 @@ Delegates to scripts/cost_tracker.py and scripts/budget_alert.py.
 """
 
 import json
-import sys
 
 import typer
 
@@ -16,7 +15,6 @@ WORKSPACE = "/home/agent/.openclaw/workspace"
 def _get_tracker():
     """Lazy-import CostTracker."""
     import os
-    sys.path.insert(0, f"{WORKSPACE}/packages/clarvis-cost")
     from clarvis_cost.core import CostTracker
     cost_log = os.path.join(WORKSPACE, "data", "costs.jsonl")
     return CostTracker(cost_log)

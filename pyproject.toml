@@ -8,6 +8,10 @@ version = "0.1.0"
 description = "Clarvis — dual-layer cognitive agent system"
 requires-python = ">=3.10"
 license = "MIT"
+dependencies = [
+    "clarvis-cost",
+    "clarvis-reasoning",
+]
 
 [project.scripts]
 clarvis = "clarvis.cli:main"
@@ -17,9 +21,10 @@ brain = ["chromadb>=0.4.0", "onnxruntime>=1.15.0"]
 
 [tool.setuptools.packages.find]
 include = ["clarvis*"]
+exclude = ["packages*"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "packages"]
+testpaths = ["clarvis/tests", "packages"]
 norecursedirs = ["scripts", "data", "memory", "monitoring", "skills", "docs", ".git"]
 markers = [
     "slow: marks tests that need ChromaDB (deselect with '-m \"not slow\"')",
