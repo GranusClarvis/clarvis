@@ -33,7 +33,9 @@ _(empty — no urgent bugs)_
 ## Pillar 3: Performance & Reliability (PI > 0.70)
 
   - [x] [GRAPH_STORAGE_UPGRADE_5] Update consumers: `graph_compaction.py` (SQL DELETE path), `cron_graph_checkpoint.sh` (SQLite backup API), `graphrag_communities.py` (load from SQLite). Safe migration (`--safe` flag), daily parity verification cron (`cron_graph_verify.sh`), soak enablement in `cron_env.sh`. RUNBOOK.md written. _(Phase 3, completed 2026-03-05)_
-  - [ ] [GRAPH_STORAGE_UPGRADE_6] Cutover: remove JSON write paths, archive `relationships.json` for 30 days, update RUNBOOK.md + ARCHITECTURE.md + CLAUDE.md references. _(Phase 4 — after soak period confirms parity)_
+  - [~] [GRAPH_STORAGE_UPGRADE_6] Cutover: `scripts/graph_cutover.py` implemented (archive JSON, enable SQLite, one-command rollback). Invariants gate (`invariants_check.py`) wired into cutover + safe migration. Docs updated (RUNBOOK.md Phase 4 section, ARCHITECTURE.md graph storage, CLAUDE.md). JSON write path removal deferred behind checklist (7-day soak prerequisite). Run `python3 scripts/graph_cutover.py` to execute. _(Phase 4 — cutover tooling done, awaiting soak period to execute + remove JSON writes)_
+  - [ ] [GRAPH_SOAK_7DAY] Execute 7-day SQLite soak: (1) Run `python3 scripts/graph_cutover.py` to enable `CLARVIS_GRAPH_BACKEND=sqlite` in cron_env.sh. (2) Monitor daily: `tail -20 memory/cron/graph_verify.log` — cron_graph_verify.sh runs at 04:45 UTC. (3) Run `python3 scripts/invariants_check.py` periodically. (4) After 7 consecutive days with zero failures, mark this complete. Soak start date: _TBD (execute cutover)_. _(Phase 5 — soak period)_
+  - [ ] [GRAPH_JSON_WRITE_REMOVAL] After [GRAPH_SOAK_7DAY] passes: remove JSON dual-write paths. See RUNBOOK.md "JSON Write Path Removal Checklist" for exact files and functions. Also update `backup_daily.sh` to back up `graph.db`. _(Phase 6 — JSON cleanup, blocked by soak)_
 
 ### AGI-Readiness (from 2026-03-04 audit, see docs/AGI_READINESS_ARCHITECTURE_AUDIT.md)
 

@@ -36,6 +36,16 @@ Expected output ends with `Result: PASS`.
 CLARVIS_GRAPH_BACKEND=sqlite python3 -m clarvis brain graph-verify --sample-n 500
 ```
 
+### Step 2b: Run Invariants Check
+
+```bash
+python3 scripts/invariants_check.py
+```
+
+Runs pytest, golden-qa retrieval, graph-verify (if sqlite), brain health, and hook registration count. Outputs a JSONL record to `data/invariants_runs.jsonl`. Exit 0 = all PASS.
+
+The safe migration (`--safe`) runs this automatically after Step 3. The cutover tool (`graph_cutover.py`) requires it to pass before proceeding.
+
 ### Step 3: Enable Soak
 
 Edit `scripts/cron_env.sh` and uncomment:
@@ -97,6 +107,16 @@ cp data/clarvisdb/relationships.pre-migration.json data/clarvisdb/relationships.
 
 All graph maintenance jobs share `/tmp/clarvis_maintenance.lock` for mutual exclusion.
 
+### On-Demand: Invariants Check
+
+```bash
+python3 scripts/invariants_check.py          # Run all, log to data/invariants_runs.jsonl
+python3 scripts/invariants_check.py --json   # Print result, no file write
+python3 scripts/invariants_check.py --check pytest  # Single check
+```
+
+Checks: pytest, golden-qa, graph-verify (sqlite only), brain-health, hook-count.
+
 ## Troubleshooting
 
 ### Parity check fails
@@ -124,3 +144,67 @@ cp data/clarvisdb/graph.checkpoint.db data/clarvisdb/graph.db
 
 ### Graph.db missing WAL/SHM files
 Normal — SQLite creates/removes them automatically. If they persist after clean shutdown, it's safe to delete them.
+
+---
+
+## Phase 4: Cutover (JSON → SQLite)
+
+### Automated Cutover
+
+Use `scripts/graph_cutover.py` for the full cutover sequence:
+
+```bash
+# Check current state
+python3 scripts/graph_cutover.py --status
+
+# Dry run (see what would happen)
+python3 scripts/graph_cutover.py --dry-run
+
+# Execute cutover
+python3 scripts/graph_cutover.py
+
+# Rollback (one command)
+python3 scripts/graph_cutover.py --rollback
+```
+
+The cutover script:
+1. Runs invariants check (`invariants_check.py`) — refuses to proceed on FAIL
+2. Runs pre-flight checks (SQLite exists, integrity OK, parity OK, no locks)
+3. Archives `relationships.json` to `data/clarvisdb/archive/relationships.<timestamp>.json`
+4. Enables `CLARVIS_GRAPH_BACKEND="sqlite"` in `cron_env.sh`
+
+**JSON dual-write continues** — `relationships.json` is still written to on every mutation. This preserves rollback safety. The JSON file is archived (copied, not removed).
+
+### Rollback
+
+One command:
+```bash
+python3 scripts/graph_cutover.py --rollback
+```
+
+This re-comments `CLARVIS_GRAPH_BACKEND` in `cron_env.sh`. Since dual-write kept JSON in sync, no data is lost.
+
+If the original JSON was lost, the script restores from the latest archive in `data/clarvisdb/archive/`.
+
+### JSON Write Path Removal Checklist
+
+After a successful soak period (recommended: 7+ days with zero parity failures), the JSON write paths can be removed. This is Phase 4b and should NOT be done until all prerequisites are met:
+
+**Prerequisites:**
+- [ ] Soak period: 7+ consecutive days with `cron_graph_verify.sh` passing (exit 0)
+- [ ] Zero parity failures in `memory/cron/graph_verify.log`
+- [ ] `graph_cutover.py` has been executed (not just dry-run)
+- [ ] `backup_daily.sh` updated to back up `graph.db` instead of (or in addition to) `relationships.json`
+- [ ] Manual verification: `clarvis brain graph-verify --sample-n 500` passes
+
+**Files to modify for JSON write removal:**
+1. `clarvis/brain/graph.py` — `_save_graph()`, `_load_graph()` (JSON load), `add_relationship()` (JSON append), `backfill_graph_nodes()` (JSON write), `bulk_intra_link()` (JSON write), `decay_edges()` (JSON write)
+2. `clarvis/brain/graph.py` — `verify_graph_parity()` can be simplified (no JSON comparison)
+3. `scripts/graph_compaction.py` — remove `run_compaction_json()` function
+4. `scripts/cron_graph_checkpoint.sh` — remove JSON `cp` path
+5. `scripts/graphrag_communities.py` — remove JSON load path
+
+**What to keep:**
+- `relationships.json` file on disk (read-only archive, 30-day retention)
+- `graph_migrate_to_sqlite.py` — useful for recovery/re-import
+- `GraphStoreSQLite.export_json()` — can regenerate JSON from SQLite if needed

@@ -19,7 +19,11 @@ fi
 # Acquire maintenance lock (mutual exclusion with checkpoint/compaction/vacuum)
 acquire_maintenance_lock "$LOGFILE"
 
-echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Graph verify started ===" >> "$LOGFILE"
+TS="$(date -u +%Y-%m-%dT%H:%M:%S)"
+echo "[$TS] === Graph verify started ===" >> "$LOGFILE"
+echo "[$TS] Backend: ${CLARVIS_GRAPH_BACKEND:-json}" >> "$LOGFILE"
+echo "[$TS] SQLite DB: $(ls -lh data/clarvisdb/graph.db 2>/dev/null || echo 'NOT FOUND')" >> "$LOGFILE"
+echo "[$TS] JSON file: $(ls -lh data/clarvisdb/relationships.json 2>/dev/null || echo 'NOT FOUND')" >> "$LOGFILE"
 
 OUTPUT=$(python3 -m clarvis brain graph-verify --sample-n 200 2>&1)
 EXIT_CODE=$?

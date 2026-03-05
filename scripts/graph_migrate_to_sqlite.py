@@ -247,18 +247,25 @@ def safe_migrate(json_path: str, sqlite_path: str) -> dict:
         old_backend = _os.environ.get("CLARVIS_GRAPH_BACKEND")
         _os.environ["CLARVIS_GRAPH_BACKEND"] = "sqlite"
 
-        sys.path.insert(0, os.path.join(WORKSPACE, "scripts"))
-        from brain import get_brain
-        # Force fresh singleton
+        # Force constants module AND brain __init__ module to see new backend
+        import clarvis.brain.constants as _cmod
+        _cmod.GRAPH_BACKEND = "sqlite"
         import clarvis.brain as _bmod
-        _bmod._brain = None
-        brain = get_brain()
+        _bmod.GRAPH_BACKEND = "sqlite"  # Patch the imported name in brain.__init__
+        _bmod._brain = None  # Force fresh singleton
+
+        brain = _bmod.get_brain()
         parity = brain.verify_graph_parity(sample_n=200)
 
+        # Restore
         if old_backend is not None:
             _os.environ["CLARVIS_GRAPH_BACKEND"] = old_backend
         else:
             _os.environ.pop("CLARVIS_GRAPH_BACKEND", None)
+        restored = old_backend or "json"
+        _cmod.GRAPH_BACKEND = restored
+        _bmod.GRAPH_BACKEND = restored
+        _bmod._brain = None
     except Exception as exc:
         print(f"  Parity check error: {exc}")
         parity = {"parity_ok": False, "error": str(exc)}
@@ -266,12 +273,34 @@ def safe_migrate(json_path: str, sqlite_path: str) -> dict:
     report["parity"] = parity
     if parity.get("parity_ok"):
         print("  Parity: OK")
-        print(f"\nSafe migration COMPLETE. Snapshot at: {snapshot_path}")
     else:
         print(f"  Parity: FAILED — {parity}")
         print(f"Snapshot preserved at: {snapshot_path}")
         report["passed"] = False
+        return report
 
+    # 4. Run invariants check (Ouroboros drift detection)
+    print(f"\nStep 4: Running invariants check...")
+    try:
+        import subprocess
+        inv_result = subprocess.run(
+            [sys.executable, os.path.join(WORKSPACE, "scripts", "invariants_check.py")],
+            capture_output=True, text=True, timeout=600, cwd=WORKSPACE,
+        )
+        inv_output = (inv_result.stdout + inv_result.stderr).strip()
+        for line in inv_output.splitlines():
+            print(f"  {line}")
+        if inv_result.returncode != 0:
+            print("\n  WARNING: Invariants check FAILED after migration.")
+            print("  Migration data is intact but review failures before cutover.")
+            report["invariants_passed"] = False
+        else:
+            report["invariants_passed"] = True
+    except Exception as exc:
+        print(f"  Invariants check error: {exc}")
+        report["invariants_passed"] = False
+
+    print(f"\nSafe migration COMPLETE. Snapshot at: {snapshot_path}")
     return report
 
 
