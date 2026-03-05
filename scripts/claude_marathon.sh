@@ -105,13 +105,24 @@ run_invariants() {
         inv_output=$(python3 "$SCRIPTS/invariants_check.py" --json 2>&1) || true
 
         local passed="false"
+        # Parse JSON from the LAST line that looks like JSON (invariants_check prints human lines too).
         passed=$(echo "$inv_output" | python3 -c "
 import sys, json
-try:
-    data = json.loads(sys.stdin.read())
-    print('true' if data.get('passed') else 'false')
-except:
+lines = sys.stdin.read().splitlines()
+json_line = None
+for line in reversed(lines):
+    s = line.strip()
+    if s.startswith('{') and s.endswith('}'):
+        json_line = s
+        break
+if not json_line:
     print('false')
+else:
+    try:
+        data = json.loads(json_line)
+        print('true' if data.get('passed') else 'false')
+    except Exception:
+        print('false')
 " 2>/dev/null || echo "false")
 
         if [ "$passed" = "true" ]; then
@@ -124,14 +135,17 @@ except:
         log "INVARIANTS output (tail): $(echo "$inv_output" | tail -20)"
 
         if [ "$attempt" -gt "$MAX_SELF_HEAL" ]; then
-            log "INVARIANTS: FAIL after self-heal attempts — stopping marathon"
+            # NOTE: invariants_check.py emits JSON to stdout, but also logs to stderr.
+            # We rely on the parsed JSON `passed` flag above. If parsing fails, we can
+            # end up here even if the textual output looks like PASS.
+            log "INVARIANTS: Unable to confirm PASS after self-heal attempts — stopping marathon"
 
             cat > "$STOP_REPORT" << REPORT_EOF
 # Marathon Stop Report
 
 **Date:** $(date -u +%Y-%m-%dT%H:%M:%S)Z
 **Batch:** $BATCH_NUM
-**Reason:** Invariants failed after ${MAX_SELF_HEAL} self-heal attempts
+**Reason:** invariants_check.py could not be parsed as PASS after ${MAX_SELF_HEAL} self-heal attempts
 
 ## Batches Completed
 $(printf '%s\n' "${BATCH_RESULTS[@]}" 2>/dev/null || echo "None")
