@@ -8,6 +8,8 @@ _Completed items auto-archived to QUEUE_ARCHIVE.md._
 
 _(empty — no urgent bugs)_
 
+- [x] [MARATHON_RUNNER] Build Claude Marathon Runner — 7-hour chaining script that picks batches from QUEUE.md, spawns Claude, runs invariants after each batch. See docs/MARATHON_RUNBOOK.md.
+
 ---
 
 ## Pillar 1: Consciousness & Integration (Phi > 0.80)
