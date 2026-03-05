@@ -52,7 +52,38 @@ MIN_COMMUNITY_SIZE = 2  # Skip singleton communities
 
 
 def _load_graph():
-    """Load the ClarvisDB relationship graph."""
+    """Load the ClarvisDB relationship graph.
+
+    Uses SQLite export when CLARVIS_GRAPH_BACKEND=sqlite and graph.db exists,
+    otherwise falls back to reading relationships.json directly.
+    """
+    backend = os.environ.get("CLARVIS_GRAPH_BACKEND", "json")
+    sqlite_path = DATA_DIR / "graph.db"
+    if backend == "sqlite" and sqlite_path.exists():
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+        from clarvis.brain.graph_store_sqlite import GraphStoreSQLite
+        store = GraphStoreSQLite(str(sqlite_path))
+        # Build in-memory dict matching JSON schema
+        nodes = {}
+        for row in store._conn.execute("SELECT id, collection, added_at, backfilled FROM nodes").fetchall():
+            nodes[row[0]] = {"collection": row[1], "added_at": row[2]}
+            if row[3]:
+                nodes[row[0]]["backfilled"] = True
+        edges = []
+        for row in store._conn.execute(
+            "SELECT from_id, to_id, type, created_at, source_collection, target_collection, weight FROM edges"
+        ).fetchall():
+            edge = {"from": row[0], "to": row[1], "type": row[2], "created_at": row[3]}
+            if row[4]:
+                edge["source_collection"] = row[4]
+            if row[5]:
+                edge["target_collection"] = row[5]
+            if row[6] is not None and row[6] != 1.0:
+                edge["weight"] = row[6]
+            edges.append(edge)
+        store.close()
+        return {"nodes": nodes, "edges": edges}
+
     graph_file = DATA_DIR / "relationships.json"
     with open(graph_file, 'r') as f:
         return json.load(f)

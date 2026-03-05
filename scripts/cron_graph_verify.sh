@@ -1,0 +1,35 @@
+#!/bin/bash
+# Graph verification — daily soak-test when CLARVIS_GRAPH_BACKEND=sqlite
+# Runs graph-verify parity check between JSON and SQLite stores.
+# Exits nonzero on FAIL so cron_watchdog / health_monitor can alert.
+#
+# Schedule: after graph_compaction (04:30), e.g. 04:45 UTC
+# Only runs when CLARVIS_GRAPH_BACKEND=sqlite; exits 0 silently otherwise.
+
+source /home/agent/.openclaw/workspace/scripts/cron_env.sh
+source /home/agent/.openclaw/workspace/scripts/lock_helper.sh
+
+LOGFILE="memory/cron/graph_verify.log"
+
+# Only run when sqlite backend is active
+if [ "${CLARVIS_GRAPH_BACKEND:-json}" != "sqlite" ]; then
+    exit 0
+fi
+
+# Acquire maintenance lock (mutual exclusion with checkpoint/compaction/vacuum)
+acquire_maintenance_lock "$LOGFILE"
+
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Graph verify started ===" >> "$LOGFILE"
+
+OUTPUT=$(python3 -m clarvis brain graph-verify --sample-n 200 2>&1)
+EXIT_CODE=$?
+
+echo "$OUTPUT" >> "$LOGFILE"
+
+if [ $EXIT_CODE -ne 0 ]; then
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] FAIL: graph-verify exited $EXIT_CODE" >> "$LOGFILE"
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Graph verify finished (FAIL) ===" >> "$LOGFILE"
+    exit 1
+fi
+
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Graph verify finished (PASS) ===" >> "$LOGFILE"

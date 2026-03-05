@@ -196,6 +196,85 @@ def verify_only(sqlite_path: str, json_path: str | None = None) -> dict:
     return report
 
 
+def safe_migrate(json_path: str, sqlite_path: str) -> dict:
+    """Safe migration: snapshot JSON first, then migrate, then verify parity.
+
+    Steps:
+      1. Copy relationships.json to relationships.pre-migration.json (atomic snapshot)
+      2. Run full migration (import_from_json)
+      3. Run graph-verify parity check
+      4. Report results
+
+    Returns dict with migration report + parity results.
+    """
+    import shutil
+
+    if not os.path.exists(json_path):
+        print(f"ERROR: JSON graph not found at {json_path}")
+        return {"passed": False, "error": "json_not_found"}
+
+    # 1. Snapshot
+    snapshot_path = json_path.replace(".json", ".pre-migration.json")
+    print(f"Step 1: Snapshotting {json_path} -> {snapshot_path}")
+    shutil.copy2(json_path, snapshot_path)
+    snap_hash = None
+    import hashlib
+    with open(snapshot_path, "rb") as f:
+        snap_hash = hashlib.sha256(f.read()).hexdigest()[:16]
+    print(f"  Snapshot SHA256 prefix: {snap_hash}")
+
+    # Verify snapshot matches source
+    with open(json_path, "rb") as f:
+        src_hash = hashlib.sha256(f.read()).hexdigest()[:16]
+    if snap_hash != src_hash:
+        print("ERROR: Snapshot hash mismatch — JSON changed during copy")
+        return {"passed": False, "error": "snapshot_mismatch"}
+    print("  Snapshot verified: matches source")
+
+    # 2. Migrate
+    print(f"\nStep 2: Migrating to SQLite...")
+    report = migrate(json_path, sqlite_path)
+
+    if not report.get("passed", False):
+        print("\nMigration verification FAILED — see report above")
+        print(f"Snapshot preserved at: {snapshot_path}")
+        return report
+
+    # 3. Parity check via brain's verify_graph_parity
+    print(f"\nStep 3: Running graph-verify parity check...")
+    try:
+        import os as _os
+        old_backend = _os.environ.get("CLARVIS_GRAPH_BACKEND")
+        _os.environ["CLARVIS_GRAPH_BACKEND"] = "sqlite"
+
+        sys.path.insert(0, os.path.join(WORKSPACE, "scripts"))
+        from brain import get_brain
+        # Force fresh singleton
+        import clarvis.brain as _bmod
+        _bmod._brain = None
+        brain = get_brain()
+        parity = brain.verify_graph_parity(sample_n=200)
+
+        if old_backend is not None:
+            _os.environ["CLARVIS_GRAPH_BACKEND"] = old_backend
+        else:
+            _os.environ.pop("CLARVIS_GRAPH_BACKEND", None)
+    except Exception as exc:
+        print(f"  Parity check error: {exc}")
+        parity = {"parity_ok": False, "error": str(exc)}
+
+    report["parity"] = parity
+    if parity.get("parity_ok"):
+        print("  Parity: OK")
+        print(f"\nSafe migration COMPLETE. Snapshot at: {snapshot_path}")
+    else:
+        print(f"  Parity: FAILED — {parity}")
+        print(f"Snapshot preserved at: {snapshot_path}")
+        report["passed"] = False
+
+    return report
+
+
 def main():
     parser = argparse.ArgumentParser(description="Migrate graph from JSON to SQLite")
     parser.add_argument("--json-path", default=GRAPH_FILE,
@@ -206,10 +285,14 @@ def main():
                         help="Show what would be migrated without doing it")
     parser.add_argument("--verify-only", action="store_true",
                         help="Verify existing migration without re-migrating")
+    parser.add_argument("--safe", action="store_true",
+                        help="Safe migration: snapshot JSON, migrate, verify parity")
     args = parser.parse_args()
 
     if args.verify_only:
         report = verify_only(args.sqlite_path, args.json_path)
+    elif args.safe:
+        report = safe_migrate(args.json_path, args.sqlite_path)
     else:
         if not os.path.exists(args.json_path):
             print(f"ERROR: JSON graph not found at {args.json_path}")
