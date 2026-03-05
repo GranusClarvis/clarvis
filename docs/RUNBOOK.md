@@ -1,6 +1,6 @@
 # Runbook
 
-_Last updated: 2026-03-04. Operational procedures for Clarvis._
+_Last updated: 2026-03-05. Operational procedures for Clarvis._
 
 ---
 
@@ -10,17 +10,16 @@ The heartbeat pipeline executes one task per cycle: gate → preflight → Claud
 
 ### Run a Manual Heartbeat
 ```bash
-source scripts/cron_env.sh
-
 # 1. Gate check (should task run?)
-python3 scripts/heartbeat_gate.py
+python3 -m clarvis heartbeat gate
 echo $?  # 0 = WAKE (proceed), 1 = SKIP
 
 # 2. Preflight (task selection + context assembly)
-python3 scripts/heartbeat_preflight.py > /tmp/heartbeat_context.txt
+python3 -m clarvis heartbeat run > /tmp/heartbeat_context.txt
 
 # 3. Execute (normally done by cron_autonomous.sh)
 cat /tmp/heartbeat_context.txt  # review the prompt
+source scripts/cron_env.sh
 timeout 1200 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \
   /home/agent/.local/bin/claude -p "$(cat /tmp/heartbeat_context.txt)" \
   --dangerously-skip-permissions --model claude-opus-4-6 > /tmp/claude_output.txt 2>&1
@@ -44,31 +43,26 @@ python3 -c "import json; eps=json.load(open('data/episodes.json')); [print(e['ta
 
 ### Health Check
 ```bash
-python3 scripts/brain.py health        # Full report (collections, counts, graph)
-python3 scripts/brain.py stats          # Quick stats
+python3 -m clarvis brain health        # Full report (collections, counts, graph)
+python3 -m clarvis brain stats         # Quick stats
 ```
 
 ### Search & Store
 ```bash
-python3 scripts/brain.py recall "query text"       # Search all collections
-python3 scripts/brain.py store "quick note"         # Store to default collection
-python3 scripts/brain.py remember "important fact" --importance 0.9 --collection clarvis-learnings
+python3 -m clarvis brain search "query text" --n 10   # Search all collections
+# For store/remember, use the Python API:
+python3 -c "from clarvis.brain import remember; remember('important fact', importance=0.9)"
 ```
 
 ### Maintenance
 ```bash
-python3 scripts/brain.py optimize-full   # Decay + dedup + noise prune + archive
-python3 scripts/brain.py backfill        # Fix orphan graph nodes
+python3 -m clarvis brain optimize-full   # Decay + dedup + noise prune + archive
+python3 -m clarvis brain backfill        # Fix orphan graph nodes
 ```
 
 ### Smoke Test
 ```bash
-python3 -c "
-import sys; sys.path.insert(0, 'scripts')
-from brain import brain
-print(brain.stats())
-print(brain.health_check())
-"
+python3 -c "from clarvis.brain import brain; print(brain.stats()); print(brain.health_check())"
 ```
 
 ---
@@ -77,14 +71,15 @@ print(brain.health_check())
 
 ### Run Full Benchmark
 ```bash
-python3 scripts/performance_benchmark.py record    # Full 8-dimension benchmark
+python3 -m clarvis bench run              # Full 8-dimension benchmark (records to history)
 ```
 
 ### Quick Checks
 ```bash
-python3 scripts/performance_benchmark.py pi         # Composite PI score only
-python3 scripts/performance_benchmark.py heartbeat   # Quick post-heartbeat check
-python3 scripts/performance_benchmark.py report      # Human-readable report
+python3 -m clarvis bench pi               # Composite PI score (cached, instant)
+python3 -m clarvis bench pi --fresh       # Recompute PI (slow, full measurement)
+python3 -m clarvis bench quick            # Quick benchmark subset (JSON)
+python3 scripts/performance_benchmark.py report      # Human-readable report (not in CLI yet)
 ```
 
 ### View History
@@ -135,7 +130,7 @@ mv data/clarvisdb data/clarvisdb_broken_$(date +%s)
 cp -r data/clarvisdb_backup_<timestamp>/ data/clarvisdb/
 
 # 4. Verify
-python3 scripts/brain.py health
+python3 -m clarvis brain health
 
 # 5. Restart
 systemctl --user start openclaw-gateway.service
@@ -212,12 +207,15 @@ tail -20 monitoring/alerts.log
 
 ### View Queue
 ```bash
-cat memory/evolution/QUEUE.md               # Active tasks (P0/P1/P2)
+python3 -m clarvis queue status            # Summary: counts by priority and section
+python3 -m clarvis queue next              # Show next P0 task
+cat memory/evolution/QUEUE.md              # Full queue (raw markdown)
 ```
 
 ### Add Task
 ```bash
-python3 scripts/queue_writer.py add "Task description" --priority P1
+python3 -m clarvis queue add "Task description" -p P1
+python3 -m clarvis queue archive           # Archive completed tasks
 ```
 
 ### Task Selection (what heartbeat picks next)
@@ -316,7 +314,7 @@ python3 scripts/cron_doctor.py        # Auto-diagnose and recover
 
 ### Brain Errors
 ```bash
-python3 scripts/brain.py health       # Will report collection issues
+python3 -m clarvis brain health       # Will report collection issues
 ls -la data/clarvisdb/chroma.sqlite3  # Check DB file exists and is non-empty
 ```
 
