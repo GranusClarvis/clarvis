@@ -43,11 +43,15 @@ class ClarvisBrain(StoreMixin, GraphMixin, SearchMixin):
         if use_local_embeddings:
             self.data_dir = LOCAL_DATA_DIR
             self.graph_file = LOCAL_GRAPH_FILE
+            self.graph_sqlite_file = LOCAL_GRAPH_SQLITE_FILE
             self.embedding_function = get_local_embedding_function()
         else:
             self.data_dir = DATA_DIR
             self.graph_file = GRAPH_FILE
+            self.graph_sqlite_file = GRAPH_SQLITE_FILE
             self.embedding_function = None
+
+        self.graph_backend = GRAPH_BACKEND
 
         self.client = chromadb.PersistentClient(path=self.data_dir)
         self._init_collections()

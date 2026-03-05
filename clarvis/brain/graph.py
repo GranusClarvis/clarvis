@@ -1,9 +1,15 @@
-"""Brain graph operations — relationship storage, traversal, backfill, decay."""
+"""Brain graph operations — relationship storage, traversal, backfill, decay.
+
+Supports dual-backend: JSON (legacy) + SQLite (via GraphStoreSQLite).
+Backend selection: env CLARVIS_GRAPH_BACKEND=json|sqlite (default: json).
+When sqlite: reads use SQLite, writes dual-write to both JSON and SQLite.
+"""
 
 import json
 import logging
 import math
 import os
+import random
 import fcntl
 from datetime import datetime, timezone
 
@@ -16,7 +22,11 @@ class GraphMixin:
     """Graph operations for ClarvisBrain (mixed into the main class)."""
 
     def _load_graph(self):
-        """Load relationship graph with corruption recovery + file locking + integrity check."""
+        """Load relationship graph with corruption recovery + file locking + integrity check.
+
+        Also initializes SQLite store when CLARVIS_GRAPH_BACKEND=sqlite.
+        """
+        # --- JSON load (always — keeps self.graph populated for compatibility) ---
         if os.path.exists(self.graph_file):
             try:
                 with open(self.graph_file, 'r') as f:
@@ -34,7 +44,6 @@ class GraphMixin:
                     )
                 else:
                     _log.debug("Graph loaded: %d edges (integrity OK)", actual_edges)
-                return
             except (json.JSONDecodeError, IOError, OSError):
                 broken_path = self.graph_file + ".broken"
                 os.rename(self.graph_file, broken_path)
@@ -50,10 +59,26 @@ class GraphMixin:
                         self._save_graph()
                         _log.info("Graph recovered from corruption (%d edges)",
                                   len(self.graph.get("edges", [])))
-                        return
+                    else:
+                        self.graph = {"nodes": {}, "edges": []}
                 except Exception:
-                    pass
-        self.graph = {"nodes": {}, "edges": []}
+                    self.graph = {"nodes": {}, "edges": []}
+        else:
+            self.graph = {"nodes": {}, "edges": []}
+
+        # --- SQLite backend init (dual-write when enabled) ---
+        self._sqlite_store = None
+        backend = getattr(self, 'graph_backend', 'json')
+        if backend == 'sqlite':
+            sqlite_path = getattr(self, 'graph_sqlite_file', None)
+            if sqlite_path:
+                try:
+                    from .graph_store_sqlite import GraphStoreSQLite
+                    self._sqlite_store = GraphStoreSQLite(sqlite_path)
+                    _log.info("SQLite graph store initialized: %s (dual-write enabled)",
+                              sqlite_path)
+                except Exception as exc:
+                    _log.error("Failed to initialize SQLite graph store: %s", exc)
 
     def _save_graph(self):
         """Save relationship graph atomically with file locking to prevent race conditions"""
@@ -92,23 +117,25 @@ class GraphMixin:
 
     def add_relationship(self, from_id, to_id, relationship_type,
                          source_collection=None, target_collection=None):
-        """Add a relationship between two memories."""
+        """Add a relationship between two memories. Dual-writes to SQLite when enabled."""
+        now_str = datetime.now(timezone.utc).isoformat()
+
         if from_id not in self.graph["nodes"]:
             self.graph["nodes"][from_id] = {
                 "collection": source_collection or self._infer_collection(from_id),
-                "added_at": datetime.now(timezone.utc).isoformat(),
+                "added_at": now_str,
             }
         if to_id not in self.graph["nodes"]:
             self.graph["nodes"][to_id] = {
                 "collection": target_collection or self._infer_collection(to_id),
-                "added_at": datetime.now(timezone.utc).isoformat(),
+                "added_at": now_str,
             }
 
         edge = {
             "from": from_id,
             "to": to_id,
             "type": relationship_type,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": now_str,
         }
         if source_collection:
             edge["source_collection"] = source_collection
@@ -123,6 +150,24 @@ class GraphMixin:
 
         self.graph["edges"].append(edge)
         self._save_graph()
+
+        # Dual-write to SQLite
+        if self._sqlite_store is not None:
+            try:
+                src_col = source_collection or self._infer_collection(from_id)
+                tgt_col = target_collection or self._infer_collection(to_id)
+                self._sqlite_store.add_node(from_id, src_col, now_str)
+                self._sqlite_store.add_node(to_id, tgt_col, now_str)
+                self._sqlite_store.add_edge(
+                    from_id, to_id, relationship_type,
+                    created_at=now_str,
+                    source_collection=source_collection,
+                    target_collection=target_collection,
+                )
+            except Exception as exc:
+                _log.warning("SQLite dual-write failed for edge %s->%s: %s",
+                             from_id, to_id, exc)
+
         return edge
 
     def _infer_collection(self, memory_id):
@@ -141,7 +186,14 @@ class GraphMixin:
         return prefix_map.get(prefix, "unknown")
 
     def get_related(self, memory_id, depth=1):
-        """Get memories related to a given memory"""
+        """Get memories related to a given memory.
+
+        Uses SQLite indexed lookups when backend=sqlite, else JSON scan.
+        """
+        if self._sqlite_store is not None:
+            return self._sqlite_store.get_related(memory_id, depth)
+
+        # JSON fallback
         related = []
         visited = set()
 
@@ -172,19 +224,29 @@ class GraphMixin:
     def backfill_graph_nodes(self):
         """Register nodes referenced by edges but missing from the nodes dict."""
         backfilled = 0
+        sqlite_nodes = []  # Collect for batch SQLite insert
         for edge in self.graph.get("edges", []):
             for key in ("from", "to"):
                 node_id = edge.get(key)
                 if node_id and node_id not in self.graph["nodes"]:
                     collection = edge.get(f"{'source' if key == 'from' else 'target'}_collection")
+                    col = collection or self._infer_collection(node_id)
+                    now_str = datetime.now(timezone.utc).isoformat()
                     self.graph["nodes"][node_id] = {
-                        "collection": collection or self._infer_collection(node_id),
-                        "added_at": datetime.now(timezone.utc).isoformat(),
+                        "collection": col,
+                        "added_at": now_str,
                         "backfilled": True,
                     }
+                    sqlite_nodes.append((node_id, col, now_str, 1))
                     backfilled += 1
         if backfilled > 0:
             self._save_graph()
+            # Dual-write backfilled nodes to SQLite
+            if self._sqlite_store is not None and sqlite_nodes:
+                try:
+                    self._sqlite_store.bulk_add_nodes(sqlite_nodes)
+                except Exception as exc:
+                    _log.warning("SQLite dual-write failed for backfill: %s", exc)
         return backfilled
 
     def bulk_cross_link(self, max_distance=1.5, max_links_per_memory=3, verbose=False):
@@ -281,6 +343,10 @@ class GraphMixin:
         target_collections = collections or list(self.collections.keys())
         now_str = datetime.now(timezone.utc).isoformat()
 
+        # Collect for SQLite batch insert
+        sqlite_nodes = []
+        sqlite_edges = []
+
         for col_name in target_collections:
             col = self.collections.get(col_name)
             if col is None or col.count() < 3:
@@ -325,16 +391,22 @@ class GraphMixin:
                         self.graph["nodes"][mem_id] = {
                             "collection": col_name, "added_at": now_str,
                         }
+                        sqlite_nodes.append((mem_id, col_name, now_str, 0))
                     if rid not in self.graph["nodes"]:
                         self.graph["nodes"][rid] = {
                             "collection": col_name, "added_at": now_str,
                         }
+                        sqlite_nodes.append((rid, col_name, now_str, 0))
                     self.graph["edges"].append({
                         "from": mem_id, "to": rid,
                         "type": "intra_similar", "created_at": now_str,
                         "source_collection": col_name,
                         "target_collection": col_name,
                     })
+                    sqlite_edges.append((
+                        mem_id, rid, "intra_similar", now_str,
+                        col_name, col_name, 1.0,
+                    ))
                     existing_pairs.add((mem_id, rid))
                     existing_pairs.add((rid, mem_id))
                     links_added += 1
@@ -350,6 +422,15 @@ class GraphMixin:
         # Single save at end
         if new_edges > 0:
             self._save_graph()
+            # Dual-write batch to SQLite
+            if self._sqlite_store is not None:
+                try:
+                    if sqlite_nodes:
+                        self._sqlite_store.bulk_add_nodes(sqlite_nodes)
+                    if sqlite_edges:
+                        self._sqlite_store.bulk_add_edges(sqlite_edges)
+                except Exception as exc:
+                    _log.warning("SQLite dual-write failed for bulk_intra_link: %s", exc)
 
         return {
             "new_edges": new_edges,
@@ -430,6 +511,18 @@ class GraphMixin:
             self.graph["edges"] = keep
             self._save_graph()
 
+            # Dual-decay in SQLite
+            if self._sqlite_store is not None:
+                try:
+                    self._sqlite_store.decay_edges(
+                        half_life_days=half_life_days,
+                        prune_below=prune_below,
+                        decay_types=decay_types,
+                        dry_run=False,
+                    )
+                except Exception as exc:
+                    _log.warning("SQLite dual-decay failed: %s", exc)
+
         avg_weight = sum(weights_after) / len(weights_after) if weights_after else 0.0
 
         return {
@@ -438,4 +531,96 @@ class GraphMixin:
             "total_before": total_before,
             "total_after": len(keep),
             "avg_weight": round(avg_weight, 4),
+        }
+
+    # ------------------------------------------------------------------
+    # Verification — compare JSON and SQLite for parity
+    # ------------------------------------------------------------------
+
+    def verify_graph_parity(self, sample_n=100):
+        """Compare JSON and SQLite graph stores for parity.
+
+        Checks:
+          1. Node count match
+          2. Edge count match (note: SQLite deduplicates via UNIQUE constraint,
+             so it may have fewer edges if JSON has duplicates)
+          3. Random sample of N edges from JSON verified to exist in SQLite
+
+        Returns dict with counts, deltas, sample results, and overall parity_ok.
+        """
+        if self._sqlite_store is None:
+            return {"error": "SQLite store not initialized (set CLARVIS_GRAPH_BACKEND=sqlite)"}
+
+        json_nodes = len(self.graph.get("nodes", {}))
+        json_edges = len(self.graph.get("edges", []))
+        sqlite_nodes = self._sqlite_store.node_count()
+        sqlite_edges = self._sqlite_store.edge_count()
+
+        # Count JSON deduped edges (unique by from/to/type triple)
+        json_edge_keys = set()
+        json_duplicates = 0
+        for e in self.graph.get("edges", []):
+            key = (e["from"], e["to"], e.get("type"))
+            if key in json_edge_keys:
+                json_duplicates += 1
+            json_edge_keys.add(key)
+        json_unique_edges = len(json_edge_keys)
+
+        # Random sample verification
+        edges = self.graph.get("edges", [])
+        sample_size = min(sample_n, len(edges))
+        sample = random.sample(edges, sample_size) if sample_size > 0 else []
+
+        matched = 0
+        mismatched = []
+        for edge in sample:
+            sqlite_hits = self._sqlite_store.get_edges(
+                from_id=edge["from"],
+                to_id=edge["to"],
+                edge_type=edge["type"],
+            )
+            if sqlite_hits:
+                matched += 1
+            else:
+                mismatched.append({
+                    "from": edge["from"],
+                    "to": edge["to"],
+                    "type": edge["type"],
+                })
+
+        # Edge type distribution comparison
+        json_type_dist = {}
+        for e in self.graph.get("edges", []):
+            t = e.get("type", "unknown")
+            json_type_dist[t] = json_type_dist.get(t, 0) + 1
+
+        sqlite_stats = self._sqlite_store.stats()
+        sqlite_type_dist = sqlite_stats.get("edge_types", {})
+
+        # Parity is OK when:
+        # - node counts match
+        # - SQLite edges == JSON unique edges (dedup-adjusted)
+        # - all sampled edges found in SQLite
+        parity_ok = (
+            json_nodes == sqlite_nodes
+            and json_unique_edges == sqlite_edges
+            and len(mismatched) == 0
+        )
+
+        return {
+            "json_nodes": json_nodes,
+            "sqlite_nodes": sqlite_nodes,
+            "node_delta": sqlite_nodes - json_nodes,
+            "json_edges": json_edges,
+            "json_unique_edges": json_unique_edges,
+            "json_duplicates": json_duplicates,
+            "sqlite_edges": sqlite_edges,
+            "edge_delta": sqlite_edges - json_unique_edges,
+            "sample_size": sample_size,
+            "sample_matched": matched,
+            "sample_mismatched": len(mismatched),
+            "mismatched_edges": mismatched[:10],
+            "json_edge_types": json_type_dist,
+            "sqlite_edge_types": sqlite_type_dist,
+            "parity_ok": parity_ok,
         }
