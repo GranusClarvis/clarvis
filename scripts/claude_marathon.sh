@@ -92,15 +92,20 @@ has_time() {
 }
 
 # --- Utility: run invariants check ---
+# Policy (Inverse directive): do NOT stop immediately on drift.
+# Attempt self-heal up to MAX_SELF_HEAL attempts, then stop if still failing.
+MAX_SELF_HEAL=2
+
 run_invariants() {
     log "INVARIANTS: Running post-batch check..."
-    local inv_output inv_exit
-    inv_output=$(python3 "$SCRIPTS/invariants_check.py" --json 2>&1) || true
-    inv_exit=$?
 
-    # Try to parse JSON result
-    local passed="false"
-    passed=$(echo "$inv_output" | python3 -c "
+    local attempt=0
+    while true; do
+        local inv_output
+        inv_output=$(python3 "$SCRIPTS/invariants_check.py" --json 2>&1) || true
+
+        local passed="false"
+        passed=$(echo "$inv_output" | python3 -c "
 import sys, json
 try:
     data = json.loads(sys.stdin.read())
@@ -109,37 +114,58 @@ except:
     print('false')
 " 2>/dev/null || echo "false")
 
-    if [ "$passed" = "true" ]; then
-        log "INVARIANTS: PASS"
-        return 0
-    else
-        log "INVARIANTS: FAIL — stopping marathon"
-        log "INVARIANTS output: $(echo "$inv_output" | tail -20)"
+        if [ "$passed" = "true" ]; then
+            log "INVARIANTS: PASS"
+            return 0
+        fi
 
-        # Write stop report
-        cat > "$STOP_REPORT" << REPORT_EOF
+        attempt=$((attempt + 1))
+        log "INVARIANTS: FAIL (attempt $attempt/$MAX_SELF_HEAL)"
+        log "INVARIANTS output (tail): $(echo "$inv_output" | tail -20)"
+
+        if [ "$attempt" -gt "$MAX_SELF_HEAL" ]; then
+            log "INVARIANTS: FAIL after self-heal attempts — stopping marathon"
+
+            cat > "$STOP_REPORT" << REPORT_EOF
 # Marathon Stop Report
 
 **Date:** $(date -u +%Y-%m-%dT%H:%M:%S)Z
 **Batch:** $BATCH_NUM
-**Reason:** Invariants check failed after batch
+**Reason:** Invariants failed after ${MAX_SELF_HEAL} self-heal attempts
 
 ## Batches Completed
 $(printf '%s\n' "${BATCH_RESULTS[@]}" 2>/dev/null || echo "None")
 
-## Invariants Output
+## Last Invariants Output
 \`\`\`
-$(echo "$inv_output" | tail -40)
+$(echo "$inv_output" | tail -60)
 \`\`\`
 
 ## Action Required
-1. Check \`python3 scripts/invariants_check.py\` output
+1. Run \`python3 scripts/invariants_check.py\`
 2. Fix failing checks
-3. Re-run marathon: \`./scripts/claude_marathon.sh\`
+3. Restart marathon
 REPORT_EOF
-        log "STOP_REPORT written to $STOP_REPORT"
-        return 1
-    fi
+            log "STOP_REPORT written to $STOP_REPORT"
+            return 1
+        fi
+
+        # --- Self-heal via Claude ---
+        log "SELF-HEAL: Spawning Claude to fix failing invariants"
+        /home/agent/.openclaw/workspace/scripts/spawn_claude.sh "SELF-HEAL INVARIANTS:
+
+The invariants_check.py just failed in the marathon runner.
+
+1) Run: python3 scripts/invariants_check.py (read the JSON output).
+2) Fix the underlying issue(s) causing failures with minimal changes.
+3) Re-run invariants_check.py and ensure it passes.
+4) If you cannot fix safely, add a crisp P0 item to QUEUE.md describing the fix.
+
+Return a brief summary of what you fixed." 2400 >> "$LOGFILE" 2>&1 || true
+
+        auto_commit
+        # loop continues to re-check invariants
+    done
 }
 
 # --- Utility: commit changes if working tree dirty ---
@@ -217,8 +243,31 @@ while has_time; do
     fi
 
     if [ "$QUEUE_EMPTY" = "true" ] || [ "$TASK_COUNT" -eq 0 ]; then
-        log "BATCH $BATCH_NUM: Queue empty or no eligible tasks — stopping"
-        break
+        log "BATCH $BATCH_NUM: Queue empty or no eligible tasks — attempting repopulation"
+
+        # Repopulate queue by asking Claude to add 3-7 concrete tasks.
+        /home/agent/.openclaw/workspace/scripts/spawn_claude.sh "QUEUE REPOPULATION (marathon):
+
+The evolution queue has no eligible tasks for execution (either empty, blocked, credential-gated, or oversized).
+
+1) Read memory/evolution/QUEUE.md and docs/ (recent audits) and pick the highest-leverage next work.
+2) Add 3-7 NEW unchecked tasks to QUEUE.md (no duplicates). Prefer decomposed, executable tasks.
+3) Ensure at least 1 task improves memory/retrieval quality and 1 improves autonomous execution success.
+
+Output: TASKS ADDED: <count> and list them." 2400 >> "$LOGFILE" 2>&1 || true
+
+        auto_commit
+        # retry selection once after repopulation
+        SELECTION_JSON=$(select_tasks 2>> "$LOGFILE")
+        TASK_COUNT=$(echo "$SELECTION_JSON" | python3 -c "import sys,json; d=json.loads(sys.stdin.read()); print(d.get('count',0))" 2>/dev/null || echo "0")
+        if [ "$TASK_COUNT" -eq 0 ]; then
+            log "BATCH $BATCH_NUM: Repopulation did not produce eligible tasks — stopping"
+            break
+        fi
+
+        BATCH_TAGS=$(echo "$SELECTION_JSON" | python3 -c "import sys,json; d=json.loads(sys.stdin.read()); print(','.join(d.get('tags',[])))" 2>/dev/null || echo "")
+        BATCH_PROMPT=$(echo "$SELECTION_JSON" | python3 -c "import sys,json; d=json.loads(sys.stdin.read()); print(d.get('batch_prompt',''))" 2>/dev/null || echo "")
+        log "BATCH $BATCH_NUM: After repopulation selected $TASK_COUNT task(s): [$BATCH_TAGS]"
     fi
 
     log "BATCH $BATCH_NUM: Selected $TASK_COUNT task(s): [$BATCH_TAGS]"

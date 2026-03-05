@@ -114,8 +114,8 @@ def get_completed_tags():
     for m in re.finditer(r'^- \[x\] \[([A-Z0-9_]+)\]', content, re.MULTILINE):
         tags.add(m.group(1))
 
-    # Also check [~] (in-progress/partial)
-    for m in re.finditer(r'^  - \[~\] \[([A-Z0-9_]+)\]', content, re.MULTILINE):
+    # Also check [~] (in-progress/partial) — top-level items
+    for m in re.finditer(r'^- \[~\] \[([A-Z0-9_]+)\]', content, re.MULTILINE):
         tags.add(m.group(1))
 
     return tags
