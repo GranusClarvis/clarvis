@@ -41,6 +41,48 @@ python3 -c "import json; eps=json.load(open('data/episodes.json')); [print(e['ta
 
 ## 2. Brain (ClarvisDB)
 
+---
+
+## 2.1 Evolution Queue Format (QUEUE.md)
+
+The evolution loop relies on `memory/evolution/QUEUE.md` being structured consistently.
+
+### Required format (top-level tasks)
+Use a **single line** per task:
+
+```md
+- [ ] [TAG] One-line description. Include acceptance criteria if possible.
+```
+
+- `TAG` should be **unique**, ALLCAPS, snake-ish (`ORCH_DEP_MAP`, `GRAPH_SOAK_5DAY`).
+- Always include the `[TAG]` prefix: postflight marks completion by **tag**, not by brittle text matching.
+
+### Subtasks
+Indent subtasks beneath the parent (2 spaces is standard):
+
+```md
+  - [ ] [TAG_1] Subtask description
+  - [ ] [TAG_2] Subtask description
+```
+
+### Status conventions
+- Pending: `- [ ]`
+- In progress / blocked: `- [~] [TAG] BLOCKED: reason (what is needed)`
+- Done: `- [x] [TAG] ... (YYYY-MM-DD HH:MM UTC)`
+
+### What NOT to do
+- Don’t write untagged tasks (they won’t be tracked reliably).
+- Don’t make multi-paragraph tasks at the top level; put details in subtasks or a linked doc.
+
+### Quick view
+```bash
+cat memory/evolution/QUEUE.md
+```
+
+---
+
+## 2. Brain (ClarvisDB)
+
 ### Health Check
 ```bash
 python3 -m clarvis brain health        # Full report (collections, counts, graph)
