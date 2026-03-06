@@ -6,7 +6,8 @@ _Completed items auto-archived to QUEUE_ARCHIVE.md._
 
 ## P0 — Do Next Heartbeat
 
-_(empty — no urgent bugs)_
+- [ ] [ORCH_FIRST_REAL_PR] Orchestrator milestone: spawn a project agent on a real repo task and produce a real PR (not just local changes). Output: PR URL + tests/CI green + promote digest back into Clarvis.
+- [ ] [ORCH_SCOREBOARD] Add an orchestration scoreboard (JSONL + summary CLI): per-agent task count, success rate, PR rate, latency, cost, benchmark score. Must be derived from real runs.
 
 
 ---
@@ -17,7 +18,12 @@ _(empty — no urgent bugs)_
 
 - [~] [SEMANTIC_BRIDGE] Build semantic overlap booster for cross-collection pairs with overlap <0.50. Current: semantic_cross_collection=0.575→0.589 (estimated). **v2 mirror strategy added** to `semantic_overlap_booster.py` (`--mirror` flag): copies actual docs between collections instead of templated bridges. All 4 pairs below 0.50 now above 0.50 (avg +0.08). Target 0.65 needs continued mirror runs on remaining weak pairs. _(in progress 2026-03-06)_
 
-## Pillar 2: Autonomous Execution (Success > 85%)
+## Pillar 2: Agent Orchestrator (Multi-Project Command Center)
+
+- [ ] [ORCH_CRON_INTEGRATION] Add daily cron: `project_agent.py promote` + `orchestration_benchmark.py run` for active agents.
+- [ ] [ORCH_AGENT_PROTOCOLS] Implement basic agent interoperability layer: define a simple internal A2A-ish message schema for project agents (task brief → structured result JSON), and enforce it in project_agent.py outputs.
+
+## Pillar 3: Autonomous Execution (Success > 85%)
 
 - [ ] [AUTONOMY_SCREENSHOT_ANALYZE] Take a screenshot of any given URL, analyze it with local vision (Qwen3-VL), extract structured info (page type, main elements, interactive components). Measure: extraction accuracy vs manual ground truth.
 - [ ] [AUTONOMY_MULTI_STEP] Multi-step workflow benchmark — given a sequence of 3+ actions (navigate → search → click result → extract data), complete the full chain. Measure: step completion rate, total success.
@@ -60,7 +66,6 @@ _(empty — no urgent bugs)_
 ### Milestone 1: First PR Pipeline (target: this week)
 
 ### Milestone 2: Cron + Cost (target: next week)
-- [ ] [ORCH_CRON_INTEGRATION] Add daily cron: `project_agent.py promote` + `orchestration_benchmark.py run` for active agents.
 - [ ] [ORCH_SUDO_OPT] Request sudo: `sudo mkdir -p /opt/clarvis-agents && sudo chown agent:agent /opt/clarvis-agents`, then `project_agent.py migrate star-world-order`.
 
 ### Milestone 3: Multi-Agent (target: 2 weeks)
@@ -81,7 +86,7 @@ _(empty — no urgent bugs)_
 
 ## P1
 
-- [ ] [RESEARCH_DISCOVERY 2026-03-05] Research: Agent Interoperability Protocols — MCP + A2A + ACP + ANP Survey (arxiv.org/abs/2505.02279). MCP (Anthropic→Linux Foundation AAIF) standardizes tool/data access; A2A (Google→LF, 100+ enterprises) enables secure agent delegation; ACP + ANP for discovery/routing. Directly applicable to project_agent.py orchestration architecture. Maps Clarvis agent protocol to industry standards. Sources: arxiv.org/abs/2505.02279, onereach.ai/blog/guide-choosing-mcp-vs-a2a-protocols
+- [x] (2026-03-06) [RESEARCH_DISCOVERY 2026-03-05] Research: Agent Interoperability Protocols — MCP + A2A + ACP + ANP. 5 brain memories stored. Research note: memory/research/agent_interoperability_protocols.md. Key finding: Clarvis project_agent.py already implements ~70% of A2A Task model; A2A-aligning agent.json with Agent Cards is next high-value step.
 - [ ] [RESEARCH_DISCOVERY 2026-03-05] Research: Runtime Verification & Metacognitive Self-Correction for Agents — MASC (step-level anomaly detection via next-execution reconstruction, ICLR 2026), AgentSpec (DSL for runtime constraint enforcement, 90%+ unsafe action prevention, ICSE 2026), AgentGuard (dynamic probabilistic assurance), SupervisorAgent (agent interaction monitoring). Improves action accuracy through real-time execution guards and self-correction loops. Sources: arxiv.org/abs/2510.14319, arxiv.org/abs/2503.18666, arxiv.org/abs/2509.23864, arxiv.org/abs/2510.26585
 - [ ] [RESEARCH_DISCOVERY 2026-03-05] Research: Process Reward Models for Agent Step Verification — ThinkPRM (generative CoT verification, 1% labels, +8% OOD), ToolPRMBench (tool-use PRM evaluation), Critical Step Optimization (verified decision-point preference learning), AgentPRM (actor-critic Monte Carlo). Directly improves action accuracy via step-level error detection before execution commits. Sources: arxiv.org/abs/2504.16828, arxiv.org/abs/2601.12294, arxiv.org/abs/2602.03412, arxiv.org/abs/2502.10325
 - [ ] [RECALL_GRAPH_CONTEXT] In `brain.py` recall/search methods, optionally expand results with 1-hop graph neighbors. When a memory is retrieved, also fetch memories connected via existing graph edges and include them as lower-weight "context" entries. No new clustering needed — uses existing 85k+ graph edges. Target: improve complex query recall by providing related context automatically. **Depends on**: [GRAPH_STORAGE_UPGRADE] — indexed SQLite lookups make per-recall graph expansion feasible (<0.1ms vs 4ms per hop). (Extracted from: RAPTOR/Hierarchical RAG research, arXiv:2401.18059)
