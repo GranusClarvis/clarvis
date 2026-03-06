@@ -1,39 +1,39 @@
 # Marathon Stop Report
 
-**Date:** 2026-03-05T23:42:30Z
+**Date:** 2026-03-06T00:03:57Z
 **Batch:** 1
-**Reason:** Invariants failed after 2 self-heal attempts
+**Reason:** invariants_check.py could not be parsed as PASS after 2 self-heal attempts
 
 ## Batches Completed
-Batch 1: SUCCESS [CLI_BRAIN_LIVE,CLI_SUBPKG_ABSORB,CLI_BENCH_EXPAND] (5m)
+Batch 1: SUCCESS [CLI_BRAIN_LIVE,CLI_SUBPKG_ABSORB,CLI_BENCH_EXPAND] (6m)
 
 ## Last Invariants Output
 ```
 [hooks] Registered 7/7 hooks
 === Invariants Check ===
-  [PASS] pytest (75.2s)
-  [PASS] golden-qa (7.7s)
+  [PASS] pytest (73.0s)
+  [PASS] golden-qa (7.4s)
   [PASS] graph-verify (0.0s)
-  [PASS] brain-health (6.2s)
+  [PASS] brain-health (11.1s)
   [PASS] hook-count (0.0s)
 
-Overall: PASS (89.1s)
+Overall: PASS (91.5s)
 {
-  "ts": "2026-03-05T23:42:27.287344+00:00",
+  "ts": "2026-03-06T00:03:54.531402+00:00",
   "passed": true,
-  "elapsed_s": 89.147,
+  "elapsed_s": 91.477,
   "checks": [
     {
       "name": "pytest",
       "passed": true,
-      "elapsed_s": 75.215,
+      "elapsed_s": 72.953,
       "exit_code": 0,
-      "summary": "106 passed in 73.99s (0:01:13)"
+      "summary": "106 passed in 71.69s (0:01:11)"
     },
     {
       "name": "golden-qa",
       "passed": true,
-      "elapsed_s": 7.739,
+      "elapsed_s": 7.443,
       "precision_at_3": 1.0,
       "hits": 25,
       "total": 25
@@ -47,7 +47,7 @@ Overall: PASS (89.1s)
     {
       "name": "brain-health",
       "passed": true,
-      "elapsed_s": 6.192,
+      "elapsed_s": 11.081,
       "status": "healthy",
       "collections": 10
     },
