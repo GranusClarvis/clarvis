@@ -39,7 +39,14 @@ _(empty — no urgent bugs)_
 
 ### AGI-Readiness (from 2026-03-04 audit, see docs/AGI_READINESS_ARCHITECTURE_AUDIT.md)
 
-- [ ] [CHROMADB_SINGLETON] Consolidate 5 different ChromaDB instantiation patterns (main brain, local brain, lite brain, VectorStore, deprecated) into a single factory function. Identified by ARCH_AUDIT_2026-03-05: multiple singletons cause embedding model loaded multiple times, inconsistent collection access, and silent divergence. Target: single `get_brain()` entry point for all callers.
+- [ ] [CHROMADB_SINGLETON] Consolidate ChromaDB instantiation into single factory. Scoping complete (2026-03-06):
+  - **3 production sites**: `clarvis/brain/__init__.py` (main+local singletons, lines 56/114), `scripts/lite_brain.py` (per-agent, line 62), `packages/clarvis-db/clarvis_db/store.py` (standalone, line 60)
+  - **2 test sites**: `clarvis/tests/conftest.py` (line 27), `tests/test_clarvis_brain.py` (line 115)
+  - **3 deprecated**: `scripts/deprecated/clarvis_brain.py`, `clarvisdb.py`, `test_chroma.py` — ignore
+  - **Step 1** (safe, smallest): Create `clarvis/brain/factory.py` with `create_chroma_client(path, use_onnx=True, telemetry=False)`. Wire into ClarvisBrain.__init__ and LiteBrain._get_client. Leave VectorStore (standalone pkg) and test fixtures unchanged.
+  - **Step 2**: Centralize embedding function creation (ONNX vs None).
+  - **Step 3**: Wire test fixtures to factory.
+  - All use PersistentClient. No HTTP/ephemeral. LocalBrain unused in production (skip for now).
 
 ### CLI Migration (see docs/CLI_MIGRATION_PLAN.md)
 
