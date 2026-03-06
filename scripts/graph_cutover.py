@@ -156,25 +156,47 @@ def preflight_checks(dry_run: bool = False) -> bool:
         try:
             old_backend = os.environ.get("CLARVIS_GRAPH_BACKEND")
             os.environ["CLARVIS_GRAPH_BACKEND"] = "sqlite"
+
+            # Reset both the spine brain singleton and the scripts/brain wrapper cache (if any)
             import clarvis.brain as _bmod
             _bmod._brain = None
-            from brain import get_brain
+            try:
+                import brain as _brain_wrapper
+                if hasattr(_brain_wrapper, "_brain"):
+                    _brain_wrapper._brain = None
+            except Exception:
+                pass
+
+            from clarvis.brain import get_brain
             brain = get_brain()
             parity = brain.verify_graph_parity(sample_n=200)
+
+            # Restore env
             if old_backend is not None:
                 os.environ["CLARVIS_GRAPH_BACKEND"] = old_backend
             else:
                 os.environ.pop("CLARVIS_GRAPH_BACKEND", None)
-            # Reset singleton
-            _bmod._brain = None
 
-            parity_ok = parity.get("parity_ok", False)
-            print(f"  [{'OK' if parity_ok else 'FAIL'}] Parity check (200-sample)")
-            print(f"    Nodes: JSON={parity['json_nodes']} SQLite={parity['sqlite_nodes']} delta={parity['node_delta']}")
-            print(f"    Edges: JSON={parity['json_unique_edges']}(unique) SQLite={parity['sqlite_edges']} delta={parity['edge_delta']}")
-            print(f"    Sample: {parity['sample_matched']}/{parity['sample_size']} matched")
-            if not parity_ok:
+            # Reset again for cleanliness
+            _bmod._brain = None
+            try:
+                if hasattr(_brain_wrapper, "_brain"):
+                    _brain_wrapper._brain = None
+            except Exception:
+                pass
+
+            if "error" in parity:
+                print(f"  [FAIL] Parity check (200-sample)")
+                print(f"    Error: {parity['error']}")
                 all_ok = False
+            else:
+                parity_ok = parity.get("parity_ok", False)
+                print(f"  [{'OK' if parity_ok else 'FAIL'}] Parity check (200-sample)")
+                print(f"    Nodes: JSON={parity['json_nodes']} SQLite={parity['sqlite_nodes']} delta={parity['node_delta']}")
+                print(f"    Edges: JSON={parity['json_unique_edges']}(unique) SQLite={parity['sqlite_edges']} delta={parity['edge_delta']}")
+                print(f"    Sample: {parity['sample_matched']}/{parity['sample_size']} matched")
+                if not parity_ok:
+                    all_ok = False
         except Exception as exc:
             print(f"  [FAIL] Parity check: {exc}")
             all_ok = False
