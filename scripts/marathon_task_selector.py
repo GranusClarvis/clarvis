@@ -32,6 +32,7 @@ QUEUE_FILE = "/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md"
 SKIP_TAGS = {
     "AUTONOMY_LOGIN", "AUTONOMY_POST", "UNIVERSAL_WEB_AGENT",
     "GITHUB_API_TASKS", "ORCH_SUDO_OPT",
+    "CLI_SUBPKG_ABSORB",  # Blocked: requires human decision (Inverse)
 }
 
 # Dependency map: tag -> set of tags that must be done first
