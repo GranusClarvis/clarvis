@@ -328,6 +328,14 @@ def run_preflight(dry_run=False):
         return result
 
     result["task"] = next_task
+    # Canonical tag for deterministic QUEUE completion marking
+    try:
+        import re
+        m = re.match(r"\[([^\]]+)\]", next_task.strip())
+        result["task_tag"] = m.group(1) if m else None
+    except Exception:
+        result["task_tag"] = None
+
     result["task_section"] = task_section
     result["task_salience"] = round(best_salience, 4)
     result["timings"]["task_selection"] = round(time.monotonic() - t2, 3)

@@ -1246,7 +1246,14 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
             if exit_code == 0:
                 # Success — mark complete
                 timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-                result_mark = _mark_task_in_queue(task, timestamp)
+                # Prefer canonical tag emitted by preflight when available
+                task_for_marking = task
+                try:
+                    if isinstance(preflight, dict) and preflight.get("task_tag"):
+                        task_for_marking = f"[{preflight['task_tag']}]"
+                except Exception:
+                    pass
+                result_mark = _mark_task_in_queue(task_for_marking, timestamp)
                 if result_mark == "marked":
                     log("Marked task complete in QUEUE.md")
                 elif result_mark == "archived":
