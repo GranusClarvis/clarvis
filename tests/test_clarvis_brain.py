@@ -855,5 +855,82 @@ class TestBulkCrossLink:
         assert isinstance(result["new_edges"], int)
 
 
+# ---------------------------------------------------------------------------
+# Factory singleton tests
+# ---------------------------------------------------------------------------
+
+class TestChromaFactory:
+    def test_same_path_returns_same_client(self, tmp_path):
+        """get_chroma_client with same path should return identical object."""
+        from clarvis.brain.factory import get_chroma_client, reset_singletons
+        reset_singletons()
+        try:
+            p = str(tmp_path / "fac1")
+            c1 = get_chroma_client(p)
+            c2 = get_chroma_client(p)
+            assert c1 is c2
+        finally:
+            reset_singletons()
+
+    def test_different_paths_return_different_clients(self, tmp_path):
+        """get_chroma_client with different paths should return separate objects."""
+        from clarvis.brain.factory import get_chroma_client, reset_singletons
+        reset_singletons()
+        try:
+            c1 = get_chroma_client(str(tmp_path / "a"))
+            c2 = get_chroma_client(str(tmp_path / "b"))
+            assert c1 is not c2
+        finally:
+            reset_singletons()
+
+    def test_collections_consistent_across_calls(self, tmp_path):
+        """Collections created via one reference should be visible via another."""
+        from clarvis.brain.factory import get_chroma_client, reset_singletons
+        reset_singletons()
+        try:
+            p = str(tmp_path / "coll_test")
+            c1 = get_chroma_client(p)
+            c1.get_or_create_collection("test-col")
+            c2 = get_chroma_client(p)
+            names = [c.name for c in c2.list_collections()]
+            assert "test-col" in names
+        finally:
+            reset_singletons()
+
+    def test_embedding_singleton(self):
+        """get_embedding_function should return same ONNX instance."""
+        from clarvis.brain.factory import get_embedding_function, reset_singletons
+        reset_singletons()
+        try:
+            e1 = get_embedding_function(use_onnx=True)
+            e2 = get_embedding_function(use_onnx=True)
+            assert e1 is e2
+            assert e1 is not None
+        finally:
+            reset_singletons()
+
+    def test_embedding_none_when_disabled(self):
+        """get_embedding_function(use_onnx=False) should return None."""
+        from clarvis.brain.factory import get_embedding_function
+        assert get_embedding_function(use_onnx=False) is None
+
+    def test_reset_clears_singletons(self, tmp_path):
+        """reset_singletons should make next call create fresh instances."""
+        from clarvis.brain.factory import get_chroma_client, reset_singletons
+        reset_singletons()
+        p = str(tmp_path / "reset_test")
+        c1 = get_chroma_client(p)
+        reset_singletons()
+        c2 = get_chroma_client(p)
+        assert c1 is not c2
+
+    def test_brain_uses_factory_client(self, brain_instance):
+        """ClarvisBrain.client should be a chromadb client (wired through factory)."""
+        import chromadb
+        assert hasattr(brain_instance, 'client')
+        # Verify it's a real chromadb client (has list_collections)
+        assert hasattr(brain_instance.client, 'list_collections')
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

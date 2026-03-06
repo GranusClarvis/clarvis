@@ -11,7 +11,6 @@ register hooks instead of being imported by brain — dependency inversion break
 """
 
 import re
-import chromadb
 import time
 
 from .constants import (
@@ -22,6 +21,7 @@ from .constants import (
     ALL_COLLECTIONS, DEFAULT_COLLECTIONS,
     route_query, get_local_embedding_function,
 )
+from .factory import get_chroma_client, get_embedding_function
 from .graph import GraphMixin
 from .search import SearchMixin
 from .store import StoreMixin
@@ -44,7 +44,7 @@ class ClarvisBrain(StoreMixin, GraphMixin, SearchMixin):
             self.data_dir = LOCAL_DATA_DIR
             self.graph_file = LOCAL_GRAPH_FILE
             self.graph_sqlite_file = LOCAL_GRAPH_SQLITE_FILE
-            self.embedding_function = get_local_embedding_function()
+            self.embedding_function = get_embedding_function(use_onnx=True)
         else:
             self.data_dir = DATA_DIR
             self.graph_file = GRAPH_FILE
@@ -53,7 +53,7 @@ class ClarvisBrain(StoreMixin, GraphMixin, SearchMixin):
 
         self.graph_backend = GRAPH_BACKEND
 
-        self.client = chromadb.PersistentClient(path=self.data_dir)
+        self.client = get_chroma_client(self.data_dir)
         self._init_collections()
         self._load_graph()
 
@@ -123,7 +123,7 @@ class LocalBrain(ClarvisBrain):
             source_path = DATA_DIR
 
         migrated = 0
-        source_client = chromadb.PersistentClient(path=source_path)
+        source_client = get_chroma_client(source_path)
 
         for col_name in ALL_COLLECTIONS:
             try:

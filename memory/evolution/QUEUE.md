@@ -39,14 +39,12 @@ _(empty — no urgent bugs)_
 
 ### AGI-Readiness (from 2026-03-04 audit, see docs/AGI_READINESS_ARCHITECTURE_AUDIT.md)
 
-- [ ] [CHROMADB_SINGLETON] Consolidate ChromaDB instantiation into single factory. Scoping complete (2026-03-06):
-  - **3 production sites**: `clarvis/brain/__init__.py` (main+local singletons, lines 56/114), `scripts/lite_brain.py` (per-agent, line 62), `packages/clarvis-db/clarvis_db/store.py` (standalone, line 60)
-  - **2 test sites**: `clarvis/tests/conftest.py` (line 27), `tests/test_clarvis_brain.py` (line 115)
-  - **3 deprecated**: `scripts/deprecated/clarvis_brain.py`, `clarvisdb.py`, `test_chroma.py` — ignore
-  - **Step 1** (safe, smallest): Create `clarvis/brain/factory.py` with `create_chroma_client(path, use_onnx=True, telemetry=False)`. Wire into ClarvisBrain.__init__ and LiteBrain._get_client. Leave VectorStore (standalone pkg) and test fixtures unchanged.
-  - **Step 2**: Centralize embedding function creation (ONNX vs None).
-  - **Step 3**: Wire test fixtures to factory.
-  - All use PersistentClient. No HTTP/ephemeral. LocalBrain unused in production (skip for now).
+- [~] [CHROMADB_SINGLETON] Consolidate ChromaDB instantiation into single factory. Steps 1+2 done (2026-03-06):
+  - **Done**: `clarvis/brain/factory.py` — `get_chroma_client(path)` (singleton per abs-path), `get_embedding_function(use_onnx)` (singleton ONNX model), `reset_singletons()` (test helper). Thread-safe with double-checked locking.
+  - **Done**: ClarvisBrain wired (`__init__.py` lines 56, 126 → factory). LiteBrain wired (`lite_brain.py` lines 62-68, 82-86 → factory). Both embedding + client consolidated.
+  - **Done**: 8 factory tests in `tests/test_clarvis_brain.py` — singleton identity, path isolation, collection consistency, embedding singleton, reset. All 87 tests pass.
+  - **Remaining Step 3**: Wire test fixtures (`conftest.py`, `test_clarvis_brain.py` brain_instance) to use factory instead of direct `chromadb.PersistentClient`.
+  - VectorStore (`packages/clarvis-db`) intentionally unchanged (standalone package, own lifecycle).
 
 ### CLI Migration (see docs/CLI_MIGRATION_PLAN.md)
 

@@ -61,11 +61,8 @@ class LiteBrain:
 
     def _get_client(self):
         if self._client is None:
-            import chromadb
-            self._client = chromadb.PersistentClient(
-                path=str(self.data_dir),
-                settings=chromadb.Settings(anonymized_telemetry=False),
-            )
+            from clarvis.brain.factory import get_chroma_client
+            self._client = get_chroma_client(str(self.data_dir))
         return self._client
 
     def _get_collection(self, name: str):
@@ -81,8 +78,8 @@ class LiteBrain:
 
     def _get_embed_fn(self):
         if self._embed_fn is None:
-            from chromadb.utils.embedding_functions import ONNXMiniLM_L6_V2
-            self._embed_fn = ONNXMiniLM_L6_V2()
+            from clarvis.brain.factory import get_embedding_function
+            self._embed_fn = get_embedding_function(use_onnx=True)
         return self._embed_fn
 
     def _gen_id(self, text: str) -> str:
