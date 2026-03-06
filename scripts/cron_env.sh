@@ -29,6 +29,8 @@ cd "$CLARVIS_WORKSPACE"
 # Uncomment the line below to enable SQLite graph backend for soak testing.
 # Before enabling, run: python3 scripts/graph_migrate_to_sqlite.py --safe
 export CLARVIS_GRAPH_BACKEND="sqlite"
+# During soak: dual-write JSON+SQLite to validate parity. After soak cutover, this will be set to 0.
+export CLARVIS_GRAPH_DUAL_WRITE="1"
 
 # Shared helper: get current weakest performance metric (fast, reads cached file)
 get_weakest_metric() {

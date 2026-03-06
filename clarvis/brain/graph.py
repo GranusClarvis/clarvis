@@ -115,21 +115,34 @@ class GraphMixin:
             fcntl.flock(f.fileno(), fcntl.LOCK_UN)
         os.replace(tmp_path, self.graph_file)
 
+    def _dual_write_enabled(self) -> bool:
+        # When backend=sqlite, we can stop writing JSON after soak.
+        return os.environ.get("CLARVIS_GRAPH_DUAL_WRITE", "1") != "0"
+
     def add_relationship(self, from_id, to_id, relationship_type,
                          source_collection=None, target_collection=None):
-        """Add a relationship between two memories. Dual-writes to SQLite when enabled."""
+        """Add a relationship between two memories.
+
+        - backend=json: writes JSON
+        - backend=sqlite + dual_write=1: writes JSON + SQLite
+        - backend=sqlite + dual_write=0: writes SQLite only
+        """
         now_str = datetime.now(timezone.utc).isoformat()
 
-        if from_id not in self.graph["nodes"]:
-            self.graph["nodes"][from_id] = {
-                "collection": source_collection or self._infer_collection(from_id),
-                "added_at": now_str,
-            }
-        if to_id not in self.graph["nodes"]:
-            self.graph["nodes"][to_id] = {
-                "collection": target_collection or self._infer_collection(to_id),
-                "added_at": now_str,
-            }
+        dual_write = self._dual_write_enabled()
+
+        # If we're in SQLite-only mode, do not mutate the JSON graph.
+        if dual_write or self._sqlite_store is None:
+            if from_id not in self.graph["nodes"]:
+                self.graph["nodes"][from_id] = {
+                    "collection": source_collection or self._infer_collection(from_id),
+                    "added_at": now_str,
+                }
+            if to_id not in self.graph["nodes"]:
+                self.graph["nodes"][to_id] = {
+                    "collection": target_collection or self._infer_collection(to_id),
+                    "added_at": now_str,
+                }
 
         edge = {
             "from": from_id,
@@ -142,16 +155,17 @@ class GraphMixin:
         if target_collection:
             edge["target_collection"] = target_collection
 
-        for existing in self.graph["edges"]:
-            if (existing["from"] == from_id and
-                    existing["to"] == to_id and
-                    existing["type"] == relationship_type):
-                return existing
+        if dual_write or self._sqlite_store is None:
+            for existing in self.graph["edges"]:
+                if (existing["from"] == from_id and
+                        existing["to"] == to_id and
+                        existing["type"] == relationship_type):
+                    return existing
 
-        self.graph["edges"].append(edge)
-        self._save_graph()
+            self.graph["edges"].append(edge)
+            self._save_graph()
 
-        # Dual-write to SQLite
+        # Write to SQLite when enabled
         if self._sqlite_store is not None:
             try:
                 src_col = source_collection or self._infer_collection(from_id)
@@ -165,7 +179,7 @@ class GraphMixin:
                     target_collection=target_collection,
                 )
             except Exception as exc:
-                _log.warning("SQLite dual-write failed for edge %s->%s: %s",
+                _log.warning("SQLite write failed for edge %s->%s: %s",
                              from_id, to_id, exc)
 
         return edge
@@ -240,13 +254,15 @@ class GraphMixin:
                     sqlite_nodes.append((node_id, col, now_str, 1))
                     backfilled += 1
         if backfilled > 0:
-            self._save_graph()
-            # Dual-write backfilled nodes to SQLite
+            # Only persist JSON during soak/dual-write. After cutover, JSON becomes archival.
+            if self._sqlite_store is None or self._dual_write_enabled():
+                self._save_graph()
+
             if self._sqlite_store is not None and sqlite_nodes:
                 try:
                     self._sqlite_store.bulk_add_nodes(sqlite_nodes)
                 except Exception as exc:
-                    _log.warning("SQLite dual-write failed for backfill: %s", exc)
+                    _log.warning("SQLite write failed for backfill: %s", exc)
         return backfilled
 
     def bulk_cross_link(self, max_distance=1.5, max_links_per_memory=3, verbose=False):
@@ -509,9 +525,12 @@ class GraphMixin:
 
         if not dry_run and (decayed_count > 0 or pruned_count > 0):
             self.graph["edges"] = keep
-            self._save_graph()
 
-            # Dual-decay in SQLite
+            # Only persist JSON during soak/dual-write. After cutover, JSON becomes archival.
+            if self._sqlite_store is None or self._dual_write_enabled():
+                self._save_graph()
+
+            # Apply decay in SQLite when enabled
             if self._sqlite_store is not None:
                 try:
                     self._sqlite_store.decay_edges(
@@ -521,7 +540,7 @@ class GraphMixin:
                         dry_run=False,
                     )
                 except Exception as exc:
-                    _log.warning("SQLite dual-decay failed: %s", exc)
+                    _log.warning("SQLite decay failed: %s", exc)
 
         avg_weight = sum(weights_after) / len(weights_after) if weights_after else 0.0
 
