@@ -72,7 +72,11 @@ SEMANTIC_WEIGHT = 0.70       # α — weight for ChromaDB semantic distance
 ACTIVATION_WEIGHT = 0.30     # (1-α) — weight for ACT-R activation
 
 # Retrieval threshold (memories below this activation are demoted)
-RETRIEVAL_TAU = -2.0         # ACT-R default τ (log-scale)
+# Calibrated 2026-03-06: -2.0 clipped 98.7% of single-access memories
+# to hard floor (0.05). Lowered to -5.0 so only genuinely forgotten memories
+# (created months ago, never re-accessed) get the floor penalty.
+# At -5.0: 63.7% above threshold; remaining 36.3% are old/unused.
+RETRIEVAL_TAU = -5.0         # Calibrated τ (log-scale)
 
 
 def compute_base_level(access_times, now_ts=None, use_spacing=True):

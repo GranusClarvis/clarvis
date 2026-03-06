@@ -610,3 +610,11 @@ _Last archived: 2026-03-06_
 - [x] [CLI_BRAIN_LIVE] Verify `clarvis brain health` output matches `python3 scripts/brain.py health` exactly. _(completed 2026-03-06, outputs match — same format, same data)_
 - [x] [CLI_BENCH_EXPAND] Add missing bench subcommands: `record`, `trend [days]`, `check` (exit 1 on failures), `heartbeat` (quick check), `weakest` (weakest metric). _(completed 2026-03-05, commit 209a84c)_
 - [x] [PERFORMANCE_BENCHMARK 2026-03-06] [PERF] Episode Success Rate 0.0 + PI drop to 0.729. _(fixed 2026-03-06: scripts/episodic_memory.py wrapper missing EpisodicMemory re-export after migration to clarvis/memory/)_
+
+## Archived 2026-03-06
+- [x] [ORCH_FIRST_REAL_PR] _(done 2026-03-06)_ Spawned star-world-order agent → PR #176 (https://github.com/InverseAltruism/Star-World-Order/pull/176). CONTRIBUTING.md rewrite, 59s, success. Promoted 7 procedures + digest back to Clarvis. No CI checks on upstream (CI workflow PR #175 not merged yet). Scoreboard confirms: 5 tasks, 2 PRs, 100% success.
+- [x] [ORCH_SCOREBOARD] _(done 2026-03-06)_ Created `scripts/orchestration_scoreboard.py`: summary table, per-agent detail view, JSONL recording, history trend. Reads from agent.json + task summaries + benchmarks. 5 agents tracked, 8 total tasks, 1 PR, 100% success rate. CLI: `summary|agent <name>|record|history [days]`.
+- [x] [ORCH_SCOREBOARD_IMPL] _(done 2026-03-06)_ Same as [ORCH_SCOREBOARD] above.
+- [x] [RESEARCH_IIT4_2026-03-06] Research: Integrated Information Theory (IIT) 4.0 (PLOS Comp Bio 2023) — axioms→postulates mapping, intrinsic cause–effect power, Intrinsic Difference (ID) measure, explicit causal relations. _(completed 2026-03-06)_
+- [x] [ACTR_WIRING_4] _(done 2026-03-06)_ Benchmark: P@1=1.000, P@3=0.867, MRR=1.000 — zero regression. Calibrated τ from -2.0→-5.0. Old τ clipped 98.7% of single-access memories; new τ keeps 63.7% in continuous sigmoid scoring. Distribution: activation range [-6.7, +1.7], mean -2.45, median -1.47.
+- [x] (2026-03-06) [RESEARCH_DISCOVERY 2026-03-05] Research: Agent Interoperability Protocols — MCP + A2A + ACP + ANP. 5 brain memories stored. Research note: memory/research/agent_interoperability_protocols.md. Key finding: Clarvis project_agent.py already implements ~70% of A2A Task model; A2A-aligning agent.json with Agent Cards is next high-value step.

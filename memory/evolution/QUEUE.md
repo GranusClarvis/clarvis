@@ -6,8 +6,6 @@ _Completed items auto-archived to QUEUE_ARCHIVE.md._
 
 ## P0 — Do Next Heartbeat
 
-- [ ] [ORCH_FIRST_REAL_PR] Orchestrator milestone: spawn a project agent on a real repo task and produce a real PR (not just local changes). Output: PR URL + tests/CI green + promote digest back into Clarvis.
-- [ ] [ORCH_SCOREBOARD] Add an orchestration scoreboard (JSONL + summary CLI): per-agent task count, success rate, PR rate, latency, cost, benchmark score. Must be derived from real runs.
 
 
 ---
@@ -20,7 +18,26 @@ _Completed items auto-archived to QUEUE_ARCHIVE.md._
 
 ## Pillar 2: Agent Orchestrator (Multi-Project Command Center)
 
+_Design: `docs/ORCHESTRATOR_PLAN_2026-03-06.md` — 5-phase rollout._
+
+### Phase 1: Scoreboard + Trust (P0)
+- [ ] [ORCH_TRUST_SCORE] Add outcome-based trust scoring to `project_agent.py`: `trust_score` field in `agent.json`, adjustment table (pr_merged +0.05, task_failed -0.10, ci_broke_main -0.20, etc.), trust tiers (autonomous ≥0.80, supervised ≥0.50, restricted ≥0.20, suspended =0.00). Update trust post-spawn in `cmd_spawn()`.
+
+### Phase 2: Multi-Session Loop (P0)
+- [ ] [ORCH_DECOMPOSE] Add `decompose_task()` to `project_agent.py`: takes task string + agent context (procedures, repo structure), returns 1-5 subtask list with deps. Uses lite brain + `dependency_map.json` if available. Single-task fallback for simple tasks.
+- [ ] [ORCH_TASK_LOOP] Add `run_task_loop()` and CLI command `project_agent.py loop <name> "<task>"`: plan→execute→verify→fix cycle per subtask, shared work branch, budget/session/timeout exit criteria, episode storage per subtask. See plan §3.2.
+- [ ] [ORCH_CI_FEEDBACK] Add CI feedback loop: `_poll_ci_checks(pr_number, repo)` via `gh pr checks`, `_extract_ci_failure_logs()` via `gh api`, re-spawn agent with failure context (max 2 CI-fix attempts). Wire into `run_task_loop()` final phase.
+
+### Phase 3: Cron Integration (P1)
 - [ ] [ORCH_CRON_INTEGRATION] Add daily cron: `project_agent.py promote` + `orchestration_benchmark.py run` for active agents.
+- [ ] [ORCH_CRON_COEXIST] Add `is_cron_window_clear(minutes_needed)` to `project_agent.py`: reads system crontab, checks if any job scheduled within window. Create `scripts/cron_agent_loop.sh` for time-slotted agent execution between cron slots. Release global lock between loop sessions.
+
+### Phase 4: Enhanced Brain (P1)
+- [ ] [ORCH_CI_CONTEXT] Add `build_ci_context()`: scan repo for test/build/lint commands from config files (package.json, Makefile, pyproject.toml), write `ci_context.json` per agent. Include in spawn prompt.
+- [ ] [ORCH_DEP_MAP] Add `build_dependency_map()`: scan repo for entry points, config files, test dirs, key modules. Write `dependency_map.json` per agent. Feed into decomposer for smarter subtask splits.
+- [ ] [ORCH_AUTO_GOLDEN_QA] After successful tasks, auto-generate 1-2 golden QA pairs from task context. Deduplicate (cosine < 0.85), cap at 50 per agent. Run `benchmark_retrieval()` weekly via cron.
+
+### Deferred
 - [ ] [ORCH_AGENT_PROTOCOLS] Implement basic agent interoperability layer: define a simple internal A2A-ish message schema for project agents (task brief → structured result JSON), and enforce it in project_agent.py outputs.
 
 ## Pillar 3: Autonomous Execution (Success > 85%)
@@ -30,7 +47,6 @@ _Completed items auto-archived to QUEUE_ARCHIVE.md._
 
 ## Research Sessions
 
-- [x] [RESEARCH_IIT4_2026-03-06] Research: Integrated Information Theory (IIT) 4.0 (PLOS Comp Bio 2023) — axioms→postulates mapping, intrinsic cause–effect power, Intrinsic Difference (ID) measure, explicit causal relations. _(completed 2026-03-06)_
 - [ ] [BROWSER_SKILL_DOC] Create skills/web-browse/SKILL.md documenting browser_agent.py capabilities for M2.5.
 
 ## Pillar 3: Performance & Reliability (PI > 0.70)
@@ -63,12 +79,9 @@ _Completed items auto-archived to QUEUE_ARCHIVE.md._
 
 ## Pillar 5: Agent Orchestrator (Multi-Project Command Center)
 
-### Milestone 1: First PR Pipeline (target: this week)
+_Consolidated into Pillar 2 above. See `docs/ORCHESTRATOR_PLAN_2026-03-06.md` for full design._
 
-### Milestone 2: Cron + Cost (target: next week)
 - [ ] [ORCH_SUDO_OPT] Request sudo: `sudo mkdir -p /opt/clarvis-agents && sudo chown agent:agent /opt/clarvis-agents`, then `project_agent.py migrate star-world-order`.
-
-### Milestone 3: Multi-Agent (target: 2 weeks)
 
 ## Backlog
 
@@ -82,11 +95,9 @@ _Completed items auto-archived to QUEUE_ARCHIVE.md._
 ## Non-Code Improvements
 
 - [ ] [ACTR_WIRING] Wire `actr_activation.py` into `brain.py` recall path — add power-law decay scoring as a re-ranking factor after ChromaDB vector search. Hook registration exists in `clarvis/brain/hooks.py` and scoring path works end-to-end. Remaining: calibration of RETRIEVAL_TAU (memories with <3 accesses get clipped to floor score). (Phase 5 priority #10.)
-  - [ ] [ACTR_WIRING_4] Run real-world smoke benchmark: before/after on a fixed query set; ensure no regression in precision@3. Calibrate RETRIEVAL_TAU (current -2.0 clips single-access memories).
 
 ## P1
 
-- [x] (2026-03-06) [RESEARCH_DISCOVERY 2026-03-05] Research: Agent Interoperability Protocols — MCP + A2A + ACP + ANP. 5 brain memories stored. Research note: memory/research/agent_interoperability_protocols.md. Key finding: Clarvis project_agent.py already implements ~70% of A2A Task model; A2A-aligning agent.json with Agent Cards is next high-value step.
 - [ ] [RESEARCH_DISCOVERY 2026-03-05] Research: Runtime Verification & Metacognitive Self-Correction for Agents — MASC (step-level anomaly detection via next-execution reconstruction, ICLR 2026), AgentSpec (DSL for runtime constraint enforcement, 90%+ unsafe action prevention, ICSE 2026), AgentGuard (dynamic probabilistic assurance), SupervisorAgent (agent interaction monitoring). Improves action accuracy through real-time execution guards and self-correction loops. Sources: arxiv.org/abs/2510.14319, arxiv.org/abs/2503.18666, arxiv.org/abs/2509.23864, arxiv.org/abs/2510.26585
 - [ ] [RESEARCH_DISCOVERY 2026-03-05] Research: Process Reward Models for Agent Step Verification — ThinkPRM (generative CoT verification, 1% labels, +8% OOD), ToolPRMBench (tool-use PRM evaluation), Critical Step Optimization (verified decision-point preference learning), AgentPRM (actor-critic Monte Carlo). Directly improves action accuracy via step-level error detection before execution commits. Sources: arxiv.org/abs/2504.16828, arxiv.org/abs/2601.12294, arxiv.org/abs/2602.03412, arxiv.org/abs/2502.10325
 - [ ] [RECALL_GRAPH_CONTEXT] In `brain.py` recall/search methods, optionally expand results with 1-hop graph neighbors. When a memory is retrieved, also fetch memories connected via existing graph edges and include them as lower-weight "context" entries. No new clustering needed — uses existing 85k+ graph edges. Target: improve complex query recall by providing related context automatically. **Depends on**: [GRAPH_STORAGE_UPGRADE] — indexed SQLite lookups make per-recall graph expansion feasible (<0.1ms vs 4ms per hop). (Extracted from: RAPTOR/Hierarchical RAG research, arXiv:2401.18059)
