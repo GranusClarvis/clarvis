@@ -7,7 +7,6 @@ _Completed items auto-archived to QUEUE_ARCHIVE.md._
 ## P0 — Do Next Heartbeat
 
 
-
 ---
 
 ## Pillar 1: Consciousness & Integration (Phi > 0.80)
@@ -21,30 +20,20 @@ _Completed items auto-archived to QUEUE_ARCHIVE.md._
 _Design: `docs/ORCHESTRATOR_PLAN_2026-03-06.md` — 5-phase rollout._
 
 ### Phase 1: Scoreboard + Trust (P0)
-- [ ] [ORCH_TRUST_SCORE] Add outcome-based trust scoring to `project_agent.py`: `trust_score` field in `agent.json`, adjustment table (pr_merged +0.05, task_failed -0.10, ci_broke_main -0.20, etc.), trust tiers (autonomous ≥0.80, supervised ≥0.50, restricted ≥0.20, suspended =0.00). Update trust post-spawn in `cmd_spawn()`.
 
 ### Phase 2: Multi-Session Loop (P0)
-- [ ] [ORCH_DECOMPOSE] Add `decompose_task()` to `project_agent.py`: takes task string + agent context (procedures, repo structure), returns 1-5 subtask list with deps. Uses lite brain + `dependency_map.json` if available. Single-task fallback for simple tasks.
-- [ ] [ORCH_TASK_LOOP] Add `run_task_loop()` and CLI command `project_agent.py loop <name> "<task>"`: plan→execute→verify→fix cycle per subtask, shared work branch, budget/session/timeout exit criteria, episode storage per subtask. See plan §3.2.
-- [ ] [ORCH_CI_FEEDBACK] Add CI feedback loop: `_poll_ci_checks(pr_number, repo)` via `gh pr checks`, `_extract_ci_failure_logs()` via `gh api`, re-spawn agent with failure context (max 2 CI-fix attempts). Wire into `run_task_loop()` final phase.
 
 ### Phase 3: Cron Integration (P1)
-- [ ] [ORCH_CRON_INTEGRATION] Add daily cron: `project_agent.py promote` + `orchestration_benchmark.py run` for active agents.
-- [ ] [ORCH_CRON_COEXIST] Add `is_cron_window_clear(minutes_needed)` to `project_agent.py`: reads system crontab, checks if any job scheduled within window. Create `scripts/cron_agent_loop.sh` for time-slotted agent execution between cron slots. Release global lock between loop sessions.
 
 ### Phase 4: Enhanced Brain (P1)
-- [ ] [ORCH_DEP_MAP] Add `build_dependency_map()`: scan repo for entry points, config files, test dirs, key modules. Write `dependency_map.json` per agent. Feed into decomposer for smarter subtask splits.
-- [ ] [ORCH_AUTO_GOLDEN_QA] After successful tasks, auto-generate 1-2 golden QA pairs from task context. Deduplicate (cosine < 0.85), cap at 50 per agent. Run `benchmark_retrieval()` weekly via cron.
 
 ### Phase 5: Visual Ops Dashboard (P1)
 - [ ] [ORCH_VISUAL_DASHBOARD] Build a **visual-only** pixel-art “Habbo style” live dashboard served over LAN IP (no controls; all commands remain via TG/Discord).
   - Shows: current QUEUE tasks, active task being executed, recent evolution runs, subagents list + their current tasks/status, and PR/CI outcomes.
   - Style: 2D game-ish rooms/avatars like the reference image.
   - Data sources: `memory/evolution/QUEUE.md`, `memory/cron/digest.md`, `memory/cron/autonomous.log`, `memory/cron/marathon.log`, `scripts/orchestration_scoreboard.py` outputs, `data/invariants_runs.jsonl`, GitHub PR list via `gh` (read-only).
-  - [ ] [ORCH_VISUAL_DASHBOARD_1] Define an events/state JSON schema (`data/dashboard/state.json`) + append-only event log (`data/dashboard/events.jsonl`).
   - [ ] [ORCH_VISUAL_DASHBOARD_2] Implement a tiny local HTTP server (FastAPI/Starlette or static + SSE/WebSocket) that serves state + streams events.
   - [ ] [ORCH_VISUAL_DASHBOARD_3] Implement a renderer: pixel UI layout (Canvas/WebGL/Phaser) with rooms/tiles + agent cards; read-only.
-  - [ ] [ORCH_VISUAL_DASHBOARD_4] Hook publishers: cron jobs + `project_agent.py loop` emit events (task start/finish, self-heal, PR created, CI pass/fail).
   - [ ] [ORCH_VISUAL_DASHBOARD_5] Hardening: no auth needed but **no command endpoints** exposed; bind to LAN only; rate limit; CORS off.
 
 ### Deferred
@@ -57,6 +46,7 @@ _Design: `docs/ORCHESTRATOR_PLAN_2026-03-06.md` — 5-phase rollout._
 
 ## Research Sessions
 
+- [ ] [RESEARCH_REPO_CLAW_EMPIRE] Deep review repo: https://github.com/GreenSheep01201/claw-empire — OpenClaw orchestrator + 2D game-style dashboard reference. Extract: (1) architecture + event model, (2) dashboard implementation (rendering stack, state model, transport), (3) what to copy into Clarvis `ORCH_VISUAL_DASHBOARD` + project_agent loop, (4) what not to copy. Output: 10 bullets + 5 concrete implementation items with file targets.
 - [ ] [RESEARCH_REPO_HERMES_AGENT] Deep review repo: https://github.com/NousResearch/hermes-agent — extract improvements relevant to Clarvis/OpenClaw (bounded prompt memory + nudges/flush, memory injection security patterns, FTS session search, snapshotting/caching, skill self-improvement + security scanning, skill hub/open standard). Output: concise comparison + 5 concrete adoptable changes with file targets.
 - [ ] [BROWSER_SKILL_DOC] Create skills/web-browse/SKILL.md documenting browser_agent.py capabilities for M2.5.
 
@@ -112,6 +102,13 @@ _Consolidated into Pillar 2 above. See `docs/ORCHESTRATOR_PLAN_2026-03-06.md` fo
 - [ ] [RESEARCH_DISCOVERY 2026-03-05] Research: Runtime Verification & Metacognitive Self-Correction for Agents — MASC (step-level anomaly detection via next-execution reconstruction, ICLR 2026), AgentSpec (DSL for runtime constraint enforcement, 90%+ unsafe action prevention, ICSE 2026), AgentGuard (dynamic probabilistic assurance), SupervisorAgent (agent interaction monitoring). Improves action accuracy through real-time execution guards and self-correction loops. Sources: arxiv.org/abs/2510.14319, arxiv.org/abs/2503.18666, arxiv.org/abs/2509.23864, arxiv.org/abs/2510.26585
 - [ ] [RESEARCH_DISCOVERY 2026-03-05] Research: Process Reward Models for Agent Step Verification — ThinkPRM (generative CoT verification, 1% labels, +8% OOD), ToolPRMBench (tool-use PRM evaluation), Critical Step Optimization (verified decision-point preference learning), AgentPRM (actor-critic Monte Carlo). Directly improves action accuracy via step-level error detection before execution commits. Sources: arxiv.org/abs/2504.16828, arxiv.org/abs/2601.12294, arxiv.org/abs/2602.03412, arxiv.org/abs/2502.10325
 - [ ] [RECALL_GRAPH_CONTEXT] In `brain.py` recall/search methods, optionally expand results with 1-hop graph neighbors. When a memory is retrieved, also fetch memories connected via existing graph edges and include them as lower-weight "context" entries. No new clustering needed — uses existing 85k+ graph edges. Target: improve complex query recall by providing related context automatically. **Depends on**: [GRAPH_STORAGE_UPGRADE] — indexed SQLite lookups make per-recall graph expansion feasible (<0.1ms vs 4ms per hop). (Extracted from: RAPTOR/Hierarchical RAG research, arXiv:2401.18059)
+
+## NEW ITEMS (2026-03-06 evolution session)
+
+- [ ] [CONTEXT_RELEVANCE_FEEDBACK] Add outcome-based context relevance tracking. Current metric (0.838) is a static proxy from `brief_v2_report.json` (v2/v1 success rate ratio). Fix: in `heartbeat_postflight.py`, after task completion, compare brief sections against Claude Code output to compute true relevance (referenced_sections / total_sections). Store per-episode. Weekly: regenerate `brief_v2_report.json` from episode data. Stretch: use feedback to auto-tune MMR lambda in `context_compressor.py`. Files: `scripts/heartbeat_postflight.py`, `scripts/context_compressor.py`, `scripts/performance_benchmark.py`.
+- [ ] [BRIEF_BENCHMARK_REFRESH] The `data/benchmarks/brief_v2_report.json` driving context_relevance is stale. Create `scripts/brief_benchmark.py`: generate briefs for 10 known tasks with ground-truth expected content, score overlap (ROUGE-L or token intersection), update the report. Add monthly cron entry (1st of month, 03:45). This directly unblocks accurate context_relevance measurement. Files: `scripts/brief_benchmark.py`, `data/benchmarks/brief_v2_report.json`.
+- [ ] [SPAWN_ADAPTIVE_TIMEOUT] Add task-category timeout to `scripts/spawn_claude.sh`: accept optional `--category` flag (quick=600s, standard=1200s, research=1800s, build=1800s). Default remains 1200s. Update `cron_research.sh` to pass `--category research`. Prevents research repo timeouts that waste cron slots (hermes-agent timed out at 1500s on 2026-03-06).
+- [ ] [STALE_PLANS_ARCHIVE] Non-code: archive stale `data/plans/` files (cognition-architectures-report.md, helixir-analysis.md, hive-analysis.md, plan-20260219_232719.json) to `data/plans/archive/`. Keep only active plans. Update any references. Shell-only task, no Python.
 
 ## NEW ITEMS (2026-03-05 evolution session)
 
