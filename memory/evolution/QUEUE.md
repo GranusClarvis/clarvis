@@ -46,7 +46,7 @@ _Design: `docs/ORCHESTRATOR_PLAN_2026-03-06.md` — 5-phase rollout._
 
 ## Research Sessions
 
-- [ ] [RESEARCH_REPO_CLAW_EMPIRE] Deep review repo: https://github.com/GreenSheep01201/claw-empire — OpenClaw orchestrator + 2D game-style dashboard reference. Extract: (1) architecture + event model, (2) dashboard implementation (rendering stack, state model, transport), (3) what to copy into Clarvis `ORCH_VISUAL_DASHBOARD` + project_agent loop, (4) what not to copy. Output: 10 bullets + 5 concrete implementation items with file targets.
+- [ ] [RESEARCH_REPO_CLAW_EMPIRE] Deep review repo: https://github.com/GreenSheep01201/claw-empire — OpenClaw orchestrator + 2D game-style dashboard. Extract: (1) how orchestration is implemented on top of OpenClaw (agent lifecycle, task dispatch, state persistence, locks), (2) architecture + event model, (3) dashboard implementation (rendering stack, state model, transport), (4) concrete Clarvis integrations for orchestration + `ORCH_VISUAL_DASHBOARD`. Output: 10 bullets + 5 concrete implementation items with file targets.
 - [ ] [RESEARCH_REPO_HERMES_AGENT] Deep review repo: https://github.com/NousResearch/hermes-agent — extract improvements relevant to Clarvis/OpenClaw (bounded prompt memory + nudges/flush, memory injection security patterns, FTS session search, snapshotting/caching, skill self-improvement + security scanning, skill hub/open standard). Output: concise comparison + 5 concrete adoptable changes with file targets.
 - [ ] [BROWSER_SKILL_DOC] Create skills/web-browse/SKILL.md documenting browser_agent.py capabilities for M2.5.
 
