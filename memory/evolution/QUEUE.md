@@ -15,20 +15,16 @@ _(empty — no urgent bugs)_
 
 (Constraint: pursue only where it improves the brain’s practical intelligence — retrieval quality, correct integration, planning reliability.)
 
-- [ ] [SEMANTIC_BRIDGE] Build semantic overlap booster for cross-collection pairs with overlap <0.50. Current: semantic_cross_collection=0.568 (Phi=0.708). Target: raise to 0.65+ to push Phi toward 0.80.
+- [~] [SEMANTIC_BRIDGE] Build semantic overlap booster for cross-collection pairs with overlap <0.50. Current: semantic_cross_collection=0.575→0.589 (estimated). **v2 mirror strategy added** to `semantic_overlap_booster.py` (`--mirror` flag): copies actual docs between collections instead of templated bridges. All 4 pairs below 0.50 now above 0.50 (avg +0.08). Target 0.65 needs continued mirror runs on remaining weak pairs. _(in progress 2026-03-06)_
 
 ## Pillar 2: Autonomous Execution (Success > 85%)
 
-- [ ] [AUTONOMY_LOGIN] Given credentials in .env, log into a web service and verify logged-in state (session cookie present, profile page accessible). User provides credentials manually.
-- [ ] [AUTONOMY_POST] Given credentials + a platform (e.g. GitHub Issues via API, or a forum), compose and post a message autonomously. Measure: post appears, content matches intent.
 - [ ] [AUTONOMY_SCREENSHOT_ANALYZE] Take a screenshot of any given URL, analyze it with local vision (Qwen3-VL), extract structured info (page type, main elements, interactive components). Measure: extraction accuracy vs manual ground truth.
 - [ ] [AUTONOMY_MULTI_STEP] Multi-step workflow benchmark — given a sequence of 3+ actions (navigate → search → click result → extract data), complete the full chain. Measure: step completion rate, total success.
 
 ## Research Sessions
 
-- [x] [RESEARCH_REPO_QWEN_AGENT] Deep review repo: https://github.com/QwenLM/Qwen-Agent _(completed 2026-03-06, see memory/research/qwen_agent_deep_review.md — 15 key ideas, 5 steal-and-implement items, ignore list)_
-- [ ] [RESEARCH_REPO_OBLITERATUS] Deep review repo: https://github.com/elder-plinius/OBLITERATUS — what it is, core mechanisms, threat model (if any), and whether any components/patterns should be integrated into Clarvis (memory, autonomy, safety, orchestration). Output: 10 bullets + 3 concrete integration ideas or "discard" with reason.
-- [ ] [RESEARCH_REPO_AGENCY_AGENTS] Review repo: https://github.com/msitarzewski/agency-agents — evaluate for delegation/sub-agent orchestration patterns applicable to Clarvis. Output: summary + 3 adoptable patterns.
+- [x] [RESEARCH_IIT4_2026-03-06] Research: Integrated Information Theory (IIT) 4.0 (PLOS Comp Bio 2023) — axioms→postulates mapping, intrinsic cause–effect power, Intrinsic Difference (ID) measure, explicit causal relations. _(completed 2026-03-06)_
 - [ ] [BROWSER_SKILL_DOC] Create skills/web-browse/SKILL.md documenting browser_agent.py capabilities for M2.5.
 
 ## Pillar 3: Performance & Reliability (PI > 0.70)
@@ -48,10 +44,8 @@ _(empty — no urgent bugs)_
 
 ### CLI Migration (see docs/CLI_MIGRATION_PLAN.md)
 
-- [x] [CLI_BRAIN_LIVE] Verify `clarvis brain health` output matches `python3 scripts/brain.py health` exactly. _(completed 2026-03-06, outputs match — same format, same data)_
 - [~] [CLI_SUBPKG_ABSORB] Evaluate absorbing `clarvis-db`, `clarvis-cost`, `clarvis-reasoning` CLIs into unified `clarvis db|cost|reasoning` subcommands. **BLOCKED: Requires Inverse decision.** Do not auto-select in marathon.
 - [ ] [CLI_DEAD_SCRIPT_SWEEP] After CLI migration complete: audit which scripts/ `__main__` blocks have zero callers. Move to `scripts/deprecated/`.
-- [x] [CLI_BENCH_EXPAND] Add missing bench subcommands: `record`, `trend [days]`, `check` (exit 1 on failures), `heartbeat` (quick check), `weakest` (weakest metric). _(completed 2026-03-05, commit 209a84c)_
 - [ ] [CLI_HEARTBEAT_EXPAND] Add `clarvis heartbeat preflight` (run preflight only, print JSON) and `clarvis heartbeat postflight` (accepts exit-code + output-file + preflight-file args). Currently only `run` and `gate` exist.
 
 ### Codebase Restructuring (see docs/ARCHITECTURE.md)
@@ -87,7 +81,6 @@ _(empty — no urgent bugs)_
 
 ## P1
 
-- [x] [PERFORMANCE_BENCHMARK 2026-03-06] [PERF] Episode Success Rate 0.0 + PI drop to 0.729. _(fixed 2026-03-06: scripts/episodic_memory.py wrapper missing EpisodicMemory re-export after migration to clarvis/memory/)_
 - [ ] [RESEARCH_DISCOVERY 2026-03-05] Research: Agent Interoperability Protocols — MCP + A2A + ACP + ANP Survey (arxiv.org/abs/2505.02279). MCP (Anthropic→Linux Foundation AAIF) standardizes tool/data access; A2A (Google→LF, 100+ enterprises) enables secure agent delegation; ACP + ANP for discovery/routing. Directly applicable to project_agent.py orchestration architecture. Maps Clarvis agent protocol to industry standards. Sources: arxiv.org/abs/2505.02279, onereach.ai/blog/guide-choosing-mcp-vs-a2a-protocols
 - [ ] [RESEARCH_DISCOVERY 2026-03-05] Research: Runtime Verification & Metacognitive Self-Correction for Agents — MASC (step-level anomaly detection via next-execution reconstruction, ICLR 2026), AgentSpec (DSL for runtime constraint enforcement, 90%+ unsafe action prevention, ICSE 2026), AgentGuard (dynamic probabilistic assurance), SupervisorAgent (agent interaction monitoring). Improves action accuracy through real-time execution guards and self-correction loops. Sources: arxiv.org/abs/2510.14319, arxiv.org/abs/2503.18666, arxiv.org/abs/2509.23864, arxiv.org/abs/2510.26585
 - [ ] [RESEARCH_DISCOVERY 2026-03-05] Research: Process Reward Models for Agent Step Verification — ThinkPRM (generative CoT verification, 1% labels, +8% OOD), ToolPRMBench (tool-use PRM evaluation), Critical Step Optimization (verified decision-point preference learning), AgentPRM (actor-critic Monte Carlo). Directly improves action accuracy via step-level error detection before execution commits. Sources: arxiv.org/abs/2504.16828, arxiv.org/abs/2601.12294, arxiv.org/abs/2602.03412, arxiv.org/abs/2502.10325

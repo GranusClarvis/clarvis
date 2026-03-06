@@ -1,7 +1,12 @@
 # Evolution Queue — Archive
 
 _Completed items archived from QUEUE.md to reduce token footprint._
-_Last archived: 2026-03-03_
+_Last archived: 2026-03-06_
+
+### Archived 2026-03-06
+- [x] [RESEARCH_REPO_OBLITERATUS] LLM abliteration toolkit. DISCARD: not relevant to API-based Clarvis. See `memory/research/OBLITERATUS_review.md`.
+- [x] [AUTONOMY_LOGIN] Verified GitHub API auth (GranusClarvis), browser session (102 cookies/28 domains), profile accessible.
+- [x] [AUTONOMY_POST] Created GitHub issue GranusClarvis/clarvis#1 autonomously. Post appeared, content matches intent.
 
 ---
 
@@ -598,3 +603,10 @@ _Last archived: 2026-03-03_
 ## Archived 2026-03-05
 - [x] [MARATHON_RUNNER] Build Claude Marathon Runner — 7-hour chaining script that picks batches from QUEUE.md, spawns Claude, runs invariants after each batch. See docs/MARATHON_RUNBOOK.md.
 - [x] [GRAPH_STORAGE_UPGRADE_5] Update consumers: `graph_compaction.py` (SQL DELETE path), `cron_graph_checkpoint.sh` (SQLite backup API), `graphrag_communities.py` (load from SQLite). Safe migration (`--safe` flag), daily parity verification cron (`cron_graph_verify.sh`), soak enablement in `cron_env.sh`. RUNBOOK.md written. _(Phase 3, completed 2026-03-05)_
+
+## Archived 2026-03-06
+- [x] [RESEARCH_REPO_QWEN_AGENT] Deep review repo: https://github.com/QwenLM/Qwen-Agent _(completed 2026-03-06, see memory/research/qwen_agent_deep_review.md — 15 key ideas, 5 steal-and-implement items, ignore list)_
+- [x] [RESEARCH_REPO_AGENCY_AGENTS] Review repo: https://github.com/msitarzewski/agency-agents — evaluate for delegation/sub-agent orchestration patterns applicable to Clarvis. Output: summary + 3 adoptable patterns. _(completed 2026-03-06, see memory/research/agency_agents_review.md — 3 patterns: QA retry pipeline, convergent parallel analysis, penalty-based trust scoring)_
+- [x] [CLI_BRAIN_LIVE] Verify `clarvis brain health` output matches `python3 scripts/brain.py health` exactly. _(completed 2026-03-06, outputs match — same format, same data)_
+- [x] [CLI_BENCH_EXPAND] Add missing bench subcommands: `record`, `trend [days]`, `check` (exit 1 on failures), `heartbeat` (quick check), `weakest` (weakest metric). _(completed 2026-03-05, commit 209a84c)_
+- [x] [PERFORMANCE_BENCHMARK 2026-03-06] [PERF] Episode Success Rate 0.0 + PI drop to 0.729. _(fixed 2026-03-06: scripts/episodic_memory.py wrapper missing EpisodicMemory re-export after migration to clarvis/memory/)_

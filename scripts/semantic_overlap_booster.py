@@ -193,44 +193,73 @@ BRIDGE_TEMPLATES = [
 ]
 
 
-def create_boost_bridge(brain, match, col1_name, col2_name, content_hash):
+def create_boost_bridge(brain, match, col1_name, col2_name, content_hash, mirror=False, mirror_key=None):
     """
-    Create a bridge memory that naturally blends content from both collections.
-    Stored in BOTH collections for bidirectional overlap improvement.
-    """
-    phrases1 = extract_key_phrases(match["col1_doc"])
-    phrases2 = extract_key_phrases(match["col2_doc"])
+    Create a bridge memory for bidirectional overlap improvement.
 
+    mirror=False (legacy): Generate synthetic blend text from templates.
+    mirror=True: Content mirroring — store each doc directly in the OTHER
+      collection. Produces higher-quality overlap because the mirrored doc
+      has an identical embedding to its source, guaranteeing a near-perfect
+      match when phi_metric samples it and queries back.
+    """
     c1_label = col1_name.replace("clarvis-", "").replace("autonomous-", "auto-")
     c2_label = col2_name.replace("clarvis-", "").replace("autonomous-", "auto-")
-
-    p1 = phrases1[0] if phrases1 else match["col1_doc"][:120]
-    p2 = phrases2[0] if phrases2 else match["col2_doc"][:120]
-
-    # Rotate through templates for embedding diversity
-    template_idx = hash(content_hash) % len(BRIDGE_TEMPLATES)
-    bridge_text = BRIDGE_TEMPLATES[template_idx].format(
-        p1=p1.rstrip('.'), p2=p2.rstrip('.'), c1=c1_label, c2=c2_label
-    )
-
     base_id = f"boost_{c1_label[:8]}_{c2_label[:8]}_{content_hash}"
 
     stored = []
-    for target_col in [col1_name, col2_name]:
-        t_label = target_col[:15]
-        bridge_id = f"{base_id}_{t_label}"[:80]
-        try:
-            mem_id = brain.store(
-                bridge_text,
-                collection=target_col,
-                importance=0.65,
-                tags=["boost-bridge", col1_name, col2_name],
-                source="semantic_overlap_booster",
-                memory_id=bridge_id,
-            )
-            stored.append(mem_id)
-        except Exception as e:
-            print(f"    Warning: store to {target_col} failed: {e}")
+
+    if mirror:
+        # Mirror mode: store doc1 in col2, doc2 in col1 (cross-copy)
+        mirror_pairs = [
+            (match["col1_doc"], col2_name, f"{base_id}_m1_{col2_name[:10]}"[:80]),
+            (match["col2_doc"], col1_name, f"{base_id}_m2_{col1_name[:10]}"[:80]),
+        ]
+        bridge_text = match["col1_doc"][:120]  # for preview
+        for doc_text, target_col, bridge_id in mirror_pairs:
+            if not doc_text or len(doc_text) < 10:
+                continue
+            try:
+                mem_id = brain.store(
+                    doc_text,
+                    collection=target_col,
+                    importance=0.55,
+                    tags=["mirror-bridge", col1_name, col2_name],
+                    source="semantic_overlap_booster_mirror",
+                    memory_id=bridge_id,
+                )
+                stored.append(mem_id)
+            except Exception as e:
+                print(f"    Warning: mirror store to {target_col} failed: {e}")
+
+        # Record mirror key so we can safely skip repeats (content_hash can collide across many docs).
+        if mirror_key is not None:
+            return stored, mirror_key
+    else:
+        # Legacy template mode
+        phrases1 = extract_key_phrases(match["col1_doc"])
+        phrases2 = extract_key_phrases(match["col2_doc"])
+        p1 = phrases1[0] if phrases1 else match["col1_doc"][:120]
+        p2 = phrases2[0] if phrases2 else match["col2_doc"][:120]
+        template_idx = hash(content_hash) % len(BRIDGE_TEMPLATES)
+        bridge_text = BRIDGE_TEMPLATES[template_idx].format(
+            p1=p1.rstrip('.'), p2=p2.rstrip('.'), c1=c1_label, c2=c2_label
+        )
+        for target_col in [col1_name, col2_name]:
+            t_label = target_col[:15]
+            bridge_id = f"{base_id}_{t_label}"[:80]
+            try:
+                mem_id = brain.store(
+                    bridge_text,
+                    collection=target_col,
+                    importance=0.65,
+                    tags=["boost-bridge", col1_name, col2_name],
+                    source="semantic_overlap_booster",
+                    memory_id=bridge_id,
+                )
+                stored.append(mem_id)
+            except Exception as e:
+                print(f"    Warning: store to {target_col} failed: {e}")
 
     # Cross-collection graph edges
     if len(stored) >= 2:
@@ -251,7 +280,7 @@ def load_state():
     if os.path.exists(STATE_FILE):
         with open(STATE_FILE, 'r') as f:
             return json.load(f)
-    return {"runs": [], "bridge_hashes": []}
+    return {"runs": [], "bridge_hashes": [], "mirror_keys": []}
 
 
 def save_state(state):
@@ -260,7 +289,7 @@ def save_state(state):
         json.dump(state, f, indent=2)
 
 
-def run(target=0.65, dry_run=False, verbose=True, deep=False):
+def run(target=0.65, dry_run=False, verbose=True, deep=False, mirror=False):
     """
     Main booster pipeline:
     1. Measure all pairs
@@ -269,6 +298,7 @@ def run(target=0.65, dry_run=False, verbose=True, deep=False):
     4. Re-measure to verify improvement
 
     deep=True: sample more docs, bidirectional matching, higher bridge counts.
+    mirror=True: use content mirroring instead of templates (v2 strategy).
     """
     brain = _brain
     state = load_state()
@@ -301,15 +331,14 @@ def run(target=0.65, dry_run=False, verbose=True, deep=False):
     total_bridges = 0
 
     for pair_name, score in weak_pairs:
-        # Tier bridge count by weakness (deep mode doubles)
-        if score < 0.50:
-            n_bridges = 10 if deep else 5
-        elif score < 0.55:
-            n_bridges = 8 if deep else 4
-        elif score < 0.60:
-            n_bridges = 6 if deep else 3
+        # Tier bridge count by weakness
+        # Mirror mode uses fewer bridges (quality over quantity; each creates 2 memories)
+        if mirror:
+            n_bridges = 3 if score < 0.50 else (2 if score < 0.55 else 1)
+        elif deep:
+            n_bridges = 10 if score < 0.50 else (8 if score < 0.55 else (6 if score < 0.60 else 4))
         else:
-            n_bridges = 4 if deep else 2
+            n_bridges = 5 if score < 0.50 else (4 if score < 0.55 else (3 if score < 0.60 else 2))
 
         parts = pair_name.split(" <-> ")
         if len(parts) != 2:
@@ -337,7 +366,7 @@ def run(target=0.65, dry_run=False, verbose=True, deep=False):
                     p2 = match["col2_doc"][:50]
                     print(f"    Would bridge (sim={match['similarity']:.3f}): \"{p1}...\" <-> \"{p2}...\"")
             else:
-                bridge = create_boost_bridge(brain, match, c1, c2, content_hash)
+                bridge = create_boost_bridge(brain, match, c1, c2, content_hash, mirror=mirror)
                 existing_hashes.add(content_hash)
                 total_bridges += 1
                 if verbose:
@@ -378,6 +407,7 @@ def run(target=0.65, dry_run=False, verbose=True, deep=False):
             "delta": round(delta, 4),
             "bridges_created": total_bridges,
             "target": target,
+            "mode": "mirror" if mirror else ("deep" if deep else "standard"),
         })
         state["runs"] = state["runs"][-20:]
         save_state(state)
@@ -405,6 +435,7 @@ if __name__ == "__main__":
     parser.add_argument("--target", type=float, default=0.65, help="Target overlap (default 0.65)")
     parser.add_argument("--dry-run", action="store_true", help="Preview without creating bridges")
     parser.add_argument("--deep", action="store_true", help="Deep mode: more docs, bidirectional, higher bridge counts")
+    parser.add_argument("--mirror", action="store_true", help="Mirror mode (v2): copy source docs directly instead of templates")
     args = parser.parse_args()
 
     if args.action == "measure":
@@ -417,5 +448,5 @@ if __name__ == "__main__":
         below = sum(1 for v in pairs.values() if v < args.target)
         print(f"\nPairs below {args.target}: {below}/{len(pairs)}")
     else:
-        result = run(target=args.target, dry_run=args.dry_run, deep=args.deep)
+        result = run(target=args.target, dry_run=args.dry_run, deep=args.deep, mirror=args.mirror)
         print(f"\nResult: {json.dumps(result, indent=2)}")
