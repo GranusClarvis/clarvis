@@ -101,28 +101,18 @@ run_invariants() {
 
     local attempt=0
     while true; do
+        # Run invariants in JSONL mode (stable): it appends a single-line JSON record to data/invariants_runs.jsonl.
         local inv_output
-        inv_output=$(python3 "$SCRIPTS/invariants_check.py" --json 2>&1) || true
+        inv_output=$(python3 "$SCRIPTS/invariants_check.py" 2>&1) || true
 
         local passed="false"
-        # Parse JSON from the LAST line that looks like JSON (invariants_check prints human lines too).
-        passed=$(echo "$inv_output" | python3 -c "
+        passed=$(tail -n 1 /home/agent/.openclaw/workspace/data/invariants_runs.jsonl 2>/dev/null | python3 -c "
 import sys, json
-lines = sys.stdin.read().splitlines()
-json_line = None
-for line in reversed(lines):
-    s = line.strip()
-    if s.startswith('{') and s.endswith('}'):
-        json_line = s
-        break
-if not json_line:
+try:
+    data=json.load(sys.stdin)
+    print('true' if data.get('passed') else 'false')
+except Exception:
     print('false')
-else:
-    try:
-        data = json.loads(json_line)
-        print('true' if data.get('passed') else 'false')
-    except Exception:
-        print('false')
 " 2>/dev/null || echo "false")
 
         if [ "$passed" = "true" ]; then
@@ -133,6 +123,7 @@ else:
         attempt=$((attempt + 1))
         log "INVARIANTS: FAIL (attempt $attempt/$MAX_SELF_HEAL)"
         log "INVARIANTS output (tail): $(echo "$inv_output" | tail -20)"
+        log "INVARIANTS last JSONL: $(tail -n 1 /home/agent/.openclaw/workspace/data/invariants_runs.jsonl 2>/dev/null | tail -c 500)"
 
         if [ "$attempt" -gt "$MAX_SELF_HEAL" ]; then
             # NOTE: invariants_check.py emits JSON to stdout, but also logs to stderr.
