@@ -28,7 +28,7 @@ cd "$CLARVIS_WORKSPACE"
 # Graph storage backend: "json" (default) or "sqlite"
 # Uncomment the line below to enable SQLite graph backend for soak testing.
 # Before enabling, run: python3 scripts/graph_migrate_to_sqlite.py --safe
-# export CLARVIS_GRAPH_BACKEND="sqlite"
+export CLARVIS_GRAPH_BACKEND="sqlite"
 
 # Shared helper: get current weakest performance metric (fast, reads cached file)
 get_weakest_metric() {
