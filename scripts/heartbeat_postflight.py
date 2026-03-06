@@ -1200,16 +1200,39 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
 
     def _mark_task_in_queue(task_text, annotation):
         """Mark a task as [x] in QUEUE.md with an annotation.
-        Returns: 'marked' if found and marked, 'archived' if already in archive, False if not found."""
+        Returns: 'marked' if found and marked, 'archived' if already in archive, False if not found.
+
+        Matching strategy:
+        1) Prefer exact tag match when task_text contains [TAG]
+        2) Fallback to prefix substring match (legacy)
+        """
+        import re
+
         with open(QUEUE_FILE, 'r') as f:
             lines = f.readlines()
+
         task_prefix = task_text[:60]
+        m = re.match(r"\[([^\]]+)\]", task_text.strip())
+        tag = m.group(1) if m else None
+
+        # Strategy A: tag-based match (robust against description drift)
+        if tag:
+            tag_re = re.compile(rf"^\- \[ \] \[{re.escape(tag)}\]\b")
+            for i, line in enumerate(lines):
+                if tag_re.search(line):
+                    lines[i] = line.replace("- [ ] ", "- [x] ", 1).rstrip() + f" ({annotation})\n"
+                    with open(QUEUE_FILE, 'w') as f:
+                        f.writelines(lines)
+                    return "marked"
+
+        # Strategy B: legacy prefix substring match
         for i, line in enumerate(lines):
             if line.strip().startswith("- [ ] ") and task_prefix in line:
                 lines[i] = line.replace("- [ ] ", "- [x] ", 1).rstrip() + f" ({annotation})\n"
                 with open(QUEUE_FILE, 'w') as f:
                     f.writelines(lines)
                 return "marked"
+
         # Check if already archived (race: preflight archived before postflight ran)
         if os.path.exists(QUEUE_ARCHIVE):
             with open(QUEUE_ARCHIVE, 'r') as f:
