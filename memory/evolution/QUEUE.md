@@ -26,7 +26,7 @@ _(empty — no urgent bugs)_
 
 ## Research Sessions
 
-- [ ] [RESEARCH_REPO_QWEN_AGENT] Deep review repo: https://github.com/QwenLM/Qwen-Agent — extract the most useful architecture patterns (tooling, planning, memory, multi-agent, evaluation), and map them to concrete Clarvis integrations. Output: (1) 15 bullets of key ideas, (2) 5 concrete “steal and implement” items with file targets, (3) what to ignore.
+- [x] [RESEARCH_REPO_QWEN_AGENT] Deep review repo: https://github.com/QwenLM/Qwen-Agent _(completed 2026-03-06, see memory/research/qwen_agent_deep_review.md — 15 key ideas, 5 steal-and-implement items, ignore list)_
 - [ ] [RESEARCH_REPO_OBLITERATUS] Deep review repo: https://github.com/elder-plinius/OBLITERATUS — what it is, core mechanisms, threat model (if any), and whether any components/patterns should be integrated into Clarvis (memory, autonomy, safety, orchestration). Output: 10 bullets + 3 concrete integration ideas or "discard" with reason.
 - [ ] [RESEARCH_REPO_AGENCY_AGENTS] Review repo: https://github.com/msitarzewski/agency-agents — evaluate for delegation/sub-agent orchestration patterns applicable to Clarvis. Output: summary + 3 adoptable patterns.
 - [ ] [BROWSER_SKILL_DOC] Create skills/web-browse/SKILL.md documenting browser_agent.py capabilities for M2.5.
@@ -82,6 +82,8 @@ _(empty — no urgent bugs)_
 
 ## P1
 
+- [ ] [PERFORMANCE_BENCHMARK 2026-03-06] [PERF] Episode Success Rate: 0.0 breached critical threshold 0.35. Action: fix_episode_success_rate
+- [ ] [PERFORMANCE_BENCHMARK 2026-03-06] [PERF] PI dropped from 1.000 to 0.729 (-0.271). Action: investigate_regression
 - [ ] [RESEARCH_DISCOVERY 2026-03-05] Research: Agent Interoperability Protocols — MCP + A2A + ACP + ANP Survey (arxiv.org/abs/2505.02279). MCP (Anthropic→Linux Foundation AAIF) standardizes tool/data access; A2A (Google→LF, 100+ enterprises) enables secure agent delegation; ACP + ANP for discovery/routing. Directly applicable to project_agent.py orchestration architecture. Maps Clarvis agent protocol to industry standards. Sources: arxiv.org/abs/2505.02279, onereach.ai/blog/guide-choosing-mcp-vs-a2a-protocols
 - [ ] [RESEARCH_DISCOVERY 2026-03-05] Research: Runtime Verification & Metacognitive Self-Correction for Agents — MASC (step-level anomaly detection via next-execution reconstruction, ICLR 2026), AgentSpec (DSL for runtime constraint enforcement, 90%+ unsafe action prevention, ICSE 2026), AgentGuard (dynamic probabilistic assurance), SupervisorAgent (agent interaction monitoring). Improves action accuracy through real-time execution guards and self-correction loops. Sources: arxiv.org/abs/2510.14319, arxiv.org/abs/2503.18666, arxiv.org/abs/2509.23864, arxiv.org/abs/2510.26585
 - [ ] [RESEARCH_DISCOVERY 2026-03-05] Research: Process Reward Models for Agent Step Verification — ThinkPRM (generative CoT verification, 1% labels, +8% OOD), ToolPRMBench (tool-use PRM evaluation), Critical Step Optimization (verified decision-point preference learning), AgentPRM (actor-critic Monte Carlo). Directly improves action accuracy via step-level error detection before execution commits. Sources: arxiv.org/abs/2504.16828, arxiv.org/abs/2601.12294, arxiv.org/abs/2602.03412, arxiv.org/abs/2502.10325
