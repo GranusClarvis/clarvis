@@ -33,7 +33,7 @@ _Design: `docs/ORCHESTRATOR_PLAN_2026-03-06.md` — 5-phase rollout._
 - [ ] [ORCH_CRON_COEXIST] Add `is_cron_window_clear(minutes_needed)` to `project_agent.py`: reads system crontab, checks if any job scheduled within window. Create `scripts/cron_agent_loop.sh` for time-slotted agent execution between cron slots. Release global lock between loop sessions.
 
 ### Phase 4: Enhanced Brain (P1)
-- [ ] [ORCH_CI_CONTEXT] Add `build_ci_context()`: scan repo for test/build/lint commands from config files (package.json, Makefile, pyproject.toml), write `ci_context.json` per agent. Include in spawn prompt.
+- [x] [ORCH_CI_CONTEXT] Add `build_ci_context()`: scan repo for test/build/lint commands from config files (package.json, Makefile, pyproject.toml), write `ci_context.json` per agent. Include in spawn prompt. _(done 2026-03-06: scans package.json/pyproject.toml/Makefile/.github/workflows, auto-refreshes on spawn, CLI `ci-context` command added)_
 - [ ] [ORCH_DEP_MAP] Add `build_dependency_map()`: scan repo for entry points, config files, test dirs, key modules. Write `dependency_map.json` per agent. Feed into decomposer for smarter subtask splits.
 - [ ] [ORCH_AUTO_GOLDEN_QA] After successful tasks, auto-generate 1-2 golden QA pairs from task context. Deduplicate (cosine < 0.85), cap at 50 per agent. Run `benchmark_retrieval()` weekly via cron.
 

@@ -363,6 +363,128 @@ def _write_initial_procedures(name: str):
 # SPAWN — execute a task in a project agent
 # =========================================================================
 
+def build_ci_context(name: str) -> dict:
+    """Scan agent repo for test/build/lint commands from config files.
+
+    Scans: package.json, Makefile, pyproject.toml, .github/workflows/*.yml
+    Writes ci_context.json to agent data dir. Returns the context dict.
+    """
+    agent_dir = _agent_dir(name)
+    if not agent_dir:
+        return {"error": f"Agent '{name}' not found"}
+    workspace = agent_dir / "workspace"
+    if not workspace.exists():
+        return {"error": f"Workspace not found: {workspace}"}
+
+    ci = {"agent": name, "commands": {}, "sources": []}
+
+    # --- package.json ---
+    pkg_json = workspace / "package.json"
+    if pkg_json.exists():
+        try:
+            pkg = json.loads(pkg_json.read_text())
+            scripts = pkg.get("scripts", {})
+            ci["sources"].append("package.json")
+            # Categorize npm scripts
+            for key in ("test", "test:run", "test:ci"):
+                if key in scripts:
+                    ci["commands"].setdefault("test", []).append(f"npm run {key}")
+            if "test" not in ci["commands"]:
+                # fallback: any script with 'test' in the name (skip watch/ui variants)
+                for key, val in scripts.items():
+                    if "test" in key and "watch" not in key and "ui" not in key:
+                        ci["commands"].setdefault("test", []).append(f"npm run {key}")
+                        break
+            for key in ("build", "compile"):
+                if key in scripts:
+                    ci["commands"].setdefault("build", []).append(f"npm run {key}")
+            for key in ("lint", "eslint", "lint:fix"):
+                if key in scripts:
+                    ci["commands"].setdefault("lint", []).append(f"npm run {key}")
+            for key in ("type-check", "typecheck", "tsc"):
+                if key in scripts:
+                    ci["commands"].setdefault("typecheck", []).append(f"npm run {key}")
+            # Package manager detection
+            if (workspace / "pnpm-lock.yaml").exists():
+                ci["package_manager"] = "pnpm"
+            elif (workspace / "yarn.lock").exists():
+                ci["package_manager"] = "yarn"
+            elif (workspace / "bun.lockb").exists():
+                ci["package_manager"] = "bun"
+            else:
+                ci["package_manager"] = "npm"
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    # --- pyproject.toml ---
+    pyproject = workspace / "pyproject.toml"
+    if pyproject.exists():
+        try:
+            content = pyproject.read_text()
+            ci["sources"].append("pyproject.toml")
+            # Basic TOML parsing for scripts section (avoid toml dependency)
+            if "[tool.pytest" in content or "pytest" in content:
+                ci["commands"].setdefault("test", []).append("python3 -m pytest")
+            if "[tool.ruff" in content or "ruff" in content:
+                ci["commands"].setdefault("lint", []).append("ruff check .")
+            if "[tool.mypy" in content or "mypy" in content:
+                ci["commands"].setdefault("typecheck", []).append("mypy .")
+            if "[tool.black" in content or "black" in content:
+                ci["commands"].setdefault("format", []).append("black --check .")
+            # Check for build system
+            if "[build-system]" in content:
+                ci["commands"].setdefault("build", []).append("python3 -m build")
+        except OSError:
+            pass
+
+    # --- Makefile ---
+    makefile = workspace / "Makefile"
+    if makefile.exists():
+        try:
+            content = makefile.read_text()
+            ci["sources"].append("Makefile")
+            import re
+            targets = re.findall(r'^([a-zA-Z_][a-zA-Z0-9_-]*):', content, re.MULTILINE)
+            for target in targets:
+                tl = target.lower()
+                if tl in ("test", "tests", "check"):
+                    ci["commands"].setdefault("test", []).append(f"make {target}")
+                elif tl in ("build", "compile", "all"):
+                    ci["commands"].setdefault("build", []).append(f"make {target}")
+                elif tl in ("lint", "linter"):
+                    ci["commands"].setdefault("lint", []).append(f"make {target}")
+                elif tl in ("fmt", "format"):
+                    ci["commands"].setdefault("format", []).append(f"make {target}")
+        except OSError:
+            pass
+
+    # --- GitHub Actions workflows ---
+    workflows_dir = workspace / ".github" / "workflows"
+    if workflows_dir.exists():
+        ci["sources"].append(".github/workflows/")
+        try:
+            for wf in sorted(workflows_dir.glob("*.yml")) + sorted(workflows_dir.glob("*.yaml")):
+                try:
+                    content = wf.read_text()
+                    ci.setdefault("ci_workflows", []).append(wf.name)
+                except OSError:
+                    pass
+        except OSError:
+            pass
+
+    # Deduplicate commands
+    for category in ci.get("commands", {}):
+        ci["commands"][category] = list(dict.fromkeys(ci["commands"][category]))
+
+    # Write ci_context.json
+    ci_file = agent_dir / "data" / "ci_context.json"
+    ci_file.parent.mkdir(parents=True, exist_ok=True)
+    ci_file.write_text(json.dumps(ci, indent=2))
+    _log(f"CI context for '{name}': {len(ci.get('commands', {}))} categories from {ci['sources']}")
+
+    return ci
+
+
 def build_spawn_prompt(name: str, task: str, config: dict,
                        agent_dir: Path, context: str = "") -> str:
     """Build the full prompt string for a project agent spawn.
@@ -389,6 +511,24 @@ def build_spawn_prompt(name: str, task: str, config: dict,
         constraints,
         "",
     ]
+
+    # Load CI context if available
+    ci_file = agent_dir / "data" / "ci_context.json"
+    if ci_file.exists():
+        try:
+            ci = json.loads(ci_file.read_text())
+            cmds = ci.get("commands", {})
+            if cmds:
+                ci_lines = ["## CI Commands (auto-detected)"]
+                for category, cmd_list in cmds.items():
+                    ci_lines.append(f"- **{category}**: {' ; '.join(cmd_list)}")
+                pm = ci.get("package_manager")
+                if pm and pm != "npm":
+                    ci_lines.append(f"- **package manager**: {pm} (use instead of npm)")
+                ci_lines.append("")
+                prompt_parts.extend(ci_lines)
+        except (json.JSONDecodeError, OSError):
+            pass
 
     if procedures:
         prompt_parts.extend([
@@ -482,6 +622,12 @@ def cmd_spawn(name: str, task: str, timeout: int = 1200,
     timeout = min(timeout, max_timeout)
 
     _log(f"Spawning task {task_id} on agent '{name}' (branch={work_branch}): {task[:80]}")
+
+    # Refresh CI context before building prompt
+    try:
+        build_ci_context(name)
+    except Exception as e:
+        _log(f"CI context scan failed (non-fatal): {e}")
 
     # Update status
     config["status"] = "running"
@@ -1252,6 +1398,10 @@ def main():
     mp.add_argument("name")
     mp.add_argument("--target", default="/opt/clarvis-agents", help="Target root")
 
+    # ci-context
+    cip = sub.add_parser("ci-context", help="Scan repo and build CI context")
+    cip.add_argument("name")
+
     args = parser.parse_args()
 
     if args.command == "create":
@@ -1278,6 +1428,8 @@ def main():
         result = cmd_seed(args.name)
     elif args.command == "migrate":
         result = cmd_migrate(args.name, args.target)
+    elif args.command == "ci-context":
+        result = build_ci_context(args.name)
     else:
         parser.print_help()
         return
