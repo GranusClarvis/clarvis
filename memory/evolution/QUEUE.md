@@ -36,6 +36,17 @@ _Design: `docs/ORCHESTRATOR_PLAN_2026-03-06.md` — 5-phase rollout._
 - [ ] [ORCH_DEP_MAP] Add `build_dependency_map()`: scan repo for entry points, config files, test dirs, key modules. Write `dependency_map.json` per agent. Feed into decomposer for smarter subtask splits.
 - [ ] [ORCH_AUTO_GOLDEN_QA] After successful tasks, auto-generate 1-2 golden QA pairs from task context. Deduplicate (cosine < 0.85), cap at 50 per agent. Run `benchmark_retrieval()` weekly via cron.
 
+### Phase 5: Visual Ops Dashboard (P1)
+- [ ] [ORCH_VISUAL_DASHBOARD] Build a **visual-only** pixel-art “Habbo style” live dashboard served over LAN IP (no controls; all commands remain via TG/Discord).
+  - Shows: current QUEUE tasks, active task being executed, recent evolution runs, subagents list + their current tasks/status, and PR/CI outcomes.
+  - Style: 2D game-ish rooms/avatars like the reference image.
+  - Data sources: `memory/evolution/QUEUE.md`, `memory/cron/digest.md`, `memory/cron/autonomous.log`, `memory/cron/marathon.log`, `scripts/orchestration_scoreboard.py` outputs, `data/invariants_runs.jsonl`, GitHub PR list via `gh` (read-only).
+  - [ ] [ORCH_VISUAL_DASHBOARD_1] Define an events/state JSON schema (`data/dashboard/state.json`) + append-only event log (`data/dashboard/events.jsonl`).
+  - [ ] [ORCH_VISUAL_DASHBOARD_2] Implement a tiny local HTTP server (FastAPI/Starlette or static + SSE/WebSocket) that serves state + streams events.
+  - [ ] [ORCH_VISUAL_DASHBOARD_3] Implement a renderer: pixel UI layout (Canvas/WebGL/Phaser) with rooms/tiles + agent cards; read-only.
+  - [ ] [ORCH_VISUAL_DASHBOARD_4] Hook publishers: cron jobs + `project_agent.py loop` emit events (task start/finish, self-heal, PR created, CI pass/fail).
+  - [ ] [ORCH_VISUAL_DASHBOARD_5] Hardening: no auth needed but **no command endpoints** exposed; bind to LAN only; rate limit; CORS off.
+
 ### Deferred
 - [ ] [ORCH_AGENT_PROTOCOLS] Implement basic agent interoperability layer: define a simple internal A2A-ish message schema for project agents (task brief → structured result JSON), and enforce it in project_agent.py outputs.
 
