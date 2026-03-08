@@ -4,6 +4,7 @@ Unit tests for project_agent.py — spawn prompt construction & output parsing.
 Run: python3 -m pytest scripts/tests/test_project_agent.py -v
 """
 import json
+import os
 import sys
 import textwrap
 from pathlib import Path
@@ -17,12 +18,33 @@ from unittest.mock import patch, MagicMock
 from project_agent import (
     build_spawn_prompt,
     build_spawn_command,
+    build_dependency_map,
     _parse_agent_output,
     _is_task_failure,
     _build_retry_context,
     cmd_spawn_with_retry,
+    _poll_ci_checks,
+    _extract_ci_failure_logs,
+    _ci_fix_loop,
+    decompose_task,
+    run_task_loop,
+    validate_a2a_result,
+    normalize_a2a_result,
+    _acquire_loop_lock,
+    _release_loop_lock,
+    _loop_lock_path,
+    A2A_PROTOCOL_VERSION,
+    A2A_REQUIRED_FIELDS,
+    A2A_VALID_STATUSES,
     CLAUDE_BIN,
     MAX_RETRIES,
+    CI_FIX_MAX_ATTEMPTS,
+    LOOP_MAX_SESSIONS,
+    LOOP_INTER_SUBTASK_DELAY_MIN,
+    LOOP_INTER_SUBTASK_DELAY_MAX,
+    COMMIT_EXT_WHITELIST,
+    COMMIT_BLOCKED_PATTERNS,
+    safe_stage_files,
 )
 
 
@@ -417,3 +439,717 @@ class TestSpawnWithRetry:
 
         assert mock_spawn.call_count == 1
         assert result["retry_metadata"]["succeeded_on_attempt"] == 0
+
+
+# ── _poll_ci_checks tests ──
+
+class TestPollCiChecks:
+    @patch("project_agent.subprocess.run")
+    def test_all_pass(self, mock_run):
+        """All checks passing returns status=pass."""
+        checks_json = json.dumps([
+            {"name": "build", "bucket": "pass", "state": "SUCCESS", "link": "https://example.com/1"},
+            {"name": "lint", "bucket": "pass", "state": "SUCCESS", "link": "https://example.com/2"},
+        ])
+        mock_run.return_value = MagicMock(returncode=0, stdout=checks_json, stderr="")
+        result = _poll_ci_checks(42, "owner/repo", timeout=5)
+        assert result["status"] == "pass"
+        assert len(result["checks"]) == 2
+
+    @patch("project_agent.subprocess.run")
+    def test_failure_detected(self, mock_run):
+        """Failed check returns status=fail with failed_checks list."""
+        checks_json = json.dumps([
+            {"name": "build", "bucket": "fail", "state": "FAILURE", "link": "https://example.com/1"},
+            {"name": "lint", "bucket": "pass", "state": "SUCCESS", "link": "https://example.com/2"},
+        ])
+        mock_run.return_value = MagicMock(returncode=1, stdout=checks_json, stderr="")
+        result = _poll_ci_checks(42, "owner/repo", timeout=5)
+        assert result["status"] == "fail"
+        assert "build" in result["failed_checks"]
+
+    @patch("project_agent.subprocess.run")
+    def test_no_checks(self, mock_run):
+        """No checks returns pass with note."""
+        mock_run.return_value = MagicMock(returncode=0, stdout="no checks reported\n", stderr="no checks")
+        result = _poll_ci_checks(42, "owner/repo", timeout=5)
+        assert result["status"] == "pass"
+        assert "No CI" in result.get("note", "")
+
+    @patch("project_agent.subprocess.run")
+    def test_subprocess_error(self, mock_run):
+        """Subprocess error returns status=error."""
+        mock_run.side_effect = FileNotFoundError("gh not found")
+        result = _poll_ci_checks(42, "owner/repo", timeout=5)
+        assert result["status"] == "error"
+
+    @patch("project_agent.subprocess.run")
+    def test_exit_code_8_pending(self, mock_run):
+        """Exit code 8 means checks still pending — keeps polling."""
+        # First call: pending (exit 8), second call: pass (exit 0)
+        checks_pending = json.dumps([
+            {"name": "build", "bucket": "pending", "state": "QUEUED", "link": ""},
+        ])
+        checks_pass = json.dumps([
+            {"name": "build", "bucket": "pass", "state": "SUCCESS", "link": ""},
+        ])
+        mock_run.side_effect = [
+            MagicMock(returncode=8, stdout=checks_pending, stderr=""),
+            MagicMock(returncode=0, stdout=checks_pass, stderr=""),
+        ]
+        with patch("project_agent.time.sleep"):
+            result = _poll_ci_checks(42, "owner/repo", timeout=30)
+        assert result["status"] == "pass"
+
+    @patch("project_agent.subprocess.run")
+    def test_cancel_bucket_is_failure(self, mock_run):
+        """Cancelled checks count as failures."""
+        checks_json = json.dumps([
+            {"name": "build", "bucket": "cancel", "state": "CANCELLED", "link": ""},
+        ])
+        mock_run.return_value = MagicMock(returncode=1, stdout=checks_json, stderr="")
+        result = _poll_ci_checks(42, "owner/repo", timeout=5)
+        assert result["status"] == "fail"
+        assert "build" in result["failed_checks"]
+
+    @patch("project_agent.subprocess.run")
+    def test_skipping_bucket_is_pass(self, mock_run):
+        """Skipped checks are not failures."""
+        checks_json = json.dumps([
+            {"name": "build", "bucket": "pass", "state": "SUCCESS", "link": ""},
+            {"name": "optional", "bucket": "skipping", "state": "SKIPPED", "link": ""},
+        ])
+        mock_run.return_value = MagicMock(returncode=0, stdout=checks_json, stderr="")
+        result = _poll_ci_checks(42, "owner/repo", timeout=5)
+        assert result["status"] == "pass"
+
+
+# ── _extract_ci_failure_logs tests ──
+
+class TestExtractCiFailureLogs:
+    @patch("project_agent.subprocess.run")
+    def test_fallback_on_api_failure(self, mock_run):
+        """If gh pr view fails, returns error message."""
+        mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="error")
+        result = _extract_ci_failure_logs(42, "owner/repo", ["build"])
+        assert "Could not fetch PR details" in result or "build" in result
+
+    @patch("project_agent.subprocess.run")
+    def test_extracts_run_details(self, mock_run):
+        """Extracts check run details from gh api output."""
+        pr_view = MagicMock(returncode=0, stdout='{"headRefOid": "abc123"}', stderr="")
+        check_runs = MagicMock(
+            returncode=0,
+            stdout='{"name":"build","status":"completed","conclusion":"failure",'
+                   '"output_title":"Build failed","output_summary":"Error in line 42",'
+                   '"html_url":"https://example.com"}\n',
+            stderr="",
+        )
+        annotations = MagicMock(returncode=0, stdout="", stderr="")
+        mock_run.side_effect = [pr_view, check_runs, annotations]
+
+        result = _extract_ci_failure_logs(42, "owner/repo")
+        assert "Build failed" in result
+        assert "Error in line 42" in result
+
+
+# ── decompose_task tests ──
+
+class TestDecomposeTask:
+    def test_simple_task_single_subtask(self):
+        """Short, simple tasks return single subtask."""
+        r = decompose_task("test", "Fix typo")
+        assert len(r) == 1
+        assert r[0]["id"] == "t1"
+        assert r[0]["deps"] == []
+
+    def test_connector_splits(self):
+        """Tasks with 'and then' get split into multiple subtasks."""
+        r = decompose_task("test", "Add login page and then add logout button and write tests")
+        assert len(r) >= 2
+        # Verify dep chain
+        for i, s in enumerate(r):
+            if i > 0:
+                assert len(s["deps"]) > 0
+
+    def test_implement_keyword_decomposes(self):
+        """Tasks starting with 'implement' get at least [impl, PR]."""
+        r = decompose_task("test", "Implement user auth with OAuth2")
+        assert len(r) >= 2
+
+    def test_max_five_subtasks(self):
+        """Should cap at 5 subtasks max."""
+        long_task = " and ".join([f"task{i}" for i in range(10)])
+        r = decompose_task("test", long_task)
+        assert len(r) <= 6  # 5 parts + optional test step
+
+    def test_subtask_has_required_keys(self):
+        """Each subtask has id, task, deps, timeout."""
+        r = decompose_task("test", "Add X and then add Y")
+        for s in r:
+            assert "id" in s
+            assert "task" in s
+            assert "deps" in s
+            assert "timeout" in s
+
+
+# ── run_task_loop tests ──
+
+class TestRunTaskLoop:
+    @patch("project_agent.cmd_spawn_with_retry")
+    @patch("project_agent._load_config")
+    @patch("project_agent._agent_dir")
+    @patch("project_agent._snapshot_cost")
+    def test_single_subtask_success(self, mock_cost, mock_dir, mock_config, mock_spawn, tmp_path):
+        """Single subtask that succeeds returns overall success."""
+        mock_config.return_value = {
+            "name": "test", "repo_url": "https://github.com/o/r.git",
+            "branch": "dev", "trust_score": 0.5,
+        }
+        mock_dir.return_value = tmp_path
+        (tmp_path / "data" / "brain").mkdir(parents=True)
+        (tmp_path / "logs").mkdir()
+        mock_cost.return_value = None
+
+        mock_spawn.return_value = {
+            "task_id": "t001",
+            "exit_code": 0,
+            "elapsed": 30.0,
+            "result": {"status": "success", "summary": "Done"},
+            "output_tail": "",
+            "retry_metadata": {"total_attempts": 1},
+        }
+
+        result = run_task_loop("test", "Fix a bug", max_sessions=3, budget_usd=1.0)
+        assert result["status"] == "success"
+        assert result["subtasks_completed"] == 1
+
+    @patch("project_agent.cmd_spawn_with_retry")
+    @patch("project_agent._load_config")
+    @patch("project_agent._agent_dir")
+    @patch("project_agent._snapshot_cost")
+    def test_agent_not_found(self, mock_cost, mock_dir, mock_config, mock_spawn):
+        """Non-existent agent returns error."""
+        mock_config.return_value = None
+        result = run_task_loop("nonexistent", "do thing")
+        assert "error" in result
+
+    @patch("project_agent.cmd_spawn_with_retry")
+    @patch("project_agent._load_config")
+    @patch("project_agent._agent_dir")
+    @patch("project_agent._snapshot_cost")
+    def test_session_limit_enforced(self, mock_cost, mock_dir, mock_config, mock_spawn, tmp_path):
+        """Loop stops when max sessions reached."""
+        mock_config.return_value = {
+            "name": "test", "repo_url": "https://github.com/o/r.git",
+            "branch": "dev",
+        }
+        mock_dir.return_value = tmp_path
+        (tmp_path / "data" / "brain").mkdir(parents=True)
+        (tmp_path / "logs").mkdir()
+        mock_cost.return_value = None
+
+        # Each spawn uses 1 session but fails, causing decomposed subtasks to accumulate
+        mock_spawn.return_value = {
+            "task_id": "t001", "exit_code": 1, "elapsed": 10.0,
+            "result": {"status": "failed", "summary": "Oops"},
+            "output_tail": "",
+            "retry_metadata": {"total_attempts": 1},
+        }
+
+        result = run_task_loop("test", "Do X and then do Y and then do Z",
+                               max_sessions=2)
+        assert result["total_sessions"] <= 3  # 2 limit + 1 tolerance
+
+
+# ── build_dependency_map tests ──
+
+class TestBuildDependencyMap:
+    def _make_agent(self, tmp_path, files=None):
+        """Create a minimal agent dir with workspace files."""
+        workspace = tmp_path / "workspace"
+        workspace.mkdir(parents=True)
+        data = tmp_path / "data"
+        data.mkdir(parents=True)
+        if files:
+            for path, content in files.items():
+                full = workspace / path
+                full.parent.mkdir(parents=True, exist_ok=True)
+                full.write_text(content)
+        return tmp_path
+
+    @patch("project_agent._agent_dir")
+    def test_node_project_detected(self, mock_dir, tmp_path):
+        """Detects Node.js project from package.json."""
+        pkg = json.dumps({
+            "name": "test-app",
+            "scripts": {"test": "vitest", "build": "next build", "lint": "eslint ."},
+            "dependencies": {"next": "16.0.0", "react": "19.0.0"},
+        })
+        agent = self._make_agent(tmp_path, {"package.json": pkg})
+        mock_dir.return_value = agent
+
+        result = build_dependency_map("test")
+        assert result["language"] == "javascript/typescript"
+        assert result["framework"] == "next.js"
+        assert result["project_type"] == "webapp"
+        assert "package.json" in result["config_files"]
+
+    @patch("project_agent._agent_dir")
+    def test_python_project_detected(self, mock_dir, tmp_path):
+        """Detects Python project from pyproject.toml."""
+        toml = '[tool.pytest.ini_options]\ntestpaths = ["tests"]\n[tool.ruff]\nline-length = 120\n'
+        agent = self._make_agent(tmp_path, {"pyproject.toml": toml})
+        mock_dir.return_value = agent
+
+        result = build_dependency_map("test")
+        assert result["language"] == "python"
+        assert result["project_type"] == "python"
+        assert "pyproject.toml" in result["config_files"]
+
+    @patch("project_agent._agent_dir")
+    def test_entry_points_found(self, mock_dir, tmp_path):
+        """Finds entry points based on language."""
+        pkg = json.dumps({"name": "app", "dependencies": {"next": "16"}})
+        agent = self._make_agent(tmp_path, {
+            "package.json": pkg,
+            "app/layout.tsx": "export default function Layout() {}",
+            "app/page.tsx": "export default function Page() {}",
+        })
+        mock_dir.return_value = agent
+
+        result = build_dependency_map("test")
+        assert "app/layout.tsx" in result["entry_points"]
+        assert "app/page.tsx" in result["entry_points"]
+
+    @patch("project_agent._agent_dir")
+    def test_source_dirs_found(self, mock_dir, tmp_path):
+        """Finds source directories with file counts."""
+        agent = self._make_agent(tmp_path, {
+            "package.json": "{}",
+            "src/index.ts": "export {}",
+            "src/utils/helper.ts": "export {}",
+            "components/Button.tsx": "export {}",
+            "lib/api.ts": "export {}",
+        })
+        mock_dir.return_value = agent
+
+        result = build_dependency_map("test")
+        src_paths = [d["path"] for d in result["source_dirs"]]
+        assert "src" in src_paths
+        assert "components" in src_paths
+        assert "lib" in src_paths
+
+    @patch("project_agent._agent_dir")
+    def test_test_dirs_found(self, mock_dir, tmp_path):
+        """Finds test directories."""
+        agent = self._make_agent(tmp_path, {
+            "package.json": "{}",
+            "tests/test_main.py": "def test_ok(): pass",
+            "__tests__/App.test.tsx": "test('renders', () => {})",
+        })
+        mock_dir.return_value = agent
+
+        result = build_dependency_map("test")
+        test_paths = [d["path"] for d in result["test_dirs"]]
+        assert "tests" in test_paths
+        assert "__tests__" in test_paths
+
+    @patch("project_agent._agent_dir")
+    def test_colocated_test_files_found(self, mock_dir, tmp_path):
+        """Finds co-located test files (*.test.ts, etc.)."""
+        agent = self._make_agent(tmp_path, {
+            "package.json": "{}",
+            "src/utils.test.ts": "test('works', () => {})",
+            "src/api.spec.ts": "describe('api', () => {})",
+        })
+        mock_dir.return_value = agent
+
+        result = build_dependency_map("test")
+        assert "src/utils.test.ts" in result["test_files"]
+        assert "src/api.spec.ts" in result["test_files"]
+
+    @patch("project_agent._agent_dir")
+    def test_writes_json_file(self, mock_dir, tmp_path):
+        """Writes dependency_map.json to agent data dir."""
+        agent = self._make_agent(tmp_path, {"package.json": "{}"})
+        mock_dir.return_value = agent
+
+        build_dependency_map("test")
+        dep_file = tmp_path / "data" / "dependency_map.json"
+        assert dep_file.exists()
+        data = json.loads(dep_file.read_text())
+        assert data["agent"] == "test"
+        assert "generated_at" in data
+
+    @patch("project_agent._agent_dir")
+    def test_nonexistent_agent(self, mock_dir, tmp_path):
+        """Returns error for non-existent agent."""
+        mock_dir.return_value = tmp_path / "nope"
+        result = build_dependency_map("ghost")
+        assert "error" in result
+
+    @patch("project_agent._agent_dir")
+    def test_config_files_detected(self, mock_dir, tmp_path):
+        """Detects various config files."""
+        agent = self._make_agent(tmp_path, {
+            "package.json": "{}",
+            "tsconfig.json": "{}",
+            "tailwind.config.ts": "export default {}",
+            "eslint.config.mjs": "export default []",
+            "vitest.config.ts": "export default {}",
+        })
+        mock_dir.return_value = agent
+
+        result = build_dependency_map("test")
+        assert "tsconfig.json" in result["config_files"]
+        assert "tailwind.config.ts" in result["config_files"]
+
+    @patch("project_agent._agent_dir")
+    def test_github_workflows_detected(self, mock_dir, tmp_path):
+        """Detects GitHub Actions workflow files."""
+        agent = self._make_agent(tmp_path, {
+            "package.json": "{}",
+            ".github/workflows/test.yml": "name: Test\non: push\njobs: {}",
+            ".github/workflows/deploy.yaml": "name: Deploy\non: push\njobs: {}",
+        })
+        mock_dir.return_value = agent
+
+        result = build_dependency_map("test")
+        # ci_workflows lists detected workflow filenames
+        assert "test.yml" in result.get("ci_workflows", [])
+        assert "deploy.yaml" in result.get("ci_workflows", [])
+
+    @patch("project_agent._agent_dir")
+    def test_key_modules_found(self, mock_dir, tmp_path):
+        """Finds key module files in lib/utils dirs."""
+        agent = self._make_agent(tmp_path, {
+            "package.json": "{}",
+            "lib/db.ts": "export const db = {}",
+            "lib/auth.ts": "export const auth = {}",
+            "utils/format.ts": "export function fmt() {}",
+        })
+        mock_dir.return_value = agent
+
+        result = build_dependency_map("test")
+        assert "lib/db.ts" in result["key_modules"]
+        assert "lib/auth.ts" in result["key_modules"]
+        assert "utils/format.ts" in result["key_modules"]
+
+
+# ── decompose_task with dep_map tests ──
+
+class TestDecomposeWithDepMap:
+    @patch("project_agent._agent_dir")
+    @patch("project_agent._load_config")
+    def test_impl_task_includes_project_hint(self, mock_config, mock_dir, tmp_path):
+        """Implementation tasks get project structure hints from dep_map."""
+        mock_config.return_value = {"name": "test"}
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        data = tmp_path / "data"
+        data.mkdir(parents=True)
+        dep_file = data / "dependency_map.json"
+        dep_file.write_text(json.dumps({
+            "framework": "next.js",
+            "language": "javascript/typescript",
+            "entry_points": ["app/page.tsx"],
+            "source_dirs": [{"path": "app", "file_count": 20}],
+            "test_dirs": [{"path": "__tests__", "file_count": 5}],
+            "test_files": ["src/utils.test.ts"],
+        }))
+        mock_dir.return_value = tmp_path
+
+        subtasks = decompose_task("test", "Implement dark mode toggle")
+        # First subtask should contain project hint
+        assert "next.js" in subtasks[0]["task"]
+        assert len(subtasks) >= 2  # at least impl + PR
+
+    @patch("project_agent._agent_dir")
+    @patch("project_agent._load_config")
+    def test_multipart_first_subtask_has_hint(self, mock_config, mock_dir, tmp_path):
+        """Multi-part tasks get project hint on first subtask only."""
+        mock_config.return_value = {"name": "test"}
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        data = tmp_path / "data"
+        data.mkdir(parents=True)
+        dep_file = data / "dependency_map.json"
+        dep_file.write_text(json.dumps({
+            "framework": "react",
+            "language": "javascript/typescript",
+            "entry_points": [],
+            "source_dirs": [{"path": "src", "file_count": 10}],
+            "test_dirs": [],
+            "test_files": [],
+        }))
+        mock_dir.return_value = tmp_path
+
+        subtasks = decompose_task("test", "Add login page and then add logout button")
+        # First subtask has hint
+        assert "react" in subtasks[0]["task"]
+        # Second subtask does NOT have hint (avoid noise)
+        if len(subtasks) > 1:
+            assert "react" not in subtasks[1]["task"]
+
+
+# ── A2A Protocol tests ──
+
+class TestValidateA2AResult:
+    def test_valid_success_result(self):
+        result = {"status": "success", "summary": "Fixed the bug"}
+        is_valid, warnings = validate_a2a_result(result)
+        assert is_valid is True
+        assert not any("missing required" in w for w in warnings)
+
+    def test_valid_blocked_status(self):
+        result = {"status": "blocked", "summary": "Waiting for CI",
+                  "error": "CI not configured"}
+        is_valid, warnings = validate_a2a_result(result)
+        assert is_valid is True
+
+    def test_missing_status(self):
+        result = {"summary": "Did stuff"}
+        is_valid, warnings = validate_a2a_result(result)
+        assert is_valid is False
+        assert any("missing required field: status" in w for w in warnings)
+
+    def test_missing_summary(self):
+        result = {"status": "success"}
+        is_valid, warnings = validate_a2a_result(result)
+        assert is_valid is False
+        assert any("missing required field: summary" in w for w in warnings)
+
+    def test_invalid_status_value(self):
+        result = {"status": "done", "summary": "Finished"}
+        is_valid, warnings = validate_a2a_result(result)
+        assert is_valid is False
+        assert any("invalid status" in w for w in warnings)
+
+    def test_empty_summary_warns(self):
+        result = {"status": "success", "summary": ""}
+        is_valid, _ = validate_a2a_result(result)
+        assert is_valid is True  # status is valid, but summary warns
+
+    def test_wrong_type_files_changed(self):
+        result = {"status": "success", "summary": "Done",
+                  "files_changed": "single_file.py"}
+        is_valid, warnings = validate_a2a_result(result)
+        assert is_valid is True  # type issues are warnings, not errors
+        assert any("files_changed should be a list" in w for w in warnings)
+
+    def test_confidence_out_of_range(self):
+        result = {"status": "success", "summary": "Done", "confidence": 1.5}
+        _, warnings = validate_a2a_result(result)
+        assert any("confidence out of range" in w for w in warnings)
+
+    def test_confidence_valid(self):
+        result = {"status": "success", "summary": "Done", "confidence": 0.85}
+        is_valid, warnings = validate_a2a_result(result)
+        assert is_valid is True
+        assert not any("confidence" in w for w in warnings)
+
+
+class TestNormalizeA2AResult:
+    def test_adds_protocol_tag(self):
+        result = {"status": "success", "summary": "Done"}
+        normalized = normalize_a2a_result(result)
+        assert normalized["protocol"] == f"a2a/v{A2A_PROTOCOL_VERSION}"
+
+    def test_fills_defaults(self):
+        result = {"status": "success", "summary": "Done"}
+        normalized = normalize_a2a_result(result)
+        assert normalized["pr_url"] is None
+        assert normalized["files_changed"] == []
+        assert normalized["procedures"] == []
+        assert normalized["follow_ups"] == []
+        assert normalized["tests_passed"] is None
+        assert normalized["error"] is None
+
+    def test_preserves_agent_values(self):
+        result = {
+            "status": "success", "summary": "Fixed login",
+            "pr_url": "https://github.com/o/r/pull/1",
+            "files_changed": ["auth.py"],
+            "confidence": 0.9,
+        }
+        normalized = normalize_a2a_result(result)
+        assert normalized["pr_url"] == "https://github.com/o/r/pull/1"
+        assert normalized["files_changed"] == ["auth.py"]
+        assert normalized["confidence"] == 0.9
+
+    def test_preserves_extra_fields(self):
+        result = {"status": "success", "summary": "Done",
+                  "custom_metric": 42}
+        normalized = normalize_a2a_result(result)
+        assert normalized["custom_metric"] == 42
+
+    def test_all_statuses_accepted(self):
+        for status in A2A_VALID_STATUSES:
+            result = {"status": status, "summary": "Test"}
+            is_valid, _ = validate_a2a_result(result)
+            assert is_valid is True
+
+
+class TestParseAgentOutputA2A:
+    def test_output_is_normalized(self):
+        output = '```json\n{"status": "success", "summary": "Done"}\n```'
+        result = _parse_agent_output(output)
+        assert result["protocol"] == f"a2a/v{A2A_PROTOCOL_VERSION}"
+        assert result["_a2a_valid"] is True
+        assert "files_changed" in result  # default filled
+
+    def test_invalid_output_marked(self):
+        output = '```json\n{"status": "done", "summary": "Finished"}\n```'
+        result = _parse_agent_output(output)
+        assert result["_a2a_valid"] is False
+        assert len(result["_a2a_warnings"]) > 0
+
+    def test_no_json_normalized(self):
+        result = _parse_agent_output("Just text")
+        assert result["protocol"] == f"a2a/v{A2A_PROTOCOL_VERSION}"
+        assert result["status"] == "unknown"
+
+    def test_empty_output_normalized(self):
+        result = _parse_agent_output("")
+        assert result["protocol"] == f"a2a/v{A2A_PROTOCOL_VERSION}"
+        assert result["status"] == "failed"
+
+
+# ── Loop Lock & Backoff Tests ──
+
+class TestLoopLock:
+    """Tests for per-agent loop lockfile with stale PID detection."""
+
+    def setup_method(self):
+        """Clean up any test lock files."""
+        lock = _loop_lock_path("test-lock-agent")
+        lock.unlink(missing_ok=True)
+
+    def teardown_method(self):
+        self.setup_method()
+
+    def test_acquire_and_release(self):
+        assert _acquire_loop_lock("test-lock-agent") is True
+        lock = _loop_lock_path("test-lock-agent")
+        assert lock.exists()
+        assert lock.read_text().strip() == str(os.getpid())
+        _release_loop_lock("test-lock-agent")
+        assert not lock.exists()
+
+    def test_double_acquire_fails(self):
+        assert _acquire_loop_lock("test-lock-agent") is True
+        # Same PID holds lock — should fail (lock held by live clarvis process)
+        # But since _is_pid_clarvis checks our own PID, it will see us as alive
+        # and refuse. This is correct behavior.
+        assert _acquire_loop_lock("test-lock-agent") is False
+
+    def test_stale_pid_reclaimed(self):
+        """Lock with dead PID should be reclaimed."""
+        lock = _loop_lock_path("test-lock-agent")
+        lock.write_text("99999999")  # PID that doesn't exist
+        assert _acquire_loop_lock("test-lock-agent") is True
+        assert lock.read_text().strip() == str(os.getpid())
+
+    def test_release_only_own_lock(self):
+        """Release should not remove lock owned by another PID."""
+        lock = _loop_lock_path("test-lock-agent")
+        lock.write_text("12345")  # Not our PID
+        _release_loop_lock("test-lock-agent")
+        assert lock.exists()  # Should NOT have been removed
+
+    def test_lock_path_format(self):
+        path = _loop_lock_path("my-agent")
+        assert str(path) == "/tmp/clarvis_agent_my-agent_loop.lock"
+
+
+class TestLoopBackoffConstants:
+    """Verify inter-subtask delay constants."""
+
+    def test_delay_range(self):
+        assert LOOP_INTER_SUBTASK_DELAY_MIN == 10
+        assert LOOP_INTER_SUBTASK_DELAY_MAX == 20
+        assert LOOP_INTER_SUBTASK_DELAY_MIN < LOOP_INTER_SUBTASK_DELAY_MAX
+
+
+class TestCommitSafetyWhitelist:
+    """Verify auto-commit safety whitelist constants and filtering."""
+
+    def test_common_extensions_whitelisted(self):
+        for ext in [".py", ".ts", ".js", ".json", ".md", ".css", ".html",
+                    ".go", ".rs", ".toml", ".yaml", ".yml", ".sh", ".sql", ".txt"]:
+            assert ext in COMMIT_EXT_WHITELIST, f"{ext} should be whitelisted"
+
+    def test_dangerous_extensions_not_whitelisted(self):
+        for ext in [".pem", ".key", ".p12", ".pfx", ".sqlite", ".db",
+                    ".log", ".zip", ".tar", ".gz"]:
+            assert ext not in COMMIT_EXT_WHITELIST, f"{ext} should NOT be whitelisted"
+
+    def test_blocked_patterns_match_secrets(self):
+        for path in [".env", "prod.env", "id_rsa", "id_ed25519",
+                     "server.pem", "private.key", "cert.p12", "keystore.pfx",
+                     "data.sqlite", "app.db", "output.log",
+                     "archive.zip", "backup.tar", "bundle.gz",
+                     "node_modules/lodash/index.js",
+                     "__pycache__/mod.cpython-310.pyc",
+                     "credentials.json", "secrets.yaml"]:
+            assert COMMIT_BLOCKED_PATTERNS.search(path), \
+                f"{path} should be blocked"
+
+    def test_blocked_patterns_allow_normal_files(self):
+        for path in ["src/main.py", "lib/utils.ts", "README.md",
+                     "package.json", "Cargo.toml", "go.mod",
+                     "tests/test_auth.py", "styles/app.css"]:
+            assert not COMMIT_BLOCKED_PATTERNS.search(path), \
+                f"{path} should NOT be blocked"
+
+    def test_safe_stage_files_in_git_repo(self, tmp_path):
+        """Integration test: safe_stage_files with a real git repo."""
+        # Init a git repo with an initial commit
+        import subprocess
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        subprocess.run(["git", "init"], cwd=str(repo), capture_output=True)
+        subprocess.run(["git", "config", "user.email", "test@test.com"],
+                       cwd=str(repo), capture_output=True)
+        subprocess.run(["git", "config", "user.name", "Test"],
+                       cwd=str(repo), capture_output=True)
+
+        # Create initial file and commit
+        (repo / "initial.py").write_text("# init")
+        subprocess.run(["git", "add", "."], cwd=str(repo), capture_output=True)
+        subprocess.run(["git", "commit", "-m", "init"],
+                       cwd=str(repo), capture_output=True)
+
+        # Create test files: some safe, some unsafe
+        (repo / "new_feature.py").write_text("print('hi')")
+        (repo / "config.json").write_text("{}")
+        (repo / "secrets.env").write_text("API_KEY=xxx")
+        (repo / "data.sqlite").write_text("binary")
+        (repo / "archive.tar.gz").write_text("binary")
+
+        # Modify tracked file
+        (repo / "initial.py").write_text("# modified")
+
+        staged, blocked = safe_stage_files(repo)
+
+        # Tracked modification should be staged
+        assert "initial.py" in staged
+
+        # Safe untracked files should be staged
+        assert "new_feature.py" in staged
+        assert "config.json" in staged
+
+        # Unsafe files should be blocked
+        blocked_str = " ".join(blocked)
+        assert "secrets.env" in blocked_str
+        assert "data.sqlite" in blocked_str
+
+    def test_prompt_contains_commit_safety(self, agent_config, agent_dir):
+        """Verify spawn prompt includes commit safety rules."""
+        prompt = build_spawn_prompt(
+            "test-project", "some task", agent_config, agent_dir
+        )
+        assert "Commit Safety" in prompt
+        assert "NEVER use `git add .`" in prompt
+        assert ".env" in prompt

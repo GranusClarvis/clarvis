@@ -32,6 +32,7 @@ STUCK_COUNT=${STUCK_COUNT:-0}
 STUCK_COUNT=$(echo "$STUCK_COUNT" | tr -d '[:space:]' | head -c 5)
 if [ "$STUCK_COUNT" -gt 0 ] 2>/dev/null; then
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] SELF-HEALING: $STUCK_COUNT stuck agents detected, healing..." >> "$LOGFILE"
+    emit_dashboard_event self_heal --section cron_autonomous --stuck-count "$STUCK_COUNT"
     python3 "$SCRIPTS/agent_orchestrator.py" heal >> "$LOGFILE" 2>&1
 fi
 
@@ -219,6 +220,7 @@ PY
 fi
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] EXECUTING (salience=$BEST_SALIENCE, section=$TASK_SECTION, route=$ROUTE_EXECUTOR tier=$ROUTE_TIER, batch=$BATCH_COUNT): ${NEXT_TASK:0:100}" >> "$LOGFILE"
+emit_dashboard_event task_started --task-name "${NEXT_TASK:0:120}" --section cron_autonomous --executor "$ROUTE_EXECUTOR" --salience "$BEST_SALIENCE" --batch-count "$BATCH_COUNT"
 
 # ============================================================================
 # PHASE 2: TASK EXECUTION
@@ -428,4 +430,5 @@ fi
 # Cleanup
 rm -f "$TASK_OUTPUT_FILE" "$PREFLIGHT_FILE"
 
+emit_dashboard_event task_completed --task-name "${NEXT_TASK:0:120}" --section cron_autonomous --executor "$EXECUTOR_USED" --exit-code "$TASK_EXIT" --duration-s "$TASK_DURATION" --status "$([ $TASK_EXIT -eq 0 ] && echo success || echo failed)"
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Heartbeat complete (preflight=${PF_TOTAL_TIME}s + exec=${TASK_DURATION}s + postflight=${PF_POST_TIME:-?}s) ===" >> "$LOGFILE"

@@ -36,3 +36,25 @@ export CLARVIS_GRAPH_DUAL_WRITE="1"
 get_weakest_metric() {
     python3 "$CLARVIS_WORKSPACE/scripts/performance_benchmark.py" weakest 2>/dev/null || echo "unknown"
 }
+
+# Check if a PID belongs to a clarvis/claude process via /proc/<pid>/cmdline.
+# Returns 0 if alive + ours, 1 if dead or PID recycled.
+# Usage: check_pid_is_clarvis "$pid" && echo "alive" || echo "dead/recycled"
+check_pid_is_clarvis() {
+    local pid="$1"
+    [ -z "$pid" ] && return 1
+    kill -0 "$pid" 2>/dev/null || return 1
+    local cmdline_file="/proc/$pid/cmdline"
+    if [ -f "$cmdline_file" ]; then
+        local cmdline
+        cmdline=$(tr '\0' ' ' < "$cmdline_file" 2>/dev/null) || return 1
+        echo "$cmdline" | grep -qE 'clarvis|claude|cron_(autonomous|morning|evening|evolution|reflection|research|implementation|strategic|cleanup|orchestrator|report|graph|chromadb)' && return 0
+        return 1  # PID recycled — not a clarvis process
+    fi
+    return 0  # /proc not available — trust kill -0
+}
+
+# Dashboard event publisher (no-op if script missing; never blocks caller)
+emit_dashboard_event() {
+    python3 "$CLARVIS_WORKSPACE/scripts/dashboard_events.py" emit "$@" >/dev/null 2>&1 || true
+}

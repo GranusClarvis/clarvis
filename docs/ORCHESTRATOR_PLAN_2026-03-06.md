@@ -664,3 +664,236 @@ Tasks:
 3. **Human-in-the-loop**: At what trust level should agents auto-merge? (Never for now — always require human review)
 4. **Model routing for subtasks**: Should simple subtasks use cheaper models? (Defer — all subtasks use Opus for reliability)
 5. **Parallel subtask execution**: When subtasks have no deps, run in parallel? (Defer — serial is simpler and debuggable)
+
+---
+
+## 12. Research: claw-empire (GreenSheep01201/claw-empire)
+
+_Deep review conducted 2026-03-06. Repo is a full AI agent office simulator built on OpenClaw._
+
+### 12.1 Architecture Overview
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                    claw-empire Architecture                       │
+│                                                                  │
+│  ┌─────────────────┐     REST + WS      ┌─────────────────────┐ │
+│  │  React 19 SPA   │◄──────────────────►│  Express 5 Server   │ │
+│  │                  │    (port 8790)      │  (single process)   │ │
+│  │  PixiJS 8 canvas│                     │                     │ │
+│  │  (pixel-art     │   14 WS event types │  SQLite (27 tables) │ │
+│  │   office view)  │   + HTTP polling    │  node:sqlite built-in│ │
+│  │                  │                     │                     │ │
+│  │  React state    │                     │  In-memory Maps for  │ │
+│  │  (30+ useState) │                     │  orchestration state │ │
+│  └─────────────────┘                     └────────┬────────────┘ │
+│                                                   │              │
+│                              ┌────────────────────┼──────┐       │
+│                              ▼                    ▼      ▼       │
+│                   ┌──────────────┐  ┌──────────┐  ┌──────────┐  │
+│                   │ CLI Agents   │  │ HTTP     │  │ API      │  │
+│                   │ claude,codex │  │ Agents   │  │ Agents   │  │
+│                   │ gemini,      │  │ copilot, │  │ openai,  │  │
+│                   │ opencode     │  │ antigrav │  │ ollama,  │  │
+│                   └──────┬───────┘  └──────────┘  │ etc.     │  │
+│                          │                         └──────────┘  │
+│                   ┌──────▼───────┐                               │
+│                   │ Git Worktree │  (.climpire-worktrees/<id>)   │
+│                   │ per task     │  Branch: climpire/<task_id>   │
+│                   └──────────────┘                               │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+**Tech stack**: React 19 + Vite 7 + Tailwind 4 + PixiJS 8 (frontend), Express 5 + node:sqlite + ws (backend). Node >= 22 required. ~660 files, modular route structure.
+
+### 12.2 Orchestration Mechanics
+
+#### Task State Machine
+```
+inbox → planned → collaborating → in_progress → review → done
+  |                                    |              |
+  +← (failure resets to inbox)         +→ cancelled   +→ revision_requested
+                                       +→ pending (pause)
+```
+
+- **8 task states** (vs our 2: success/failure). The `collaborating` state is notable — it represents cross-department pre-work before execution begins.
+- **`source_task_id`** links delegated tasks to parents, forming a tree.
+- **`subtasks` table** with `target_department_id` + `delegated_task_id` bridges cross-department delegation.
+
+#### Agent Lifecycle
+- **Creation**: POST /api/agents — name, department, role (team_leader/senior/junior/intern), cli_provider (7 types), personality, workflow_pack_key
+- **Configuration**: PATCH — cli_model, reasoning_level, oauth_account_id, api_provider_id
+- **Spawning** — 3 provider paths:
+  1. **CLI** (claude/codex/gemini/opencode): `child_process.spawn()` → stdout parsed for subtask events
+  2. **HTTP** (copilot/antigravity): OAuth-authenticated HTTP calls with AbortController
+  3. **API** (openai/anthropic/google/ollama/etc): Direct LLM API calls
+- **Stopping**: SIGINT (pause) or SIGTERM→SIGKILL (cancel), with delegation state cleanup
+- **Resuming**: `pending` → `planned`, auto-re-spawns with 450-900ms random delay
+- **Destruction**: Blocked while `working`, cascades by nullifying foreign keys
+
+#### Auto-Assignment Algorithm
+Multi-layer ranking: workflow-pack department priorities → constrained agent scope → status (idle > break) → non-leader preferred → fewest tasks done → earliest created.
+
+#### Locking / Concurrency
+**Single-process Node.js — no distributed locks.** All concurrency is in-memory:
+- `activeProcesses: Map<taskId, {pid, controller}>` — prevents double-spawning
+- `subtaskDelegationDispatchInFlight: Set<taskId>` — prevents concurrent delegation for same task
+- `plannerSubtaskRoutingInFlight: Set<taskId>` — prevents concurrent subtask re-routing
+- `reviewInFlight: Set<taskId>` — prevents concurrent review processing
+- Git worktrees provide code-level isolation between concurrent agents
+
+**Key pattern**: In-flight guard sets with queued retries:
+```typescript
+if (subtaskDelegationDispatchInFlight.has(taskId)) {
+  pendingDelegationOptionsByTask.set(taskId, opts); // queue for later
+  return;
+}
+subtaskDelegationDispatchInFlight.add(taskId);
+// ... proceed, then .delete() when done
+```
+
+#### Cross-Department Collaboration
+- Sequential department batching: departments processed one at a time with 900-1600ms random delays
+- Origin team priority: foreign delegation deferred until origin team finishes its subtasks
+- Subtask seeding from planning meetings: creates subtasks from approved plans, then LLM re-routes to correct departments
+- Video-specific ordering: `[VIDEO_FINAL_RENDER]` subtasks held until all other subtasks complete
+
+#### Run Complete Handler
+Central post-execution hub: on success → auto-complete own-dept subtasks → trigger foreign delegation → move to review → schedule review meeting → finishReview (merge worktree). On failure → reset to inbox → cleanup worktree → send failure report → continue cross-dept queues.
+
+### 12.3 2D Dashboard Implementation
+
+#### Rendering Stack
+- **Engine**: PixiJS 8 on HTML5 `<canvas>`, `antialias: false`, `scaleMode: "nearest"`, `imageRendering: "pixelated"`
+- **Scene building**: Imperative PixiJS scene graph, rebuilt from scratch on every React state change
+- **Layout**: Vertical zones — CEO office (110px) → hallway (32px) → department grid (3-col responsive) → hallway → break room (110px)
+- **Animation**: PixiJS `app.ticker` at 60fps handles: CEO WASD movement, crown bob, working particles, CLI utilization effects (sweat/distress/collapse), sub-clone floating, wall clocks, break room ambiance, delivery arc animations
+- **All furniture/rooms drawn procedurally** via PixiJS `Graphics` (rectangles, circles, fills) — no sprite sheets for environment. Only agent avatars use sprite images.
+
+#### State Model
+- **React `useState` at App root** (30+ state variables, no Redux/Zustand) — agents, tasks, departments, subAgents, meetingPresence, crossDeptDeliveries, etc.
+- **Agent visual states**: idle (static), working (sparkle particles), break (in break room with coffee), offline (translucent gray + zzz)
+- **CLI utilization overlays**: <60% normal, 60-79% sweat drops, 80-99% red tint + sweat, 100% rotated in bed with blanket
+- **Scene rebuild trigger**: any change to agents/tasks/subAgents/language/theme → full scene rebuild
+
+#### Transport
+- **WebSocket** (primary): 14 event types — `task_update`, `agent_status`, `cli_output`, `subtask_update`, `cross_dept_delivery`, `ceo_office_call`, `chat_stream`, `task_report`, etc.
+- **Batched broadcasting**: `cli_output` batched at 250ms, `subtask_update` at 150ms. All others immediate.
+- **HTTP live sync** (backup): Debounced polling via `scheduleLiveSync()` — tasks + agents + stats + decision inbox fetched together. 5s interval fallback.
+- **Visibility-aware**: Pauses polling when tab hidden, resumes on focus.
+
+#### Dashboard Data Shown
+- CEO office: 4 KPI cards (Staff count, Working count, In Progress, Done/Total)
+- Dashboard page (React component): HUD stats, ranking board (top 5 by XP), department performance bars, working/idle agent lists, mission log (6 recent tasks)
+- Agent detail: sprite, role badge, unread indicator, CLI utilization bar
+
+### 12.4 Steal List — 5 Concrete Adoptable Changes
+
+#### 1. WebSocket/SSE Event Hub with Batched Broadcasting
+**What claw-empire does**: `server/ws/hub.ts` — batched broadcasting with per-event-type cooldown intervals (250ms for cli_output, 150ms for subtask_update, immediate for others). Collects payloads during cooldown, flushes max 60 items per batch.
+
+**Clarvis adoption**: Our `ORCH_VISUAL_DASHBOARD_2` task needs exactly this pattern. Instead of polling files, build an SSE event hub that batches high-frequency events (task progress) and sends critical events (task_complete, agent_status) immediately.
+
+**File targets**:
+- `scripts/dashboard_events.py` — new, SSE event hub with batched broadcasting
+- `scripts/project_agent.py` — emit events to hub on spawn/complete/promote
+- `scripts/heartbeat_postflight.py` — emit events on task completion
+
+#### 2. Auto-Commit Safety Whitelist for Worktree Merges
+**What claw-empire does**: `server/modules/workflow/core/worktree/shared.ts` — before merging a worktree, auto-commits with a safety filter:
+- Extension whitelist: `.ts, .tsx, .js, .json, .md, .css, .py, .go...`
+- Blocked pattern: `/(\.env|id_rsa|id_ed25519|.*\.(pem|key|p12|pfx|sqlite|db|log|zip|tar|gz))$/`
+- Tracked changes always staged; untracked only if whitelisted + not blocked
+
+**Clarvis adoption**: Our project agents don't currently have merge safety. When agents commit, they could accidentally stage secrets or binaries.
+
+**File targets**:
+- `scripts/project_agent.py` (`cmd_spawn()`) — add auto-commit safety filter before `git add/commit`
+- Add `SAFE_EXTENSIONS` and `BLOCKED_PATTERNS` constants
+
+#### 3. Stale Process Detection + Cleanup Before Re-Spawn
+**What claw-empire does**: Before re-running a task, checks if a stale process exists from a previous run:
+```typescript
+const existing = activeProcesses.get(taskId);
+if (existing) {
+  if (isPidAlive(existing.pid)) return 409; // still running
+  activeProcesses.delete(taskId);  // stale — clean up
+}
+```
+
+**Clarvis adoption**: Our global lock (`/tmp/clarvis_claude_global.lock`) doesn't detect stale locks from crashed processes reliably. The lockfile has PID-based detection but no cross-referencing with actual process state.
+
+**File targets**:
+- `scripts/project_agent.py` — add `_check_stale_lock(agent_name)` that reads PID from lockfile, checks `/proc/<pid>/cmdline`, auto-cleans if stale
+- `scripts/cron_env.sh` — harden `_acquire_lock()` with `/proc` liveness check
+
+#### 4. Sequential Delegation with Randomized Delays
+**What claw-empire does**: Cross-department subtask delegation processes one department at a time, with 900-1600ms random delays between batches. Prevents thundering herd when decomposed tasks need multiple agents. In-flight guard Set prevents concurrent delegation for same parent task.
+
+**Clarvis adoption**: Our `project_agent.py loop` command processes subtasks serially (good), but has no delay between sessions and no guard against concurrent loop invocations on the same agent. Adding randomized backoff between sessions reduces API burst and gives cron windows to interleave.
+
+**File targets**:
+- `scripts/project_agent.py` (`run_task_loop()`) — add `time.sleep(random.uniform(10, 20))` between subtask sessions
+- `scripts/project_agent.py` — add per-agent in-flight lockfile (`/tmp/clarvis_agent_<name>_loop.lock`) with stale PID detection
+
+#### 5. Break Rotation / Lifecycle Timer for Dashboard "Aliveness"
+**What claw-empire does**: Server-side timer (60s interval) randomly rotates idle agents to/from `break` status (40% return chance, 50% send-on-break chance). Creates visual dynamism without actual work happening.
+
+**Clarvis adoption**: For the pixel-art dashboard, static agent positions will look dead. A simple lifecycle timer that varies agent visual state (idle→thinking→idle, or idle→reviewing_brain→idle) based on actual cron activity would make the dashboard feel alive.
+
+**File targets**:
+- `scripts/dashboard_events.py` — add agent state rotation timer that emits `agent_status` events
+- Read actual cron status (`/tmp/clarvis_*.lock` files, recent log timestamps) to drive visual states rather than faking them
+
+### 12.5 What NOT to Copy (and Why)
+
+| claw-empire Pattern | Why Not for Clarvis |
+|---|---|
+| **Full Express+React web app** | Clarvis is Python + systemd + Telegram. A full web framework adds 660+ files, Node.js dependency, and a new process to manage. Our dashboard should be a lightweight static page + SSE/WS from a small Python server. |
+| **In-memory Maps for critical state** | All orchestration state (active sessions, delegation chains, review rounds) lives in Maps/Sets — lost on server restart. We should persist to JSONL/SQLite. Our `project_agent.py` already uses file-based state (agent.json, trust.json). |
+| **27-table SQLite schema** | Massively over-engineered for our use case. We have 5 agents, not 13. Our flat-file approach (agent.json + JSONL logs) is sufficient and easier to debug/backup. Only add SQLite if we hit performance limits on JSONL. |
+| **Multi-round review consensus meetings** | claw-empire has planning meetings → review meetings → revision rounds → re-review. Our review loop is: human reads PR on GitHub → approves/rejects. Meeting simulation adds complexity with no value for a single-user system. |
+| **Workflow packs (6 task profiles)** | Each pack has its own input schema, prompt preset, QA rules, output template, routing keywords, cost profile. We have one workflow: decompose → spawn → verify → promote. Template proliferation adds maintenance burden. |
+| **i18n (4 languages in every table)** | Single user (Patrick), single language (English). Adding `name_ko/ja/zh` columns to everything is pure bloat. |
+| **CEO WASD movement in PixiJS** | Fun but pointless for a read-only monitoring dashboard. Our CEO (Patrick) interacts via Telegram, not a game controller. |
+| **OAuth multi-account rotation with failure tracking** | claw-empire tracks multiple OAuth accounts per provider with priority, failure counts, and auto-swap. We use a single OpenRouter API key. Unnecessary complexity. |
+
+### 12.6 Dashboard Architecture Recommendation
+
+Based on claw-empire analysis, here's the recommended stack for `ORCH_VISUAL_DASHBOARD`:
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                 Clarvis Visual Dashboard (Read-Only)              │
+│                                                                  │
+│  ┌────────────────────────┐      SSE        ┌─────────────────┐ │
+│  │  Static HTML + JS      │◄───────────────│ Python SSE      │ │
+│  │                        │   (EventSource) │ Server          │ │
+│  │  PixiJS 8 canvas       │                 │ (Starlette)     │ │
+│  │  (pixel-art rooms,     │                 │ port: 18791     │ │
+│  │   agent sprites,       │   Initial load  │                 │ │
+│  │   status particles)    │◄───────────────│ GET /state      │ │
+│  │                        │   (full state)  │ GET /sse        │ │
+│  │  No React needed —     │                 │                 │ │
+│  │  vanilla JS + PixiJS   │                 │ Reads:          │ │
+│  │                        │                 │ - QUEUE.md      │ │
+│  └────────────────────────┘                 │ - digest.md     │ │
+│                                             │ - agent configs │ │
+│  Key differences from claw-empire:          │ - scoreboard    │ │
+│  - SSE not WebSocket (simpler, one-way)     │ - lock files    │ │
+│  - No React (read-only = no interaction)    │ - cron logs     │ │
+│  - Starlette not Express (Python ecosystem) │ - gh pr list    │ │
+│  - LAN-only binding (no auth needed)        └─────────────────┘ │
+│  - ~200 lines Python + ~500 lines JS (vs 660 files)            │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+**Event types to implement** (inspired by claw-empire's 14, reduced to 6):
+1. `task_started` — agent began working on a task
+2. `task_completed` — task finished (success/failure)
+3. `agent_status` — agent state changed (idle/working/offline)
+4. `queue_update` — QUEUE.md changed (new task added/completed)
+5. `cron_activity` — cron job started/finished
+6. `pr_update` — PR created/merged/CI status change
+
+**Rendering approach**: Follow claw-empire's procedural drawing (PixiJS Graphics for rooms/furniture) + sprite images for agents. But simpler: 1 room per agent (not 6 departments), no CEO movement, no meeting table, no delivery animations. Just rooms with agents showing current activity.

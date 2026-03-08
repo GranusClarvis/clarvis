@@ -25,11 +25,15 @@ Usage:
     python3 project_agent.py promote <name>   # pull summaries/procedures back to Clarvis
     python3 project_agent.py destroy <name>   # remove agent (requires --confirm)
     python3 project_agent.py benchmark <name> # run isolation + retrieval benchmarks
+    python3 project_agent.py decompose <name> "task" # break task into subtasks
+    python3 project_agent.py loop <name> "task" [--timeout 1200] [--max-sessions 8] [--budget 2.0]
+    python3 project_agent.py ci-check <name> <pr_number> [--timeout 600]
 """
 
 import argparse
 import json
 import os
+import random
 import shlex
 import shutil
 import subprocess
@@ -51,6 +55,142 @@ LOGFILE = CLARVIS_WORKSPACE / "memory" / "cron" / "project_agents.log"
 MAX_RETRIES = 2              # Max retry attempts per task
 RETRY_BACKOFF_BASE = 15      # Seconds before first retry (doubles each attempt)
 
+# ── Auto-Commit Safety Whitelist ──────────────────────────────────────
+# Extensions that untracked files must match to be staged.
+# Tracked (modified/deleted) files are always staged regardless.
+COMMIT_EXT_WHITELIST = frozenset({
+    ".py", ".ts", ".js", ".jsx", ".tsx", ".json", ".md", ".css", ".scss",
+    ".html", ".go", ".rs", ".toml", ".yaml", ".yml", ".sh", ".sql", ".txt",
+    ".mjs", ".cjs", ".svelte", ".vue", ".lock",
+})
+
+# Regex patterns for paths that must NEVER be staged (secrets, binaries, logs).
+import re as _re_mod
+COMMIT_BLOCKED_PATTERNS = _re_mod.compile(
+    r"(\.env|id_rsa|id_ed25519|\.pem$|\.key$|\.p12$|\.pfx$|"
+    r"\.sqlite$|\.db$|\.log$|\.zip$|\.tar$|\.gz$|\.tgz$|"
+    r"\.whl$|\.egg$|\.pyc$|node_modules/|__pycache__/|"
+    r"\.git/|credentials|secrets?\.)"
+)
+
+# ── A2A Message Protocol (v1) ─────────────────────────────────────────
+# Internal Agent-to-Agent message schema for structured communication.
+# Agents MUST return this JSON at end of task. Clarvis validates on receive.
+
+A2A_PROTOCOL_VERSION = "1"
+
+# Required fields every agent response must contain
+A2A_REQUIRED_FIELDS = {"status", "summary"}
+
+# Valid status values
+A2A_VALID_STATUSES = {"success", "partial", "failed", "blocked"}
+
+# Full schema with types (for documentation and validation)
+A2A_RESULT_SCHEMA = {
+    "protocol":      "a2a/v1",        # str  — protocol identifier (auto-injected)
+    "status":        "success",        # str  — one of A2A_VALID_STATUSES
+    "summary":       "",               # str  — 1-3 sentence description of what was done
+    "pr_url":        None,             # str|null — PR URL if one was created
+    "branch":        None,             # str|null — git branch name
+    "files_changed": [],               # list[str] — relative paths of modified files
+    "procedures":    [],               # list[str] — reusable build/test/deploy commands
+    "follow_ups":    [],               # list[str] — suggested next tasks
+    "tests_passed":  None,             # bool|null — whether tests passed
+    "error":         None,             # str|null — error message if status=failed/blocked
+    "confidence":    None,             # float|null — 0.0-1.0 agent self-assessed confidence
+    "pr_class":      None,             # str|null — A/B/C PR class (required when pr_url is set)
+}
+
+
+def validate_a2a_result(result: dict) -> tuple[bool, list[str]]:
+    """Validate an agent result against A2A protocol v1.
+
+    Returns (is_valid, list_of_warnings). A result is valid if it has
+    all required fields with acceptable values. Warnings are non-fatal
+    issues (missing optional fields, unexpected types).
+    """
+    warnings = []
+
+    # Check required fields
+    for field in A2A_REQUIRED_FIELDS:
+        if field not in result:
+            warnings.append(f"missing required field: {field}")
+    if not warnings:
+        # All required present — check values
+        if result.get("status") not in A2A_VALID_STATUSES:
+            warnings.append(f"invalid status: {result.get('status')!r} "
+                          f"(expected one of {A2A_VALID_STATUSES})")
+        if not isinstance(result.get("summary", ""), str) or not result.get("summary"):
+            warnings.append("summary must be a non-empty string")
+
+    is_valid = not any("missing required" in w or "invalid status" in w for w in warnings)
+
+    # Type checks for optional fields (warnings only)
+    if "files_changed" in result and not isinstance(result["files_changed"], list):
+        warnings.append("files_changed should be a list")
+    if "procedures" in result and not isinstance(result["procedures"], list):
+        warnings.append("procedures should be a list")
+    if "follow_ups" in result and not isinstance(result["follow_ups"], list):
+        warnings.append("follow_ups should be a list")
+    if "confidence" in result and result["confidence"] is not None:
+        try:
+            c = float(result["confidence"])
+            if not (0.0 <= c <= 1.0):
+                warnings.append(f"confidence out of range: {c}")
+        except (ValueError, TypeError):
+            warnings.append(f"confidence must be a number: {result['confidence']!r}")
+
+    # PR class validation: warn if pr_url set but pr_class missing/invalid
+    if result.get("pr_url"):
+        pr_class = result.get("pr_class")
+        if not pr_class:
+            warnings.append("pr_class should be set when pr_url is present (A/B/C)")
+        elif pr_class not in ("A", "B", "C"):
+            warnings.append(f"pr_class must be one of A, B, C — got {pr_class!r}")
+
+    return is_valid, warnings
+
+
+def normalize_a2a_result(result: dict) -> dict:
+    """Normalize an agent result to conform to A2A protocol v1.
+
+    Fills in defaults for missing optional fields and adds protocol tag.
+    """
+    normalized = {"protocol": f"a2a/v{A2A_PROTOCOL_VERSION}"}
+    for key, default in A2A_RESULT_SCHEMA.items():
+        if key == "protocol":
+            continue
+        normalized[key] = result.get(key, default)
+    # Preserve any extra fields the agent sent (extensibility)
+    for key, value in result.items():
+        if key not in normalized:
+            normalized[key] = value
+    return normalized
+
+
+# ── Trust scoring ──────────────────────────────────────────────────────
+# Outcome-based adjustment table: event -> delta
+TRUST_ADJUSTMENTS = {
+    "task_success":    +0.03,   # basic task completed
+    "pr_created":      +0.05,   # opened a PR
+    "pr_merged":       +0.05,   # PR was merged (applied via promote/manual)
+    "task_failed":     -0.10,   # task failed
+    "timeout":         -0.05,   # task timed out
+    "ci_broke_main":   -0.20,   # broke the main branch CI
+    "manual_boost":    +0.10,   # operator manually boosts
+    "manual_penalize": -0.10,   # operator manually penalizes
+}
+
+# Trust tiers: (min_score, tier_name, description)
+TRUST_TIERS = [
+    (0.80, "autonomous",  "Full autonomy — can spawn without review"),
+    (0.50, "supervised",   "Supervised — results reviewed before merge"),
+    (0.20, "restricted",   "Restricted — limited task types, extra guardrails"),
+    (0.00, "suspended",    "Suspended — no tasks dispatched"),
+]
+
+DEFAULT_TRUST_SCORE = 0.50  # new agents start supervised
+
 # Cost tracking via OpenRouter API
 try:
     sys.path.insert(0, str(CLARVIS_WORKSPACE / "scripts"))
@@ -58,6 +198,22 @@ try:
     _HAS_COST_API = True
 except ImportError:
     _HAS_COST_API = False
+
+# Dashboard event publishing
+try:
+    from dashboard_events import emit_event as _emit_dashboard_event
+    _HAS_DASHBOARD = True
+except ImportError:
+    _HAS_DASHBOARD = False
+
+
+def _emit(event_type: str, **kwargs):
+    """Emit a dashboard event (no-op if module unavailable)."""
+    if _HAS_DASHBOARD:
+        try:
+            _emit_dashboard_event(event_type, **kwargs)
+        except Exception:
+            pass
 
 
 def _snapshot_cost() -> Optional[float]:
@@ -76,6 +232,198 @@ def _agents_root() -> Path:
     if AGENTS_ROOT_PRIMARY.exists() and AGENTS_ROOT_PRIMARY.is_dir():
         return AGENTS_ROOT_PRIMARY
     return AGENTS_ROOT_FALLBACK
+
+
+# ── Lock liveness via /proc ──────────────────────────────────────────
+
+_CLARVIS_PROCESS_MARKERS = (
+    "clarvis", "claude",
+    "cron_autonomous", "cron_morning", "cron_evening",
+    "cron_evolution", "cron_reflection", "cron_research",
+    "cron_implementation", "cron_strategic", "cron_orchestrator",
+    "project_agent",
+)
+
+
+def _is_pid_clarvis(pid: int) -> bool:
+    """Check if PID is alive AND belongs to a clarvis/claude process.
+
+    Reads /proc/<pid>/cmdline to verify identity, preventing false lock
+    honors from PID recycling after the original process died.
+    """
+    try:
+        os.kill(pid, 0)  # alive?
+    except (ProcessLookupError, PermissionError):
+        return False
+
+    cmdline_path = Path(f"/proc/{pid}/cmdline")
+    if cmdline_path.exists():
+        try:
+            cmdline = cmdline_path.read_bytes().replace(b"\x00", b" ").decode("utf-8", errors="replace")
+            return any(marker in cmdline for marker in _CLARVIS_PROCESS_MARKERS)
+        except OSError:
+            return False
+    # /proc unavailable (non-Linux) — fall back to kill-0 (already passed)
+    return True
+
+
+# ── Claude concurrency controls ───────────────────────────────────────
+#
+# We intentionally do NOT use the global Clarvis Claude lock for project agents.
+# Agents are repo-isolated under /home/agent/agents/<name>/ and may run in parallel.
+#
+# Policy (Inverse directive 2026-03-07):
+# - Each agent may run at most 1 Claude session at a time (per-agent lock).
+# - Up to MAX_PARALLEL_AGENT_CLAUDE agents may run Claude concurrently.
+# - Clarvis core cron scripts still use /tmp/clarvis_claude_global.lock.
+
+MAX_PARALLEL_AGENT_CLAUDE = int(os.environ.get("CLARVIS_MAX_PARALLEL_AGENT_CLAUDE", "3"))
+
+
+def _agent_claude_lock_path(agent_name: str) -> Path:
+    return Path(f"/tmp/clarvis_agent_{agent_name}_claude.lock")
+
+
+def _acquire_agent_claude_lock(agent_name: str) -> Optional[str]:
+    """Acquire per-agent Claude lock. Returns error string if locked."""
+    lock = _agent_claude_lock_path(agent_name)
+    if lock.exists():
+        try:
+            pid_str = lock.read_text().strip()
+            if pid_str.isdigit() and _is_pid_clarvis(int(pid_str)):
+                age = int(time.time() - lock.stat().st_mtime)
+                return f"agent Claude lock held for '{agent_name}' by PID {pid_str} (age={age}s)"
+            lock.unlink(missing_ok=True)
+        except OSError:
+            lock.unlink(missing_ok=True)
+    try:
+        lock.write_text(str(os.getpid()))
+        return None
+    except OSError as e:
+        return f"failed to acquire agent Claude lock for '{agent_name}': {e}"
+
+
+def _release_agent_claude_lock(agent_name: str) -> None:
+    lock = _agent_claude_lock_path(agent_name)
+    try:
+        if lock.exists() and lock.read_text().strip() == str(os.getpid()):
+            lock.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+def _slots_dir() -> Path:
+    return Path("/tmp/clarvis_claude_slots")
+
+
+def _cleanup_stale_slot_files() -> None:
+    d = _slots_dir()
+    if not d.exists():
+        return
+    for f in d.glob("slot_*.lock"):
+        try:
+            pid_str = f.read_text().strip().split()[0]
+            if not pid_str.isdigit() or not _is_pid_clarvis(int(pid_str)):
+                f.unlink(missing_ok=True)
+        except OSError:
+            try:
+                f.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+
+def _acquire_claude_slot(agent_name: str) -> tuple[Optional[Path], Optional[str]]:
+    """Acquire a global *semaphore slot* for agent Claude runs.
+
+    Returns (slot_file, error). If slot_file is not None, caller MUST release.
+    """
+    if MAX_PARALLEL_AGENT_CLAUDE <= 0:
+        return None, None
+
+    d = _slots_dir()
+    d.mkdir(parents=True, exist_ok=True)
+
+    _cleanup_stale_slot_files()
+
+    # Count current holders
+    holders = list(d.glob("slot_*.lock"))
+    if len(holders) >= MAX_PARALLEL_AGENT_CLAUDE:
+        return None, f"agent Claude concurrency cap reached ({len(holders)}/{MAX_PARALLEL_AGENT_CLAUDE})"
+
+    # Create a unique slot file
+    slot = d / f"slot_{agent_name}_{os.getpid()}_{int(time.time())}.lock"
+    try:
+        slot.write_text(f"{os.getpid()} {agent_name}\n")
+        return slot, None
+    except OSError as e:
+        return None, f"failed to acquire agent Claude slot: {e}"
+
+
+def _release_claude_slot(slot_file: Optional[Path]) -> None:
+    if not slot_file:
+        return
+    try:
+        slot_file.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+# ── Per-agent loop lockfile ─────────────────────────────────────────
+
+def _loop_lock_path(agent_name: str) -> Path:
+    """Return the lockfile path for a per-agent task loop."""
+    return Path(f"/tmp/clarvis_agent_{agent_name}_loop.lock")
+
+
+def _acquire_loop_lock(agent_name: str) -> bool:
+    """Acquire per-agent loop lock with stale PID detection.
+
+    Returns True if lock acquired, False if another live loop is running.
+    Stale locks (dead PID or recycled non-clarvis PID) are auto-cleaned.
+    """
+    lock = _loop_lock_path(agent_name)
+    if lock.exists():
+        try:
+            pid_str = lock.read_text().strip()
+            if pid_str.isdigit():
+                pid = int(pid_str)
+                if _is_pid_clarvis(pid):
+                    age = int(time.time() - lock.stat().st_mtime)
+                    if age <= 5 * 3600:  # 5h max loop duration
+                        _log(f"Loop lock held by PID {pid} (age={age}s) for agent '{agent_name}'")
+                        return False
+                    else:
+                        _log(f"WARN: Stale loop lock (PID {pid}, age={age}s) for '{agent_name}' — reclaiming")
+                else:
+                    _log(f"WARN: Loop lock PID {pid} dead/recycled for '{agent_name}' — reclaiming")
+            # Invalid or stale — remove
+            lock.unlink(missing_ok=True)
+        except (OSError, ValueError):
+            lock.unlink(missing_ok=True)
+    # Write our PID
+    try:
+        lock.write_text(str(os.getpid()))
+        return True
+    except OSError as e:
+        _log(f"Failed to acquire loop lock for '{agent_name}': {e}")
+        return False
+
+
+def _release_loop_lock(agent_name: str) -> None:
+    """Release per-agent loop lock (only if we own it)."""
+    lock = _loop_lock_path(agent_name)
+    try:
+        if lock.exists():
+            pid_str = lock.read_text().strip()
+            if pid_str == str(os.getpid()):
+                lock.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+# Delay between subtask sessions (seconds)
+LOOP_INTER_SUBTASK_DELAY_MIN = 10
+LOOP_INTER_SUBTASK_DELAY_MAX = 20
 
 
 # Collections for lite brain (subset of Clarvis's 10)
@@ -98,6 +446,8 @@ AGENT_CONFIG_TEMPLATE = {
     "total_tasks": 0,
     "total_successes": 0,
     "total_pr_count": 0,
+    "trust_score": DEFAULT_TRUST_SCORE,
+    "trust_history": [],          # last N adjustments [{event, delta, score, ts}]
     "budget": {
         "max_timeout": 1800,   # 30 min max per task
         "max_daily_tasks": 10,
@@ -155,6 +505,83 @@ def _save_config(name: str, config: dict):
     tmp.replace(cfg_path)
 
 
+# ── Trust scoring functions ─────────────────────────────────────────────
+
+def get_trust_tier(score: float) -> tuple[str, str]:
+    """Return (tier_name, description) for a trust score."""
+    for min_score, tier, desc in TRUST_TIERS:
+        if score >= min_score:
+            return tier, desc
+    return "suspended", "Suspended — no tasks dispatched"
+
+
+def adjust_trust(name: str, event: str, config: Optional[dict] = None) -> dict:
+    """Apply a trust adjustment to an agent. Returns updated config.
+
+    Args:
+        name: Agent name
+        event: Key from TRUST_ADJUSTMENTS
+        config: If provided, use this config (avoids re-read). Caller must save.
+    """
+    if config is None:
+        config = _load_config(name)
+        if not config:
+            return {"error": f"Agent '{name}' not found"}
+
+    delta = TRUST_ADJUSTMENTS.get(event)
+    if delta is None:
+        return {"error": f"Unknown trust event: {event}"}
+
+    old_score = config.get("trust_score", DEFAULT_TRUST_SCORE)
+    new_score = round(max(0.0, min(1.0, old_score + delta)), 3)
+
+    config["trust_score"] = new_score
+
+    # Append to history (keep last 50)
+    history = config.get("trust_history", [])
+    history.append({
+        "event": event,
+        "delta": delta,
+        "old": old_score,
+        "new": new_score,
+        "ts": datetime.now(timezone.utc).isoformat(),
+    })
+    config["trust_history"] = history[-50:]
+
+    old_tier, _ = get_trust_tier(old_score)
+    new_tier, _ = get_trust_tier(new_score)
+    if old_tier != new_tier:
+        _log(f"Trust tier change for '{name}': {old_tier} -> {new_tier} "
+             f"(score {old_score:.3f} -> {new_score:.3f}, event={event})")
+    else:
+        _log(f"Trust update for '{name}': {old_score:.3f} -> {new_score:.3f} "
+             f"(event={event}, tier={new_tier})")
+
+    _emit("trust_changed", agent=name, event=event, delta=delta,
+          old_score=old_score, new_score=new_score,
+          old_tier=old_tier, new_tier=new_tier)
+
+    return config
+
+
+def _apply_spawn_trust(name: str, config: dict, spawn_result: dict):
+    """Apply trust adjustments based on spawn outcome. Saves config."""
+    exit_code = spawn_result.get("exit_code", 1)
+    agent_result = spawn_result.get("result", {})
+    status = agent_result.get("status", "unknown")
+
+    if exit_code == 124:
+        adjust_trust(name, "timeout", config)
+    elif status == "success" or exit_code == 0:
+        adjust_trust(name, "task_success", config)
+        if agent_result.get("pr_url"):
+            adjust_trust(name, "pr_created", config)
+    elif status in ("failed", "unknown"):
+        adjust_trust(name, "task_failed", config)
+
+    _save_config(name, config)
+
+
 def _task_id() -> str:
     ts = datetime.now(timezone.utc).strftime("%m%d%H%M%S")
     h = hashlib.sha256(str(time.time()).encode()).hexdigest()[:4]
@@ -170,6 +597,61 @@ def _run_git(workspace: Path, args: list[str], timeout: int = 60) -> subprocess.
         text=True,
         timeout=timeout,
     )
+
+
+def safe_stage_files(workspace: Path) -> tuple[list[str], list[str]]:
+    """Stage files respecting the auto-commit safety whitelist.
+
+    Rules:
+    - Tracked changes (modified/deleted): always staged.
+    - Untracked files: staged only if extension is whitelisted AND path
+      does not match any blocked pattern.
+
+    Returns (staged, blocked) — lists of relative file paths.
+    """
+    staged = []
+    blocked = []
+
+    # 1) Stage all tracked changes (modified/deleted) unconditionally
+    r = _run_git(workspace, ["diff", "--name-only"])
+    tracked_modified = [f for f in r.stdout.strip().splitlines() if f]
+
+    # Also include already-staged tracked changes
+    r2 = _run_git(workspace, ["diff", "--cached", "--name-only"])
+    tracked_staged = [f for f in r2.stdout.strip().splitlines() if f]
+
+    # Filter tracked files: block secrets even in tracked files
+    for f in set(tracked_modified) | set(tracked_staged):
+        if COMMIT_BLOCKED_PATTERNS.search(f):
+            blocked.append(f"TRACKED-BLOCKED: {f}")
+            _run_git(workspace, ["reset", "HEAD", "--", f])
+        else:
+            _run_git(workspace, ["add", "--", f])
+            staged.append(f)
+
+    # 2) Handle deleted files (tracked deletions)
+    r3 = _run_git(workspace, ["diff", "--name-only", "--diff-filter=D"])
+    for f in r3.stdout.strip().splitlines():
+        if f and f not in staged:
+            _run_git(workspace, ["add", "--", f])
+            staged.append(f)
+
+    # 3) Untracked files: whitelist extension + not blocked
+    r4 = _run_git(workspace, ["ls-files", "--others", "--exclude-standard"])
+    for f in r4.stdout.strip().splitlines():
+        if not f:
+            continue
+        ext = os.path.splitext(f)[1].lower()
+        if ext not in COMMIT_EXT_WHITELIST:
+            blocked.append(f"EXT-BLOCKED: {f} ({ext})")
+            continue
+        if COMMIT_BLOCKED_PATTERNS.search(f):
+            blocked.append(f"PATTERN-BLOCKED: {f}")
+            continue
+        _run_git(workspace, ["add", "--", f])
+        staged.append(f)
+
+    return staged, blocked
 
 
 def _sync_and_checkout_work_branch(workspace: Path, base_branch: str, agent: str, task_id: str) -> str:
@@ -305,23 +787,32 @@ Your brain DB is: {agent_dir}/data/brain (isolated — NOT shared with Clarvis)
 2. Explore the codebase to understand context
 3. Implement the requested changes
 4. Run tests to verify
-5. Create a PR (or commit if tests pass)
+5. Create a PR (or commit if tests pass — see Commit Safety)
 6. Write a concise summary of what you did
 
-## Output Protocol
-At the end of your task, output a JSON block with this structure:
+## Commit Safety
+NEVER commit secrets, credentials, or binary artifacts.
+Use `git add <specific-files>` — NEVER use `git add .` or `git add -A`.
+Blocked: .env, id_rsa, *.pem, *.key, *.sqlite, *.db, *.log, *.zip, node_modules/.
+
+## Output Protocol (A2A/v1 — MANDATORY)
+At the end of your task, output EXACTLY ONE JSON block. Clarvis validates this automatically.
+Fields marked REQUIRED must be present.
 ```json
 {{
-  "status": "success" | "partial" | "failed",
+  "status": "success|partial|failed|blocked",  // REQUIRED
+  "summary": "What I did in 2-3 sentences",    // REQUIRED
   "pr_url": "https://github.com/..." | null,
   "branch": "feature/...",
-  "summary": "What I did in 2-3 sentences",
   "files_changed": ["path/to/file1", "path/to/file2"],
   "procedures": ["How to build: ...", "How to test: ..."],
   "follow_ups": ["TODO: ...", "NEEDS: ..."],
-  "tests_passed": true | false
+  "tests_passed": true | false,
+  "error": "why it failed" | null,
+  "confidence": 0.0 to 1.0
 }}
 ```
+Status: success=done, partial=incomplete, failed=error, blocked=external dep.
 
 ## Brain Usage
 Store learnings about this repo:
@@ -362,6 +853,214 @@ def _write_initial_procedures(name: str):
 # =========================================================================
 # SPAWN — execute a task in a project agent
 # =========================================================================
+
+def build_dependency_map(name: str) -> dict:
+    """Scan agent repo for entry points, config files, test dirs, key modules.
+
+    Produces a structured map written to dependency_map.json in agent data dir.
+    Used by decompose_task() for smarter subtask splits (e.g., knowing which
+    dirs contain tests, what the main entry points are, project structure).
+
+    Returns the dependency map dict.
+    """
+    agent_dir = _agent_dir(name)
+    if not agent_dir.exists():
+        return {"error": f"Agent '{name}' not found"}
+    workspace = agent_dir / "workspace"
+    if not workspace.exists():
+        return {"error": f"Workspace not found: {workspace}"}
+
+    dep = {
+        "agent": name,
+        "entry_points": [],
+        "config_files": [],
+        "test_dirs": [],
+        "test_files": [],
+        "key_modules": [],
+        "source_dirs": [],
+        "doc_files": [],
+        "project_type": "unknown",
+        "framework": None,
+        "language": None,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    # ── Detect project type / language / framework ───────────────────────
+    has_package_json = (workspace / "package.json").exists()
+    has_pyproject = (workspace / "pyproject.toml").exists()
+    has_setup_py = (workspace / "setup.py").exists()
+    has_cargo = (workspace / "Cargo.toml").exists()
+    has_go_mod = (workspace / "go.mod").exists()
+
+    if has_package_json:
+        dep["language"] = "javascript/typescript"
+        try:
+            pkg = json.loads((workspace / "package.json").read_text())
+            pkg_deps = {**pkg.get("dependencies", {}), **pkg.get("devDependencies", {})}
+            if "next" in pkg_deps:
+                dep["framework"] = "next.js"
+                dep["project_type"] = "webapp"
+            elif "react" in pkg_deps:
+                dep["framework"] = "react"
+                dep["project_type"] = "webapp"
+            elif "vue" in pkg_deps:
+                dep["framework"] = "vue"
+                dep["project_type"] = "webapp"
+            elif "express" in pkg_deps or "fastify" in pkg_deps:
+                dep["framework"] = "express" if "express" in pkg_deps else "fastify"
+                dep["project_type"] = "api"
+            else:
+                dep["project_type"] = "node"
+        except (json.JSONDecodeError, OSError):
+            dep["project_type"] = "node"
+    elif has_pyproject or has_setup_py:
+        dep["language"] = "python"
+        dep["project_type"] = "python"
+    elif has_cargo:
+        dep["language"] = "rust"
+        dep["project_type"] = "rust"
+    elif has_go_mod:
+        dep["language"] = "go"
+        dep["project_type"] = "go"
+
+    # ── Config files ────────────────────────────────────────────────────
+    config_patterns = [
+        "package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock",
+        "tsconfig.json", "tsconfig.*.json", "jsconfig.json",
+        "next.config.*", "vite.config.*", "vitest.config.*", "jest.config.*",
+        "webpack.config.*", "rollup.config.*",
+        "tailwind.config.*", "postcss.config.*",
+        "eslint.config.*", ".eslintrc*", ".prettierrc*",
+        "pyproject.toml", "setup.py", "setup.cfg", "tox.ini", "mypy.ini",
+        "Cargo.toml", "go.mod", "go.sum",
+        "Makefile", "Dockerfile", "docker-compose.yml", "docker-compose.yaml",
+        ".env.example", ".env.local.example",
+    ]
+    for pattern in config_patterns:
+        for f in workspace.glob(pattern):
+            if f.is_file():
+                dep["config_files"].append(str(f.relative_to(workspace)))
+
+    # ── Entry points ──────────────────────────────────────────────────
+    entry_patterns = {
+        "javascript/typescript": [
+            "app/layout.tsx", "app/layout.ts", "app/page.tsx", "app/page.ts",
+            "pages/index.tsx", "pages/index.ts", "pages/index.jsx", "pages/index.js",
+            "pages/_app.tsx", "pages/_app.ts",
+            "src/index.tsx", "src/index.ts", "src/index.jsx", "src/index.js",
+            "src/main.tsx", "src/main.ts", "src/main.jsx", "src/main.js",
+            "src/App.tsx", "src/App.ts", "src/App.jsx", "src/App.js",
+            "index.ts", "index.js", "main.ts", "main.js",
+            "server.ts", "server.js", "src/server.ts", "src/server.js",
+        ],
+        "python": [
+            "main.py", "app.py", "run.py", "manage.py",
+            "src/main.py", "src/app.py",
+            "__main__.py", "src/__main__.py",
+        ],
+        "rust": ["src/main.rs", "src/lib.rs"],
+        "go": ["main.go", "cmd/main.go"],
+    }
+    lang = dep["language"] or ""
+    for pattern_list in ([entry_patterns.get(lang, [])] +
+                         [v for k, v in entry_patterns.items() if k != lang]):
+        for ep in pattern_list:
+            if (workspace / ep).exists():
+                dep["entry_points"].append(ep)
+    # Deduplicate
+    dep["entry_points"] = list(dict.fromkeys(dep["entry_points"]))
+
+    # ── Source directories ──────────────────────────────────────────────
+    source_dir_candidates = [
+        "src", "lib", "app", "components", "pages", "api",
+        "packages", "modules", "core", "utils", "helpers",
+        "contracts", "scripts", "hooks", "services", "middleware",
+    ]
+    for d in source_dir_candidates:
+        p = workspace / d
+        if p.is_dir():
+            # Count files to verify it's a real source dir, not just a few configs
+            file_count = sum(1 for _ in p.rglob("*") if _.is_file()
+                             and not _.name.startswith("."))
+            if file_count > 0:
+                dep["source_dirs"].append({
+                    "path": d,
+                    "file_count": min(file_count, 9999),  # cap for perf
+                })
+
+    # ── Key modules (files that many things likely depend on) ──────────
+    key_module_patterns = [
+        "lib/**/*.ts", "lib/**/*.tsx", "lib/**/*.js",
+        "utils/**/*.ts", "utils/**/*.tsx", "utils/**/*.js",
+        "src/lib/**/*.ts", "src/utils/**/*.ts",
+        "core/**/*.py", "utils/**/*.py",
+        "contracts/**/*.sol",
+    ]
+    for pattern in key_module_patterns:
+        for f in workspace.glob(pattern):
+            if f.is_file() and not f.name.startswith("."):
+                dep["key_modules"].append(str(f.relative_to(workspace)))
+    # Cap key modules list (largest files first by name length as proxy)
+    dep["key_modules"] = sorted(dep["key_modules"])[:50]
+
+    # ── Test directories and files ──────────────────────────────────────
+    test_dir_candidates = [
+        "tests", "test", "__tests__", "spec", "specs",
+        "src/tests", "src/__tests__", "src/test",
+        "e2e", "cypress", "playwright",
+    ]
+    for d in test_dir_candidates:
+        p = workspace / d
+        if p.is_dir():
+            test_count = sum(1 for _ in p.rglob("*") if _.is_file()
+                             and not _.name.startswith("."))
+            dep["test_dirs"].append({"path": d, "file_count": min(test_count, 9999)})
+
+    # Find test files in source dirs (co-located tests)
+    test_file_globs = [
+        "**/*.test.ts", "**/*.test.tsx", "**/*.test.js", "**/*.test.jsx",
+        "**/*.spec.ts", "**/*.spec.tsx", "**/*.spec.js", "**/*.spec.jsx",
+        "**/test_*.py", "**/*_test.py", "**/*_test.go",
+    ]
+    test_files_found = set()
+    for pattern in test_file_globs:
+        for f in workspace.glob(pattern):
+            if f.is_file() and "node_modules" not in str(f):
+                test_files_found.add(str(f.relative_to(workspace)))
+    dep["test_files"] = sorted(test_files_found)[:100]  # cap
+
+    # ── Documentation files ───────────────────────────────────────────
+    doc_patterns = ["README.md", "CONTRIBUTING.md", "CHANGELOG.md",
+                    "docs/**/*.md", "*.md"]
+    for pattern in doc_patterns:
+        for f in workspace.glob(pattern):
+            if f.is_file() and "node_modules" not in str(f):
+                dep["doc_files"].append(str(f.relative_to(workspace)))
+    dep["doc_files"] = sorted(set(dep["doc_files"]))[:30]
+
+    # ── CI workflow files ───────────────────────────────────────────
+    workflows_dir = workspace / ".github" / "workflows"
+    if workflows_dir.exists():
+        try:
+            wf_names = []
+            for wf in sorted(workflows_dir.glob("*.yml")) + sorted(workflows_dir.glob("*.yaml")):
+                if wf.is_file():
+                    wf_names.append(wf.name)
+            if wf_names:
+                dep["ci_workflows"] = wf_names
+        except OSError:
+            pass
+
+    # ── Write dependency_map.json ────────────────────────────────────
+    dep_file = agent_dir / "data" / "dependency_map.json"
+    dep_file.parent.mkdir(parents=True, exist_ok=True)
+    dep_file.write_text(json.dumps(dep, indent=2))
+    _log(f"Dependency map for '{name}': {dep['project_type']}/{dep['framework']}, "
+         f"{len(dep['entry_points'])} entries, {len(dep['source_dirs'])} src dirs, "
+         f"{len(dep['test_dirs'])} test dirs, {len(dep['key_modules'])} key modules")
+
+    return dep
+
 
 def build_ci_context(name: str) -> dict:
     """Scan agent repo for test/build/lint commands from config files.
@@ -530,6 +1229,31 @@ def build_spawn_prompt(name: str, task: str, config: dict,
         except (json.JSONDecodeError, OSError):
             pass
 
+    # Load dependency map if available
+    dep_file = agent_dir / "data" / "dependency_map.json"
+    if dep_file.exists():
+        try:
+            dm = json.loads(dep_file.read_text())
+            dm_lines = ["## Project Structure (auto-detected)"]
+            if dm.get("framework"):
+                dm_lines.append(f"- **Framework**: {dm['framework']} ({dm.get('language', '?')})")
+            elif dm.get("language"):
+                dm_lines.append(f"- **Language**: {dm['language']}")
+            if dm.get("entry_points"):
+                dm_lines.append(f"- **Entry points**: {', '.join(dm['entry_points'][:5])}")
+            if dm.get("source_dirs"):
+                dirs = [f"{d['path']}/ ({d['file_count']} files)" for d in dm["source_dirs"][:6]]
+                dm_lines.append(f"- **Source dirs**: {', '.join(dirs)}")
+            if dm.get("test_dirs"):
+                tdirs = [f"{d['path']}/ ({d['file_count']} files)" for d in dm["test_dirs"][:3]]
+                dm_lines.append(f"- **Test dirs**: {', '.join(tdirs)}")
+            if dm.get("test_files"):
+                dm_lines.append(f"- **Test files**: {len(dm['test_files'])} co-located test files")
+            dm_lines.append("")
+            prompt_parts.extend(dm_lines)
+        except (json.JSONDecodeError, OSError):
+            pass
+
     if procedures:
         prompt_parts.extend([
             "## Known Procedures",
@@ -544,6 +1268,13 @@ def build_spawn_prompt(name: str, task: str, config: dict,
             "",
         ])
 
+    # PR Factory rules injection (Phase 1 — graceful if not installed)
+    try:
+        from pr_factory_rules import build_pr_rules_section
+        prompt_parts.extend(build_pr_rules_section())
+    except ImportError:
+        pass
+
     prompt_parts.extend([
         "## Task",
         task,
@@ -556,24 +1287,38 @@ def build_spawn_prompt(name: str, task: str, config: dict,
         "",
         "## Git Workflow for PRs",
         "1. git checkout -b feature/<desc>",
-        "2. Make changes, commit",
+        "2. Make changes, commit (see Commit Safety below)",
         "3. git push origin feature/<desc>",
         "4. gh pr create --title '...' --body '...'",
         "",
-        "## Output Protocol",
-        "At the END of your work, output a JSON block (```json ... ```) with this EXACT structure:",
+        "## Commit Safety (MANDATORY)",
+        "NEVER commit secrets, credentials, or binary artifacts.",
+        f"Allowed extensions for new files: {', '.join(sorted(COMMIT_EXT_WHITELIST))}",
+        "Blocked patterns: .env, id_rsa, id_ed25519, *.pem, *.key, *.p12, *.pfx,",
+        "  *.sqlite, *.db, *.log, *.zip, *.tar, *.gz, node_modules/, __pycache__/.",
+        "Use `git add <specific-files>` — NEVER use `git add .` or `git add -A`.",
+        "",
+        "## Output Protocol (A2A/v1 — MANDATORY)",
+        "At the END of your work, output EXACTLY ONE JSON block (```json ... ```) with this structure.",
+        "All fields marked REQUIRED must be present. Clarvis validates this automatically.",
         "```json",
         "{",
-        '  "status": "success" | "partial" | "failed",',
+        '  "status": "success|partial|failed|blocked",  // REQUIRED',
+        '  "summary": "2-3 sentences of what you did",  // REQUIRED',
         '  "pr_url": "https://github.com/..." or null,',
         '  "branch": "feature/...",',
-        '  "summary": "2-3 sentences of what you did",',
         '  "files_changed": ["path/to/file1", "path/to/file2"],',
         '  "procedures": ["Build: npm run build", "Test: npm run test"],',
         '  "follow_ups": ["TODO: ...", "NEEDS: ..."],',
-        '  "tests_passed": true or false',
+        '  "tests_passed": true or false,',
+        '  "error": "error description if failed/blocked" or null,',
+        '  "confidence": 0.0 to 1.0,  // your confidence in the result',
+        '  "pr_class": "A|B|C"  // REQUIRED when pr_url is set (see PR Factory Rules)',
         "}",
         "```",
+        "Status meanings: success=task fully done, partial=some work done but incomplete,",
+        "failed=could not complete, blocked=external dependency prevents completion.",
+        "pr_class: A=full completion, B=best safe progress, C=task-unblocking.",
     ])
 
     return "\n".join(prompt_parts)
@@ -609,6 +1354,25 @@ def cmd_spawn(name: str, task: str, timeout: int = 1200,
     if config.get("status") == "running":
         return {"error": f"Agent '{name}' is already running a task"}
 
+    # Trust gate — suspended agents cannot run
+    trust = config.get("trust_score", DEFAULT_TRUST_SCORE)
+    tier, _ = get_trust_tier(trust)
+    if tier == "suspended":
+        return {"error": f"Agent '{name}' is suspended (trust={trust:.3f}). "
+                f"Use 'trust {name} boost' to restore."}
+
+    # Agent Claude concurrency controls (per-agent lock + global semaphore cap)
+    lock_err = _acquire_agent_claude_lock(name)
+    if lock_err:
+        _log(f"SKIP spawn '{name}': {lock_err}")
+        return {"error": f"Cannot spawn: {lock_err}"}
+
+    slot_file, slot_err = _acquire_claude_slot(name)
+    if slot_err:
+        _release_agent_claude_lock(name)
+        _log(f"SKIP spawn '{name}': {slot_err}")
+        return {"error": f"Cannot spawn: {slot_err}"}
+
     agent_dir = _agent_dir(name)
     workspace = agent_dir / "workspace"
     task_id = _task_id()
@@ -622,6 +1386,8 @@ def cmd_spawn(name: str, task: str, timeout: int = 1200,
     timeout = min(timeout, max_timeout)
 
     _log(f"Spawning task {task_id} on agent '{name}' (branch={work_branch}): {task[:80]}")
+    _emit("agent_spawned", agent=name, task_id=task_id,
+          task_name=task[:120], branch=work_branch)
 
     # Refresh CI context before building prompt
     try:
@@ -678,6 +1444,10 @@ def cmd_spawn(name: str, task: str, timeout: int = 1200,
         exit_code = 1
         output = ""
         stderr = str(e)
+    finally:
+        # Always release concurrency controls
+        _release_claude_slot(slot_file)
+        _release_agent_claude_lock(name)
 
     elapsed = time.time() - start_time
 
@@ -706,6 +1476,17 @@ def cmd_spawn(name: str, task: str, timeout: int = 1200,
     # Parse agent output for structured result
     agent_result = _parse_agent_output(output)
 
+    # ── Post-spawn commit safety audit ────────────────────────────────
+    # Re-stage any remaining dirty files through the safety filter.
+    # This catches cases where the agent used `git add .` or staged secrets.
+    try:
+        _staged, _blocked = safe_stage_files(workspace)
+        if _blocked:
+            _log(f"Commit safety blocked {len(_blocked)} files: {_blocked[:5]}")
+            agent_result.setdefault("_safety_blocked", _blocked)
+    except Exception as e:
+        _log(f"Post-spawn safety audit error (non-fatal): {e}")
+
     # Update config
     config["status"] = "idle"
     config["last_run"] = datetime.now(timezone.utc).isoformat()
@@ -718,7 +1499,12 @@ def cmd_spawn(name: str, task: str, timeout: int = 1200,
     config["last_task"]["exit_code"] = exit_code
     config["last_task"]["elapsed"] = round(elapsed, 1)
     config["last_task"]["result"] = agent_result.get("status", "unknown")
-    _save_config(name, config)
+
+    # Apply trust scoring based on outcome (also saves config)
+    _apply_spawn_trust(name, config, {
+        "exit_code": exit_code,
+        "result": agent_result,
+    })
 
     # Store task summary
     summary_file = agent_dir / "memory" / "summaries" / f"{task_id}.json"
@@ -737,6 +1523,16 @@ def cmd_spawn(name: str, task: str, timeout: int = 1200,
 
     _log(f"Task {task_id} completed: exit={exit_code} elapsed={elapsed:.0f}s status={agent_result.get('status', 'unknown')}")
 
+    _emit("task_completed", agent=name, task_id=task_id,
+          status=agent_result.get("status", "unknown"),
+          exit_code=exit_code, duration_s=round(elapsed, 1),
+          cost_usd=actual_cost_usd, section="project_agent")
+
+    # Emit PR event if one was created
+    if agent_result.get("pr_url"):
+        _emit("pr_created", agent=name, task_id=task_id,
+              pr_url=agent_result["pr_url"])
+
     return {
         "task_id": task_id,
         "agent": name,
@@ -749,9 +1545,15 @@ def cmd_spawn(name: str, task: str, timeout: int = 1200,
 
 
 def _parse_agent_output(output: str) -> dict:
-    """Extract structured JSON result from agent output."""
+    """Extract structured JSON result from agent output, validate against A2A protocol.
+
+    Returns a normalized A2A-conformant dict. If the agent didn't produce
+    valid JSON, synthesizes a minimal result with status=unknown.
+    """
     if not output:
-        return {"status": "failed", "summary": "No output"}
+        return normalize_a2a_result({"status": "failed", "summary": "No output"})
+
+    raw_result = None
 
     # Find last JSON block in output
     import re
@@ -759,24 +1561,39 @@ def _parse_agent_output(output: str) -> dict:
 
     if json_blocks:
         try:
-            return json.loads(json_blocks[-1])
+            raw_result = json.loads(json_blocks[-1])
         except json.JSONDecodeError:
             pass
 
     # Fallback: try to find raw JSON object
-    for line in reversed(output.split("\n")):
-        line = line.strip()
-        if line.startswith("{") and line.endswith("}"):
-            try:
-                return json.loads(line)
-            except json.JSONDecodeError:
-                continue
+    if raw_result is None:
+        for line in reversed(output.split("\n")):
+            line = line.strip()
+            if line.startswith("{") and line.endswith("}"):
+                try:
+                    raw_result = json.loads(line)
+                    break
+                except json.JSONDecodeError:
+                    continue
 
-    # No structured output — extract what we can
-    return {
-        "status": "unknown",
-        "summary": output[-500:] if output else "No output",
-    }
+    # No structured output — synthesize minimal result
+    if raw_result is None:
+        return normalize_a2a_result({
+            "status": "unknown",
+            "summary": output[-500:] if output else "No output",
+        })
+
+    # Validate and normalize
+    is_valid, warnings = validate_a2a_result(raw_result)
+    if warnings:
+        _log(f"A2A validation warnings: {'; '.join(warnings)}")
+
+    normalized = normalize_a2a_result(raw_result)
+    normalized["_a2a_valid"] = is_valid
+    if warnings:
+        normalized["_a2a_warnings"] = warnings
+
+    return normalized
 
 
 def _is_task_failure(spawn_result: dict) -> bool:
@@ -1009,6 +1826,188 @@ def cmd_promote(name: str) -> dict:
 
 
 # =========================================================================
+# AUTO GOLDEN QA — generate Q/A pairs from successful task summaries
+# =========================================================================
+
+GOLDEN_QA_CAP = 50
+GOLDEN_QA_DEDUP_THRESHOLD = 0.85  # cosine similarity above this = duplicate
+
+
+def _cosine_sim(a: list[float], b: list[float]) -> float:
+    """Compute cosine similarity between two vectors."""
+    dot = sum(x * y for x, y in zip(a, b))
+    norm_a = sum(x * x for x in a) ** 0.5
+    norm_b = sum(x * x for x in b) ** 0.5
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
+    return dot / (norm_a * norm_b)
+
+
+def cmd_auto_golden_qa(name: str) -> dict:
+    """Auto-generate golden QA pairs from successful task summaries.
+
+    For each successful task, generates 1-2 Q/A pairs from the task
+    description and result summary. Deduplicates against existing QA
+    by cosine similarity (threshold 0.85). Caps at 50 total pairs.
+    """
+    config = _load_config(name)
+    if not config:
+        return {"error": f"Agent '{name}' not found"}
+
+    agent_dir = _agent_dir(name)
+    summaries_dir = agent_dir / "memory" / "summaries"
+    golden_file = agent_dir / "data" / "golden_qa.json"
+
+    # Load existing golden QA
+    existing_qa = []
+    if golden_file.exists():
+        try:
+            existing_qa = json.loads(golden_file.read_text())
+        except (json.JSONDecodeError, OSError):
+            existing_qa = []
+
+    if len(existing_qa) >= GOLDEN_QA_CAP:
+        return {"status": "at_cap", "count": len(existing_qa),
+                "cap": GOLDEN_QA_CAP}
+
+    # Get embedding function for dedup
+    sys.path.insert(0, str(CLARVIS_WORKSPACE / "scripts"))
+    try:
+        from clarvis.brain.factory import get_embedding_function
+        embed_fn = get_embedding_function(use_onnx=True)
+    except Exception as e:
+        return {"error": f"Cannot load embeddings: {e}"}
+
+    # Embed existing QA queries for dedup
+    existing_queries = [qa.get("query", "") for qa in existing_qa]
+    existing_embeddings = []
+    if existing_queries:
+        existing_embeddings = embed_fn(existing_queries)
+
+    # Track which summaries we already processed
+    processed_marker = agent_dir / "data" / "auto_qa_processed.json"
+    processed_ids = set()
+    if processed_marker.exists():
+        try:
+            processed_ids = set(json.loads(processed_marker.read_text()))
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    # Scan successful summaries
+    candidates = []
+    if summaries_dir.exists():
+        for sf in sorted(summaries_dir.glob("*.json")):
+            try:
+                summary = json.loads(sf.read_text())
+            except (json.JSONDecodeError, OSError):
+                continue
+
+            task_id = summary.get("task_id", sf.stem)
+            if task_id in processed_ids:
+                continue
+
+            result = summary.get("result", {})
+            status = result.get("status", "")
+            if status != "success":
+                processed_ids.add(task_id)
+                continue
+
+            task_desc = summary.get("task", "")
+            result_summary = result.get("summary", "")
+            procedures = result.get("procedures", [])
+
+            if not task_desc or not result_summary:
+                processed_ids.add(task_id)
+                continue
+
+            # Generate Q/A pair 1: "How to <task>?"
+            q1 = f"How do I {task_desc.lower().rstrip('.')}?"
+            if len(q1) > 200:
+                q1 = q1[:197] + "..."
+            a1 = result_summary[:500] if result_summary else task_desc
+
+            candidates.append({
+                "query": q1,
+                "expected_docs": [task_desc[:100].lower()],
+                "answer": a1,
+                "collection": "project-procedures",
+                "tags": ["auto_qa", "golden_qa"],
+                "source_task": task_id,
+            })
+
+            # Generate Q/A pair 2: from first procedure (if available)
+            if procedures and len(procedures) > 0:
+                proc = procedures[0] if isinstance(procedures[0], str) else ""
+                if proc and len(proc) > 20:
+                    q2 = f"What is the procedure for: {proc[:100]}?"
+                    a2 = proc[:500]
+                    candidates.append({
+                        "query": q2,
+                        "expected_docs": [proc[:80].lower()],
+                        "answer": a2,
+                        "collection": "project-procedures",
+                        "tags": ["auto_qa", "golden_qa"],
+                        "source_task": task_id,
+                    })
+
+            processed_ids.add(task_id)
+
+    if not candidates:
+        # Save processed IDs even if no candidates
+        processed_marker.parent.mkdir(parents=True, exist_ok=True)
+        processed_marker.write_text(json.dumps(list(processed_ids)))
+        return {"status": "no_new_candidates", "existing": len(existing_qa)}
+
+    # Deduplicate candidates against existing QA
+    added = 0
+    skipped_dedup = 0
+    for candidate in candidates:
+        if len(existing_qa) >= GOLDEN_QA_CAP:
+            break
+
+        # Embed candidate query
+        cand_emb = embed_fn([candidate["query"]])[0]
+
+        # Check similarity against all existing
+        is_dup = False
+        for ex_emb in existing_embeddings:
+            sim = _cosine_sim(cand_emb, ex_emb)
+            if sim >= GOLDEN_QA_DEDUP_THRESHOLD:
+                is_dup = True
+                break
+
+        if is_dup:
+            skipped_dedup += 1
+            continue
+
+        # Add to QA set
+        existing_qa.append(candidate)
+        existing_embeddings.append(cand_emb)
+        existing_queries.append(candidate["query"])
+        added += 1
+
+    # Save updated golden QA
+    golden_file.parent.mkdir(parents=True, exist_ok=True)
+    golden_file.write_text(json.dumps(existing_qa, indent=2))
+
+    # Save processed IDs
+    processed_marker.parent.mkdir(parents=True, exist_ok=True)
+    processed_marker.write_text(json.dumps(list(processed_ids)))
+
+    _log(f"Auto golden QA for '{name}': +{added} pairs "
+         f"({skipped_dedup} deduped, {len(existing_qa)} total)")
+
+    return {
+        "status": "generated",
+        "agent": name,
+        "added": added,
+        "skipped_dedup": skipped_dedup,
+        "total": len(existing_qa),
+        "cap": GOLDEN_QA_CAP,
+    }
+
+
+# =========================================================================
 # LIST / INFO / STATUS
 # =========================================================================
 
@@ -1025,11 +2024,15 @@ def cmd_list() -> list:
                 config = _load_config(d.name)
                 if config:
                     seen.add(d.name)
+                    trust = config.get("trust_score", DEFAULT_TRUST_SCORE)
+                    tier, _ = get_trust_tier(trust)
                     agents.append({
                         "name": config["name"],
                         "repo": config["repo_url"],
                         "branch": config.get("branch", "main"),
                         "status": config.get("status", "unknown"),
+                        "trust_score": trust,
+                        "trust_tier": tier,
                         "tasks": config.get("total_tasks", 0),
                         "successes": config.get("total_successes", 0),
                         "prs": config.get("total_pr_count", 0),
@@ -1070,6 +2073,12 @@ def cmd_info(name: str) -> dict:
     config["brain_size_kb"] = round(brain_size / 1024, 1)
     config["git_status"] = git_status
     config["path"] = str(agent_dir)
+
+    # Enrich with trust tier
+    trust = config.get("trust_score", DEFAULT_TRUST_SCORE)
+    tier, tier_desc = get_trust_tier(trust)
+    config["trust_tier"] = tier
+    config["trust_tier_desc"] = tier_desc
 
     return config
 
@@ -1342,6 +2351,813 @@ def _benchmark_tasks(name: str) -> dict:
 
 
 # =========================================================================
+# TRUST — view / adjust trust score
+# =========================================================================
+
+def cmd_trust(name: str, action: str = "show") -> dict:
+    """View or adjust an agent's trust score.
+
+    Actions: show, boost, penalize, set:<value>, history
+    """
+    config = _load_config(name)
+    if not config:
+        return {"error": f"Agent '{name}' not found"}
+
+    trust = config.get("trust_score", DEFAULT_TRUST_SCORE)
+    tier, tier_desc = get_trust_tier(trust)
+
+    if action == "show":
+        return {
+            "name": name,
+            "trust_score": trust,
+            "tier": tier,
+            "tier_desc": tier_desc,
+            "recent_history": config.get("trust_history", [])[-10:],
+        }
+    elif action == "boost":
+        config = adjust_trust(name, "manual_boost", config)
+        _save_config(name, config)
+        new_tier, _ = get_trust_tier(config["trust_score"])
+        return {"name": name, "trust_score": config["trust_score"],
+                "tier": new_tier, "action": "boosted +0.10"}
+    elif action == "penalize":
+        config = adjust_trust(name, "manual_penalize", config)
+        _save_config(name, config)
+        new_tier, _ = get_trust_tier(config["trust_score"])
+        return {"name": name, "trust_score": config["trust_score"],
+                "tier": new_tier, "action": "penalized -0.10"}
+    elif action.startswith("set:"):
+        try:
+            new_val = float(action.split(":", 1)[1])
+            new_val = round(max(0.0, min(1.0, new_val)), 3)
+        except ValueError:
+            return {"error": f"Invalid trust value: {action}"}
+        old_score = config.get("trust_score", DEFAULT_TRUST_SCORE)
+        config["trust_score"] = new_val
+        history = config.get("trust_history", [])
+        history.append({
+            "event": "manual_set",
+            "delta": round(new_val - old_score, 3),
+            "old": old_score,
+            "new": new_val,
+            "ts": datetime.now(timezone.utc).isoformat(),
+        })
+        config["trust_history"] = history[-50:]
+        _save_config(name, config)
+        new_tier, _ = get_trust_tier(new_val)
+        _log(f"Trust manually set for '{name}': {old_score:.3f} -> {new_val:.3f} (tier={new_tier})")
+        return {"name": name, "trust_score": new_val, "tier": new_tier,
+                "action": f"set to {new_val:.3f}"}
+    elif action == "history":
+        return {
+            "name": name,
+            "trust_score": trust,
+            "tier": tier,
+            "history": config.get("trust_history", []),
+        }
+    else:
+        return {"error": f"Unknown action: {action}. Use: show, boost, penalize, set:<value>, history"}
+
+
+# =========================================================================
+# CI FEEDBACK LOOP — poll checks, extract failure logs, re-spawn to fix
+# =========================================================================
+
+CI_POLL_INTERVAL = 30       # seconds between polls
+CI_POLL_MAX_WAIT = 600      # max seconds to wait for CI (10 min)
+CI_FIX_MAX_ATTEMPTS = 2     # max times to re-spawn for CI fixes
+
+
+def _poll_ci_checks(pr_number: int, repo: str, timeout: int = CI_POLL_MAX_WAIT) -> dict:
+    """Poll GitHub CI checks for a PR until they complete or timeout.
+
+    Uses `gh pr checks <number> --repo <repo> --json` for reliable structured output.
+    Returns: {status: 'pass'|'fail'|'pending'|'error', checks: [...], elapsed: float}
+    """
+    start = time.time()
+    last_checks = []
+
+    while time.time() - start < timeout:
+        try:
+            r = subprocess.run(
+                ["gh", "pr", "checks", str(pr_number), "--repo", repo,
+                 "--json", "bucket,state,link,name"],
+                capture_output=True, text=True, timeout=30,
+            )
+        except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+            return {"status": "error", "error": str(e), "checks": [], "elapsed": round(time.time() - start, 1)}
+
+        # Detect "no checks" message (can appear with any returncode)
+        combined_output = (r.stdout + r.stderr).lower()
+        if "no checks" in combined_output or "no check runs" in combined_output:
+            return {"status": "pass", "checks": [], "elapsed": round(time.time() - start, 1),
+                    "note": "No CI checks configured"}
+
+        # gh exit 8 = checks still pending (not an error)
+        if r.returncode not in (0, 1, 8):
+            return {"status": "error", "error": f"gh exit {r.returncode}: {r.stderr.strip()[:200]}",
+                    "checks": [], "elapsed": round(time.time() - start, 1)}
+
+        # Parse JSON output
+        try:
+            checks_json = json.loads(r.stdout) if r.stdout.strip() else []
+        except json.JSONDecodeError:
+            return {"status": "error", "error": f"Invalid JSON from gh: {r.stdout[:200]}",
+                    "checks": [], "elapsed": round(time.time() - start, 1)}
+
+        checks = []
+        for c in checks_json:
+            checks.append({
+                "name": c.get("name", ""),
+                "bucket": c.get("bucket", ""),
+                "state": c.get("state", ""),
+                "url": c.get("link", ""),
+            })
+        last_checks = checks
+
+        if not checks:
+            time.sleep(CI_POLL_INTERVAL)
+            continue
+
+        # Use the bucket field for reliable status aggregation
+        buckets = {c["bucket"] for c in checks}
+
+        # If any check is pending, keep waiting
+        if "pending" in buckets:
+            _log(f"CI checks still pending for PR #{pr_number}: "
+                 f"{[c['name'] for c in checks if c['bucket'] == 'pending']}")
+            time.sleep(CI_POLL_INTERVAL)
+            continue
+
+        # All checks resolved — check for failures
+        failed = [c for c in checks if c["bucket"] in ("fail", "cancel")]
+        if failed:
+            return {
+                "status": "fail",
+                "checks": checks,
+                "failed_checks": [c["name"] for c in failed],
+                "elapsed": round(time.time() - start, 1),
+            }
+        else:
+            return {
+                "status": "pass",
+                "checks": checks,
+                "elapsed": round(time.time() - start, 1),
+            }
+
+    # Timeout
+    return {
+        "status": "pending",
+        "checks": last_checks,
+        "elapsed": round(time.time() - start, 1),
+        "note": f"Timed out after {timeout}s",
+    }
+
+
+def _extract_ci_failure_logs(pr_number: int, repo: str, check_names: list[str] = None) -> str:
+    """Extract failure logs from GitHub Actions for failed CI checks.
+
+    Uses `gh api` to fetch check run details and annotations.
+    Returns a formatted string with failure context for the agent.
+    """
+    logs = []
+
+    # Get check runs for the PR's head SHA
+    try:
+        # Get PR details to find head SHA
+        r = subprocess.run(
+            ["gh", "pr", "view", str(pr_number), "--repo", repo, "--json", "headRefOid"],
+            capture_output=True, text=True, timeout=30,
+        )
+        if r.returncode != 0:
+            return f"Could not fetch PR details: {r.stderr.strip()}"
+
+        pr_data = json.loads(r.stdout)
+        sha = pr_data.get("headRefOid", "")
+        if not sha:
+            return "Could not determine head SHA for PR"
+
+        # Fetch check runs for this commit
+        r = subprocess.run(
+            ["gh", "api", f"repos/{repo}/commits/{sha}/check-runs",
+             "--jq", ".check_runs[] | {name: .name, status: .status, conclusion: .conclusion, "
+                     "output_title: .output.title, output_summary: .output.summary, "
+                     "html_url: .html_url}"],
+            capture_output=True, text=True, timeout=30,
+        )
+
+        if r.returncode != 0:
+            # Fallback: just report check names
+            if check_names:
+                return f"CI checks failed: {', '.join(check_names)}. Check the PR for details."
+            return f"Could not fetch check run details: {r.stderr.strip()}"
+
+        # Parse JSONL output (one JSON object per line)
+        for line in r.stdout.strip().splitlines():
+            try:
+                run = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+
+            name = run.get("name", "unknown")
+            conclusion = run.get("conclusion", "")
+
+            # Skip if we're filtering and this isn't a target
+            if check_names and name not in check_names:
+                continue
+
+            if conclusion in ("failure", "cancelled", "timed_out", "action_required"):
+                entry = [f"### Failed: {name}"]
+                if run.get("output_title"):
+                    entry.append(f"Title: {run['output_title']}")
+                if run.get("output_summary"):
+                    # Truncate long summaries
+                    summary = run["output_summary"][:800]
+                    entry.append(f"Summary:\n{summary}")
+                if run.get("html_url"):
+                    entry.append(f"URL: {run['html_url']}")
+                logs.append("\n".join(entry))
+
+        # Also try to get annotations (more detailed error messages)
+        r2 = subprocess.run(
+            ["gh", "api", f"repos/{repo}/commits/{sha}/check-runs",
+             "--jq", ".check_runs[] | select(.conclusion==\"failure\") | "
+                     ".output.annotations[]? | {path: .path, line: .start_line, "
+                     "message: .message, level: .annotation_level}"],
+            capture_output=True, text=True, timeout=30,
+        )
+        if r2.returncode == 0 and r2.stdout.strip():
+            annotation_lines = ["### Annotations (specific errors):"]
+            for line in r2.stdout.strip().splitlines()[:20]:  # cap at 20 annotations
+                try:
+                    ann = json.loads(line)
+                    annotation_lines.append(
+                        f"- {ann.get('path', '?')}:{ann.get('line', '?')} "
+                        f"[{ann.get('level', '?')}] {ann.get('message', '')[:200]}"
+                    )
+                except json.JSONDecodeError:
+                    continue
+            if len(annotation_lines) > 1:
+                logs.append("\n".join(annotation_lines))
+
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
+        return f"Error extracting CI logs: {e}"
+
+    if not logs:
+        if check_names:
+            return f"CI checks failed: {', '.join(check_names)}. No detailed logs available."
+        return "CI failed but no detailed logs could be extracted."
+
+    return "\n\n".join(logs)
+
+
+def _ci_fix_loop(name: str, pr_number: int, repo: str, spawn_result: dict,
+                 task: str, timeout: int = 1200, max_attempts: int = CI_FIX_MAX_ATTEMPTS) -> dict:
+    """Re-spawn agent to fix CI failures, up to max_attempts times.
+
+    Args:
+        name: Agent name
+        pr_number: PR number to monitor
+        repo: GitHub repo (owner/name)
+        spawn_result: The spawn result that created the PR
+        task: Original task description
+        timeout: Timeout per fix attempt
+        max_attempts: Max CI fix iterations
+
+    Returns: dict with final status, attempts, and CI outcome
+    """
+    ci_attempts = []
+
+    for attempt in range(max_attempts):
+        # Poll CI checks
+        _log(f"CI fix loop: polling checks for PR #{pr_number} (attempt {attempt + 1}/{max_attempts})")
+        _emit("ci_started", agent=name, pr_number=pr_number,
+              attempt=attempt + 1, max_attempts=max_attempts)
+        ci_result = _poll_ci_checks(pr_number, repo)
+        ci_attempts.append({"attempt": attempt, "ci_result": ci_result})
+
+        if ci_result["status"] == "pass":
+            _log(f"CI passed for PR #{pr_number}")
+            _emit("ci_completed", agent=name, pr_number=pr_number,
+                  status="pass", attempt=attempt + 1)
+            return {
+                "status": "ci_pass",
+                "pr_number": pr_number,
+                "attempts": ci_attempts,
+                "total_ci_attempts": attempt,
+            }
+
+        if ci_result["status"] == "error":
+            _log(f"Error polling CI for PR #{pr_number}: {ci_result.get('error')}")
+            _emit("ci_completed", agent=name, pr_number=pr_number,
+                  status="error", error=ci_result.get("error"))
+            return {
+                "status": "ci_error",
+                "pr_number": pr_number,
+                "attempts": ci_attempts,
+                "error": ci_result.get("error"),
+            }
+
+        if ci_result["status"] == "pending":
+            _log(f"CI timed out waiting for checks on PR #{pr_number}")
+            return {
+                "status": "ci_timeout",
+                "pr_number": pr_number,
+                "attempts": ci_attempts,
+            }
+
+        # CI failed — extract logs and re-spawn
+        failed_checks = ci_result.get("failed_checks", [])
+        _log(f"CI failed for PR #{pr_number}: {failed_checks}")
+        _emit("ci_completed", agent=name, pr_number=pr_number,
+              status="fail", failed_checks=failed_checks, attempt=attempt + 1)
+
+        failure_logs = _extract_ci_failure_logs(pr_number, repo, failed_checks)
+
+        fix_context = "\n".join([
+            f"## CI FIX ATTEMPT {attempt + 1}/{max_attempts}",
+            "",
+            f"Your PR #{pr_number} has **failing CI checks**. Fix the errors below.",
+            "Do NOT create a new PR — push fixes to the existing branch.",
+            "",
+            "## CI Failure Details",
+            failure_logs,
+            "",
+            "## Strategy",
+            "1. Read the error messages carefully",
+            "2. Fix the root cause in the code",
+            "3. Commit and push to the same branch",
+            "4. The CI will re-run automatically",
+        ])
+
+        fix_task = (
+            f"Fix CI failures on PR #{pr_number}. "
+            f"Failed checks: {', '.join(failed_checks)}. "
+            f"Push fixes to the existing branch — do NOT create a new PR."
+        )
+
+        # Re-spawn to fix
+        _log(f"Re-spawning agent '{name}' to fix CI (attempt {attempt + 1})")
+        fix_result = cmd_spawn(name, fix_task, timeout, fix_context)
+        ci_attempts[-1]["fix_result"] = {
+            "task_id": fix_result.get("task_id"),
+            "exit_code": fix_result.get("exit_code"),
+            "status": fix_result.get("result", {}).get("status", "unknown"),
+            "elapsed": fix_result.get("elapsed"),
+        }
+
+        if fix_result.get("error"):
+            _log(f"CI fix spawn error: {fix_result['error']}")
+            return {
+                "status": "ci_fix_error",
+                "pr_number": pr_number,
+                "attempts": ci_attempts,
+                "error": fix_result["error"],
+            }
+
+    # Exhausted attempts — do one final poll
+    final_ci = _poll_ci_checks(pr_number, repo)
+    ci_attempts.append({"attempt": max_attempts, "ci_result": final_ci, "type": "final_poll"})
+
+    final_status = "ci_pass" if final_ci["status"] == "pass" else "ci_stuck"
+    _log(f"CI fix loop exhausted for PR #{pr_number}: {final_status}")
+    _emit("ci_completed", agent=name, pr_number=pr_number,
+          status=final_status, attempt=max_attempts, exhausted=True)
+
+    return {
+        "status": final_status,
+        "pr_number": pr_number,
+        "attempts": ci_attempts,
+        "total_ci_attempts": max_attempts,
+    }
+
+
+# =========================================================================
+# DECOMPOSE — break a task into subtasks
+# =========================================================================
+
+def decompose_task(name: str, task: str) -> list[dict]:
+    """Decompose a task into 1-5 subtasks based on agent context.
+
+    Uses heuristics + agent procedures/context to break down the task.
+    Returns list of {id, task, deps, timeout} dicts.
+
+    For simple/short tasks, returns a single-task list (passthrough).
+    """
+    config = _load_config(name)
+    agent_dir = _agent_dir(name)
+
+    # Heuristic: short tasks (< 100 chars, no "and"/"then") get single-task treatment
+    task_lower = task.lower().strip()
+    connectors = [" and then ", " then ", " and ", " also ", " + ", "; ", " after that"]
+    has_connectors = any(c in task_lower for c in connectors)
+    is_long = len(task) > 120
+
+    if not has_connectors and not is_long:
+        # Check if it's an "implement" style task that should be decomposed
+        impl_keywords = ["implement", "add", "create", "build", "write", "develop"]
+        if not any(task_lower.startswith(kw) for kw in impl_keywords):
+            return [{"id": "t1", "task": task, "deps": [], "timeout": 1200}]
+
+    # Load agent procedures for context
+    procedures = ""
+    if agent_dir.exists():
+        proc_file = agent_dir / "memory" / "procedures.md"
+        if proc_file.exists():
+            try:
+                procedures = proc_file.read_text()[:1500]
+            except OSError:
+                pass
+
+    # Load CI context for build/test commands
+    ci_commands = {}
+    if agent_dir.exists():
+        ci_file = agent_dir / "data" / "ci_context.json"
+        if ci_file.exists():
+            try:
+                ci = json.loads(ci_file.read_text())
+                ci_commands = ci.get("commands", {})
+            except (json.JSONDecodeError, OSError):
+                pass
+
+    # Load dependency map if available
+    dep_map = {}
+    if agent_dir.exists():
+        dep_file = agent_dir / "data" / "dependency_map.json"
+        if dep_file.exists():
+            try:
+                dep_map = json.loads(dep_file.read_text())
+            except (json.JSONDecodeError, OSError):
+                pass
+
+    # Decompose using heuristics
+    subtasks = []
+
+    # Split on connectors
+    parts = [task]
+    for connector in [" and then ", " then ", " and ", "; "]:
+        new_parts = []
+        for p in parts:
+            new_parts.extend(p.split(connector))
+        parts = [p.strip() for p in new_parts if p.strip()]
+
+    # Cap at 5 subtasks
+    parts = parts[:5]
+
+    # Build project context hint from dep_map (if available)
+    project_hint = ""
+    if dep_map:
+        hints = []
+        if dep_map.get("framework"):
+            hints.append(f"Framework: {dep_map['framework']}")
+        if dep_map.get("language"):
+            hints.append(f"Language: {dep_map['language']}")
+        if dep_map.get("entry_points"):
+            hints.append(f"Entry points: {', '.join(dep_map['entry_points'][:5])}")
+        if dep_map.get("source_dirs"):
+            dirs = [d["path"] for d in dep_map["source_dirs"][:6]]
+            hints.append(f"Source dirs: {', '.join(dirs)}")
+        if dep_map.get("test_dirs"):
+            tdirs = [d["path"] for d in dep_map["test_dirs"][:3]]
+            hints.append(f"Test dirs: {', '.join(tdirs)}")
+        if dep_map.get("test_files"):
+            hints.append(f"Test files: {len(dep_map['test_files'])} found")
+        if hints:
+            project_hint = " [Project: " + "; ".join(hints) + "]"
+
+    if len(parts) <= 1:
+        # No natural split — try semantic decomposition
+        # Pattern: "implement X" → [implement, test, PR]
+        impl_keywords = ["implement", "add", "create", "build", "write", "develop"]
+        if any(task_lower.startswith(kw) for kw in impl_keywords):
+            impl_task = task + project_hint if project_hint else task
+            subtasks = [
+                {"id": "t1", "task": impl_task, "deps": [], "timeout": 1200},
+            ]
+            # Add test subtask if CI has test commands
+            if ci_commands.get("test"):
+                test_cmd = ci_commands["test"][0]
+                # Enrich test hint with test dir info from dep_map
+                test_hint = f"Run tests ({test_cmd}) and fix any failures from the implementation"
+                if dep_map.get("test_dirs"):
+                    tdirs = [d["path"] for d in dep_map["test_dirs"][:2]]
+                    test_hint += f". Test dirs: {', '.join(tdirs)}"
+                if dep_map.get("test_files") and len(dep_map["test_files"]) <= 10:
+                    test_hint += f". Existing test files: {', '.join(dep_map['test_files'][:5])}"
+                subtasks.append({
+                    "id": "t2",
+                    "task": test_hint,
+                    "deps": ["t1"],
+                    "timeout": 600,
+                })
+            # Add PR subtask
+            subtasks.append({
+                "id": f"t{len(subtasks) + 1}",
+                "task": "Create a PR with all changes. Include a clear description of what was implemented.",
+                "deps": [f"t{len(subtasks)}"],
+                "timeout": 300,
+            })
+            return subtasks
+        else:
+            # Simple task, no decomposition needed
+            return [{"id": "t1", "task": task, "deps": [], "timeout": 1200}]
+
+    # Build subtask chain from parts
+    for i, part in enumerate(parts, 1):
+        tid = f"t{i}"
+        deps = [f"t{i-1}"] if i > 1 else []
+        # Smaller timeout for sub-pieces
+        timeout = min(1200, max(600, 1200 // len(parts) + 300))
+        # Add project hint to first subtask only (avoids noise in follow-ups)
+        enriched = (part + project_hint) if (i == 1 and project_hint) else part
+        subtasks.append({"id": tid, "task": enriched, "deps": deps, "timeout": timeout})
+
+    # Add final verification subtask if we have test commands and didn't already add one
+    has_test_subtask = any("test" in s["task"].lower() for s in subtasks)
+    if ci_commands.get("test") and not has_test_subtask and len(subtasks) < 5:
+        test_cmd = ci_commands["test"][0]
+        subtasks.append({
+            "id": f"t{len(subtasks) + 1}",
+            "task": f"Run full test suite ({test_cmd}) and fix any regressions",
+            "deps": [subtasks[-1]["id"]],
+            "timeout": 600,
+        })
+
+    _log(f"Decomposed task for '{name}' into {len(subtasks)} subtasks")
+    return subtasks
+
+
+# =========================================================================
+# TASK LOOP — plan → execute → verify → fix cycle
+# =========================================================================
+
+# Exit criteria defaults
+LOOP_MAX_SESSIONS = 8
+LOOP_MAX_BUDGET_USD = 2.00
+LOOP_MAX_WALL_SECONDS = 4 * 3600  # 4 hours
+
+
+def run_task_loop(name: str, task: str, timeout_per_subtask: int = 1200,
+                  max_sessions: int = LOOP_MAX_SESSIONS,
+                  budget_usd: float = LOOP_MAX_BUDGET_USD,
+                  max_wall_seconds: int = LOOP_MAX_WALL_SECONDS) -> dict:
+    """Execute a full plan→execute→verify→fix loop for a task.
+
+    1. PLAN: decompose task into subtasks
+    2. EXECUTE: spawn agent on each subtask (sequential, respecting deps)
+    3. VERIFY: check result, run CI if PR created
+    4. FIX: retry on failure (max 2 retries per subtask, CI fix loop for PRs)
+    5. REFLECT: store episode per subtask
+
+    Exit when: all done, max_sessions exceeded, budget exceeded, or wall clock exceeded.
+
+    Returns: {status, subtasks, episodes, total_cost, total_sessions, total_elapsed}
+    """
+    config = _load_config(name)
+    if not config:
+        return {"error": f"Agent '{name}' not found"}
+
+    # Acquire per-agent loop lock (prevent concurrent loop invocations)
+    if not _acquire_loop_lock(name):
+        msg = f"Loop already running for agent '{name}' — skipping"
+        _log(msg)
+        return {"error": msg, "status": "locked"}
+
+    agent_dir = _agent_dir(name)
+    loop_start = time.time()
+    total_sessions = 0
+    total_cost = 0.0
+    cost_start = _snapshot_cost()
+    episodes = []
+    work_branch = None
+    pr_number = None
+    repo = config.get("repo_url", "")
+
+    # Derive owner/repo for gh commands
+    gh_repo = ""
+    if repo:
+        # Handle SSH and HTTPS URLs
+        import re as _re
+        m = _re.search(r'[:/]([^/]+/[^/.]+?)(?:\.git)?$', repo)
+        if m:
+            gh_repo = m.group(1)
+
+    _log(f"Starting task loop for agent '{name}': {task[:80]}")
+    _emit("task_started", agent=name, task_name=task[:120],
+          section="project_agent_loop", executor="claude-opus")
+
+    # Phase 1: PLAN — decompose
+    subtasks = decompose_task(name, task)
+    _log(f"Task loop plan: {len(subtasks)} subtasks")
+
+    subtask_results = {}
+
+    for st in subtasks:
+        # Check exit criteria
+        elapsed = time.time() - loop_start
+        if elapsed > max_wall_seconds:
+            _log(f"Task loop wall clock exceeded ({elapsed:.0f}s > {max_wall_seconds}s)")
+            break
+
+        if total_sessions >= max_sessions:
+            _log(f"Task loop max sessions reached ({total_sessions} >= {max_sessions})")
+            break
+
+        if cost_start is not None:
+            current_cost = _snapshot_cost()
+            if current_cost is not None:
+                total_cost = round(current_cost - cost_start, 6)
+                if total_cost > budget_usd:
+                    _log(f"Task loop budget exceeded (${total_cost:.4f} > ${budget_usd:.2f})")
+                    break
+
+        # Check deps
+        deps_met = all(
+            subtask_results.get(dep, {}).get("status") == "success"
+            for dep in st.get("deps", [])
+        )
+        if not deps_met:
+            # Skip subtask if deps failed
+            failed_deps = [d for d in st.get("deps", [])
+                           if subtask_results.get(d, {}).get("status") != "success"]
+            _log(f"Skipping subtask {st['id']}: unmet deps {failed_deps}")
+            subtask_results[st["id"]] = {
+                "status": "skipped",
+                "reason": f"Dependencies not met: {failed_deps}",
+            }
+            episodes.append({
+                "subtask_id": st["id"],
+                "task": st["task"][:200],
+                "status": "skipped",
+                "reason": f"deps_not_met: {failed_deps}",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
+            continue
+
+        # Phase 2: EXECUTE
+        st_timeout = st.get("timeout", timeout_per_subtask)
+        context_parts = [f"This is subtask {st['id']} of {len(subtasks)} in a multi-step task loop."]
+        if work_branch:
+            context_parts.append(f"Continue working on branch: {work_branch}")
+            context_parts.append("Do NOT create a new branch — push to the existing one.")
+        if pr_number:
+            context_parts.append(f"PR #{pr_number} already exists. Push commits to the same branch.")
+
+        # Include context from previous subtasks
+        prev_summaries = []
+        for prev_id, prev_res in subtask_results.items():
+            if prev_res.get("status") == "success":
+                prev_summaries.append(f"- {prev_id}: {prev_res.get('summary', 'done')[:100]}")
+        if prev_summaries:
+            context_parts.append("\nCompleted subtasks:\n" + "\n".join(prev_summaries))
+
+        context = "\n".join(context_parts)
+
+        _log(f"Executing subtask {st['id']}: {st['task'][:60]}")
+        spawn_result = cmd_spawn_with_retry(name, st["task"], st_timeout, context)
+        total_sessions += spawn_result.get("retry_metadata", {}).get("total_attempts", 1)
+
+        # Phase 3: VERIFY
+        result_data = spawn_result.get("result", {})
+        status = result_data.get("status", "unknown")
+        summary = result_data.get("summary", "")
+
+        # Track work branch from first successful spawn
+        if result_data.get("branch") and not work_branch:
+            work_branch = result_data["branch"]
+
+        # Extract PR number if created
+        pr_url = result_data.get("pr_url", "")
+        if pr_url and not pr_number:
+            import re as _re
+            m = _re.search(r'/pull/(\d+)', pr_url)
+            if m:
+                pr_number = int(m.group(1))
+                _log(f"PR created: #{pr_number} ({pr_url})")
+
+        subtask_results[st["id"]] = {
+            "status": status,
+            "summary": summary,
+            "task_id": spawn_result.get("task_id"),
+            "elapsed": spawn_result.get("elapsed"),
+            "exit_code": spawn_result.get("exit_code"),
+        }
+
+        # Phase 5: REFLECT — store episode
+        episode = {
+            "subtask_id": st["id"],
+            "task": st["task"][:200],
+            "status": status,
+            "summary": summary[:300],
+            "task_id": spawn_result.get("task_id"),
+            "elapsed": spawn_result.get("elapsed"),
+            "exit_code": spawn_result.get("exit_code"),
+            "retry_count": spawn_result.get("retry_metadata", {}).get("total_attempts", 1) - 1,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        episodes.append(episode)
+
+        # Store episode in agent brain
+        try:
+            sys.path.insert(0, str(CLARVIS_WORKSPACE / "scripts"))
+            from lite_brain import LiteBrain
+            brain = LiteBrain(str(agent_dir / "data" / "brain"))
+            brain.store(
+                f"Task: {st['task'][:150]} | Status: {status} | Summary: {summary[:200]}",
+                "project-episodes",
+                importance=0.7 if status == "success" else 0.5,
+                tags=["task_loop", st["id"]],
+                source="task_loop",
+            )
+        except Exception as e:
+            _log(f"Failed to store episode in agent brain: {e}")
+
+        if status not in ("success", "partial"):
+            _log(f"Subtask {st['id']} failed: {status}")
+            # Don't continue with dependent subtasks (handled by deps check above)
+
+        # Randomized inter-subtask delay (prevent API hammering, mimic claw-empire pattern)
+        if st != subtasks[-1]:  # skip delay after last subtask
+            delay = random.uniform(LOOP_INTER_SUBTASK_DELAY_MIN, LOOP_INTER_SUBTASK_DELAY_MAX)
+            _log(f"Inter-subtask delay: {delay:.1f}s")
+            time.sleep(delay)
+
+    # Phase 4 (post-loop): CI feedback if PR was created
+    ci_result = None
+    if pr_number and gh_repo:
+        _log(f"Running CI feedback loop for PR #{pr_number}")
+        ci_result = _ci_fix_loop(name, pr_number, gh_repo, spawn_result, task, timeout_per_subtask)
+
+        # Apply trust adjustment based on CI outcome
+        config = _load_config(name)  # reload
+        if config:
+            if ci_result.get("status") == "ci_pass":
+                _log(f"CI passed after {ci_result.get('total_ci_attempts', 0)} fix attempts")
+            elif ci_result.get("status") == "ci_stuck":
+                adjust_trust(name, "ci_broke_main", config)
+                _save_config(name, config)
+
+    # Compute final cost
+    cost_end = _snapshot_cost()
+    if cost_start is not None and cost_end is not None:
+        total_cost = round(cost_end - cost_start, 6)
+
+    total_elapsed = round(time.time() - loop_start, 1)
+
+    # Determine overall status
+    completed = [sid for sid, r in subtask_results.items() if r.get("status") == "success"]
+    failed = [sid for sid, r in subtask_results.items() if r.get("status") in ("failed", "unknown")]
+    skipped = [sid for sid, r in subtask_results.items() if r.get("status") == "skipped"]
+
+    if len(completed) == len(subtasks):
+        overall = "success"
+    elif completed:
+        overall = "partial"
+    else:
+        overall = "failed"
+
+    # Save loop summary
+    loop_summary = {
+        "task": task[:500],
+        "agent": name,
+        "status": overall,
+        "subtasks_total": len(subtasks),
+        "subtasks_completed": len(completed),
+        "subtasks_failed": len(failed),
+        "subtasks_skipped": len(skipped),
+        "total_sessions": total_sessions,
+        "total_cost_usd": total_cost,
+        "total_elapsed": total_elapsed,
+        "pr_number": pr_number,
+        "ci_result": ci_result.get("status") if ci_result else None,
+        "episodes": episodes,
+        "subtask_results": subtask_results,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+    # Write loop log
+    loop_file = agent_dir / "logs" / f"loop_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.json"
+    try:
+        loop_file.parent.mkdir(parents=True, exist_ok=True)
+        loop_file.write_text(json.dumps(loop_summary, indent=2, default=str))
+    except OSError:
+        pass
+
+    _log(f"Task loop complete for '{name}': {overall} "
+         f"({len(completed)}/{len(subtasks)} subtasks, {total_sessions} sessions, "
+         f"${total_cost:.4f}, {total_elapsed:.0f}s)")
+
+    _emit("task_completed", agent=name, task_name=task[:120],
+          status=overall, section="project_agent_loop",
+          subtasks_completed=len(completed), subtasks_total=len(subtasks),
+          total_sessions=total_sessions, duration_s=total_elapsed,
+          cost_usd=total_cost, pr_number=pr_number)
+
+    _release_loop_lock(name)
+    return loop_summary
+
+
+# =========================================================================
 # CLI
 # =========================================================================
 
@@ -1398,9 +3214,45 @@ def main():
     mp.add_argument("name")
     mp.add_argument("--target", default="/opt/clarvis-agents", help="Target root")
 
+    # dep-map
+    dmp = sub.add_parser("dep-map", help="Scan repo and build dependency map")
+    dmp.add_argument("name")
+
     # ci-context
     cip = sub.add_parser("ci-context", help="Scan repo and build CI context")
     cip.add_argument("name")
+
+    # trust
+    tp = sub.add_parser("trust", help="View or adjust agent trust score")
+    tp.add_argument("name")
+    tp.add_argument("action", nargs="?", default="show",
+                    help="show|boost|penalize|set:<value>|history")
+
+    # decompose
+    dcp = sub.add_parser("decompose", help="Decompose a task into subtasks")
+    dcp.add_argument("name", help="Agent name")
+    dcp.add_argument("task", help="Task description")
+
+    # loop
+    lp = sub.add_parser("loop", help="Run full plan→execute→verify→fix loop")
+    lp.add_argument("name", help="Agent name")
+    lp.add_argument("task", help="Task description")
+    lp.add_argument("--timeout", type=int, default=1200, help="Timeout per subtask")
+    lp.add_argument("--max-sessions", type=int, default=LOOP_MAX_SESSIONS,
+                    help=f"Max Claude Code sessions (default: {LOOP_MAX_SESSIONS})")
+    lp.add_argument("--budget", type=float, default=LOOP_MAX_BUDGET_USD,
+                    help=f"Max budget in USD (default: {LOOP_MAX_BUDGET_USD})")
+
+    # auto-qa
+    aqp = sub.add_parser("auto-qa", help="Auto-generate golden QA from successful tasks")
+    aqp.add_argument("name")
+
+    # ci-check (manual CI check for a PR)
+    ccp = sub.add_parser("ci-check", help="Poll CI checks for a PR")
+    ccp.add_argument("name", help="Agent name")
+    ccp.add_argument("pr_number", type=int, help="PR number")
+    ccp.add_argument("--timeout", type=int, default=CI_POLL_MAX_WAIT,
+                     help=f"Max wait seconds (default: {CI_POLL_MAX_WAIT})")
 
     args = parser.parse_args()
 
@@ -1428,8 +3280,32 @@ def main():
         result = cmd_seed(args.name)
     elif args.command == "migrate":
         result = cmd_migrate(args.name, args.target)
+    elif args.command == "dep-map":
+        result = build_dependency_map(args.name)
     elif args.command == "ci-context":
         result = build_ci_context(args.name)
+    elif args.command == "trust":
+        result = cmd_trust(args.name, args.action)
+    elif args.command == "decompose":
+        result = decompose_task(args.name, args.task)
+    elif args.command == "loop":
+        result = run_task_loop(args.name, args.task, args.timeout,
+                               args.max_sessions, args.budget)
+    elif args.command == "auto-qa":
+        result = cmd_auto_golden_qa(args.name)
+    elif args.command == "ci-check":
+        config = _load_config(args.name)
+        if not config:
+            result = {"error": f"Agent '{args.name}' not found"}
+        else:
+            repo_url = config.get("repo_url", "")
+            import re as _re
+            m = _re.search(r'[:/]([^/]+/[^/.]+?)(?:\.git)?$', repo_url)
+            gh_repo = m.group(1) if m else ""
+            if not gh_repo:
+                result = {"error": f"Cannot derive GitHub repo from URL: {repo_url}"}
+            else:
+                result = _poll_ci_checks(args.pr_number, gh_repo, args.timeout)
     else:
         parser.print_help()
         return

@@ -10,6 +10,7 @@ acquire_local_lock "/tmp/clarvis_morning.lock" "$LOGFILE"
 acquire_global_claude_lock "$LOGFILE"
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Morning routine started ===" >> "$LOGFILE"
+emit_dashboard_event task_started --task-name "Morning planning" --section cron_morning --executor claude-opus
 
 # Step 0: Session open — restore attention state and working memory from previous session
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running session open..." >> "$LOGFILE"
@@ -37,4 +38,5 @@ PRIORITIES=$(tail -c 500 "$MORNING_OUTPUT_FILE" 2>/dev/null | tr '\n' ' ' | sed 
 python3 /home/agent/.openclaw/workspace/scripts/digest_writer.py morning "I started my day and reviewed the evolution queue. $PRIORITIES" >> "$LOGFILE" 2>&1 || true
 rm -f "$MORNING_OUTPUT_FILE"
 
+emit_dashboard_event task_completed --task-name "Morning planning" --section cron_morning --status success
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Morning routine complete ===" >> "$LOGFILE"

@@ -18,7 +18,6 @@ Usage:
 """
 
 import json
-import os
 import sys
 from datetime import datetime, timezone, timedelta
 from pathlib import Path

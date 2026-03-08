@@ -180,7 +180,10 @@ def _verify_task_executable(task_text):
         checks_passed += 1
 
     # 3. Lock check: ensure no conflicting lock held
+    #    Uses /proc/<pid>/cmdline to verify the lock holder is actually
+    #    a clarvis/claude process (prevents false honors from PID recycling).
     lock_conflict = False
+    _lock_markers = ("clarvis", "claude", "cron_", "project_agent")
     for lockfile in ("clarvis_claude_global.lock", "clarvis_maintenance.lock"):
         lock_path = os.path.join(LOCK_DIR, lockfile)
         if os.path.exists(lock_path):
@@ -188,11 +191,18 @@ def _verify_task_executable(task_text):
                 with open(lock_path) as f:
                     pid_str = f.read().strip()
                 pid = int(pid_str)
-                # Check if PID is alive
-                os.kill(pid, 0)
+                os.kill(pid, 0)  # alive?
+                # Verify via /proc/<pid>/cmdline
+                cmdline_file = f"/proc/{pid}/cmdline"
+                if os.path.exists(cmdline_file):
+                    with open(cmdline_file, "rb") as cf:
+                        cmdline = cf.read().replace(b"\x00", b" ").decode("utf-8", errors="replace")
+                    if not any(m in cmdline for m in _lock_markers):
+                        # PID recycled — not a clarvis process, ignore lock
+                        continue
                 reasons.append(f"lock held: {lockfile} (pid {pid})")
                 lock_conflict = True
-            except (ValueError, ProcessLookupError, PermissionError):
+            except (ValueError, ProcessLookupError, PermissionError, OSError):
                 pass  # stale lock or dead process — ignore
     if not lock_conflict:
         checks_passed += 1

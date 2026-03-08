@@ -49,6 +49,38 @@ _register_lock() {
 }
 
 # =============================================================================
+# _is_clarvis_process <pid>
+#
+# Returns 0 if the PID belongs to a clarvis/claude process, 1 otherwise.
+# Reads /proc/<pid>/cmdline to verify the process identity, preventing
+# false lock honors from PID recycling.
+# =============================================================================
+_is_clarvis_process() {
+    local pid="$1"
+    [ -z "$pid" ] && return 1
+
+    # First: is the process alive at all?
+    kill -0 "$pid" 2>/dev/null || return 1
+
+    # Second: verify via /proc/<pid>/cmdline that it's actually ours
+    local cmdline_file="/proc/$pid/cmdline"
+    if [ -f "$cmdline_file" ]; then
+        # cmdline is NUL-delimited; convert to spaces for matching
+        local cmdline
+        cmdline=$(tr '\0' ' ' < "$cmdline_file" 2>/dev/null) || return 1
+        # Match known clarvis/claude process signatures
+        if echo "$cmdline" | grep -qE 'clarvis|claude|cron_(autonomous|morning|evening|evolution|reflection|research|implementation|strategic|cleanup|orchestrator|report|graph|chromadb)'; then
+            return 0
+        fi
+        # PID alive but not a clarvis process — PID was recycled
+        return 1
+    fi
+
+    # /proc not available (non-Linux) — fall back to kill -0 result (already passed)
+    return 0
+}
+
+# =============================================================================
 # acquire_local_lock <lockfile> <logfile> [stale_threshold_seconds]
 #
 # Acquires a local job lock. Exits the script (exit 0) if the lock is held
@@ -68,7 +100,7 @@ acquire_local_lock() {
     if [ -f "$lockfile" ]; then
         local pid
         pid=$(cat "$lockfile" 2>/dev/null)
-        if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+        if [ -n "$pid" ] && _is_clarvis_process "$pid"; then
             if [ "$stale_threshold" -gt 0 ] 2>/dev/null; then
                 local lock_age
                 lock_age=$(( $(date +%s) - $(stat -c %Y "$lockfile" 2>/dev/null || echo 0) ))
@@ -82,6 +114,8 @@ acquire_local_lock() {
                 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] SKIP: Previous run still active (PID $pid)" >> "$logfile"
                 exit 0
             fi
+        elif [ -n "$pid" ]; then
+            echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WARN: Stale lock (PID $pid dead or recycled) — reclaiming" >> "$logfile"
         fi
     fi
     echo $$ > "$lockfile"
@@ -107,7 +141,7 @@ acquire_global_claude_lock() {
         local gpid glock_age
         gpid=$(cat "$GLOBAL_LOCK" 2>/dev/null)
         glock_age=$(( $(date +%s) - $(stat -c %Y "$GLOBAL_LOCK" 2>/dev/null || echo 0) ))
-        if [ -n "$gpid" ] && kill -0 "$gpid" 2>/dev/null && [ "$glock_age" -le 2400 ]; then
+        if [ -n "$gpid" ] && _is_clarvis_process "$gpid" && [ "$glock_age" -le 2400 ]; then
             echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] GLOBAL LOCK: Claude already running (PID $gpid, age=${glock_age}s) — deferring" >> "$logfile"
             if [ "$on_conflict" = "queue" ]; then
                 local scripts_dir
@@ -120,7 +154,7 @@ acquire_global_claude_lock() {
             fi
             exit 0
         else
-            [ -n "$gpid" ] && echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] GLOBAL LOCK: Stale (age=${glock_age}s, PID $gpid) — reclaiming" >> "$logfile"
+            [ -n "$gpid" ] && echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] GLOBAL LOCK: Stale (age=${glock_age}s, PID $gpid not clarvis) — reclaiming" >> "$logfile"
             rm -f "$GLOBAL_LOCK"
         fi
     fi
@@ -146,11 +180,11 @@ acquire_maintenance_lock() {
         local mpid mlock_age
         mpid=$(cat "$MAINTENANCE_LOCK" 2>/dev/null)
         mlock_age=$(( $(date +%s) - $(stat -c %Y "$MAINTENANCE_LOCK" 2>/dev/null || echo 0) ))
-        if [ -n "$mpid" ] && kill -0 "$mpid" 2>/dev/null && [ "$mlock_age" -le "$stale_threshold" ]; then
+        if [ -n "$mpid" ] && _is_clarvis_process "$mpid" && [ "$mlock_age" -le "$stale_threshold" ]; then
             echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] SKIP: Maintenance lock held (PID $mpid, age=${mlock_age}s)" >> "$logfile"
             exit 0
         else
-            [ -n "$mpid" ] && echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] MAINTENANCE LOCK: Stale (age=${mlock_age}s) — reclaiming" >> "$logfile"
+            [ -n "$mpid" ] && echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] MAINTENANCE LOCK: Stale (age=${mlock_age}s, PID $mpid not clarvis) — reclaiming" >> "$logfile"
             rm -f "$MAINTENANCE_LOCK"
         fi
     fi

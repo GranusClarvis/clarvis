@@ -23,6 +23,7 @@ acquire_local_lock "/tmp/clarvis_research.lock" "$LOGFILE" 2400
 acquire_global_claude_lock "$LOGFILE"
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Research session starting ===" >> "$LOGFILE"
+emit_dashboard_event task_started --task-name "Research session" --section cron_research --executor claude-opus
 
 # Extract the FIRST unchecked research task from QUEUE.md
 # Looks for items with [RESEARCH] tag, "Research:" prefix, or "Bundle " prefix
@@ -275,4 +276,5 @@ except Exception as e:
 
 rm -f "$TASK_OUTPUT_FILE"
 
+emit_dashboard_event task_completed --task-name "Research session" --section cron_research --status "$([ ${TASK_EXIT:-1} -eq 0 ] && echo success || echo failed)" --duration-s "${TASK_DURATION:-0}"
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Research session complete (${TASK_DURATION}s) ===" >> "$LOGFILE"

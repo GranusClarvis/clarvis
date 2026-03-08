@@ -17,6 +17,7 @@ acquire_local_lock "/tmp/clarvis_evolution.lock" "$LOGFILE"
 acquire_global_claude_lock "$LOGFILE"
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Evolution analysis starting (optimized) ===" >> "$LOGFILE"
+emit_dashboard_event task_started --task-name "Evolution analysis" --section cron_evolution --executor claude-opus
 
 # ============================================================================
 # BATCHED METRICS COLLECTION (single Python process)
@@ -98,4 +99,5 @@ python3 "$SCRIPTS/digest_writer.py" evolution \
 # Cleanup
 rm -f "$EVO_PREFLIGHT_FILE"
 
+emit_dashboard_event task_completed --task-name "Evolution analysis" --section cron_evolution --status success
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Evolution analysis complete ===" >> "$LOGFILE"

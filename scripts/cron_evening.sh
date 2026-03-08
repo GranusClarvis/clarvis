@@ -9,6 +9,7 @@ acquire_local_lock "/tmp/clarvis_evening.lock" "$LOGFILE"
 acquire_global_claude_lock "$LOGFILE"
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Evening routine started ===" >> "$LOGFILE"
+emit_dashboard_event task_started --task-name "Evening assessment" --section cron_evening --executor claude-opus
 
 # === PHI METRIC: RECORD AND ACT ===
 # Record phi metric AND act on it: drops trigger cross-linking, rises log positive episodes
@@ -105,4 +106,9 @@ python3 /home/agent/.openclaw/workspace/scripts/digest_writer.py evening \
     "Evening assessment complete. $PHI_DIGEST. Capability scores: $ASSESSMENT_DIGEST. Ran retrieval benchmark, self-report, and dashboard regeneration. Evening code audit done." \
     >> "$LOGFILE" 2>&1 || true
 
+# === DAILY MEMORY LOG: Generate memory/YYYY-MM-DD.md from digest ===
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Generating daily memory log..." >> "$LOGFILE"
+python3 /home/agent/.openclaw/workspace/scripts/daily_memory_log.py >> "$LOGFILE" 2>&1 || true
+
+emit_dashboard_event task_completed --task-name "Evening assessment" --section cron_evening --status success
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Evening routine complete ===" >> "$LOGFILE"

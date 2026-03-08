@@ -10,6 +10,7 @@ acquire_local_lock "/tmp/clarvis_reflection.lock" "$LOGFILE"
 acquire_global_claude_lock "$LOGFILE"
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Reflection starting ===" >> "$LOGFILE"
+emit_dashboard_event task_started --task-name "Daily reflection" --section cron_reflection --executor claude-opus
 
 # Step 0: QUEUE.md scan — count pending/completed for digest metrics
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Scanning QUEUE.md..." >> "$LOGFILE"
@@ -110,4 +111,5 @@ python3 /home/agent/.openclaw/workspace/scripts/digest_writer.py reflection \
     "REFLECTION: complete. QUEUE: ${QUEUE_PENDING} pending, ${QUEUE_DONE} done. WEAKEST: ${WEAKEST_METRIC}. Pipeline: optimize, reflect, synthesize, crosslink, consolidate, learn, amplify, episodic, temporal, meta-learn, AZR, causal. Session saved." \
     >> "$LOGFILE" 2>&1 || true
 
+emit_dashboard_event task_completed --task-name "Daily reflection" --section cron_reflection --status success
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Reflection complete ===" >> "$LOGFILE"

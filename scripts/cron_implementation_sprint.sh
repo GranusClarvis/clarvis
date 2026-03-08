@@ -23,6 +23,7 @@ acquire_local_lock "/tmp/clarvis_implementation_sprint.lock" "$LOGFILE" 2400
 acquire_global_claude_lock "$LOGFILE" "queue"
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Implementation Sprint starting ===" >> "$LOGFILE"
+emit_dashboard_event task_started --task-name "Implementation Sprint" --section cron_implementation --executor claude-opus
 
 # Extract the FIRST unchecked IMPLEMENTATION task from QUEUE.md
 # Skips research tasks (Research:, Bundle, study, paper, investigate, explore)
@@ -186,4 +187,5 @@ except Exception as e:
 " >> "$LOGFILE" 2>&1
 
 rm -f "$TASK_OUTPUT_FILE" "$PREFLIGHT_FILE"
+emit_dashboard_event task_completed --task-name "Implementation Sprint" --section cron_implementation --status "$([ ${TASK_EXIT:-1} -eq 0 ] && echo success || echo failed)" --duration-s "${TASK_DURATION:-0}"
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Implementation Sprint complete (${TASK_DURATION}s) ===" >> "$LOGFILE"

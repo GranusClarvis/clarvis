@@ -28,32 +28,35 @@ _Design: `docs/ORCHESTRATOR_PLAN_2026-03-06.md` — 5-phase rollout._
 ### Phase 4: Enhanced Brain (P1)
 
 ### Phase 5: Visual Ops Dashboard (P1)
-- [ ] [ORCH_VISUAL_DASHBOARD] Build a **visual-only** pixel-art “Habbo style” live dashboard served over LAN IP (no controls; all commands remain via TG/Discord).
+_Design informed by claw-empire visual deep dive (`docs/CLAW_EMPIRE_VISUALS_NOTES_2026-03-06.md`). Stack: Starlette SSE + vanilla JS + PixiJS 8._
   - Shows: current QUEUE tasks, active task being executed, recent evolution runs, subagents list + their current tasks/status, and PR/CI outcomes.
-  - Style: 2D game-ish rooms/avatars like the reference image.
+  - Style: 2D game-ish rooms/avatars (procedural PixiJS Graphics for rooms/furniture, emoji-based agents with status particles — same approach as claw-empire but simpler: 1 room, no CEO movement, no sub-clone fireworks).
   - Data sources: `memory/evolution/QUEUE.md`, `memory/cron/digest.md`, `memory/cron/autonomous.log`, `memory/cron/marathon.log`, `scripts/orchestration_scoreboard.py` outputs, `data/invariants_runs.jsonl`, GitHub PR list via `gh` (read-only).
-  - [ ] [ORCH_VISUAL_DASHBOARD_2] Implement a tiny local HTTP server (FastAPI/Starlette or static + SSE/WebSocket) that serves state + streams events.
-  - [ ] [ORCH_VISUAL_DASHBOARD_3] Implement a renderer: pixel UI layout (Canvas/WebGL/Phaser) with rooms/tiles + agent cards; read-only.
-  - [ ] [ORCH_VISUAL_DASHBOARD_5] Hardening: no auth needed but **no command endpoints** exposed; bind to LAN only; rate limit; CORS off.
+  - 6 SSE event types: `task_started`, `task_completed`, `agent_status`, `queue_update`, `cron_activity`, `pr_update`.
+
+  - [ ] [DASHBOARD_OWNER_LABELS] Normalize event schema to always include `owner_type` + `owner_name` so it’s unambiguous which subagent/cron produced a queue/event line. Display in Queue/Completed panels and modal.
+  - [ ] [DASHBOARD_QUEUE_BLOCK_POPUP] Server endpoint to fetch the *full* QUEUE.md block for a given task (by tag+line), and show it in the modal on click.
+
+  - [ ] [SUBAGENT_PR_FACTORY_PHASE1_PROMPT] Implement PR-factory rules injection as a **wrapper**: add prompt section for PR classes (A/B/C), two‑PR policy, max‑2 refinements, and Class C task-linkage; wire into `project_agent.py` prompt build. Add acceptance tests. (See `docs/subagents/PR_FACTORY_IMPLEMENTATION_PLAN.md` Phase 1.)
+  - [ ] [SUBAGENT_PR_FACTORY_PHASE2_INTAKE] Implement deterministic intake artifacts + precision indexes for subagents (project brief, stack detect, commands, architecture map, trust boundaries; indexes for file/symbol/route/config/test). Stale-aware. Add tests. (See implementation plan Phase 2.)
+  - [ ] [SUBAGENT_PR_FACTORY_PHASE3_BRIEF_WRITEBACK] Implement execution brief compiler + verify/self-review loop control + PR class decision + mandatory writeback (episode summary, atomic facts, procedures, typed edges, golden QA). Add tests. (See implementation plan Phase 3.)
+
+### Steal List (from claw-empire review, P1)
 
 ### Deferred
-- [ ] [ORCH_AGENT_PROTOCOLS] Implement basic agent interoperability layer: define a simple internal A2A-ish message schema for project agents (task brief → structured result JSON), and enforce it in project_agent.py outputs.
 
 ## Pillar 3: Autonomous Execution (Success > 85%)
 
-- [ ] [AUTONOMY_SCREENSHOT_ANALYZE] Take a screenshot of any given URL, analyze it with local vision (Qwen3-VL), extract structured info (page type, main elements, interactive components). Measure: extraction accuracy vs manual ground truth.
 - [ ] [AUTONOMY_MULTI_STEP] Multi-step workflow benchmark — given a sequence of 3+ actions (navigate → search → click result → extract data), complete the full chain. Measure: step completion rate, total success.
 
 ## Research Sessions
 
-- [ ] [RESEARCH_REPO_CLAW_EMPIRE] Deep review repo: https://github.com/GreenSheep01201/claw-empire — OpenClaw orchestrator + 2D game-style dashboard. Extract: (1) how orchestration is implemented on top of OpenClaw (agent lifecycle, task dispatch, state persistence, locks), (2) architecture + event model, (3) dashboard implementation (rendering stack, state model, transport), (4) concrete Clarvis integrations for orchestration + `ORCH_VISUAL_DASHBOARD`. Output: 10 bullets + 5 concrete implementation items with file targets.
-- [ ] [RESEARCH_REPO_HERMES_AGENT] Deep review repo: https://github.com/NousResearch/hermes-agent — extract improvements relevant to Clarvis/OpenClaw (bounded prompt memory + nudges/flush, memory injection security patterns, FTS session search, snapshotting/caching, skill self-improvement + security scanning, skill hub/open standard). Output: concise comparison + 5 concrete adoptable changes with file targets.
-- [ ] [BROWSER_SKILL_DOC] Create skills/web-browse/SKILL.md documenting browser_agent.py capabilities for M2.5.
+- [x] [ACON_CONTEXT_COMPRESSION] Research: ACON — Agentic Context Compression (Kang et al., arXiv:2510.00615). Contrastive guideline optimization: 26-54% token reduction maintaining task success. 5 application ideas documented. _(completed 2026-03-08)_
+- [ ] [MEMR3_REFLECTIVE_RETRIEVAL] Research: MemR3 — Reflective Reasoning for Memory Retrieval (arXiv:2512.20237) + Hindsight retain-recall-reflect (arXiv:2512.12818). Maintains explicit evidence-gap state during retrieval: query → retrieve → gap-analysis → re-query until sufficient. Complements existing memory research (storage-focused) by optimizing the retrieval reasoning path. Applicable to brain.py recall pipeline and context_relevance. Sources: arxiv.org/abs/2512.20237, arxiv.org/abs/2512.12818
 
 ## Pillar 3: Performance & Reliability (PI > 0.70)
 
   - [~] [GRAPH_STORAGE_UPGRADE_6] Cutover: `scripts/graph_cutover.py` implemented (archive JSON, enable SQLite, one-command rollback). Invariants gate (`invariants_check.py`) wired into cutover + safe migration. Docs updated (RUNBOOK.md Phase 4 section, ARCHITECTURE.md graph storage, CLAUDE.md). JSON write path removal deferred behind checklist (7-day soak prerequisite). Run `python3 scripts/graph_cutover.py` to execute. _(Phase 4 — cutover tooling done, awaiting soak period to execute + remove JSON writes)_
-  - [ ] [GRAPH_SOAK_5DAY] Execute 5-day SQLite soak (dual-write enabled): (1) Ensure `scripts/cron_env.sh` exports `CLARVIS_GRAPH_BACKEND=sqlite` and `CLARVIS_GRAPH_DUAL_WRITE=1`. (2) Monitor daily: `tail -20 memory/cron/graph_verify.log` — cron_graph_verify.sh runs at 04:45 UTC. (3) Run `python3 scripts/invariants_check.py` periodically. (4) After **5 consecutive PASS days**, the soak manager will automatically flip `CLARVIS_GRAPH_DUAL_WRITE=0` (SQLite-only writes). Soak start date: _(auto-tracked in data/graph_soak_state.json)_.
   - [ ] [GRAPH_JSON_WRITE_REMOVAL] After soak completes + SQLite-only writes stable: remove legacy JSON write paths entirely (code cleanup). See RUNBOOK.md checklist; also update backups to include `graph.db`. _(blocked by soak completion)_
 
 ### AGI-Readiness (from 2026-03-04 audit, see docs/AGI_READINESS_ARCHITECTURE_AUDIT.md)
@@ -99,8 +102,6 @@ _Consolidated into Pillar 2 above. See `docs/ORCHESTRATOR_PLAN_2026-03-06.md` fo
 
 ## P1
 
-- [ ] [RESEARCH_DISCOVERY 2026-03-05] Research: Runtime Verification & Metacognitive Self-Correction for Agents — MASC (step-level anomaly detection via next-execution reconstruction, ICLR 2026), AgentSpec (DSL for runtime constraint enforcement, 90%+ unsafe action prevention, ICSE 2026), AgentGuard (dynamic probabilistic assurance), SupervisorAgent (agent interaction monitoring). Improves action accuracy through real-time execution guards and self-correction loops. Sources: arxiv.org/abs/2510.14319, arxiv.org/abs/2503.18666, arxiv.org/abs/2509.23864, arxiv.org/abs/2510.26585
-- [ ] [RESEARCH_DISCOVERY 2026-03-05] Research: Process Reward Models for Agent Step Verification — ThinkPRM (generative CoT verification, 1% labels, +8% OOD), ToolPRMBench (tool-use PRM evaluation), Critical Step Optimization (verified decision-point preference learning), AgentPRM (actor-critic Monte Carlo). Directly improves action accuracy via step-level error detection before execution commits. Sources: arxiv.org/abs/2504.16828, arxiv.org/abs/2601.12294, arxiv.org/abs/2602.03412, arxiv.org/abs/2502.10325
 - [ ] [RECALL_GRAPH_CONTEXT] In `brain.py` recall/search methods, optionally expand results with 1-hop graph neighbors. When a memory is retrieved, also fetch memories connected via existing graph edges and include them as lower-weight "context" entries. No new clustering needed — uses existing 85k+ graph edges. Target: improve complex query recall by providing related context automatically. **Depends on**: [GRAPH_STORAGE_UPGRADE] — indexed SQLite lookups make per-recall graph expansion feasible (<0.1ms vs 4ms per hop). (Extracted from: RAPTOR/Hierarchical RAG research, arXiv:2401.18059)
 
 ## NEW ITEMS (2026-03-06 evolution session)

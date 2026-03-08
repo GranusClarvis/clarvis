@@ -52,11 +52,18 @@ _Curated knowledge. Distilled wisdom. Updated regularly._
 - Later active-inference formalisms decompose **expected free energy** into epistemic (information gain) + pragmatic (goal/utility) terms — a clean bridge from world-model building to goal-directed control.
 - Sajid, Ball, Parr, Friston (arXiv:1909.10863; Neural Computation 2021) clarifies the *engineering mapping* to RL: rewards can be treated as **observations**, while “goals” live as **prior preferences** (which can be learned). Minimizing expected free energy yields built-in epistemic exploration and principled handling of uncertainty/non-stationarity without a hard-coded reward-max objective.
 - 2026-03-04: Friston et al. ("Generalised free energy and active inference") contrasts **expected free energy** (preferences absorbed into priors over policies) with **generalised free energy** (preferences as explicit priors over outcomes inside the generative model; future outcomes treated as hidden states). Posterior policy updates can look identical, but the modelling story is cleaner: one unified generative model scoring both epistemic (uncertainty reduction) and pragmatic (preferred outcomes) drives policy selection.
+- 2026-03-07: Raja et al. (Phys Life Rev 2021) critique: much of FEP’s apparent generality comes from the **Markov blanket formalism** (a “variational Bayes everywhere” reframing). For engineering/science value, don’t accept FEP as explanatory by default—demand the concrete **generative model**, blanket partition, and a story that explains (not presupposes) successful perception/action.
 
 ### Test-Time Compute Scaling (2026-03-01)
 - Snell et al. (arXiv 2408.03314 / ICLR 2025): test-time compute gains depend strongly on prompt difficulty.
 - Different regimes want different inference: easier prompts benefit from *sequential self-revision* (improving the proposal distribution), while harder prompts benefit more from *parallel sampling* and/or *search* guided by dense process-based reward models (PRMs).
 - A practical takeaway is a **compute-optimal policy**: allocate compute per prompt (and even pick the method) based on a difficulty estimate, yielding ~4× better compute-efficiency vs best-of-N and sometimes letting a smaller model + extra inference FLOPs beat a much larger model (when the base model has non-trivial success).
+
+### Graph-based Agent Memory (2026-03-07)
+- Survey (arXiv:2602.05665) frames agent memory as a lifecycle: extraction → storage → retrieval → evolution, and argues graphs are the natural substrate when you care about *relations* (time, causality, entities), not just semantic similarity.
+- MAGMA (arXiv:2601.03236): represent the same memory item across **orthogonal graphs** (semantic/temporal/causal/entity) and retrieve via **policy-guided traversal**, yielding more interpretable, intent-aligned evidence than monolithic vector stores.
+- Zep/Graphiti (arXiv:2501.13956): a **temporally-aware knowledge graph** that continuously synthesizes conversational + business data; reports strong long-horizon gains and large latency cuts via structured, time-indexed retrieval.
+- Practical implication for Clarvis: extend our existing 85k+ edge memory graph with **typed temporal/causal edges** and add a traversal-based retrieval mode (candidate implementation for `RECALL_GRAPH_CONTEXT`).
 
 ### Useful Engineering Repos
 - **public-apis/public-apis** — curated directory of free/public APIs; handy for rapid prototypes, data sources, integration tests, and agent “tool discovery” baselines. https://github.com/public-apis/public-apis (added 2026-03-03)

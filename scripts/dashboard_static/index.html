@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clarvis Ops Dashboard</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #1a1a2e;
+    overflow: hidden;
+    font-family: 'Courier New', monospace;
+    image-rendering: pixelated;
+  }
+  #app {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  #pixi-container {
+    flex: 1;
+    position: relative;
+  }
+  #status-bar {
+    height: 32px;
+    background: #16213e;
+    color: #e0e0e0;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    gap: 16px;
+    border-top: 2px solid #0f3460;
+  }
+  .status-item { display: flex; align-items: center; gap: 4px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .dot-green { background: #00ff88; box-shadow: 0 0 4px #00ff88; }
+  .dot-red { background: #ff4444; box-shadow: 0 0 4px #ff4444; }
+  .dot-yellow { background: #ffaa00; box-shadow: 0 0 4px #ffaa00; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="pixi-container"></div>
+
+  <!-- Simple modal for inspecting queue items / events -->
+  <div id="modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:10;">
+    <div id="modal-card" style="position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:min(720px, 92vw); background:#0f172a; border:2px solid #533483; border-radius:8px; padding:14px; color:#e0e0e0; font-size:12px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:10px;">
+        <div id="modal-title" style="font-weight:bold; letter-spacing:1px;">Details</div>
+        <button id="modal-close" style="background:#16213e; color:#e0e0e0; border:1px solid #0f3460; padding:4px 10px; border-radius:6px; cursor:pointer;">Close</button>
+      </div>
+      <pre id="modal-body" style="white-space:pre-wrap; word-break:break-word; line-height:1.35; max-height:70vh; overflow:auto; margin:0;"></pre>
+    </div>
+  </div>
+
+  <div id="status-bar">
+    <span class="status-item"><span id="conn-dot" class="dot dot-red"></span><span id="conn-label">OFFLINE</span></span>
+    <span class="status-item" id="pending-count">--</span>
+    <span class="status-item" id="active-task">--</span>
+    <span class="status-item" id="last-event">--</span>
+    <span style="flex:1"></span>
+    <span class="status-item" id="clock">--</span>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/pixi.js@8/dist/pixi.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -23,7 +23,6 @@ import os
 import re
 import shutil
 import sys
-import time
 from datetime import datetime, timezone
 
 WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
