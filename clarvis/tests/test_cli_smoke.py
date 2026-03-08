@@ -39,3 +39,11 @@ def test_cli_queue_subcommand_importable():
     """Queue CLI module imports cleanly."""
     from clarvis.cli_queue import app as queue_app
     assert queue_app is not None
+
+
+def test_cli_heartbeat_has_all_commands():
+    """Heartbeat CLI has gate, run, preflight, postflight commands."""
+    from clarvis.cli_heartbeat import app as hb_app
+    cmd_names = {cmd.name or cmd.callback.__name__ for cmd in hb_app.registered_commands}
+    expected = {"gate", "run", "preflight", "postflight"}
+    assert expected.issubset(cmd_names), f"Missing commands: {expected - cmd_names}"

@@ -52,12 +52,42 @@ EVENT_TYPES = {
 }
 
 
+def infer_owner(kwargs: dict) -> tuple[str, str]:
+    """Infer owner_type and owner_name from event kwargs.
+
+    Returns (owner_type, owner_name) based on available fields:
+      - agent present      → ("subagent", agent_name)
+      - section=cron_*     → ("cron", section_name)
+      - section=project_*  → ("subagent", section_name)
+      - executor present   → ("system", executor)
+      - fallback           → ("system", "clarvis")
+    """
+    # Explicit override takes precedence
+    if "owner_type" in kwargs and "owner_name" in kwargs:
+        return kwargs["owner_type"], kwargs["owner_name"]
+
+    agent = kwargs.get("agent")
+    section = kwargs.get("section", "")
+    executor = kwargs.get("executor", "")
+
+    if agent:
+        return "subagent", agent
+    if section.startswith("cron_"):
+        return "cron", section
+    if section.startswith("project_"):
+        return "subagent", section.replace("project_", "")
+    if executor:
+        return "system", executor
+    return "system", "clarvis"
+
+
 def emit_event(event_type: str, **kwargs) -> dict:
     """Append a structured event to the dashboard event log.
 
     Args:
         event_type: One of EVENT_TYPES
         **kwargs: Event-specific fields (task_id, agent, status, etc.)
+            owner_type/owner_name are auto-inferred if not provided.
 
     Returns:
         The event dict that was written.
@@ -66,9 +96,14 @@ def emit_event(event_type: str, **kwargs) -> dict:
         # Warn but don't crash — extensibility
         pass
 
+    # Auto-infer owner fields if not explicitly set
+    owner_type, owner_name = infer_owner(kwargs)
+
     event = {
         "type": event_type,
         "ts": datetime.now(timezone.utc).isoformat(),
+        "owner_type": owner_type,
+        "owner_name": owner_name,
         **kwargs,
     }
 

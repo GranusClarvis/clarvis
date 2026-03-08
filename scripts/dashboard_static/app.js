@@ -242,8 +242,9 @@ function drawQueuePanel(container, x, y, w, h) {
   for (const t of tasks) {
     const icon = t.status === 'in_progress' ? '\u25B6' : '\u25CB';
     const color = t.status === 'in_progress' ? COLORS.working : COLORS.textDim;
+    const ownerBadge = t.owner_name && t.owner_name !== 'unknown' ? ` ${truncate(t.owner_name, 8)}` : '';
     const line = new PIXI.Text({
-      text: `${icon} [${t.tag}]`,
+      text: `${icon} [${t.tag}]${ownerBadge}`,
       style: { fontFamily: 'Courier New', fontSize: 8, fill: color },
     });
     line.x = x + 6;
@@ -257,6 +258,8 @@ function drawQueuePanel(container, x, y, w, h) {
         tag: t.tag,
         status: t.status,
         section: t.section,
+        owner_type: t.owner_type || 'unknown',
+        owner_name: t.owner_name || 'unknown',
         description: t.description,
       });
     });
@@ -300,11 +303,13 @@ function drawCompletedPanel(container, x, y, w, h) {
     const ts = (ev.ts || '').slice(11, 19);
     const ok = (ev.status || '').toLowerCase() === 'success' || (ev.exit_code === '0');
     const color = ok ? COLORS.success : COLORS.fail;
-    const owner = ev.agent || ev.executor || ev.section || '';
-    const label = truncate(ev.task_name || ev.task || owner, 20);
+    const ownerType = ev.owner_type || 'system';
+    const ownerName = ev.owner_name || ev.agent || ev.executor || ev.section || '';
+    const ownerPrefix = ownerType === 'cron' ? 'C' : ownerType === 'subagent' ? 'A' : 'S';
+    const label = truncate(ev.task_name || ev.task || ownerName, 18);
 
     const line = new PIXI.Text({
-      text: `${ts} ${ok ? 'ok' : 'fail'} ${truncate(owner, 8)} ${label}`,
+      text: `${ts} ${ok ? 'ok' : '!!'}  ${ownerPrefix}:${truncate(ownerName, 6)} ${label}`,
       style: { fontFamily: 'Courier New', fontSize: 8, fill: color },
     });
     line.x = x + 6;
@@ -313,7 +318,7 @@ function drawCompletedPanel(container, x, y, w, h) {
     line.eventMode = 'static';
     line.cursor = 'pointer';
     line.on('pointertap', () => {
-      showModal(`COMPLETED ${ok ? 'ok' : 'fail'}`, ev);
+      showModal(`COMPLETED ${ok ? 'ok' : 'fail'} [${ownerType}/${ownerName}]`, ev);
     });
 
     container.addChild(line);
@@ -356,8 +361,10 @@ function drawEventsPanel(container, x, y, w, h) {
       ev.type === 'task_completed' ? COLORS.success :
       ev.type === 'error' ? COLORS.fail :
       ev.type === 'agent_spawned' ? COLORS.working : COLORS.textDim;
+    const evOwner = ev.owner_name || ev.agent || '';
+    const evLabel = truncate(ev.task_name || evOwner || '', 16);
     const line = new PIXI.Text({
-      text: `${ts} ${(ev.type || '').slice(0, 14)} ${truncate(ev.task_name || ev.agent || '', 18)}`,
+      text: `${ts} ${(ev.type || '').slice(0, 14)} ${evOwner ? truncate(evOwner, 6) + ' ' : ''}${evLabel}`,
       style: { fontFamily: 'Courier New', fontSize: 8, fill: typeColor },
     });
     line.x = x + 6;

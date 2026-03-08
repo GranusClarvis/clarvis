@@ -37,6 +37,11 @@ _Curated knowledge. Distilled wisdom. Updated regularly._
 - **Key implementation hint:** keep the workspace bottleneck intentionally small; let modules compete for broadcast (winner-take-all), and use cycle-consistency as the glue across latent spaces
 - 2026-03-03 (GNW refresher): GNW predicts **nonlinear “ignition”** (sudden, sustained, selective reverberation) when a representation crosses threshold + engages long-range recurrent loops in a **bow-tie cortical core** (fronto-parietal + hubs) — making content globally available; “no-report” paradigms aim to separate ignition from mere reporting.
 
+### Reflective Retrieval Control (MemR3) (2026-03-08)
+- MemR3 (arXiv:2512.20237) reframes long-horizon conversational “memory retrieval” as a **closed-loop controller** rather than a single retrieve-then-answer step.
+- Core mechanism: a router chooses between **retrieve / reflect / answer**, maintaining an explicit global **evidence–gap state** (what’s established vs what’s missing). That evidence–gap drives query refinement and early stopping.
+- Practical takeaway for Clarvis: implement a retrieval loop that (1) tracks coverage of required facts, (2) decides whether to retrieve again vs synthesize, and (3) logs a human-auditable trace of which memories support which claims.
+
 ### Integrated World Modeling Theory (IWMT) (2026-03-01)
 - Adam Safron’s IWMT tries to reconcile **IIT** (integration/phi) and **GNWT** (global broadcast/ignition) inside the **Free Energy Principle / Active Inference** framing.
 - 2026-03-05 addendum (Safron 2020): IIT-style “integration” only implies experience for systems with **perspectival reference frames** that keep models tethered to external reality (coherent space/time/cause + self/world); otherwise you can, in principle, have arbitrarily high Φ-like integration that’s still “dark”.

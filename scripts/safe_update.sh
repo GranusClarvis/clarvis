@@ -584,32 +584,32 @@ post_update_check() {
     ((checks_failed++)) || true
   fi
 
-  # 3. Gateway process
-  if pm2 list 2>/dev/null | grep -q "openclaw-gateway.*online"; then
-    ok "Gateway: running"
+  # 3. Gateway process (systemd-first; PM2 fallback)
+  # We primarily run the gateway under systemd user services.
+  if systemctl --user is-active openclaw-gateway.service &>/dev/null; then
+    ok "Gateway: running (systemd)"
+    ((checks_passed++)) || true
+  elif pm2 list 2>/dev/null | grep -q "openclaw-gateway.*online"; then
+    ok "Gateway: running (pm2)"
+    ((checks_passed++)) || true
+  elif ss -tlnp 2>/dev/null | grep -q ":18789 "; then
+    # Last-resort: port is listening even if process manager check fails.
+    ok "Gateway: port 18789 listening"
     ((checks_passed++)) || true
   else
     fail "Gateway: not running"
     ((checks_failed++)) || true
   fi
 
-  # 4. ClarvisDB brain
+  # 4. ClarvisDB brain (use our known-good brain health script)
   local brain_check
-  brain_check=$(python3 -c "
-import sys
-sys.path.insert(0, '$SCRIPTS_DIR')
-from brain import brain
-stats = brain.stats()
-total = sum(s.get('count', 0) for s in stats.values()) if isinstance(stats, dict) else 0
-print(f'ok:{total}')
-" 2>/dev/null || echo "fail:0")
+  brain_check=$(python3 "$SCRIPTS_DIR/brain.py" health 2>/dev/null | head -n 5 || true)
 
-  if [[ "$brain_check" == ok:* ]]; then
-    local count="${brain_check#ok:}"
-    ok "ClarvisDB: healthy ($count memories)"
+  if echo "$brain_check" | grep -qi "status: healthy\|Store/recall test: healthy\|Health check complete"; then
+    ok "ClarvisDB: healthy"
     ((checks_passed++)) || true
   else
-    fail "ClarvisDB: not responding"
+    fail "ClarvisDB: health check failed"
     ((checks_failed++)) || true
   fi
 

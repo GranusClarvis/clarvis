@@ -275,19 +275,14 @@ class LiteBrain:
     def add_edge(self, source_id: str, target_id: str, edge_type: str = "related",
                  weight: float = 0.5):
         """Add a semantic link between two memories."""
-        graph = {"nodes": {}, "edges": []}
-        if self.graph_file.exists():
-            try:
-                graph = json.loads(self.graph_file.read_text())
-            except (json.JSONDecodeError, OSError):
-                pass
+        graph = self._load_graph()
 
         graph["nodes"].setdefault(source_id, {"created": datetime.now(timezone.utc).isoformat()})
         graph["nodes"].setdefault(target_id, {"created": datetime.now(timezone.utc).isoformat()})
 
         # Check for existing edge
         for edge in graph["edges"]:
-            if edge["source"] == source_id and edge["target"] == target_id:
+            if edge["source"] == source_id and edge["target"] == target_id and edge.get("type") == edge_type:
                 edge["weight"] = min(1.0, edge["weight"] + 0.1)
                 break
         else:
@@ -299,9 +294,184 @@ class LiteBrain:
                 "created": datetime.now(timezone.utc).isoformat(),
             })
 
+        self._save_graph(graph)
+
+    def _load_graph(self) -> dict:
+        """Load the graph from disk."""
+        if self.graph_file.exists():
+            try:
+                return json.loads(self.graph_file.read_text())
+            except (json.JSONDecodeError, OSError):
+                pass
+        return {"nodes": {}, "edges": []}
+
+    def _save_graph(self, graph: dict):
+        """Atomically save graph to disk."""
         tmp = self.graph_file.with_suffix(".tmp")
         tmp.write_text(json.dumps(graph, indent=2))
         tmp.replace(self.graph_file)
+
+    def get_edges_by_type(self, edge_type: str) -> list:
+        """Get all edges of a specific type."""
+        graph = self._load_graph()
+        return [e for e in graph["edges"] if e.get("type") == edge_type]
+
+    def get_related(self, node_id: str, edge_types: Optional[list] = None) -> list:
+        """Get nodes related to node_id, optionally filtered by edge types."""
+        graph = self._load_graph()
+        related = []
+        for edge in graph["edges"]:
+            if edge_types and edge.get("type") not in edge_types:
+                continue
+            if edge["source"] == node_id:
+                related.append({"id": edge["target"], "type": edge.get("type", "related"),
+                                "weight": edge.get("weight", 0.5), "direction": "outgoing"})
+            elif edge["target"] == node_id:
+                related.append({"id": edge["source"], "type": edge.get("type", "related"),
+                                "weight": edge.get("weight", 0.5), "direction": "incoming"})
+        return related
+
+    def build_typed_edges(self, indexes: dict) -> dict:
+        """Build typed relationship edges from precision indexes.
+
+        Creates edges: route→file, symbol→file, test→module.
+        Returns counts of edges created per type.
+        """
+        counts = {"route_file": 0, "symbol_file": 0, "test_module": 0}
+        graph = self._load_graph()
+
+        # Existing edge set for dedup
+        existing = {(e["source"], e["target"], e.get("type", "related")) for e in graph["edges"]}
+        now = datetime.now(timezone.utc).isoformat()
+
+        # route→file edges from route_index
+        route_idx = indexes.get("route_index", {})
+        routes = route_idx.get("routes", []) if isinstance(route_idx, dict) else []
+        for r in routes:
+            route_path = r.get("path", "")
+            file_path = r.get("file", "")
+            if route_path and file_path:
+                src = f"route:{route_path}"
+                tgt = f"file:{file_path}"
+                if (src, tgt, "route_file") not in existing:
+                    graph["nodes"].setdefault(src, {"created": now})
+                    graph["nodes"].setdefault(tgt, {"created": now})
+                    graph["edges"].append({
+                        "source": src, "target": tgt, "type": "route_file",
+                        "weight": 0.9, "created": now,
+                    })
+                    existing.add((src, tgt, "route_file"))
+                    counts["route_file"] += 1
+
+        # symbol→file edges from symbol_index
+        sym_idx = indexes.get("symbol_index", {})
+        symbols = sym_idx.get("symbols", []) if isinstance(sym_idx, dict) else []
+        for entry in symbols:
+            file_path = entry.get("file", "")
+            for sym in entry.get("symbols", [])[:20]:
+                sym_name = sym.get("name", "")
+                if sym_name and file_path:
+                    src = f"symbol:{sym_name}"
+                    tgt = f"file:{file_path}"
+                    if (src, tgt, "symbol_file") not in existing:
+                        graph["nodes"].setdefault(src, {"created": now})
+                        graph["nodes"].setdefault(tgt, {"created": now})
+                        graph["edges"].append({
+                            "source": src, "target": tgt, "type": "symbol_file",
+                            "weight": 0.8, "created": now,
+                        })
+                        existing.add((src, tgt, "symbol_file"))
+                        counts["symbol_file"] += 1
+
+        # test→module edges from test_index
+        test_idx = indexes.get("test_index", {})
+        tests = test_idx.get("tests", []) if isinstance(test_idx, dict) else []
+        for t in tests:
+            test_file = t.get("test_file", "")
+            source_module = t.get("likely_source", "")
+            if test_file and source_module:
+                src = f"test:{test_file}"
+                tgt = f"module:{source_module}"
+                if (src, tgt, "test_module") not in existing:
+                    graph["nodes"].setdefault(src, {"created": now})
+                    graph["nodes"].setdefault(tgt, {"created": now})
+                    graph["edges"].append({
+                        "source": src, "target": tgt, "type": "test_module",
+                        "weight": 0.85, "created": now,
+                    })
+                    existing.add((src, tgt, "test_module"))
+                    counts["test_module"] += 1
+
+        self._save_graph(graph)
+        return counts
+
+    def hybrid_recall(self, query: str, indexes: Optional[dict] = None,
+                      n_results: int = 5) -> dict:
+        """Hybrid retrieval combining vector recall with typed edge expansion.
+
+        Returns:
+            {
+                "memories": [...],        # from vector recall
+                "related_files": [...],   # from typed edges (route→file, symbol→file)
+                "related_tests": [...],   # test files for matched modules
+            }
+        """
+        # 1. Vector recall from brain
+        memories = self.recall(query, n_results=n_results)
+
+        result = {
+            "memories": memories,
+            "related_files": [],
+            "related_tests": [],
+        }
+
+        if not indexes:
+            return result
+
+        query_lower = query.lower()
+        query_words = [w for w in query_lower.split() if len(w) > 3]
+        graph = self._load_graph()
+
+        # 2. Route-based file lookup: match query words against route paths
+        seen_files = set()
+        for edge in graph["edges"]:
+            if edge.get("type") != "route_file":
+                continue
+            route = edge["source"].replace("route:", "")
+            if any(w in route.lower() for w in query_words):
+                file_path = edge["target"].replace("file:", "")
+                if file_path not in seen_files:
+                    result["related_files"].append(file_path)
+                    seen_files.add(file_path)
+
+        # 3. Symbol-based file lookup: match query words against symbol names
+        for edge in graph["edges"]:
+            if edge.get("type") != "symbol_file":
+                continue
+            symbol = edge["source"].replace("symbol:", "").lower()
+            if any(w in symbol for w in query_words):
+                file_path = edge["target"].replace("file:", "")
+                if file_path not in seen_files:
+                    result["related_files"].append(file_path)
+                    seen_files.add(file_path)
+
+        # 4. Test lookup: for each matched file, find its tests
+        for file_path in list(result["related_files"]):
+            # Derive module name from file path
+            module_name = file_path.rsplit("/", 1)[-1] if "/" in file_path else file_path
+            for edge in graph["edges"]:
+                if edge.get("type") != "test_module":
+                    continue
+                if module_name in edge["target"]:
+                    test_file = edge["source"].replace("test:", "")
+                    if test_file not in result["related_tests"]:
+                        result["related_tests"].append(test_file)
+
+        # Cap results
+        result["related_files"] = result["related_files"][:10]
+        result["related_tests"] = result["related_tests"][:5]
+
+        return result
 
 
 # Auto-detect brain directory from environment

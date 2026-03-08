@@ -82,7 +82,6 @@ BACKUP_SOURCES=(
   "data/phi_history.json"
   "data/task-graph.json"
   "data/evolution-log.jsonl"
-  "data/relationships.json"
   # Subdirectories with critical state
   "data/hebbian"
   "data/synaptic"

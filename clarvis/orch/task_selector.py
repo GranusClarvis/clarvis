@@ -239,6 +239,22 @@ def score_tasks(tasks, codelet_result=None):
     except Exception:
         pass
 
+    # Pre-fetch failure lessons once (was per-task, causing ~100s overhead)
+    _failure_docs = []
+    try:
+        _failure_raw = brain.recall(
+            "failure failed avoid error crash timeout",
+            collections=["clarvis-learnings"], n=20, min_importance=0.5
+        )
+        _failure_docs = [
+            r["document"].lower() for r in _failure_raw
+            if r.get("distance", 1.0) < 0.8
+            and any(kw in r.get("document", "").lower()
+                    for kw in ("failure", "failed", "avoid"))
+        ]
+    except Exception:
+        pass
+
     scored = []
 
     for task in tasks:
@@ -300,18 +316,13 @@ def score_tasks(tasks, codelet_result=None):
             except Exception:
                 pass
 
+        # Failure penalty via pre-fetched docs (string match, no per-task brain call)
         failure_penalty = 0.0
-        try:
-            failure_lessons = brain.recall(
-                text, collections=["clarvis-learnings"], n=3, min_importance=0.5
-            )
-            for lesson in failure_lessons:
-                doc = lesson.get("document", "").lower()
-                dist = lesson.get("distance", 1.0)
-                if ("failure" in doc or "failed" in doc or "avoid" in doc) and dist < 0.8:
+        if _failure_docs:
+            task_keywords = {w for w in text_lower.split() if len(w) > 4}
+            for fdoc in _failure_docs:
+                if any(kw in fdoc for kw in task_keywords):
                     failure_penalty = min(0.15, failure_penalty + 0.05)
-        except Exception:
-            pass
 
         # Novelty: boost tasks that differ from recent completed work
         novelty = _compute_novelty(text, recent_completed)

@@ -95,11 +95,33 @@ def parse_queue(path: Path) -> list[dict]:
         if m:
             check, tag, desc = m.groups()
             status = {"x": "done", "~": "in_progress", " ": "pending"}[check]
+
+            # Extract owner from [SOURCE DATE] prefix in description
+            owner_type = "manual"
+            owner_name = "unknown"
+            source_m = re.match(r'^\[([A-Z_]+)\s+\d{4}-\d{2}-\d{2}\]\s*(.*)', desc)
+            if source_m:
+                source_tag = source_m.group(1).lower()
+                desc = source_m.group(2)
+                # Map known source tags to owner types
+                if source_tag in ("auto_split", "auto_evolve", "goal_tracker",
+                                  "self_model", "perf_monitor"):
+                    owner_type = "system"
+                    owner_name = source_tag
+                elif source_tag == "manual":
+                    owner_type = "manual"
+                    owner_name = "user"
+                else:
+                    owner_type = "system"
+                    owner_name = source_tag
+
             tasks.append({
                 "tag": tag,
                 "status": status,
                 "description": desc,
                 "section": current_section,
+                "owner_type": owner_type,
+                "owner_name": owner_name,
             })
     return tasks
 
@@ -154,8 +176,33 @@ def read_agents() -> list[dict]:
     return agents
 
 
+def _normalize_event_owner(ev: dict) -> dict:
+    """Ensure every event has owner_type + owner_name (backfill legacy events)."""
+    if "owner_type" in ev and "owner_name" in ev:
+        return ev
+    agent = ev.get("agent", "")
+    section = ev.get("section", "")
+    executor = ev.get("executor", "")
+    if agent:
+        ev.setdefault("owner_type", "subagent")
+        ev.setdefault("owner_name", agent)
+    elif section.startswith("cron_"):
+        ev.setdefault("owner_type", "cron")
+        ev.setdefault("owner_name", section)
+    elif section.startswith("project_"):
+        ev.setdefault("owner_type", "subagent")
+        ev.setdefault("owner_name", section.replace("project_", ""))
+    elif executor:
+        ev.setdefault("owner_type", "system")
+        ev.setdefault("owner_name", executor)
+    else:
+        ev.setdefault("owner_type", "system")
+        ev.setdefault("owner_name", "clarvis")
+    return ev
+
+
 def read_recent_events(n: int = EVENT_TAIL_COUNT) -> list[dict]:
-    """Read last N dashboard events."""
+    """Read last N dashboard events, normalizing owner fields."""
     if not EVENTS_FILE.exists():
         return []
     try:
@@ -163,7 +210,8 @@ def read_recent_events(n: int = EVENT_TAIL_COUNT) -> list[dict]:
         events = []
         for line in lines[-n:]:
             try:
-                events.append(json.loads(line))
+                ev = json.loads(line)
+                events.append(_normalize_event_owner(ev))
             except json.JSONDecodeError:
                 continue
         return events

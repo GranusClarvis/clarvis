@@ -6,12 +6,16 @@ The heartbeat pipeline is:
   3. Claude Code executes selected task
   4. heartbeat postflight — episode encoding, confidence, brain storage
 
-This CLI wraps the gate + preflight for diagnostics.
-Full heartbeat execution still happens via cron_autonomous.sh (spawns Claude Code).
+Subcommands:
+  gate       — run gate only (exit 0=WAKE, 1=SKIP)
+  preflight  — run preflight only, print JSON
+  postflight — record outcome from exit-code + output-file + preflight-file
+  run        — gate + preflight together (diagnostic)
 """
 
 import json
 import sys
+from pathlib import Path
 
 import typer
 
@@ -84,4 +88,76 @@ def gate():
         raise
     except Exception as e:
         print(f"Gate error: {e}")
+        raise typer.Exit(1)
+
+
+@app.command()
+def preflight(
+    dry_run: bool = typer.Option(False, "--dry-run", help="Label output as dry run."),
+    output_file: str = typer.Option(None, "--output", "-o", help="Write JSON result to file instead of stdout."),
+):
+    """Run preflight only (attention scoring, task selection, context).
+
+    Prints the full preflight result as JSON. Useful for diagnostics and
+    for piping into postflight after manual execution.
+    """
+    sys.path.insert(0, f"{WORKSPACE}/scripts")
+    try:
+        import heartbeat_preflight
+        result = heartbeat_preflight.run_preflight(dry_run=dry_run)
+        json_out = json.dumps(result, indent=2, default=str)
+        if output_file:
+            Path(output_file).write_text(json_out)
+            print(f"Preflight result written to {output_file}")
+        else:
+            print(json_out)
+    except Exception as e:
+        print(f"Preflight error: {e}", file=sys.stderr)
+        raise typer.Exit(1)
+
+
+@app.command()
+def postflight(
+    exit_code: int = typer.Argument(..., help="Exit code from the executor (0=success, 124=timeout)."),
+    output_file: str = typer.Argument(..., help="Path to the task output file."),
+    preflight_file: str = typer.Argument(..., help="Path to the preflight JSON file (from `heartbeat preflight -o`)."),
+    duration: int = typer.Option(0, "--duration", "-d", help="Task duration in seconds."),
+):
+    """Run postflight only (episode encoding, confidence, brain storage).
+
+    Accepts the executor exit code, output file, and preflight JSON file.
+    Typically used after manual task execution:
+
+        clarvis heartbeat preflight -o /tmp/pf.json
+        # ... execute task, producing /tmp/output.txt ...
+        clarvis heartbeat postflight 0 /tmp/output.txt /tmp/pf.json
+    """
+    # Load preflight data
+    pf_path = Path(preflight_file)
+    if not pf_path.exists():
+        print(f"Preflight file not found: {preflight_file}", file=sys.stderr)
+        raise typer.Exit(1)
+    try:
+        preflight_data = json.loads(pf_path.read_text())
+    except (json.JSONDecodeError, OSError) as e:
+        print(f"Failed to read preflight file: {e}", file=sys.stderr)
+        raise typer.Exit(1)
+
+    out_path = Path(output_file)
+    if not out_path.exists():
+        print(f"Output file not found: {output_file}", file=sys.stderr)
+        raise typer.Exit(1)
+
+    sys.path.insert(0, f"{WORKSPACE}/scripts")
+    try:
+        import heartbeat_postflight
+        heartbeat_postflight.run_postflight(
+            exit_code=exit_code,
+            output_file=output_file,
+            preflight_data=preflight_data,
+            task_duration=duration,
+        )
+        print(f"Postflight complete (exit_code={exit_code}, duration={duration}s)")
+    except Exception as e:
+        print(f"Postflight error: {e}", file=sys.stderr)
         raise typer.Exit(1)

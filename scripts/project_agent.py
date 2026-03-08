@@ -1254,6 +1254,36 @@ def build_spawn_prompt(name: str, task: str, config: dict,
         except (json.JSONDecodeError, OSError):
             pass
 
+    # PR Factory Phase 2: inject intake artifacts + indexes into prompt
+    try:
+        from pr_factory_intake import load_all_artifacts, format_artifacts_for_prompt
+        from pr_factory_indexes import load_all_indexes, format_indexes_for_prompt
+        artifacts = load_all_artifacts(agent_dir)
+        if artifacts:
+            art_text = format_artifacts_for_prompt(artifacts)
+            if art_text.strip():
+                prompt_parts.extend(["## Project Intake (auto-generated)", art_text, ""])
+        indexes = load_all_indexes(agent_dir)
+        if indexes:
+            idx_text = format_indexes_for_prompt(indexes)
+            if idx_text.strip():
+                prompt_parts.extend(["## Precision Indexes (auto-generated)", idx_text, ""])
+    except ImportError:
+        pass
+    except Exception:
+        pass
+
+    # PR Factory Phase 3: inject execution brief into prompt
+    try:
+        from pr_factory import build_factory_context
+        factory_context = build_factory_context(name, task, agent_dir)
+        if factory_context and factory_context.strip():
+            prompt_parts.extend(["## Execution Brief (compiled)", factory_context, ""])
+    except ImportError:
+        pass
+    except Exception:
+        pass
+
     if procedures:
         prompt_parts.extend([
             "## Known Procedures",
@@ -1395,6 +1425,17 @@ def cmd_spawn(name: str, task: str, timeout: int = 1200,
     except Exception as e:
         _log(f"CI context scan failed (non-fatal): {e}")
 
+    # PR Factory Phase 2: refresh intake artifacts + precision indexes
+    try:
+        from pr_factory_intake import refresh_artifacts
+        from pr_factory_indexes import refresh_indexes
+        refresh_artifacts(agent_dir, workspace)
+        refresh_indexes(agent_dir, workspace)
+    except ImportError:
+        pass  # Phase 2 not installed yet — graceful degradation
+    except Exception as e:
+        _log(f"PR factory intake refresh failed (non-fatal): {e}")
+
     # Update status
     config["status"] = "running"
     config["last_task"] = {"id": task_id, "task": task[:200], "started": datetime.now(timezone.utc).isoformat()}
@@ -1486,6 +1527,15 @@ def cmd_spawn(name: str, task: str, timeout: int = 1200,
             agent_result.setdefault("_safety_blocked", _blocked)
     except Exception as e:
         _log(f"Post-spawn safety audit error (non-fatal): {e}")
+
+    # PR Factory Phase 3: mandatory writeback (episode, facts, procedures, golden QA)
+    try:
+        from pr_factory import run_writeback
+        run_writeback(name, agent_dir, agent_result, task)
+    except ImportError:
+        pass  # Phase 3 not installed yet — graceful degradation
+    except Exception as e:
+        _log(f"PR factory writeback failed (non-fatal): {e}")
 
     # Update config
     config["status"] = "idle"
