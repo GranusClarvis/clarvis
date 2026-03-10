@@ -1,0 +1,26 @@
+{
+  "id": "clarvis-context",
+  "name": "Clarvis Context Engine",
+  "description": "Context engine that injects ClarvisDB brain context into every M2.5 conversation turn",
+  "version": "0.1.0",
+  "kind": "context-engine",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "contextTier": {
+        "type": "string",
+        "enum": ["minimal", "standard", "full"],
+        "default": "standard"
+      },
+      "maxLatencyMs": {
+        "type": "number",
+        "default": 5000
+      },
+      "skipShortMessages": {
+        "type": "number",
+        "default": 20
+      }
+    }
+  }
+}

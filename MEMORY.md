@@ -12,6 +12,7 @@ _Curated knowledge. Distilled wisdom. Updated regularly._
 - Controversial (some call it pseudoscience), but clinically useful for assessing consciousness in unresponsive patients
 - Calculation is computationally intractable for real systems, driving research into proxy measures
 - 2026-03-02: Φ approximations study (small 3–6 node networks) found several heuristics correlate with max-Φ (e.g., decoder-based Φ*, state differentiation, Lempel–Ziv/PCI-like complexity), but they largely *don’t* reduce compute cost; best viewed as proxies for “capacity for high-Φ” and good at spotting low-Φ regimes, not replacements for Φ.
+- 2026-03-09: IIT 4.0’s most practically useful design lesson for Clarvis is boundary discipline: unified cognition is not “more context” but a **definite internal causal boundary** with irreducible cross-component influence. Track internal integration/coherence, not just external task performance.
 
 ### Intrinsic Metacognitive Learning (2026-02-28)
 - Self-improvement requires INTRINSIC metacognition, not just extrinsic (human-designed) loops

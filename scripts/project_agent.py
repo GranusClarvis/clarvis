@@ -83,12 +83,12 @@ A2A_PROTOCOL_VERSION = "1"
 A2A_REQUIRED_FIELDS = {"status", "summary"}
 
 # Valid status values
-A2A_VALID_STATUSES = {"success", "partial", "failed", "blocked"}
+A2A_VALID_STATUSES = {"success", "partial", "failed", "blocked", "unknown"}
 
 # Full schema with types (for documentation and validation)
 A2A_RESULT_SCHEMA = {
     "protocol":      "a2a/v1",        # str  — protocol identifier (auto-injected)
-    "status":        "success",        # str  — one of A2A_VALID_STATUSES
+    "status":        "unknown",        # str  — one of A2A_VALID_STATUSES (default unknown, not success)
     "summary":       "",               # str  — 1-3 sentence description of what was done
     "pr_url":        None,             # str|null — PR URL if one was created
     "branch":        None,             # str|null — git branch name
@@ -109,21 +109,22 @@ def validate_a2a_result(result: dict) -> tuple[bool, list[str]]:
     all required fields with acceptable values. Warnings are non-fatal
     issues (missing optional fields, unexpected types).
     """
-    warnings = []
+    errors: list[str] = []
+    warnings: list[str] = []
 
     # Check required fields
     for field in A2A_REQUIRED_FIELDS:
         if field not in result:
-            warnings.append(f"missing required field: {field}")
-    if not warnings:
+            errors.append(f"missing required field: {field}")
+    if not errors:
         # All required present — check values
         if result.get("status") not in A2A_VALID_STATUSES:
-            warnings.append(f"invalid status: {result.get('status')!r} "
+            errors.append(f"invalid status: {result.get('status')!r} "
                           f"(expected one of {A2A_VALID_STATUSES})")
         if not isinstance(result.get("summary", ""), str) or not result.get("summary"):
-            warnings.append("summary must be a non-empty string")
+            errors.append("summary must be a non-empty string")
 
-    is_valid = not any("missing required" in w or "invalid status" in w for w in warnings)
+    is_valid = len(errors) == 0
 
     # Type checks for optional fields (warnings only)
     if "files_changed" in result and not isinstance(result["files_changed"], list):
@@ -148,7 +149,7 @@ def validate_a2a_result(result: dict) -> tuple[bool, list[str]]:
         elif pr_class not in ("A", "B", "C"):
             warnings.append(f"pr_class must be one of A, B, C — got {pr_class!r}")
 
-    return is_valid, warnings
+    return is_valid, errors + warnings
 
 
 def normalize_a2a_result(result: dict) -> dict:
@@ -433,6 +434,7 @@ LITE_COLLECTIONS = [
     "project-context",        # current state, recent work
     "project-episodes",       # task outcomes with timestamps
     "project-goals",          # project-specific objectives
+    "project-sector",         # domain/product playbook constraints (Layer E)
 ]
 
 AGENT_CONFIG_TEMPLATE = {
@@ -1256,8 +1258,8 @@ def build_spawn_prompt(name: str, task: str, config: dict,
 
     # PR Factory Phase 2: inject intake artifacts + indexes into prompt
     try:
-        from pr_factory_intake import load_all_artifacts, format_artifacts_for_prompt
-        from pr_factory_indexes import load_all_indexes, format_indexes_for_prompt
+        from clarvis.orch.pr_intake import load_all_artifacts, format_artifacts_for_prompt
+        from clarvis.orch.pr_indexes import load_all_indexes, format_indexes_for_prompt
         artifacts = load_all_artifacts(agent_dir)
         if artifacts:
             art_text = format_artifacts_for_prompt(artifacts)
@@ -1300,7 +1302,7 @@ def build_spawn_prompt(name: str, task: str, config: dict,
 
     # PR Factory rules injection (Phase 1 — graceful if not installed)
     try:
-        from pr_factory_rules import build_pr_rules_section
+        from clarvis.orch.pr_rules import build_pr_rules_section
         prompt_parts.extend(build_pr_rules_section())
     except ImportError:
         pass
@@ -1427,8 +1429,8 @@ def cmd_spawn(name: str, task: str, timeout: int = 1200,
 
     # PR Factory Phase 2: refresh intake artifacts + precision indexes
     try:
-        from pr_factory_intake import refresh_artifacts
-        from pr_factory_indexes import refresh_indexes
+        from clarvis.orch.pr_intake import refresh_artifacts
+        from clarvis.orch.pr_indexes import refresh_indexes
         refresh_artifacts(agent_dir, workspace)
         refresh_indexes(agent_dir, workspace)
     except ImportError:
@@ -1634,14 +1636,22 @@ def _parse_agent_output(output: str) -> dict:
         })
 
     # Validate and normalize
-    is_valid, warnings = validate_a2a_result(raw_result)
-    if warnings:
-        _log(f"A2A validation warnings: {'; '.join(warnings)}")
+    is_valid, issues = validate_a2a_result(raw_result)
+    if issues:
+        level = "errors" if not is_valid else "warnings"
+        _log(f"A2A validation {level}: {'; '.join(issues)}")
+
+    # Fix missing required fields before normalizing
+    if not is_valid:
+        if "status" not in raw_result:
+            raw_result["status"] = "unknown"
+        if "summary" not in raw_result or not raw_result.get("summary"):
+            raw_result["summary"] = output[-500:].strip() if output else "No structured summary"
 
     normalized = normalize_a2a_result(raw_result)
     normalized["_a2a_valid"] = is_valid
-    if warnings:
-        normalized["_a2a_warnings"] = warnings
+    if issues:
+        normalized["_a2a_warnings"] = issues
 
     return normalized
 
@@ -2973,238 +2983,241 @@ def run_task_loop(name: str, task: str, timeout_per_subtask: int = 1200,
         _log(msg)
         return {"error": msg, "status": "locked"}
 
-    agent_dir = _agent_dir(name)
-    loop_start = time.time()
-    total_sessions = 0
-    total_cost = 0.0
-    cost_start = _snapshot_cost()
-    episodes = []
-    work_branch = None
-    pr_number = None
-    repo = config.get("repo_url", "")
+    try:
 
-    # Derive owner/repo for gh commands
-    gh_repo = ""
-    if repo:
-        # Handle SSH and HTTPS URLs
-        import re as _re
-        m = _re.search(r'[:/]([^/]+/[^/.]+?)(?:\.git)?$', repo)
-        if m:
-            gh_repo = m.group(1)
+        agent_dir = _agent_dir(name)
+        loop_start = time.time()
+        total_sessions = 0
+        total_cost = 0.0
+        cost_start = _snapshot_cost()
+        episodes = []
+        work_branch = None
+        pr_number = None
+        repo = config.get("repo_url", "")
 
-    _log(f"Starting task loop for agent '{name}': {task[:80]}")
-    _emit("task_started", agent=name, task_name=task[:120],
-          section="project_agent_loop", executor="claude-opus")
+        # Derive owner/repo for gh commands
+        gh_repo = ""
+        if repo:
+            # Handle SSH and HTTPS URLs
+            import re as _re
+            m = _re.search(r'[:/]([^/]+/[^/.]+?)(?:\.git)?$', repo)
+            if m:
+                gh_repo = m.group(1)
 
-    # Phase 1: PLAN — decompose
-    subtasks = decompose_task(name, task)
-    _log(f"Task loop plan: {len(subtasks)} subtasks")
+        _log(f"Starting task loop for agent '{name}': {task[:80]}")
+        _emit("task_started", agent=name, task_name=task[:120],
+              section="project_agent_loop", executor="claude-opus")
 
-    subtask_results = {}
+        # Phase 1: PLAN — decompose
+        subtasks = decompose_task(name, task)
+        _log(f"Task loop plan: {len(subtasks)} subtasks")
 
-    for st in subtasks:
-        # Check exit criteria
-        elapsed = time.time() - loop_start
-        if elapsed > max_wall_seconds:
-            _log(f"Task loop wall clock exceeded ({elapsed:.0f}s > {max_wall_seconds}s)")
-            break
+        subtask_results = {}
 
-        if total_sessions >= max_sessions:
-            _log(f"Task loop max sessions reached ({total_sessions} >= {max_sessions})")
-            break
+        for st in subtasks:
+            # Check exit criteria
+            elapsed = time.time() - loop_start
+            if elapsed > max_wall_seconds:
+                _log(f"Task loop wall clock exceeded ({elapsed:.0f}s > {max_wall_seconds}s)")
+                break
 
-        if cost_start is not None:
-            current_cost = _snapshot_cost()
-            if current_cost is not None:
-                total_cost = round(current_cost - cost_start, 6)
-                if total_cost > budget_usd:
-                    _log(f"Task loop budget exceeded (${total_cost:.4f} > ${budget_usd:.2f})")
-                    break
+            if total_sessions >= max_sessions:
+                _log(f"Task loop max sessions reached ({total_sessions} >= {max_sessions})")
+                break
 
-        # Check deps
-        deps_met = all(
-            subtask_results.get(dep, {}).get("status") == "success"
-            for dep in st.get("deps", [])
-        )
-        if not deps_met:
-            # Skip subtask if deps failed
-            failed_deps = [d for d in st.get("deps", [])
-                           if subtask_results.get(d, {}).get("status") != "success"]
-            _log(f"Skipping subtask {st['id']}: unmet deps {failed_deps}")
+            if cost_start is not None:
+                current_cost = _snapshot_cost()
+                if current_cost is not None:
+                    total_cost = round(current_cost - cost_start, 6)
+                    if total_cost > budget_usd:
+                        _log(f"Task loop budget exceeded (${total_cost:.4f} > ${budget_usd:.2f})")
+                        break
+
+            # Check deps
+            deps_met = all(
+                subtask_results.get(dep, {}).get("status") == "success"
+                for dep in st.get("deps", [])
+            )
+            if not deps_met:
+                # Skip subtask if deps failed
+                failed_deps = [d for d in st.get("deps", [])
+                               if subtask_results.get(d, {}).get("status") != "success"]
+                _log(f"Skipping subtask {st['id']}: unmet deps {failed_deps}")
+                subtask_results[st["id"]] = {
+                    "status": "skipped",
+                    "reason": f"Dependencies not met: {failed_deps}",
+                }
+                episodes.append({
+                    "subtask_id": st["id"],
+                    "task": st["task"][:200],
+                    "status": "skipped",
+                    "reason": f"deps_not_met: {failed_deps}",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                })
+                continue
+
+            # Phase 2: EXECUTE
+            st_timeout = st.get("timeout", timeout_per_subtask)
+            context_parts = [f"This is subtask {st['id']} of {len(subtasks)} in a multi-step task loop."]
+            if work_branch:
+                context_parts.append(f"Continue working on branch: {work_branch}")
+                context_parts.append("Do NOT create a new branch — push to the existing one.")
+            if pr_number:
+                context_parts.append(f"PR #{pr_number} already exists. Push commits to the same branch.")
+
+            # Include context from previous subtasks
+            prev_summaries = []
+            for prev_id, prev_res in subtask_results.items():
+                if prev_res.get("status") == "success":
+                    prev_summaries.append(f"- {prev_id}: {prev_res.get('summary', 'done')[:100]}")
+            if prev_summaries:
+                context_parts.append("\nCompleted subtasks:\n" + "\n".join(prev_summaries))
+
+            context = "\n".join(context_parts)
+
+            _log(f"Executing subtask {st['id']}: {st['task'][:60]}")
+            spawn_result = cmd_spawn_with_retry(name, st["task"], st_timeout, context)
+            total_sessions += spawn_result.get("retry_metadata", {}).get("total_attempts", 1)
+
+            # Phase 3: VERIFY
+            result_data = spawn_result.get("result", {})
+            status = result_data.get("status", "unknown")
+            summary = result_data.get("summary", "")
+
+            # Track work branch from first successful spawn
+            if result_data.get("branch") and not work_branch:
+                work_branch = result_data["branch"]
+
+            # Extract PR number if created
+            pr_url = result_data.get("pr_url", "")
+            if pr_url and not pr_number:
+                import re as _re
+                m = _re.search(r'/pull/(\d+)', pr_url)
+                if m:
+                    pr_number = int(m.group(1))
+                    _log(f"PR created: #{pr_number} ({pr_url})")
+
             subtask_results[st["id"]] = {
-                "status": "skipped",
-                "reason": f"Dependencies not met: {failed_deps}",
+                "status": status,
+                "summary": summary,
+                "task_id": spawn_result.get("task_id"),
+                "elapsed": spawn_result.get("elapsed"),
+                "exit_code": spawn_result.get("exit_code"),
             }
-            episodes.append({
+
+            # Phase 5: REFLECT — store episode
+            episode = {
                 "subtask_id": st["id"],
                 "task": st["task"][:200],
-                "status": "skipped",
-                "reason": f"deps_not_met: {failed_deps}",
+                "status": status,
+                "summary": summary[:300],
+                "task_id": spawn_result.get("task_id"),
+                "elapsed": spawn_result.get("elapsed"),
+                "exit_code": spawn_result.get("exit_code"),
+                "retry_count": spawn_result.get("retry_metadata", {}).get("total_attempts", 1) - 1,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
-            })
-            continue
+            }
+            episodes.append(episode)
 
-        # Phase 2: EXECUTE
-        st_timeout = st.get("timeout", timeout_per_subtask)
-        context_parts = [f"This is subtask {st['id']} of {len(subtasks)} in a multi-step task loop."]
-        if work_branch:
-            context_parts.append(f"Continue working on branch: {work_branch}")
-            context_parts.append("Do NOT create a new branch — push to the existing one.")
-        if pr_number:
-            context_parts.append(f"PR #{pr_number} already exists. Push commits to the same branch.")
+            # Store episode in agent brain
+            try:
+                sys.path.insert(0, str(CLARVIS_WORKSPACE / "scripts"))
+                from lite_brain import LiteBrain
+                brain = LiteBrain(str(agent_dir / "data" / "brain"))
+                brain.store(
+                    f"Task: {st['task'][:150]} | Status: {status} | Summary: {summary[:200]}",
+                    "project-episodes",
+                    importance=0.7 if status == "success" else 0.5,
+                    tags=["task_loop", st["id"]],
+                    source="task_loop",
+                )
+            except Exception as e:
+                _log(f"Failed to store episode in agent brain: {e}")
 
-        # Include context from previous subtasks
-        prev_summaries = []
-        for prev_id, prev_res in subtask_results.items():
-            if prev_res.get("status") == "success":
-                prev_summaries.append(f"- {prev_id}: {prev_res.get('summary', 'done')[:100]}")
-        if prev_summaries:
-            context_parts.append("\nCompleted subtasks:\n" + "\n".join(prev_summaries))
+            if status not in ("success", "partial"):
+                _log(f"Subtask {st['id']} failed: {status}")
+                # Don't continue with dependent subtasks (handled by deps check above)
 
-        context = "\n".join(context_parts)
+            # Randomized inter-subtask delay (prevent API hammering, mimic claw-empire pattern)
+            if st != subtasks[-1]:  # skip delay after last subtask
+                delay = random.uniform(LOOP_INTER_SUBTASK_DELAY_MIN, LOOP_INTER_SUBTASK_DELAY_MAX)
+                _log(f"Inter-subtask delay: {delay:.1f}s")
+                time.sleep(delay)
 
-        _log(f"Executing subtask {st['id']}: {st['task'][:60]}")
-        spawn_result = cmd_spawn_with_retry(name, st["task"], st_timeout, context)
-        total_sessions += spawn_result.get("retry_metadata", {}).get("total_attempts", 1)
+        # Phase 4 (post-loop): CI feedback if PR was created
+        ci_result = None
+        if pr_number and gh_repo:
+            _log(f"Running CI feedback loop for PR #{pr_number}")
+            ci_result = _ci_fix_loop(name, pr_number, gh_repo, spawn_result, task, timeout_per_subtask)
 
-        # Phase 3: VERIFY
-        result_data = spawn_result.get("result", {})
-        status = result_data.get("status", "unknown")
-        summary = result_data.get("summary", "")
+            # Apply trust adjustment based on CI outcome
+            config = _load_config(name)  # reload
+            if config:
+                if ci_result.get("status") == "ci_pass":
+                    _log(f"CI passed after {ci_result.get('total_ci_attempts', 0)} fix attempts")
+                elif ci_result.get("status") == "ci_stuck":
+                    adjust_trust(name, "ci_broke_main", config)
+                    _save_config(name, config)
 
-        # Track work branch from first successful spawn
-        if result_data.get("branch") and not work_branch:
-            work_branch = result_data["branch"]
+        # Compute final cost
+        cost_end = _snapshot_cost()
+        if cost_start is not None and cost_end is not None:
+            total_cost = round(cost_end - cost_start, 6)
 
-        # Extract PR number if created
-        pr_url = result_data.get("pr_url", "")
-        if pr_url and not pr_number:
-            import re as _re
-            m = _re.search(r'/pull/(\d+)', pr_url)
-            if m:
-                pr_number = int(m.group(1))
-                _log(f"PR created: #{pr_number} ({pr_url})")
+        total_elapsed = round(time.time() - loop_start, 1)
 
-        subtask_results[st["id"]] = {
-            "status": status,
-            "summary": summary,
-            "task_id": spawn_result.get("task_id"),
-            "elapsed": spawn_result.get("elapsed"),
-            "exit_code": spawn_result.get("exit_code"),
-        }
+        # Determine overall status
+        completed = [sid for sid, r in subtask_results.items() if r.get("status") == "success"]
+        failed = [sid for sid, r in subtask_results.items() if r.get("status") in ("failed", "unknown")]
+        skipped = [sid for sid, r in subtask_results.items() if r.get("status") == "skipped"]
 
-        # Phase 5: REFLECT — store episode
-        episode = {
-            "subtask_id": st["id"],
-            "task": st["task"][:200],
-            "status": status,
-            "summary": summary[:300],
-            "task_id": spawn_result.get("task_id"),
-            "elapsed": spawn_result.get("elapsed"),
-            "exit_code": spawn_result.get("exit_code"),
-            "retry_count": spawn_result.get("retry_metadata", {}).get("total_attempts", 1) - 1,
+        if len(completed) == len(subtasks):
+            overall = "success"
+        elif completed:
+            overall = "partial"
+        else:
+            overall = "failed"
+
+        # Save loop summary
+        loop_summary = {
+            "task": task[:500],
+            "agent": name,
+            "status": overall,
+            "subtasks_total": len(subtasks),
+            "subtasks_completed": len(completed),
+            "subtasks_failed": len(failed),
+            "subtasks_skipped": len(skipped),
+            "total_sessions": total_sessions,
+            "total_cost_usd": total_cost,
+            "total_elapsed": total_elapsed,
+            "pr_number": pr_number,
+            "ci_result": ci_result.get("status") if ci_result else None,
+            "episodes": episodes,
+            "subtask_results": subtask_results,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
-        episodes.append(episode)
 
-        # Store episode in agent brain
+        # Write loop log
+        loop_file = agent_dir / "logs" / f"loop_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.json"
         try:
-            sys.path.insert(0, str(CLARVIS_WORKSPACE / "scripts"))
-            from lite_brain import LiteBrain
-            brain = LiteBrain(str(agent_dir / "data" / "brain"))
-            brain.store(
-                f"Task: {st['task'][:150]} | Status: {status} | Summary: {summary[:200]}",
-                "project-episodes",
-                importance=0.7 if status == "success" else 0.5,
-                tags=["task_loop", st["id"]],
-                source="task_loop",
-            )
-        except Exception as e:
-            _log(f"Failed to store episode in agent brain: {e}")
+            loop_file.parent.mkdir(parents=True, exist_ok=True)
+            loop_file.write_text(json.dumps(loop_summary, indent=2, default=str))
+        except OSError:
+            pass
 
-        if status not in ("success", "partial"):
-            _log(f"Subtask {st['id']} failed: {status}")
-            # Don't continue with dependent subtasks (handled by deps check above)
+        _log(f"Task loop complete for '{name}': {overall} "
+             f"({len(completed)}/{len(subtasks)} subtasks, {total_sessions} sessions, "
+             f"${total_cost:.4f}, {total_elapsed:.0f}s)")
 
-        # Randomized inter-subtask delay (prevent API hammering, mimic claw-empire pattern)
-        if st != subtasks[-1]:  # skip delay after last subtask
-            delay = random.uniform(LOOP_INTER_SUBTASK_DELAY_MIN, LOOP_INTER_SUBTASK_DELAY_MAX)
-            _log(f"Inter-subtask delay: {delay:.1f}s")
-            time.sleep(delay)
+        _emit("task_completed", agent=name, task_name=task[:120],
+              status=overall, section="project_agent_loop",
+              subtasks_completed=len(completed), subtasks_total=len(subtasks),
+              total_sessions=total_sessions, duration_s=total_elapsed,
+              cost_usd=total_cost, pr_number=pr_number)
 
-    # Phase 4 (post-loop): CI feedback if PR was created
-    ci_result = None
-    if pr_number and gh_repo:
-        _log(f"Running CI feedback loop for PR #{pr_number}")
-        ci_result = _ci_fix_loop(name, pr_number, gh_repo, spawn_result, task, timeout_per_subtask)
-
-        # Apply trust adjustment based on CI outcome
-        config = _load_config(name)  # reload
-        if config:
-            if ci_result.get("status") == "ci_pass":
-                _log(f"CI passed after {ci_result.get('total_ci_attempts', 0)} fix attempts")
-            elif ci_result.get("status") == "ci_stuck":
-                adjust_trust(name, "ci_broke_main", config)
-                _save_config(name, config)
-
-    # Compute final cost
-    cost_end = _snapshot_cost()
-    if cost_start is not None and cost_end is not None:
-        total_cost = round(cost_end - cost_start, 6)
-
-    total_elapsed = round(time.time() - loop_start, 1)
-
-    # Determine overall status
-    completed = [sid for sid, r in subtask_results.items() if r.get("status") == "success"]
-    failed = [sid for sid, r in subtask_results.items() if r.get("status") in ("failed", "unknown")]
-    skipped = [sid for sid, r in subtask_results.items() if r.get("status") == "skipped"]
-
-    if len(completed) == len(subtasks):
-        overall = "success"
-    elif completed:
-        overall = "partial"
-    else:
-        overall = "failed"
-
-    # Save loop summary
-    loop_summary = {
-        "task": task[:500],
-        "agent": name,
-        "status": overall,
-        "subtasks_total": len(subtasks),
-        "subtasks_completed": len(completed),
-        "subtasks_failed": len(failed),
-        "subtasks_skipped": len(skipped),
-        "total_sessions": total_sessions,
-        "total_cost_usd": total_cost,
-        "total_elapsed": total_elapsed,
-        "pr_number": pr_number,
-        "ci_result": ci_result.get("status") if ci_result else None,
-        "episodes": episodes,
-        "subtask_results": subtask_results,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-    }
-
-    # Write loop log
-    loop_file = agent_dir / "logs" / f"loop_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.json"
-    try:
-        loop_file.parent.mkdir(parents=True, exist_ok=True)
-        loop_file.write_text(json.dumps(loop_summary, indent=2, default=str))
-    except OSError:
-        pass
-
-    _log(f"Task loop complete for '{name}': {overall} "
-         f"({len(completed)}/{len(subtasks)} subtasks, {total_sessions} sessions, "
-         f"${total_cost:.4f}, {total_elapsed:.0f}s)")
-
-    _emit("task_completed", agent=name, task_name=task[:120],
-          status=overall, section="project_agent_loop",
-          subtasks_completed=len(completed), subtasks_total=len(subtasks),
-          total_sessions=total_sessions, duration_s=total_elapsed,
-          cost_usd=total_cost, pr_number=pr_number)
-
-    _release_loop_lock(name)
-    return loop_summary
+        return loop_summary
+    finally:
+        _release_loop_lock(name)
 
 
 # =========================================================================

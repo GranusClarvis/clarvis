@@ -250,18 +250,28 @@ function drawQueuePanel(container, x, y, w, h) {
     line.x = x + 6;
     line.y = ty;
 
-    // Clickable inspect
+    // Clickable inspect — fetch full QUEUE.md block
     line.eventMode = 'static';
     line.cursor = 'pointer';
     line.on('pointertap', () => {
-      showModal(`QUEUE [${t.tag}] (${t.status})`, {
-        tag: t.tag,
-        status: t.status,
-        section: t.section,
-        owner_type: t.owner_type || 'unknown',
-        owner_name: t.owner_name || 'unknown',
-        description: t.description,
-      });
+      showModal(`QUEUE [${t.tag}] (${t.status})`, 'Loading\u2026');
+      fetch(`/queue-block/${encodeURIComponent(t.tag)}`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.block) {
+            showModal(`QUEUE [${t.tag}] (${t.status})`, data.block);
+          } else {
+            showModal(`QUEUE [${t.tag}] (${t.status})`, data.error || 'Block not found');
+          }
+        })
+        .catch(() => {
+          showModal(`QUEUE [${t.tag}] (${t.status})`, {
+            tag: t.tag, status: t.status, section: t.section,
+            owner_type: t.owner_type || 'unknown',
+            owner_name: t.owner_name || 'unknown',
+            description: t.description,
+          });
+        });
     });
 
     container.addChild(line);

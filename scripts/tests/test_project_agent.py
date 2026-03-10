@@ -926,10 +926,34 @@ class TestValidateA2AResult:
         assert is_valid is False
         assert any("invalid status" in w for w in warnings)
 
-    def test_empty_summary_warns(self):
+    def test_empty_summary_invalidates(self):
+        """Empty summary must make result invalid — it's a required field."""
         result = {"status": "success", "summary": ""}
-        is_valid, _ = validate_a2a_result(result)
-        assert is_valid is True  # status is valid, but summary warns
+        is_valid, warnings = validate_a2a_result(result)
+        assert is_valid is False
+        assert any("summary must be" in w for w in warnings)
+
+    def test_none_summary_invalidates(self):
+        """None summary must make result invalid."""
+        result = {"status": "success", "summary": None}
+        is_valid, warnings = validate_a2a_result(result)
+        assert is_valid is False
+        assert any("summary must be" in w for w in warnings)
+
+    def test_non_string_summary_invalidates(self):
+        """Non-string summary must make result invalid."""
+        result = {"status": "success", "summary": 123}
+        is_valid, warnings = validate_a2a_result(result)
+        assert is_valid is False
+        assert any("summary must be" in w for w in warnings)
+
+    def test_missing_both_required_fields(self):
+        """Missing both status and summary should invalidate."""
+        result = {"files_changed": ["foo.py"]}
+        is_valid, warnings = validate_a2a_result(result)
+        assert is_valid is False
+        assert any("missing required field: status" in w for w in warnings)
+        assert any("missing required field: summary" in w for w in warnings)
 
     def test_wrong_type_files_changed(self):
         result = {"status": "success", "summary": "Done",
@@ -990,6 +1014,25 @@ class TestNormalizeA2AResult:
             is_valid, _ = validate_a2a_result(result)
             assert is_valid is True
 
+    def test_unknown_status_valid(self):
+        """'unknown' is now a valid status (used as default for missing status)."""
+        result = {"status": "unknown", "summary": "Fallback"}
+        is_valid, _ = validate_a2a_result(result)
+        assert is_valid is True
+
+
+class TestNormalizeDefaultsToUnknown:
+    """Verify normalize defaults missing status to 'unknown', not 'success'."""
+
+    def test_missing_status_defaults_unknown(self):
+        normalized = normalize_a2a_result({"summary": "did stuff"})
+        assert normalized["status"] == "unknown", \
+            f"Missing status should default to 'unknown', got '{normalized['status']}'"
+
+    def test_missing_summary_defaults_empty(self):
+        normalized = normalize_a2a_result({"status": "failed"})
+        assert normalized["summary"] == ""
+
 
 class TestParseAgentOutputA2A:
     def test_output_is_normalized(self):
@@ -1014,6 +1057,29 @@ class TestParseAgentOutputA2A:
         result = _parse_agent_output("")
         assert result["protocol"] == f"a2a/v{A2A_PROTOCOL_VERSION}"
         assert result["status"] == "failed"
+
+    def test_missing_status_repaired_to_unknown(self):
+        """When agent returns JSON without status, parse should fix to 'unknown'."""
+        output = '```json\n{"summary": "Did something"}\n```'
+        result = _parse_agent_output(output)
+        assert result["status"] == "unknown", \
+            f"Missing status should be repaired to 'unknown', got '{result['status']}'"
+        assert result["_a2a_valid"] is False
+
+    def test_missing_summary_repaired_from_output(self):
+        """When agent returns JSON without summary, parse should use output tail."""
+        output = 'Some work done here\n```json\n{"status": "success"}\n```'
+        result = _parse_agent_output(output)
+        assert result["_a2a_valid"] is False
+        assert len(result["summary"]) > 0, "Missing summary should be repaired from output"
+
+    def test_missing_both_repaired(self):
+        """When both required fields missing, both should be repaired."""
+        output = 'output text\n```json\n{"pr_url": "http://example.com"}\n```'
+        result = _parse_agent_output(output)
+        assert result["status"] == "unknown"
+        assert len(result["summary"]) > 0
+        assert result["_a2a_valid"] is False
 
 
 # ── Loop Lock & Backoff Tests ──

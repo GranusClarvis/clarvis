@@ -11,6 +11,7 @@ Usage:
     )
 """
 
+import json
 import math
 import os
 import re
@@ -21,6 +22,8 @@ WORKSPACE = os.environ.get(
     "CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace"
 )
 QUEUE_FILE = os.path.join(WORKSPACE, "memory/evolution/QUEUE.md")
+CAPABILITY_HISTORY = os.path.join(WORKSPACE, "data/capability_history.json")
+PHI_HISTORY = os.path.join(WORKSPACE, "data/phi_history.json")
 
 # Stopwords for TF-IDF
 _STOPWORDS = frozenset(
@@ -301,6 +304,38 @@ def compress_episodes(episodes, max_items=10):
             lines.append(f"  {str(ep)[:120]}")
 
     return "EPISODIC RECALL:\n" + "\n".join(lines)
+
+
+def get_latest_scores():
+    """Read latest capability scores and Phi from history files.
+
+    Returns compact dict for embedding in prompts.
+    """
+    scores = {}
+    if os.path.exists(CAPABILITY_HISTORY):
+        try:
+            with open(CAPABILITY_HISTORY, 'r') as f:
+                history = json.load(f)
+            if history:
+                latest = history[-1]
+                scores["capabilities"] = {
+                    k: round(v, 2) for k, v in latest.get("scores", {}).items()
+                    if isinstance(v, (int, float))
+                }
+                scores["capability_avg"] = round(
+                    sum(scores["capabilities"].values()) / max(1, len(scores["capabilities"])), 2
+                )
+        except Exception:
+            pass
+    if os.path.exists(PHI_HISTORY):
+        try:
+            with open(PHI_HISTORY, 'r') as f:
+                phi_hist = json.load(f)
+            if phi_hist:
+                scores["phi"] = round(phi_hist[-1].get("phi", 0), 3)
+        except Exception:
+            pass
+    return scores
 
 
 def generate_tiered_brief(current_task="", tier="standard", episodic_hints=None, knowledge_hints=None):

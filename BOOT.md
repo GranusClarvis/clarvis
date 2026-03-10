@@ -12,7 +12,7 @@ from clarvis.brain import brain, search, remember, capture
 2. Verify brain is working:
 ```python
 stats = brain.stats()
-# stats contains: collections (10), total_memories (2000+), graph_nodes, graph_edges
+# stats contains: collections (10), total_memories (3600+), graph_nodes, graph_edges
 ```
 
 3. Verify self-awareness:

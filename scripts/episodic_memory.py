@@ -4,7 +4,7 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
-from clarvis.memory.episodic_memory import main
+from clarvis.memory.episodic_memory import main, episodic, EpisodicMemory
 
 if __name__ == "__main__":
     main()

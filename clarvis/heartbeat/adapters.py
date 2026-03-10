@@ -101,7 +101,7 @@ def _procedural_injection_track(context):
 
 def _periodic_synthesis(context):
     """Run episodic memory synthesis every 10th episode."""
-    from episodic_memory import EpisodicMemory
+    from clarvis.memory.episodic_memory import EpisodicMemory
 
     em = EpisodicMemory()
     ep_count = len(em.episodes)

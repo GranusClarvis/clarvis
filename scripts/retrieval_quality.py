@@ -66,6 +66,17 @@ class RetrievalQualityTracker:
             if r.get("collection"):
                 collections_hit.add(r["collection"])
 
+        # CRAG-style retrieval verdict (best-effort, non-blocking)
+        retrieval_verdict = None
+        retrieval_max_score = None
+        try:
+            from clarvis.brain.retrieval_eval import classify_batch
+            verdict, max_score, _ = classify_batch(results, query)
+            retrieval_verdict = verdict
+            retrieval_max_score = round(max_score, 4)
+        except Exception:
+            pass  # Non-critical — don't block event logging
+
         event = {
             "id": event_id,
             "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -76,6 +87,8 @@ class RetrievalQualityTracker:
             "min_distance": round(min(distances), 4) if distances else None,
             "max_distance": round(max(distances), 4) if distances else None,
             "collections_hit": sorted(collections_hit),
+            "retrieval_verdict": retrieval_verdict,
+            "retrieval_max_score": retrieval_max_score,
             "useful": None,  # Filled by rate()
             "reason": None,
         }

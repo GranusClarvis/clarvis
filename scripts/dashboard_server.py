@@ -2,9 +2,10 @@
 """Clarvis Visual Dashboard — SSE event hub + state API.
 
 Starlette app serving:
-  GET /       — static files (PixiJS dashboard)
-  GET /state  — full JSON snapshot of system state
-  GET /sse    — Server-Sent Events stream (live updates)
+  GET /                   — static files (PixiJS dashboard)
+  GET /state              — full JSON snapshot of system state
+  GET /queue-block/{tag}  — full QUEUE.md markdown block for a task tag
+  GET /sse                — Server-Sent Events stream (live updates)
 
 Data sources:
   - memory/evolution/QUEUE.md (task queue)
@@ -90,7 +91,7 @@ def parse_queue(path: Path) -> list[dict]:
             current_section = line[3:].strip()
             continue
 
-        # Match task lines: - [ ] [TAG] description  or  - [x] or - [~]
+        # Match top-level task lines only: - [ ] [TAG] description
         m = re.match(r'^-\s+\[([ x~])\]\s+\[([A-Z0-9_]+)\]\s*(.*)', line)
         if m:
             check, tag, desc = m.groups()
@@ -118,12 +119,55 @@ def parse_queue(path: Path) -> list[dict]:
             tasks.append({
                 "tag": tag,
                 "status": status,
-                "description": desc,
+                "description": desc[:120],
                 "section": current_section,
                 "owner_type": owner_type,
                 "owner_name": owner_name,
             })
     return tasks
+
+
+def extract_queue_block(path: Path, tag: str) -> str | None:
+    """Extract the full markdown block for a task identified by [TAG].
+
+    Returns the task line plus all continuation lines (indented text,
+    sub-bullets, blank lines) until the next task or section header.
+    """
+    if not path.exists():
+        return None
+    try:
+        lines = path.read_text().splitlines()
+    except OSError:
+        return None
+
+    # Regex to find a task line with the given tag (possibly indented)
+    tag_pattern = re.compile(
+        r'^\s*-\s+\[[ x~]\]\s+\[' + re.escape(tag) + r'\]\s'
+    )
+    # Regex to detect the *next* task line (any tag) or section header
+    next_boundary = re.compile(r'^\s*-\s+\[[ x~]\]\s+\[[A-Z0-9_]+\]|^#{1,4}\s')
+
+    start = None
+    for i, line in enumerate(lines):
+        if tag_pattern.match(line):
+            start = i
+            break
+    if start is None:
+        return None
+
+    # Collect lines from start until the next task/header boundary
+    block = [lines[start]]
+    for j in range(start + 1, len(lines)):
+        line = lines[j]
+        if next_boundary.match(line):
+            break
+        block.append(line)
+
+    # Strip trailing blank lines
+    while block and not block[-1].strip():
+        block.pop()
+
+    return "\n".join(block)
 
 
 def read_locks() -> list[dict]:
@@ -392,6 +436,21 @@ async def sse_endpoint(request):
     )
 
 
+async def queue_block_endpoint(request):
+    """GET /queue-block/{tag} — full QUEUE.md block for a task tag."""
+    tag = request.path_params.get("tag", "").upper()
+    if not tag or not re.match(r'^[A-Z0-9_]+$', tag):
+        return JSONResponse({"error": "Invalid tag"}, status_code=400)
+
+    block = await asyncio.get_event_loop().run_in_executor(
+        None, extract_queue_block, QUEUE_FILE, tag
+    )
+    if block is None:
+        return JSONResponse({"error": f"Tag [{tag}] not found"}, status_code=404)
+
+    return JSONResponse({"tag": tag, "block": block})
+
+
 async def health_endpoint(request):
     """GET /health — simple health check."""
     return JSONResponse({"status": "ok", "ts": datetime.now(timezone.utc).isoformat()})
@@ -406,6 +465,7 @@ async def on_startup():
 
 routes = [
     Route("/state", state_endpoint),
+    Route("/queue-block/{tag}", queue_block_endpoint),
     Route("/sse", sse_endpoint),
     Route("/health", health_endpoint),
     Mount("/", app=StaticFiles(directory=str(STATIC_DIR), html=True)),

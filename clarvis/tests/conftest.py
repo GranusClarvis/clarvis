@@ -3,9 +3,9 @@
 import os
 import tempfile
 import pytest
-import chromadb
 
 from clarvis.brain.constants import ALL_COLLECTIONS
+from clarvis.brain.factory import get_chroma_client, reset_singletons
 
 
 @pytest.fixture
@@ -13,6 +13,7 @@ def tmp_brain():
     """Create an isolated ClarvisBrain with a temp ChromaDB directory.
 
     Avoids touching production data. Tears down after test.
+    Uses factory singleton for ChromaDB client consistency.
     """
     from clarvis.brain import ClarvisBrain
 
@@ -24,7 +25,7 @@ def tmp_brain():
         brain.data_dir = tmpdir
         brain.graph_file = graph_file
         brain.embedding_function = None
-        brain.client = chromadb.PersistentClient(path=tmpdir)
+        brain.client = get_chroma_client(tmpdir)
         brain.collections = {}
         for name in ALL_COLLECTIONS:
             brain.collections[name] = brain.client.get_or_create_collection(name)
@@ -46,3 +47,4 @@ def tmp_brain():
         brain._recall_observers = []
         brain._optimize_hooks = []
         yield brain
+        reset_singletons()

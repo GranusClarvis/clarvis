@@ -125,3 +125,19 @@ def test_brain_hook_idempotent(tmp_brain):
 
     assert result2 == {"status": "already_registered"}
     assert tmp_brain._hooks_registered is True
+
+
+def test_periodic_synthesis_import():
+    """Smoke test: _periodic_synthesis hook can import EpisodicMemory.
+
+    Regression test for import mismatch that caused failures in postflight
+    logs (2026-03-04 through 2026-03-07). The fix changed the import from
+    'from episodic_memory import EpisodicMemory' to
+    'from clarvis.memory.episodic_memory import EpisodicMemory'.
+    """
+    from clarvis.heartbeat.adapters import _periodic_synthesis
+
+    result = _periodic_synthesis({})
+    # Should return a dict (either skip or synthesis result), not raise
+    assert isinstance(result, dict)
+    assert "episode_count" in result or "goals_count" in result

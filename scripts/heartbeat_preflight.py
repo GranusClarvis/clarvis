@@ -243,6 +243,9 @@ def run_preflight(dry_run=False):
         "prediction_confidence": 0.7,
         "episodic_hints": "",
         "context_brief": "",
+        "confidence_tier": "HIGH",
+        "confidence_action": "execute",
+        "confidence_for_tier": 0.7,
         "route_tier": "complex",
         "route_executor": "claude",
         "route_score": 0.5,
@@ -292,12 +295,14 @@ def run_preflight(dry_run=False):
 
     result["timings"]["attention_tick"] = round(time.monotonic() - t1, 3)
 
-    # === 2. TASK SELECTION ===
+    # === 2. TASK SELECTION (with fallback-on-defer loop) ===
     t2 = time.monotonic()
     next_task = None
     task_section = "P1"
     best_salience = 0.0
 
+    # Build ranked candidate list
+    candidates = []
     if parse_tasks and score_tasks:
         try:
             tasks = parse_tasks()
@@ -309,33 +314,169 @@ def run_preflight(dry_run=False):
 
             # Score all tasks using attention salience + codelet bias (sorted by salience)
             scored = score_tasks(tasks, codelet_result=codelet_result)
-
-            best_task = scored[0]
-            best_salience = best_task.get("salience", 0.0)
-            next_task = best_task.get("text", "")
-            task_section = best_task.get("section", "P1")
-            log(f"Selected task (salience={best_salience:.3f}): {next_task[:80]}...")
+            candidates = scored
         except Exception as e:
             log(f"Task selector failed: {e}")
 
-    # Fallback: grep first unchecked task
-    if not next_task:
+    # Fallback: grep unchecked tasks (collect multiple for fallback rotation)
+    if not candidates:
         try:
             import re
             with open(QUEUE_FILE) as f:
                 for line in f:
                     m = re.match(r'^- \[ \] (.+)$', line.strip())
                     if m:
-                        next_task = m.group(1)
-                        log(f"Fallback task: {next_task[:80]}...")
-                        break
+                        candidates.append({"text": m.group(1), "section": "P1", "salience": 0.0})
+                        if len(candidates) >= 10:
+                            break
+            if candidates:
+                log(f"Fallback: {len(candidates)} unchecked tasks found")
         except Exception as e:
             log(f"Fallback task search failed: {e}")
 
-    if not next_task:
+    if not candidates:
         result["status"] = "no_tasks"
         result["timings"]["total"] = round(time.monotonic() - t0, 3)
         return result
+
+    # --- DEFER-FALLBACK LOOP: Try candidates until one passes all gates ---
+    MAX_CANDIDATES = 20  # Wider scan to avoid burning a slot on one oversized cluster
+
+    def _evaluate_candidates(candidate_list, deferred_tasks, pass_name="primary"):
+        selected = None
+        selected_section = None
+        selected_salience = 0.0
+        selected_tag = None
+        autosplit_tags = []
+
+        for candidate in candidate_list[:MAX_CANDIDATES]:
+            cand_task = candidate.get("text", "")
+            cand_section = candidate.get("section", "P1")
+            cand_salience = candidate.get("salience", 0.0)
+
+            if not cand_task:
+                continue
+
+            # Gate 1: Cognitive load check (section-dependent)
+            if should_defer_task:
+                try:
+                    defer, load_info = should_defer_task(cand_section)
+                    if defer:
+                        deferred_tasks.append({"task": cand_task[:80], "reason": f"cognitive_load: {load_info}"})
+                        log(f"Skipping (cognitive load, {cand_section}): {cand_task[:60]}...")
+                        continue
+                except Exception as e:
+                    log(f"Cognitive load check failed for candidate: {e}")
+
+            # Gate 2: Task sizing — defer oversized tasks, but try auto-split first
+            if estimate_task_complexity:
+                try:
+                    sizing = estimate_task_complexity(cand_task)
+                    if sizing["recommendation"] == "defer_to_sprint":
+                        if log_sizing:
+                            log_sizing(cand_task, sizing)
+                        # Auto-split oversized tasks (non-blocking — inject meaningful subtasks + mark parent)
+                        try:
+                            import re as _re
+                            m = _re.match(r"\[([^\]]+)\]", cand_task.strip())
+                            parent_tag = m.group(1).strip() if m else ""
+                            if parent_tag:
+                                from queue_writer import ensure_subtasks_for_tag, mark_task_in_progress
+                                subtasks = [
+                                    f"[{parent_tag}_1] Analyze: read relevant source files, identify change boundary",
+                                    f"[{parent_tag}_2] Implement: core logic change in one focused increment",
+                                    f"[{parent_tag}_3] Test: add/update test(s) covering the new behavior",
+                                    f"[{parent_tag}_4] Verify: run existing tests, confirm no regressions",
+                                ]
+                                inserted = ensure_subtasks_for_tag(
+                                    parent_tag,
+                                    subtasks=subtasks,
+                                    source="auto_split",
+                                )
+                                if inserted:
+                                    autosplit_tags.append(parent_tag)
+                                    log(f"Auto-split: inserted subtasks for [{parent_tag}] into QUEUE.md")
+                                    try:
+                                        mark_task_in_progress(parent_tag)
+                                        log(f"Auto-split: marked [{parent_tag}] as in-progress ([~])")
+                                    except Exception as me:
+                                        log(f"Auto-split: parent mark failed (non-fatal): {me}")
+                        except Exception as e:
+                            log(f"Auto-split failed (non-fatal): {e}")
+
+                        deferred_tasks.append({
+                            "task": cand_task[:80],
+                            "reason": f"oversized (score={sizing['score']:.2f}, signals={sizing['signals']})",
+                        })
+                        log(f"Skipping (oversized, score={sizing['score']:.2f}): {cand_task[:60]}...")
+                        continue
+                except Exception as e:
+                    log(f"Task sizing failed for candidate: {e}")
+
+            # Gate 3: Verification (hard failures only block)
+            try:
+                verification = _verify_task_executable(cand_task)
+                if verification.get("hard_fail"):
+                    deferred_tasks.append({"task": cand_task[:80], "reason": f"verification: {verification['reason']}"})
+                    log(f"Skipping (verification hard fail): {cand_task[:60]}...")
+                    continue
+            except Exception:
+                pass
+
+            selected = cand_task
+            selected_section = cand_section
+            selected_salience = cand_salience
+            try:
+                import re as _re
+                m = _re.match(r"\[([^\]]+)\]", cand_task.strip())
+                selected_tag = m.group(1).strip() if m else None
+            except Exception:
+                selected_tag = None
+            break
+
+        return selected, selected_section, selected_salience, selected_tag, autosplit_tags
+
+    deferred_tasks = []
+    next_task, task_section, best_salience, selected_tag, autosplit_tags = _evaluate_candidates(candidates, deferred_tasks, "primary")
+
+    # Rescue pass: if the first pass only saw oversized parents, rescan the queue so the
+    # freshly inserted subtasks can compete in the same heartbeat instead of wasting the slot.
+    if not next_task and autosplit_tags:
+        try:
+            reparsed = parse_tasks(QUEUE_FILE) if parse_tasks else []
+            rescored = score_tasks(reparsed) if (score_tasks and reparsed) else []
+            deferred_prefixes = {d["task"] for d in deferred_tasks}
+            rescue_candidates = [
+                c for c in rescored
+                if c.get("text") and c.get("text")[:80] not in deferred_prefixes
+            ]
+            if rescue_candidates:
+                log(f"Rescue pass: rescanning queue after auto-split ({len(autosplit_tags)} parent(s))")
+                next_task, task_section, best_salience, selected_tag, more_autosplit = _evaluate_candidates(
+                    rescue_candidates, deferred_tasks, "rescue"
+                )
+                autosplit_tags.extend(more_autosplit)
+        except Exception as e:
+            log(f"Rescue pass failed (non-fatal): {e}")
+
+    if not next_task:
+        log(f"All {len(deferred_tasks)} candidates deferred — no executable task this heartbeat")
+        result["should_defer"] = True
+        result["defer_reason"] = "all_candidates_deferred"
+        result["deferred_tasks"] = deferred_tasks
+        try:
+            attention.submit(
+                f"ALL TASKS DEFERRED ({len(deferred_tasks)} candidates checked)",
+                source="heartbeat", importance=0.7)
+        except Exception:
+            pass
+        result["timings"]["task_selection"] = round(time.monotonic() - t2, 3)
+        result["timings"]["total"] = round(time.monotonic() - t0, 3)
+        return result
+
+    if deferred_tasks:
+        log(f"Skipped {len(deferred_tasks)} deferred tasks, executing fallback: {next_task[:60]}...")
+        result["deferred_tasks"] = deferred_tasks
 
     result["task"] = next_task
     # Canonical tag for deterministic QUEUE completion marking
@@ -361,29 +502,18 @@ def run_preflight(dry_run=False):
     except Exception:
         pass
 
-    # === 4. COGNITIVE LOAD CHECK ===
+    # === 4. COGNITIVE LOAD + TASK SIZING (already checked in defer-fallback loop above) ===
+    # Re-run sizing for the selected task to populate result fields
     t4 = time.monotonic()
     if should_defer_task:
         try:
-            defer, load_info = should_defer_task(task_section)
-            result["should_defer"] = defer
+            _defer, load_info = should_defer_task(task_section)
             result["cognitive_load"] = load_info if isinstance(load_info, dict) else {"raw": str(load_info)}
-            if defer:
-                log(f"Cognitive load: DEFER — {load_info}")
-                try:
-                    attention.submit(f"DEFERRED due to cognitive load: {next_task[:80]}",
-                                   source="heartbeat", importance=0.6)
-                except Exception:
-                    pass
-                result["timings"]["total"] = round(time.monotonic() - t0, 3)
-                return result
-            else:
-                log(f"Cognitive load: OK — {load_info}")
+            log(f"Cognitive load: OK — {load_info}")
         except Exception as e:
             log(f"Cognitive load check failed: {e}")
     result["timings"]["cognitive_load"] = round(time.monotonic() - t4, 3)
 
-    # === 4.5 TASK SIZING: Estimate complexity, defer oversized tasks to sprint ===
     t45 = time.monotonic()
     if estimate_task_complexity:
         try:
@@ -391,64 +521,19 @@ def run_preflight(dry_run=False):
             result["task_sizing"] = sizing
             log(f"Task sizing: {sizing['complexity']} (score={sizing['score']:.2f}, "
                 f"signals={sizing['signals']}, rec={sizing['recommendation']})")
-
             if log_sizing:
                 log_sizing(next_task, sizing)
-
-            if sizing["recommendation"] == "defer_to_sprint":
-                # Self-heal: if a task is oversized and keeps getting deferred, auto-split
-                # it into subtasks (only once) so autonomous cycles can still make progress.
-                try:
-                    import re as _re
-                    m = _re.match(r"\[([^\]]+)\]", next_task.strip())
-                    parent_tag = m.group(1).strip() if m else ""
-                    if parent_tag:
-                        from queue_writer import ensure_subtasks_for_tag
-                        inserted = ensure_subtasks_for_tag(
-                            parent_tag,
-                            subtasks=[
-                                f"[{parent_tag}_1] Scope: locate the exact file/function injection point(s)",
-                                f"[{parent_tag}_2] Implement the core change in the smallest viable increment",
-                                f"[{parent_tag}_3] Add a small deterministic test fixture to lock behavior",
-                                f"[{parent_tag}_4] Run a smoke benchmark and confirm no precision@3 regression",
-                            ],
-                            source="auto_split",
-                        )
-                        if inserted:
-                            log(f"Auto-split: inserted subtasks for [{parent_tag}] into QUEUE.md")
-                except Exception as e:
-                    log(f"Auto-split failed (non-fatal): {e}")
-
-                log(f"Task OVERSIZED — deferring to implementation sprint slot")
-                result["should_defer"] = True
-                result["defer_reason"] = "oversized_task"
-                try:
-                    attention.submit(
-                        f"OVERSIZED TASK deferred to sprint: {next_task[:80]}",
-                        source="heartbeat", importance=0.7)
-                except Exception:
-                    pass
-                result["timings"]["task_sizing"] = round(time.monotonic() - t45, 3)
-                result["timings"]["total"] = round(time.monotonic() - t0, 3)
-                return result
         except Exception as e:
             log(f"Task sizing failed (non-fatal): {e}")
     result["timings"]["task_sizing"] = round(time.monotonic() - t45, 3)
 
-    # === 4.7 ACTION VERIFY GATE: Pre-execution task validation ===
+    # === 4.7 ACTION VERIFY GATE: Re-run for result population ===
     t47 = time.monotonic()
     try:
         verification = _verify_task_executable(next_task)
         result["verification"] = verification
         if not verification["passed"]:
-            log(f"Verification FAILED: {verification['reason']}")
-            # Don't block — just log. Only block on hard failures (missing files).
-            if verification.get("hard_fail"):
-                result["should_defer"] = True
-                result["defer_reason"] = f"verification: {verification['reason']}"
-                result["timings"]["verification"] = round(time.monotonic() - t47, 3)
-                result["timings"]["total"] = round(time.monotonic() - t0, 3)
-                return result
+            log(f"Verification note: {verification['reason']}")
         else:
             log(f"Verification OK: {verification['reason']}")
     except Exception as e:
@@ -595,6 +680,46 @@ def run_preflight(dry_run=False):
             log(f"World model prediction failed: {e}")
     result["timings"]["world_model"] = round(time.monotonic() - t75, 3)
 
+    # === 7.6 CONFIDENCE TIERED ACTIONS: Gate execution by confidence level ===
+    # HIGH (>0.8) → execute autonomously
+    # MEDIUM (0.5-0.8) → execute with extra validation gate injected into prompt
+    # LOW (<0.5) → skip (defer) — flag for next heartbeat
+    confidence_for_tier = dyn_conf
+    # Factor in world model P(success) if available — average with dynamic confidence
+    wm_p = result.get("wm_p_success")
+    if wm_p is not None:
+        confidence_for_tier = (dyn_conf + wm_p) / 2
+
+    if confidence_for_tier > 0.8:
+        confidence_tier = "HIGH"
+        confidence_action = "execute"
+    elif confidence_for_tier >= 0.5:
+        confidence_tier = "MEDIUM"
+        confidence_action = "execute_with_validation"
+    else:
+        confidence_tier = "LOW"
+        confidence_action = "skip"
+
+    result["confidence_tier"] = confidence_tier
+    result["confidence_action"] = confidence_action
+    result["confidence_for_tier"] = round(confidence_for_tier, 3)
+    log(f"Confidence tier: {confidence_tier} (combined={confidence_for_tier:.2f}, "
+        f"dyn={dyn_conf:.2f}, wm_p={wm_p if wm_p is not None else 'N/A'})")
+
+    # LOW confidence → defer task entirely
+    if confidence_tier == "LOW":
+        result["should_defer"] = True
+        result["defer_reason"] = f"low_confidence ({confidence_for_tier:.2f})"
+        log(f"LOW confidence — deferring task: {next_task[:60]}")
+        try:
+            attention.submit(
+                f"TASK DEFERRED (LOW confidence={confidence_for_tier:.2f}): {next_task[:60]}",
+                source="heartbeat", importance=0.6)
+        except Exception:
+            pass
+        result["timings"]["total"] = round(time.monotonic() - t0, 3)
+        return result
+
     # === 7.7 GWT BROADCAST: Run LIDA cognitive cycle ===
     t77 = time.monotonic()
     gwt_broadcast_text = ""
@@ -688,6 +813,33 @@ def run_preflight(dry_run=False):
     result["brain_context"] = brain_context
     result["brain_working_memory"] = brain_working_memory
     result["timings"]["knowledge"] = round(time.monotonic() - t85, 3)
+
+    # === 8.6 RETRIEVAL EVAL: CRAG-style retrieval quality scoring ===
+    retrieval_verdict = "SKIPPED"
+    try:
+        from clarvis.brain.retrieval_eval import evaluate_retrieval
+        # Evaluate the brain recall results if we have raw results
+        eval_results = brain_ctx.get("raw_results", []) if brain_preflight_context and brain_ctx else []
+        if not eval_results:
+            # Try legacy path — grab learnings if available
+            eval_results = locals().get("learnings", [])
+        if eval_results and isinstance(eval_results, list) and len(eval_results) > 0:
+            eval_out = evaluate_retrieval(eval_results, next_task)
+            retrieval_verdict = eval_out["verdict"]
+            result["retrieval_verdict"] = retrieval_verdict
+            result["retrieval_max_score"] = eval_out["max_score"]
+            result["retrieval_n_above"] = eval_out["n_above_threshold"]
+            log(f"Retrieval eval: {retrieval_verdict} "
+                f"(max={eval_out['max_score']}, above={eval_out['n_above_threshold']}/{eval_out['n_results']})")
+            # If INCORRECT, flag it — no context is better than bad context
+            if retrieval_verdict == "INCORRECT":
+                log("Retrieval INCORRECT — knowledge_hints will be omitted from brief")
+                result["knowledge_hints"] = ""
+        else:
+            result["retrieval_verdict"] = "NO_RESULTS"
+    except Exception as e:
+        log(f"Retrieval eval failed (non-fatal): {e}")
+        result["retrieval_verdict"] = "ERROR"
 
     # === 8.7 BRAIN INTROSPECTION: Deep self-awareness for decision-making ===
     t87 = time.monotonic()
@@ -944,6 +1096,18 @@ def run_preflight(dry_run=False):
         except Exception as e:
             log(f"Automation insights failed: {e}")
     result["timings"]["automation_insights"] = round(time.monotonic() - t105, 3)
+
+    # === 10.52 CONFIDENCE GATE: Extra validation for MEDIUM confidence tasks ===
+    if result.get("confidence_tier") == "MEDIUM":
+        conf_val = result.get("confidence_for_tier", 0)
+        context_brief += (
+            f"\nCONFIDENCE GATE (MEDIUM — extra validation required, confidence={conf_val:.0%}):\n"
+            "Before committing changes, verify:\n"
+            "1. Run existing tests to confirm no regressions\n"
+            "2. If creating new code, add at least one smoke test\n"
+            "3. Double-check file paths and imports before writing\n"
+            "4. Prefer smaller, safer changes over ambitious rewrites\n"
+        )
 
     # === 10.55 PROMPT OPTIMIZATION: Select best variant combo (APE/SPO) ===
     t1055 = time.monotonic()

@@ -26,6 +26,11 @@ if ! ss -tlnp 2>/dev/null | grep -q ":18789 "; then
     ALERT=1
 fi
 
+# Check dashboard (non-critical — log only, no auto-restart)
+if ! ss -tlnp 2>/dev/null | grep -q ":18799 "; then
+    echo "[$DATE] [INFO] Dashboard port 18799 not listening (service may be stopped)" >> $LOG_DIR/alerts.log
+fi
+
 # === SECURITY CHECKS ===
 # Check for failed SSH attempts
 FAILED_SSH=$(grep "Failed password" /var/log/auth.log 2>/dev/null | tail -5 | wc -l)
@@ -69,6 +74,21 @@ fi
 
 if [ $SUSPICIOUS -gt 0 ]; then
     echo "[$DATE] [WARNING] Suspicious processes detected" >> $LOG_DIR/alerts.log
+fi
+
+# === BRAIN HYGIENE CHECK (once per hour, not every 15min) ===
+BRAIN_CACHE="/tmp/clarvis_brain_check_cache"
+BRAIN_STALE=true
+if [ -f "$BRAIN_CACHE" ]; then
+    BRAIN_AGE=$(( $(date +%s) - $(stat -c%Y "$BRAIN_CACHE" 2>/dev/null || echo 0) ))
+    [ "$BRAIN_AGE" -lt 3600 ] && BRAIN_STALE=false
+fi
+if [ "$BRAIN_STALE" = true ]; then
+    python3 /home/agent/.openclaw/workspace/scripts/brain_hygiene.py check >> $LOG_DIR/health.log 2>&1 || {
+        echo "[$DATE] [WARNING] Brain hygiene check failed or detected regression" >> $LOG_DIR/alerts.log
+        ALERT=1
+    }
+    touch "$BRAIN_CACHE"
 fi
 
 # Keep last 1000 lines of health log

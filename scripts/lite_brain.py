@@ -7,12 +7,13 @@ ChromaDB + ONNX stack but with fewer collections and no cross-agent leakage.
 Each project agent gets its own data directory at:
   /home/agent/agents/<name>/data/brain/
 
-Collections (5 vs Clarvis's 10):
+Collections (6 vs Clarvis's 10):
   project-learnings   — what the agent learned about this repo
   project-procedures  — how-to for this repo (build, test, deploy)
   project-context     — current state, recent work
   project-episodes    — task outcomes with timestamps
   project-goals       — project-specific objectives
+  project-sector      — domain/product playbook constraints (Layer E)
 
 Usage (from a project agent's scripts/):
     from lite_brain import LiteBrain
@@ -43,6 +44,7 @@ COLLECTIONS = [
     "project-context",
     "project-episodes",
     "project-goals",
+    "project-sector",
 ]
 
 DEFAULT_COLLECTION = "project-learnings"
@@ -151,6 +153,31 @@ class LiteBrain:
     def search(self, query: str, n_results: int = 10) -> list:
         """Search all collections."""
         return self.recall(query, n_results=n_results)
+
+    def sector_recall(self, query: str, n_results: int = 5) -> list:
+        """Retrieve sector/domain playbook constraints relevant to query.
+
+        Searches the project-sector collection for domain-specific knowledge
+        (governance rules, product constraints, safety invariants, etc.).
+        Returns list of dicts with document, relevance, metadata.
+        """
+        return self.recall(query, n_results=n_results, collection="project-sector")
+
+    def store_sector(self, text: str, constraint_type: str = "domain",
+                     importance: float = 0.7, source: str = "sector_playbook") -> str:
+        """Store a sector/domain constraint in the project-sector collection.
+
+        Args:
+            text: The constraint or domain knowledge text.
+            constraint_type: One of: domain, governance, safety, product, invariant.
+            importance: Priority weight (default 0.7 for sector constraints).
+            source: Origin identifier.
+
+        Returns: The stored document ID.
+        """
+        tags = ["sector", f"type:{constraint_type}"]
+        return self.store(text, "project-sector", importance=importance,
+                          tags=tags, source=source)
 
     def stats(self) -> dict:
         """Get brain statistics."""
@@ -419,10 +446,16 @@ class LiteBrain:
         # 1. Vector recall from brain
         memories = self.recall(query, n_results=n_results)
 
+        # 1b. Sector constraints (always retrieved, independent of indexes)
+        sector_constraints = self.sector_recall(query, n_results=3)
+        sector_texts = [s["document"] for s in sector_constraints
+                        if s.get("relevance", 0) > 0.15]
+
         result = {
             "memories": memories,
             "related_files": [],
             "related_tests": [],
+            "sector_constraints": sector_texts,
         }
 
         if not indexes:

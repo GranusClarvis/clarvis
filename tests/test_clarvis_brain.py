@@ -82,9 +82,13 @@ class TestRouteQuery:
 
 @pytest.fixture
 def brain_instance(tmp_path):
-    """Create an isolated ClarvisBrain with temp directories."""
+    """Create an isolated ClarvisBrain with temp directories.
+
+    Uses factory singleton for ChromaDB client consistency.
+    """
     import clarvis.brain as brain_mod
     import clarvis.brain.constants as const_mod
+    from clarvis.brain.factory import get_chroma_client, reset_singletons
 
     # Save originals
     orig = {
@@ -111,8 +115,7 @@ def brain_instance(tmp_path):
     b.graph_file = test_graph
     b.embedding_function = None
 
-    import chromadb
-    b.client = chromadb.PersistentClient(path=test_data)
+    b.client = get_chroma_client(test_data)
     b._init_collections()
     b._load_graph()
 
@@ -144,6 +147,7 @@ def brain_instance(tmp_path):
     brain_mod.GRAPH_FILE = orig["mod_GRAPH_FILE"]
     const_mod.DATA_DIR = orig["const_DATA_DIR"]
     const_mod.GRAPH_FILE = orig["const_GRAPH_FILE"]
+    reset_singletons()
 
 
 class TestBrainStore:
@@ -695,7 +699,6 @@ class TestGraphCorruptionRecovery:
         """Corrupt graph file should be renamed .broken and graph reset."""
         import clarvis.brain as brain_mod
         import clarvis.brain.constants as const_mod
-        import chromadb
 
         orig = {
             "mod_DATA_DIR": brain_mod.DATA_DIR,

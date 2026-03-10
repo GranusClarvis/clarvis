@@ -43,6 +43,7 @@ _KNOWN_JOBS = [
     "graph_checkpoint",
     "graph_compaction",
     "chromadb_vacuum",
+    "monthly_reflection",
 ]
 
 

@@ -11,7 +11,7 @@ import pytest
 
 sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
 
-from pr_factory_rules import build_pr_rules_section, PR_CLASSES
+from clarvis.orch.pr_rules import build_pr_rules_section, PR_CLASSES
 from project_agent import (
     build_spawn_prompt,
     validate_a2a_result,

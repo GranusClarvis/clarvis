@@ -1217,7 +1217,7 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
 
         # Strategy A: tag-based match (robust against description drift)
         if tag:
-            tag_re = re.compile(rf"^\- \[ \] \[{re.escape(tag)}\]\b")
+            tag_re = re.compile(rf"^\- \[ \] \[{re.escape(tag)}\](?=\s|$)")
             for i, line in enumerate(lines):
                 if tag_re.search(line):
                     lines[i] = line.replace("- [ ] ", "- [x] ", 1).rstrip() + f" ({annotation})\n"

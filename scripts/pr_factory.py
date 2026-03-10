@@ -16,7 +16,6 @@ import json
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 CLARVIS_WORKSPACE = Path("/home/agent/.openclaw/workspace")
 
@@ -82,6 +81,7 @@ def build_execution_brief(name: str, task: str, agent_dir: Path) -> dict:
         "artifact_excerpts": {},
         "relevant_facts": [],
         "relevant_episodes": [],
+        "sector_constraints": [],
         "required_validations": [],
         "verify_loop": {
             "max_refinements": 2,
@@ -101,7 +101,7 @@ def build_execution_brief(name: str, task: str, agent_dir: Path) -> dict:
     # Load artifacts (once, used for excerpts + fact enrichment)
     artifacts = {}
     try:
-        from pr_factory_intake import load_all_artifacts
+        from clarvis.orch.pr_intake import load_all_artifacts
         artifacts = load_all_artifacts(agent_dir) or {}
     except ImportError:
         pass
@@ -126,7 +126,7 @@ def build_execution_brief(name: str, task: str, agent_dir: Path) -> dict:
     # Load indexes for relevant files + typed edges
     indexes = {}
     try:
-        from pr_factory_indexes import load_all_indexes
+        from clarvis.orch.pr_indexes import load_all_indexes
         indexes = load_all_indexes(agent_dir) or {}
     except ImportError:
         pass
@@ -159,25 +159,50 @@ def build_execution_brief(name: str, task: str, agent_dir: Path) -> dict:
                     file_set.append(t)
             brief["relevant_files"] = file_set[:12]
 
+            # Dynamic relevance threshold: lower when brain is sparse
+            total_mem = lb.stats().get("total_memories", 0)
+            fact_threshold = 0.10 if total_mem < 50 else 0.20 if total_mem < 200 else 0.25
+
             # Facts from vector recall
             facts = lb.recall(task, n_results=5, collection="project-learnings")
             brief["relevant_facts"] = [
-                f["document"] for f in facts if f.get("relevance", 0) > 0.25
+                f["document"] for f in facts if f.get("relevance", 0) > fact_threshold
             ][:5]
 
-            # Episodes from vector recall
-            episodes = lb.recall(task, n_results=3, collection="project-episodes")
-            brief["relevant_episodes"] = [
-                e["document"] for e in episodes if e.get("relevance", 0) > 0.25
+            # Episodes from vector recall (lower threshold + fallback to recent)
+            episodes = lb.recall(task, n_results=5, collection="project-episodes")
+            relevant_eps = [
+                e["document"] for e in episodes if e.get("relevance", 0) > fact_threshold
             ][:3]
+            brief["relevant_episodes"] = relevant_eps
+
+            # Sector constraints from hybrid recall or direct sector recall
+            sector = hybrid.get("sector_constraints", [])
+            if not sector:
+                sector_results = lb.sector_recall(task, n_results=3)
+                sector = [s["document"] for s in sector_results
+                          if s.get("relevance", 0) > 0.15]
+            brief["sector_constraints"] = sector[:5]
     except Exception:
         # Fallback: at least use index keyword matching
         if indexes:
             brief["relevant_files"] = _find_relevant_files(task, indexes)
 
+    # Fallback: surface recent task summaries as episode context
+    if not brief["relevant_episodes"]:
+        brief["relevant_episodes"] = _load_recent_summaries(agent_dir, task, max_items=3)
+
+    # Fallback: if no files found, use entrypoints from architecture
+    if not brief["relevant_files"] and artifacts:
+        brief["relevant_files"] = _fallback_entrypoints(artifacts)
+
     # Enrich facts from artifacts (trust boundaries, project brief, constraints)
     if artifacts:
         _enrich_facts_from_artifacts(brief, task, task_class, artifacts)
+
+    # Enrich sector from artifact if brain had no sector constraints
+    if not brief["sector_constraints"] and artifacts:
+        _enrich_sector_from_artifacts(brief, artifacts)
 
     # Save brief
     brief_path = agent_dir / "data" / "execution_brief.json"
@@ -234,6 +259,12 @@ def format_brief_for_prompt(brief: dict) -> str:
         lines.append("**Prior episodes**:")
         for e in episodes[:2]:
             lines.append(f"  - {e[:150]}")
+
+    sector = brief.get("sector_constraints", [])
+    if sector:
+        lines.append("**Sector/domain constraints**:")
+        for s in sector[:4]:
+            lines.append(f"  - {s[:150]}")
 
     excerpts = brief.get("artifact_excerpts", {})
     if excerpts.get("stack"):
@@ -353,6 +384,44 @@ def _extract_validations(commands: dict) -> list[str]:
     return validations
 
 
+def _extract_task_keywords(task: str) -> list[str]:
+    """Extract search keywords from task text with CamelCase/snake_case splitting.
+
+    Handles: "Fix claimQuestReward race condition" →
+        ["fix", "claim", "quest", "reward", "race", "condition",
+         "claimquestreward"]
+    """
+    words = set()
+    task_lower = task.lower()
+
+    for raw in task_lower.split():
+        if len(raw) < 3:
+            continue
+        words.add(raw)
+
+    # Split CamelCase and snake_case from original (preserving case info)
+    for raw_word in task.split():
+        if len(raw_word) < 3:
+            continue
+        # CamelCase split: "claimQuestReward" → ["claim", "Quest", "Reward"]
+        parts = re.findall(r'[A-Z]?[a-z]+|[A-Z]+(?=[A-Z][a-z]|\d|\b)', raw_word)
+        for p in parts:
+            if len(p) >= 3:
+                words.add(p.lower())
+        # snake_case / kebab-case split
+        for p in re.split(r'[_\-]', raw_word):
+            if len(p) >= 3:
+                words.add(p.lower())
+        # Keep compound as single token too (for symbol matching)
+        words.add(raw_word.lower())
+
+    # Filter common stop words that pollute matching
+    stop = {"the", "and", "for", "with", "from", "that", "this", "should",
+            "will", "can", "are", "has", "have", "into", "each", "when",
+            "then", "also", "been", "being", "not", "add", "new", "use"}
+    return [w for w in words if w not in stop]
+
+
 def _find_relevant_files(task: str, indexes: dict) -> list[str]:
     """Find files likely relevant to the task from indexes.
 
@@ -361,7 +430,7 @@ def _find_relevant_files(task: str, indexes: dict) -> list[str]:
     """
     files = []
     task_lower = task.lower()
-    task_words = [w for w in task_lower.split() if len(w) >= 3]
+    task_words = _extract_task_keywords(task)
 
     # Helper to unwrap index data (may be wrapped or raw)
     def _get_data(idx_name: str) -> dict:
@@ -425,6 +494,70 @@ def _find_relevant_files(task: str, indexes: dict) -> list[str]:
     return list(dict.fromkeys(files))[:12]  # Dedupe, cap at 12
 
 
+def _load_recent_summaries(agent_dir: Path, task: str, max_items: int = 3) -> list[str]:
+    """Load recent task summaries as episode context when brain episodes are empty.
+
+    Extracts concise episode strings from memory/summaries/*.json files.
+    """
+    summaries_dir = agent_dir / "memory" / "summaries"
+    if not summaries_dir.exists():
+        return []
+
+    episodes = []
+    task_keywords = set(w.lower() for w in task.split() if len(w) >= 4)
+
+    # Load summaries sorted by filename (timestamp-based)
+    for sf in sorted(summaries_dir.glob("*.json"), reverse=True):
+        try:
+            data = json.loads(sf.read_text())
+            result = data.get("result", {})
+            if not isinstance(result, dict):
+                continue
+            status = result.get("status", "unknown")
+            summary = result.get("summary", "")
+            task_text = data.get("task", "")[:80]
+            pr_url = result.get("pr_url", "")
+
+            if not summary:
+                continue
+
+            # Build concise episode string
+            ep = f"[{status.upper()}] {task_text}"
+            if pr_url:
+                ep += f" → PR: {pr_url}"
+            ep += f": {summary[:150]}"
+            episodes.append(ep)
+
+        except (json.JSONDecodeError, OSError):
+            continue
+
+        if len(episodes) >= max_items + 2:
+            break
+
+    # Prefer episodes with keyword overlap, then most recent
+    def _relevance(ep: str) -> int:
+        ep_lower = ep.lower()
+        return sum(1 for kw in task_keywords if kw in ep_lower)
+
+    episodes.sort(key=_relevance, reverse=True)
+    return episodes[:max_items]
+
+
+def _fallback_entrypoints(artifacts: dict) -> list[str]:
+    """When no files found via keyword matching, return architecture entrypoints."""
+    arch = artifacts.get("architecture_map", {})
+    if isinstance(arch, dict) and "data" in arch:
+        arch = arch["data"]
+    if not arch:
+        return []
+
+    files = []
+    for ep in arch.get("entrypoints", [])[:4]:
+        if isinstance(ep, str):
+            files.append(ep)
+    return files
+
+
 def _enrich_facts_from_artifacts(brief: dict, task: str, task_class: str,
                                   artifacts: dict):
     """Add contextual facts from artifacts to the brief.
@@ -461,6 +594,30 @@ def _enrich_facts_from_artifacts(brief: dict, task: str, task_class: str,
     brief["relevant_facts"] = list(dict.fromkeys(facts))[:8]
 
 
+def _enrich_sector_from_artifacts(brief: dict, artifacts: dict):
+    """Add sector constraints from the sector_playbook artifact as fallback."""
+    sector = artifacts.get("sector_playbook", {})
+    if isinstance(sector, dict) and sector.get("data"):
+        sector = sector["data"]
+    if not sector:
+        return
+
+    constraints = brief.get("sector_constraints", [])
+
+    if sector.get("sector"):
+        constraints.append(f"Sector: {sector['sector']}")
+
+    for c in sector.get("constraints", [])[:3]:
+        if c and c not in constraints:
+            constraints.append(c[:150])
+
+    for inv in sector.get("safety_invariants", [])[:3]:
+        if inv and inv not in constraints:
+            constraints.append(f"[invariant] {inv[:150]}")
+
+    brief["sector_constraints"] = constraints[:5]
+
+
 # ── Mandatory Writeback ──
 
 def run_writeback(name: str, agent_dir: Path, result: dict, task: str):
@@ -490,6 +647,7 @@ def run_writeback(name: str, agent_dir: Path, result: dict, task: str):
         _store_episode(lb, episode)
         _store_facts(lb, result)
         _store_procedures(lb, result)
+        _store_sector_insights(lb, result)
         _store_file_edges(lb, episode)
         _update_golden_qa(agent_dir, task, result)
     except Exception:
@@ -536,21 +694,81 @@ def _store_episode(lb, episode: dict):
 
 
 def _store_facts(lb, result: dict):
-    """Extract and store atomic facts from agent result."""
+    """Extract and store dense atomic facts from agent result.
+
+    Produces structured facts across categories:
+    - File-role facts: what each modified file does / what changed
+    - Invariants/gotchas: constraints discovered during execution
+    - Route/endpoint facts: API surface changes
+    - Validated procedures: commands that were verified to work
+    - Outcome summary: grounded knowledge from the task result
+    """
     facts = []
-
-    # Files changed are factual
-    for f in result.get("files_changed", [])[:5]:
-        facts.append(f"File modified: {f}")
-
-    # Summary contains grounded knowledge
     summary = result.get("summary", "")
-    if summary and len(summary) > 20:
-        facts.append(f"Outcome: {summary[:300]}")
+    files_changed = result.get("files_changed", [])
+    procedures = result.get("procedures", [])
+    status = result.get("status", "unknown")
 
-    for fact in facts:
-        lb.store(fact, "project-learnings", importance=0.5,
-                 tags=["atomic_fact"], source="pr_factory_writeback")
+    # 1. File-role facts: what changed and why (denser than bare paths)
+    if files_changed and summary:
+        # Group files by directory for concise facts
+        dirs = {}
+        for f in files_changed[:10]:
+            d = f.rsplit("/", 1)[0] if "/" in f else "root"
+            dirs.setdefault(d, []).append(f.rsplit("/", 1)[-1] if "/" in f else f)
+        for d, fnames in dirs.items():
+            fact = f"Modified {d}/: {', '.join(fnames[:4])}"
+            if len(summary) > 20:
+                fact += f" — {summary[:120]}"
+            facts.append(("file_role", fact, 0.5))
+
+    # 2. Extract invariants and gotchas from summary
+    invariant_patterns = [
+        (r"(?:must|always|never|invariant|requires?)\s+.{10,80}", "invariant"),
+        (r"(?:gotcha|caveat|note|important|warning):\s*.{10,100}", "gotcha"),
+        (r"(?:race condition|deadlock|timeout|retry|idempoten)\w*\s+.{5,60}", "gotcha"),
+    ]
+    if summary:
+        for pattern, fact_type in invariant_patterns:
+            matches = re.findall(pattern, summary, re.IGNORECASE)
+            for m in matches[:2]:
+                clean = m.strip().rstrip(".,;")
+                if len(clean) > 15:
+                    facts.append((fact_type, f"[{fact_type}] {clean[:200]}", 0.7))
+
+    # 3. Route/endpoint facts from file paths
+    route_keywords = ("route", "api/", "endpoint", "handler", "middleware")
+    for f in files_changed[:10]:
+        if any(kw in f.lower() for kw in route_keywords):
+            fact = f"[route] {f} — touched in {status} {result.get('pr_class', '?')}-class task"
+            facts.append(("route", fact, 0.6))
+
+    # 4. Validated procedure evidence
+    if status == "success" and procedures:
+        verified = [p for p in procedures[:5] if isinstance(p, str) and len(p) > 3]
+        if verified:
+            evidence = ", ".join(verified[:3])
+            facts.append(("procedure_evidence",
+                          f"[verified] Commands passed: {evidence}", 0.6))
+
+    # 5. Outcome summary (always stored for grounding)
+    if summary and len(summary) > 20:
+        facts.append(("outcome", f"Outcome: {summary[:300]}", 0.5))
+
+    # 6. Error/blocker facts (valuable for future avoidance)
+    error = result.get("error", "")
+    if error and len(error) > 10:
+        facts.append(("blocker", f"[blocker] {error[:200]}", 0.6))
+
+    # Deduplicate by content prefix (first 80 chars)
+    seen = set()
+    for fact_type, text, importance in facts:
+        key = text[:80].lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        lb.store(text, "project-learnings", importance=importance,
+                 tags=["atomic_fact", fact_type], source="pr_factory_writeback")
 
 
 def _store_procedures(lb, result: dict):
@@ -563,6 +781,35 @@ def _store_procedures(lb, result: dict):
         if isinstance(proc, str) and len(proc) > 5:
             lb.store(proc, "project-procedures", importance=0.7,
                      tags=["verified"], source="pr_factory_writeback")
+
+
+def _store_sector_insights(lb, result: dict):
+    """Store domain/sector insights discovered during task execution.
+
+    Extracts sector-relevant knowledge from the agent's output summary
+    and stores it in project-sector collection for future briefs.
+    """
+    summary = result.get("summary", "")
+    if not summary or len(summary) < 20:
+        return
+
+    # Look for sector-like signals in summary
+    sector_keywords = [
+        "invariant", "constraint", "governance", "safety", "must not",
+        "always", "never", "domain rule", "product rule", "requirement",
+    ]
+
+    summary_lower = summary.lower()
+    if not any(kw in summary_lower for kw in sector_keywords):
+        return
+
+    # Store the sector-relevant portion as a constraint
+    lb.store_sector(
+        f"Discovered: {summary[:300]}",
+        constraint_type="domain",
+        importance=0.6,
+        source="pr_factory_writeback",
+    )
 
 
 def _store_file_edges(lb, episode: dict):

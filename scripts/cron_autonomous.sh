@@ -89,6 +89,8 @@ print(f'ROUTE_TIER={shlex.quote(d.get(\"route_tier\", \"complex\"))}')
 print(f'ROUTE_EXECUTOR={shlex.quote(d.get(\"route_executor\", \"claude\"))}')
 print(f'ROUTE_SCORE={shlex.quote(str(d.get(\"route_score\", 0.5)))}')
 print(f'ROUTE_REASON={shlex.quote(d.get(\"route_reason\", \"unknown\"))}')
+print(f'CONFIDENCE_TIER={shlex.quote(d.get(\"confidence_tier\", \"HIGH\"))}')
+print(f'CONFIDENCE_FOR_TIER={shlex.quote(str(d.get(\"confidence_for_tier\", 0.7)))}')
 print(f'EPISODIC_HINTS={shlex.quote(d.get(\"episodic_hints\", \"\"))}')
 print(f'CONTEXT_BRIEF={shlex.quote(d.get(\"context_brief\", \"\"))}')
 # Format procedure hint
@@ -106,7 +108,7 @@ timings = d.get('timings', {})
 print(f'PF_TOTAL_TIME={shlex.quote(str(timings.get(\"total\", \"?\")))}')
 " 2>> "$LOGFILE")
 
-echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] PREFLIGHT: status=$PF_STATUS task_salience=$BEST_SALIENCE route=$ROUTE_EXECUTOR time=${PF_TOTAL_TIME}s" >> "$LOGFILE"
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] PREFLIGHT: status=$PF_STATUS task_salience=$BEST_SALIENCE route=$ROUTE_EXECUTOR confidence_tier=$CONFIDENCE_TIER time=${PF_TOTAL_TIME}s" >> "$LOGFILE"
 
 # Handle non-execution states
 if [ "$PF_STATUS" = "queue_empty" ] || [ "$PF_STATUS" = "no_tasks" ]; then
@@ -180,14 +182,8 @@ for line in content:
 batch = [next_task]
 
 # Heuristics: only batch tasks that are not oversized and not too long.
-# Also skip the parent tag if it already has explicit subtasks (we want the subtasks to run instead).
 MAX_TASKS = 3
 MAX_TOTAL_CHARS = 900
-
-def is_subtask(t: str) -> bool:
-    # [TAG_1] style
-    m = re.match(r'^\[([^\]]+)\]$', re.match(r'^\[([^\]]+)\]', t).group(0)) if re.match(r'^\[[^\]]+\]', t) else None
-    return bool(re.search(r'\[[^\]]+_\d+\]', t))
 
 def ok_to_batch(t: str) -> bool:
     sizing = estimate_task_complexity(t)

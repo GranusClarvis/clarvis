@@ -1,7 +1,8 @@
 #!/bin/bash
 # =============================================================================
 # Proper Claude Code spawner — the ONLY correct way to spawn Claude Code
-# Usage: ./spawn_claude.sh "task description" [timeout_seconds] [--no-tg] [--isolated] [--topic=N] [--chat=ID]
+# Usage: ./spawn_claude.sh "task description" [timeout_seconds] [--no-tg] [--isolated] [--category=CAT] [--topic=N] [--chat=ID]
+# --category: quick=600s, standard=1200s, research=1800s, build=1800s (overrides default timeout)
 #
 # NEVER use sessions_spawn — that spawns M2.5, not Claude Code.
 # This script uses the claude CLI directly, with proper env, full paths,
@@ -21,20 +22,34 @@ SEND_TG="true"
 ISOLATED="false"
 TG_TOPIC=""
 TG_CHAT_ID="REDACTED_CHAT_ID"
+CATEGORY=""
 # Parse optional flags from args 3+
 for arg in "${@:3}"; do
     case "$arg" in
-        --no-tg)   SEND_TG="false" ;;
-        --isolated) ISOLATED="true" ;;
-        --topic=*)  TG_TOPIC="${arg#--topic=}" ;;
-        --chat=*)   TG_CHAT_ID="${arg#--chat=}" ;;
+        --no-tg)      SEND_TG="false" ;;
+        --isolated)   ISOLATED="true" ;;
+        --topic=*)    TG_TOPIC="${arg#--topic=}" ;;
+        --chat=*)     TG_CHAT_ID="${arg#--chat=}" ;;
+        --category=*) CATEGORY="${arg#--category=}" ;;
     esac
 done
 
+# Category-based timeout: overrides default when no explicit timeout was given
+if [ -n "$CATEGORY" ] && [ "$TIMEOUT" = "1200" ]; then
+    case "$CATEGORY" in
+        quick)    TIMEOUT=600 ;;
+        standard) TIMEOUT=1200 ;;
+        research) TIMEOUT=1800 ;;
+        build)    TIMEOUT=1800 ;;
+        *)        echo "WARN: Unknown category '$CATEGORY', using default ${TIMEOUT}s" ;;
+    esac
+fi
+
 if [ -z "$TASK" ]; then
-    echo "Usage: ./spawn_claude.sh 'task description' [timeout] [--no-tg] [--isolated] [--topic=N] [--chat=ID]"
+    echo "Usage: ./spawn_claude.sh 'task description' [timeout] [--no-tg] [--isolated] [--category=CAT] [--topic=N] [--chat=ID]"
     echo "Default timeout: 1200s (20 min). Use --no-tg to skip Telegram delivery."
     echo "Use --isolated to run in git worktree isolation."
+    echo "Use --category=CAT to set timeout by task type: quick=600s, standard=1200s, research=1800s, build=1800s."
     echo "Use --topic=N to deliver output to a specific Telegram topic thread."
     echo "Use --chat=ID to deliver to a specific chat (default: DM REDACTED_CHAT_ID)."
     exit 1
@@ -93,11 +108,12 @@ with open(prompt_file, "w", encoding="utf-8") as f:
     f.write("\n".join(parts))
 PY
 
-echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] Spawning with ${TIMEOUT}s timeout..." >> "$LOGFILE"
+CATEGORY_TAG="${CATEGORY:+(category=$CATEGORY)}"
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] Spawning with ${TIMEOUT}s timeout ${CATEGORY_TAG}..." >> "$LOGFILE"
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] Task: ${TASK:0:100}..." >> "$LOGFILE"
 
 # Immediate stdout feedback — so exec() monitoring sees output (prevents SIGTERM from no-output watchdog)
-echo "[spawn_claude] Spawned with ${TIMEOUT}s timeout. Task: ${TASK:0:80}"
+echo "[spawn_claude] Spawned with ${TIMEOUT}s timeout ${CATEGORY_TAG}. Task: ${TASK:0:80}"
 echo "[spawn_claude] Output will be delivered via Telegram when complete."
 
 # Belt-and-suspenders: forcibly unset Claude Code nesting guards

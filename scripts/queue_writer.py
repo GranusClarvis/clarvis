@@ -352,6 +352,53 @@ def archive_completed():
         lock_fd.close()
 
 
+def mark_task_in_progress(tag: str) -> bool:
+    """Mark a task as in-progress by changing [ ] to [~].
+
+    Used when auto-splitting an oversized task — the parent stays in queue
+    but is marked as decomposed/in-progress so it doesn't keep being
+    reconsidered as a fresh candidate each heartbeat.
+
+    Args:
+        tag: The task tag (e.g., "ACTR_WIRING")
+
+    Returns:
+        True if marked, False if not found or already marked.
+    """
+    lock_path = QUEUE_FILE + ".lock"
+    os.makedirs(os.path.dirname(lock_path), exist_ok=True)
+    lock_fd = open(lock_path, "w")
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX)
+
+        content = _read_queue()
+        lines = content.split("\n")
+        found = False
+        marked = False
+
+        for i, line in enumerate(lines):
+            # Match unchecked task with the given tag
+            m = re.match(rf'^- \[\s*\] .*\[{re.escape(tag)}\]', line.strip())
+            if m:
+                found = True
+                # Change [ ] to [~]
+                new_line = line.replace("- [ ]", "- [~]", 1)
+                if new_line != line:
+                    lines[i] = new_line
+                    marked = True
+                    break
+
+        if marked:
+            with open(QUEUE_FILE, "w") as f:
+                f.write("\n".join(lines))
+
+        return marked
+
+    finally:
+        fcntl.flock(lock_fd, fcntl.LOCK_UN)
+        lock_fd.close()
+
+
 def tasks_added_today() -> int:
     """How many auto-generated tasks were added today."""
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")

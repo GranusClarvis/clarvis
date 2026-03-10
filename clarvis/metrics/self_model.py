@@ -491,7 +491,9 @@ def _assess_autonomous_execution():
             outcome_lines = [l for l in recent_lines if "outcome: success" in l or "COMPLETED" in l]
             exec_success = [l for l in recent_lines if "EXECUTION:" in l and "exit=0" in l]
             log_completed = max(len(outcome_lines), len(exec_success))
-            outcome_fail = [l for l in recent_lines if "outcome: timeout" in l or "outcome: failure" in l or "FAILED" in l]
+            # Match actual execution failures only — exclude "Verification FAILED: lock held"
+            # preflight messages which are informational, not task failures
+            outcome_fail = [l for l in recent_lines if "outcome: timeout" in l or "outcome: failure" in l or ("FAILED" in l and "Verification FAILED" not in l)]
             exec_fail = [l for l in recent_lines if "EXECUTION:" in l and "exit=" in l and "exit=0" not in l]
             log_failed = max(len(outcome_fail), len(exec_fail))
             log_descriptions = outcome_lines if outcome_lines else exec_success

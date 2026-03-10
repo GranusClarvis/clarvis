@@ -276,6 +276,85 @@ def create_boost_bridge(brain, match, col1_name, col2_name, content_hash, mirror
     }
 
 
+def prune_template_bridges(brain, max_ratio=0.50, dry_run=False, verbose=True):
+    """
+    Remove template bridges from collections where bridge ratio exceeds max_ratio.
+    Keeps mirror bridges (source=semantic_overlap_booster_mirror) — only removes
+    template bridges (BRIDGE [, Connection between, source=semantic_overlap_booster).
+
+    Returns dict with counts of pruned memories per collection.
+    """
+    pruned = {}
+    for name, col in brain.collections.items():
+        data = col.get(include=["documents", "metadatas"])
+        ids = data.get("ids", [])
+        docs = data.get("documents", [])
+        metas = data.get("metadatas", [])
+
+        # Identify template bridges to remove
+        to_remove = []
+        for i, (mid, doc, meta) in enumerate(zip(ids, docs, metas)):
+            is_template_bridge = False
+            # Check ID pattern (boost_ but NOT _m1_ or _m2_ which are mirrors)
+            if mid.startswith(("bridge_", "sbridge_")):
+                is_template_bridge = True
+            elif mid.startswith("boost_") and "_m1_" not in mid and "_m2_" not in mid:
+                is_template_bridge = True
+            # Check document content patterns
+            if doc and doc.startswith(("BRIDGE [", "Connection between", "Cross-domain link:")):
+                is_template_bridge = True
+            # Check source metadata
+            if meta and meta.get("source") == "semantic_overlap_booster":
+                is_template_bridge = True
+            # Never prune mirror bridges
+            if meta and meta.get("source") == "semantic_overlap_booster_mirror":
+                is_template_bridge = False
+            if mid.startswith("boost_") and ("_m1_" in mid or "_m2_" in mid):
+                is_template_bridge = False
+
+            if is_template_bridge:
+                to_remove.append(mid)
+
+        total = len(ids)
+        bridge_count = len(to_remove)
+        ratio = bridge_count / total if total > 0 else 0
+
+        if ratio > max_ratio and bridge_count > 0:
+            # Prune enough to get ratio to max_ratio
+            organic = total - bridge_count
+            target_total = int(organic / (1.0 - max_ratio)) if max_ratio < 1.0 else total
+            n_to_keep = max(0, target_total - organic)
+            n_to_remove = bridge_count - n_to_keep
+
+            if n_to_remove <= 0:
+                continue
+
+            # Remove the oldest/most generic bridges first (those with shortest docs)
+            remove_with_len = []
+            for mid in to_remove:
+                idx = ids.index(mid)
+                doc_len = len(docs[idx]) if docs[idx] else 0
+                remove_with_len.append((mid, doc_len))
+            remove_with_len.sort(key=lambda x: x[1])  # shortest first
+            remove_ids = [mid for mid, _ in remove_with_len[:n_to_remove]]
+
+            if verbose:
+                print(f"  {name}: {total} total, {bridge_count} template bridges ({ratio:.0%}), removing {len(remove_ids)}")
+
+            if not dry_run:
+                try:
+                    col.delete(ids=remove_ids)
+                    pruned[name] = len(remove_ids)
+                except Exception as e:
+                    print(f"    Warning: prune failed for {name}: {e}")
+            else:
+                pruned[name] = len(remove_ids)
+        elif verbose and bridge_count > 0:
+            print(f"  {name}: {total} total, {bridge_count} template bridges ({ratio:.0%}) — OK")
+
+    return pruned
+
+
 def load_state():
     if os.path.exists(STATE_FILE):
         with open(STATE_FILE, 'r') as f:
@@ -334,7 +413,7 @@ def run(target=0.65, dry_run=False, verbose=True, deep=False, mirror=False):
         # Tier bridge count by weakness
         # Mirror mode uses fewer bridges (quality over quantity; each creates 2 memories)
         if mirror:
-            n_bridges = 3 if score < 0.50 else (2 if score < 0.55 else 1)
+            n_bridges = 4 if score < 0.50 else (3 if score < 0.55 else (2 if score < 0.60 else 1))
         elif deep:
             n_bridges = 10 if score < 0.50 else (8 if score < 0.55 else (6 if score < 0.60 else 4))
         else:
@@ -430,8 +509,8 @@ def run(target=0.65, dry_run=False, verbose=True, deep=False, mirror=False):
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Semantic Overlap Booster")
-    parser.add_argument("action", nargs="?", default="boost", choices=["boost", "measure"],
-                        help="Action: boost (create bridges) or measure (just measure)")
+    parser.add_argument("action", nargs="?", default="boost", choices=["boost", "measure", "prune"],
+                        help="Action: boost (create bridges), measure (just measure), prune (remove template bridges)")
     parser.add_argument("--target", type=float, default=0.65, help="Target overlap (default 0.65)")
     parser.add_argument("--dry-run", action="store_true", help="Preview without creating bridges")
     parser.add_argument("--deep", action="store_true", help="Deep mode: more docs, bidirectional, higher bridge counts")
@@ -447,6 +526,17 @@ if __name__ == "__main__":
             print(f"  {score:.4f}  {name}{marker}")
         below = sum(1 for v in pairs.values() if v < args.target)
         print(f"\nPairs below {args.target}: {below}/{len(pairs)}")
+    elif args.action == "prune":
+        print("=== Pruning Template Bridges ===")
+        print(f"Max bridge ratio: 50%{' (dry run)' if args.dry_run else ''}\n")
+        before_overall, _ = measure_all_pairs(_brain)
+        print(f"BEFORE: Overall = {before_overall:.4f}\n")
+        pruned = prune_template_bridges(_brain, max_ratio=0.50, dry_run=args.dry_run)
+        total_pruned = sum(pruned.values())
+        print(f"\nTotal pruned: {total_pruned}")
+        if not args.dry_run and total_pruned > 0:
+            after_overall, _ = measure_all_pairs(_brain)
+            print(f"AFTER: Overall = {after_overall:.4f} (delta: {after_overall - before_overall:+.4f})")
     else:
         result = run(target=args.target, dry_run=args.dry_run, deep=args.deep, mirror=args.mirror)
         print(f"\nResult: {json.dumps(result, indent=2)}")

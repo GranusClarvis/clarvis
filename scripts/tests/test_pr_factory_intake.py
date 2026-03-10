@@ -13,7 +13,7 @@ import pytest
 
 sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
 
-from pr_factory_intake import (
+from clarvis.orch.pr_intake import (
     generate_project_brief,
     generate_stack_detect,
     generate_commands,
@@ -25,7 +25,7 @@ from pr_factory_intake import (
     is_stale,
     _save_artifact,
 )
-from pr_factory_indexes import (
+from clarvis.orch.pr_indexes import (
     build_file_index,
     build_symbol_index,
     build_route_index,
@@ -480,7 +480,7 @@ class TestTestIndex:
         assert any("Button.test.tsx" in t for t in test_files)
 
     def test_infers_source_module(self):
-        from pr_factory_indexes import _infer_source_module
+        from clarvis.orch.pr_indexes import _infer_source_module
         assert _infer_source_module("Button.test.tsx") == "Button.tsx"
         assert _infer_source_module("test_utils.py") == "utils.py"
         assert _infer_source_module("handler_test.go") == "handler.go"

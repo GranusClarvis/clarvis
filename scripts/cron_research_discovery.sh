@@ -43,23 +43,41 @@ CONTEXT_BRIEF=$(python3 "$SCRIPTS/prompt_builder.py" context-brief --task "ident
 # Sources: research_ingested.json + QUEUE_ARCHIVE.md (completed research topics)
 ALREADY_RESEARCHED=$(python3 -c "
 import json, os, re
+seen = set()
+
+def emit(text):
+    text = re.sub(r'\s+', ' ', text).strip(' -–—:')
+    if not text:
+        return
+    key = text.lower()
+    if key not in seen:
+        seen.add(key)
+        print(f'  - {text}')
+
 # 1. Topics from research ingestion tracker
 tracker_file = 'data/research_ingested.json'
 if os.path.exists(tracker_file):
     with open(tracker_file) as f:
         d = json.load(f)
     for name in sorted(d.keys()):
-        print(f'  - {name.replace(\".md\", \"\").replace(\"-\", \" \")}')
+        emit(name.replace('.md', '').replace('-', ' '))
+
 # 2. Completed research/bundle items from QUEUE_ARCHIVE.md
 archive_file = 'memory/evolution/QUEUE_ARCHIVE.md'
 if os.path.exists(archive_file):
     with open(archive_file) as f:
-        for line in f:
-            m = re.match(r'^- \[x\] .*?(Research:|Bundle [A-Z]:)(.*?)$', line.strip())
+        for raw in f:
+            line = raw.strip()
+            if not line.startswith('- [x] '):
+                continue
+            body = re.sub(r'^- \[x\]\s*', '', line)
+            body_no_tags = re.sub(r'\[[^\]]+\]\s*', '', body).strip()
+            if re.search(r'\b(research|bundle|iit|integrated information theory|global workspace|consciousness)\b', body_no_tags, re.I):
+                emit(body_no_tags)
+            m = re.search(r'(Research:|Bundle\s+[A-Z]:)\s*(.*)$', body, re.I)
             if m:
-                title = re.sub(r'\[.*?\]\s*', '', m.group(1) + m.group(2)).strip()
-                if title:
-                    print(f'  - {title}')
+                emit(f'{m.group(1)} {m.group(2)}')
+
 if not os.path.exists(tracker_file) and not os.path.exists(archive_file):
     print('  (none)')
 " 2>/dev/null)

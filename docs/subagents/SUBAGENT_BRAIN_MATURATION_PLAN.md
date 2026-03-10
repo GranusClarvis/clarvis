@@ -124,7 +124,7 @@ Best use:
 
 Episodes should be ranked, not blindly injected.
 
-### Layer E — Sector / product playbook
+### Layer E — Sector / product playbook ✅ (implemented 2026-03-08)
 Purpose: knowledge of the repo's domain and intended product behavior.
 
 Examples:
@@ -133,6 +133,17 @@ Examples:
 - NSFW chatbot memory/safety/product boundaries
 
 This should be derived from repo docs and linked to modules/invariants.
+
+**Implementation:**
+- New `project-sector` collection in LiteBrain (6th collection)
+- `LiteBrain.store_sector()` / `LiteBrain.sector_recall()` — dedicated sector storage/retrieval
+- `generate_sector_playbook()` in `pr_factory_intake.py` — scans README, CLAUDE.md, docs/ for constraints
+- `seed_sector_to_brain()` — populates project-sector from playbook artifact
+- `hybrid_recall()` now includes `sector_constraints` in results
+- `build_execution_brief()` adds sector constraints to every brief
+- `format_brief_for_prompt()` renders sector as "Sector/domain constraints" section
+- Writeback: `_store_sector_insights()` captures domain knowledge discovered during tasks
+- Sector playbook registered as artifact in `refresh_artifacts()` with staleness tracking
 
 ### Layer F — Typed relationships
 Purpose: make retrieval sharper and more compositional.

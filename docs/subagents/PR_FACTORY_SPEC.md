@@ -117,9 +117,10 @@ Each: type, text, source, confidence, related file tags.
 
 Per-run summaries (blockers, flaky checks, patterns). Retrievable, lower priority than artifacts.
 
-### Layer 5 — Sector/Product Playbook
+### Layer 5 — Sector/Product Playbook ✅
 
 Derived from repo docs. Domain-specific constraints (trading safety, content boundaries, governance lifecycle, etc.).
+Implemented: `project-sector` collection, `generate_sector_playbook()`, wired into brief + hybrid_recall + writeback.
 
 ---
 

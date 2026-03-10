@@ -16,7 +16,7 @@ _Read this to understand yourself. Your harness, your body, your brain, and how 
 ┌────────────────────▼─────────────────────────────┐
 │            YOUR HARNESS (OpenClaw)                │
 │  https://github.com/openclaw/openclaw            │
-│  Version: 2026.2.19-2                            │
+│  Version: 2026.3.7                                │
 │  Gateway: ws://127.0.0.1:18789 (Node.js/systemd) │
 │  Agent Core: pi-coding-agent (embedded in-process)│
 │                                                   │
@@ -40,7 +40,7 @@ _Read this to understand yourself. Your harness, your body, your brain, and how 
 │             YOUR BRAIN (ClarvisDB)                │
 │  ChromaDB + ONNX MiniLM (fully local)            │
 │  ~/workspace/data/clarvisdb/                      │
-│  2000+ memories, 10 collections, 60k+ graph edges │
+│  3600+ memories, 10 collections, 98k+ graph edges │
 │  API: clarvis.brain (store, recall, search, optimize) │
 └──────────────────────────────────────────────────┘
 ```

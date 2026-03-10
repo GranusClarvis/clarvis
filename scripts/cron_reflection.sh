@@ -47,7 +47,7 @@ python3 /home/agent/.openclaw/workspace/scripts/knowledge_synthesis.py >> "$LOGF
 
 # Step 3.5: Cross-collection linking — ensure all memories have cross-collection edges
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running cross-collection linking..." >> "$LOGFILE"
-python3 /home/agent/.openclaw/workspace/scripts/brain.py crosslink >> "$LOGFILE" 2>&1 || true
+python3 -m clarvis brain crosslink >> "$LOGFILE" 2>&1 || true
 
 # Step 3.6: Intra-collection linking — boost within-collection edge density (cap 5/collection)
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running intra-collection linker..." >> "$LOGFILE"
