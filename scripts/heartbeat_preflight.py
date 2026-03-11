@@ -123,6 +123,11 @@ try:
 except ImportError:
     po_select_variant = None
 
+try:
+    from clarvis.brain.retrieval_gate import classify_retrieval as gate_classify
+except ImportError:
+    gate_classify = None
+
 _import_time = time.monotonic() - start_import
 log = lambda msg: print(f"[{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S')}] PREFLIGHT: {msg}", file=sys.stderr)
 
@@ -739,6 +744,22 @@ def run_preflight(dry_run=False):
     result["gwt_broadcast"] = gwt_broadcast_text
     result["timings"]["gwt_broadcast"] = round(time.monotonic() - t77, 3)
 
+    # === 7.8 RETRIEVAL GATE: Classify retrieval need before brain recall ===
+    t78 = time.monotonic()
+    retrieval_tier_info = None
+    if gate_classify:
+        try:
+            retrieval_tier_info = gate_classify(next_task)
+            result["retrieval_tier"] = retrieval_tier_info.tier
+            result["retrieval_gate_reason"] = retrieval_tier_info.reason
+            log(f"Retrieval gate: tier={retrieval_tier_info.tier} reason={retrieval_tier_info.reason}")
+        except Exception as e:
+            log(f"Retrieval gate failed (non-fatal, defaulting DEEP): {e}")
+            result["retrieval_tier"] = "DEEP_RETRIEVAL"
+    else:
+        result["retrieval_tier"] = "DEEP_RETRIEVAL"  # fallback: full recall
+    result["timings"]["retrieval_gate"] = round(time.monotonic() - t78, 3)
+
     # === 8. EPISODIC MEMORY: Recall similar episodes ===
     t8 = time.monotonic()
     similar_episodes = ""
@@ -765,30 +786,42 @@ def run_preflight(dry_run=False):
     result["timings"]["episodic"] = round(time.monotonic() - t8, 3)
 
     # === 8.5 BRAIN BRIDGE: Full brain context (goals + context + knowledge + working memory) ===
+    # Gated by retrieval_tier from §7.8
     t85 = time.monotonic()
     knowledge_hints = ""
     brain_goals = ""
     brain_context = ""
     brain_working_memory = ""
-    if brain_preflight_context:
+    brain_ctx = {}
+    _rt = result.get("retrieval_tier", "DEEP_RETRIEVAL")
+
+    if _rt == "NO_RETRIEVAL":
+        log("Brain bridge SKIPPED — retrieval gate: NO_RETRIEVAL (saving ~7.5s)")
+    elif brain_preflight_context:
         try:
-            brain_ctx = brain_preflight_context(next_task, n_knowledge=5, n_goals=5)
+            # Adjust recall depth based on retrieval tier
+            if _rt == "LIGHT_RETRIEVAL":
+                _n_knowledge = 3
+            else:  # DEEP_RETRIEVAL
+                _n_knowledge = 10 if (retrieval_tier_info and retrieval_tier_info.graph_expand) else 5
+            brain_ctx = brain_preflight_context(next_task, n_knowledge=_n_knowledge, n_goals=5)
             knowledge_hints = brain_ctx.get("knowledge_hints", "")
             brain_goals = brain_ctx.get("goals_text", "")
             brain_context = brain_ctx.get("context", "")
             brain_working_memory = brain_ctx.get("working_memory", "")
             brain_timings = brain_ctx.get("brain_timings", {})
-            log(f"Brain bridge: knowledge={len(knowledge_hints)}B goals={len(brain_goals)}B "
+            log(f"Brain bridge ({_rt}): knowledge={len(knowledge_hints)}B goals={len(brain_goals)}B "
                 f"context={len(brain_context)}B wm={len(brain_working_memory)}B "
                 f"timings={brain_timings}")
         except Exception as e:
             log(f"Brain bridge preflight failed: {e}")
     else:
-        # Fallback: ad-hoc brain recall (legacy)
+        # Fallback: ad-hoc brain recall (legacy) — only if not NO_RETRIEVAL
         try:
             from brain import get_brain, LEARNINGS
             b = get_brain()
-            learnings = b.recall(next_task, collections=[LEARNINGS], n=5, min_importance=0.3)
+            _n_fallback = 3 if _rt == "LIGHT_RETRIEVAL" else 5
+            learnings = b.recall(next_task, collections=[LEARNINGS], n=_n_fallback, min_importance=0.3)
             if learnings:
                 hints = []
                 for mem in learnings:
@@ -805,7 +838,7 @@ def run_preflight(dry_run=False):
                         prefix = "[LEARNING]"
                     hints.append(f"  {prefix} {doc}")
                 knowledge_hints = "\n".join(hints)
-                log(f"Brain knowledge (legacy): {len(learnings)} relevant learnings found")
+                log(f"Brain knowledge (legacy, {_rt}): {len(learnings)} relevant learnings found")
         except Exception as e:
             log(f"Brain knowledge recall failed: {e}")
     result["knowledge_hints"] = knowledge_hints
