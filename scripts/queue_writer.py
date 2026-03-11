@@ -77,7 +77,7 @@ def _extract_all_items(content: str) -> list:
     items = []
     for line in content.split("\n"):
         # Match both - [ ] and - [x] items
-        m = re.match(r'^- \[[ x]\] (.+)', line)
+        m = re.match(r'^- \[\s]\] (.+)', line)
         if m:
             items.append(m.group(1))
     return items
@@ -191,7 +191,7 @@ def add_tasks(tasks: list, priority: str = "P0", source: str = "unknown") -> lis
         task_lines = []
         for task in new_tasks:
             # Strip existing checkbox prefix if present
-            task_clean = re.sub(r'^- \[[ x]\] ', '', task).strip()
+            task_clean = re.sub(r'^- \[\s]\] ', '', task).strip()
             task_lines.append(f"- [ ] [{source.upper()} {today}] {task_clean}")
 
         # Insert tasks
@@ -246,7 +246,7 @@ def ensure_subtasks_for_tag(parent_tag: str, subtasks: list[str], source: str = 
         lines = content.split("\n")
 
         # Find the parent line. We match the explicit tag first.
-        parent_re = re.compile(r"^\- \[[ x]\] \[" + re.escape(parent_tag) + r"\]\b")
+        parent_re = re.compile(r"^\- \[[\s]\] \[" + re.escape(parent_tag) + r"\]")
         parent_idx = None
         for i, line in enumerate(lines):
             if parent_re.search(line):
@@ -260,7 +260,7 @@ def ensure_subtasks_for_tag(parent_tag: str, subtasks: list[str], source: str = 
         j = parent_idx + 1
         while j < len(lines) and lines[j].strip() == "":
             j += 1
-        if j < len(lines) and re.match(r"^\s{2,}\- \[[ x]\] ", lines[j]):
+        if j < len(lines) and re.match(r"^\s{2,}\- \[\s]\] ", lines[j]):
             return False  # already has subtasks
 
         # Insert subtasks immediately under parent
@@ -268,7 +268,7 @@ def ensure_subtasks_for_tag(parent_tag: str, subtasks: list[str], source: str = 
         stamped = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         to_insert = []
         for st in subtasks:
-            st_clean = re.sub(r"^\- \[[ x]\] ", "", st).strip()
+            st_clean = re.sub(r"^\- \[\s]\] ", "", st).strip()
             if not st_clean:
                 continue
             # Keep indentation consistent with existing manual subtasks (2 spaces)
