@@ -333,7 +333,8 @@ COMPLEXITY_KEYWORDS = {
 }
 
 # Implementation sprint slot allows longer tasks (1800s vs 1200s)
-IMPLEMENTATION_SLOT_HOURS = {14}  # cron_implementation_sprint at 14:00 CET
+# Expanded to cover core work hours (06:00-20:00 UTC)
+IMPLEMENTATION_SLOT_HOURS = {6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}  # 14:00 CET reference
 
 
 def estimate_task_complexity(task_text):
