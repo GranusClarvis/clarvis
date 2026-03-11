@@ -55,12 +55,17 @@ def _ensure_ollama() -> bool:
     # Try to start
     import subprocess
     try:
+        uid = os.getuid()
+        runtime_dir = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{uid}")
+        bus_address = os.environ.get(
+            "DBUS_SESSION_BUS_ADDRESS", f"unix:path=/run/user/{uid}/bus"
+        )
         subprocess.run(
             ["systemctl", "--user", "start", "ollama.service"],
             env={
                 **os.environ,
-                "XDG_RUNTIME_DIR": "/run/user/1001",
-                "DBUS_SESSION_BUS_ADDRESS": "unix:path=/run/user/1001/bus",
+                "XDG_RUNTIME_DIR": runtime_dir,
+                "DBUS_SESSION_BUS_ADDRESS": bus_address,
             },
             capture_output=True,
             timeout=15,

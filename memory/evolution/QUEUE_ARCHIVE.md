@@ -804,3 +804,8 @@ _Last archived: 2026-03-09_
 
 ## Archived 2026-03-10
 - [x] [SPAWN_ADAPTIVE_TIMEOUT] Add task-category timeout to `scripts/spawn_claude.sh`: accept optional `--category` flag (quick=600s, standard=1200s, research=1800s, build=1800s). Default remains 1200s. Update `cron_research.sh` to pass `--category research`. Prevents research repo timeouts that waste cron slots (hermes-agent timed out at 1500s on 2026-03-06). _(Done 2026-03-10: `--category=CAT` flag added to spawn_claude.sh, category overrides default timeout, explicit timeout still wins. cron_research.sh discovery fallback bumped from 1200s→1800s to match research category.)_
+
+## Archived 2026-03-10
+- [x] [SCREENSHOT_ANALYZER_RUNTIME_UID] Fix `scripts/screenshot_analyzer.py` Ollama startup pathing to derive `XDG_RUNTIME_DIR`/`DBUS_SESSION_BUS_ADDRESS` from the current user instead of hard-coding `/run/user/1001`. _(Done 2026-03-10: uses `os.getuid()` with env-var-first fallback.)_
+- [x] [RESEARCH_CRAWLER_TRACKER_HARDENING] Harden `scripts/research_crawler.py` tracker load/save against corrupt or partial JSON writes. _(Done 2026-03-10: load wraps json.load in try/except with corrupt-file backup + key validation; save uses atomic write-tmp-then-rename with fsync. 5/5 tests pass.)_
+- [x] [RESEARCH_DISCOVERY 2026-03-10] Research: Free Energy Principle / Active Inference — completed. Key takeaway: intelligence is better framed as prediction-error minimization across perception, memory selection, and action, with hierarchical temporal models and explicit uncertainty reduction more useful than treating FEP as a vague consciousness claim. Notes: `memory/research/free_energy_principle_2026-03-10.md`.

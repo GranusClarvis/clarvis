@@ -14,6 +14,7 @@ _Completed items auto-archived to QUEUE_ARCHIVE.md._
 (Constraint: pursue only where it improves the brain’s practical intelligence — retrieval quality, correct integration, planning reliability.)
 
 - [ ] [SEMANTIC_BRIDGE] Build semantic overlap booster for cross-collection pairs with overlap <0.50. Current: semantic_cross_collection=0.575→0.589 (estimated). **v2 mirror strategy added** to `semantic_overlap_booster.py` (`--mirror` flag): copies actual docs between collections instead of templated bridges. All 4 pairs below 0.50 now above 0.50 (avg +0.08). Target 0.65 needs continued mirror runs on remaining weak pairs. _(in progress 2026-03-06)_
+- [x] [RESEARCH_SEMANTICA 2026-03-11] Research: Hawksight-AI/semantica — 24-module Python framework for semantic layers, context graphs, decision intelligence with W3C PROV-O provenance. Key findings: decisions as first-class objects (Clarvis gap), 5-type conflict detection (Clarvis has none), temporal validity on edges, declarative reasoning engines. 3 actionable items: decision event bus, temporal edge validity, basic conflict detection. Note: `memory/research/semantica_hawksight_2026-03-11.md`. 5 brain memories stored.
 
 ## Pillar 2: Agent Orchestrator (Multi-Project Command Center)
 

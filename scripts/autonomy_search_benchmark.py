@@ -20,14 +20,12 @@ import argparse
 import asyncio
 import json
 import os
-import re
 import sys
 import time
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 # ── Paths ─────────────────────────────────────────────────────────────
 

@@ -36,18 +36,36 @@ MAX_CONTENT_LENGTH = 50000  # Truncate very long pages
 
 
 def _load_tracker() -> dict:
-    """Load crawl tracker (hash-based dedup)."""
-    if os.path.exists(TRACKER_PATH):
+    """Load crawl tracker (hash-based dedup). Tolerates corrupt JSON."""
+    default = {"crawled": {}, "stats": {"total": 0, "ingested": 0, "errors": 0}}
+    if not os.path.exists(TRACKER_PATH):
+        return default
+    try:
         with open(TRACKER_PATH) as f:
-            return json.load(f)
-    return {"crawled": {}, "stats": {"total": 0, "ingested": 0, "errors": 0}}
+            data = json.load(f)
+        if not isinstance(data, dict) or "crawled" not in data:
+            raise ValueError("tracker missing expected keys")
+        return data
+    except (json.JSONDecodeError, ValueError, OSError) as e:
+        # Preserve the corrupt file for debugging, then start fresh
+        backup = TRACKER_PATH + f".corrupt.{int(time.time())}"
+        try:
+            os.rename(TRACKER_PATH, backup)
+            print(f"[WARN] Corrupt tracker renamed to {backup}: {e}")
+        except OSError:
+            print(f"[WARN] Corrupt tracker could not be backed up: {e}")
+        return default
 
 
 def _save_tracker(tracker: dict):
-    """Save crawl tracker."""
+    """Save crawl tracker atomically (write-tmp-then-rename)."""
     os.makedirs(os.path.dirname(TRACKER_PATH), exist_ok=True)
-    with open(TRACKER_PATH, "w") as f:
+    tmp_path = TRACKER_PATH + ".tmp"
+    with open(tmp_path, "w") as f:
         json.dump(tracker, f, indent=2)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp_path, TRACKER_PATH)
 
 
 def _url_hash(url: str) -> str:
