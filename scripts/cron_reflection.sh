@@ -12,6 +12,24 @@ acquire_global_claude_lock "$LOGFILE"
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Reflection starting ===" >> "$LOGFILE"
 emit_dashboard_event task_started --task-name "Daily reflection" --section cron_reflection --executor claude-opus
 
+# Failure tracking — continue on error but log and count failures
+STEP_FAILURES=0
+FAILED_STEPS=""
+
+run_step() {
+    local step_name="$1"
+    shift
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running ${step_name}..." >> "$LOGFILE"
+    "$@" >> "$LOGFILE" 2>&1
+    local exit_code=$?
+    if [ "$exit_code" -ne 0 ]; then
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WARNING: ${step_name} failed (exit ${exit_code})" >> "$LOGFILE"
+        STEP_FAILURES=$((STEP_FAILURES + 1))
+        FAILED_STEPS="${FAILED_STEPS} ${step_name}"
+    fi
+    return 0  # always continue
+}
+
 # Step 0: QUEUE.md scan — count pending/completed for digest metrics
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Scanning QUEUE.md..." >> "$LOGFILE"
 QUEUE_PENDING=$(grep -c '^\- \[ \]' memory/evolution/QUEUE.md 2>/dev/null || echo 0)

@@ -13,7 +13,7 @@ The primary data directory (~98 entries). Contains all persistent state that scr
 ### ClarvisDB (Vector Brain)
 | Path | Purpose |
 |------|---------|
-| `data/clarvisdb/` | ChromaDB vector store (10 collections, 1200+ memories, 47k+ graph edges) |
+| `data/clarvisdb/` | ChromaDB vector store (10 collections, 3400+ memories, 134k+ graph edges) |
 | `data/clarvisdb/chroma.sqlite3` | ChromaDB backing store |
 | `data/clarvisdb/relationships.json` | Graph edges (entity relationships) |
 | `data/clarvisdb/communities.json` | GraphRAG community detection output |

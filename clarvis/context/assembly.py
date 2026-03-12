@@ -372,41 +372,127 @@ def get_spotlight_items(n=5, exclude_task=""):
         return []
 
 
-def find_related_tasks(current_task, queue_file=None, max_tasks=3):
-    """Find pending tasks related to the current task by word overlap."""
-    queue_file = queue_file or QUEUE_FILE
-    if not current_task or not os.path.exists(queue_file):
-        return []
+def _parse_queue_tasks(content):
+    """Parse pending tasks from QUEUE.md with their priority context.
 
+    Returns list of (priority_weight, task_text) tuples.
+    Priority weights: P0=1.0, P1=0.7, P2=0.4, unknown=0.5.
+    """
+    priority_weight = 0.5  # default for tasks before any section header
+    results = []
+
+    for line in content.splitlines():
+        stripped = line.strip()
+
+        # Track priority from section headers
+        header_match = re.match(r'^#{1,3}\s+(.+)$', stripped)
+        if header_match:
+            header = header_match.group(1)
+            if re.search(r'\bP0\b', header):
+                priority_weight = 1.0
+            elif re.search(r'\bP1\b', header):
+                priority_weight = 0.7
+            elif re.search(r'\bP2\b', header):
+                priority_weight = 0.4
+            elif re.match(r'Pillar', header):
+                priority_weight = 0.7  # Pillar sections default to P1
+            continue
+
+        # Extract pending tasks
+        task_match = re.match(r'^- \[ \] (.+)$', stripped)
+        if not task_match:
+            continue
+        task_text = task_match.group(1)
+        core = re.split(r'\s*[\(—]', task_text, 1)[0].strip()
+        if len(core) < 15:
+            core = task_text[:100]
+        results.append((priority_weight, core[:80], task_text))
+
+    return results
+
+
+def _cosine_similarity(a, b):
+    """Compute cosine similarity between two vectors."""
+    import numpy as np
+    a, b = np.asarray(a), np.asarray(b)
+    dot = np.dot(a, b)
+    norm = np.linalg.norm(a) * np.linalg.norm(b)
+    return float(dot / norm) if norm > 0 else 0.0
+
+
+def _semantic_rank(current_task, parsed_tasks, embed_fn):
+    """Rank tasks by semantic similarity using embeddings + priority weight."""
+    texts = [current_task] + [t[2] for t in parsed_tasks]
+    embeddings = embed_fn(texts)
+    query_emb = embeddings[0]
+
+    scored = []
+    for i, (priority_w, core, _full) in enumerate(parsed_tasks):
+        sim = _cosine_similarity(query_emb, embeddings[i + 1])
+        # Skip near-duplicates (same task)
+        if sim > 0.9:
+            continue
+        # Combined score: semantic similarity * priority weight
+        score = sim * priority_w
+        if score > 0.05:
+            scored.append((score, core))
+
+    scored.sort(reverse=True)
+    return scored
+
+
+def _word_overlap_rank(current_task, parsed_tasks):
+    """Fallback: rank tasks by word overlap (original Jaccard approach)."""
     task_words = set(re.findall(r'[a-z]{3,}', current_task.lower()))
     if not task_words:
         return []
 
-    with open(queue_file, 'r') as f:
-        lines = f.readlines()
-
-    candidates = []
-    for line in lines:
-        stripped = line.strip()
-        match = re.match(r'^- \[ \] (.+)$', stripped)
-        if not match:
-            continue
-        task_text = match.group(1)
-        candidate_words = set(re.findall(r'[a-z]{3,}', task_text.lower()))
+    scored = []
+    for priority_w, core, full_text in parsed_tasks:
+        candidate_words = set(re.findall(r'[a-z]{3,}', full_text.lower()))
         if not candidate_words:
             continue
-        overlap = len(task_words & candidate_words) / max(1, len(task_words | candidate_words))
-        if overlap > 0.6:
-            continue
+        jaccard = len(task_words & candidate_words) / max(1, len(task_words | candidate_words))
+        if jaccard > 0.6:
+            continue  # skip near-duplicates
         relevance = len(task_words & candidate_words) / max(1, len(candidate_words))
         if relevance > 0.1:
-            core = re.split(r'\s*[\(—]', task_text, 1)[0].strip()
-            if len(core) < 15:
-                core = task_text[:100]
-            candidates.append((relevance, core[:80]))
+            scored.append((relevance * priority_w, core))
 
-    candidates.sort(reverse=True)
-    return [text for _, text in candidates[:max_tasks]]
+    scored.sort(reverse=True)
+    return scored
+
+
+def find_related_tasks(current_task, queue_file=None, max_tasks=3):
+    """Find pending tasks related to the current task using semantic similarity.
+
+    Uses ONNX MiniLM embeddings for semantic matching with priority weighting.
+    Falls back to word-overlap Jaccard if embeddings are unavailable.
+    """
+    queue_file = queue_file or QUEUE_FILE
+    if not current_task or not os.path.exists(queue_file):
+        return []
+
+    with open(queue_file, 'r') as f:
+        content = f.read()
+
+    parsed = _parse_queue_tasks(content)
+    if not parsed:
+        return []
+
+    # Try semantic ranking with brain embeddings
+    try:
+        from clarvis.brain.factory import get_embedding_function
+        embed_fn = get_embedding_function(use_onnx=True)
+        if embed_fn is not None:
+            scored = _semantic_rank(current_task, parsed, embed_fn)
+            return [text for _, text in scored[:max_tasks]]
+    except Exception:
+        pass
+
+    # Fallback to word overlap
+    scored = _word_overlap_rank(current_task, parsed)
+    return [text for _, text in scored[:max_tasks]]
 
 
 def get_recent_completions(queue_file=None, n=3):

@@ -238,12 +238,14 @@ Clarvis evolves through **autonomous subconscious cycles** triggered by system c
 
 ```mermaid
 flowchart TB
-    subgraph Cron["Daily Cron Schedule"]
-        MORN[cron_morning.sh<br/>08:00 UTC]
-        AUT1[cron_autonomous.sh<br/>07,11,15,17 UTC]
-        EVO[cron_evolution.sh<br/>13:00 UTC]
-        EVE[cron_evening.sh<br/>18:00 UTC]
-        REF[cron_reflection.sh<br/>21:00 UTC]
+    subgraph Cron["Daily Cron Schedule (CET)"]
+        MORN[cron_morning.sh<br/>08:00]
+        AUT1[cron_autonomous.sh<br/>12x/day]
+        RES[cron_research.sh<br/>10:00, 16:00]
+        EVO[cron_evolution.sh<br/>13:00]
+        IMPL[cron_implementation_sprint.sh<br/>14:00]
+        EVE[cron_evening.sh<br/>18:00]
+        REF[cron_reflection.sh<br/>21:00]
     end
     
     subgraph Tasks["Evolution Tasks"]
@@ -255,8 +257,10 @@ flowchart TB
     
     MORN --> PLAN
     AUT1 --> EXEC
+    RES --> RES2[Research]
     EVO --> META
-    EVE --> RES
+    IMPL --> EXEC
+    EVE --> RES2
     REF --> META
     
     PLAN --> QUEUE[QUEUE.md]
@@ -397,18 +401,20 @@ tests/
 
 ## 📊 Metrics
 
-Clarvis tracks **8 capability dimensions** via `clarvis.metrics.self_model`:
+Clarvis tracks **8 capability dimensions** via `clarvis.metrics.self_model`.
 
-| Dimension | Score | What it measures |
-|-----------|-------|------------------|
-| Memory System | 0.80 | ChromaDB + graph health |
-| Code Generation | 0.94 | Tests pass, syntax clean |
-| Self-Reflection | 0.86 | Meta-cognitive quality |
-| Reasoning Chains | 1.00 | Causal reasoning |
-| Autonomous Execution | 0.76 | Task completion rate |
-| Context Relevance | 0.84 | Brief quality |
-| Calibration | 0.13 | Prediction accuracy |
-| Overall Φ | 0.65 | Consciousness metric |
+**Brain stats (as of 2026-03-12):** 10 collections, 3400+ memories, 134k+ graph edges, dual backends (JSON + SQLite+WAL).
+
+| Dimension | What it measures |
+|-----------|------------------|
+| Memory System | ChromaDB + graph health |
+| Code Generation | Tests pass, syntax clean |
+| Self-Reflection | Meta-cognitive quality |
+| Reasoning Chains | Causal reasoning |
+| Autonomous Execution | Task completion rate |
+| Context Relevance | Brief quality |
+| Calibration | Prediction accuracy |
+| Overall Φ | Consciousness metric |
 
 ---
 
@@ -439,4 +445,4 @@ python3 -m clarvis bench run
 
 ---
 
-_Last updated: 2026-03-09_
+_Last updated: 2026-03-12_
