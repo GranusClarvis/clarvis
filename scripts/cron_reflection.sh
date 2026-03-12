@@ -90,17 +90,24 @@ run_step "absolute_zero" python3 /home/agent/.openclaw/workspace/scripts/absolut
 run_step "causal_model" python3 /home/agent/.openclaw/workspace/scripts/causal_model.py analyze
 
 # Step 7: Session close — save attention state and working memory for next session — CRITICAL
-echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running session close..." >> "$LOGFILE"
-python3 /home/agent/.openclaw/workspace/scripts/session_hook.py close >> "$LOGFILE" 2>&1
-SESSION_EXIT=$?
-if [ "$SESSION_EXIT" -ne 0 ]; then
-    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WARNING: session_hook.py close failed with exit $SESSION_EXIT" >> "$LOGFILE"
+run_step "session_close" python3 /home/agent/.openclaw/workspace/scripts/session_hook.py close
+
+# === Failure summary ===
+if [ "$STEP_FAILURES" -gt 0 ]; then
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] PIPELINE FAILURES: ${STEP_FAILURES} step(s) failed:${FAILED_STEPS}" >> "$LOGFILE"
+    DIGEST_STATUS="REFLECTION: ${STEP_FAILURES} step(s) failed:${FAILED_STEPS}."
+else
+    DIGEST_STATUS="REFLECTION: complete, all steps passed."
 fi
 
 # === DIGEST: Write first-person summary for M2.5 agent ===
 python3 /home/agent/.openclaw/workspace/scripts/digest_writer.py reflection \
-    "REFLECTION: complete. QUEUE: ${QUEUE_PENDING} pending, ${QUEUE_DONE} done. WEAKEST: ${WEAKEST_METRIC}. Pipeline: optimize, reflect, synthesize, crosslink, consolidate, learn, amplify, episodic, temporal, meta-learn, AZR, causal. Session saved." \
+    "${DIGEST_STATUS} QUEUE: ${QUEUE_PENDING} pending, ${QUEUE_DONE} done. WEAKEST: ${WEAKEST_METRIC}. Pipeline: optimize, reflect, synthesize, crosslink, consolidate, learn, amplify, episodic, temporal, meta-learn, AZR, causal. Session saved." \
     >> "$LOGFILE" 2>&1 || true
 
-emit_dashboard_event task_completed --task-name "Daily reflection" --section cron_reflection --status success
-echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Reflection complete ===" >> "$LOGFILE"
+if [ "$STEP_FAILURES" -gt 0 ]; then
+    emit_dashboard_event task_completed --task-name "Daily reflection" --section cron_reflection --status partial --meta "failures=${STEP_FAILURES}"
+else
+    emit_dashboard_event task_completed --task-name "Daily reflection" --section cron_reflection --status success
+fi
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Reflection complete (${STEP_FAILURES} failures) ===" >> "$LOGFILE"
