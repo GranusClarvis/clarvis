@@ -25,6 +25,16 @@ _Read this to know what happened during autonomous cycles._
 
 **Total: 8 scripts → deprecated/, 3 kept.** ~1,600 LOC removed from active scripts/.
 
+### MMR Postflight Rate-Limit (manual, evening CET)
+
+`mmr_update_lambdas()` was running on every postflight (12x/day), scanning the full 7-day `context_relevance.jsonl` window each time — wasteful I/O for only 3 total episodes.
+
+**Fix** (`heartbeat_postflight.py:1137-1163`): Added two gates before calling `update_lambdas()`:
+1. **Verdict gate**: Skip when retrieval verdict is `NO_RETRIEVAL` or `SKIPPED` (no useful signal)
+2. **Episode gate**: Skip when total episodes in `adaptive_mmr_state.json` < 10 (not enough data to justify the scan)
+
+Both gates log the skip reason. Currently saving ~11 JSONL scans/day until episode count reaches 10.
+
 ### System Improvements Executed
 
 **1. health_check() now verifies retrieval quality** (`clarvis/brain/store.py:405`)
@@ -1266,3 +1276,25 @@ I executed evolution task: "[RETRIEVAL_GATE_TESTS] Add unit tests for `clarvis/b
 
 ---
 
+
+### 🎯 Final Perfection Results — 22:34 UTC
+
+**Brain Improvements:**
+- `clarvis/brain/__init__.py`: RuntimeError if collection init fails (was silent)
+- `clarvis/brain/store.py`: Enhanced health_check() with:
+  - Collection validation
+  - Store/recall roundtrip verification
+  - Timing metrics
+
+**Deprecated (7 scripts → scripts/deprecated/):**
+- autonomy_search_benchmark.py
+- cross_collection_edge_builder.py
+- dead_code_audit.py
+- pr_factory_rules.py
+- safety_check.py
+- structure_gate.py
+- subagent_soak_eval.py
+
+**Tests:** 313 passing in 9.06s (was timeout)
+
+**Commit:** 2b31035 — Pushed ✅

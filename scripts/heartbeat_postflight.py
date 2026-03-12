@@ -1134,12 +1134,34 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
                 if cr_record:
                     cr_record(cr_result)
                 # Periodically update adaptive MMR lambdas from accumulated data
+                # Rate-limit: skip when no useful signal or insufficient new episodes
                 if mmr_update_lambdas:
-                    try:
-                        updated = mmr_update_lambdas()
-                        log(f"ADAPTIVE MMR: lambdas updated — {updated}")
-                    except Exception:
-                        pass  # non-critical
+                    _mmr_skip_reason = None
+                    if rv in ("NO_RETRIEVAL", "SKIPPED"):
+                        _mmr_skip_reason = f"verdict={rv}"
+                    else:
+                        try:
+                            import json as _json
+                            _mmr_state_path = os.path.join(
+                                os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace"),
+                                "data", "retrieval_quality", "adaptive_mmr_state.json",
+                            )
+                            if os.path.exists(_mmr_state_path):
+                                with open(_mmr_state_path) as _f:
+                                    _mmr_st = _json.load(_f)
+                                _total_eps = sum(v.get("episodes", 0) for v in _mmr_st.values() if isinstance(v, dict))
+                                if _total_eps < 10:
+                                    _mmr_skip_reason = f"episodes={_total_eps}<10"
+                        except Exception:
+                            pass  # read failure → run update anyway
+                    if _mmr_skip_reason:
+                        log(f"ADAPTIVE MMR: skipped update ({_mmr_skip_reason})")
+                    else:
+                        try:
+                            updated = mmr_update_lambdas()
+                            log(f"ADAPTIVE MMR: lambdas updated — {updated}")
+                        except Exception:
+                            pass  # non-critical
         except Exception as e:
             log(f"Retrieval feedback recording failed (non-fatal): {e}")
             _pf_errors.append("retrieval_feedback")
