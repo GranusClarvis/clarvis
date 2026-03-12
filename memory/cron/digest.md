@@ -1198,3 +1198,31 @@ Orchestrator daily: promoted 0 agent results, benchmarked 2 agents. Errors: 3.
 1. Wire automation_insights → heartbeat_preflight
 2. Run dead_code_audit periodically
 3. Keep ast_surgery for future self-improvement
+### ⚡ Autonomous — 22:18 UTC
+
+I executed evolution task: "[RETRIEVAL_GATE_TESTS] Add unit tests for `clarvis/brain/retrieval_gate.py`. This module runs 12x/day to classify retrie". Result: success (exit 0, 611s). Output: unicode, newlines, tag-only)- No regressions (288/288 full suite passes)- QUEUE.md updatedNEXT: MMR_POSTFLIGHT_RATE_LIMIT  gate mmr_update_lambdas() in postflight to skip on NO_RET
+
+---
+
+### Perfection Sprint: Dead Code Audit + Test Speed Fix (manual, ~22:20 UTC)
+
+**Dead Code Audit** (`dead_code_audit.py`): 110 scripts, 99 exercised (90%), 11 deprecation candidates:
+- `safety_check.py`, `graph_cutover.py`, `dashboard_server.py`, `pr_factory_rules.py`, `structure_gate.py`, `subagent_soak_eval.py`, `autonomy_search_benchmark.py`, `cross_collection_edge_builder.py`, `semantic_overlap_booster.py`, `universal_web_agent.py`, `dead_code_audit.py` (itself)
+- Action: Move to `scripts/deprecated/` after 7-day soak (earliest: 2026-03-19)
+
+**Test Speed Fix**: `clarvis/tests/conftest.py` — replaced ChromaDB's default sentence-transformer embeddings with `_FastHashEmbedding` (deterministic SHA256-to-384d vectors) in the test fixture:
+- Before: `test_brain_roundtrip.py` + `test_memory_evolution.py` TIMEOUT at 180s (ChromaDB default embeddings ~3.2s/store)
+- After: 26 tests pass in 4.39s. Full suite (313 tests) passes in 9.06s
+- `invariants_check.py` pytest check will now pass within its 180s timeout
+
+**Invariants Status After Fixes**:
+- pytest: PASS (after fix), golden-qa: PASS, brain-health: PASS, hook-count: PASS
+- graph-verify: still FAIL — `similar_to` parity drift (JSON=6997 vs SQLite=6984). Low priority.
+
+**Other Health Checks**:
+- Import health: all pass except brain.py import (682ms vs 600ms threshold) — ONNX load, known
+- Brain: 3412 memories, 4010 nodes, 131K edges — healthy
+- Monitoring: normal log sizes
+
+---
+

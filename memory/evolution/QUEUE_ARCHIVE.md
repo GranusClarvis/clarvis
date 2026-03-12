@@ -919,3 +919,6 @@ _Last archived: 2026-03-09_
 - [x] [SELF_MODEL_ASSESS] Run self_model.py assess, report all scores **(2026-03-12: Memory=0.90, Autonomous=0.88, CodeGen=0.83, Reflection=0.91, Reasoning=1.00, Learning=0.93, Consciousness=0.90. Integration avg=0.840.)**
 - [x] [P0] Cross-collection connectivity — run targeted_mirror_boost **(2026-03-12: Was already 0.80. Ran targeted_mirror_boost: 9 mirrors, identity-goals +0.097, pairs<0.65 reduced 8→7.)**
 - [x] [P0] Verify retrieval gate + adaptive recall end-to-end with test task (2026-03-12: confirmed wired in heartbeat_preflight.py)
+
+## Archived 2026-03-12
+- [x] [RETRIEVAL_GATE_TESTS] Add unit tests for `clarvis/brain/retrieval_gate.py`. 69 tests covering all 3 tiers, tag/keyword matching, priority ordering, edge cases, dry_run. 288/288 suite pass. (2026-03-12)

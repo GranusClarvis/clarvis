@@ -112,7 +112,6 @@ _Consolidated into Pillar 2 above. See `docs/ORCHESTRATOR_PLAN_2026-03-06.md` fo
 
 ## P1 — This Week
 
-- [x] [RETRIEVAL_GATE_TESTS] Add unit tests for `clarvis/brain/retrieval_gate.py`. 69 tests covering all 3 tiers, tag/keyword matching, priority ordering, edge cases, dry_run. 288/288 suite pass. (2026-03-12)
 - [ ] [MMR_POSTFLIGHT_RATE_LIMIT] Gate `mmr_update_lambdas()` call in `heartbeat_postflight.py` to skip when (a) task was classified NO_RETRIEVAL (no useful signal) or (b) fewer than 10 new episodes since last update (check `episodes` field in `data/adaptive_mmr_state.json`). Currently scans full 7-day `context_relevance.jsonl` window on every postflight (12x/day) — wasteful I/O with no signal on retrieval-free tasks.
 
 ## P2 — When Idle
