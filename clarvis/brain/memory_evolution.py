@@ -164,24 +164,25 @@ def evolve_memory(brain, old_id, old_collection, new_text, reason="contradiction
     }
 
 
-def find_contradictions(brain, text, collection, threshold=0.3, top_n=3):
+def find_contradictions(brain, text, collection, threshold=1.0, top_n=5):
     """Find existing memories that are highly similar but potentially contradictory.
 
-    Detects contradiction by looking for memories with high embedding similarity
-    (distance < threshold) but containing negation/opposing signals.
+    Two detection signals (either triggers a conflict flag):
+      1. Negation asymmetry — one text has negation words the other lacks
+      2. Low text overlap — high embedding similarity (same topic) but different
+         wording (Jaccard < 0.3), per Xu et al. 2024 "Knowledge Conflicts" survey
 
-    This is a simple heuristic — full semantic contradiction detection would
-    require an LLM call. We check for negation patterns as a cheap proxy.
+    Threshold calibrated for MiniLM L2 distances (~0.8-1.0 for related memories).
 
     Args:
         brain: ClarvisBrain instance
         text: New memory text to check against existing memories
         collection: Which collection to search
-        threshold: Max embedding distance to consider (lower = more similar)
+        threshold: Max L2 distance to consider (default 1.0 for MiniLM)
         top_n: Number of similar memories to check
 
     Returns:
-        list of dicts with keys: id, document, distance, contradiction_signal
+        list of dicts with keys: id, document, distance, text_overlap, contradiction_signal
     """
     import re
 
@@ -209,27 +210,52 @@ def find_contradictions(brain, text, collection, threshold=0.3, top_n=3):
         words = set(re.findall(r"[a-z']+", t.lower()))
         return words & _NEGATION_WORDS
 
+    def _text_overlap(a, b):
+        """Jaccard similarity of word sets (0.0 = no overlap, 1.0 = identical)."""
+        wa = set(re.findall(r"[a-z0-9]+", a.lower()))
+        wb = set(re.findall(r"[a-z0-9]+", b.lower()))
+        if not wa or not wb:
+            return 0.0
+        return len(wa & wb) / len(wa | wb)
+
     new_negations = _extract_negations(text)
 
     contradictions = []
+    seen_ids = set()
     for mem in results:
         dist = mem.get("distance")
         if dist is None or dist > threshold:
             continue
 
-        doc = mem.get("document", "")
-        old_negations = _extract_negations(doc)
+        mem_id = mem.get("id")
+        if mem_id in seen_ids:
+            continue
 
-        # Contradiction signal: one has negation words the other doesn't
-        # (symmetric difference in negation patterns)
+        doc = mem.get("document", "")
+        signals = []
+
+        # Signal 1: negation word asymmetry
+        old_negations = _extract_negations(doc)
         neg_diff = new_negations.symmetric_difference(old_negations)
         if neg_diff:
+            signals.append(f"negation_diff:{','.join(sorted(neg_diff))}")
+
+        # Signal 2: high embedding similarity but low text overlap
+        # (same entity/topic, different content — key heuristic from
+        # Xu et al. 2024 "Knowledge Conflicts" survey)
+        overlap = _text_overlap(text, doc)
+        if overlap < 0.3:
+            signals.append(f"low_text_overlap:{overlap:.2f}")
+
+        if signals:
+            seen_ids.add(mem_id)
             contradictions.append({
-                "id": mem.get("id"),
+                "id": mem_id,
                 "collection": mem.get("collection", collection),
                 "document": doc,
                 "distance": dist,
-                "contradiction_signal": sorted(neg_diff),
+                "text_overlap": round(overlap, 3),
+                "contradiction_signal": signals,
             })
 
     return contradictions

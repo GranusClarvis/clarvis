@@ -251,29 +251,8 @@ def benchmark_efficiency():
     except Exception:
         pass
 
-    # Check cost log for average tokens per operation
-    cost_log = os.path.join(WORKSPACE, "data/costs.jsonl")
-    if os.path.exists(cost_log):
-        try:
-            entries = []
-            with open(cost_log) as f:
-                for line in f:
-                    line = line.strip()
-                    if line:
-                        try:
-                            entries.append(json.loads(line))
-                        except json.JSONDecodeError:
-                            continue
-            # Last 50 entries
-            recent = entries[-50:] if len(entries) > 50 else entries
-            if recent:
-                total_tokens = sum(
-                    e.get("input_tokens", 0) + e.get("output_tokens", 0)
-                    for e in recent
-                )
-                result["avg_tokens_per_op"] = round(total_tokens / len(recent))
-        except Exception:
-            pass
+    # Cost tracking: costs.jsonl removed (was deprecated).
+    # Real cost data available via cost_tracker.py telegram / cost_api.py
 
     return result
 

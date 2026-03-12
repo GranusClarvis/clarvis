@@ -10,6 +10,9 @@ External modules (hebbian, actr, attention, retrieval_quality, memory_consolidat
 register hooks instead of being imported by brain — dependency inversion breaks the SCC.
 """
 
+import json as _json
+import logging
+import os
 import re
 import time
 import uuid
@@ -207,22 +210,95 @@ store_important = lambda text, collection=None, importance=0.7, source="conversa
 recall = lambda query, n=5: [r["document"] for r in brain.recall(query, n=n)]
 
 
-def remember(text, importance=0.9, category=None):
-    """Manually remember something important. Auto-detects collection if category=None."""
-    if category is None:
-        tl = text.lower()
-        if re.search(r'\b(prefer|hate|love|like|dislike|want|don\'?t want)\b', tl):
-            category = PREFERENCES
-        elif re.search(r'\b(learned|lesson|mistake|fixed|solved|research|insight)\b', tl):
-            category = LEARNINGS
-        elif re.search(r'\b(my name is|i am|creator|made me)\b', tl):
-            category = IDENTITY
-        elif re.search(r'\b(server|host|port|database|api|config|running on)\b', tl):
-            category = INFRASTRUCTURE
-        elif re.search(r'\b(goal|objective|target|deadline|milestone)\b', tl):
-            category = GOALS
-        else:
-            category = MEMORIES
+_conflict_log = logging.getLogger("clarvis.brain.conflicts")
+
+_CONFLICT_LOG_PATH = os.path.join(
+    os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace"),
+    "data", "conflict_log.jsonl",
+)
+
+
+def _log_conflict(conflict, action, new_text, category):
+    """Append a conflict event to data/conflict_log.jsonl."""
+    from datetime import datetime, timezone
+    entry = {
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "action": action,
+        "category": category,
+        "new_text": new_text[:200],
+        "existing_id": conflict.get("id"),
+        "existing_text": conflict.get("document", "")[:200],
+        "distance": conflict.get("distance"),
+        "contradiction_signal": conflict.get("contradiction_signal", []),
+    }
+    try:
+        os.makedirs(os.path.dirname(_CONFLICT_LOG_PATH), exist_ok=True)
+        with open(_CONFLICT_LOG_PATH, "a") as f:
+            f.write(_json.dumps(entry) + "\n")
+    except Exception as exc:
+        _conflict_log.debug("Failed to write conflict log: %s", exc)
+
+
+def _detect_and_resolve_conflicts(text, category, importance):
+    """Pre-storage conflict detection: find contradictions, apply temporal precedence.
+
+    Returns (resolved_ids, conflict_count) — resolved_ids are the old memory IDs
+    that were superseded via evolve_memory.
+    """
+    from .memory_evolution import find_contradictions, evolve_memory
+
+    resolved_ids = []
+    try:
+        contradictions = find_contradictions(brain, text, category,
+                                             threshold=1.0, top_n=5)
+    except Exception:
+        return [], 0
+
+    for conflict in contradictions:
+        old_id = conflict.get("id")
+        old_col = conflict.get("collection", category)
+        if not old_id:
+            continue
+
+        # Temporal precedence: newer always supersedes older
+        try:
+            evolve_result = evolve_memory(
+                brain, old_id, old_col, text, reason="contradiction"
+            )
+            action = "evolved" if evolve_result.get("evolved") else "log_only"
+        except Exception:
+            action = "log_only"
+
+        _log_conflict(conflict, action, text, category)
+        if action == "evolved":
+            resolved_ids.append(old_id)
+            _conflict_log.info(
+                "Conflict resolved: superseded %s in %s (d=%.3f, signals=%s)",
+                old_id, old_col, conflict.get("distance", -1),
+                conflict.get("contradiction_signal", []),
+            )
+
+    return resolved_ids, len(contradictions)
+
+
+def _detect_category(text):
+    """Auto-detect collection from text content."""
+    tl = text.lower()
+    if re.search(r'\b(prefer|hate|love|like|dislike|want|don\'?t want)\b', tl):
+        return PREFERENCES
+    if re.search(r'\b(learned|lesson|mistake|fixed|solved|research|insight)\b', tl):
+        return LEARNINGS
+    if re.search(r'\b(my name is|i am|creator|made me)\b', tl):
+        return IDENTITY
+    if re.search(r'\b(server|host|port|database|api|config|running on)\b', tl):
+        return INFRASTRUCTURE
+    if re.search(r'\b(goal|objective|target|deadline|milestone)\b', tl):
+        return GOALS
+    return MEMORIES
+
+
+def _detect_tags(text):
+    """Auto-detect tags from text content."""
     tags = []
     tl = text.lower()
     if re.search(r'\b(code|script|python|js|rust)\b', tl):
@@ -233,6 +309,23 @@ def remember(text, importance=0.9, category=None):
         tags.append("goal")
     if re.search(r'\b(research|paper|study|theory)\b', tl):
         tags.append("research")
+    return tags
+
+
+def remember(text, importance=0.9, category=None):
+    """Manually remember something important. Auto-detects collection if category=None.
+
+    Pre-storage conflict detection: queries existing memories for contradictions.
+    If a highly similar memory exists with conflicting content, the old memory
+    is superseded (temporal precedence) and a conflict is logged.
+    """
+    if category is None:
+        category = _detect_category(text)
+    tags = _detect_tags(text)
+
+    # --- Conflict detection (pre-storage) ---
+    _detect_and_resolve_conflicts(text, category, importance)
+
     return brain.store(text, collection=category, importance=importance,
                        tags=tags or None, source="manual")
 
@@ -276,29 +369,37 @@ def propose(text, importance=0.7, category=None, source="proposal"):
     """
     candidate_id = f"prop_{uuid.uuid4().hex[:12]}"
 
-    # Auto-detect category (same logic as remember())
+    # Auto-detect category
     if category is None:
-        tl = text.lower()
-        if re.search(r'\b(prefer|hate|love|like|dislike|want|don\'?t want)\b', tl):
-            category = PREFERENCES
-        elif re.search(r'\b(learned|lesson|mistake|fixed|solved|research|insight)\b', tl):
-            category = LEARNINGS
-        elif re.search(r'\b(my name is|i am|creator|made me)\b', tl):
-            category = IDENTITY
-        elif re.search(r'\b(server|host|port|database|api|config|running on)\b', tl):
-            category = INFRASTRUCTURE
-        elif re.search(r'\b(goal|objective|target|deadline|milestone)\b', tl):
-            category = GOALS
-        else:
-            category = MEMORIES
+        category = _detect_category(text)
 
     evaluation = {
         "dedup_similar": None,
+        "conflicts": [],
         "goal_relevance": 0.0,
         "importance_ok": importance >= 0.3,
         "text_quality": len(text.strip()) >= 20,
     }
     reasons = []
+
+    # 0. Conflict detection: find contradictions in target collection
+    try:
+        from .memory_evolution import find_contradictions
+        contradictions = find_contradictions(brain, text, category,
+                                             threshold=1.0, top_n=5)
+        if contradictions:
+            evaluation["conflicts"] = [
+                {
+                    "id": c["id"],
+                    "distance": round(c.get("distance", 0), 4),
+                    "signals": c.get("contradiction_signal", []),
+                    "text_preview": c.get("document", "")[:100],
+                }
+                for c in contradictions
+            ]
+            reasons.append(f"conflicts detected ({len(contradictions)})")
+    except Exception:
+        pass
 
     # 1. Dedup check: find similar existing memories
     try:

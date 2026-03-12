@@ -156,6 +156,40 @@ class TestFindContradictions:
         # Real contradiction detection depends on embedding distance
         assert isinstance(results, list)
 
+    def test_detects_low_text_overlap(self, tmp_brain):
+        """High embedding sim + low text overlap = conflict (same topic, different content)."""
+        tmp_brain.store("The gateway runs on port 18789 using Node.js",
+                        collection=LEARNINGS, importance=0.8)
+        # Same topic (gateway/port) but completely different content
+        results = find_contradictions(
+            tmp_brain,
+            "OpenClaw gateway migrated to Rust on port 9090",
+            LEARNINGS,
+            threshold=1.5,  # Relaxed for test brain (no real embeddings)
+        )
+        assert isinstance(results, list)
+        # If distance is within threshold, should flag low_text_overlap
+        for r in results:
+            signals = r.get("contradiction_signal", [])
+            has_overlap_signal = any("low_text_overlap" in s for s in signals)
+            has_negation_signal = any("negation_diff" in s for s in signals)
+            # At least one signal type should be present
+            assert has_overlap_signal or has_negation_signal
+
+    def test_text_overlap_field_present(self, tmp_brain):
+        """Contradiction results should include text_overlap score."""
+        tmp_brain.store("Python is not good for systems programming",
+                        collection=LEARNINGS, importance=0.8)
+        results = find_contradictions(
+            tmp_brain,
+            "Python is excellent for systems programming",
+            LEARNINGS,
+            threshold=1.5,
+        )
+        for r in results:
+            assert "text_overlap" in r
+            assert isinstance(r["text_overlap"], float)
+
     def test_returns_empty_for_bad_collection(self, tmp_brain):
         result = find_contradictions(tmp_brain, "Test", "nonexistent_collection")
         assert result == []

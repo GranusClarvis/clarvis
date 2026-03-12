@@ -63,7 +63,6 @@ MEMORY_DELETE_GZ_AFTER_DAYS = 90
 # JSONL trimming: {relative_path: max_lines_to_keep}
 JSONL_TRIM = {
     "data/thought_log.jsonl": 2000,
-    "data/costs.jsonl": 5000,
     "data/router_decisions.jsonl": 2000,
     "data/code_gen_outcomes.jsonl": 2000,
     "data/performance_history.jsonl": 1000,

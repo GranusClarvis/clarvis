@@ -239,6 +239,49 @@ def _meta_learning_analyze(context):
 
 
 # ---------------------------------------------------------------------------
+# 5. INTRINSIC SELF-ASSESSMENT hook (postflight priority 92 — daily, after meta-learning)
+# ---------------------------------------------------------------------------
+
+_ASSESSMENT_MARKER = os.path.join(_SCRIPTS_DIR, "..", "data", ".last_assessment_run")
+
+
+def _intrinsic_assessment(context):
+    """Run intrinsic self-assessment (at most once per day via postflight)."""
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    if os.path.exists(_ASSESSMENT_MARKER):
+        try:
+            with open(_ASSESSMENT_MARKER) as f:
+                last_date = f.read().strip()
+            if last_date == today:
+                return {"action": "skip", "reason": "already_ran_today"}
+        except (IOError, OSError):
+            pass
+
+    from clarvis.cognition.intrinsic_assessment import full_assessment
+
+    result = full_assessment(days=7)
+    assessment = result.get("assessment", {})
+    curriculum = result.get("autocurriculum", [])
+
+    # Update marker
+    os.makedirs(os.path.dirname(_ASSESSMENT_MARKER), exist_ok=True)
+    with open(_ASSESSMENT_MARKER, "w") as f:
+        f.write(today)
+
+    score = assessment.get("composite_score", 0)
+    patterns = len(result.get("failure_patterns", []))
+    _log(f"SELF-ASSESSMENT: composite={score:.0%}, "
+         f"patterns={patterns}, autocurriculum={len(curriculum)} tasks")
+
+    return {
+        "action": "assessed",
+        "composite_score": score,
+        "failure_patterns": patterns,
+        "autocurriculum_tasks": len(curriculum),
+    }
+
+
+# ---------------------------------------------------------------------------
 # Registration
 # ---------------------------------------------------------------------------
 
@@ -265,9 +308,15 @@ def register_meta_learning():
     registry.register(HookPhase.POSTFLIGHT, "meta_learning", _meta_learning_analyze, priority=90)
 
 
+def register_intrinsic_assessment():
+    """Register intrinsic self-assessment hook (daily, priority 92)."""
+    registry.register(HookPhase.POSTFLIGHT, "intrinsic_assessment", _intrinsic_assessment, priority=92)
+
+
 def register_all():
     """Register all migrated subsystem hooks. Call once at startup."""
     register_procedural()
     register_consolidation()
     register_metrics()
     register_meta_learning()
+    register_intrinsic_assessment()

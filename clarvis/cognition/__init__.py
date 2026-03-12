@@ -1,10 +1,11 @@
-"""Clarvis cognition — attention, confidence, thought protocol, context relevance.
+"""Clarvis cognition — attention, confidence, thought protocol, context relevance, self-assessment.
 
 Split into:
   - attention.py: GWT spotlight, salience scoring, codelet competition, attention schema (AST)
   - confidence.py: prediction tracking, Bayesian calibration, Brier scoring
   - thought_protocol.py: ThoughtScript DSL, signal vectors, decision frames
   - context_relevance.py: section relevance scoring, Jaccard overlap, episode-level tracking
+  - intrinsic_assessment.py: performance evaluation, failure patterns, autocurriculum
 """
 
 from .confidence import (

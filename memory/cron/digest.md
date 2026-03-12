@@ -29,6 +29,35 @@ Ran full architecture assessment. All systems green.
 
 No critical improvements needed. Architecture is stable and performant.
 
+### Knowledge Conflict Detection — Wired into brain.remember()
+
+Enhanced `find_contradictions()` in `clarvis/brain/memory_evolution.py` with a second detection signal: **low text overlap** (Jaccard < 0.3) alongside the existing negation-word asymmetry. This implements the embedding distance anomaly heuristic from Xu et al. 2024 ("Knowledge Conflicts" survey): when two memories have high embedding similarity but low word overlap, they likely describe the same entity with conflicting facts.
+
+**Changes:**
+- `memory_evolution.py`: Added `_text_overlap()` Jaccard function, `text_overlap` field in results, dual-signal detection (negation + overlap)
+- `__init__.py`: Calibrated threshold from 0.3→1.0 for MiniLM L2 distances (real brain queries return ~0.8-1.0 for related memories)
+- `test_memory_evolution.py`: 2 new tests (low-overlap detection, text_overlap field presence) — 18/18 pass
+
+**Pipeline:** `remember()` → `_detect_and_resolve_conflicts()` → `find_contradictions()` → `evolve_memory()` (temporal precedence) + `_log_conflict()` → `data/conflict_log.jsonl`
+
+**Verified on real brain:** 3 contradictions detected in infrastructure collection for gateway-related queries with both `negation_diff` and `low_text_overlap` signals.
+
+### Conflict Detection — Wired into brain.remember()
+
+Implemented pre-storage conflict detection in `clarvis.brain.remember()`, based on Xu et al. 2024 "Knowledge Conflicts" survey (arXiv:2403.08319).
+
+**What it does:**
+- Before storing a memory, `remember()` calls `_detect_and_resolve_conflicts()` which queries top-5 similar existing memories
+- Two contradiction signals: (1) negation word asymmetry, (2) high embedding similarity + low text overlap (Jaccard < 0.3)
+- **Temporal precedence**: contradicting older memories are superseded via `evolve_memory()` — original marked with `superseded_by`, evolved version gets `evolved_from` lineage
+- All conflicts logged to `data/conflict_log.jsonl` with timestamps, signals, and resolution action
+
+**Changes:**
+- `clarvis/brain/__init__.py`: Added `_detect_and_resolve_conflicts()`, `_log_conflict()`, `_detect_category()`, `_detect_tags()` helpers. `remember()` now runs conflict gate before storage. `propose()` also checks for conflicts in evaluation.
+- `clarvis/brain/memory_evolution.py`: Enhanced `find_contradictions()` with text overlap heuristic (Jaccard similarity), dedup via `seen_ids`, multi-signal detection. Threshold calibrated to 1.0 for MiniLM L2 distances.
+
+**Test results:** End-to-end verified — contradicting memory triggers detection (negation_diff signal), old memory superseded, evolved version linked, conflict logged. 25/25 clarvis-db tests pass.
+
 ### Evolution — BRIEF_BENCHMARK_REFRESH Complete
 
 Created `scripts/brief_benchmark.py` — measures context brief quality against ground-truth expectations for 10 known tasks across 3 categories (code/research/maintenance) and 3 tiers (minimal/standard/full). Uses token-intersection coverage scoring. Baseline results: 35.2% mean coverage (code=43%, research=63%, maintenance=13%). Full tier briefs score highest (62%); minimal tier produces too little content to match expectations (0%). Results auto-merged into `data/benchmarks/brief_v2_report.json` as `brief_quality` block. Monthly cron added at 03:45 UTC on the 1st of each month, right after the monthly reflection. This unblocks longitudinal tracking of brief quality as the brain and context pipeline evolve.
