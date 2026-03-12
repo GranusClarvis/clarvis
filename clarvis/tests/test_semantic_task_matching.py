@@ -183,20 +183,21 @@ class TestCosineSimilarity:
 class TestSemanticRank:
     @staticmethod
     def _mock_embed_fn(texts):
-        """Deterministic mock embeddings based on keyword overlap.
+        """Deterministic mock embeddings based on keyword presence.
 
-        Generates 3D vectors where dimensions represent:
-        - dim 0: 'brain' or 'memory' keywords
-        - dim 1: 'graph' or 'compaction' keywords
-        - dim 2: 'cost' or 'budget' keywords
+        Generates 6D vectors for enough differentiation to avoid
+        the >0.9 near-duplicate filter while preserving semantic direction.
         """
         result = []
-        for text in texts:
+        for i, text in enumerate(texts):
             t = text.lower()
             v = [
-                1.0 if any(kw in t for kw in ["brain", "memory", "retrieval"]) else 0.1,
-                1.0 if any(kw in t for kw in ["graph", "compaction", "edge"]) else 0.1,
-                1.0 if any(kw in t for kw in ["cost", "budget", "spend"]) else 0.1,
+                0.8 if "brain" in t else 0.1,
+                0.7 if "memory" in t or "retrieval" in t else 0.15,
+                0.8 if "graph" in t or "compaction" in t else 0.1,
+                0.7 if "edge" in t or "dataset" in t else 0.15,
+                0.8 if "cost" in t or "budget" in t else 0.1,
+                0.2 + 0.01 * i,  # small unique offset per text
             ]
             result.append(v)
         return result
