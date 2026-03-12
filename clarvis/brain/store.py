@@ -403,23 +403,51 @@ class StoreMixin:
         return self.health_check()
 
     def health_check(self):
-        """Verify brain is working"""
-        try:
-            self.store("health check test", collection=MEMORIES, importance=0.1)
-            self.recall("health check test", n=1)
-            s = self.stats()
+        """Verify brain is working: store, recall, validate retrieval, check collections."""
+        issues = []
+        timings = {}
 
-            return {
-                "status": "healthy",
-                "total_memories": s["total_memories"],
-                "collections": len(s["collections"]),
-                "graph_edges": s["graph_edges"]
-            }
+        # 1. Validate all collections initialized
+        missing = [c for c in ALL_COLLECTIONS if c not in self.collections]
+        if missing:
+            issues.append(f"missing collections: {missing}")
+
+        # 2. Store + recall roundtrip with retrieval verification
+        try:
+            t0 = time.monotonic()
+            probe = f"health_probe_{int(time.time())}"
+            self.store(probe, collection=MEMORIES, importance=0.1)
+            timings["store_ms"] = round((time.monotonic() - t0) * 1000)
+
+            t0 = time.monotonic()
+            results = self.recall(probe, n=3)
+            timings["recall_ms"] = round((time.monotonic() - t0) * 1000)
+
+            # Verify the probe was actually retrieved
+            found = any(probe in r.get("document", "") for r in results)
+            if not found:
+                issues.append("retrieval failed: probe memory not in recall results")
         except Exception as e:
-            return {
-                "status": "unhealthy",
-                "error": str(e)
-            }
+            issues.append(f"store/recall error: {e}")
+
+        # 3. Stats
+        try:
+            t0 = time.monotonic()
+            s = self.stats()
+            timings["stats_ms"] = round((time.monotonic() - t0) * 1000)
+        except Exception as e:
+            issues.append(f"stats error: {e}")
+            s = {"total_memories": 0, "collections": {}, "graph_edges": 0}
+
+        status = "unhealthy" if issues else "healthy"
+        return {
+            "status": status,
+            "total_memories": s["total_memories"],
+            "collections": len(s["collections"]),
+            "graph_edges": s.get("graph_edges", 0),
+            "timings": timings,
+            **({"issues": issues} if issues else {}),
+        }
 
     # === RECONSOLIDATION ===
 

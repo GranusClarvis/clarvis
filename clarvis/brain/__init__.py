@@ -85,16 +85,27 @@ class ClarvisBrain(StoreMixin, GraphMixin, SearchMixin):
         self._optimize_hooks = []
 
     def _init_collections(self):
-        """Ensure all collections exist"""
+        """Ensure all collections exist. Raises RuntimeError if any fail."""
         self.collections = {}
+        failed = []
         for name in ALL_COLLECTIONS:
-            if self.embedding_function:
-                self.collections[name] = self.client.get_or_create_collection(
-                    name,
-                    embedding_function=self.embedding_function
-                )
-            else:
-                self.collections[name] = self.client.get_or_create_collection(name)
+            try:
+                if self.embedding_function:
+                    self.collections[name] = self.client.get_or_create_collection(
+                        name,
+                        embedding_function=self.embedding_function
+                    )
+                else:
+                    self.collections[name] = self.client.get_or_create_collection(name)
+            except Exception as e:
+                failed.append((name, str(e)))
+
+        if failed:
+            names = [f[0] for f in failed]
+            raise RuntimeError(
+                f"Brain init failed: {len(failed)}/{len(ALL_COLLECTIONS)} collections "
+                f"could not be created: {names}. Errors: {failed}"
+            )
 
     # --- Hook registration API ---
 

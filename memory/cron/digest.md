@@ -5,6 +5,46 @@ _Read this to know what happened during autonomous cycles._
 
 ---
 
+## Final Perfection Analysis — Deprecation + System Improvements (manual, evening CET)
+
+### Deprecation Verdicts (11 candidates analyzed)
+
+| Script | LOC | Decision | Reason |
+|--------|-----|----------|--------|
+| safety_check.py | ~80 | **DEPRECATED** | No active callers, no cron, superseded by structure_gate (also deprecated) |
+| pr_factory_rules.py | 12 | **DEPRECATED** | Thin wrapper → `clarvis.orch.pr_rules` spine module (migration complete) |
+| structure_gate.py | ~150 | **DEPRECATED** | No callers, no cron wiring, compileall covered by pytest |
+| subagent_soak_eval.py | ~300 | **DEPRECATED** | Evaluation harness never wired to cron, no importers |
+| autonomy_search_benchmark.py | 449 | **DEPRECATED** | 0 imports, experimental benchmark never integrated |
+| cross_collection_edge_builder.py | ~200 | **DEPRECATED** | Superseded by semantic_bridge_builder.py |
+| semantic_overlap_booster.py | ~200 | **DEPRECATED** | Superseded by semantic_bridge_builder.py |
+| dead_code_audit.py | ~200 | **DEPRECATED** | Self-referential utility, ran once, purpose fulfilled |
+| graph_cutover.py | ~180 | **KEPT** | Operational rollback tool documented in RUNBOOK.md |
+| dashboard_server.py | ~300 | **KEPT** | Active: has tests, serves visual dashboard on port 18799 |
+| universal_web_agent.py | ~200 | **KEPT** | Has tests, credential management, browser automation capability |
+
+**Total: 8 scripts → deprecated/, 3 kept.** ~1,600 LOC removed from active scripts/.
+
+### System Improvements Executed
+
+**1. health_check() now verifies retrieval quality** (`clarvis/brain/store.py:405`)
+- Previously: stored probe + called recall() but never checked if probe was in results
+- Now: validates probe appears in top-3 recall results, reports `issues` list if not
+- Added per-operation timing (`store_ms`, `recall_ms`, `stats_ms`) for performance visibility
+- Added collection count validation against ALL_COLLECTIONS
+
+**2. _init_collections() now fails loud on errors** (`clarvis/brain/__init__.py:87`)
+- Previously: if `get_or_create_collection()` failed mid-loop, brain silently operated with missing collections
+- Now: catches per-collection exceptions, raises `RuntimeError` with list of failed collections
+- Prevents silent data misdirection (store to LEARNINGS → silent fallback to MEMORIES)
+
+**3. Identified improvements for future sprints:**
+- Learning loop error handling (conversation_learner.py, knowledge_synthesis.py — no try/except on brain.store)
+- ChromaDB retry logic in factory.py (no backoff on transient failures)
+- Integration tests for learning pipeline (0 test files for these modules)
+
+---
+
 ## Perfection Audit — Full Codebase Analysis (manual, ~night CET)
 
 ### 1. BLOAT: Scripts Not in Cron
