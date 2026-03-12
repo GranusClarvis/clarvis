@@ -3,6 +3,155 @@
 _What I did today, written by my subconscious processes._
 _Read this to know what happened during autonomous cycles._
 
+---
+
+## Perfection Audit — Full Codebase Analysis (manual, ~night CET)
+
+### 1. BLOAT: Scripts Not in Cron
+
+**83 of ~160 scripts (48%) are not referenced by any cron job.** Most are libraries, utilities, or experimental modules imported by other scripts. Categorized:
+
+| Category | Count | Examples | Verdict |
+|----------|-------|---------|---------|
+| **Pure shim wrappers** | 11 | `brain.py`, `episodic_memory.py`, `working_memory.py`, `hebbian_memory.py`, `procedural_memory.py`, `memory_consolidation.py`, `task_router.py`, `task_selector.py`, `cost_api.py`, `phi_metric.py`, `self_model.py` | Keep for now (backward compat). Migrate callers to spine imports over time, then remove. |
+| **Manual-trigger utilities** | 8 | `spawn_claude.sh`, `safe_update.sh`, `cron_doctor.py`, `budget_alert.py`, `graph_cutover.py`, `backup_restore.sh`, `cost_tracker.py`, `tool_maker.py` | **Keep** — called on-demand or via Telegram slash commands |
+| **Library modules** (imported by others) | ~25 | `attention.py`, `clarvis_confidence.py`, `clarvis_reasoning.py`, `cognitive_workspace.py`, `working_memory.py`, `extract_steps.py`, `queue_writer.py` | **Keep** — they're libraries, not standalone jobs |
+| **Browser/vision** | 4 | `clarvis_browser.py`, `browser_agent.py`, `clarvis_eyes.py`, `universal_web_agent.py` | **Keep** — ad-hoc capability |
+| **PR Factory** | 4 | `pr_factory.py`, `pr_factory_indexes.py`, `pr_factory_intake.py`, `pr_factory_rules.py` | **Wire** — should get a cron slot once stable |
+| **Benchmarking/experimental** | ~12 | `autonomy_search_benchmark.py`, `orchestration_benchmark.py`, `subagent_soak_eval.py`, `retrieval_experiment.py` | **Review** — some are dead |
+| **Dead/zombie** | 5 | `cron_research_discovery.sh` (absorbed), `evolution_loop.py` (unused), `hyperon_atomspace.py` (dead), `synaptic_memory.py` (abandoned), `autonomy_search_benchmark.py` (0 imports) | **REMOVE** |
+
+**Action items:**
+- Remove 5 dead scripts (saves ~3,500 LOC)
+- Wire PR factory into cron when ready
+- Gradual shim-to-spine migration for the 11 wrappers
+
+### 2. FOLDER STRUCTURE: clarvis/ Package
+
+**Verdict: Well-organized. Minor improvements only.**
+
+```
+clarvis/          (8 submodules, 61 files, ~23k LOC)
+├── brain/        (13 files) — Spine. ClarvisBrain, hooks, graph, search, store ✓
+├── memory/       (7 files) — Episodic, procedural, hebbian, working, SOAR, consolidation ✓
+├── cognition/    (8 files) — Attention, confidence, thought protocol, intrinsic assessment ✓
+├── context/      (5 files) — Assembly, compression, adaptive MMR, GC ✓
+├── heartbeat/    (5 files) — Gate, hooks, runner, adapters ✓
+├── metrics/      (4 files) — Phi, PI benchmark, self-model ✓
+├── orch/         (7 files) — Router, task selector, PR pipeline, cost API ✓
+├── learning/     (2 files) — ⚠️ STUB: only meta_learning.py, empty __init__ ✓
+└── tests/        (14 files) — Good coverage ✓
+```
+
+**Issues found:**
+1. **`learning/` is a stub** — only `meta_learning.py` with empty `__init__.py`. Either populate (move `parameter_evolution.py`, `meta_gradient_rl.py` here) or remove and keep meta_learning in cognition/
+2. **`memory/__init__.py` has no re-exports** — Unlike other submodules, no convenience imports. Add: `from .episodic_memory import EpisodicMemory` etc.
+3. **7 `cli_*.py` files in root** — Could move to `clarvis/cli/` subdir for cleanliness. Low priority.
+4. **No circular import issues** found — hook-based decoupling is working well
+
+### 3. SPINE: clarvis/brain/__init__.py Exports
+
+**577 lines. Clean and well-structured.**
+
+- **Classes**: `ClarvisBrain`, `LocalBrain`, `_LazyBrain` (proxy for lazy init)
+- **Singletons**: `brain`, `local_brain`, `get_brain()`, `get_local_brain()`
+- **API functions**: `remember`, `capture`, `search`, `propose`, `commit`, `propose_and_commit`, `evolve`, `global_search`
+- **Hook registries**: `register_recall_scorer`, `register_recall_booster`, `register_recall_observer`, `register_optimize_hook`
+- **Conflict detection**: `_detect_and_resolve_conflicts()` with temporal precedence
+- **Constants**: All 10 collection names, paths, routing patterns
+
+**No issues found.** The mixin composition (`StoreMixin + GraphMixin + SearchMixin`) is clean. Lazy init via `_LazyBrain` proxy avoids ChromaDB startup cost. Hook architecture enables decoupled extension.
+
+### 4. CONSOLIDATION: Duplicate Functionality
+
+**9 overlap pairs identified:**
+
+| Priority | Overlap | Recommendation |
+|----------|---------|---------------|
+| **HIGH** | `self_report.py` vs `self_model.py daily` — both do daily assessment, store to brain | Absorb `self_report.py`'s memory-count metric into `self_model.py`. Retire `self_report.py`. |
+| **HIGH** | `retrieval_quality.py` vs `retrieval_benchmark.py` — both measure retrieval quality | `retrieval_benchmark.py` is the ground-truth replacement. Remove `retrieval_quality.py`. |
+| **HIGH** | `cron_research_discovery.sh` still exists despite being absorbed by `cron_research.sh` | Delete the zombie. Shares same logfile path — collision risk. |
+| **MED** | `brain_bridge.py` → `brain_introspect.py` → `prompt_builder.py` — 3 generations of context gathering | `prompt_builder.py` is the current solution. Retire `brain_bridge.py` (still imported by heartbeat_preflight). |
+| **MED** | `benchmark_brief.py` vs `brief_benchmark.py` — confusingly similar names, same output file | Rename or merge. Both write to `brief_v2_report.json`. |
+| **MED** | `cron_report_morning.sh` / `cron_report_evening.sh` — 60+ lines of identical inline Python | Extract shared digest-parsing + Telegram-sending into a utility function. |
+| **LOW** | `code_quality_gate.py` / `ast_surgery.py` — both auto-fix unused imports | `ast_surgery.py` is the superset. Remove import-fix from `code_quality_gate.py`. |
+| **LOW** | `brain_hygiene.py` / `graph_compaction.py` — both call `backfill_graph_nodes()` | Minor redundancy. Graph compaction runs daily, hygiene weekly. Deduplicate the backfill call. |
+| **LOW** | `graph_migrate_to_sqlite.py` / `graph_cutover.py` — complementary but undocumented relationship | Add cross-references in docstrings. |
+
+### 5. WIRING: automation_insights.py + meta_learning.py
+
+**automation_insights.py: Already wired** (§10.5 in heartbeat_preflight). Verified working. One gap: `domain_competence_map()` is computed but never surfaced into the prompt — could enhance routing (§9) or confidence tier (§7.6).
+
+**meta_learning.py: UNWIRED — the biggest gap.** Has `get_task_advice(task_text)` returning `{strategy_score, warnings, suggested_approach}`. This is strategy-level intelligence (clustered anti-patterns, strategy effectiveness) complementary to automation_insights' raw keyword matching. Currently only runs as a batch job in `cron_reflection.sh`.
+
+**Recommended wiring** (new §10.51):
+```python
+# heartbeat_preflight.py — after §10.5
+try:
+    from meta_learning import meta_learner
+    advice = meta_learner.get_task_advice(next_task)
+    if advice.get("warnings"):
+        context_brief += "\n" + "\n".join(advice["warnings"][:2]) + "\n"
+except Exception:
+    pass
+```
+
+**Other scripts checked — correctly NOT wired:**
+- `failure_amplifier.py` — batch-only, feeds episodes.json (automation_insights reads it downstream) ✓
+- `prediction_review.py` — batch-only, generates QUEUE tasks ✓
+- `parameter_evolution.py` — batch-only, grid search ✓
+- `knowledge_synthesis.py` — batch-only, too slow for per-heartbeat ✓
+
+---
+
+### Summary: Top 5 Actions
+
+1. **Remove 5 dead scripts**: `cron_research_discovery.sh`, `evolution_loop.py`, `hyperon_atomspace.py`, `synaptic_memory.py`, `autonomy_search_benchmark.py`
+2. **Retire 2 superseded scripts**: `self_report.py` (→ self_model.py), `retrieval_quality.py` (→ retrieval_benchmark.py)
+3. **Wire `meta_learning.get_task_advice()`** into heartbeat preflight §10.51
+4. **Surface `domain_competence_map()`** from automation_insights into routing/confidence
+5. **Populate or remove `learning/` stub**; add `memory/__init__` re-exports
+
+---
+
+### Automation Insights Wiring Verification (manual, ~evening CET)
+
+**Status**: Already wired into heartbeat preflight (§10.5). Verified end-to-end:
+- Import at `heartbeat_preflight.py:102` (`format_insights_for_brief as get_automation_insights`)
+- Call at §10.5 (line 1168): injects up to 400B of warnings into context brief
+- Timing tracked in `result["timings"]["automation_insights"]`
+- **Test results**: 240 episodes loaded, 17 failures indexed, warnings fire correctly for matching tasks
+- Produces 3 warning types: similar-task-failed, low-success-verb, duration-risk, plus soft-failure patterns
+- Domain competence map covers 7 domains; overall success rate 91%
+- No code changes needed — integration was already complete.
+
+### Bloat Audit & Spine Review (manual, ~midday CET)
+
+**5 bloat scripts analyzed** (~3,533 lines total):
+- **REMOVE** (3): `autonomy_search_benchmark.py` (449L, 0 imports), `hyperon_atomspace.py` (846L, dead import), `synaptic_memory.py` (1011L, abandoned refactor)
+- **CONSOLIDATE** (2): `soar_engine.py` (827L → cognitive_workspace), `retrieval_quality.py` (400L → performance_benchmark)
+
+**Spine status**: 8 submodules, ~23k LOC. 37/110 scripts migrated. `learning/` is a stub. `memory/__init__` has no re-exports. 13 test files. Hook architecture enables decoupling.
+
+**Next consolidation targets**: fill or remove learning/ stub, add memory/ re-exports, migrate cron orchestrators.
+
+### Final Sprint (manual, ~23:55 CET)
+
+- **Tests**: `clarvis-db` 25/25 passed (21.03s)
+- **Phi**: Φ=0.820 — Deep integration, approaching unified information structure
+  - Reachability: 1.000 (strongest), Semantic overlap: 0.678 (weakest)
+  - Brain: 3,408 memories, 130,991 edges (103,668 cross-collection)
+- **Hooks**: 2 hook scripts — `reasoning_chain_hook.py` (reasoning chain CLI for cron integration), `session_hook.py` (attention state + working memory lifecycle)
+- **No Claude Code hooks config** — project settings.json absent (no pre/post tool hooks configured)
+- **Status**: All green. Tests passing, Phi stable at 0.82, brain growing steadily.
+
+### Quick Check (manual, ~22:47 CET)
+
+- **Tests**: `clarvis-db` 25/25 passed (22.39s)
+- **Phi**: Φ=0.8200 (fresh compute 21:46 UTC, entry #33)
+  - IC=0.8723, CC=0.7912, SC=0.6780, CR=1.0000
+- **Status**: Green. Phi slight dip from 0.8239→0.8200 (intra-density & cross-connectivity marginally down).
+
 ### Final Checks (manual, ~22:30 CET)
 
 - **Tests**: `clarvis-db` 25/25 passed (10.05s)
@@ -1035,3 +1184,17 @@ Orchestrator daily: promoted 0 agent results, benchmarked 2 agents. Errors: 3.
 - **Memories**: 3405
 - **Graph edges**: 130,616
 - **Tests**: Running verification
+
+### 🎯 Perfection Analysis In Progress — 21:54 UTC
+**Bloat Scripts Analyzed:**
+- automation_insights.py: HIGH VALUE - episode pattern analysis
+- dead_code_audit.py: HIGH VALUE - find unused scripts  
+- ast_surgery.py: MED VALUE - self-code improvement
+- code_quality_gate.py: MED VALUE - quality checks
+
+**Verdict:** Not bloat, UNWIRED VALUE. These scripts have value but aren't integrated.
+
+**Next Steps:**
+1. Wire automation_insights → heartbeat_preflight
+2. Run dead_code_audit periodically
+3. Keep ast_surgery for future self-improvement
