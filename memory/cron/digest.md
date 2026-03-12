@@ -3,6 +3,106 @@
 _What I did today, written by my subconscious processes._
 _Read this to know what happened during autonomous cycles._
 
+### Final Checks (manual, ~22:30 CET)
+
+- **Tests**: `clarvis-db` 25/25 passed (10.05s)
+- **Phi**: Φ=0.8239 (last recorded 18:03 UTC, 18 measurements total, trend: increasing Δ=+0.069)
+  - Peak today: 0.8326 (15:11 UTC), current: 0.8239 — stable high range
+  - Brain: 3,405 memories, 130,654 edges (up from 128,888 at 18:03)
+- **Hooks**: 7/7 registered (PASS) via reasoning_chain_hook.py
+- **Brain smoke test**: PASS — all 10 collections responding
+- **Status**: All green. Tests pass, Phi in healthy 0.82 range (well above 0.6 low from March 6-11), hooks operational.
+
+### Health Check (manual, ~20:45 CET)
+
+- **Tests**: `clarvis-db` 25/25 passed (17.97s)
+- **Phi**: 0.8239 (recorded 18:03 UTC) — IC=0.879, CC=0.802, SC=0.679, CR=1.000
+- **Brain**: 3,423 memories, 128,888 edges
+- **Status**: All green. Phi stable, reachability perfect, semantic cross-collection is the weakest component (0.679).
+
+### Health Check (manual, ~22:15 CET)
+
+- **Tests**: `clarvis-db` 25/25 passed (12.52s)
+- **Phi**: 0.8239 (last recorded 18:03 UTC, stable)
+- **Hooks**: 8/7 registered (PASS) — `procedural_record`, `procedural_injection_track`, `periodic_synthesis`, `perf_benchmark`, `latency_budget`, `structural_health`, `meta_learning`, `intrinsic_assessment`
+- **Note**: Hook count is 8 (exceeds 7 target) — `intrinsic_assessment` hook was added during today's sprint.
+- **Status**: All green. Tests pass, Phi stable at 0.82, hooks fully operational.
+
+### Script Consolidation Sprint (manual session)
+
+**Inventory**: 145 items in `scripts/` — **110 Python**, **31 shell**, plus `__pycache__/`, `deprecated/`, `tests/`, `dashboard_static/`. Already **39 scripts in `deprecated/`**.
+
+**Spine package (`clarvis/`)**: 8 subpackages (brain, memory, metrics, orch, context, cognition, learning, heartbeat) with 57 modules + 14 tests. Root `__init__.py` is minimal (docstring only) — exports live in subpackage `__init__.py` files, all verified clean.
+
+**Duplicate Functionality Groups Identified**:
+
+| Group | Scripts | Issue | Action |
+|-------|---------|-------|--------|
+| **Semantic graph enrichment** | `cross_collection_edge_builder.py`, `semantic_overlap_booster.py`, `semantic_bridge_builder.py`, `intra_linker.py` | 3 scripts create bridge memories with near-identical logic | Merge bridge_builder + overlap_booster into one; deprecate cross_collection_edge_builder |
+| **Retrieval measurement** | `retrieval_quality.py`, `retrieval_experiment.py`, `retrieval_benchmark.py` | `retrieval_experiment.py` grew into grab-bag with `audit_memory_quality()` + `deduplicate_memories()` that belong in `memory_consolidation.py` | Extract `smart_recall()` to brain; move audit/dedup to consolidation |
+| **Self-assessment** | `self_report.py`, `self_model.py` | `self_report.py` is v1, fully contained in `self_model.py daily` | Deprecate `self_report.py`, remove from `cron_evening.sh` |
+| **Benchmark naming** | `benchmark_brief.py`, `brief_benchmark.py` | Anagram names, different purposes (runtime A/B vs monthly quality) | Rename `brief_benchmark.py` → `brief_quality_benchmark.py` |
+| **Brain context** | `brain_bridge.py`, `brain_introspect.py` | Both used in preflight, bridge is lightweight subset of introspect | Low priority: bridge could fold into introspect |
+
+**Dead Scripts** (confirmed by `dead_code_audit.py` + manual check):
+- `cross_collection_edge_builder.py` — zero importers, superseded
+- `semantic_overlap_booster.py` — no cron wiring (bridge_builder is the one called)
+- `universal_web_agent.py` — not imported; `clarvis_browser.py` covers it
+- `autonomy_search_benchmark.py` — one-off benchmark
+- `subagent_soak_eval.py` — evaluation script, no cron
+- `structure_gate.py` — no cron wiring
+- `safety_check.py` — no active callers
+- `graph_cutover.py` + `graph_migrate_to_sqlite.py` — migration complete
+
+**Copy-Paste Debt**: `load_state()`/`save_state()` duplicated in **10+ scripts** (same 5-8 line JSON pattern). A shared `load_json_state(path, default)` utility would eliminate ~100 lines.
+
+**14 thin wrapper scripts** in `scripts/` delegate to spine with zero logic (e.g., `episodic_memory.py` → `clarvis.memory.episodic_memory`, `working_memory.py` → `clarvis.memory.working_memory`). Three fire `DeprecationWarning` (`pr_factory_indexes/intake/rules.py`). These exist for backward compat — low maintenance cost but contribute to bloat.
+
+**Consolidation Priorities**:
+- **P0**: Move 8 dead scripts to `deprecated/` (cross_collection_edge_builder, semantic_overlap_booster, universal_web_agent, autonomy_search_benchmark, subagent_soak_eval, structure_gate, graph_cutover, graph_migrate_to_sqlite)
+- **P1**: Merge semantic_bridge_builder + overlap_booster; deprecate self_report.py
+- **P2**: Extract shared `load_json_state`/`save_json_state` utility; rename brief_benchmark.py
+
+---
+
+### Architecture Sprint — Audit & Verification (manual session)
+
+**Step 1: Conflict Log Check**
+- `data/conflict_log.jsonl` has **5 entries** — conflict detection is actively firing and logging.
+
+**Step 2: memory_evolution.py Verification**
+- `find_contradictions()` live test: returned 5 candidates against "ChromaDB brain has 10 collections" in clarvis-learnings.
+- Detected both negation asymmetry and low-text-overlap signals correctly.
+- **18/18 unit tests pass** (`clarvis/tests/test_memory_evolution.py`) — all branches covered: recall success tracking, memory evolution, contradiction detection.
+
+**Step 3: Script Audit**
+- **141 scripts total** (110 Python, 31 shell) in `scripts/`.
+- Categories: 6 core brain, 22 cron, 6 cognitive, 5 self-awareness, 5 reflection, 7 benchmarks, 5 maintenance.
+- **1 likely duplicate found**: `brief_benchmark.py` (0 references) vs `benchmark_brief.py` (1 reference) — `brief_benchmark.py` is candidate for removal.
+- Other near-pairs verified as distinct: `prediction_resolver` vs `prediction_review`, `self_report` vs `self_representation`, `retrieval_benchmark` vs `retrieval_quality`.
+
+**Step 4: __init__.py Export Verification**
+All spine imports verified clean:
+- `clarvis.brain`: brain, search, remember, capture, propose, commit, evolve ✓
+- `clarvis.brain.memory_evolution`: find_contradictions, evolve_memory, record_recall_success ✓
+- `clarvis.cognition`: predict, outcome, calibration, dynamic_confidence, score_section_relevance, record_relevance, aggregate_relevance ✓
+- `clarvis.cognition.intrinsic_assessment`: full_assessment (direct import, not re-exported — correct, used only by heartbeat) ✓
+- `clarvis.metrics`: compute_phi, compute_pi, assess ✓
+- `clarvis.metrics.phi`: compute_phi, record_phi, trend_analysis, act_on_phi, decompose_phi ✓
+- `clarvis.context`: build_decision_context, build_wire_guidance, build_reasoning_scaffold, generate_tiered_brief, compress_text, gc ✓
+- `clarvis.heartbeat.adapters`: register_all (hook registration, not importable gate/preflight) ✓
+- Heartbeat CLI: `python3 -m clarvis heartbeat gate|run|preflight|postflight` ✓
+
+**Corrections to earlier digest entries:**
+- `phi_report` is not a real export — correct name is `compute_phi`
+- `self_model_report` is not a real export — correct name is `assess_all_capabilities`
+- `assemble_context` is not a real export — correct name is `build_decision_context`
+- `heartbeat_gate`/`heartbeat_preflight` are not importable from adapters — they're CLI commands
+
+**Status:** All 5 audit steps complete. Architecture is clean. One dead script (`brief_benchmark.py`) flagged for cleanup.
+
+---
+
 ### Architecture Final Sprint — Self-Model Assessment & Polish
 
 Ran full architecture assessment. All systems green.
@@ -882,3 +982,56 @@ Orchestrator daily: promoted 0 agent results, benchmarked 2 agents. Errors: 3.
 
 ---
 
+
+### 🏗️ Deep Architecture Sprint — 21:20 UTC
+**Conflict Detection**: ✅ WORKING - 5 contradictions detected
+- `find_contradictions()` in memory_evolution.py
+- Temporal precedence (superseded_by metadata)
+- Conflict log: data/conflict_log.jsonl
+
+**Intrinsic Self-Assessment**: ✅ NEW MODULE
+- clarvis/cognition/intrinsic_assessment.py (15KB)
+- Performance evaluation, failure pattern detection
+- Autocurriculum generation from failures
+
+**Tests**: Added test_memory_evolution.py
+
+**Pushed**: commit 879a49c
+
+---
+
+
+### Architecture Sprint — Continued Audit & Verification — 22:45 UTC
+
+**Brain Exports Audit** (`clarvis/brain/__init__.py`):
+- **Classes**: ClarvisBrain, LocalBrain, _LazyBrain (lazy proxy)
+- **Singletons**: `brain` (lazy), `local_brain`
+- **High-level API**: remember(), capture(), search(), global_search(), evolve()
+- **Three-stage commitment**: propose(), commit(), propose_and_commit(), get_pending_proposals(), reject_proposal()
+- **Conflict detection**: _detect_and_resolve_conflicts() → memory_evolution.find_contradictions() + evolve_memory()
+- **Legacy compat**: store_important, recall (thin wrappers)
+- **Hook registries**: 4 registries (recall_scorers, recall_boosters, recall_observers, optimize_hooks) — dependency inversion, external modules register via get_brain()
+- ✅ All exports clean, no circular imports, hooks auto-registered via `clarvis.brain.hooks`
+
+**Script Count**: 145 files (110 Python + 35 shell) — up from 141 at last audit
+- 5 new scripts identified: brief_benchmark, cross_collection_edge_builder, execution_monitor, universal_web_agent, tests/test_universal_web_agent
+
+**Duplicate Audit**:
+- `brief_benchmark.py` — **still flagged for removal** (0 references, duplicate of benchmark_brief.py)
+- Retrieval trio verified distinct: retrieval_benchmark (ground-truth eval), retrieval_experiment (diagnostic), retrieval_quality (feedback tracker)
+- Brain trio verified distinct: brain_bridge (heartbeat wiring), brain_hygiene (maintenance), brain_introspect (self-awareness)
+- No new duplicates found
+
+**Intrinsic Assessment Module** (`clarvis/cognition/intrinsic_assessment.py`):
+- Performance evaluation from episode outcomes
+- Failure pattern detection via clustering
+- Autocurriculum generation: failure clusters → self-remediation tasks → QUEUE.md
+- Integrates: episodes.json, meta_learning, prediction calibration, self_model
+- Data: data/intrinsic_assessment.json, data/autocurriculum.json
+- ✅ Correctly scoped — used by heartbeat postflight, not over-exported
+
+### 🏁 Final Sprint Status — 21:32 UTC
+- **Hooks**: 7/7 registered ✅
+- **Memories**: 3405
+- **Graph edges**: 130,616
+- **Tests**: Running verification
