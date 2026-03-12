@@ -10,6 +10,7 @@ Canonical spine module. Provides:
 Migrated from scripts/self_model.py (Phase 5 spine refactor).
 """
 import json
+import math
 import os
 import subprocess
 import sys
@@ -591,7 +592,8 @@ def _assess_code_generation():
     """Score code generation based on commits, compile health, and test pass rate.
 
     Scoring (continuous, quality-based — max 1.0):
-      - Git commits today: scaled 0–0.3 (1 commit=0.1, 3+=0.2, 6+=0.3)
+      - Git commits today: scaled 0–0.2 (1 commit=0.05, 3+=0.1, 6+=0.2)
+      - Code change complexity (lines changed today): 0–0.1 (500+ lines for full)
       - Scripts exist (baseline infrastructure): +0.1 (reduced from 0.3)
       - Key scripts compile clean: 0–0.2 (proportional to clean/total)
       - Test pass rate (if test infra exists): 0–0.3
@@ -610,11 +612,11 @@ def _assess_code_generation():
         commits = [l.strip() for l in result.stdout.strip().split('\n') if l.strip()]
         if commits:
             if len(commits) >= 6:
-                commit_score = 0.3
-            elif len(commits) >= 3:
                 commit_score = 0.2
-            else:
+            elif len(commits) >= 3:
                 commit_score = 0.1
+            else:
+                commit_score = 0.05
             score += commit_score
             evidence.append(f"{len(commits)} commits today (+{commit_score:.2f})")
 
@@ -625,6 +627,32 @@ def _assess_code_generation():
                 evidence.append(f"avg commit msg {avg_msg_len:.0f} chars (+0.10)")
     except Exception as e:
         evidence.append(f"git error: {e}")
+
+    # Code change complexity: lines changed in last 24h (quality signal, not just commit count)
+    try:
+        diff_result = subprocess.run(
+            ["git", "log", "--numstat", "--since=24 hours ago", "--format="],
+            capture_output=True, text=True, timeout=10,
+            cwd="/home/agent/.openclaw/workspace"
+        )
+        # Parse numstat output: "additions\tdeletions\tfilename" per line
+        lines_changed = 0
+        for line in diff_result.stdout.strip().split('\n'):
+            parts = line.split('\t')
+            if len(parts) >= 2:
+                try:
+                    # Binary files show '-' instead of numbers
+                    add = int(parts[0]) if parts[0] != '-' else 0
+                    delete = int(parts[1]) if parts[1] != '-' else 0
+                    lines_changed += add + delete
+                except ValueError:
+                    continue
+        if lines_changed > 0:
+            complexity_score = min(0.1, lines_changed / 500 * 0.1)
+            score += complexity_score
+            evidence.append(f"{lines_changed} lines changed today (+{complexity_score:.2f})")
+    except Exception:
+        pass
 
     # Baseline: scripts directory has files (reduced — existence is not quality)
     try:
@@ -879,10 +907,11 @@ def _assess_reasoning_chains():
     falls back to legacy chain counting.
 
     Scoring (continuous, quality-based — max 1.0):
-      - High-quality chains (>2 steps AND has outcome): each +0.08, cap 0.5  (0–0.5)
-      - Today's chains with real outcomes vs empty chains                     (0–0.3)
-      - Hook exists: +0.05 (reduced from 0.2 — existence is not quality)     (0–0.05)
-      - Chain freshness: any chains today → +0.15                            (0–0.15)
+      - High-quality chains (log scale, ~100 for full score):                (0–0.35)
+      - Chain depth (fraction of quality chains with 4+ steps):              (0–0.15)
+      - Today's chains with real outcomes (need 3+ today for full score):    (0–0.3)
+      - Hook exists: +0.05 (reduced from 0.2 — existence is not quality)    (0–0.05)
+      - Chain freshness: any chains today → +0.15                           (0–0.15)
     """
     # Try ClarvisReasoning first (richer meta-cognitive scoring)
     try:
@@ -899,6 +928,7 @@ def _assess_reasoning_chains():
     today = datetime.now(timezone.utc).strftime("%Y%m%d")
 
     high_quality_count = 0
+    deep_count = 0  # chains with 4+ steps (beyond minimum quality bar)
     low_quality_count = 0
     today_with_outcomes = 0
     today_empty = 0
@@ -925,6 +955,9 @@ def _assess_reasoning_chains():
                 else:
                     low_quality_count += 1
 
+                if len(steps) >= 4 and has_outcome:
+                    deep_count += 1
+
                 if is_today:
                     if has_outcome:
                         today_with_outcomes += 1
@@ -933,17 +966,24 @@ def _assess_reasoning_chains():
             except (json.JSONDecodeError, Exception):
                 continue
 
-        quality_score = min(0.5, high_quality_count * 0.1)
+        # Logarithmic quality score — diminishing returns, ~100 chains for full 0.35
+        quality_score = min(0.35, math.log1p(high_quality_count) / math.log1p(100) * 0.35)
         score += quality_score
         if high_quality_count > 0:
-            evidence.append(f"{high_quality_count} high-quality chains (+{quality_score:.2f})")
+            evidence.append(f"{high_quality_count} high-quality chains (log scale) (+{quality_score:.2f})")
+
+        # Chain depth — rewards chains that go beyond the 2-step minimum
+        depth_score = min(0.15, deep_count / max(high_quality_count, 1) * 0.15)
+        score += depth_score
+        if deep_count > 0:
+            evidence.append(f"{deep_count}/{high_quality_count} deep chains (4+ steps) (+{depth_score:.2f})")
 
         today_total = today_with_outcomes + today_empty
         if today_total > 0:
-            today_quality_ratio = today_with_outcomes / today_total
-            today_score = today_quality_ratio * 0.3
+            # Require at least 3 chains today for full score — 1 chain = 0.10, not 0.30
+            today_score = min(0.3, (today_with_outcomes / max(3, today_total)) * 0.3)
             score += today_score
-            evidence.append(f"today: {today_with_outcomes}/{today_total} with outcomes (+{today_score:.2f})")
+            evidence.append(f"today: {today_with_outcomes}/{today_total} with outcomes (need 3+) (+{today_score:.2f})")
             score += 0.15
             evidence.append(f"{today_total} chains today (+0.15)")
     else:

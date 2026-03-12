@@ -16,6 +16,12 @@ import math
 from datetime import datetime, timezone
 from typing import Optional
 
+try:
+    from rank_bm25 import BM25Okapi
+    _HAS_BM25 = True
+except ImportError:
+    _HAS_BM25 = False
+
 # Verdict constants
 CORRECT = "CORRECT"
 AMBIGUOUS = "AMBIGUOUS"
@@ -37,6 +43,45 @@ MIN_SENTENCE_LEN = 10   # ignore very short sentences
 
 # Recency half-life in days (30 days → score 0.5)
 RECENCY_HALF_LIFE = 30.0
+
+
+class BM25Scorer:
+    """Lazy BM25 scorer for a batch of documents.
+
+    Builds a BM25Okapi index on first use and normalizes scores to [0, 1].
+    Falls back gracefully when rank_bm25 is not installed.
+    """
+
+    def __init__(self, documents: list[str]):
+        self._docs = documents
+        self._bm25 = None
+
+    def _build(self):
+        if self._bm25 is None and _HAS_BM25 and self._docs:
+            tokenized = [list(_tokenize(d)) for d in self._docs]
+            self._bm25 = BM25Okapi(tokenized)
+
+    def score(self, query: str, doc_index: int) -> float:
+        """Return BM25 score for *query* against document at *doc_index*, normalized to [0, 1].
+
+        BM25Okapi can produce negative IDF values when a term appears in every
+        document (common with small corpora).  Negative raw scores are clamped
+        to 0 before normalization so the returned value is always in [0, 1].
+        """
+        self._build()
+        if self._bm25 is None:
+            return 0.0
+        q_tokens = list(_tokenize(query))
+        if not q_tokens:
+            return 0.0
+        raw_scores = self._bm25.get_scores(q_tokens)
+        # Clamp negatives (IDF artefact with small corpora)
+        clamped = [max(0.0, s) for s in raw_scores]
+        best = max(clamped) if clamped else 0.0
+        if best <= 0.0:
+            # All scores zero/negative — fall back to Jaccard for this query
+            return _keyword_overlap(query, self._docs[doc_index]) if doc_index < len(self._docs) else 0.0
+        return float(clamped[doc_index] / best)  # normalize to 0-1
 
 
 def _tokenize(text: str) -> set[str]:
@@ -92,18 +137,28 @@ def _recency_score(result: dict) -> float:
         return 0.5
 
 
-def score_result(result: dict, query: str) -> float:
+def score_result(result: dict, query: str, *,
+                 bm25_scorer: BM25Scorer | None = None,
+                 doc_index: int = 0) -> float:
     """Compute composite retrieval score for a single result.
 
     Args:
         result: Dict with keys: document, metadata, distance, collection, id
         query: The search query string
+        bm25_scorer: Optional BM25Scorer for keyword scoring (falls back to Jaccard)
+        doc_index: Index of this result in the BM25 corpus
 
     Returns:
         Score in [0, 1] range
     """
     sem = _semantic_sim(result.get("distance", 2.0))
-    kw = _keyword_overlap(query, result.get("document", ""))
+
+    # Use BM25 when a scorer is available, otherwise fall back to Jaccard
+    if bm25_scorer is not None:
+        kw = bm25_scorer.score(query, doc_index)
+    else:
+        kw = _keyword_overlap(query, result.get("document", ""))
+
     imp = result.get("metadata", {}).get("importance", 0.5)
     if isinstance(imp, str):
         try:
@@ -118,6 +173,9 @@ def score_result(result: dict, query: str) -> float:
 def classify_batch(results: list[dict], query: str) -> tuple[str, float, list[float]]:
     """Classify a retrieval batch as CORRECT / AMBIGUOUS / INCORRECT.
 
+    Builds a BM25 index from the batch documents (when rank_bm25 is installed)
+    and uses it for keyword scoring instead of simple Jaccard similarity.
+
     Args:
         results: List of recall result dicts
         query: The search query
@@ -128,7 +186,14 @@ def classify_batch(results: list[dict], query: str) -> tuple[str, float, list[fl
     if not results:
         return INCORRECT, 0.0, []
 
-    scores = [score_result(r, query) for r in results]
+    # Build BM25 scorer from this batch's documents
+    docs = [r.get("document", "") for r in results]
+    scorer = BM25Scorer(docs) if _HAS_BM25 else None
+
+    scores = [
+        score_result(r, query, bm25_scorer=scorer, doc_index=i)
+        for i, r in enumerate(results)
+    ]
     max_score = max(scores)
 
     if max_score >= CORRECT_THRESHOLD:

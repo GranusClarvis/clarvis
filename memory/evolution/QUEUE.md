@@ -52,11 +52,6 @@ _Dependency chain: GATE → EVAL → RETRY → FEEDBACK. Each phase is independe
   - [ ] [AUTO_SPLIT 2026-03-12] [CONTEXT_RELEVANCE_FEEDBACK_LOOP_2] Implement: core logic change in one focused increment
   - [ ] [AUTO_SPLIT 2026-03-12] [CONTEXT_RELEVANCE_FEEDBACK_LOOP_3] Test: add/update test(s) covering the new behavior
   - [ ] [AUTO_SPLIT 2026-03-12] [CONTEXT_RELEVANCE_FEEDBACK_LOOP_4] Verify: run existing tests, confirm no regressions
-- [~] [SEMANTIC_TASK_MATCHING] Replace word-overlap Jaccard scoring in `clarvis/context/assembly.py:find_related_tasks` (lines 380-409) with brain semantic search via `from clarvis.brain import search`. Current approach misses tasks with similar meaning but different vocabulary. Also filter results by QUEUE section priority (P0/P1/P2) so low-priority tasks don't crowd the brief. _(Targets Context Relevance — richer related-task context)_
-  - [ ] [AUTO_SPLIT 2026-03-12] [SEMANTIC_TASK_MATCHING_1] Analyze: read relevant source files, identify change boundary
-  - [ ] [AUTO_SPLIT 2026-03-12] [SEMANTIC_TASK_MATCHING_2] Implement: core logic change in one focused increment
-  - [ ] [AUTO_SPLIT 2026-03-12] [SEMANTIC_TASK_MATCHING_3] Test: add/update test(s) covering the new behavior
-  - [ ] [AUTO_SPLIT 2026-03-12] [SEMANTIC_TASK_MATCHING_4] Verify: run existing tests, confirm no regressions
 
 ## Research Sessions
 
@@ -112,6 +107,5 @@ _Consolidated into Pillar 2 above. See `docs/ORCHESTRATOR_PLAN_2026-03-06.md` fo
 
 ## P1 — This Week
 
-- [x] [MMR_POSTFLIGHT_RATE_LIMIT] (2026-03-12) Gate `mmr_update_lambdas()` call in `heartbeat_postflight.py` to skip when (a) task was classified NO_RETRIEVAL (no useful signal) or (b) fewer than 10 new episodes since last update (check `episodes` field in `data/adaptive_mmr_state.json`). Currently scans full 7-day `context_relevance.jsonl` window on every postflight (12x/day) — wasteful I/O with no signal on retrieval-free tasks.
 
 ## P2 — When Idle

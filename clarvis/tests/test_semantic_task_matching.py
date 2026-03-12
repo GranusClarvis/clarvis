@@ -388,20 +388,20 @@ class TestFindRelatedTasks:
 - [ ] Improve vector database query latency
 - [ ] Clean up old log files
 """
-        # Embeddings: 8 dims. Query about DB speed should match vector DB task.
+        # Model overlapping concepts: "brain/search" and "database/query" are
+        # different words but semantically adjacent (cross-loading on dims 0-1).
         def mock_embed(texts):
             result = []
             for i, t in enumerate(texts):
                 tl = t.lower()
+                brain_search = any(kw in tl for kw in ["brain", "search", "speed", "retrieval"])
+                db_query = any(kw in tl for kw in ["vector", "database", "query", "latency"])
+                cleanup = any(kw in tl for kw in ["log", "clean", "old", "file"])
                 v = [
-                    0.6 if any(kw in tl for kw in ["vector", "database", "query"]) else 0.1,
-                    0.6 if any(kw in tl for kw in ["brain", "search", "speed"]) else 0.1,
-                    0.5 if any(kw in tl for kw in ["log", "clean", "old", "file"]) else 0.1,
-                    0.4 if any(kw in tl for kw in ["improve", "latency"]) else 0.1,
-                    0.3 if "optimization" in tl else 0.1,
-                    0.2,  # baseline
-                    0.15 + 0.03 * i,  # unique per text
-                    0.1 + 0.02 * (i % 3),
+                    0.9 if brain_search else (0.3 if db_query else 0.05),
+                    0.9 if db_query else (0.3 if brain_search else 0.05),
+                    0.9 if cleanup else 0.05,
+                    0.1 + 0.02 * i,  # unique offset
                 ]
                 result.append(v)
             return result

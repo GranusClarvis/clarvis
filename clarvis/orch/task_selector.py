@@ -37,6 +37,12 @@ try:
 except Exception:
     thought_proto = None
 
+try:
+    from world_models import get_world_model
+    _wm = get_world_model()
+except Exception:
+    _wm = None
+
 QUEUE_FILE = "/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md"
 QUALITY_GATE_FILE = "/home/agent/.openclaw/workspace/data/memory_quality_gate.json"
 EPISODES_FILE = "/home/agent/.openclaw/workspace/data/episodes.json"
@@ -373,6 +379,26 @@ def score_tasks(tasks, codelet_result=None):
         })
 
     scored.sort(key=lambda x: x["salience"], reverse=True)
+
+    # World model re-ranking: adjust scores by predicted success probability
+    if _wm is not None and len(scored) > 1:
+        try:
+            top_candidates = scored[:min(5, len(scored))]
+            for item in top_candidates:
+                prediction = _wm.predict(item["text"])
+                if prediction:
+                    p_success = prediction.get("p_success", 0.5)
+                    curiosity = prediction.get("curiosity", 0.0)
+                    # Blend: 85% original salience + 15% world model signal
+                    wm_signal = p_success * 0.7 + curiosity * 0.3
+                    item["salience"] = round(
+                        0.85 * item["salience"] + 0.15 * wm_signal, 4
+                    )
+                    item["details"]["wm_p_success"] = round(p_success, 3)
+                    item["details"]["wm_curiosity"] = round(curiosity, 3)
+        except Exception:
+            pass  # World model failure is non-fatal
+        scored.sort(key=lambda x: x["salience"], reverse=True)
 
     if thought_proto and scored:
         try:

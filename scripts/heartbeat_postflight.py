@@ -552,9 +552,32 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
     variant_task_type = preflight_data.get("prompt_variant_task_type", "")
     if po_record_outcome and variant_id:
         try:
+            # Compute quality score (0.0-1.0) from output signals
+            quality_score = None
+            if task_status == "success" and output_text:
+                q = 0.5  # base for success
+                out_len = len(output_text)
+                if out_len > 500:
+                    q += 0.1  # substantive output
+                if out_len > 2000:
+                    q += 0.1  # detailed output
+                # Check for test/verification signals
+                out_lower = output_text[-3000:].lower() if out_len > 3000 else output_text.lower()
+                if "pass" in out_lower or "✓" in out_lower or "success" in out_lower:
+                    q += 0.1
+                if "test" in out_lower and ("pass" in out_lower or "ok" in out_lower):
+                    q += 0.1
+                # Penalty for error signals in successful tasks
+                if "error" in out_lower or "traceback" in out_lower:
+                    q -= 0.1
+                quality_score = max(0.0, min(1.0, q))
+            elif task_status == "timeout":
+                quality_score = 0.1
+            elif task_status == "failure":
+                quality_score = 0.0
             po_record_outcome(variant_id, variant_task_type, task_status,
-                              task_duration, task)
-            log(f"Prompt optimization: recorded {task_status} for variant "
+                              task_duration, task, quality_score=quality_score)
+            log(f"Prompt optimization: recorded {task_status} q={quality_score} for variant "
                 f"{variant_id[:50]}")
         except Exception as e:
             log(f"Prompt optimization recording failed (non-fatal): {e}")

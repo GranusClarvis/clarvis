@@ -75,7 +75,7 @@ You have TWO execution layers — like a human brain:
 
 ## 🧠 ClarvisDB Brain — YOUR ONLY MEMORY SYSTEM
 
-**Fully local** (ONNX embeddings, ChromaDB, SQLite). 3600+ memories, 10 collections, 98k+ graph edges.
+**Fully local** (ONNX embeddings, ChromaDB, SQLite). 3400+ memories, 10 collections, 135k+ graph edges.
 
 ```python
 from clarvis.brain import brain, search, remember, capture

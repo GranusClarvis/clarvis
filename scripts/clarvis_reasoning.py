@@ -47,6 +47,7 @@ CLI:
 """
 
 import json
+import math
 import sys
 from collections import Counter
 from datetime import datetime, timezone
@@ -655,12 +656,15 @@ class ClarvisReasoner:
 
         # Score new-format sessions
         good_sessions = 0
+        deep_sessions = 0  # sessions with 4+ steps (beyond minimum bar)
         for f in session_files:
             try:
                 s = ReasoningSession.load(f.stem)
                 ev = s.evaluate()
                 if ev["quality_grade"] in ("good", "adequate"):
                     good_sessions += 1
+                if len(s.steps) >= 4 and s.completed:
+                    deep_sessions += 1
                 if today in s.created:
                     today_count += 1
                     if s.completed:
@@ -670,6 +674,7 @@ class ClarvisReasoner:
 
         # Score legacy chains
         hq_legacy = 0
+        deep_legacy = 0  # legacy chains with 4+ steps
         for f in legacy_files:
             try:
                 chain = json.loads(f.read_text())
@@ -677,6 +682,8 @@ class ClarvisReasoner:
                 has_outcome = any(s.get("outcome") for s in steps)
                 if len(steps) >= 2 and has_outcome:
                     hq_legacy += 1
+                if len(steps) >= 4 and has_outcome:
+                    deep_legacy += 1
                 if today in f.name:
                     today_count += 1
                     if has_outcome:
@@ -684,19 +691,25 @@ class ClarvisReasoner:
             except Exception:
                 continue
 
-        # Quality score: good sessions + hq legacy, each +0.08, cap 0.5
+        # Logarithmic quality score — diminishing returns, ~100 chains for full 0.35
         quality_count = good_sessions + hq_legacy
-        quality_score = min(0.5, quality_count * 0.08)
+        quality_score = min(0.35, math.log1p(quality_count) / math.log1p(100) * 0.35)
         score += quality_score
         if quality_count > 0:
-            evidence.append(f"{quality_count} quality chains (+{quality_score:.2f})")
+            evidence.append(f"{quality_count} quality chains (log scale) (+{quality_score:.2f})")
 
-        # Today's quality ratio (0-0.3)
+        # Chain depth — rewards chains that go beyond the 2-step minimum
+        deep_count = deep_sessions + deep_legacy
+        depth_score = min(0.15, deep_count / max(quality_count, 1) * 0.15)
+        score += depth_score
+        if deep_count > 0:
+            evidence.append(f"{deep_count}/{quality_count} deep chains (4+ steps) (+{depth_score:.2f})")
+
+        # Today's quality ratio (0-0.3) — require at least 3 chains for full score
         if today_count > 0:
-            ratio = today_with_outcomes / today_count
-            today_score = ratio * 0.3
+            today_score = min(0.3, (today_with_outcomes / max(3, today_count)) * 0.3)
             score += today_score
-            evidence.append(f"today: {today_with_outcomes}/{today_count} with outcomes (+{today_score:.2f})")
+            evidence.append(f"today: {today_with_outcomes}/{today_count} with outcomes (need 3+) (+{today_score:.2f})")
             # Freshness bonus
             score += 0.15
             evidence.append("active today (+0.15)")

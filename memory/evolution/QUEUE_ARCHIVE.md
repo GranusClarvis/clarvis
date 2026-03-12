@@ -922,3 +922,11 @@ _Last archived: 2026-03-09_
 
 ## Archived 2026-03-12
 - [x] [RETRIEVAL_GATE_TESTS] Add unit tests for `clarvis/brain/retrieval_gate.py`. 69 tests covering all 3 tiers, tag/keyword matching, priority ordering, edge cases, dry_run. 288/288 suite pass. (2026-03-12)
+
+## Archived 2026-03-12
+- [x] [SEMANTIC_TASK_MATCHING] Replace word-overlap Jaccard scoring in `clarvis/context/assembly.py:find_related_tasks` with ONNX semantic embedding + priority weighting. Falls back to word-overlap. 37 new tests, 352/352 pass. _(2026-03-12)_
+- [x] [AUTO_SPLIT 2026-03-12] [SEMANTIC_TASK_MATCHING_1] Analyze: read relevant source files, identify change boundary
+- [x] [AUTO_SPLIT 2026-03-12] [SEMANTIC_TASK_MATCHING_2] Implement: core logic change in one focused increment
+- [x] [AUTO_SPLIT 2026-03-12] [SEMANTIC_TASK_MATCHING_3] Test: add/update test(s) covering the new behavior
+- [x] [AUTO_SPLIT 2026-03-12] [SEMANTIC_TASK_MATCHING_4] Verify: run existing tests, confirm no regressions
+- [x] [MMR_POSTFLIGHT_RATE_LIMIT] (2026-03-12) Gate `mmr_update_lambdas()` call in `heartbeat_postflight.py` to skip when (a) task was classified NO_RETRIEVAL (no useful signal) or (b) fewer than 10 new episodes since last update (check `episodes` field in `data/adaptive_mmr_state.json`). Currently scans full 7-day `context_relevance.jsonl` window on every postflight (12x/day) — wasteful I/O with no signal on retrieval-free tasks.
