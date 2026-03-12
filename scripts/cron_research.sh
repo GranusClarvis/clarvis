@@ -68,8 +68,8 @@ if [ -z "$RESEARCH_TASK" ]; then
         fi
     fi
     echo $$ > "$DISC_LOCKFILE"
-    # Update trap to clean both lockfiles
-    trap "rm -f $LOCKFILE $DISC_LOCKFILE" EXIT
+    # Update trap to clean discovery lockfile AND lock_helper's locks
+    trap "rm -f $DISC_LOCKFILE; _lock_helper_cleanup 2>/dev/null" EXIT
 
     # Run discovery inline (same logic as cron_research_discovery.sh)
     CONTEXT_BRIEF_DISC=$(python3 "$SCRIPTS/prompt_builder.py" context-brief --task "identify valuable research topics" --tier standard 2>/dev/null || echo "")
@@ -154,7 +154,7 @@ ENDDISC
         echo ""
         echo "### Research Discovery — $(date -u +%H:%M) UTC"
         echo ""
-        if [ $DISC_EXIT -eq 0 ]; then
+        if [ "$DISC_EXIT" -eq 0 ]; then
             echo "Discovered research topics (via fallback). Summary: ${DISC_SUMMARY:0:200}"
         else
             echo "Discovery FAILED. Exit=$DISC_EXIT (${DISC_DURATION}s)."
@@ -239,7 +239,7 @@ DIGEST_FILE="memory/cron/digest.md"
     echo ""
     echo "### Research — $(date -u +%H:%M) UTC"
     echo ""
-    if [ $TASK_EXIT -eq 0 ]; then
+    if [ "$TASK_EXIT" -eq 0 ]; then
         echo "Researched: ${RESEARCH_TASK:0:100}. Result: success (${TASK_DURATION}s). Summary: ${SUMMARY:0:200}"
     else
         echo "Research FAILED: ${RESEARCH_TASK:0:100}. Exit=$TASK_EXIT (${TASK_DURATION}s)."
@@ -252,7 +252,7 @@ DIGEST_FILE="memory/cron/digest.md"
 # === RESEARCH POSTFLIGHT: Ensure insights are stored in brain ===
 # Uses brain.py ingest-research (single source of truth for ingestion logic).
 # Hash-based dedup prevents double-ingestion. Files get moved to ingested/ after.
-if [ $TASK_EXIT -eq 0 ]; then
+if [ "$TASK_EXIT" -eq 0 ]; then
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running research postflight..." >> "$LOGFILE"
     python3 "$SCRIPTS/brain.py" ingest-research >> "$LOGFILE" 2>&1
 

@@ -12,3 +12,7 @@ from .assembly import (  # noqa: F401
     TIER_BUDGETS,
 )
 from .gc import gc, archive_completed, rotate_logs  # noqa: F401
+from .adaptive_mmr import (  # noqa: F401
+    get_adaptive_lambda, classify_mmr_category, update_lambdas,
+    BASE_LAMBDAS,
+)

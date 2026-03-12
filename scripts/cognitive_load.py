@@ -198,15 +198,19 @@ def measure_capability_degradation():
     except Exception:
         return 0.0
 
-    if len(history) < 2:
+    # Navigate into snapshots wrapper if present
+    if isinstance(history, dict) and "snapshots" in history:
+        history = history["snapshots"]
+
+    if not isinstance(history, list) or len(history) < 2:
         return 0.0
 
     # Compare latest to previous entry
     latest = history[-1]
     previous = history[-2]
 
-    latest_scores = latest.get("capabilities", {})
-    previous_scores = previous.get("capabilities", {})
+    latest_scores = latest.get("scores", latest.get("capabilities", {}))
+    previous_scores = previous.get("scores", previous.get("capabilities", {}))
 
     if not latest_scores or not previous_scores:
         return 0.0

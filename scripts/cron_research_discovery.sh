@@ -11,28 +11,13 @@
 # =============================================================================
 
 source /home/agent/.openclaw/workspace/scripts/cron_env.sh
+source /home/agent/.openclaw/workspace/scripts/lock_helper.sh
 LOGFILE="memory/cron/research.log"
-LOCKFILE="/tmp/clarvis_research_discovery.lock"
 SCRIPTS="/home/agent/.openclaw/workspace/scripts"
 
-# Prevent nested Claude sessions
-unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT 2>/dev/null || true
-
-# Prevent overlapping runs
-if [ -f "$LOCKFILE" ]; then
-    pid=$(cat "$LOCKFILE" 2>/dev/null)
-    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-        lock_age=$(( $(date +%s) - $(stat -c %Y "$LOCKFILE" 2>/dev/null || echo 0) ))
-        if [ "$lock_age" -gt 1200 ]; then
-            echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WARN: Stale discovery lock (age=${lock_age}s) — reclaiming" >> "$LOGFILE"
-        else
-            echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] SKIP: Previous discovery run still active (PID $pid)" >> "$LOGFILE"
-            exit 0
-        fi
-    fi
-fi
-echo $$ > "$LOCKFILE"
-trap "rm -f $LOCKFILE" EXIT
+# Acquire locks: local (with 1200s stale detection) + global Claude
+acquire_local_lock "/tmp/clarvis_research_discovery.lock" "$LOGFILE" 1200
+acquire_global_claude_lock "$LOGFILE" "queue"
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Research Discovery starting ===" >> "$LOGFILE"
 
@@ -144,7 +129,7 @@ SUMMARY=$(tail -c 300 "$TASK_OUTPUT_FILE" 2>/dev/null | tail -3)
     echo ""
     echo "### Research Discovery — $(date -u +%H:%M) UTC"
     echo ""
-    if [ $TASK_EXIT -eq 0 ]; then
+    if [ "$TASK_EXIT" -eq 0 ]; then
         echo "Discovered research topics. Summary: ${SUMMARY:0:200}"
     else
         echo "Discovery FAILED. Exit=$TASK_EXIT (${TASK_DURATION}s)."

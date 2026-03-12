@@ -1,7 +1,7 @@
 """OpenRouter Cost API Client — Real usage data from OpenRouter.
 
 Provides:
-  - get_api_key()      → Read OpenRouter API key from auth.json
+  - get_api_key()      → Read OpenRouter API key from auth-profiles.json
   - fetch_usage()      → Daily/weekly/monthly spend + remaining credits
   - fetch_generation() → Detailed stats for a single generation
   - format_usage()     → Human-readable formatted output
@@ -15,14 +15,14 @@ import urllib.request
 import urllib.error
 from typing import Dict, Optional
 
-AUTH_FILE = "/home/agent/.openclaw/agents/main/agent/auth.json"
+AUTH_FILE = "/home/agent/.openclaw/agents/main/agent/auth-profiles.json"
 OPENROUTER_BASE = "https://openrouter.ai/api/v1"
 
 _cached_key: Optional[str] = None
 
 
 def get_api_key() -> str:
-    """Read OpenRouter API key from OpenClaw auth.json. Caches after first read."""
+    """Read OpenRouter API key from OpenClaw auth-profiles.json. Caches after first read."""
     global _cached_key
     if _cached_key:
         return _cached_key
@@ -33,9 +33,9 @@ def get_api_key() -> str:
     with open(AUTH_FILE) as f:
         auth = json.load(f)
 
-    key = auth.get("openrouter", {}).get("key")
+    key = auth.get("profiles", {}).get("openrouter:default", {}).get("key")
     if not key:
-        raise ValueError("No OpenRouter API key found in auth.json")
+        raise ValueError("No OpenRouter API key found in auth-profiles.json")
 
     _cached_key = key
     return key

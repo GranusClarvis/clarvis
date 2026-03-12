@@ -752,7 +752,7 @@ class StructuralCausalModel:
 
 def build_task_scm() -> StructuralCausalModel:
     """Build a task-outcome SCM from current episodic memory."""
-    from episodic_memory import episodic
+    from clarvis.memory.episodic_memory import episodic
 
     scm = StructuralCausalModel("clarvis_task_scm")
     scm.build_from_episodes(episodic.episodes, episodic.causal_links)
@@ -767,7 +767,7 @@ def run_counterfactual(episode_id: str, intervention: dict,
     Example: "Would episode ep_20260224_1200 have succeeded
              if strategy had been 'research' instead of 'implement'?"
     """
-    from episodic_memory import episodic
+    from clarvis.memory.episodic_memory import episodic
 
     # Build fresh SCM
     scm = build_task_scm()
@@ -783,7 +783,7 @@ def run_counterfactual(episode_id: str, intervention: dict,
 def store_findings_in_brain(report: dict):
     """Store causal analysis findings in the brain."""
     try:
-        from brain import brain
+        from clarvis.brain import brain
 
         findings = report.get("findings", [])
         if not findings:

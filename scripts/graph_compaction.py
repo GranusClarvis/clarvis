@@ -36,7 +36,7 @@ def _save_graph_atomic(brain):
     additions.  That defeats intentional deletions during compaction.
     We use the same atomic-write + exclusive-lock pattern but skip the merge.
     """
-    tmp_path = brain.graph_file + ".tmp"
+    tmp_path = f"{brain.graph_file}.tmp.{os.getpid()}"
     with open(tmp_path, 'w') as f:
         fcntl.flock(f.fileno(), fcntl.LOCK_EX)
         json.dump(brain.graph, f, indent=2)
@@ -391,10 +391,21 @@ def run_compaction_json(brain, dry_run=False):
 
 
 def run_compaction(dry_run=False):
-    """Dispatch to backend-specific compaction pipeline."""
+    """Dispatch to backend-specific compaction pipeline.
+
+    When dual-write is active (backend=sqlite + CLARVIS_GRAPH_DUAL_WRITE=1),
+    compact BOTH stores to keep them in sync.  Otherwise compaction only runs
+    on SQLite while JSON keeps growing, causing parity drift.
+    """
     brain = get_brain()
     if brain._sqlite_store is not None:
-        return run_compaction_sqlite(brain, dry_run=dry_run)
+        result = run_compaction_sqlite(brain, dry_run=dry_run)
+        # Also compact JSON when dual-write is active to prevent drift
+        dual_write = os.environ.get("CLARVIS_GRAPH_DUAL_WRITE", "1") != "0"
+        if dual_write:
+            print("\n--- JSON dual-write compaction (sync) ---")
+            run_compaction_json(brain, dry_run=dry_run)
+        return result
     return run_compaction_json(brain, dry_run=dry_run)
 
 

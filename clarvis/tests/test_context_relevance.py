@@ -1,0 +1,338 @@
+"""Tests for clarvis.cognition.context_relevance — section-level relevance scoring."""
+
+import json
+import os
+import tempfile
+
+import pytest
+
+from clarvis.cognition.context_relevance import (
+    parse_brief_sections,
+    score_section_relevance,
+    record_relevance,
+    aggregate_relevance,
+    regenerate_report,
+    _tokenize,
+    _jaccard,
+    _containment,
+)
+
+
+# === Helpers ===
+
+SAMPLE_BRIEF = """SUCCESS CRITERIA: Complete the migration of graph storage.
+Ensure all edges are preserved. Run parity checks.
+
+RELEVANT KNOWLEDGE:
+SQLite WAL mode provides better concurrency. The graph has 85k+ edges.
+Migration script handles deduplication automatically.
+
+WORKING MEMORY:
+Current task: graph cutover. Previous session fixed parity delta.
+
+---
+
+RELATED TASKS:
+  - Cleanup dead scripts
+  - Update RUNBOOK.md
+
+METRICS: Phi=0.72, cap_avg=0.65, worst=planning=0.41
+
+RECENT:
+  - [x] AMEM_MEMORY_EVOLUTION completed
+  - [x] RETRIEVAL_GATE completed
+
+---
+
+EPISODIC LESSONS:
+Last migration attempt timed out because invariants_check was slow.
+Root cause: full table scan on 100k edges without index.
+
+APPROACH:
+Think step-by-step. Verify parity before and after cutover.
+
+BRAIN GOALS (active objectives):
+(80%) AGI/consciousness (86%) Session Continuity
+
+WORLD MODEL: P(success)=78%, novelty=0.25
+
+FAILURE AVOIDANCE (somatic markers + causal chains):
+FAIL: Previous migration timed out at 300s threshold
+"""
+
+SAMPLE_OUTPUT_RELEVANT = """
+Running graph cutover from JSON to SQLite backend.
+Verified parity: 3810 nodes, 100150 edges, 200/200 sample match.
+SQLite WAL mode is active. Archived relationships.json.
+Enabled CLARVIS_GRAPH_BACKEND=sqlite in cron_env.sh.
+Invariants check passed. Migration complete.
+Updated RUNBOOK.md with Phase 4 cutover status.
+"""
+
+SAMPLE_OUTPUT_IRRELEVANT = """
+Refactored the Telegram bot message formatting.
+Added emoji support for status messages.
+Updated the Discord webhook integration.
+"""
+
+
+class TestTokenize:
+    def test_basic(self):
+        tokens = _tokenize("Hello world, this is a test of tokenization!")
+        assert "hello" in tokens
+        assert "tokenization" in tokens
+        # Stopwords excluded
+        assert "this" not in tokens
+
+    def test_empty(self):
+        assert _tokenize("") == set()
+
+    def test_short_words_excluded(self):
+        tokens = _tokenize("go to do it is ok no")
+        # All 2-char words excluded (need 3+ chars)
+        assert len(tokens) == 0
+
+
+class TestJaccard:
+    def test_identical(self):
+        s = {"alpha", "beta", "gamma"}
+        assert _jaccard(s, s) == 1.0
+
+    def test_disjoint(self):
+        assert _jaccard({"a", "b"}, {"c", "d"}) == 0.0
+
+    def test_partial_overlap(self):
+        score = _jaccard({"a", "b", "c"}, {"b", "c", "d"})
+        assert 0.4 < score < 0.6  # 2/4 = 0.5
+
+    def test_empty(self):
+        assert _jaccard(set(), {"a"}) == 0.0
+        assert _jaccard(set(), set()) == 0.0
+
+
+class TestContainment:
+    def test_full_containment(self):
+        small = {"alpha", "beta"}
+        big = {"alpha", "beta", "gamma", "delta", "epsilon"}
+        assert _containment(small, big) == 1.0
+
+    def test_no_containment(self):
+        assert _containment({"a", "b"}, {"c", "d"}) == 0.0
+
+    def test_partial_containment(self):
+        small = {"alpha", "beta", "gamma", "delta"}
+        big = {"alpha", "beta", "epsilon", "zeta"}
+        assert _containment(small, big) == 0.5  # 2/4
+
+    def test_empty(self):
+        assert _containment(set(), {"a"}) == 0.0
+        assert _containment({"a"}, set()) == 0.0
+
+    def test_asymmetric(self):
+        """Containment is asymmetric — unlike Jaccard."""
+        small = {"a", "b"}
+        big = {"a", "b", "c", "d", "e", "f", "g", "h", "i", "j"}
+        assert _containment(small, big) == 1.0  # all of small in big
+        assert _containment(big, small) == 0.2  # only 2/10 of big in small
+
+
+class TestParseBriefSections:
+    def test_parses_all_sections(self):
+        sections = parse_brief_sections(SAMPLE_BRIEF)
+        assert "knowledge" in sections
+        assert "working_memory" in sections
+        assert "related_tasks" in sections
+        assert "metrics" in sections
+        assert "completions" in sections
+        assert "episodes" in sections
+        assert "reasoning" in sections
+
+    def test_parses_supplementary_sections(self):
+        sections = parse_brief_sections(SAMPLE_BRIEF)
+        assert "brain_goals" in sections
+        assert "world_model" in sections
+        assert "failure_avoidance" in sections
+
+    def test_empty_brief(self):
+        assert parse_brief_sections("") == {}
+        assert parse_brief_sections(None) == {}
+
+    def test_no_markers(self):
+        sections = parse_brief_sections("Just some plain text without any section markers.")
+        assert "brief" in sections  # Falls back to single "brief" section
+
+    def test_section_content_not_empty(self):
+        sections = parse_brief_sections(SAMPLE_BRIEF)
+        for name, content in sections.items():
+            assert len(content.strip()) > 0, f"Section {name} is empty"
+
+
+class TestScoreSectionRelevance:
+    def test_relevant_output_scores_high(self):
+        result = score_section_relevance(
+            SAMPLE_BRIEF, SAMPLE_OUTPUT_RELEVANT,
+            task="graph cutover", outcome="success",
+        )
+        assert result["overall"] > 0.4  # Most sections should be referenced
+        assert result["sections_referenced"] >= 4
+        assert result["sections_total"] >= 8  # includes supplementary sections
+
+    def test_irrelevant_output_scores_low(self):
+        result = score_section_relevance(
+            SAMPLE_BRIEF, SAMPLE_OUTPUT_IRRELEVANT,
+            task="telegram refactor", outcome="success",
+        )
+        assert result["overall"] < 0.5  # Few sections referenced
+        assert result["sections_referenced"] < result["sections_total"]
+
+    def test_empty_inputs(self):
+        result = score_section_relevance("", "some output")
+        assert result["overall"] == 0.0
+        assert result["sections_total"] == 0
+
+        result = score_section_relevance("some brief", "")
+        assert result["overall"] == 0.0
+
+    def test_per_section_scores(self):
+        result = score_section_relevance(
+            SAMPLE_BRIEF, SAMPLE_OUTPUT_RELEVANT,
+            task="test", outcome="success",
+        )
+        assert isinstance(result["per_section"], dict)
+        for name, score in result["per_section"].items():
+            assert 0.0 <= score <= 1.0, f"Section {name} score out of range: {score}"
+
+    def test_task_and_outcome_stored(self):
+        result = score_section_relevance(
+            SAMPLE_BRIEF, SAMPLE_OUTPUT_RELEVANT,
+            task="my task description", outcome="failure",
+        )
+        assert result["task"] == "my task description"
+        assert result["outcome"] == "failure"
+
+
+class TestRecordAndAggregate:
+    def test_record_creates_file(self, tmp_path):
+        relevance_file = str(tmp_path / "context_relevance.jsonl")
+        result = {
+            "overall": 0.71,
+            "sections_total": 7,
+            "sections_referenced": 5,
+            "per_section": {"knowledge": 0.23, "metrics": 0.18},
+            "task": "test task",
+            "outcome": "success",
+        }
+
+        # Monkey-patch the file path
+        import clarvis.cognition.context_relevance as cr_mod
+        orig = cr_mod.RELEVANCE_FILE
+        cr_mod.RELEVANCE_FILE = relevance_file
+        try:
+            path = record_relevance(result)
+            assert os.path.exists(path)
+            with open(path) as f:
+                entry = json.loads(f.readline())
+            assert entry["overall"] == 0.71
+            assert "ts" in entry
+        finally:
+            cr_mod.RELEVANCE_FILE = orig
+
+    def test_aggregate_empty(self, tmp_path):
+        agg = aggregate_relevance(days=7, relevance_file=str(tmp_path / "nonexistent.jsonl"))
+        assert agg["mean_relevance"] == 0.0
+        assert agg["episodes"] == 0
+
+    def test_aggregate_computes_means(self, tmp_path):
+        relevance_file = str(tmp_path / "context_relevance.jsonl")
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc).isoformat()
+
+        entries = [
+            {"ts": now, "overall": 0.6, "per_section": {"knowledge": 0.3, "metrics": 0.1}, "outcome": "success"},
+            {"ts": now, "overall": 0.8, "per_section": {"knowledge": 0.5, "metrics": 0.2}, "outcome": "success"},
+            {"ts": now, "overall": 0.4, "per_section": {"knowledge": 0.2, "metrics": 0.05}, "outcome": "failure"},
+        ]
+        with open(relevance_file, "w") as f:
+            for e in entries:
+                f.write(json.dumps(e) + "\n")
+
+        agg = aggregate_relevance(days=7, relevance_file=relevance_file)
+        assert agg["episodes"] == 3
+        assert 0.59 < agg["mean_relevance"] < 0.61  # (0.6+0.8+0.4)/3 = 0.6
+        assert "knowledge" in agg["per_section_mean"]
+        assert agg["success_mean"] > agg["failure_mean"]
+
+    def test_aggregate_filters_by_date(self, tmp_path):
+        relevance_file = str(tmp_path / "context_relevance.jsonl")
+        from datetime import datetime, timezone, timedelta
+        old_ts = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+        new_ts = datetime.now(timezone.utc).isoformat()
+
+        entries = [
+            {"ts": old_ts, "overall": 0.9, "per_section": {}, "outcome": "success"},  # Too old
+            {"ts": new_ts, "overall": 0.5, "per_section": {}, "outcome": "success"},   # Recent
+        ]
+        with open(relevance_file, "w") as f:
+            for e in entries:
+                f.write(json.dumps(e) + "\n")
+
+        agg = aggregate_relevance(days=7, relevance_file=relevance_file)
+        assert agg["episodes"] == 1
+        assert agg["mean_relevance"] == 0.5
+
+
+class TestRegenerateReport:
+    def test_regenerate_enriches_report(self, tmp_path, monkeypatch):
+        """regenerate_report() merges episode-derived relevance into brief_v2_report.json."""
+        from datetime import datetime, timezone
+
+        # Set up JSONL with enough episodes (>= 3)
+        relevance_file = str(tmp_path / "context_relevance.jsonl")
+        now = datetime.now(timezone.utc).isoformat()
+        entries = [
+            {"ts": now, "overall": 0.7, "per_section": {"knowledge": 0.3}, "outcome": "success"},
+            {"ts": now, "overall": 0.8, "per_section": {"knowledge": 0.5}, "outcome": "success"},
+            {"ts": now, "overall": 0.6, "per_section": {"knowledge": 0.2}, "outcome": "failure"},
+        ]
+        with open(relevance_file, "w") as f:
+            for e in entries:
+                f.write(json.dumps(e) + "\n")
+
+        # Set up existing report
+        benchmarks_dir = tmp_path / "data" / "benchmarks"
+        benchmarks_dir.mkdir(parents=True)
+        report_path = str(benchmarks_dir / "brief_v2_report.json")
+        with open(report_path, "w") as f:
+            json.dump({"total_heartbeats": 100, "by_version": {}}, f)
+
+        # Monkeypatch paths
+        import clarvis.cognition.context_relevance as cr_mod
+        monkeypatch.setattr(cr_mod, "RELEVANCE_FILE", relevance_file)
+        monkeypatch.setattr(cr_mod, "_WORKSPACE", str(tmp_path))
+
+        agg = regenerate_report(days=7)
+        assert agg["episodes"] == 3
+        assert 0.69 < agg["mean_relevance"] < 0.71  # (0.7+0.8+0.6)/3
+
+        # Verify the report file was enriched
+        with open(report_path) as f:
+            report = json.load(f)
+        assert "context_relevance_from_episodes" in report
+        cr_data = report["context_relevance_from_episodes"]
+        assert cr_data["episodes"] == 3
+        assert 0.69 < cr_data["mean_relevance"] < 0.71
+        assert "generated" in cr_data
+        # Original data preserved
+        assert report["total_heartbeats"] == 100
+
+    def test_regenerate_skips_with_few_episodes(self, tmp_path, monkeypatch):
+        """regenerate_report() skips when < 3 episodes available."""
+        import clarvis.cognition.context_relevance as cr_mod
+        monkeypatch.setattr(cr_mod, "RELEVANCE_FILE", str(tmp_path / "empty.jsonl"))
+        monkeypatch.setattr(cr_mod, "_WORKSPACE", str(tmp_path))
+
+        agg = regenerate_report(days=7)
+        assert agg["episodes"] == 0
+        # No report file created
+        report_path = tmp_path / "data" / "benchmarks" / "brief_v2_report.json"
+        assert not report_path.exists()

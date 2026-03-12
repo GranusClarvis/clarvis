@@ -452,7 +452,7 @@ class EpisodicMemory:
         # === SPREADING ACTIVATION: Connect episodic recall to attention spotlight ===
         if use_spreading_activation and top_episodes:
             try:
-                from attention import attention
+                from clarvis.cognition.attention import attention
                 # Build activation text from retrieved episodes
                 activation_text = " ".join(ep["task"] for ep in top_episodes)
                 # Boost spotlight items that overlap with recalled episodes

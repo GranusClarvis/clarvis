@@ -397,19 +397,28 @@ def benchmark_context_quality():
                 if raw_bytes > 0:
                     result["brief_compression"] = round(1.0 - avg_bytes / raw_bytes, 3)
 
-            # Context relevance: proxy from v2 success rate vs v1
-            v2_rate = report.get("v2_success_rate", 0)
-            v1_rate = report.get("baseline_success_rate", 0.5)
-            # Also check nested by_version structure (actual report format)
-            if not v2_rate:
+            # Context relevance: prefer episode-based data (CONTEXT_RELEVANCE_FEEDBACK)
+            try:
+                from clarvis.cognition.context_relevance import aggregate_relevance
+                agg = aggregate_relevance(days=7)
+                if agg.get("episodes", 0) >= 5:
+                    result["context_relevance"] = round(agg["mean_relevance"], 3)
+            except Exception:
+                pass
+
+            # Fallback: static proxy from v2 success rate vs v1
+            if result["context_relevance"] == 0.0:
+                v2_rate = report.get("v2_success_rate", 0)
+                v1_rate = report.get("baseline_success_rate", 0.5)
                 by_ver = report.get("by_version", {})
                 v2_data = by_ver.get("v2", {})
                 v1_data = by_ver.get("v1", {})
-                v2_rate = v2_data.get("success_rate", 0)
-                if v1_data.get("success_rate"):
-                    v1_rate = v1_data["success_rate"]
-            if v2_rate > 0:
-                result["context_relevance"] = round(min(v2_rate / max(v1_rate, 0.01), 1.5) / 1.5, 3)
+                if not v2_rate:
+                    v2_rate = v2_data.get("success_rate", 0)
+                    if v1_data.get("success_rate"):
+                        v1_rate = v1_data["success_rate"]
+                if v2_rate > 0:
+                    result["context_relevance"] = round(min(v2_rate / max(v1_rate, 0.01), 1.5) / 1.5, 3)
         except Exception:
             pass
 

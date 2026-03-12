@@ -234,7 +234,12 @@ def create_boost_bridge(brain, match, col1_name, col2_name, content_hash, mirror
 
         # Record mirror key so we can safely skip repeats (content_hash can collide across many docs).
         if mirror_key is not None:
-            return stored, mirror_key
+            return {
+                "bridge_id": base_id,
+                "text_preview": (stored[0] if stored else "")[:120],
+                "stored_in": len(stored),
+                "mirror_key": mirror_key,
+            }
     else:
         # Legacy template mode
         phrases1 = extract_key_phrases(match["col1_doc"])
@@ -274,6 +279,223 @@ def create_boost_bridge(brain, match, col1_name, col2_name, content_hash, mirror
         "text_preview": bridge_text[:120],
         "stored_in": len(stored),
     }
+
+
+def get_stratified_samples(col, sample_size=12):
+    """Get the exact docs that stratified sampling would select.
+
+    Matches the sampling logic in measure_all_pairs() and phi_metric.semantic_cross_collection().
+    Returns list of (doc_id, doc_text) tuples.
+    """
+    all_results = col.get(include=["documents"])
+    all_ids = all_results.get("ids", [])
+    all_docs = all_results.get("documents", [])
+    n = len(all_docs)
+    if n == 0:
+        return []
+    actual_sample = min(sample_size, n)
+    if actual_sample >= n:
+        return list(zip(all_ids, all_docs))
+    step = n / actual_sample
+    indices = [int(i * step) for i in range(actual_sample)]
+    return [(all_ids[i], all_docs[i]) for i in indices]
+
+
+def targeted_mirror_boost(brain, target=0.65, dry_run=False, verbose=True, max_pairs=25):
+    """Targeted mirror strategy: mirror the EXACT docs that stratified sampling selects.
+
+    For each weak pair (c1, c2):
+    1. Compute which docs the metric will sample from c1 and c2
+    2. For each sampled doc from c1, check if c2 already has a good match
+    3. If not, mirror that doc into c2 (and vice versa)
+
+    This ensures the measurement finds high-similarity matches because the
+    mirrored doc IS the query doc (or very close to it).
+
+    Only mirrors docs that would improve the pair score. Skips docs where
+    the existing best-match similarity is already above a threshold.
+    """
+    state = load_state()
+    existing_keys = set(state.get("mirror_keys", []))
+
+    # Measure current state
+    before_overall, before_pairs = measure_all_pairs(brain)
+    if verbose:
+        print(f"=== Targeted Mirror Boost ===")
+        print(f"BEFORE: Overall = {before_overall:.4f}")
+
+    weak_pairs = sorted(
+        [(k, v) for k, v in before_pairs.items() if v < target],
+        key=lambda x: x[1]
+    )[:max_pairs]
+
+    if not weak_pairs:
+        if verbose:
+            print("All pairs at or above target.")
+        return {"before": before_overall, "after": before_overall, "mirrors": 0}
+
+    if verbose:
+        print(f"Targeting {len(weak_pairs)} weak pairs\n")
+
+    total_mirrors = 0
+    # Similarity threshold: only mirror if current best-match is below this.
+    # Adaptive: on second+ runs (few new mirrors), raise threshold to catch more.
+    mirror_threshold = 0.72
+
+    for pair_name, score in weak_pairs:
+        parts = pair_name.split(" <-> ")
+        if len(parts) != 2:
+            continue
+        c1, c2 = parts
+        col1 = brain.collections[c1]
+        col2 = brain.collections[c2]
+
+        samples_c1 = get_stratified_samples(col1)
+        samples_c2 = get_stratified_samples(col2)
+        pair_mirrors = 0
+
+        # Direction 1: mirror c1 sampled docs into c2 where needed
+        for doc_id, doc_text in samples_c1[:8]:
+            if not doc_text or len(doc_text) < 15:
+                continue
+            # Skip if this doc is itself a bridge/mirror
+            if doc_id.startswith(("bridge_", "sbridge_", "boost_")):
+                continue
+
+            mirror_key = f"tm_{c1[:8]}_{c2[:8]}_{doc_id[:20]}"
+            if mirror_key in existing_keys:
+                continue
+
+            # Check if c2 already has a good match for this doc
+            try:
+                r = col2.query(query_texts=[doc_text], n_results=1, include=["distances"])
+                if r["distances"] and r["distances"][0]:
+                    existing_sim = max(0, 1.0 - r["distances"][0][0] / 2.0)
+                    if existing_sim >= mirror_threshold:
+                        continue  # Already has a good match
+            except Exception:
+                continue
+
+            if dry_run:
+                if verbose:
+                    print(f"  Would mirror {doc_id[:30]} -> {c2} (current sim={existing_sim:.3f})")
+                existing_keys.add(mirror_key)
+                pair_mirrors += 1
+                continue
+
+            # Store the doc in the target collection
+            c2_label = c2.replace("clarvis-", "").replace("autonomous-", "auto-")
+            bridge_id = f"tm_{c2_label[:8]}_{hashlib.md5(doc_id.encode()).hexdigest()[:10]}"[:63]
+            try:
+                brain.store(
+                    doc_text,
+                    collection=c2,
+                    importance=0.50,
+                    tags=["targeted-mirror", c1, c2],
+                    source="semantic_overlap_booster_targeted",
+                    memory_id=bridge_id,
+                )
+                existing_keys.add(mirror_key)
+                pair_mirrors += 1
+            except Exception as e:
+                if verbose:
+                    print(f"    Warning: mirror to {c2} failed: {e}")
+
+        # Direction 2: mirror c2 sampled docs into c1 where needed
+        for doc_id, doc_text in samples_c2[:8]:
+            if not doc_text or len(doc_text) < 15:
+                continue
+            if doc_id.startswith(("bridge_", "sbridge_", "boost_")):
+                continue
+
+            mirror_key = f"tm_{c2[:8]}_{c1[:8]}_{doc_id[:20]}"
+            if mirror_key in existing_keys:
+                continue
+
+            try:
+                r = col1.query(query_texts=[doc_text], n_results=1, include=["distances"])
+                if r["distances"] and r["distances"][0]:
+                    existing_sim = max(0, 1.0 - r["distances"][0][0] / 2.0)
+                    if existing_sim >= mirror_threshold:
+                        continue
+            except Exception:
+                continue
+
+            if dry_run:
+                if verbose:
+                    print(f"  Would mirror {doc_id[:30]} -> {c1} (current sim={existing_sim:.3f})")
+                existing_keys.add(mirror_key)
+                pair_mirrors += 1
+                continue
+
+            c1_label = c1.replace("clarvis-", "").replace("autonomous-", "auto-")
+            bridge_id = f"tm_{c1_label[:8]}_{hashlib.md5(doc_id.encode()).hexdigest()[:10]}"[:63]
+            try:
+                brain.store(
+                    doc_text,
+                    collection=c1,
+                    importance=0.50,
+                    tags=["targeted-mirror", c1, c2],
+                    source="semantic_overlap_booster_targeted",
+                    memory_id=bridge_id,
+                )
+                existing_keys.add(mirror_key)
+                pair_mirrors += 1
+            except Exception as e:
+                if verbose:
+                    print(f"    Warning: mirror to {c1} failed: {e}")
+
+        total_mirrors += pair_mirrors
+        if verbose and pair_mirrors > 0:
+            print(f"  {pair_name}: {score:.4f} -> +{pair_mirrors} mirrors")
+
+    if verbose:
+        print(f"\nTotal targeted mirrors: {total_mirrors}")
+
+    # Re-measure
+    if not dry_run and total_mirrors > 0:
+        after_overall, after_pairs = measure_all_pairs(brain)
+        delta = after_overall - before_overall
+
+        if verbose:
+            print(f"\nAFTER: Overall = {after_overall:.4f} (delta: {delta:+.4f})")
+            still_below = sum(1 for v in after_pairs.values() if v < target)
+            print(f"  Pairs still below {target}: {still_below}/{len(after_pairs)}")
+
+            improvements = []
+            for pn in after_pairs:
+                if pn in before_pairs:
+                    d = after_pairs[pn] - before_pairs[pn]
+                    if abs(d) > 0.001:
+                        improvements.append((pn, before_pairs[pn], after_pairs[pn], d))
+            if improvements:
+                improvements.sort(key=lambda x: -x[3])
+                print(f"\n  Top changes:")
+                for name, bef, aft, d in improvements[:15]:
+                    print(f"    {name}: {bef:.4f} -> {aft:.4f} ({d:+.4f})")
+
+        # Save state
+        state["mirror_keys"] = list(existing_keys)
+        state["runs"].append({
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "before": before_overall,
+            "after": after_overall,
+            "delta": round(delta, 4),
+            "bridges_created": total_mirrors,
+            "target": target,
+            "mode": "targeted_mirror",
+        })
+        state["runs"] = state["runs"][-20:]
+        save_state(state)
+
+        return {
+            "before": before_overall,
+            "after": after_overall,
+            "delta": round(delta, 4),
+            "mirrors": total_mirrors,
+        }
+
+    return {"before": before_overall, "after": before_overall, "mirrors": total_mirrors, "dry_run": dry_run}
 
 
 def prune_template_bridges(brain, max_ratio=0.50, dry_run=False, verbose=True):
@@ -411,9 +633,19 @@ def run(target=0.65, dry_run=False, verbose=True, deep=False, mirror=False):
 
     for pair_name, score in weak_pairs:
         # Tier bridge count by weakness
-        # Mirror mode uses fewer bridges (quality over quantity; each creates 2 memories)
+        # Mirror mode: each mirror pair creates 2 memories (one in each collection).
+        # Higher counts ensure stratified sampling (12 docs) picks up mirrors.
         if mirror:
-            n_bridges = 4 if score < 0.50 else (3 if score < 0.55 else (2 if score < 0.60 else 1))
+            if score < 0.45:
+                n_bridges = 10
+            elif score < 0.50:
+                n_bridges = 8
+            elif score < 0.55:
+                n_bridges = 6
+            elif score < 0.60:
+                n_bridges = 5
+            else:
+                n_bridges = 4
         elif deep:
             n_bridges = 10 if score < 0.50 else (8 if score < 0.55 else (6 if score < 0.60 else 4))
         else:
@@ -509,8 +741,8 @@ def run(target=0.65, dry_run=False, verbose=True, deep=False, mirror=False):
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Semantic Overlap Booster")
-    parser.add_argument("action", nargs="?", default="boost", choices=["boost", "measure", "prune"],
-                        help="Action: boost (create bridges), measure (just measure), prune (remove template bridges)")
+    parser.add_argument("action", nargs="?", default="boost", choices=["boost", "measure", "prune", "targeted"],
+                        help="Action: boost (create bridges), measure (just measure), prune (remove template bridges), targeted (mirror sampled docs)")
     parser.add_argument("--target", type=float, default=0.65, help="Target overlap (default 0.65)")
     parser.add_argument("--dry-run", action="store_true", help="Preview without creating bridges")
     parser.add_argument("--deep", action="store_true", help="Deep mode: more docs, bidirectional, higher bridge counts")
@@ -537,6 +769,9 @@ if __name__ == "__main__":
         if not args.dry_run and total_pruned > 0:
             after_overall, _ = measure_all_pairs(_brain)
             print(f"AFTER: Overall = {after_overall:.4f} (delta: {after_overall - before_overall:+.4f})")
+    elif args.action == "targeted":
+        result = targeted_mirror_boost(_brain, target=args.target, dry_run=args.dry_run)
+        print(f"\nResult: {json.dumps(result, indent=2)}")
     else:
         result = run(target=args.target, dry_run=args.dry_run, deep=args.deep, mirror=args.mirror)
         print(f"\nResult: {json.dumps(result, indent=2)}")

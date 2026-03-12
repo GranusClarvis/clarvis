@@ -24,17 +24,11 @@ echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running context window GC..." >> "$LOGFILE
 python3 /home/agent/.openclaw/workspace/scripts/context_compressor.py gc >> "$LOGFILE" 2>&1 || true
 
 # Step 1: Memory optimization (decay stale memories) — CRITICAL
-echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running brain.optimize()..." >> "$LOGFILE"
-python3 -c "
-import sys
-sys.path.insert(0, '/home/agent/.openclaw/workspace/scripts')
-from brain import brain
-brain.optimize()
-print('brain.optimize() complete')
-" >> "$LOGFILE" 2>&1
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running brain optimize..." >> "$LOGFILE"
+python3 -m clarvis brain optimize >> "$LOGFILE" 2>&1
 OPTIMIZE_EXIT=$?
-if [ $OPTIMIZE_EXIT -ne 0 ]; then
-    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WARNING: brain.optimize() failed with exit $OPTIMIZE_EXIT" >> "$LOGFILE"
+if [ "$OPTIMIZE_EXIT" -ne 0 ]; then
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WARNING: brain optimize failed with exit $OPTIMIZE_EXIT" >> "$LOGFILE"
 fi
 
 # Step 2: Run full reflection loop (extract lessons + generate queue tasks)
@@ -102,7 +96,7 @@ python3 /home/agent/.openclaw/workspace/scripts/causal_model.py analyze >> "$LOG
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running session close..." >> "$LOGFILE"
 python3 /home/agent/.openclaw/workspace/scripts/session_hook.py close >> "$LOGFILE" 2>&1
 SESSION_EXIT=$?
-if [ $SESSION_EXIT -ne 0 ]; then
+if [ "$SESSION_EXIT" -ne 0 ]; then
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WARNING: session_hook.py close failed with exit $SESSION_EXIT" >> "$LOGFILE"
 fi
 

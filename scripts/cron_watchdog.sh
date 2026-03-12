@@ -56,7 +56,7 @@ check_job() {
 
 # --- Check each job ---
 # Job name, log file, max hours since last output (interval + grace)
-check_job "autonomous"      "$LOG_DIR/autonomous.log"      4    # every 3h, grace 1h
+check_job "autonomous"      "$LOG_DIR/autonomous.log"      6    # max gap ~5h (23:00→01:00+06:00), grace 1h
 check_job "health_monitor"  "/home/agent/.openclaw/workspace/monitoring/health.log" 1  # every 15m, grace 45m
 check_job "morning_report"  "$LOG_DIR/report_morning.log"  26   # daily at 10:00, grace 2h
 check_job "evening_report"  "$LOG_DIR/report_evening.log"  26   # daily at 22:00, grace 2h
@@ -67,7 +67,7 @@ check_job "reflection"      "$LOG_DIR/reflection.log"       26   # daily at 21:0
 check_job "backup"          "$LOG_DIR/backup.log"           26   # daily at 02:00, grace 2h
 check_job "backup_verify"   "$LOG_DIR/backup_verify.log"    26   # daily at 02:30, grace 2h
 check_job "dream_engine"    "$LOG_DIR/dream.log"            26   # daily at 02:45, grace 2h
-check_job "research"        "$LOG_DIR/research.log"         10   # 3x/day at 09,14,20, grace 2h
+check_job "research"        "$LOG_DIR/research.log"         10   # 2x/day at 10,16, grace 4h
 
 # --- Working memory health check ---
 # Verify attention spotlight has active items (target: 3+)

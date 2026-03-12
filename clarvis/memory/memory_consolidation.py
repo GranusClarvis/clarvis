@@ -1258,7 +1258,7 @@ def sleep_consolidate(dry_run=False):
 
     # Load episodes from episodic memory
     try:
-        from episodic_memory import episodic
+        from clarvis.memory.episodic_memory import episodic
         episodes = episodic.episodes
     except Exception as e:
         print(f"[sleep] Cannot load episodic memory: {e}")

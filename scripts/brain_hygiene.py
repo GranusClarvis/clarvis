@@ -204,7 +204,11 @@ def cmd_run():
     graph_ok = run_graph_verify()
 
     # 3. Full optimization (dedup + noise + archive)
-    opt_ok = run_optimize_full()
+    # Skip if graph verification failed — optimizing a broken graph can worsen corruption
+    if not graph_ok:
+        _log("WARN: Skipping optimize — graph verification failed")
+        _alert("Graph verification failed — skipping optimize to prevent corruption")
+    opt_ok = run_optimize_full() if graph_ok else False
 
     # 4. Snapshot current state
     stats = get_brain_stats()

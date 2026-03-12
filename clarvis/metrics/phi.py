@@ -21,8 +21,8 @@ from datetime import datetime, timezone
 try:
     from clarvis.brain import get_brain as _spine_get_brain, ALL_COLLECTIONS
 except ImportError:
-    from brain import ClarvisBrain, ALL_COLLECTIONS
-    _spine_get_brain = None
+    from brain import get_brain as _legacy_get_brain, ALL_COLLECTIONS
+    _spine_get_brain = _legacy_get_brain
 
 PHI_HISTORY_FILE = "/home/agent/.openclaw/workspace/data/phi_history.json"
 PHI_DECOMPOSITION_FILE = "/home/agent/.openclaw/workspace/data/phi_decomposition.json"
@@ -46,9 +46,7 @@ LEGACY_PREFIX_MAP = {
 
 def _get_brain():
     """Get brain singleton (with hooks registered) via spine, or fallback to legacy."""
-    if _spine_get_brain is not None:
-        return _spine_get_brain()
-    return ClarvisBrain()
+    return _spine_get_brain()
 
 
 def _infer_collection(node_id):
@@ -94,15 +92,24 @@ def _build_adjacency(brain):
 
 
 def intra_collection_density(nodes, adj):
-    """Measure 1: Within-collection link density.
+    """Measure 1: Within-collection link density (degree-based).
 
-    Score = avg(links_per_node / max_possible_links_per_node) across collections.
+    Uses average degree per collection instead of raw edge density.
+    Raw density = edges / max_pairs is O(n²) in the denominator and drops
+    toward zero for large collections even when connectivity is healthy.
+    Degree-based metric: min(1.0, avg_degree / TARGET_DEGREE) is scale-
+    invariant and reflects actual integration per memory.
+
+    TARGET_DEGREE = 10: each memory should ideally have ~10 same-collection
+    neighbors for strong intra-collection integration.
     """
+    TARGET_DEGREE = 10
+
     col_nodes = defaultdict(set)
     for nid, col in nodes.items():
         col_nodes[col].add(nid)
 
-    densities = []
+    scores = []
     per_collection = {}
 
     for col, members in col_nodes.items():
@@ -113,13 +120,14 @@ def intra_collection_density(nodes, adj):
             neighbors_in_col = sum(1 for n in adj.get(nid, set()) if n in members)
             total_links += neighbors_in_col
         actual_edges = total_links / 2
-        max_edges = len(members) * (len(members) - 1) / 2
-        density = actual_edges / max_edges if max_edges > 0 else 0
-        densities.append(density)
-        per_collection[col] = round(density, 4)
+        n = len(members)
+        avg_degree = (actual_edges * 2 / n) if n > 0 else 0
+        score = min(1.0, avg_degree / TARGET_DEGREE)
+        scores.append(score)
+        per_collection[col] = round(score, 4)
 
-    avg_density = sum(densities) / len(densities) if densities else 0.0
-    return avg_density, per_collection
+    avg_score = sum(scores) / len(scores) if scores else 0.0
+    return avg_score, per_collection
 
 
 def cross_collection_integration(nodes, edge_list):
@@ -317,7 +325,7 @@ def compute_phi(brain=None):
     stats = brain.stats()
 
     ic_score, ic_details = intra_collection_density(nodes, adj)
-    ic_normalized = min(1.0, ic_score * 5)
+    ic_normalized = ic_score  # Already normalized (degree-based, 0-1)
 
     cc_score, cc_details = cross_collection_integration(nodes, edge_list)
     sc_score, sc_details = semantic_cross_collection(brain)
@@ -449,7 +457,7 @@ def act_on_phi(result=None):
         except Exception as e:
             actions.append(f"cross-link failed: {e}")
         try:
-            from attention import attention
+            from clarvis.cognition.attention import attention
             attention.submit(
                 f"Phi dropped from {prev_phi:.3f} to {current_phi:.3f} — memory integration weakening",
                 source="phi_metric", importance=0.9, relevance=0.8, boost=0.3,
@@ -461,7 +469,7 @@ def act_on_phi(result=None):
     elif delta > 0.05:
         actions.append(f"phi_rise: {prev_phi:.3f} -> {current_phi:.3f} (delta={delta:.3f})")
         try:
-            from episodic_memory import episodic
+            from clarvis.memory.episodic_memory import episodic
             episodic.encode(
                 task_text=f"Phi integration improved: {prev_phi:.3f} -> {current_phi:.3f}",
                 section="consciousness_metrics", salience=0.8, outcome="success", duration_s=0,

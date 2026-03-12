@@ -245,7 +245,11 @@ def close_chain(chain_id: str, result: str, task_text: str, exit_code: str = "0"
 
     # Mark the final step's outcome
     complete_step(chain_id, f"Chain complete: {result}")
-    print(f"Chain {chain_id} closed: {result} ({3}+ steps)", file=sys.stderr)
+    try:
+        step_count = len(list_chains().get(chain_id, {}).get("steps", []))
+    except Exception:
+        step_count = "?"
+    print(f"Chain {chain_id} closed: {result} ({step_count} steps)", file=sys.stderr)
 
     # === ClarvisReasoning dual-write: complete the session ===
     if cr_reasoner:

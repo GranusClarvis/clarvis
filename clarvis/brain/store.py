@@ -229,12 +229,19 @@ class StoreMixin:
     # === MEMORY DECAY & PRUNING ===
 
     def decay_importance(self, decay_rate=0.01, min_importance=0.1):
-        """Decay importance of all memories over time."""
+        """Decay importance of all memories over time.
+
+        Batches upserts per collection for efficiency (~10 calls instead of 1000+).
+        """
         decayed = 0
         now = datetime.now(timezone.utc)
 
         for col_name, col in self.collections.items():
             results = col.get()
+
+            batch_ids = []
+            batch_docs = []
+            batch_metas = []
 
             for i, mem_id in enumerate(results.get("ids", [])):
                 meta = results["metadatas"][i] if results.get("metadatas") else {}
@@ -254,14 +261,15 @@ class StoreMixin:
 
                         if new_importance < current_importance:
                             meta["importance"] = new_importance
-                            col.upsert(
-                                ids=[mem_id],
-                                documents=[results["documents"][i]],
-                                metadatas=[meta]
-                            )
-                            decayed += 1
+                            batch_ids.append(mem_id)
+                            batch_docs.append(results["documents"][i])
+                            batch_metas.append(meta)
                 except Exception:
                     pass
+
+            if batch_ids:
+                col.upsert(ids=batch_ids, documents=batch_docs, metadatas=batch_metas)
+                decayed += len(batch_ids)
 
         return decayed
 

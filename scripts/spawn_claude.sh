@@ -15,6 +15,7 @@ set -euo pipefail
 
 # Source cron env for proper PATH, HOME, env cleanup
 source /home/agent/.openclaw/workspace/scripts/cron_env.sh
+source /home/agent/.openclaw/workspace/scripts/lock_helper.sh
 
 TASK="${1:-}"
 TIMEOUT="${2:-1200}"
@@ -111,6 +112,10 @@ PY
 CATEGORY_TAG="${CATEGORY:+(category=$CATEGORY)}"
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] Spawning with ${TIMEOUT}s timeout ${CATEGORY_TAG}..." >> "$LOGFILE"
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] Task: ${TASK:0:100}..." >> "$LOGFILE"
+
+# Acquire global Claude lock — prevent concurrent Claude Code spawns
+LOGFILE="/tmp/spawn_claude_$$.log"
+acquire_global_claude_lock "$LOGFILE"
 
 # Immediate stdout feedback — so exec() monitoring sees output (prevents SIGTERM from no-output watchdog)
 echo "[spawn_claude] Spawned with ${TIMEOUT}s timeout ${CATEGORY_TAG}. Task: ${TASK:0:80}"

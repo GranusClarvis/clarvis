@@ -270,8 +270,6 @@ class ReasoningSession:
 
         # Circular: repeating earlier thoughts
         for prev in self.steps:
-            if prev.step_num == step.step_num:
-                continue
             # Simple word overlap detection
             prev_words = set(prev.thought.lower().split())
             step_words = set(thought_lower.split())

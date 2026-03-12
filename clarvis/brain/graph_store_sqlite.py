@@ -378,8 +378,10 @@ class GraphStoreSQLite:
     def backup(self, dst_path: str):
         """Hot backup using SQLite's online backup API."""
         dst = sqlite3.connect(dst_path)
-        self._conn.backup(dst)
-        dst.close()
+        try:
+            self._conn.backup(dst)
+        finally:
+            dst.close()
         _log.info("Graph backup written to %s", dst_path)
 
     # ------------------------------------------------------------------

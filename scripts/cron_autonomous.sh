@@ -45,7 +45,7 @@ PREFLIGHT_FILE=$(mktemp --suffix=.json)
 python3 "$SCRIPTS/heartbeat_preflight.py" > "$PREFLIGHT_FILE" 2>> "$LOGFILE"
 PREFLIGHT_EXIT=$?
 
-if [ $PREFLIGHT_EXIT -ne 0 ]; then
+if [ "$PREFLIGHT_EXIT" -ne 0 ]; then
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WARN: Preflight failed (exit $PREFLIGHT_EXIT)" >> "$LOGFILE"
     rm -f "$PREFLIGHT_FILE"
     exit 1
@@ -260,11 +260,25 @@ Rules:
 OUTPUT FORMAT (mandatory): Start with "RESULT: success|partial|fail — <what changed>". Then list each task with status. End with "NEXT: <suggested follow-up or none>".
 ENDPROMPT
 
+    # Start Claude Code in background for progress monitoring
     timeout "$_timeout" env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \
         /home/agent/.local/bin/claude -p "$(cat "$_prompt_file")" \
         --dangerously-skip-permissions --model claude-opus-4-6 \
-        > "$_output_file" 2>&1
+        > "$_output_file" 2>&1 &
+    local _claude_pid=$!
+
+    # Pattern 9: Commitment & Reconsideration — monitor for stalled execution
+    python3 "$SCRIPTS/execution_monitor.py" "$_output_file" "$_timeout" "$_claude_pid" >> "$LOGFILE" 2>&1 &
+    local _monitor_pid=$!
+
+    # Wait for Claude Code (or monitor-triggered abort)
+    wait "$_claude_pid"
     local _exit=$?
+
+    # Clean up monitor
+    kill "$_monitor_pid" 2>/dev/null
+    wait "$_monitor_pid" 2>/dev/null
+
     rm -f "$_prompt_file"
     return $_exit
 }
@@ -344,7 +358,7 @@ with open('$PREFLIGHT_FILE', 'w') as f:
     fi
 
     # Check if task needs escalation to Claude Code
-    if grep -q "NEEDS_CLAUDE_CODE: true" "$OPENROUTER_STDERR" 2>/dev/null || grep -q "NEEDS_CLAUDE_CODE: true" "$TASK_OUTPUT_FILE" 2>/dev/null || [ $TASK_EXIT -ne 0 ]; then
+    if grep -q "NEEDS_CLAUDE_CODE: true" "$OPENROUTER_STDERR" 2>/dev/null || grep -q "NEEDS_CLAUDE_CODE: true" "$TASK_OUTPUT_FILE" 2>/dev/null || [ "$TASK_EXIT" -ne 0 ]; then
         # Upgrade timeout: escalated tasks need Claude Code minimum (900s)
         if [ "$CLAUDE_TIMEOUT" -lt 900 ]; then
             echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] ESCALATION: upgrading timeout to 1200s (Claude Code minimum)" >> "$LOGFILE"
@@ -365,7 +379,7 @@ elif [ "$ROUTE_EXECUTOR" = "gemini" ]; then
         python3 "$SCRIPTS/task_router.py" execute-openrouter "$NEXT_TASK" > "$TASK_OUTPUT_FILE" 2>&1
     TASK_EXIT=$?
 
-    if grep -q "NEEDS_CLAUDE_CODE: true" "$TASK_OUTPUT_FILE" 2>/dev/null || [ $TASK_EXIT -ne 0 ]; then
+    if grep -q "NEEDS_CLAUDE_CODE: true" "$TASK_OUTPUT_FILE" 2>/dev/null || [ "$TASK_EXIT" -ne 0 ]; then
         # Upgrade timeout: escalated tasks need Claude Code minimum (900s)
         if [ "$CLAUDE_TIMEOUT" -lt 900 ]; then
             echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] ESCALATION: upgrading timeout to 1200s (Claude Code minimum)" >> "$LOGFILE"
@@ -382,6 +396,19 @@ else
 
     run_claude_code "$CLAUDE_TIMEOUT" "$TASK_OUTPUT_FILE"
     TASK_EXIT=$?
+fi
+
+# Check for reconsideration flag (Pattern 9: Commitment & Reconsideration)
+RECONSIDER_FILE="${TASK_OUTPUT_FILE}.reconsider.json"
+if [ -f "$RECONSIDER_FILE" ]; then
+    RECONSIDER_INFO=$(python3 -c "
+import json
+with open('$RECONSIDER_FILE') as f:
+    d = json.load(f)
+print(f\"reason={d.get('reason','?')} aborted={d.get('aborted',False)}\")
+" 2>/dev/null || echo "reason=unknown aborted=unknown")
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] RECONSIDER: $RECONSIDER_INFO — task remains in queue for retry" >> "$LOGFILE"
+    rm -f "$RECONSIDER_FILE"
 fi
 
 rm -f "$OPENROUTER_STDERR"
@@ -403,7 +430,7 @@ echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running batched post-flight..." >> "$LOGFI
 POSTFLIGHT_OUTPUT=$(python3 "$SCRIPTS/heartbeat_postflight.py" "$TASK_EXIT" "$TASK_OUTPUT_FILE" "$PREFLIGHT_FILE" "$TASK_DURATION" 2>> "$LOGFILE")
 POSTFLIGHT_EXIT=$?
 
-if [ $POSTFLIGHT_EXIT -ne 0 ]; then
+if [ "$POSTFLIGHT_EXIT" -ne 0 ]; then
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WARN: Postflight failed (exit $POSTFLIGHT_EXIT)" >> "$LOGFILE"
 else
     # Log postflight timings — extract JSON from potentially mixed output
@@ -424,7 +451,7 @@ print('?')
 fi
 
 # Cleanup
-rm -f "$TASK_OUTPUT_FILE" "$PREFLIGHT_FILE"
+rm -f "$TASK_OUTPUT_FILE" "$PREFLIGHT_FILE" "${TASK_OUTPUT_FILE}.reconsider.json"
 
-emit_dashboard_event task_completed --task-name "${NEXT_TASK:0:120}" --section cron_autonomous --executor "$EXECUTOR_USED" --exit-code "$TASK_EXIT" --duration-s "$TASK_DURATION" --status "$([ $TASK_EXIT -eq 0 ] && echo success || echo failed)"
+emit_dashboard_event task_completed --task-name "${NEXT_TASK:0:120}" --section cron_autonomous --executor "$EXECUTOR_USED" --exit-code "$TASK_EXIT" --duration-s "$TASK_DURATION" --status "$([ "$TASK_EXIT" -eq 0 ] && echo success || echo failed)"
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Heartbeat complete (preflight=${PF_TOTAL_TIME}s + exec=${TASK_DURATION}s + postflight=${PF_POST_TIME:-?}s) ===" >> "$LOGFILE"

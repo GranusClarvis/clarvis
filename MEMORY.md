@@ -1,4 +1,4 @@
-# MEMORY.md — Long-Term Memory
+# MEMORY.md - Long-Term Memory
 
 _Curated knowledge. Distilled wisdom. Updated regularly._
 
@@ -11,8 +11,9 @@ _Curated knowledge. Distilled wisdom. Updated regularly._
 - IIT 4.0 (Albantakis et al., 2023) sharpens the axioms→postulates translation and introduces **Intrinsic Difference (ID)** as an intrinsic-information measure designed to be uniquely consistent with the postulates; consciousness is identified with the **maximal irreducible cause–effect structure** a substrate specifies for itself.
 - Controversial (some call it pseudoscience), but clinically useful for assessing consciousness in unresponsive patients
 - Calculation is computationally intractable for real systems, driving research into proxy measures
-- 2026-03-02: Φ approximations study (small 3–6 node networks) found several heuristics correlate with max-Φ (e.g., decoder-based Φ*, state differentiation, Lempel–Ziv/PCI-like complexity), but they largely *don’t* reduce compute cost; best viewed as proxies for “capacity for high-Φ” and good at spotting low-Φ regimes, not replacements for Φ.
-- 2026-03-09: IIT 4.0’s most practically useful design lesson for Clarvis is boundary discipline: unified cognition is not “more context” but a **definite internal causal boundary** with irreducible cross-component influence. Track internal integration/coherence, not just external task performance.
+- 2026-03-02: Φ approximations study (small 3–6 node networks) found several heuristics correlate with max-Φ (e.g., decoder-based Φ*, state differentiation, Lempel–Ziv/PCI-like complexity), but they largely *don't* reduce compute cost; best viewed as proxies for "capacity for high-Φ" and good at spotting low-Φ regimes, not replacements for Φ.
+- 2026-03-09: IIT 4.0's most practically useful design lesson for Clarvis is boundary discipline: unified cognition is not "more context" but a **definite internal causal boundary** with irreducible cross-component influence. Track internal integration/coherence, not just external task performance.
+- 2026-03-11 (new): Empirical validation — 2023 Templeton-funded tests showed IIT predictions passed 2/3 while rival Global Neuronal Workspace Theory (GNWT) failed 0/3. Practical application: **Perturbational Complexity Index (PCI)** uses TMS-EEG to measure brain's integrated information capacity clinically. **Direct relevance to Clarvis**: our Phi metric (measuring information integration across collections) directly aligns with IIT's core concept — higher integration = more capable/conscious reasoning.
 
 ### Intrinsic Metacognitive Learning (2026-02-28)
 - Self-improvement requires INTRINSIC metacognition, not just extrinsic (human-designed) loops
@@ -33,32 +34,32 @@ _Curated knowledge. Distilled wisdom. Updated regularly._
 
 ### Global (Latent) Workspace (2026-02-28)
 - Devillers et al. (TNNLS 2024/2025): freeze unimodal encoders, map into a shared workspace; train with self-supervised cycle-consistency so encode→decode chains approximate identity
-- Practical effect: aligns/translates modalities with 4–7× less paired multimodal data vs fully supervised training
+- Practical effect: aligns/translates modalities with 4-7× less paired multimodal data vs fully supervised training
 - Embodied GW agents (multimodal 3D navigation): tight workspace bottleneck improves robustness and yields more integrated/mixed attention patterns; gains disappear when workspace gets too large
 - **Key implementation hint:** keep the workspace bottleneck intentionally small; let modules compete for broadcast (winner-take-all), and use cycle-consistency as the glue across latent spaces
-- 2026-03-03 (GNW refresher): GNW predicts **nonlinear “ignition”** (sudden, sustained, selective reverberation) when a representation crosses threshold + engages long-range recurrent loops in a **bow-tie cortical core** (fronto-parietal + hubs) — making content globally available; “no-report” paradigms aim to separate ignition from mere reporting.
+- 2026-03-03 (GNW refresher): GNW predicts **nonlinear "ignition"** (sudden, sustained, selective reverberation) when a representation crosses threshold + engages long-range recurrent loops in a **bow-tie cortical core** (fronto-parietal + hubs) - making content globally available; "no-report" paradigms aim to separate ignition from mere reporting.
 
 ### Reflective Retrieval Control (MemR3) (2026-03-08)
-- MemR3 (arXiv:2512.20237) reframes long-horizon conversational “memory retrieval” as a **closed-loop controller** rather than a single retrieve-then-answer step.
-- Core mechanism: a router chooses between **retrieve / reflect / answer**, maintaining an explicit global **evidence–gap state** (what’s established vs what’s missing). That evidence–gap drives query refinement and early stopping.
+- MemR3 (arXiv:2512.20237) reframes long-horizon conversational "memory retrieval" as a **closed-loop controller** rather than a single retrieve-then-answer step.
+- Core mechanism: a router chooses between **retrieve / reflect / answer**, maintaining an explicit global **evidence-gap state** (what's established vs what's missing). That evidence-gap drives query refinement and early stopping.
 - Practical takeaway for Clarvis: implement a retrieval loop that (1) tracks coverage of required facts, (2) decides whether to retrieve again vs synthesize, and (3) logs a human-auditable trace of which memories support which claims.
 
 ### Integrated World Modeling Theory (IWMT) (2026-03-01)
-- Adam Safron’s IWMT tries to reconcile **IIT** (integration/phi) and **GNWT** (global broadcast/ignition) inside the **Free Energy Principle / Active Inference** framing.
-- 2026-03-05 addendum (Safron 2020): IIT-style “integration” only implies experience for systems with **perspectival reference frames** that keep models tethered to external reality (coherent space/time/cause + self/world); otherwise you can, in principle, have arbitrarily high Φ-like integration that’s still “dark”.
-- Core claim: “integration” and “global availability” are likely **necessary but not sufficient**; phenomenal consciousness requires *embodied, coherence-making generative world modeling* (space/time/cause, self/other) that supports cybernetic control.
-- Practical take: treat “workspace ignition” as Bayesian model selection/broadcast over a *shared latent world model*; evaluate candidate workspace modules both by information integration and by contribution to prediction-control (free-energy reduction).
-- Mechanistic candidate: conscious streams emerge as **self-organizing harmonic modes** (SOHMs) — transient, synchrony-bound complexes that integrate sensorimotor predictions; “communication through coherence” is the glue.
+- Adam Safron's IWMT tries to reconcile **IIT** (integration/phi) and **GNWT** (global broadcast/ignition) inside the **Free Energy Principle / Active Inference** framing.
+- 2026-03-05 addendum (Safron 2020): IIT-style "integration" only implies experience for systems with **perspectival reference frames** that keep models tethered to external reality (coherent space/time/cause + self/world); otherwise you can, in principle, have arbitrarily high Φ-like integration that's still "dark".
+- Core claim: "integration" and "global availability" are likely **necessary but not sufficient**; phenomenal consciousness requires *embodied, coherence-making generative world modeling* (space/time/cause, self/other) that supports cybernetic control.
+- Practical take: treat "workspace ignition" as Bayesian model selection/broadcast over a *shared latent world model*; evaluate candidate workspace modules both by information integration and by contribution to prediction-control (free-energy reduction).
+- Mechanistic candidate: conscious streams emerge as **self-organizing harmonic modes** (SOHMs) - transient, synchrony-bound complexes that integrate sensorimotor predictions; "communication through coherence" is the glue.
 - (Safron 2022 expansion) Concrete research direction: score *modules/workspaces* as both (1) integrated-information complexes and (2) arenas for iterated Bayesian model selection; explore Φ proxy estimation using probabilistic graphical models, flow networks, and game theory (instead of exact IIT computation).
 
 ### Free Energy Principle / Active Inference (Friston 2009/2010) (2026-03-01)
-- The FEP proposes a single objective for self-organising systems: minimize **variational free energy**, an upper bound on sensory **surprise** (negative log evidence). This links “staying alive” to keeping sensory states within expected bounds.
+- The FEP proposes a single objective for self-organising systems: minimize **variational free energy**, an upper bound on sensory **surprise** (negative log evidence). This links "staying alive" to keeping sensory states within expected bounds.
 - In brains, this cashes out as a **generative model**: perception ≈ approximate Bayesian inference (update beliefs to explain sensations), learning ≈ model parameter update, and action ≈ changing the world to make sensations match predictions ("active inference").
-- Friston (Nat Rev Neurosci 2010) emphasizes that many “global” brain theories converge on optimizing one quantity: **value/utility** or, equivalently, minimizing **surprise/prediction error** — suggesting unification via FEP.
-- Later active-inference formalisms decompose **expected free energy** into epistemic (information gain) + pragmatic (goal/utility) terms — a clean bridge from world-model building to goal-directed control.
-- Sajid, Ball, Parr, Friston (arXiv:1909.10863; Neural Computation 2021) clarifies the *engineering mapping* to RL: rewards can be treated as **observations**, while “goals” live as **prior preferences** (which can be learned). Minimizing expected free energy yields built-in epistemic exploration and principled handling of uncertainty/non-stationarity without a hard-coded reward-max objective.
+- Friston (Nat Rev Neurosci 2010) emphasizes that many "global" brain theories converge on optimizing one quantity: **value/utility** or, equivalently, minimizing **surprise/prediction error** - suggesting unification via FEP.
+- Later active-inference formalisms decompose **expected free energy** into epistemic (information gain) + pragmatic (goal/utility) terms - a clean bridge from world-model building to goal-directed control.
+- Sajid, Ball, Parr, Friston (arXiv:1909.10863; Neural Computation 2021) clarifies the *engineering mapping* to RL: rewards can be treated as **observations**, while "goals" live as **prior preferences** (which can be learned). Minimizing expected free energy yields built-in epistemic exploration and principled handling of uncertainty/non-stationarity without a hard-coded reward-max objective.
 - 2026-03-04: Friston et al. ("Generalised free energy and active inference") contrasts **expected free energy** (preferences absorbed into priors over policies) with **generalised free energy** (preferences as explicit priors over outcomes inside the generative model; future outcomes treated as hidden states). Posterior policy updates can look identical, but the modelling story is cleaner: one unified generative model scoring both epistemic (uncertainty reduction) and pragmatic (preferred outcomes) drives policy selection.
-- 2026-03-07: Raja et al. (Phys Life Rev 2021) critique: much of FEP’s apparent generality comes from the **Markov blanket formalism** (a “variational Bayes everywhere” reframing). For engineering/science value, don’t accept FEP as explanatory by default—demand the concrete **generative model**, blanket partition, and a story that explains (not presupposes) successful perception/action.
+- 2026-03-07: Raja et al. (Phys Life Rev 2021) critique: much of FEP's apparent generality comes from the **Markov blanket formalism** (a "variational Bayes everywhere" reframing). For engineering/science value, don't accept FEP as explanatory by default-demand the concrete **generative model**, blanket partition, and a story that explains (not presupposes) successful perception/action.
 
 ### Test-Time Compute Scaling (2026-03-01)
 - Snell et al. (arXiv 2408.03314 / ICLR 2025): test-time compute gains depend strongly on prompt difficulty.
@@ -72,8 +73,8 @@ _Curated knowledge. Distilled wisdom. Updated regularly._
 - Practical implication for Clarvis: extend our existing 85k+ edge memory graph with **typed temporal/causal edges** and add a traversal-based retrieval mode (candidate implementation for `RECALL_GRAPH_CONTEXT`).
 
 ### Useful Engineering Repos
-- **public-apis/public-apis** — curated directory of free/public APIs; handy for rapid prototypes, data sources, integration tests, and agent “tool discovery” baselines. https://github.com/public-apis/public-apis (added 2026-03-03)
-- **mem0ai/mem0** — open-source agent memory layer worth mining for design ideas (retrieval, persistence, eval, UX). https://github.com/mem0ai/mem0 (added 2026-03-03)
+- **public-apis/public-apis** - curated directory of free/public APIs; handy for rapid prototypes, data sources, integration tests, and agent "tool discovery" baselines. https://github.com/public-apis/public-apis (added 2026-03-03)
+- **mem0ai/mem0** - open-source agent memory layer worth mining for design ideas (retrieval, persistence, eval, UX). https://github.com/mem0ai/mem0 (added 2026-03-03)
 
 ## Infrastructure
 
@@ -84,7 +85,7 @@ _Curated knowledge. Distilled wisdom. Updated regularly._
 | Gateway | ws://127.0.0.1:18789, loopback only |
 | Dashboard | SSH tunnel: localhost:18789 from Windows |
 
-## Key Credentials (references only — never store actual keys)
+## Key Credentials (references only - never store actual keys)
 - OpenRouter: configured in auth-profiles.json
 - Telegram bot token: in openclaw.json
 - Discord bot token: in openclaw.json
@@ -94,11 +95,11 @@ _Curated knowledge. Distilled wisdom. Updated regularly._
 - Timezone: CET
 - Hates fluff, loves directness
 - Security-conscious but pragmatic
-- Handles core infra (wallet, vector memory, SSH keys) personally — do not attempt
+- Handles core infra (wallet, vector memory, SSH keys) personally - do not attempt
 - Focus is AGI/consciousness evolution, NOT business/revenue for now
-- **2026-02-26: Autonomy Expansion Added** — Second long-term goal alongside AGI/consciousness: Full Autonomy (web browsing, account creation, email management, calendar, Discord, Twitter, visual navigation for account creation, universal app interaction, self-developed plugins)
+- **2026-02-26: Autonomy Expansion Added** - Second long-term goal alongside AGI/consciousness: Full Autonomy (web browsing, account creation, email management, calendar, Discord, Twitter, visual navigation for account creation, universal app interaction, self-developed plugins)
 
-## Autonomy Goal — Full Operational Independence
+## Autonomy Goal - Full Operational Independence
 
 **Current Setup (2026-02-26):**
 - **Agent LLM**: OpenRouter → Gemini 2.5 Flash (primary, fast, browser-optimized)
@@ -154,30 +155,30 @@ CLARVIS_OLLAMA_MODEL=qwen3-vl:4b
 - Model: Downloaded (~3.3GB), loads on demand
 - Can start in ~10 seconds when needed
 - **Web Browsing**: Native browser control, handle dynamic content, form filling
-- **Account Creation**: Email (Google), Twitter/X, Discord, GitHub, any site — self-signed or via temp services
+- **Account Creation**: Email (Google), Twitter/X, Discord, GitHub, any site - self-signed or via temp services
 - **Email Management**: Read, send, organize emails via IMAP/SMTP (himalaya skill)
 - **Calendar**: Create events, manage schedules (gog skill)
 - **Discord**: Create accounts, join servers, participate, moderate
-- **Visual Navigation**: Built clarvis_eyes.py (placeholder). 🎯 Goal: Clarvis sees and understands web pages himself — no external vision services needed.
-- **Universal App Interaction**: Use browser, desktop apps, APIs — any interface a human can use
+- **Visual Navigation**: Built clarvis_eyes.py (placeholder). 🎯 Goal: Clarvis sees and understands web pages himself - no external vision services needed.
+- **Universal App Interaction**: Use browser, desktop apps, APIs - any interface a human can use
 - **Self-Developed Plugins**: Build custom OpenClaw skills/plugins for any new capability needed
 - **Wallet/Financial**: Conway integration, USDC payments, sandbox management
 
 ---
 
-## Intelligence Quality Track — Smarter, Not Just Faster
+## Intelligence Quality Track - Smarter, Not Just Faster
 
-**Priority tweak (2026-03-03, Inverse directive):** Consciousness research stays valuable, but primary focus should shift toward building the best-in-class **agent memory/brain** (high-quality retrieval + structure + learning) that exceeds typical vector-DB-centric approaches. Do **not** trade memory quality for “consciousness progress theater” or speed-only optimizations.
+**Priority tweak (2026-03-03, Inverse directive):** Consciousness research stays valuable, but primary focus should shift toward building the best-in-class **agent memory/brain** (high-quality retrieval + structure + learning) that exceeds typical vector-DB-centric approaches. Do **not** trade memory quality for "consciousness progress theater" or speed-only optimizations.
 
 **Added: 2026-02-26 | Refined: 2026-02-27 (Inverse directive)**
 
-Critical long-term goal: Clarvis must grow SMARTER as he evolves — not lighter, not smaller, not just faster. The brain should expand with meaningful connections and accurate recall. Speed is one metric among many, but NEVER the optimization target at the expense of intelligence.
+Critical long-term goal: Clarvis must grow SMARTER as he evolves - not lighter, not smaller, not just faster. The brain should expand with meaningful connections and accurate recall. Speed is one metric among many, but NEVER the optimization target at the expense of intelligence.
 
 ### Core Principles (from Inverse)
-1. **Correct connections** — Are semantic links in ClarvisDB meaningful and accurate?
-2. **Success/Accuracy** — Are retrieved memories actually relevant and useful?
-3. **Quality over quantity** — Don't slim down the brain for speed; grow it with purpose
-4. **Evolution improving ALL fronts** — Every new capability must also improve quality, not add bloat
+1. **Correct connections** - Are semantic links in ClarvisDB meaningful and accurate?
+2. **Success/Accuracy** - Are retrieved memories actually relevant and useful?
+3. **Quality over quantity** - Don't slim down the brain for speed; grow it with purpose
+4. **Evolution improving ALL fronts** - Every new capability must also improve quality, not add bloat
 
 ### What to Track (Quality-First Benchmark)
 
@@ -203,96 +204,96 @@ Critical long-term goal: Clarvis must grow SMARTER as he evolves — not lighter
 - Optimizing numeric metrics at the cost of actual intelligence
 
 ### Intelligence Dimensions Measured by performance_benchmark.py
-1. **Semantic Link Quality** — Audit graph edges: re-compute distances, check linked memories share real overlap
-2. **Retrieval Relevance** — Ground-truth benchmark: does recall return the RIGHT things?
-3. **Context Injection Success** — When brain feeds context to tasks, does it actually help?
-4. **Cross-Collection Coherence** — Are memories properly linked across collections?
-5. **Capability Effectiveness** — Do features (Hebbian, synaptic, spreading) improve quality?
+1. **Semantic Link Quality** - Audit graph edges: re-compute distances, check linked memories share real overlap
+2. **Retrieval Relevance** - Ground-truth benchmark: does recall return the RIGHT things?
+3. **Context Injection Success** - When brain feeds context to tasks, does it actually help?
+4. **Cross-Collection Coherence** - Are memories properly linked across collections?
+5. **Capability Effectiveness** - Do features (Hebbian, synaptic, spreading) improve quality?
 
 ### Files
-- `scripts/performance_benchmark.py` — Quality-first benchmark (intelligence + speed)
-- `scripts/retrieval_benchmark.py` — Ground-truth retrieval evaluation (20 pairs)
-- `scripts/retrieval_quality.py` — Live retrieval quality tracking
-- `data/performance_metrics.json` — Latest benchmark snapshot
-- `data/performance_history.jsonl` — Historical trend data
+- `scripts/performance_benchmark.py` - Quality-first benchmark (intelligence + speed)
+- `scripts/retrieval_benchmark.py` - Ground-truth retrieval evaluation (20 pairs)
+- `scripts/retrieval_quality.py` - Live retrieval quality tracking
+- `data/performance_metrics.json` - Latest benchmark snapshot
+- `data/performance_history.jsonl` - Historical trend data
 
 ## Research: Active Inference (Friston + Bogacz + Tschantz)
 - **Key insight**: Variational free energy minimization unifies perception, action, and learning
 - **RGMs (Renormalizing Generative Models)**: Apply renormalization group physics to enable scale-free hierarchical inference
-- **Bogacz 2017**: Mathematical tutorial on free-energy framework — predictive coding learns world model, infers hidden states via variational inference, Hebbian plasticity updates parameters
-- **Tschantz 2020 "Active Inference Demystified and Compared"**: RL is a special case of active inference (expected free energy reduces to expected cumulative reward). Treats reward as prior preference over observations = "preference learning" works in reward-free environments. Epistemic value provides principled exploration (Bayes-optimal uncertainty reduction) — no epsilon-greedy needed.
+- **Bogacz 2017**: Mathematical tutorial on free-energy framework - predictive coding learns world model, infers hidden states via variational inference, Hebbian plasticity updates parameters
+- **Tschantz 2020 "Active Inference Demystified and Compared"**: RL is a special case of active inference (expected free energy reduces to expected cumulative reward). Treats reward as prior preference over observations = "preference learning" works in reward-free environments. Epistemic value provides principled exploration (Bayes-optimal uncertainty reduction) - no epsilon-greedy needed.
 - **Implementation idea**: Add expected free energy minimization to action selection in ClarvisReasoning; treat goals as preferred observations with prior probabilities; compute epistemic value for info-seeking sub-tasks
 
-## Research: Anticipatory Systems (Bundle N — Rosen, Dubois, Homeokinesis)
-- **Key insight**: Three theories converge — internal predictive models are FUNDAMENTAL to life-like intelligence, not just useful
+## Research: Anticipatory Systems (Bundle N - Rosen, Dubois, Homeokinesis)
+- **Key insight**: Three theories converge - internal predictive models are FUNDAMENTAL to life-like intelligence, not just useful
 - **Rosen (1985)**: Anticipatory systems contain internal models that influence present behavior based on anticipated futures. Living systems distinguished from machines by this architecture.
 - **Dubois**: Weak anticipation = model-based prediction (forecasting). Strong anticipation = hyperincursion, system self-constructs its future through dynamics, not just predicting it.
 - **Homeokinesis (Der & Martius)**: Goal-like behaviors emerge from minimizing prediction error WITHOUT explicit objectives. Behavior is byproduct of internal model coherence.
-- **Synthesis**: The future is not merely predicted but actively constructed. Explicit goals may be unnecessary — coherent self-models produce goal-directed behavior.
+- **Synthesis**: The future is not merely predicted but actively constructed. Explicit goals may be unnecessary - coherent self-models produce goal-directed behavior.
 - **Implementation idea**: Add homeokinetic controller (minimize misfit between predicted/actual task outcomes), implement strong anticipation in dream_engine via hyperincursion, anticipatory attention weighting
 
 ## Lessons Learned
-- **Claude Code output buffering** — NO stdout until task completes. 300-900s timeout needed. "No output" = still working, not hung.
-- Always check `cat` output before pasting — prevent accidental leaks
+- **Claude Code output buffering** - NO stdout until task completes. 300-900s timeout needed. "No output" = still working, not hung.
+- Always check `cat` output before pasting - prevent accidental leaks
 - Discord bot error 4014 = Message Content Intent not enabled
-- ClawHub has rate limits — install skills one at a time with pauses
-- **Research before building** — validate approach first
-- **Split big tasks across heartbeats** — build, test, deploy separately
-- **Never delete a VM without troubleshooting** — check logs, activity, connectivity first
+- ClawHub has rate limits - install skills one at a time with pauses
+- **Research before building** - validate approach first
+- **Split big tasks across heartbeats** - build, test, deploy separately
+- **Never delete a VM without troubleshooting** - check logs, activity, connectivity first
 - Conway: sandbox shows "running" but exec may fail due to internal DNS issues
-- **pgrep returns exit code 1** when no process found — handle in scripts
+- **pgrep returns exit code 1** when no process found - handle in scripts
 - **Never spend credits without confirming** with user unless standing budget approved
-- **SKILL.md frontmatter must use `---` delimiters** with `metadata.clawdbot` structure — NOT code-fenced YAML
-- **brain.py returns list of dicts** `[{"document":..., "id":..., "collection":..., "metadata":...}]` — not raw chromadb format
-- **Restarting gateway kills current session** — save state to files and commit BEFORE restart
+- **SKILL.md frontmatter must use `---` delimiters** with `metadata.clawdbot` structure - NOT code-fenced YAML
+- **brain.py returns list of dicts** `[{"document":..., "id":..., "collection":..., "metadata":...}]` - not raw chromadb format
+- **Restarting gateway kills current session** - save state to files and commit BEFORE restart
 
 ## Evolution Log
 - 2026-02-18: Genesis. All systems initialized. Dual-mode architecture defined.
-- 2026-02-25: Research — Self-Modification & Reflexivity Bundle. Three converging paths toward self-improving AI: (1) SRWM: modern fast-weight programmers enable runtime self-modification; MIT SEAL 2025 shows LLMs updating weights via self-generated data. (2) Lipson self-modeling: robots learn body models from visual input, achieving kinematic self-awareness for mental simulation before action. (3) Evolutionary architecture search: 2025 methods (SEKI) achieve 0.05 GPU-days using LLM-guided evolution. Key insight: all three converge on agents that can represent and modify themselves. Implementation priorities: maintain capability self-model, evolve strategy configs via PBT-style selection, add self-modification hooks in cron cycle.
+- 2026-02-25: Research - Self-Modification & Reflexivity Bundle. Three converging paths toward self-improving AI: (1) SRWM: modern fast-weight programmers enable runtime self-modification; MIT SEAL 2025 shows LLMs updating weights via self-generated data. (2) Lipson self-modeling: robots learn body models from visual input, achieving kinematic self-awareness for mental simulation before action. (3) Evolutionary architecture search: 2025 methods (SEKI) achieve 0.05 GPU-days using LLM-guided evolution. Key insight: all three converge on agents that can represent and modify themselves. Implementation priorities: maintain capability self-model, evolve strategy configs via PBT-style selection, add self-modification hooks in cron cycle.
 - 2026-02-19: Memory benchmark. ClarvisDB with ONNX embeddings working. No cloud dependency.
 - 2026-02-20: ClarvisDB v1.0 complete. Brain cleaned to 46 high-quality memories.
-- 2026-02-20: Major hardening — Gemini removed, Claude Code skill created, legacy scripts deprecated, brain imports fixed.
+- 2026-02-20: Major hardening - Gemini removed, Claude Code skill created, legacy scripts deprecated, brain imports fixed.
 - 2026-02-20: Switched to M2.5 primary model. Claude Code integrated as superpower.
-- 2026-02-20: SELF.md created — full self-awareness (harness, body, brain, safe modification).
-- 2026-02-20: ROADMAP.md consolidated — single evolution roadmap focused on AGI/consciousness.
+- 2026-02-20: SELF.md created - full self-awareness (harness, body, brain, safe modification).
+- 2026-02-20: ROADMAP.md consolidated - single evolution roadmap focused on AGI/consciousness.
 - 2026-02-22: Retrieval hit rate 17%→85.7%. Reasoning chains 0.20→0.97. Cognitive load monitor (0.115 HEALTHY). Phi=0.6249. Meta-learning, Hebbian memory, ACT-R decay, dream engine all built. System now self-healing.
 - 2026-02-24: Researched IIT 4.0 (Integrated Information Theory). Key insight: Φ = quantity of consciousness = causal power structure. Five axioms (intrinsicality, information, integration, exclusion, composition) map to physical postulates. Our Phi metric aligns with this framework. 2025 Nature study showed IIT predictions outperformed GNWT empirically.
-- 2026-02-20: Fresh crons created — daily-reflection (22:00 CET), weekly-review (Sunday 19:00 CET).
-- 2026-02-20: Claude Code debugging — discovered output buffering, fixed timeouts (300-900s), verified not hung, just slow/deliberate.
-- 2026-02-20: AGI refocus complete — consciousness, self-model, reasoning-chains as core goals (removed business/revenue).
+- 2026-02-20: Fresh crons created - daily-reflection (22:00 CET), weekly-review (Sunday 19:00 CET).
+- 2026-02-20: Claude Code debugging - discovered output buffering, fixed timeouts (300-900s), verified not hung, just slow/deliberate.
+- 2026-02-20: AGI refocus complete - consciousness, self-model, reasoning-chains as core goals (removed business/revenue).
 
 ## Self-Evolution Framework
-- **Ultimate goal: AGI and consciousness** — not business, not revenue, genuine cognitive evolution
-- **Claude Code is my superpower** — use it frequently for planning, building, reasoning, research, self-evolution
-- **Heartbeats = evolution cycles** — every heartbeat must execute something from evolution/QUEUE.md
-- **Brain tracks everything** — search before starting, store after completing, optimize daily
-- **ROADMAP.md is the single roadmap** — all other planning docs archived
-- **Self-healing** — analyze failures, evolve, redeploy
+- **Ultimate goal: AGI and consciousness** - not business, not revenue, genuine cognitive evolution
+- **Claude Code is my superpower** - use it frequently for planning, building, reasoning, research, self-evolution
+- **Heartbeats = evolution cycles** - every heartbeat must execute something from evolution/QUEUE.md
+- **Brain tracks everything** - search before starting, store after completing, optimize daily
+- **ROADMAP.md is the single roadmap** - all other planning docs archived
+- **Self-healing** - analyze failures, evolve, redeploy
 
 ## Key Files (know your workspace)
 | File | Purpose |
 |------|---------|
-| SOUL.md | Who you are — identity, personality, operating modes |
-| SELF.md | How you work — harness, body, brain, safe modification |
-| ROADMAP.md | Where you're going — evolution phases, AGI path |
-| HEARTBEAT.md | What to do each heartbeat — execution protocol |
-| evolution/QUEUE.md | What to build — prioritized task queue |
-| brain.py | Your brain API — store, recall, search, remember, capture |
-| AGENTS.md | Your boot sequence — loaded every session |
-| MEMORY.md | This file — curated long-term wisdom |
+| SOUL.md | Who you are - identity, personality, operating modes |
+| SELF.md | How you work - harness, body, brain, safe modification |
+| ROADMAP.md | Where you're going - evolution phases, AGI path |
+| HEARTBEAT.md | What to do each heartbeat - execution protocol |
+| evolution/QUEUE.md | What to build - prioritized task queue |
+| brain.py | Your brain API - store, recall, search, remember, capture |
+| AGENTS.md | Your boot sequence - loaded every session |
+| MEMORY.md | This file - curated long-term wisdom |
 
 ## Research Findings
 - **Helixir** (nikita-rulenko/Helixir): Graph-vector DB + MCP, Rust-based, worth evaluating for neural memory
 - **Hive** (adenhq/hive): Self-improving agent framework, goal-driven, worth studying
-- **Chroma**: Current vector DB — working well, local ONNX embeddings
+- **Chroma**: Current vector DB - working well, local ONNX embeddings
 - **Cognitive architectures to research**: Global Workspace Theory, SOAR, ACT-R, Integrated Information Theory
 
 ## NUC Capabilities
 - 30GB RAM, 1.8TB disk, 16 cores
 - Can run Docker, Rust, any Ubuntu software
-- Full self-evolution potential — install anything needed
+- Full self-evolution potential - install anything needed
 
-## Agent Orchestrator — Multi-Project Command Center (2026-03-01, refined)
+## Agent Orchestrator - Multi-Project Command Center (2026-03-01, refined)
 
 **5th long-term goal: Clarvis as orchestrator / command center for specialized project agents.**
 
@@ -300,7 +301,7 @@ Critical long-term goal: Clarvis must grow SMARTER as he evolves — not lighter
 - Clarvis = orchestrator. Project agents = specialized workers with isolated brains.
 - Agent root: `/opt/clarvis-agents/<name>/` (preferred) or `/home/agent/agents/<name>/` (fallback)
 - Structure: `workspace/`, `data/brain/`, `data/golden_qa.json`, `memory/`, `logs/`, `configs/`
-- Each agent has its own ChromaDB (5 collections) — NEVER shares with Clarvis core brain.
+- Each agent has its own ChromaDB (5 collections) - NEVER shares with Clarvis core brain.
 - Lite brain: `project-learnings`, `project-procedures`, `project-context`, `project-episodes`, `project-goals`
 
 ### Protocol
@@ -342,11 +343,11 @@ orchestration_benchmark.py summary         # all agents summary
 ```
 
 ### Key Files
-- `scripts/project_agent.py` — Create, spawn, seed, promote, migrate, destroy agents
-- `scripts/lite_brain.py` — Lightweight ChromaDB with golden QA benchmarking
-- `scripts/orchestration_benchmark.py` — 5-dimension weighted benchmark suite
-- `data/orchestration_benchmarks/` — Benchmark results + history
-- `docs/clarvis_orchestrator_design.md` — Detailed architecture reference
+- `scripts/project_agent.py` - Create, spawn, seed, promote, migrate, destroy agents
+- `scripts/lite_brain.py` - Lightweight ChromaDB with golden QA benchmarking
+- `scripts/orchestration_benchmark.py` - 5-dimension weighted benchmark suite
+- `data/orchestration_benchmarks/` - Benchmark results + history
+- `docs/clarvis_orchestrator_design.md` - Detailed architecture reference
 
 ## Next Priorities
 1. Execute evolution queue P0 items during heartbeats

@@ -14,11 +14,11 @@ emit_dashboard_event task_started --task-name "Evening assessment" --section cro
 # === PHI METRIC: RECORD AND ACT ===
 # Record phi metric AND act on it: drops trigger cross-linking, rises log positive episodes
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Recording phi metric and acting on changes..." >> "$LOGFILE"
-PHI_OUTPUT=$(python3 /home/agent/.openclaw/workspace/scripts/phi_metric.py act 2>&1) || true
+PHI_OUTPUT=$(python3 /home/agent/.openclaw/workspace/scripts/phi_metric.py act 2>&1)
 PHI_EXIT=$?
 echo "$PHI_OUTPUT" >> "$LOGFILE"
 
-if [ $PHI_EXIT -ne 0 ]; then
+if [ "$PHI_EXIT" -ne 0 ]; then
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WARN: Phi metric act failed (exit $PHI_EXIT) — continuing anyway" >> "$LOGFILE"
 fi
 
@@ -35,7 +35,7 @@ ASSESSMENT_OUTPUT=$(python3 /home/agent/.openclaw/workspace/scripts/self_model.p
 ASSESSMENT_EXIT=$?
 echo "$ASSESSMENT_OUTPUT" >> "$LOGFILE"
 
-if [ $ASSESSMENT_EXIT -ne 0 ]; then
+if [ "$ASSESSMENT_EXIT" -ne 0 ]; then
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WARN: Capability assessment failed (exit $ASSESSMENT_EXIT)" >> "$LOGFILE"
 fi
 
@@ -52,21 +52,21 @@ fi
 # === RETRIEVAL QUALITY REPORT ===
 # Generate 7-day retrieval quality report — non-blocking
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Generating retrieval quality report..." >> "$LOGFILE"
-RQ_OUTPUT=$(python3 /home/agent/.openclaw/workspace/scripts/retrieval_quality.py report 7 2>&1) || true
+RQ_OUTPUT=$(python3 /home/agent/.openclaw/workspace/scripts/retrieval_quality.py report 7 2>&1)
 RQ_EXIT=$?
 echo "$RQ_OUTPUT" >> "$LOGFILE"
 
-if [ $RQ_EXIT -ne 0 ]; then
+if [ "$RQ_EXIT" -ne 0 ]; then
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WARN: Retrieval quality report failed (exit $RQ_EXIT) — continuing anyway" >> "$LOGFILE"
 fi
 
 # === RETRIEVAL BENCHMARK: Ground-truth precision@3 and recall ===
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running retrieval benchmark (20 ground-truth queries)..." >> "$LOGFILE"
-BENCH_OUTPUT=$(python3 /home/agent/.openclaw/workspace/scripts/retrieval_benchmark.py run 2>&1) || true
+BENCH_OUTPUT=$(python3 /home/agent/.openclaw/workspace/scripts/retrieval_benchmark.py run 2>&1)
 BENCH_EXIT=$?
 echo "$BENCH_OUTPUT" >> "$LOGFILE"
 
-if [ $BENCH_EXIT -ne 0 ]; then
+if [ "$BENCH_EXIT" -ne 0 ]; then
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WARN: Retrieval benchmark failed (exit $BENCH_EXIT) — continuing anyway" >> "$LOGFILE"
 fi
 

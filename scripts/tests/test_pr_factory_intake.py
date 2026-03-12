@@ -316,7 +316,7 @@ class TestRefreshArtifacts:
         refresh_artifacts(agent_dir, workspace)
         report2 = refresh_artifacts(agent_dir, workspace)
         # All should be skipped on second run (same SHA)
-        assert len(report2["skipped"]) == 5
+        assert len(report2["skipped"]) == 6
         assert len(report2["refreshed"]) == 0
 
 

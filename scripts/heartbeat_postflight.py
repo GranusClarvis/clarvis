@@ -75,7 +75,7 @@ except ImportError:
     write_digest = None
 
 try:
-    from task_router import log_decision, classify_task
+    from clarvis.orch.router import log_decision, classify_task
 except ImportError:
     log_decision = None
     classify_task = None
@@ -174,9 +174,35 @@ except ImportError:
     rq_tracker = None
 
 try:
+    from clarvis.brain.retrieval_feedback import record_feedback as retrieval_record_feedback
+except ImportError:
+    retrieval_record_feedback = None
+
+try:
+    from clarvis.brain.memory_evolution import record_recall_success as mem_evo_recall_success
+    from clarvis.brain.memory_evolution import find_contradictions as mem_evo_find_contradictions
+    from clarvis.brain.memory_evolution import evolve_memory as mem_evo_evolve
+except ImportError:
+    mem_evo_recall_success = None
+    mem_evo_find_contradictions = None
+    mem_evo_evolve = None
+
+try:
     from prompt_optimizer import record_outcome as po_record_outcome
 except ImportError:
     po_record_outcome = None
+
+try:
+    from clarvis.cognition.context_relevance import score_section_relevance, record_relevance as cr_record
+except ImportError:
+    score_section_relevance = None
+    cr_record = None
+
+try:
+    from clarvis.context.adaptive_mmr import classify_mmr_category, update_lambdas as mmr_update_lambdas
+except ImportError:
+    classify_mmr_category = None
+    mmr_update_lambdas = None
 
 # Cost tracking
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'packages', 'clarvis-cost'))
@@ -361,6 +387,19 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
                     source="postflight_failure"
                 )
                 log("Stored failure lesson in brain")
+
+                # Contradiction check: if the failure lesson contradicts existing learnings, evolve them
+                if mem_evo_find_contradictions and mem_evo_evolve:
+                    try:
+                        contras = mem_evo_find_contradictions(brain_mod, lesson, "clarvis-learnings",
+                                                              threshold=0.4, top_n=3)
+                        for c in contras[:2]:  # Limit to 2 evolutions per cycle
+                            evo = mem_evo_evolve(brain_mod, c["id"], c["collection"],
+                                                 lesson, reason="contradiction")
+                            if evo.get("evolved"):
+                                log(f"MEMORY EVOLUTION: Evolved {c['id']} → {evo['new_id']} (contradiction: {c['contradiction_signal'][:3]})")
+                    except Exception as e:
+                        log(f"Contradiction check failed (non-fatal): {e}")
 
             # Generate a follow-up investigation task (max 1 per cycle)
             # Check retry count to avoid infinite failure loops
@@ -1059,6 +1098,68 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
             except Exception as e:
                 log(f"Structural health check failed: {e}")
         timings["structural_health"] = round(time.monotonic() - t747, 3)
+
+    # === 7.48 RETRIEVAL FEEDBACK: RL-lite reward signal from verdict × outcome ===
+    t748 = time.monotonic()
+    if retrieval_record_feedback:
+        try:
+            rv = preflight_data.get("retrieval_verdict", "SKIPPED")
+            max_score = preflight_data.get("retrieval_max_score")
+            if max_score is None:
+                # Try from nested retrieval data
+                ret_data = preflight_data.get("retrieval_data", {})
+                max_score = ret_data.get("max_score") if isinstance(ret_data, dict) else None
+            fb_result = retrieval_record_feedback(
+                verdict=rv,
+                outcome=task_status,
+                max_score=max_score,
+                task=task[:200],
+            )
+            log(f"RETRIEVAL FEEDBACK: {rv}×{task_status} → reward={fb_result['reward']:.2f}, "
+                f"EMA={fb_result['ema_success_rate']:.3f}, total={fb_result['total_episodes']}"
+                + (", suggestions generated!" if fb_result.get("suggestions_generated") else ""))
+
+            # --- Context relevance: section-level content matching ---
+            brief_text = preflight_data.get("context_brief", "")
+            if brief_text and output_text and score_section_relevance:
+                cr_result = score_section_relevance(
+                    brief_text, output_text, task=task, outcome=task_status,
+                )
+                # Tag with MMR category for adaptive lambda feedback loop
+                if classify_mmr_category:
+                    cr_result["mmr_category"] = classify_mmr_category(task)
+                log(f"CONTEXT RELEVANCE: {cr_result['sections_referenced']}/{cr_result['sections_total']} "
+                    f"sections referenced ({cr_result['overall']:.1%})"
+                    + (f" [{cr_result.get('mmr_category', '?')}]" if classify_mmr_category else ""))
+                if cr_record:
+                    cr_record(cr_result)
+                # Periodically update adaptive MMR lambdas from accumulated data
+                if mmr_update_lambdas:
+                    try:
+                        updated = mmr_update_lambdas()
+                        log(f"ADAPTIVE MMR: lambdas updated — {updated}")
+                    except Exception:
+                        pass  # non-critical
+        except Exception as e:
+            log(f"Retrieval feedback recording failed (non-fatal): {e}")
+            _pf_errors.append("retrieval_feedback")
+    timings["retrieval_feedback"] = round(time.monotonic() - t748, 3)
+
+    # === 7.49 MEMORY EVOLUTION: Increment recall_success for memories used in successful tasks ===
+    t749 = time.monotonic()
+    if mem_evo_recall_success and task_status == "success":
+        try:
+            recalled_ids = preflight_data.get("recalled_memory_ids", [])
+            if recalled_ids:
+                from clarvis.brain import get_brain as _get_brain_evo
+                _brain_evo = _get_brain_evo()
+                evo_result = mem_evo_recall_success(_brain_evo, recalled_ids)
+                log(f"MEMORY EVOLUTION: recall_success updated for {evo_result['updated']}/{len(recalled_ids)} memories"
+                    + (f", errors: {evo_result['errors'][:2]}" if evo_result['errors'] else ""))
+        except Exception as e:
+            log(f"Memory evolution tracking failed (non-fatal): {e}")
+            _pf_errors.append("memory_evolution")
+    timings["memory_evolution"] = round(time.monotonic() - t749, 3)
 
     # === 7.5 COST TRACKING ===
     t75 = time.monotonic()

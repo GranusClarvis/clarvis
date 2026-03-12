@@ -19,12 +19,16 @@ class SearchMixin:
     """Search operations for ClarvisBrain (mixed into the main class)."""
 
     def recall(self, query, collections=None, n=5, min_importance=None,
-               include_related=False, since_days=None, attention_boost=False, caller=None):
+               include_related=False, since_days=None, attention_boost=False,
+               caller=None, graph_expand=False):
         """Recall memories matching a query.
 
         Uses registered hooks for scoring (actr), boosting (attention/hebbian),
         and observation (retrieval_quality) instead of importing those modules
         directly — dependency inversion breaks the circular import SCC.
+
+        graph_expand: If True, expand top results with 1-hop graph neighbors.
+            Neighbor documents are fetched and appended as lower-weight context.
         """
         if collections is None:
             routed = route_query(query)
@@ -152,6 +156,13 @@ class SearchMixin:
 
         final_results = all_results[:n * len(collections)]
 
+        # --- Graph expansion: fetch 1-hop neighbor documents ---
+        if graph_expand and final_results:
+            try:
+                final_results = self._expand_with_graph_neighbors(final_results, n)
+            except Exception:
+                _log.debug("Graph expansion failed", exc_info=True)
+
         # --- Hook: recall observers (async fire-and-forget) ---
         # Observers (hebbian, synaptic, retrieval_quality) are side-effects that
         # don't affect query results. Run them in a background thread to avoid
@@ -193,6 +204,76 @@ class SearchMixin:
             del self._recall_cache[oldest]
 
         return final_results
+
+    def _expand_with_graph_neighbors(self, results, n, max_seed=3, max_neighbors=5):
+        """Expand results with 1-hop graph neighbor documents.
+
+        For each of the top max_seed results, fetch graph neighbors and
+        resolve their documents. Neighbors not already in results are
+        appended with a penalty multiplier on their score.
+
+        Args:
+            results: Existing recall results (already sorted)
+            n: Original n parameter (caps total expanded results)
+            max_seed: How many top results to expand from (default 3)
+            max_neighbors: Max neighbors per seed result (default 5)
+
+        Returns:
+            Expanded results list (originals + neighbors).
+        """
+        existing_ids = {r.get("id") for r in results if r.get("id")}
+        neighbor_entries = []
+
+        for seed in results[:max_seed]:
+            seed_id = seed.get("id")
+            if not seed_id:
+                continue
+
+            related = self.get_related(seed_id, depth=1)
+            if not related:
+                continue
+
+            for rel in related[:max_neighbors]:
+                neighbor_id = rel.get("id", "")
+                if neighbor_id in existing_ids:
+                    continue
+                existing_ids.add(neighbor_id)
+
+                # Resolve document from the appropriate collection
+                neighbor_col = rel.get("collection") or self._infer_collection(neighbor_id)
+                col_obj = self.collections.get(neighbor_col)
+                if col_obj is None:
+                    continue
+
+                try:
+                    doc_result = col_obj.get(ids=[neighbor_id], include=["documents", "metadatas"])
+                    if not (doc_result["ids"] and doc_result["documents"] and doc_result["documents"][0]):
+                        continue
+                    doc_text = doc_result["documents"][0]
+                    meta = doc_result["metadatas"][0] if doc_result.get("metadatas") else {}
+                except Exception:
+                    continue
+
+                # Use seed's distance with a penalty (neighbor is less directly relevant)
+                seed_distance = seed.get("distance", 1.0)
+                neighbor_distance = seed_distance * 1.5 if seed_distance else 2.0
+
+                neighbor_entries.append({
+                    "document": doc_text,
+                    "metadata": meta,
+                    "collection": neighbor_col,
+                    "id": neighbor_id,
+                    "distance": neighbor_distance,
+                    "related": [],
+                    "_graph_expanded": True,
+                    "_expanded_from": seed_id,
+                    "_relationship": rel.get("relationship", "unknown"),
+                })
+
+        if neighbor_entries:
+            results = list(results) + neighbor_entries
+
+        return results
 
     def get(self, collection, n=100):
         """Get all memories from a collection"""

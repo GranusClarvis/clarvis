@@ -17,9 +17,11 @@ import json
 import re
 import urllib.request
 import urllib.parse
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import os
 sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
+
+today_str = datetime.now(timezone.utc).strftime('%Y-%m-%d')
 
 # Get bot token
 with open('/home/agent/.openclaw/openclaw.json') as f:
@@ -101,7 +103,7 @@ for match in re.finditer(r'- \[ \] \[([^\]]+)\].*?—\s*(.+?)(?:\(|—|$)', queu
 today_completed = []
 for match in re.finditer(r'- \[x\] \[([^\]]+)\].*?(\d{4}-\d{2}-\d{2})', queue_content):
     date = match.group(2)
-    if '2026-02-26' in date:
+    if today_str in date:
         task = match.group(1)[:35]
         today_completed.append(task)
 

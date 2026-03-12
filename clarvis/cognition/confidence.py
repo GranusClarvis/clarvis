@@ -94,7 +94,7 @@ def predict(event: str, expected: str, confidence: float) -> dict:
                   f"(band 85-95% accuracy={acc:.0%}, n={n})", file=sys.stderr)
     elif confidence >= 0.95:
         acc, n = _band_accuracy(0.90, 1.01)
-        if acc is not None and acc < 0.85:
+        if acc is not None and acc < 0.90:
             confidence = max(0.3, confidence - 0.10)
             recalibrated = True
             print(f"Recalibrated: {original_confidence:.0%} → {confidence:.0%} "
@@ -210,6 +210,30 @@ def calibration() -> dict:
         (e["confidence"] - (1.0 if e["correct"] else 0.0)) ** 2 for e in resolved
     ) / len(resolved)
     result["brier_score"] = round(brier, 4)
+
+    # Recency-weighted Brier: exponential decay (half_life=30 days)
+    # Recent predictions matter more — reflects current calibration quality.
+    import math
+    now = datetime.now(timezone.utc)
+    half_life = 30.0
+    weighted_sum = 0.0
+    weight_total = 0.0
+    for e in resolved:
+        ts = e.get("timestamp", "")
+        try:
+            if isinstance(ts, str) and ts:
+                created = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                age_days = (now - created).total_seconds() / 86400
+            else:
+                age_days = 60.0  # old prediction
+        except (ValueError, TypeError):
+            age_days = 60.0
+        weight = math.exp(-0.693 * age_days / half_life)
+        sq_err = (e["confidence"] - (1.0 if e["correct"] else 0.0)) ** 2
+        weighted_sum += weight * sq_err
+        weight_total += weight
+    if weight_total > 0:
+        result["brier_score_weighted"] = round(weighted_sum / weight_total, 4)
 
     return result
 
@@ -467,6 +491,58 @@ def auto_resolve(task_text: str, task_outcome: str, max_age_days: int = 7) -> di
     return {"matched": matched, "stale_expired": stale_expired, "remaining_open": remaining}
 
 
+def sweep_stale(max_age_days: int = 14) -> dict:
+    """Sweep all unresolved predictions older than max_age_days.
+
+    Closes them with outcome='expired' and correct=None (excluded from Brier).
+    Unlike auto_resolve (which marks stale as correct=False), sweep uses a neutral
+    outcome so expired predictions don't pollute calibration metrics.
+
+    Returns:
+        dict with keys: closed (int), remaining_open (int), brier_before, brier_after
+    """
+    entries = _load_predictions()
+    if not entries:
+        return {"closed": 0, "remaining_open": 0, "brier_before": None, "brier_after": None}
+
+    # Brier before
+    brier_before = calibration().get("brier_score")
+
+    now = datetime.now(timezone.utc)
+    cutoff = now.timestamp() - (max_age_days * 86400)
+    closed = 0
+    modified = False
+
+    for entry in entries:
+        if entry["outcome"] is not None:
+            continue  # already resolved
+
+        try:
+            ts = datetime.fromisoformat(entry["timestamp"])
+            if ts.timestamp() < cutoff:
+                entry["outcome"] = "expired"
+                entry["correct"] = None  # neutral — excluded from Brier
+                closed += 1
+                modified = True
+        except (ValueError, KeyError):
+            pass
+
+    if modified:
+        _save_predictions(entries)
+
+    remaining = sum(1 for e in entries if e["outcome"] is None)
+
+    # Brier after
+    brier_after = calibration().get("brier_score")
+
+    return {
+        "closed": closed,
+        "remaining_open": remaining,
+        "brier_before": brier_before,
+        "brier_after": brier_after,
+    }
+
+
 THRESHOLDS_FILE = f"{CALIBRATION_DIR}/thresholds.json"
 
 
@@ -613,9 +689,16 @@ def main():
         print(f"Matched: {result['matched']}, Stale expired: {result['stale_expired']}, "
               f"Remaining open: {result['remaining_open']}")
 
+    elif cmd == "sweep":
+        # Stale prediction sweep: close all unresolved predictions older than N days
+        max_days = int(sys.argv[2]) if len(sys.argv) > 2 else 14
+        result = sweep_stale(max_age_days=max_days)
+        print(f"Sweep (>{max_days}d): closed={result['closed']}, remaining_open={result['remaining_open']}")
+        print(f"Brier before: {result['brier_before']}, after: {result['brier_after']}")
+
     else:
         print(f"Unknown command: {cmd}")
-        print("Try: predict, outcome, calibration, list, review, dynamic, apply, threshold, predict-specific, auto-resolve")
+        print("Try: predict, outcome, calibration, list, review, dynamic, apply, threshold, predict-specific, auto-resolve, sweep")
 
 
 if __name__ == "__main__":

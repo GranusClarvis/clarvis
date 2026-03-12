@@ -443,7 +443,7 @@ def _get_prediction_outcomes_today(today_str):
                     correct = pred.get("correct")
                     if correct is True:
                         completed += 1
-                        descriptions.append(pred.get("description", ""))
+                        descriptions.append(pred.get("event", pred.get("description", "")))
                     elif correct is False:
                         failed += 1
     except Exception:
@@ -722,42 +722,52 @@ def _assess_code_generation():
             except Exception:
                 pass
 
-        # Test pass rate (if test infrastructure exists)
-        try:
-            test_dirs = [
-                Path("/home/agent/.openclaw/workspace/tests"),
-                Path("/home/agent/.openclaw/workspace/scripts/tests"),
-                Path("/home/agent/.openclaw/workspace/packages/clarvis-db/tests"),
-            ]
-            test_files = []
-            for td in test_dirs:
-                if td.exists():
-                    test_files.extend(td.glob("test_*.py"))
-                    test_files.extend(td.glob("*_test.py"))
+    # Test pass rate (always scored — independent of heartbeat vs fallback path)
+    # Uses a representative subset (8 files) to stay within timeout budget
+    try:
+        test_dirs = [
+            Path("/home/agent/.openclaw/workspace/tests"),
+            Path("/home/agent/.openclaw/workspace/scripts/tests"),
+            Path("/home/agent/.openclaw/workspace/packages/clarvis-db/tests"),
+            Path("/home/agent/.openclaw/workspace/clarvis/tests"),
+        ]
+        test_files = []
+        for td in test_dirs:
+            if td.exists():
+                test_files.extend(td.glob("test_*.py"))
+                test_files.extend(td.glob("*_test.py"))
 
-            if test_files:
-                r = subprocess.run(
-                    ["python3", "-m", "pytest", "--tb=no", "-q"] + [str(f) for f in test_files[:20]],
-                    capture_output=True, text=True, timeout=60,
-                    cwd="/home/agent/.openclaw/workspace"
-                )
-                output = r.stdout + r.stderr
-                import re
-                passed_m = re.search(r'(\d+) passed', output)
-                failed_m = re.search(r'(\d+) failed', output)
-                passed = int(passed_m.group(1)) if passed_m else 0
-                failed = int(failed_m.group(1)) if failed_m else 0
-                total_tests = passed + failed
-                if total_tests > 0:
-                    pass_rate = passed / total_tests
-                    test_score = pass_rate * 0.3
-                    score += test_score
-                    evidence.append(f"test pass rate={pass_rate:.0%} ({passed}/{total_tests}) (+{test_score:.2f})")
-                elif r.returncode == 0:
-                    score += 0.05
-                    evidence.append("test infra exists but no tests collected (+0.05)")
-        except Exception:
-            pass
+        if test_files:
+            # Sample up to 2 files per directory for a fast representative check
+            sampled = []
+            for td in test_dirs:
+                td_files = [f for f in test_files if str(f).startswith(str(td))]
+                sampled.extend(td_files[:2])
+            if not sampled:
+                sampled = test_files[:8]
+            r = subprocess.run(
+                ["python3", "-m", "pytest", "--tb=no", "-q"]
+                + [str(f) for f in sampled],
+                capture_output=True, text=True, timeout=300,
+                cwd="/home/agent/.openclaw/workspace"
+            )
+            output = r.stdout + r.stderr
+            import re
+            passed_m = re.search(r'(\d+) passed', output)
+            failed_m = re.search(r'(\d+) failed', output)
+            passed = int(passed_m.group(1)) if passed_m else 0
+            failed = int(failed_m.group(1)) if failed_m else 0
+            total_tests = passed + failed
+            if total_tests > 0:
+                pass_rate = passed / total_tests
+                test_score = pass_rate * 0.3
+                score += test_score
+                evidence.append(f"test pass rate={pass_rate:.0%} ({passed}/{total_tests}) (+{test_score:.2f})")
+            elif r.returncode == 0:
+                score += 0.05
+                evidence.append("test infra exists but no tests collected (+0.05)")
+    except Exception:
+        pass
 
     return max(0.0, min(1.0, score)), evidence
 
@@ -962,7 +972,7 @@ def _assess_learning_feedback():
 
     # --- Procedural memory: success rate, not just existence ---
     try:
-        from procedural_memory import list_procedures
+        from clarvis.memory.procedural_memory import list_procedures
         procs = list_procedures()
         if procs:
             # Weighted average success rate (weight by use_count)
@@ -1035,24 +1045,33 @@ def _assess_learning_feedback():
     else:
         evidence.append("no evolution failure tracking")
 
-    # --- Knowledge synthesis: check for recent synthesis output ---
+    # --- Knowledge synthesis: check brain for synthesis memories ---
     try:
-        synth_path = Path("/home/agent/.openclaw/workspace/data/synthesis")
-        if synth_path.exists():
-            synth_files = list(synth_path.glob("*.json"))
-            if synth_files:
-                synth_score = min(0.15, len(synth_files) * 0.03)
-                score += synth_score
-                evidence.append(f"{len(synth_files)} synthesis outputs (+{synth_score:.2f})")
-            else:
-                evidence.append("synthesis dir exists but empty")
+        from clarvis.brain import search as brain_search
+        synth_results = brain_search("synthesis cross-domain insight", n=10,
+                                     collections=["clarvis-learnings"])
+        synth_mems = [r for r in synth_results if r.get("distance", 1.0) < 1.2]
+        if len(synth_mems) >= 5:
+            synth_score = 0.15
+        elif len(synth_mems) >= 2:
+            synth_score = min(0.15, len(synth_mems) * 0.03)
+        elif synth_mems:
+            synth_score = 0.03
         else:
-            # Fall back to checking if script exists
-            if Path("/home/agent/.openclaw/workspace/scripts/knowledge_synthesis.py").exists():
-                score += 0.02
-                evidence.append("knowledge synthesis script exists (+0.02)")
+            synth_score = 0.0
+
+        if synth_score > 0:
+            score += synth_score
+            evidence.append(f"{len(synth_mems)} synthesis memories in brain (+{synth_score:.2f})")
+        elif Path("/home/agent/.openclaw/workspace/scripts/knowledge_synthesis.py").exists():
+            score += 0.02
+            evidence.append("knowledge synthesis script exists (+0.02)")
+        else:
+            evidence.append("no knowledge synthesis")
     except Exception:
-        pass
+        if Path("/home/agent/.openclaw/workspace/scripts/knowledge_synthesis.py").exists():
+            score += 0.02
+            evidence.append("knowledge synthesis script exists (+0.02)")
 
     return max(0.0, min(1.0, score)), evidence
 
@@ -1093,7 +1112,7 @@ def _assess_consciousness_metrics():
 
     # --- Attention spotlight utilization ---
     try:
-        from attention import attention as attn
+        from clarvis.cognition.attention import attention as attn
         spotlight = attn.focus()
         capacity = attn.capacity
         if capacity > 0:
@@ -1467,9 +1486,19 @@ def daily_update():
             queue_file = "/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md"
             with open(queue_file) as f:
                 queue_content = f.read().lower()
-            deduped = [t for t in regression_tasks
-                       if "regression-alert" not in queue_content
-                       or t.split("]")[1].split("dropped")[0].strip().lower() not in queue_content]
+            deduped = []
+            for t in regression_tasks:
+                if "regression-alert" not in queue_content:
+                    deduped.append(t)
+                else:
+                    # Extract domain name safely for per-domain dedup
+                    parts = t.split("]", 2)
+                    if len(parts) >= 2:
+                        domain_part = parts[1].split("dropped")[0].strip().lower()
+                        if domain_part not in queue_content:
+                            deduped.append(t)
+                    else:
+                        deduped.append(t)  # Malformed task — add it anyway
             if deduped:
                 inject_tasks_to_queue(deduped)
         except Exception:

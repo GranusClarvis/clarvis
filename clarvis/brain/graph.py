@@ -106,7 +106,7 @@ class GraphMixin:
         # Write edge-count header for integrity verification on next load
         self.graph["_edge_count"] = len(self.graph.get("edges", []))
 
-        tmp_path = self.graph_file + ".tmp"
+        tmp_path = f"{self.graph_file}.tmp.{os.getpid()}"
         with open(tmp_path, 'w') as f:
             fcntl.flock(f.fileno(), fcntl.LOCK_EX)
             json.dump(self.graph, f, indent=2)
@@ -617,11 +617,11 @@ class GraphMixin:
         sqlite_type_dist = sqlite_stats.get("edge_types", {})
 
         # Parity is OK when:
-        # - node counts match
+        # - SQLite has >= JSON nodes (SQLite may have extra from edge backfill)
         # - SQLite edges == JSON unique edges (dedup-adjusted)
         # - all sampled edges found in SQLite
         parity_ok = (
-            json_nodes == sqlite_nodes
+            sqlite_nodes >= json_nodes
             and json_unique_edges == sqlite_edges
             and len(mismatched) == 0
         )

@@ -502,23 +502,33 @@ def _rerun_job(job_name: str, result: dict) -> dict:
 
 
 def _add_evolution_task(task: str):
-    """Add a fix task to QUEUE.md under P0."""
-    queue_path = WORKSPACE / "memory" / "evolution" / "QUEUE.md"
-    if not queue_path.exists():
-        return
-
-    content = queue_path.read_text()
-    marker = "## P0 — Do Next Heartbeat"
-    tag = f"[CRON-DOCTOR] {task}"
-
-    # Dedup: don't add the same task twice
-    if tag in content:
-        return
-
-    if marker in content:
-        parts = content.split(marker, 1)
-        new_task = f"\n- [ ] {tag}"
-        queue_path.write_text(parts[0] + marker + new_task + parts[1])
+    """Add a fix task to QUEUE.md under P0 via shared queue_writer."""
+    try:
+        sys.path.insert(0, str(WORKSPACE / "scripts"))
+        from queue_writer import add_task
+        add_task(task, priority="P0", source="cron-doctor")
+    except ImportError:
+        # Fallback: direct write with file locking
+        import fcntl
+        queue_path = WORKSPACE / "memory" / "evolution" / "QUEUE.md"
+        if not queue_path.exists():
+            return
+        lock_path = str(queue_path) + ".lock"
+        lock_fd = open(lock_path, "w")
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_EX)
+            content = queue_path.read_text()
+            marker = "## P0 — Do Next Heartbeat"
+            tag = f"[CRON-DOCTOR] {task}"
+            if tag in content:
+                return
+            if marker in content:
+                parts = content.split(marker, 1)
+                new_task = f"\n- [ ] {tag}"
+                queue_path.write_text(parts[0] + marker + new_task + parts[1])
+        finally:
+            fcntl.flock(lock_fd, fcntl.LOCK_UN)
+            lock_fd.close()
 
 
 # === MAIN ENTRY POINTS ===
@@ -565,7 +575,12 @@ def recover(dry_run: bool = False) -> list[dict]:
 
         # Dispatch to handler
         handler = RECOVERY_HANDLERS.get(failure_type, recover_unknown)
-        result = handler(failure, dry_run=dry_run)
+        try:
+            result = handler(failure, dry_run=dry_run)
+        except Exception as ex:
+            _log(f"ERROR: Recovery handler for {job_name} raised: {ex}")
+            result = {"job": job_name, "action": "handler_error", "success": False,
+                      "error": str(ex)}
         result["type"] = failure_type
         result["detail"] = failure["detail"]
         results.append(result)

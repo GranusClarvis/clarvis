@@ -29,7 +29,7 @@ EVO_PREFLIGHT_FILE=$(mktemp --suffix=.json)
 python3 "$SCRIPTS/evolution_preflight.py" > "$EVO_PREFLIGHT_FILE" 2>> "$LOGFILE"
 EVO_EXIT=$?
 
-if [ $EVO_EXIT -ne 0 ]; then
+if [ "$EVO_EXIT" -ne 0 ]; then
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WARN: Evolution preflight failed (exit $EVO_EXIT) — falling back" >> "$LOGFILE"
     # Minimal fallback: just compress context
     COMPRESSED_QUEUE=$(python3 "$SCRIPTS/context_compressor.py" queue 2>> "$LOGFILE")

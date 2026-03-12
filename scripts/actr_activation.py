@@ -78,6 +78,14 @@ ACTIVATION_WEIGHT = 0.30     # (1-α) — weight for ACT-R activation
 # At -5.0: 63.7% above threshold; remaining 36.3% are old/unused.
 RETRIEVAL_TAU = -5.0         # Calibrated τ (log-scale)
 
+# Low-access grace: memories with <3 accesses use a softer threshold.
+# Without this, single-access memories older than ~6h get clipped to floor,
+# which is too aggressive — they haven't had a chance to be re-accessed.
+# Grace of 3.0 means effective tau = -8.0 for low-access, clipping only
+# memories accessed once and older than ~3 months.
+LOW_ACCESS_THRESHOLD = 3     # Access count below which grace applies
+LOW_ACCESS_GRACE = 3.0       # τ offset for low-access memories
+
 
 def compute_base_level(access_times, now_ts=None, use_spacing=True):
     """Compute ACT-R base-level activation B_i.
@@ -394,8 +402,22 @@ def actr_score(result, context_metas=None, add_noise=False):
     # ACT-R activation component
     activation = actr_activation(meta, context_metas, add_noise)
 
+    # Determine effective retrieval threshold.
+    # Low-access memories (<3 accesses) get a softer threshold to avoid
+    # penalizing memories that haven't had a chance to be re-accessed.
+    access_count = meta.get("access_count", 1)
+    if isinstance(access_count, str):
+        try:
+            access_count = int(access_count)
+        except (ValueError, TypeError):
+            access_count = 1
+    if access_count < LOW_ACCESS_THRESHOLD:
+        effective_tau = RETRIEVAL_TAU - LOW_ACCESS_GRACE
+    else:
+        effective_tau = RETRIEVAL_TAU
+
     # Below retrieval threshold? Penalize heavily
-    if activation < RETRIEVAL_TAU:
+    if activation < effective_tau:
         activation_score = 0.05  # Almost forgotten
     else:
         # Map activation to 0-1 via sigmoid

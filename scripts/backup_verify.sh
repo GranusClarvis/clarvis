@@ -59,27 +59,35 @@ backup_dir = sys.argv[1] if len(sys.argv) > 1 else ""
 with open(os.path.join(backup_dir, "manifest.json")) as f:
     manifest = json.load(f)
 
-ok = fail = missing = 0
+ok = fail = missing = skipped = 0
 backup_type = manifest.get("type", "full")
 
+# Skip cron log files — they change during backup/verify and cause false mismatches
+SKIP_PREFIXES = ("memory/cron/",)
+SKIP_SUFFIXES = (".log",)
+
 for entry in manifest.get("files", []):
-    backup_file = os.path.join(backup_dir, entry["path"])
+    p = entry["path"]
+    if any(p.startswith(pfx) for pfx in SKIP_PREFIXES) and any(p.endswith(sfx) for sfx in SKIP_SUFFIXES):
+        skipped += 1
+        continue
+    backup_file = os.path.join(backup_dir, p)
     if os.path.exists(backup_file):
         with open(backup_file, "rb") as fh:
             actual = hashlib.sha256(fh.read()).hexdigest()
         if actual == entry["sha256"]:
             ok += 1
         else:
-            print(f"  FAIL: checksum mismatch: {entry['path']}")
+            print(f"  FAIL: checksum mismatch: {p}")
             fail += 1
     else:
         if backup_type == "incremental":
             pass  # Expected for unchanged files in incremental
         else:
-            print(f"  MISSING: {entry['path']}")
+            print(f"  MISSING: {p}")
             missing += 1
 
-print(f"  Files: {ok} verified, {fail} failed, {missing} missing")
+print(f"  Files: {ok} verified, {fail} failed, {missing} missing, {skipped} skipped (cron logs)")
 sys.exit(1 if fail > 0 else 0)
 PYEOF
   local result=$?
@@ -132,27 +140,35 @@ backup_dir = '$backup_dir'
 with open(os.path.join(backup_dir, 'manifest.json')) as f:
     manifest = json.load(f)
 
-ok = fail = missing = 0
+ok = fail = missing = skipped = 0
 backup_type = manifest.get('type', 'full')
 
+# Skip cron log files — they change during backup/verify and cause false mismatches
+SKIP_PREFIXES = ('memory/cron/',)
+SKIP_SUFFIXES = ('.log',)
+
 for entry in manifest.get('files', []):
-    backup_file = os.path.join(backup_dir, entry['path'])
+    p = entry['path']
+    if any(p.startswith(pfx) for pfx in SKIP_PREFIXES) and any(p.endswith(sfx) for sfx in SKIP_SUFFIXES):
+        skipped += 1
+        continue
+    backup_file = os.path.join(backup_dir, p)
     if os.path.exists(backup_file):
         with open(backup_file, 'rb') as fh:
             actual = hashlib.sha256(fh.read()).hexdigest()
         if actual == entry['sha256']:
             ok += 1
         else:
-            print(f'  FAIL: checksum mismatch: {entry[\"path\"]}')
+            print(f'  FAIL: checksum mismatch: {p}')
             fail += 1
     else:
         if backup_type == 'incremental':
             pass
         else:
-            print(f'  MISSING: {entry[\"path\"]}')
+            print(f'  MISSING: {p}')
             missing += 1
 
-print(f'  Files: {ok} verified, {fail} failed, {missing} missing')
+print(f'  Files: {ok} verified, {fail} failed, {missing} missing, {skipped} skipped (cron logs)')
 sys.exit(1 if fail > 0 else 0)
 "
   local result=$?

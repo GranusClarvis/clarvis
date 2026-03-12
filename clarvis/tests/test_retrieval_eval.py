@@ -1,9 +1,11 @@
 """Tests for clarvis.brain.retrieval_eval — CRAG-style retrieval evaluator."""
 
 import pytest
+from unittest.mock import MagicMock
 from clarvis.brain.retrieval_eval import (
     score_result, classify_batch, strip_refine, evaluate_retrieval,
     _keyword_overlap, _semantic_sim, _recency_score,
+    _extract_keywords, _rewrite_query, adaptive_recall,
     CORRECT, AMBIGUOUS, INCORRECT,
 )
 
@@ -185,6 +187,156 @@ class TestEvaluateRetrieval:
         assert ev["verdict"] == INCORRECT
         assert ev["n_results"] == 0
         assert ev["strip_applied"] is False
+
+
+# ---------------------------------------------------------------------------
+# Keyword extraction and query rewriting
+# ---------------------------------------------------------------------------
+
+class TestExtractKeywords:
+    def test_extracts_meaningful_tokens(self):
+        kws = _extract_keywords("Fix retrieval hit rate showing 0.0 in performance_benchmark")
+        assert len(kws) > 0
+        assert "retrieval" in kws
+        assert "the" not in kws  # stop word
+
+    def test_filters_short_tokens(self):
+        kws = _extract_keywords("a b c do it now or we fail")
+        # "a", "b", "c" are all < 3 chars, should be filtered
+        assert "a" not in kws
+        assert "b" not in kws
+
+    def test_empty_query(self):
+        kws = _extract_keywords("")
+        assert isinstance(kws, list)
+
+    def test_top_k_limit(self):
+        kws = _extract_keywords("one two three four five six seven eight nine ten eleven", top_k=3)
+        assert len(kws) <= 3
+
+
+class TestRewriteQuery:
+    def test_strips_task_brackets(self):
+        rewritten = _rewrite_query("[AUTO_SPLIT 2026-03-12] [TASK_NAME] Fix the retrieval logic")
+        assert "[AUTO_SPLIT" not in rewritten
+        assert "[TASK_NAME]" not in rewritten
+
+    def test_strips_action_prefix(self):
+        rewritten = _rewrite_query("Implement: core logic change in one focused increment")
+        assert not rewritten.startswith("Implement")
+
+    def test_preserves_domain_terms(self):
+        rewritten = _rewrite_query("Fix retrieval adaptive retry logic for brain recall")
+        assert "retrieval" in rewritten or "adaptive" in rewritten
+
+    def test_fallback_on_empty(self):
+        # If keyword extraction fails, return original
+        result = _rewrite_query("a")
+        assert len(result) > 0
+
+
+# ---------------------------------------------------------------------------
+# Adaptive recall
+# ---------------------------------------------------------------------------
+
+def _make_brain_mock(recall_results=None, retry_results=None):
+    """Create a mock brain that returns different results for initial vs retry."""
+    mock = MagicMock()
+    call_count = [0]
+
+    def mock_recall(*args, **kwargs):
+        call_count[0] += 1
+        if call_count[0] == 1 and recall_results is not None:
+            return recall_results
+        if retry_results is not None:
+            return retry_results
+        return recall_results or []
+
+    mock.recall = MagicMock(side_effect=mock_recall)
+    return mock
+
+
+class TestAdaptiveRecall:
+    def test_skips_on_no_retrieval(self):
+        brain = _make_brain_mock()
+        out = adaptive_recall(brain, "test query", tier="NO_RETRIEVAL")
+        assert out["verdict"] == "SKIPPED"
+        assert not out["retried"]
+        brain.recall.assert_not_called()
+
+    def test_returns_correct_without_retry(self):
+        results = [_make_result(distance=0.1, importance=0.9,
+                                doc="chromadb vector memory embeddings")]
+        brain = _make_brain_mock()
+        out = adaptive_recall(brain, "chromadb vector memory",
+                              original_results=results)
+        assert out["verdict"] == CORRECT
+        assert not out["retried"]
+        assert out["original_verdict"] == CORRECT
+
+    def test_retries_on_incorrect(self):
+        # Initial: bad results
+        bad_results = [_make_result(distance=2.0, importance=0.1,
+                                    doc="random unrelated noise")]
+        # Retry: good results
+        good_results = [_make_result(distance=0.1, importance=0.9,
+                                     doc="chromadb vector memory embeddings")]
+        brain = _make_brain_mock(retry_results=good_results)
+        out = adaptive_recall(brain, "chromadb vector memory",
+                              original_results=bad_results)
+        assert out["retried"]
+        assert out["original_verdict"] == INCORRECT
+        # Retry should have improved the verdict
+        assert out["verdict"] in (CORRECT, AMBIGUOUS)
+        assert out["retry_query"] is not None
+
+    def test_retry_still_incorrect_returns_empty(self):
+        bad_results = [_make_result(distance=2.0, importance=0.1,
+                                    doc="random unrelated noise")]
+        brain = _make_brain_mock(retry_results=bad_results)
+        out = adaptive_recall(brain, "chromadb vector memory",
+                              original_results=bad_results)
+        assert out["retried"]
+        assert out["verdict"] == INCORRECT
+        assert out["results"] == []
+
+    def test_no_results_returns_no_results(self):
+        brain = _make_brain_mock()
+        out = adaptive_recall(brain, "test query", original_results=[])
+        assert out["verdict"] == "NO_RESULTS"
+        assert not out["retried"]
+
+    def test_does_initial_recall_when_no_results_provided(self):
+        good_results = [_make_result(distance=0.1, importance=0.9,
+                                     doc="chromadb vector memory embeddings")]
+        brain = _make_brain_mock(recall_results=good_results)
+        out = adaptive_recall(brain, "chromadb vector memory")
+        assert out["verdict"] == CORRECT
+        brain.recall.assert_called_once()
+
+    def test_retry_uses_all_collections(self):
+        bad_results = [_make_result(distance=2.0, importance=0.1,
+                                    doc="random noise")]
+        brain = _make_brain_mock(retry_results=[])
+        adaptive_recall(brain, "chromadb memory", original_results=bad_results)
+        # Check that retry call used ALL_COLLECTIONS
+        retry_call = brain.recall.call_args
+        from clarvis.brain.constants import ALL_COLLECTIONS
+        assert retry_call.kwargs.get("collections") == ALL_COLLECTIONS
+
+    def test_retry_relaxes_min_importance(self):
+        bad_results = [_make_result(distance=2.0, importance=0.1,
+                                    doc="random noise")]
+        brain = _make_brain_mock(retry_results=[])
+        adaptive_recall(brain, "chromadb memory", original_results=bad_results)
+        retry_call = brain.recall.call_args
+        assert retry_call.kwargs.get("min_importance") == 0.1
+
+    def test_handles_recall_exception(self):
+        brain = MagicMock()
+        brain.recall.side_effect = RuntimeError("ChromaDB down")
+        out = adaptive_recall(brain, "test query")
+        assert out["verdict"] == "NO_RESULTS"
 
 
 if __name__ == "__main__":

@@ -207,7 +207,7 @@ def get_failure_patterns(current_task, n=3):
     """
     patterns = []
     try:
-        from episodic_memory import EpisodicMemory
+        from clarvis.memory.episodic_memory import EpisodicMemory
         em = EpisodicMemory()
         failures = em.recall_failures(n=n * 2)
         if not failures:
@@ -340,7 +340,7 @@ def get_spotlight_items(n=5, exclude_task=""):
     Deduplicates similar items and excludes items matching `exclude_task`.
     """
     try:
-        from attention import attention
+        from clarvis.cognition.attention import attention
         attention._load()
         focused = attention.focus()
         items = []

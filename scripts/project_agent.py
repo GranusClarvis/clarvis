@@ -388,7 +388,7 @@ def _acquire_loop_lock(agent_name: str) -> bool:
             pid_str = lock.read_text().strip()
             if pid_str.isdigit():
                 pid = int(pid_str)
-                if _is_pid_clarvis(pid):
+                if pid == os.getpid() or _is_pid_clarvis(pid):
                     age = int(time.time() - lock.stat().st_mtime)
                     if age <= 5 * 3600:  # 5h max loop duration
                         _log(f"Loop lock held by PID {pid} (age={age}s) for agent '{agent_name}'")

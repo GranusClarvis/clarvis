@@ -286,6 +286,8 @@ def _get_capability_scores():
             history = json.load(f)
         if not history:
             return ""
+        if isinstance(history, dict) and "snapshots" in history:
+            history = history["snapshots"]
         latest = history[-1] if isinstance(history, list) else history
         scores = latest.get("scores", latest.get("domains", {}))
         if not scores:

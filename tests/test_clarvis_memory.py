@@ -3322,7 +3322,7 @@ class TestHebbianComputeFisher:
             mock_brain = MagicMock()
             mock_brain.collections = {}
 
-            with patch("brain.brain", mock_brain):
+            with patch("clarvis.brain.brain", mock_brain):
                 scores = hebbian.compute_fisher()
 
             assert isinstance(scores, dict)
@@ -3368,7 +3368,7 @@ class TestHebbianComputeFisher:
             mock_brain = MagicMock()
             mock_brain.collections = {"test-col": mock_col}
 
-            with patch("brain.brain", mock_brain):
+            with patch("clarvis.brain.brain", mock_brain):
                 scores = hebbian.compute_fisher()
 
             assert isinstance(scores, dict)
@@ -3446,7 +3446,7 @@ class TestHebbianComputeFisher:
             mock_brain = MagicMock()
             mock_brain.collections = {"col": mock_col}
 
-            with patch("brain.brain", mock_brain):
+            with patch("clarvis.brain.brain", mock_brain):
                 scores = hebbian.compute_fisher()
 
             # mem_1 has coactivation partner → lower uniqueness
@@ -3482,7 +3482,7 @@ class TestHebbianComputeFisher:
             mock_brain = MagicMock()
             mock_brain.collections = {"col": mock_col}
 
-            with patch("brain.brain", mock_brain):
+            with patch("clarvis.brain.brain", mock_brain):
                 scores = hebbian.compute_fisher()
 
             assert "mem_str" in scores
@@ -3526,7 +3526,7 @@ class TestHebbianDiagnose:
             mock_brain = MagicMock()
             mock_brain.collections = {"test-col": mock_col}
 
-            with patch("brain.brain", mock_brain):
+            with patch("clarvis.brain.brain", mock_brain):
                 diag = hebbian.diagnose()
 
             assert diag["high_importance_count"] == 1
@@ -3560,7 +3560,7 @@ class TestHebbianDiagnose:
             mock_brain = MagicMock()
             mock_brain.collections = {"col": mock_col}
 
-            with patch("brain.brain", mock_brain):
+            with patch("clarvis.brain.brain", mock_brain):
                 diag = hebbian.diagnose()
 
             assert diag["high_importance_count"] == 1
@@ -3593,7 +3593,7 @@ class TestHebbianDiagnose:
             mock_brain = MagicMock()
             mock_brain.collections = {"col": mock_col}
 
-            with patch("brain.brain", mock_brain):
+            with patch("clarvis.brain.brain", mock_brain):
                 diag = hebbian.diagnose()
 
             assert diag["coactivation_pairs"] == 2
@@ -3616,7 +3616,7 @@ class TestHebbianDiagnose:
             mock_brain = MagicMock()
             mock_brain.collections = {}
 
-            with patch("brain.brain", mock_brain):
+            with patch("clarvis.brain.brain", mock_brain):
                 diag = hebbian.diagnose()
 
             assert diag["high_importance_count"] == 0

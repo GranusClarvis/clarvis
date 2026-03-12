@@ -73,7 +73,7 @@ PREFLIGHT_EXIT=$?
 CONTEXT_BRIEF=""
 EPISODIC_HINTS=""
 PROC_HINT=""
-if [ $PREFLIGHT_EXIT -eq 0 ]; then
+if [ "$PREFLIGHT_EXIT" -eq 0 ]; then
     # Strip non-JSON lines
     python3 -c "
 import json, sys
@@ -148,7 +148,7 @@ echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] SPRINT EXECUTION: exit=$TASK_EXIT duration
 tail -c 2000 "$TASK_OUTPUT_FILE" >> "$LOGFILE" 2>/dev/null
 
 # Run postflight for episode recording and metrics
-if [ $PREFLIGHT_EXIT -eq 0 ]; then
+if [ "$PREFLIGHT_EXIT" -eq 0 ]; then
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running postflight..." >> "$LOGFILE"
     python3 "$SCRIPTS/heartbeat_postflight.py" "$TASK_EXIT" "$TASK_OUTPUT_FILE" "$PREFLIGHT_FILE" "$TASK_DURATION" >> "$LOGFILE" 2>&1
 fi
@@ -159,7 +159,7 @@ SUMMARY=$(tail -c 500 "$TASK_OUTPUT_FILE" 2>/dev/null | tail -5)
     echo ""
     echo "### Implementation Sprint — $(date -u +%H:%M) UTC"
     echo ""
-    if [ $TASK_EXIT -eq 0 ]; then
+    if [ "$TASK_EXIT" -eq 0 ]; then
         echo "Sprint task: ${IMPL_TASK:0:100}. Result: success (${TASK_DURATION}s). Summary: ${SUMMARY:0:200}"
     else
         echo "Sprint FAILED: ${IMPL_TASK:0:100}. Exit=$TASK_EXIT (${TASK_DURATION}s)."

@@ -12,6 +12,7 @@ register hooks instead of being imported by brain — dependency inversion break
 
 import re
 import time
+import uuid
 
 from .constants import (
     DATA_DIR, LOCAL_DATA_DIR, GRAPH_FILE, LOCAL_GRAPH_FILE,
@@ -253,6 +254,215 @@ def capture(text):
         return {"captured": False, "reason": f"low importance ({score:.2f})", "importance": score}
     mem_id = remember(text, importance=score)
     return {"captured": True, "memory_id": mem_id, "importance": score}
+
+
+# === Two-Stage Memory Commitment ===
+# Pattern 2: Three-Stage Memory Commitment (propose → evaluate → commit)
+# Reduces memory bloat by filtering low-utility memories pre-storage.
+
+_pending_proposals = {}  # candidate_id → proposal dict
+
+
+def propose(text, importance=0.7, category=None, source="proposal"):
+    """Stage 1: Propose a memory for storage without committing it.
+
+    Evaluates utility via dedup check, goal relevance, and importance
+    threshold. Returns a candidate dict with evaluation results.
+
+    Usage:
+        candidate = propose("Learned that X improves Y", importance=0.8)
+        if candidate["recommendation"] == "commit":
+            commit(candidate["candidate_id"])
+    """
+    candidate_id = f"prop_{uuid.uuid4().hex[:12]}"
+
+    # Auto-detect category (same logic as remember())
+    if category is None:
+        tl = text.lower()
+        if re.search(r'\b(prefer|hate|love|like|dislike|want|don\'?t want)\b', tl):
+            category = PREFERENCES
+        elif re.search(r'\b(learned|lesson|mistake|fixed|solved|research|insight)\b', tl):
+            category = LEARNINGS
+        elif re.search(r'\b(my name is|i am|creator|made me)\b', tl):
+            category = IDENTITY
+        elif re.search(r'\b(server|host|port|database|api|config|running on)\b', tl):
+            category = INFRASTRUCTURE
+        elif re.search(r'\b(goal|objective|target|deadline|milestone)\b', tl):
+            category = GOALS
+        else:
+            category = MEMORIES
+
+    evaluation = {
+        "dedup_similar": None,
+        "goal_relevance": 0.0,
+        "importance_ok": importance >= 0.3,
+        "text_quality": len(text.strip()) >= 20,
+    }
+    reasons = []
+
+    # 1. Dedup check: find similar existing memories
+    try:
+        similar = brain.recall(text, collections=[category], n=3, caller="proposal_dedup")
+        if similar:
+            top_dist = similar[0].get("distance")
+            if top_dist is not None and top_dist < 0.3:
+                evaluation["dedup_similar"] = {
+                    "distance": round(top_dist, 4),
+                    "existing_id": similar[0].get("id"),
+                    "existing_text": similar[0].get("document", "")[:100],
+                }
+                reasons.append(f"near-duplicate (d={top_dist:.3f})")
+            elif top_dist is not None and top_dist < 0.5:
+                evaluation["dedup_similar"] = {
+                    "distance": round(top_dist, 4),
+                    "existing_id": similar[0].get("id"),
+                    "existing_text": similar[0].get("document", "")[:100],
+                }
+                reasons.append(f"similar exists (d={top_dist:.3f})")
+    except Exception:
+        pass
+
+    # 2. Goal relevance: check if text relates to active goals
+    try:
+        goals = brain.recall(text, collections=[GOALS], n=2, caller="proposal_goals")
+        if goals:
+            top_goal_dist = goals[0].get("distance")
+            if top_goal_dist is not None and top_goal_dist < 1.0:
+                evaluation["goal_relevance"] = round(1.0 - top_goal_dist, 3)
+                reasons.append(f"goal-aligned ({evaluation['goal_relevance']:.2f})")
+    except Exception:
+        pass
+
+    # 3. Recommendation logic
+    is_duplicate = (evaluation["dedup_similar"] is not None
+                    and evaluation["dedup_similar"]["distance"] < 0.3)
+    is_low_quality = not evaluation["text_quality"]
+    is_low_importance = not evaluation["importance_ok"]
+
+    if is_duplicate:
+        recommendation = "reject"
+        reasons.insert(0, "REJECT: near-duplicate")
+    elif is_low_quality:
+        recommendation = "reject"
+        reasons.insert(0, "REJECT: text too short (<20 chars)")
+    elif is_low_importance:
+        recommendation = "reject"
+        reasons.insert(0, "REJECT: importance below threshold (0.3)")
+    elif (evaluation["dedup_similar"] is not None
+          and evaluation["dedup_similar"]["distance"] < 0.5):
+        recommendation = "review"
+        reasons.insert(0, "REVIEW: similar memory exists — consider reconsolidation")
+    else:
+        recommendation = "commit"
+        reasons.insert(0, "OK: passes all checks")
+
+    proposal = {
+        "candidate_id": candidate_id,
+        "text": text,
+        "importance": importance,
+        "category": category,
+        "source": source,
+        "evaluation": evaluation,
+        "recommendation": recommendation,
+        "reasons": reasons,
+        "proposed_at": time.time(),
+    }
+
+    _pending_proposals[candidate_id] = proposal
+
+    # Auto-expire old proposals (keep max 100, drop oldest)
+    if len(_pending_proposals) > 100:
+        oldest = min(_pending_proposals, key=lambda k: _pending_proposals[k]["proposed_at"])
+        del _pending_proposals[oldest]
+
+    return proposal
+
+
+def commit(candidate_id):
+    """Stage 2: Commit a proposed memory to persistent storage.
+
+    Args:
+        candidate_id: The ID returned by propose()
+
+    Returns:
+        Dict with memory_id on success, or error on failure.
+    """
+    proposal = _pending_proposals.pop(candidate_id, None)
+    if proposal is None:
+        return {"committed": False, "error": f"No pending proposal with id '{candidate_id}'"}
+
+    # Auto-detect tags (same logic as remember())
+    tags = []
+    tl = proposal["text"].lower()
+    if re.search(r'\b(code|script|python|js|rust)\b', tl):
+        tags.append("technical")
+    if re.search(r'\b(bug|fix|error|issue)\b', tl):
+        tags.append("bug")
+    if re.search(r'\b(goal|objective)\b', tl):
+        tags.append("goal")
+    if re.search(r'\b(research|paper|study|theory)\b', tl):
+        tags.append("research")
+
+    memory_id = brain.store(
+        proposal["text"],
+        collection=proposal["category"],
+        importance=proposal["importance"],
+        tags=tags or None,
+        source=proposal["source"],
+    )
+
+    return {
+        "committed": True,
+        "memory_id": memory_id,
+        "category": proposal["category"],
+        "importance": proposal["importance"],
+        "evaluation": proposal["evaluation"],
+    }
+
+
+def propose_and_commit(text, importance=0.7, category=None, source="auto",
+                       auto_commit=True):
+    """Convenience: propose + auto-commit if recommended.
+
+    Returns the proposal with commit result if auto-committed.
+    Use this as a drop-in replacement for remember() with pre-storage filtering.
+    """
+    proposal = propose(text, importance=importance, category=category, source=source)
+
+    if auto_commit and proposal["recommendation"] == "commit":
+        result = commit(proposal["candidate_id"])
+        proposal["commit_result"] = result
+    elif auto_commit and proposal["recommendation"] == "review":
+        # For "review" recommendations, still commit but flag it
+        result = commit(proposal["candidate_id"])
+        proposal["commit_result"] = result
+    else:
+        proposal["commit_result"] = None
+
+    return proposal
+
+
+def get_pending_proposals():
+    """List all pending proposals awaiting commit/reject."""
+    now = time.time()
+    return [
+        {**p, "age_s": round(now - p["proposed_at"], 1)}
+        for p in _pending_proposals.values()
+    ]
+
+
+def reject_proposal(candidate_id):
+    """Explicitly reject a pending proposal."""
+    proposal = _pending_proposals.pop(candidate_id, None)
+    if proposal is None:
+        return {"rejected": False, "error": f"No pending proposal with id '{candidate_id}'"}
+    return {"rejected": True, "candidate_id": candidate_id, "text": proposal["text"][:100]}
+
+
+def evolve(old_id, old_collection, new_text, reason="contradiction"):
+    """Evolve a memory — create a revised version linked to the original."""
+    from .memory_evolution import evolve_memory
+    return evolve_memory(brain, old_id, old_collection, new_text, reason)
 
 
 def search(query, n=5, min_importance=None, collections=None):

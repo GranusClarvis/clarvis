@@ -39,7 +39,7 @@ _log = lambda msg: print(
 
 def _procedural_record(context):
     """Record procedure usage outcome (success/failure) and learn new procedures."""
-    from procedural_memory import record_use, learn_from_task
+    from clarvis.memory.procedural_memory import record_use, learn_from_task
 
     exit_code = context.get("exit_code", 1)
     proc_id = context.get("procedure_id")

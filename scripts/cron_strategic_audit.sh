@@ -114,7 +114,8 @@ fi
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] State gathered. Spawning Claude Code for deep analysis..." >> "$LOGFILE"
 
 # === SPAWN CLAUDE CODE FOR DEEP STRATEGIC AUDIT ===
-AUDIT_OUTPUT=$(timeout 1200 /home/agent/.local/bin/claude -p \
+AUDIT_OUTPUT=$(timeout 1200 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \
+  /home/agent/.local/bin/claude --model claude-opus-4-6 -p \
 "You are Clarvis's strategic auditor — a meta-evaluation layer that prevents metric gaming,
 integration overload, and wasted evolution cycles. Be brutally honest.
 

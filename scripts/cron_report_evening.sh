@@ -17,10 +17,12 @@ import json
 import re
 import urllib.request
 import urllib.parse
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 import subprocess
 sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
+
+today_str = datetime.now(timezone.utc).strftime('%Y-%m-%d')
 
 # Get bot token
 with open('/home/agent/.openclaw/openclaw.json') as f:
@@ -51,7 +53,7 @@ for match in re.finditer(pattern, digest_content):
 daytime_entries = []
 for e in entries:
     hour = int(e['time'].split(':')[0])
-    if 10 <= hour <= 21:
+    if 10 <= hour <= 22:
         daytime_entries.append(e)
 
 # ==== TASK EXTRACTION ====
@@ -77,7 +79,7 @@ def extract_task_details(context, entry_type):
 today_commits = []
 try:
     result = subprocess.run(
-        ['git', 'log', '--oneline', '--since="2026-02-26 00:00:00"', '--until="2026-02-26 23:59:59"'],
+        ['git', 'log', '--oneline', f'--since={today_str} 00:00:00', f'--until={today_str} 23:59:59'],
         cwd='/home/agent/.openclaw/workspace',
         capture_output=True, text=True, timeout=5
     )
@@ -98,7 +100,7 @@ with open(queue_path) as f:
 today_completed = []
 for match in re.finditer(r'- \[x\] \[([^\]]+)\].*?(\d{4}-\d{2}-\d{2})', queue_content):
     date = match.group(2)
-    if '2026-02-26' in date:
+    if today_str in date:
         today_completed.append(match.group(1)[:35])
 
 # Pending items

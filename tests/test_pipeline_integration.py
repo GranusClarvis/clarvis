@@ -118,6 +118,7 @@ class TestEdgeDecay:
                 self.graph_file = graph_file
                 self.collections = {}
                 self.graph = {"nodes": {}, "edges": edges}
+                self._sqlite_store = None
 
         graph_file = str(tmp_path / "test_graph.json")
         stub = StubBrain(graph_file)

@@ -350,6 +350,8 @@ class EvolutionLoop:
         # Common patterns
         if exit_code == 124 or "timeout" in error:
             return f"Timeout: {component} exceeded time limit. Likely slow operation or infinite loop."
+        if exit_code == 143:
+            return f"SIGTERM: {component} was killed (exit 143 = signal 15). Likely execution monitor abort due to no output at 75% timeout, or external kill."
         if "no such file" in error or "not found" in error or "FileNotFoundError" in error:
             return f"Missing dependency: {component} references a file/module that doesn't exist."
         if "permission" in error or exit_code == 126:
@@ -408,14 +410,24 @@ class EvolutionLoop:
         strategy = analysis.get("fix_strategy", "")
 
         if "reuse fix" in strategy.lower():
-            # Find the referenced fix and copy its action
+            # Find the referenced fix and copy its action TYPE, but generate a
+            # new task description from the CURRENT failure (not the old one).
             for sf in analysis.get("similar_failures", []):
                 if sf.get("fix_id"):
                     old_fix_path = FIXES_DIR / f"{sf['fix_id']}.json"
                     if old_fix_path.exists():
                         old_fix = json.loads(old_fix_path.read_text())
-                        fix["action"] = old_fix.get("action")
-                        fix["description"] = f"Reapply: {old_fix.get('description', '')}"
+                        old_action = old_fix.get("action", {})
+                        fix["action"] = {
+                            "type": old_action.get("type", "evolution_task"),
+                            # Use CURRENT failure details, not old ones
+                            "task": f"Fix failure in {failure['component']}: {failure['error'][:200]}",
+                            "context": failure.get("context", ""),
+                            "stderr_tail": failure.get("stderr", "")[-500:],
+                            "reused_from": sf["fix_id"],
+                        }
+                        fix["description"] = f"Reapply strategy from {sf['fix_id']}: {old_fix.get('description', '')[:100]}"
+                        break
 
         if not fix["action"]:
             # Generate a new action — queue for evolution
@@ -474,17 +486,26 @@ class EvolutionLoop:
             from queue_writer import add_task
             add_task(task, priority="P0", source="evolution-loop")
         except ImportError:
-            # Fallback: direct write
+            # Fallback: direct write with file locking
+            import fcntl
             queue_path = Path("/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md")
             if not queue_path.exists():
                 return
-            content = queue_path.read_text()
-            marker = "## P0 — Do Next Heartbeat"
-            if marker in content:
-                parts = content.split(marker, 1)
-                new_task = f"\n- [ ] [AUTO-FIX] {task}"
-                content = parts[0] + marker + new_task + parts[1]
-                queue_path.write_text(content)
+            lock_path = str(queue_path) + ".lock"
+            lock_fd = open(lock_path, "w")
+            try:
+                fcntl.flock(lock_fd, fcntl.LOCK_EX)
+                content = queue_path.read_text()
+                marker = "## P0 — Do Next Heartbeat"
+                today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+                if marker in content:
+                    parts = content.split(marker, 1)
+                    new_task = f"\n- [ ] [AUTO-FIX {today}] {task}\n"
+                    content = parts[0] + marker + new_task + parts[1]
+                    queue_path.write_text(content)
+            finally:
+                fcntl.flock(lock_fd, fcntl.LOCK_UN)
+                lock_fd.close()
 
 
 # === Module-level convenience function for heartbeat integration ===

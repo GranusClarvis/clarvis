@@ -93,7 +93,7 @@ def get_phi_trajectory(days=7):
     """
     records = load_json(PHI_HISTORY)
     if isinstance(records, dict):
-        records = records.get("history", [])
+        records = records.get("history", records.get("snapshots", []))
     if not records:
         return {"first": 0, "last": 0, "delta": 0, "measurements": 0, "trend": "no_data"}
 

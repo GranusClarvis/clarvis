@@ -58,7 +58,7 @@ except ImportError:
     EpisodicMemory = None
 
 try:
-    from task_router import get_stats as router_stats
+    from clarvis.orch.router import get_stats as router_stats
 except ImportError:
     router_stats = None
 
@@ -207,7 +207,7 @@ def run():
         import re
         queue_file = "/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md"
         with open(queue_file) as f:
-            result["pending_count"] = sum(1 for line in f if re.match(r'^- \[ \]', line.strip()))
+            result["pending_count"] = sum(1 for line in f if re.match(r'^- \[ \]', line))
     except Exception:
         pass
 

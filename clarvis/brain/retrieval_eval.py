@@ -83,7 +83,7 @@ def _recency_score(result: dict) -> float:
         else:
             # Handle ISO format with or without timezone
             ts_clean = str(ts_str).replace("Z", "+00:00")
-            if "+" not in ts_clean and ts_clean[-1] != "Z":
+            if "+" not in ts_clean:
                 ts_clean += "+00:00"
             created = datetime.fromisoformat(ts_clean)
         age_days = (datetime.now(timezone.utc) - created).total_seconds() / 86400
@@ -250,6 +250,190 @@ def evaluate_retrieval(results: list[dict], query: str,
         "n_above_threshold": n_above,
         "refined_results": refined,
         "strip_applied": strip_applied,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Adaptive recall — corrective retry on INCORRECT verdict
+# ---------------------------------------------------------------------------
+
+# Stop words for keyword extraction (common English words that add no signal)
+_STOP_WORDS = frozenset({
+    "a", "an", "the", "is", "are", "was", "were", "be", "been", "being",
+    "have", "has", "had", "do", "does", "did", "will", "would", "could",
+    "should", "may", "might", "can", "shall", "to", "of", "in", "for",
+    "on", "with", "at", "by", "from", "as", "into", "through", "during",
+    "before", "after", "above", "below", "between", "and", "but", "or",
+    "not", "no", "if", "then", "than", "so", "that", "this", "it", "its",
+    "all", "each", "every", "any", "some", "more", "most", "other",
+    "up", "out", "about", "just", "also", "very", "too", "only",
+})
+
+
+def _extract_keywords(query: str, top_k: int = 8) -> list[str]:
+    """Extract salient keywords from a query using TF-like scoring.
+
+    Filters stop words, short tokens, and scores by token length + uniqueness.
+    Returns top_k keywords for query rewriting.
+    """
+    tokens = re.findall(r"[a-z][a-z0-9_]+", query.lower())
+    # Filter stop words and very short tokens
+    filtered = [t for t in tokens if t not in _STOP_WORDS and len(t) >= 3]
+    if not filtered:
+        return tokens[:top_k]  # fallback to raw tokens
+
+    # Score by: length (longer = more specific) + frequency
+    from collections import Counter
+    freq = Counter(filtered)
+    scored = [(t, freq[t] * 0.5 + len(t) * 0.3) for t in set(filtered)]
+    scored.sort(key=lambda x: x[1], reverse=True)
+    return [t for t, _ in scored[:top_k]]
+
+
+def _rewrite_query(query: str) -> str:
+    """Rewrite query by extracting core keywords for broader matching.
+
+    Strips filler/task-format text, keeps domain-specific terms.
+    """
+    # Remove common task prefixes like "[AUTO_SPLIT 2026-03-12]", "[TASK_NAME]"
+    cleaned = re.sub(r'\[.*?\]', '', query)
+    # Remove "Analyze:", "Implement:", etc.
+    cleaned = re.sub(r'^(Analyze|Implement|Test|Verify|Fix|Add|Update|Build|Create|Wire)\s*:\s*', '', cleaned, flags=re.I)
+    keywords = _extract_keywords(cleaned)
+    if not keywords:
+        return query  # fallback: return original
+    return " ".join(keywords)
+
+
+def adaptive_recall(brain_instance, query: str, tier: str = "DEEP_RETRIEVAL",
+                    original_results: list[dict] | None = None,
+                    min_importance: float = 0.3,
+                    n: int = 5) -> dict:
+    """Adaptive recall with corrective retry on INCORRECT verdict.
+
+    Flow:
+      1. Evaluate original results (or do initial recall)
+      2. If CORRECT/AMBIGUOUS → return as-is
+      3. If INCORRECT → rewrite query, broaden to all collections, relax importance
+      4. If retry still INCORRECT → return empty (no context > bad context)
+
+    Args:
+        brain_instance: ClarvisBrain instance
+        query: The search query (usually the task description)
+        tier: Retrieval tier from gate (NO_RETRIEVAL, LIGHT_RETRIEVAL, DEEP_RETRIEVAL)
+        original_results: Pre-fetched recall results (if available)
+        min_importance: Original min_importance threshold
+        n: Number of results to recall
+
+    Returns:
+        {
+            "verdict": str,
+            "max_score": float,
+            "results": list[dict],
+            "retried": bool,
+            "retry_query": str | None,
+            "original_verdict": str,
+        }
+    """
+    from .constants import ALL_COLLECTIONS
+
+    # If NO_RETRIEVAL, skip everything
+    if tier == "NO_RETRIEVAL":
+        return {
+            "verdict": "SKIPPED",
+            "max_score": 0.0,
+            "results": [],
+            "retried": False,
+            "retry_query": None,
+            "original_verdict": "SKIPPED",
+        }
+
+    # Step 1: Get initial results if not provided
+    if original_results is None:
+        try:
+            original_results = brain_instance.recall(
+                query, n=n, min_importance=min_importance,
+                attention_boost=True, caller="adaptive_recall_initial",
+            )
+        except Exception:
+            original_results = []
+
+    # Step 2: Evaluate initial results
+    if not original_results:
+        return {
+            "verdict": "NO_RESULTS",
+            "max_score": 0.0,
+            "results": [],
+            "retried": False,
+            "retry_query": None,
+            "original_verdict": "NO_RESULTS",
+        }
+
+    eval_out = evaluate_retrieval(original_results, query)
+    original_verdict = eval_out["verdict"]
+
+    # Step 3: If CORRECT or AMBIGUOUS (with strip refinement), return
+    if original_verdict in (CORRECT, AMBIGUOUS):
+        results = eval_out.get("refined_results") or original_results
+        return {
+            "verdict": original_verdict,
+            "max_score": eval_out["max_score"],
+            "results": results,
+            "retried": False,
+            "retry_query": None,
+            "original_verdict": original_verdict,
+        }
+
+    # Step 4: INCORRECT — corrective retry
+    # (a) Rewrite query via keyword extraction
+    retry_query = _rewrite_query(query)
+    # (b) Broaden to ALL collections
+    # (c) Relax min_importance to 0.1
+    try:
+        retry_results = brain_instance.recall(
+            retry_query,
+            collections=ALL_COLLECTIONS,
+            n=n,
+            min_importance=0.1,
+            attention_boost=True,
+            caller="adaptive_recall_retry",
+        )
+    except Exception:
+        retry_results = []
+
+    if not retry_results:
+        return {
+            "verdict": INCORRECT,
+            "max_score": eval_out["max_score"],
+            "results": [],
+            "retried": True,
+            "retry_query": retry_query,
+            "original_verdict": INCORRECT,
+        }
+
+    # Step 5: Re-evaluate retry results
+    retry_eval = evaluate_retrieval(retry_results, retry_query)
+
+    if retry_eval["verdict"] == INCORRECT:
+        # Retry still INCORRECT → skip context injection (no context > bad context)
+        return {
+            "verdict": INCORRECT,
+            "max_score": retry_eval["max_score"],
+            "results": [],
+            "retried": True,
+            "retry_query": retry_query,
+            "original_verdict": INCORRECT,
+        }
+
+    # Retry improved the verdict
+    results = retry_eval.get("refined_results") or retry_results
+    return {
+        "verdict": retry_eval["verdict"],
+        "max_score": retry_eval["max_score"],
+        "results": results,
+        "retried": True,
+        "retry_query": retry_query,
+        "original_verdict": INCORRECT,
     }
 
 

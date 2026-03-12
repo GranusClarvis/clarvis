@@ -355,7 +355,7 @@ def find_procedure(task_text: str, threshold: float = 0.8) -> dict | None:
     Args:
         task_text: Description of the task to find a procedure for
         threshold: Maximum cosine distance to accept (lower = stricter match).
-                   Default 0.5. Typical good matches are < 0.3.
+                   Default 0.8 (evolved via parameter_evolution). Typical good matches are < 0.3.
 
     Returns:
         Dict with procedure info (name, steps, success_rate, id) or None
@@ -389,12 +389,9 @@ def find_procedure(task_text: str, threshold: float = 0.8) -> dict | None:
         )
 
     if not results:
-        # Rate: no results = not useful
-        try:
-            from retrieval_quality import tracker
-            tracker.rate_last("procedural_memory", useful=False, reason="no_results")
-        except Exception:
-            pass
+        # No results means ChromaDB returned nothing — don't rate this as
+        # "not useful" because absence of stored procedures isn't a retrieval
+        # failure. Only rate when we actually evaluate a candidate.
         return None
 
     # Pick the closest semantic match (lowest distance)
@@ -408,12 +405,9 @@ def find_procedure(task_text: str, threshold: float = 0.8) -> dict | None:
 
     # Filter by similarity threshold — reject if too dissimilar
     if distance is not None and distance > threshold:
-        # Rate: results found but too dissimilar
-        try:
-            from retrieval_quality import tracker
-            tracker.rate_last("procedural_memory", useful=False, reason=f"too_dissimilar_d={distance:.3f}")
-        except Exception:
-            pass
+        # Don't rate as "not useful" — having no matching procedure for a
+        # novel task is expected, not a retrieval failure. Rating these as
+        # failures inflates false-negative counts and drags down hit_rate.
         return None
 
     meta = best.get("metadata", {})

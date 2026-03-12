@@ -30,7 +30,7 @@ start_import = time.monotonic()
 from attention import attention, get_codelet_competition, get_attention_schema
 
 try:
-    from task_selector import parse_tasks, score_tasks
+    from clarvis.orch.task_selector import parse_tasks, score_tasks
 except ImportError:
     parse_tasks = None
     score_tasks = None
@@ -73,7 +73,7 @@ except ImportError:
     compress_episodes = None
 
 try:
-    from task_router import classify_task
+    from clarvis.orch.router import classify_task
 except ImportError:
     classify_task = None
 
@@ -329,7 +329,7 @@ def run_preflight(dry_run=False):
             import re
             with open(QUEUE_FILE) as f:
                 for line in f:
-                    m = re.match(r'^- \[ \] (.+)$', line.strip())
+                    m = re.match(r'^- \[ \] (.+)$', line)
                     if m:
                         candidates.append({"text": m.group(1), "section": "P1", "salience": 0.0})
                         if len(candidates) >= 10:
@@ -686,23 +686,27 @@ def run_preflight(dry_run=False):
     result["timings"]["world_model"] = round(time.monotonic() - t75, 3)
 
     # === 7.6 CONFIDENCE TIERED ACTIONS: Gate execution by confidence level ===
-    # HIGH (>0.8) → execute autonomously
+    # HIGH (≥0.8)     → execute autonomously
     # MEDIUM (0.5-0.8) → execute with extra validation gate injected into prompt
-    # LOW (<0.5) → skip (defer) — flag for next heartbeat
+    # LOW (0.3-0.5)    → dry-run mode (log what would be done, skip execution)
+    # UNKNOWN (<0.3)   → skip entirely (defer to next heartbeat)
     confidence_for_tier = dyn_conf
     # Factor in world model P(success) if available — average with dynamic confidence
     wm_p = result.get("wm_p_success")
     if wm_p is not None:
         confidence_for_tier = (dyn_conf + wm_p) / 2
 
-    if confidence_for_tier > 0.8:
+    if confidence_for_tier >= 0.8:
         confidence_tier = "HIGH"
         confidence_action = "execute"
     elif confidence_for_tier >= 0.5:
         confidence_tier = "MEDIUM"
         confidence_action = "execute_with_validation"
-    else:
+    elif confidence_for_tier >= 0.3:
         confidence_tier = "LOW"
+        confidence_action = "dry_run"
+    else:
+        confidence_tier = "UNKNOWN"
         confidence_action = "skip"
 
     result["confidence_tier"] = confidence_tier
@@ -711,14 +715,29 @@ def run_preflight(dry_run=False):
     log(f"Confidence tier: {confidence_tier} (combined={confidence_for_tier:.2f}, "
         f"dyn={dyn_conf:.2f}, wm_p={wm_p if wm_p is not None else 'N/A'})")
 
-    # LOW confidence → defer task entirely
-    if confidence_tier == "LOW":
+    # UNKNOWN confidence → defer task entirely (no useful signal)
+    if confidence_tier == "UNKNOWN":
         result["should_defer"] = True
-        result["defer_reason"] = f"low_confidence ({confidence_for_tier:.2f})"
-        log(f"LOW confidence — deferring task: {next_task[:60]}")
+        result["defer_reason"] = f"unknown_confidence ({confidence_for_tier:.2f})"
+        log(f"UNKNOWN confidence — deferring task: {next_task[:60]}")
         try:
             attention.submit(
-                f"TASK DEFERRED (LOW confidence={confidence_for_tier:.2f}): {next_task[:60]}",
+                f"TASK DEFERRED (UNKNOWN confidence={confidence_for_tier:.2f}): {next_task[:60]}",
+                source="heartbeat", importance=0.7)
+        except Exception:
+            pass
+        result["timings"]["total"] = round(time.monotonic() - t0, 3)
+        return result
+
+    # LOW confidence → dry-run mode (gather context but skip actual execution)
+    if confidence_tier == "LOW":
+        result["should_defer"] = True
+        result["defer_reason"] = f"low_confidence_dry_run ({confidence_for_tier:.2f})"
+        result["dry_run"] = True
+        log(f"LOW confidence — dry-run mode for task: {next_task[:60]}")
+        try:
+            attention.submit(
+                f"TASK DRY-RUN (LOW confidence={confidence_for_tier:.2f}): {next_task[:60]}",
                 source="heartbeat", importance=0.6)
         except Exception:
             pass
@@ -799,12 +818,15 @@ def run_preflight(dry_run=False):
         log("Brain bridge SKIPPED — retrieval gate: NO_RETRIEVAL (saving ~7.5s)")
     elif brain_preflight_context:
         try:
-            # Adjust recall depth based on retrieval tier
+            # Adjust recall depth and graph expansion based on retrieval tier
+            _graph_expand = False
             if _rt == "LIGHT_RETRIEVAL":
                 _n_knowledge = 3
             else:  # DEEP_RETRIEVAL
-                _n_knowledge = 10 if (retrieval_tier_info and retrieval_tier_info.graph_expand) else 5
-            brain_ctx = brain_preflight_context(next_task, n_knowledge=_n_knowledge, n_goals=5)
+                _graph_expand = bool(retrieval_tier_info and retrieval_tier_info.graph_expand)
+                _n_knowledge = 10 if _graph_expand else 5
+            brain_ctx = brain_preflight_context(next_task, n_knowledge=_n_knowledge, n_goals=5,
+                                                graph_expand=_graph_expand)
             knowledge_hints = brain_ctx.get("knowledge_hints", "")
             brain_goals = brain_ctx.get("goals_text", "")
             brain_context = brain_ctx.get("context", "")
@@ -845,29 +867,52 @@ def run_preflight(dry_run=False):
     result["brain_goals"] = brain_goals
     result["brain_context"] = brain_context
     result["brain_working_memory"] = brain_working_memory
+    # Extract recalled memory IDs for postflight recall_success tracking (memory evolution)
+    _recalled_ids = []
+    _raw = brain_ctx.get("raw_results", []) if brain_preflight_context and brain_ctx else []
+    if not _raw:
+        _raw = locals().get("learnings", []) or []
+    for _mem in (_raw if isinstance(_raw, list) else []):
+        _mid = _mem.get("id")
+        _mcol = _mem.get("collection")
+        if _mid and _mcol:
+            _recalled_ids.append({"id": _mid, "collection": _mcol})
+    if _recalled_ids:
+        result["recalled_memory_ids"] = _recalled_ids
     result["timings"]["knowledge"] = round(time.monotonic() - t85, 3)
 
-    # === 8.6 RETRIEVAL EVAL: CRAG-style retrieval quality scoring ===
+    # === 8.6 RETRIEVAL EVAL + ADAPTIVE RETRY: CRAG-style scoring with corrective retry ===
     retrieval_verdict = "SKIPPED"
     try:
-        from clarvis.brain.retrieval_eval import evaluate_retrieval
-        # Evaluate the brain recall results if we have raw results
+        from clarvis.brain.retrieval_eval import adaptive_recall
+        from brain import get_brain as _get_brain_for_retry
+        # Gather raw results from brain bridge or legacy path
         eval_results = brain_ctx.get("raw_results", []) if brain_preflight_context and brain_ctx else []
         if not eval_results:
-            # Try legacy path — grab learnings if available
             eval_results = locals().get("learnings", [])
         if eval_results and isinstance(eval_results, list) and len(eval_results) > 0:
-            eval_out = evaluate_retrieval(eval_results, next_task)
-            retrieval_verdict = eval_out["verdict"]
+            b_retry = _get_brain_for_retry()
+            ar_out = adaptive_recall(
+                b_retry, next_task, tier=_rt,
+                original_results=eval_results, n=len(eval_results),
+            )
+            retrieval_verdict = ar_out["verdict"]
             result["retrieval_verdict"] = retrieval_verdict
-            result["retrieval_max_score"] = eval_out["max_score"]
-            result["retrieval_n_above"] = eval_out["n_above_threshold"]
+            result["retrieval_max_score"] = ar_out["max_score"]
+            result["retrieval_retried"] = ar_out["retried"]
+            result["retrieval_original_verdict"] = ar_out["original_verdict"]
+            if ar_out["retry_query"]:
+                result["retrieval_retry_query"] = ar_out["retry_query"]
             log(f"Retrieval eval: {retrieval_verdict} "
-                f"(max={eval_out['max_score']}, above={eval_out['n_above_threshold']}/{eval_out['n_results']})")
-            # If INCORRECT, flag it — no context is better than bad context
+                f"(max={ar_out['max_score']}, retried={ar_out['retried']}, "
+                f"orig={ar_out['original_verdict']})")
+            # If INCORRECT after retry, omit knowledge_hints
             if retrieval_verdict == "INCORRECT":
-                log("Retrieval INCORRECT — knowledge_hints will be omitted from brief")
+                log("Retrieval INCORRECT (even after retry) — knowledge_hints omitted")
                 result["knowledge_hints"] = ""
+            elif ar_out["retried"] and ar_out["results"]:
+                # Retry improved verdict — use retry results for knowledge hints
+                log(f"Adaptive retry improved verdict {ar_out['original_verdict']}→{retrieval_verdict}")
         else:
             result["retrieval_verdict"] = "NO_RESULTS"
     except Exception as e:

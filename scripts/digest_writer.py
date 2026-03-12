@@ -77,9 +77,6 @@ def write_digest(source: str, summary: str):
         source: One of morning/autonomous/evolution/evening/reflection
         summary: First-person summary of what happened (1-5 sentences)
     """
-    state = _load_state()
-    state = _reset_if_new_day(state)
-
     now = datetime.now(timezone.utc)
     timestamp = now.strftime("%H:%M UTC")
     emoji = SECTION_EMOJI.get(source, "📝")
@@ -91,15 +88,25 @@ def write_digest(source: str, summary: str):
 
     entry = f"### {emoji} {source.title()} — {timestamp}\n\n{summary}\n\n---\n\n"
 
-    # Atomic append with file lock
+    # Use a single lock file for both digest and state operations
+    lock_path = DIGEST_FILE + ".lock"
     os.makedirs(os.path.dirname(DIGEST_FILE), exist_ok=True)
-    with open(DIGEST_FILE, "a") as f:
-        fcntl.flock(f, fcntl.LOCK_EX)
-        f.write(entry)
-        fcntl.flock(f, fcntl.LOCK_UN)
+    os.makedirs(os.path.dirname(DIGEST_STATE), exist_ok=True)
+    lock_fd = open(lock_path, "w")
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX)
 
-    state["entries_today"] = state.get("entries_today", 0) + 1
-    _save_state(state)
+        state = _load_state()
+        state = _reset_if_new_day(state)
+
+        with open(DIGEST_FILE, "a") as f:
+            f.write(entry)
+
+        state["entries_today"] = state.get("entries_today", 0) + 1
+        _save_state(state)
+    finally:
+        fcntl.flock(lock_fd, fcntl.LOCK_UN)
+        lock_fd.close()
 
     return {"written": True, "file": DIGEST_FILE, "entries_today": state["entries_today"]}
 

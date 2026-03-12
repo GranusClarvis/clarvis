@@ -29,7 +29,7 @@ except ImportError:
     _HAS_ACTR = False
 
 
-def brain_preflight_context(task_text, n_knowledge=5, n_goals=5):
+def brain_preflight_context(task_text, n_knowledge=5, n_goals=5, graph_expand=False):
     """Gather brain context for a task before execution.
 
     Queries brain for:
@@ -37,6 +37,9 @@ def brain_preflight_context(task_text, n_knowledge=5, n_goals=5):
       2. Current working context
       3. Relevant knowledge from learnings, memories, episodes
       4. Working memory (recent context items)
+
+    Args:
+        graph_expand: If True, expand recall results with 1-hop graph neighbors.
 
     Returns dict with keys: goals_text, context, knowledge_hints, working_memory
     All values are strings safe for prompt injection.
@@ -92,14 +95,22 @@ def brain_preflight_context(task_text, n_knowledge=5, n_goals=5):
             min_importance=0.3,
             attention_boost=True,
             caller="brain_bridge_preflight",
+            graph_expand=graph_expand,
         )
         # MMR reranking: balance relevance with diversity to reduce redundant context
+        # Lambda adapts per task category: code=0.7, research=0.4, maintenance=0.6
         if knowledge and len(knowledge) > 1:
             try:
                 from context_compressor import mmr_rerank
-                knowledge = mmr_rerank(knowledge, task_text, lambda_param=0.5)
+                try:
+                    from clarvis.context.adaptive_mmr import get_adaptive_lambda
+                    _lambda = get_adaptive_lambda(task_text)
+                except ImportError:
+                    _lambda = 0.5
+                knowledge = mmr_rerank(knowledge, task_text, lambda_param=_lambda)
             except Exception:
                 pass  # fall through to unranked results
+        result["raw_results"] = knowledge or []
         if knowledge:
             hints = []
             actr_scores = []
