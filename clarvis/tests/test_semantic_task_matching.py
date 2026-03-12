@@ -379,39 +379,32 @@ class TestFindRelatedTasks:
         for item in result:
             assert len(item) <= 80
 
-    def test_semantic_matching_finds_synonyms(self, tmp_path, monkeypatch):
+    def test_semantic_matching_finds_synonyms(self, tmp_path):
         """Semantic matching should find tasks with different vocabulary but similar meaning."""
-        queue_file = str(tmp_path / "QUEUE.md")
         queue_content = """\
 ## P0
 
 - [ ] Improve vector database query latency
 - [ ] Clean up old log files
 """
-        with open(queue_file, "w") as f:
-            f.write(queue_content)
-
-        # Mock embedding function that maps semantically
+        # Mock embedding function with enough dims to avoid >0.9 filter
         def mock_embed(texts):
             result = []
-            for t in texts:
+            for i, t in enumerate(texts):
                 tl = t.lower()
                 v = [
-                    1.0 if any(kw in tl for kw in ["vector", "database", "query", "brain", "search", "retrieval", "speed"]) else 0.1,
-                    1.0 if any(kw in tl for kw in ["log", "clean", "old", "file"]) else 0.1,
-                    0.5,
+                    0.8 if any(kw in tl for kw in ["vector", "database", "query", "brain", "search", "retrieval", "speed"]) else 0.1,
+                    0.8 if any(kw in tl for kw in ["log", "clean", "old", "file"]) else 0.1,
+                    0.3 if "improve" in tl or "optimize" in tl else 0.15,
+                    0.2 + 0.02 * i,  # unique offset
                 ]
                 result.append(v)
             return result
 
-        import clarvis.context.assembly as asm
-        monkeypatch.setattr(asm, "find_related_tasks", lambda *a, **kw: None)
-
-        # Directly test that semantic ranking finds the right task
         parsed = _parse_queue_tasks(queue_content)
         scored = _semantic_rank("brain search speed optimization", parsed, mock_embed)
-        if scored:
-            assert "vector database" in scored[0][1].lower()
+        assert len(scored) > 0
+        assert "vector database" in scored[0][1].lower()
 
     def test_priority_filtering_prefers_p0(self, tmp_path, monkeypatch):
         """P0 tasks should outrank P2 tasks with equal semantic similarity."""
