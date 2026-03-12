@@ -1298,3 +1298,11 @@ I executed evolution task: "[RETRIEVAL_GATE_TESTS] Add unit tests for `clarvis/b
 **Tests:** 313 passing in 9.06s (was timeout)
 
 **Commit:** 2b31035 — Pushed ✅
+
+### ⚡ MMR Rate Limiting — 22:40 UTC
+**Implementation:** Skip mmr_update_lambdas() when:
+- Task was NO_RETRIEVAL (no useful signal)
+- Fewer than 10 new episodes since last update
+
+**Impact:** Saves unnecessary I/O on 12x/day postflight runs.
+**Commit:** 45662a4 ✅

@@ -8,10 +8,13 @@ and creates synthesized insights about non-obvious relationships.
 
 import sys
 import os
+import logging
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from brain import brain, ALL_COLLECTIONS
 from collections import defaultdict
 import re
+
+logger = logging.getLogger(__name__)
 
 # Stopwords to ignore in keyword extraction
 STOPWORDS = {
@@ -37,7 +40,11 @@ def load_all_memories() -> list:
     """Load all memories from all collections with collection labels."""
     all_memories = []
     for coll in ALL_COLLECTIONS:
-        memories = brain.get(coll, n=200)
+        try:
+            memories = brain.get(coll, n=200)
+        except Exception as e:
+            logger.error("Failed to load collection '%s': %s", coll, e)
+            continue
         for mem in memories:
             mem['collection'] = coll
             all_memories.append(mem)
@@ -104,7 +111,11 @@ def find_semantic_bridges(top_n: int = 5) -> list:
     key_collections = ['clarvis-learnings', 'clarvis-procedures', 'clarvis-goals', 'clarvis-memories']
 
     for source_coll in key_collections:
-        source_memories = brain.get(source_coll, n=10)
+        try:
+            source_memories = brain.get(source_coll, n=10)
+        except Exception as e:
+            logger.error("Failed to get memories from '%s': %s", source_coll, e)
+            continue
         for mem in source_memories[:5]:  # Top 5 from each collection
             doc = mem.get('document', '')
             if len(doc) < 20:
@@ -112,7 +123,11 @@ def find_semantic_bridges(top_n: int = 5) -> list:
 
             # Search other collections for semantic matches
             target_colls = [c for c in key_collections if c != source_coll]
-            results = brain.recall(doc, collections=target_colls, n=3)
+            try:
+                results = brain.recall(doc, collections=target_colls, n=3)
+            except Exception as e:
+                logger.error("Semantic recall failed for '%s': %s", doc[:40], e)
+                continue
 
             for r in results:
                 if r.get('collection') != source_coll:
@@ -138,13 +153,20 @@ def find_semantic_bridges(top_n: int = 5) -> list:
 
 
 def create_synthesis(summary: str, connected_memories: list):
-    """Store a synthesized insight and link related memories."""
-    mem_id = brain.store(
-        f"Cross-domain insight: {summary}",
-        collection='clarvis-learnings',
-        importance=0.8,
-        tags=['synthesis', 'cross-domain', 'insight']
-    )
+    """Store a synthesized insight and link related memories.
+
+    Returns mem_id on success, None on failure.
+    """
+    try:
+        mem_id = brain.store(
+            f"Cross-domain insight: {summary}",
+            collection='clarvis-learnings',
+            importance=0.8,
+            tags=['synthesis', 'cross-domain', 'insight']
+        )
+    except Exception as e:
+        logger.error("Failed to store synthesis '%s': %s", summary[:60], e)
+        return None
 
     # Create relationships between connected memories
     if len(connected_memories) >= 2:
@@ -157,7 +179,7 @@ def create_synthesis(summary: str, connected_memories: list):
                         relationship_type='synthesized_with'
                     )
         except Exception as e:
-            print(f"  Relationship creation note: {e}")
+            logger.warning("Relationship creation note: %s", e)
 
     return mem_id
 
@@ -181,6 +203,7 @@ def run_synthesis_cycle():
     stored = 0
 
     # Store top keyword connections
+    failed = 0
     for conn in connections[:5]:
         concept = conn['concept']
         colls = ', '.join(c.replace('clarvis-', '') for c in conn['collections'])
@@ -190,8 +213,11 @@ def run_synthesis_cycle():
             f"({colls}), connecting {conn['total_memories']} memories"
         )
         print(f"  [keyword] {summary}")
-        create_synthesis(summary, mem_ids)
-        stored += 1
+        result = create_synthesis(summary, mem_ids)
+        if result is not None:
+            stored += 1
+        else:
+            failed += 1
 
     # Store top semantic bridges
     for bridge in bridges[:3]:
@@ -203,11 +229,16 @@ def run_synthesis_cycle():
             f"'{bridge['target_snippet'][:50]}...'"
         )
         print(f"  [semantic] {summary}")
-        create_synthesis(summary, [bridge['source_id'], bridge['target_id']])
-        stored += 1
+        result = create_synthesis(summary, [bridge['source_id'], bridge['target_id']])
+        if result is not None:
+            stored += 1
+        else:
+            failed += 1
 
-    print(f"\nStored {stored} synthesized insights total")
-    return {'keyword_connections': connections[:10], 'semantic_bridges': bridges[:5], 'stored': stored}
+    if failed:
+        logger.warning("Synthesis pipeline: %d/%d insights failed to store", failed, failed + stored)
+    print(f"\nStored {stored} synthesized insights total ({failed} failed)")
+    return {'keyword_connections': connections[:10], 'semantic_bridges': bridges[:5], 'stored': stored, 'failed': failed}
 
 
 if __name__ == "__main__":

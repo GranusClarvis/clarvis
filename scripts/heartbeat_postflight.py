@@ -907,6 +907,30 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
                         syntax_errors.append(f"{relpath}:{se.lineno}: {se.msg}")
 
             total_files = syntax_ok + syntax_fail
+            syntax_ratio = syntax_ok / total_files if total_files > 0 else 1.0
+
+            # === Quality score: 0.0-1.0 composite beyond binary success/fail ===
+            # Weights: completion 0.30, syntax 0.25, output_cleanliness 0.25, efficiency 0.20
+            q_completion = 1.0 if exit_code == 0 else (0.3 if exit_code == 124 else 0.0)
+            q_syntax = syntax_ratio
+            # Output cleanliness: penalize tracebacks, errors, warnings in output
+            _out_lower = output_text.lower() if output_text else ""
+            _traceback_count = _out_lower.count("traceback (most recent")
+            _error_count = _out_lower.count("error:") + _out_lower.count("error ")
+            q_output = max(0.0, 1.0 - (_traceback_count * 0.3) - (min(_error_count, 5) * 0.1))
+            # Efficiency: reasonable duration (penalize >900s, bonus for <300s)
+            if task_duration <= 0:
+                q_efficiency = 0.5
+            elif task_duration < 300:
+                q_efficiency = 1.0
+            elif task_duration < 900:
+                q_efficiency = 0.8
+            else:
+                q_efficiency = max(0.2, 1.0 - (task_duration - 900) / 1800)
+            quality_score = round(
+                0.30 * q_completion + 0.25 * q_syntax + 0.25 * q_output + 0.20 * q_efficiency, 3
+            )
+
             outcome_entry = {
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "task": task[:200],
@@ -916,9 +940,16 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
                 "syntax_ok": syntax_ok,
                 "syntax_fail": syntax_fail,
                 "syntax_errors": syntax_errors[:5],
-                "syntax_ratio": syntax_ok / total_files if total_files > 0 else 1.0,
+                "syntax_ratio": syntax_ratio,
                 "exit_code": exit_code,
                 "duration_s": task_duration,
+                "quality_score": quality_score,
+                "quality_breakdown": {
+                    "completion": round(q_completion, 2),
+                    "syntax": round(q_syntax, 2),
+                    "output_cleanliness": round(q_output, 2),
+                    "efficiency": round(q_efficiency, 2),
+                },
             }
 
             # Append to outcomes JSONL
@@ -929,7 +960,7 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
 
             log(f"Code-gen outcome: {len(changed_py)} files, "
                 f"syntax={syntax_ok}/{total_files} clean, "
-                f"task={task_status}")
+                f"quality={quality_score:.2f}, task={task_status}")
         else:
             log("Code-gen outcome: no .py changes detected")
     except Exception as e:

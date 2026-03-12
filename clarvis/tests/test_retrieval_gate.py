@@ -230,16 +230,23 @@ class TestLightRetrieval:
 # ---------------------------------------------------------------------------
 
 class TestPriorityOrdering:
-    """NO_RETRIEVAL check runs before DEEP, so maintenance + deep signals → NO_RETRIEVAL."""
+    """Tag-based NO_RETRIEVAL is authoritative; keyword conflicts escalate to LIGHT."""
 
     def test_maintenance_tag_overrides_deep_keywords(self):
-        # Has BACKUP tag (NO_RETRIEVAL) AND "research" keyword (DEEP)
+        # Tag is authoritative — [BACKUP] tag wins even with "research" keyword
         result = classify_retrieval("[BACKUP] Research-related backup task")
         assert result.tier == "NO_RETRIEVAL"
+        assert "maintenance tag:" in result.reason
 
-    def test_maintenance_keyword_overrides_deep(self):
-        # "cleanup" triggers NO_RETRIEVAL before "design" triggers DEEP
+    def test_maintenance_keyword_plus_deep_keyword_escalates(self):
+        # Keyword conflict: "cleanup" (NO) + "research"/"design" (DEEP) → LIGHT
         result = classify_retrieval("Cleanup old research design docs")
+        assert result.tier == "LIGHT_RETRIEVAL"
+        assert "conflict:" in result.reason
+
+    def test_pure_maintenance_keyword_no_deep(self):
+        # No deep signal → still NO_RETRIEVAL
+        result = classify_retrieval("Cleanup old temp files from /tmp")
         assert result.tier == "NO_RETRIEVAL"
 
 
@@ -292,6 +299,134 @@ class TestEdgeCases:
         # but "research" IS a deep keyword pattern
         assert result.tier == "DEEP_RETRIEVAL"
         assert "deep keyword:" in result.reason  # keyword path, not tag path
+
+
+# ---------------------------------------------------------------------------
+# Conflict resolution: maintenance keyword + deep signal → LIGHT
+# ---------------------------------------------------------------------------
+
+class TestConflictResolution:
+    """When maintenance keywords co-occur with deep signals, escalate to LIGHT."""
+
+    @pytest.mark.parametrize("task", [
+        "Research why the health_monitor is failing",
+        "Investigate health check failures in production",
+        "Analyze the backup failure root cause",
+        "Design a format for the API response",
+        "Investigate why cleanup is timing out",
+        "Research the dream_engine architecture for redesign",
+        "Diagnose the watchdog false alarms",
+    ])
+    def test_maintenance_keyword_with_deep_signal_escalates(self, task):
+        result = classify_retrieval(task)
+        assert result.tier == "LIGHT_RETRIEVAL", (
+            f"Expected LIGHT (conflict resolution) for: {task}, got {result.tier}: {result.reason}"
+        )
+        assert "conflict:" in result.reason
+
+    @pytest.mark.parametrize("task", [
+        "Run backup for today's data",
+        "Execute health_monitor checks",
+        "Run shellcheck on scripts",
+        "cleanup old temp files",
+        "vacuum the chromadb collections",
+    ])
+    def test_pure_maintenance_stays_no_retrieval(self, task):
+        """Maintenance keyword WITHOUT deep signal → NO_RETRIEVAL (unchanged)."""
+        result = classify_retrieval(task)
+        assert result.tier == "NO_RETRIEVAL", (
+            f"Expected NO_RETRIEVAL for pure maintenance: {task}, got {result.tier}"
+        )
+
+    def test_tag_overrides_even_with_deep_keywords(self):
+        """Tag-based NO_RETRIEVAL is authoritative, even with deep keywords."""
+        result = classify_retrieval("[BACKUP] Research and analyze backup strategy")
+        assert result.tier == "NO_RETRIEVAL"
+        assert "maintenance tag:" in result.reason
+
+
+# ---------------------------------------------------------------------------
+# Adversarial / ambiguous inputs
+# ---------------------------------------------------------------------------
+
+class TestAdversarialInputs:
+    """Adversarial and tricky inputs that could confuse the classifier."""
+
+    def test_all_keywords_mixed(self):
+        """Task with both maintenance AND deep keywords everywhere."""
+        task = "Research backup strategy, design cleanup plan, investigate lint audit"
+        result = classify_retrieval(task)
+        # "backup" matches NO, but "research"+"design"+"investigate"+"audit" are DEEP
+        assert result.tier == "LIGHT_RETRIEVAL"
+        assert "conflict:" in result.reason
+
+    def test_maintenance_keyword_in_quotes(self):
+        """Keyword inside quoted string should still match (regex doesn't know quotes)."""
+        result = classify_retrieval('Fix the error message: "backup failed"')
+        assert result.tier == "NO_RETRIEVAL"
+
+    def test_keyword_as_variable_name(self):
+        """Keyword that's actually a variable name in code context."""
+        result = classify_retrieval("Rename the `format` variable to `formatter`")
+        assert result.tier == "NO_RETRIEVAL"  # "format" matches
+
+    def test_negated_keyword(self):
+        """'no backup needed' still matches 'backup' — regex can't parse negation."""
+        result = classify_retrieval("This task needs no backup at all")
+        assert result.tier == "NO_RETRIEVAL"  # known limitation
+
+    def test_tag_case_sensitivity(self):
+        """Tags must be uppercase; lowercase tag falls through to keyword matching."""
+        result = classify_retrieval("[backup] run the backup")
+        # [backup] is lowercase → _extract_tag returns None
+        # but "backup" keyword still matches
+        assert result.tier == "NO_RETRIEVAL"
+        assert "maintenance keyword:" in result.reason
+
+    def test_multiple_tags_only_first_extracted(self):
+        """Only the first [TAG] is extracted."""
+        result = classify_retrieval("[RESEARCH_DISCOVERY] [BACKUP] mixed signals")
+        assert result.tier == "DEEP_RETRIEVAL"
+        assert "research/design tag:" in result.reason
+
+    def test_tag_in_middle_of_text_ignored(self):
+        """Tags only match at start of text (after stripping)."""
+        result = classify_retrieval("Fix the [BACKUP] related issue")
+        # No tag extracted (not at start), "backup" keyword matches but
+        # no deep signals → NO_RETRIEVAL
+        assert result.tier == "NO_RETRIEVAL"
+
+    def test_empty_tag_brackets(self):
+        """Empty brackets should not extract a tag."""
+        result = classify_retrieval("[] Fix something")
+        assert result.tier == "LIGHT_RETRIEVAL"
+
+    def test_regex_special_chars_in_input(self):
+        """Input with regex metacharacters should not cause errors."""
+        result = classify_retrieval("Fix regex: (foo|bar)+ [a-z]* (?:test)")
+        assert result.tier == "LIGHT_RETRIEVAL"
+
+    def test_very_short_ambiguous(self):
+        """Single ambiguous word."""
+        result = classify_retrieval("plan")
+        assert result.tier == "DEEP_RETRIEVAL"
+        assert "deep keyword: plan" in result.reason
+
+    def test_why_question_is_deep(self):
+        """'why' triggers investigation/deep retrieval."""
+        result = classify_retrieval("Why does the test fail?")
+        assert result.tier == "DEEP_RETRIEVAL"
+
+    def test_audit_without_maintenance_context(self):
+        """'audit' alone triggers DEEP, not NO_RETRIEVAL."""
+        result = classify_retrieval("Audit the API permissions model")
+        assert result.tier == "DEEP_RETRIEVAL"
+
+    def test_shellcheck_audit_conflict(self):
+        """'shellcheck' (NO) + 'audit' (DEEP) → conflict → LIGHT."""
+        result = classify_retrieval("Run shellcheck audit on all scripts")
+        assert result.tier == "LIGHT_RETRIEVAL"
+        assert "conflict:" in result.reason
 
 
 # ---------------------------------------------------------------------------

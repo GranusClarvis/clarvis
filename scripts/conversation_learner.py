@@ -20,10 +20,13 @@ Usage:
 import sys
 import os
 import re
+import logging
 from collections import Counter
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from brain import brain, AUTONOMOUS_LEARNING
+
+logger = logging.getLogger(__name__)
 
 
 # === Pattern extraction regexes ===
@@ -391,16 +394,21 @@ def synthesize_insights(patterns: dict) -> list:
 def store_insights(insights: list, dry_run: bool = False) -> int:
     """Store structured insights in brain with collection='autonomous-learning'."""
     stored = 0
+    failed = 0
 
     # Check for existing autonomous-learning entries to avoid duplicates
-    existing = brain.get(AUTONOMOUS_LEARNING, n=200)
     existing_texts = set()
-    for e in existing:
-        doc = e.get('document', '')
-        # Strip examples suffix before dedup
-        doc_core = doc.split(' | Examples:')[0]
-        norm = re.sub(r'\s+', ' ', doc_core.lower().strip())[:80]
-        existing_texts.add(norm)
+    try:
+        existing = brain.get(AUTONOMOUS_LEARNING, n=200)
+        for e in existing:
+            doc = e.get('document', '')
+            # Strip examples suffix before dedup
+            doc_core = doc.split(' | Examples:')[0]
+            norm = re.sub(r'\s+', ' ', doc_core.lower().strip())[:80]
+            existing_texts.add(norm)
+    except Exception as e:
+        logger.error("Failed to load existing learnings for dedup: %s", e)
+        # Continue without dedup — better to store duplicates than lose insights
 
     for insight in insights:
         text = f"[{insight['type']}] {insight['insight']}"
@@ -421,17 +429,23 @@ def store_insights(insights: list, dry_run: bool = False) -> int:
             print(f"  [DRY RUN] Would store (imp={importance:.1f}): {text[:120]}...")
             stored += 1
         else:
-            mem_id = brain.store(
-                text,
-                collection=AUTONOMOUS_LEARNING,
-                importance=importance,
-                tags=tags,
-                source='conversation_learner',
-            )
-            print(f"  Stored ({mem_id}): {text[:100]}...")
-            stored += 1
-            existing_texts.add(normalized)
+            try:
+                mem_id = brain.store(
+                    text,
+                    collection=AUTONOMOUS_LEARNING,
+                    importance=importance,
+                    tags=tags,
+                    source='conversation_learner',
+                )
+                print(f"  Stored ({mem_id}): {text[:100]}...")
+                stored += 1
+                existing_texts.add(normalized)
+            except Exception as e:
+                logger.error("Failed to store insight: %s — %s", text[:80], e)
+                failed += 1
 
+    if failed:
+        logger.warning("Learning pipeline: %d/%d insights failed to store", failed, failed + stored)
     return stored
 
 
@@ -506,7 +520,11 @@ def run(dry_run=False, report_only=False):
 
     # Store
     print_report(patterns, insights)
-    stored = store_insights(insights, dry_run=dry_run)
+    try:
+        stored = store_insights(insights, dry_run=dry_run)
+    except Exception as e:
+        logger.error("store_insights crashed: %s", e)
+        stored = 0
     print(f"\n{'[DRY RUN] Would store' if dry_run else 'Stored'} {stored} new insights to brain (collection=autonomous-learning)")
 
     return {'stored': stored, 'insights': len(insights)}

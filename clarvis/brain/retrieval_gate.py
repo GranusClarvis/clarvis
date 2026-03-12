@@ -107,22 +107,22 @@ def classify_retrieval(task_text: str) -> RetrievalTier:
 
     tag = _extract_tag(task_text)
 
-    # 1. Check NO_RETRIEVAL first (maintenance/cron tasks)
+    # 1. Tag-based NO_RETRIEVAL (authoritative — tags are explicit intent)
     if tag and tag in _NO_RETRIEVAL_TAGS:
         return RetrievalTier(
             tier="NO_RETRIEVAL",
             reason=f"maintenance tag: {tag}",
         )
 
+    # 2. Keyword-based NO_RETRIEVAL (check but don't return yet — may conflict)
+    no_retrieval_match = None
     for pat in _NO_RETRIEVAL_PATTERNS:
         m = pat.search(task_text)
         if m:
-            return RetrievalTier(
-                tier="NO_RETRIEVAL",
-                reason=f"maintenance keyword: {m.group(0)}",
-            )
+            no_retrieval_match = m.group(0)
+            break
 
-    # 2. Check DEEP_RETRIEVAL (research/design/investigation)
+    # 3. Tag-based DEEP_RETRIEVAL (authoritative)
     if tag and tag in _DEEP_RETRIEVAL_TAGS:
         return RetrievalTier(
             tier="DEEP_RETRIEVAL",
@@ -132,6 +132,7 @@ def classify_retrieval(task_text: str) -> RetrievalTier:
             graph_expand=True,
         )
 
+    # 4. Count deep keyword matches
     deep_matches = 0
     deep_reason = ""
     for pat in _DEEP_RETRIEVAL_PATTERNS:
@@ -141,6 +142,22 @@ def classify_retrieval(task_text: str) -> RetrievalTier:
             if not deep_reason:
                 deep_reason = m.group(0)
 
+    # 5. Resolve conflicts: maintenance keyword + deep signal → LIGHT (don't skip)
+    if no_retrieval_match:
+        if deep_matches > 0:
+            return RetrievalTier(
+                tier="LIGHT_RETRIEVAL",
+                reason=f"conflict: maintenance '{no_retrieval_match}' + deep '{deep_reason}'",
+                collections=_LIGHT_COLLECTIONS,
+                n_results=3,
+                graph_expand=False,
+            )
+        return RetrievalTier(
+            tier="NO_RETRIEVAL",
+            reason=f"maintenance keyword: {no_retrieval_match}",
+        )
+
+    # 6. Deep retrieval
     if deep_matches >= 2:
         return RetrievalTier(
             tier="DEEP_RETRIEVAL",
@@ -160,7 +177,7 @@ def classify_retrieval(task_text: str) -> RetrievalTier:
             graph_expand=False,
         )
 
-    # 3. Default: LIGHT_RETRIEVAL (scoped implementation, wiring, fixes)
+    # 7. Default: LIGHT_RETRIEVAL (scoped implementation, wiring, fixes)
     return RetrievalTier(
         tier="LIGHT_RETRIEVAL",
         reason="default: scoped implementation",
