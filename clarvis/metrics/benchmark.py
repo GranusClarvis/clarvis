@@ -10,32 +10,39 @@ Migrated from scripts/performance_benchmark.py (Phase 5 spine refactor).
 """
 
 # === TARGETS (measurable thresholds) ===
-# Weights emphasize intelligence, not just performance.
-# Speed is secondary — smarter connections, better retrieval, higher accuracy.
+# REVISED 2026-03-13: Honest scoring based on audit findings.
+# Previous targets were too soft (e.g., 8000ms when actual 740ms).
+# New targets are realistic based on current performance + 20% headroom.
 TARGETS = {
     # Dimension 1: Brain Query Speed
-    "brain_query_avg_ms":   {"target": 8000.0, "direction": "lower",  "label": "Brain Query Avg (ms)",    "weight": 0.08, "critical": 12000.0},
-    "brain_query_p95_ms":   {"target": 9000.0, "direction": "lower",  "label": "Brain Query P95 (ms)",    "weight": 0.05, "critical": 14000.0},
+    # Honesty: Actual ~740ms, target should be challenging but achievable
+    "brain_query_avg_ms":   {"target": 800.0,  "direction": "lower",  "label": "Brain Query Avg (ms)",    "weight": 0.08, "critical": 2000.0},
+    "brain_query_p95_ms":   {"target": 1500.0, "direction": "lower",  "label": "Brain Query P95 (ms)",    "weight": 0.05, "critical": 3000.0},
     # Dimension 2: Semantic Retrieval — CORE QUALITY
-    "retrieval_hit_rate":   {"target": 0.80,  "direction": "higher",  "label": "Retrieval Hit Rate",      "weight": 0.18, "critical": 0.40},
-    "retrieval_precision3": {"target": 0.60,  "direction": "higher",  "label": "Precision@3",             "weight": 0.08, "critical": 0.25},
+    # Increased benchmark from 20 to 50+ queries for statistical significance
+    "retrieval_hit_rate":   {"target": 0.85,  "direction": "higher",  "label": "Retrieval Hit Rate",      "weight": 0.15, "critical": 0.50},
+    "retrieval_precision3": {"target": 0.70,  "direction": "higher",  "label": "Precision@3",             "weight": 0.08, "critical": 0.30},
     # Dimension 3: Efficiency (tracked, not primary focus)
-    "avg_tokens_per_op":    {"target": None,   "direction": "monitor", "label": "Avg Tokens/Operation",    "weight": 0.00},
-    "heartbeat_overhead_s": {"target": 15.0,  "direction": "lower",   "label": "Heartbeat Overhead (s)",  "weight": 0.03, "critical": 30.0},
+    "avg_tokens_per_op":    {"target": 15000, "direction": "lower",  "label": "Avg Tokens/Operation",    "weight": 0.02, "critical": 30000},
+    "heartbeat_overhead_s": {"target": 12.0,  "direction": "lower",   "label": "Heartbeat Overhead (s)",  "weight": 0.03, "critical": 30.0},
     # Dimension 4: Accuracy — CORE QUALITY
-    "episode_success_rate": {"target": 0.70,  "direction": "higher",  "label": "Episode Success Rate",    "weight": 0.18, "critical": 0.35},
-    "action_accuracy":      {"target": 0.80,  "direction": "higher",  "label": "Action Accuracy",         "weight": 0.08, "critical": 0.45},
+    "episode_success_rate": {"target": 0.85,  "direction": "higher",  "label": "Episode Success Rate",    "weight": 0.15, "critical": 0.50},
+    "action_accuracy":      {"target": 0.90,  "direction": "higher",  "label": "Action Accuracy",         "weight": 0.08, "critical": 0.60},
     # Dimension 5: Results Quality / Intelligence — CORE QUALITY
-    "phi":                  {"target": 0.50,  "direction": "higher",  "label": "Phi (Integration)",       "weight": 0.12, "critical": 0.20},
-    "context_relevance":    {"target": 0.70,  "direction": "higher",  "label": "Context Relevance",       "weight": 0.08, "critical": 0.35},
+    "phi":                  {"target": 0.70,  "direction": "higher",  "label": "Phi (Integration)",       "weight": 0.10, "critical": 0.30},
+    "context_relevance":    {"target": 0.75,  "direction": "higher",  "label": "Context Relevance",       "weight": 0.08, "critical": 0.40},
+    # NEW: Quality dimension (beyond binary success)
+    "task_quality_score":   {"target": 0.70,  "direction": "higher",  "label": "Task Quality Score",      "weight": 0.08, "critical": 0.40},
+    # NEW: Code generation quality
+    "code_quality_score":   {"target": 0.75,  "direction": "higher",  "label": "Code Generation Quality", "weight": 0.05, "critical": 0.45},
     # Dimension 6: Brain Health
-    "graph_density":        {"target": 1.0,   "direction": "higher",  "label": "Graph Density (edges/mem)","weight": 0.05, "critical": 0.2},
+    "graph_density":        {"target": 1.5,   "direction": "higher",  "label": "Graph Density (edges/mem)","weight": 0.03, "critical": 0.3},
     "brain_total_memories": {"target": None,   "direction": "monitor", "label": "Brain Size (memories)",    "weight": 0.00},
-    "bloat_score":          {"target": 0.50,  "direction": "lower",   "label": "Bloat Score",             "weight": 0.02, "critical": 0.80},
+    "bloat_score":          {"target": 0.40,  "direction": "lower",   "label": "Bloat Score",             "weight": 0.02, "critical": 0.70},
     # Dimension 7: Context/Prompt Quality
-    "brief_compression":    {"target": 0.50,  "direction": "higher",  "label": "Brief Compression Ratio", "weight": 0.02, "critical": 0.15},
+    "brief_compression":    {"target": 0.55,  "direction": "higher",  "label": "Brief Compression Ratio", "weight": 0.02, "critical": 0.20},
     # Dimension 8: Load Scaling
-    "load_degradation_pct": {"target": 20.0,  "direction": "lower",   "label": "Load Degradation (%)",    "weight": 0.02, "critical": 70.0},
+    "load_degradation_pct": {"target": 15.0,  "direction": "lower",   "label": "Load Degradation (%)",    "weight": 0.02, "critical": 60.0},
 }
 
 

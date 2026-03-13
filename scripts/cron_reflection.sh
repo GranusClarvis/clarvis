@@ -89,6 +89,12 @@ run_step "absolute_zero" python3 /home/agent/.openclaw/workspace/scripts/absolut
 # Step 6.95: Causal Analysis (Pearl SCM)
 run_step "causal_model" python3 /home/agent/.openclaw/workspace/scripts/causal_model.py analyze
 
+# Step 6.97: Research-to-Queue bridge (monthly — 1st of month only)
+DAY_OF_MONTH=$(date +%d)
+if [ "$DAY_OF_MONTH" = "01" ]; then
+    run_step "research_bridge" python3 /home/agent/.openclaw/workspace/scripts/research_to_queue.py inject --max 3
+fi
+
 # Step 7: Session close — save attention state and working memory for next session — CRITICAL
 run_step "session_close" python3 /home/agent/.openclaw/workspace/scripts/session_hook.py close
 

@@ -204,6 +204,12 @@ except ImportError:
     classify_mmr_category = None
     mmr_update_lambdas = None
 
+try:
+    from clarvis.metrics.code_validation import validate_python_file as cv_validate_file, validate_output as cv_validate_output
+except ImportError:
+    cv_validate_file = None
+    cv_validate_output = None
+
 # Cost tracking
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'packages', 'clarvis-cost'))
 try:
@@ -942,6 +948,16 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
             _error_count = _out_lower.count("error:") + _out_lower.count("error ")
             q_output = max(0.0, 1.0 - (_traceback_count * 0.3) - (min(_error_count, 5) * 0.1))
             # Efficiency: reasonable duration (penalize >900s, bonus for <300s)
+            # Progress-aware: if checkpoints show steady progress, reduce duration penalty
+            progress_data = {}
+            try:
+                _progress_file = output_file + ".progress.json"
+                if os.path.exists(_progress_file):
+                    with open(_progress_file) as _pf:
+                        progress_data = json.load(_pf)
+            except (OSError, json.JSONDecodeError):
+                pass
+
             if task_duration <= 0:
                 q_efficiency = 0.5
             elif task_duration < 300:
@@ -950,6 +966,10 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
                 q_efficiency = 0.8
             else:
                 q_efficiency = max(0.2, 1.0 - (task_duration - 900) / 1800)
+                # Checkpoint bonus: steady progress mitigates duration penalty
+                cp_score = progress_data.get("progress_score", 0.0)
+                if cp_score > 0.4:
+                    q_efficiency = min(0.8, q_efficiency + cp_score * 0.3)
             quality_score = round(
                 0.30 * q_completion + 0.25 * q_syntax + 0.25 * q_output + 0.20 * q_efficiency, 3
             )
@@ -974,6 +994,9 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
                     "efficiency": round(q_efficiency, 2),
                 },
             }
+            if progress_data:
+                outcome_entry["progress_checkpoints"] = progress_data.get("checkpoints", 0)
+                outcome_entry["progress_score"] = progress_data.get("progress_score", 0.0)
 
             # Append to outcomes JSONL
             outcomes_file = os.path.join(ws, "data", "code_gen_outcomes.jsonl")
@@ -990,6 +1013,130 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
         log(f"Code-gen outcome recording failed: {e}")
         _pf_errors.append("code_gen_outcome")
     timings["code_gen_outcome"] = round(time.monotonic() - t742, 3)
+
+    # === 7.43 CODE VALIDATION GATE: Self-repair feedback loop (Self-Refine pattern) ===
+    t743 = time.monotonic()
+    if cv_validate_output or cv_validate_file:
+        try:
+            cv_file_errors = []
+            cv_output_result = None
+
+            # 1. Validate execution output for runtime/test errors
+            if cv_validate_output and output_text:
+                cv_output_result = cv_validate_output(output_text, task)
+
+            # 2. Validate changed Python files for syntax/structural issues
+            if cv_validate_file:
+                import subprocess
+                ws = "/home/agent/.openclaw/workspace"
+                _cvd1 = subprocess.run(
+                    ["git", "diff", "--name-only", "--diff-filter=ACMR", "HEAD~1", "HEAD", "--", "*.py"],
+                    capture_output=True, text=True, timeout=10, cwd=ws
+                )
+                _cvd2 = subprocess.run(
+                    ["git", "diff", "--name-only", "--diff-filter=ACMR", "--", "*.py"],
+                    capture_output=True, text=True, timeout=10, cwd=ws
+                )
+                _cv_changed = set()
+                for _cvline in (_cvd1.stdout + "\n" + _cvd2.stdout).strip().split("\n"):
+                    _cvline = _cvline.strip()
+                    if _cvline.endswith(".py"):
+                        _cv_changed.add(_cvline)
+
+                for relpath in sorted(_cv_changed)[:10]:
+                    fpath = os.path.join(ws, relpath)
+                    if os.path.exists(fpath):
+                        fv = cv_validate_file(fpath)
+                        if not fv["valid"]:
+                            cv_file_errors.append({
+                                "file": relpath,
+                                "errors": fv["errors"][:3],
+                                "refinement": fv["refinement"],
+                            })
+
+            has_output_errs = cv_output_result and cv_output_result.get("has_errors", False)
+            has_file_errs = len(cv_file_errors) > 0
+
+            if has_output_errs or has_file_errs:
+                # Build refinement prompt (Self-Refine pattern from research)
+                refinement_parts = []
+                if has_output_errs:
+                    refinement_parts.append(cv_output_result["refinement"])
+                for fe in cv_file_errors[:3]:
+                    refinement_parts.append(f"File {fe['file']}: {fe['refinement']}")
+                refinement_prompt = "CODE VALIDATION ERRORS:\n" + "\n".join(refinement_parts)
+
+                log(f"CODE VALIDATION: {len(cv_file_errors)} file(s) with issues, "
+                    f"output_errors={has_output_errs}")
+
+                # Record validation failure in episode
+                if EpisodicMemory:
+                    try:
+                        em_cv = EpisodicMemory()
+                        if em_cv.episodes:
+                            latest = em_cv.episodes[-1]
+                            if latest.get("task", "")[:60] == task[:60]:
+                                latest.setdefault("tags", []).append("code_validation:fail")
+                                latest["code_validation"] = {
+                                    "passed": False,
+                                    "file_errors": len(cv_file_errors),
+                                    "output_errors": has_output_errs,
+                                    "refinement": refinement_prompt[:300],
+                                }
+                                em_cv._save()
+                    except Exception:
+                        pass
+
+                # Persist validation outcome
+                cv_entry = {
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "task": task[:200],
+                    "validation_passed": False,
+                    "file_errors": len(cv_file_errors),
+                    "output_errors": has_output_errs,
+                    "refinement_prompt": refinement_prompt[:500],
+                }
+                cv_outcomes_file = os.path.join(
+                    "/home/agent/.openclaw/workspace", "data", "code_validation_outcomes.jsonl"
+                )
+                os.makedirs(os.path.dirname(cv_outcomes_file), exist_ok=True)
+                with open(cv_outcomes_file, "a") as cvf:
+                    cvf.write(json.dumps(cv_entry) + "\n")
+
+                # === FEEDBACK LOOP: Auto-inject P1 fix task when >3 validation errors ===
+                total_cv_errors = sum(len(fe["errors"]) for fe in cv_file_errors)
+                if has_output_errs and cv_output_result:
+                    total_cv_errors += len(cv_output_result.get("errors", []))
+                if total_cv_errors > 3:
+                    try:
+                        from queue_writer import add_task as _cv_add_task
+                        affected_files = ", ".join(fe["file"] for fe in cv_file_errors[:3])
+                        fix_desc = (
+                            f"[CODE_QUALITY_FIX] Fix {total_cv_errors} code validation errors "
+                            f"in: {affected_files or 'output'} — task: {task[:80]}"
+                        )
+                        _cv_added = _cv_add_task(fix_desc, priority="P1", source="code_validation")
+                        if _cv_added:
+                            log(f"CODE VALIDATION FEEDBACK: injected P1 fix task ({total_cv_errors} errors)")
+                    except Exception as e:
+                        log(f"CODE VALIDATION FEEDBACK: queue injection failed: {e}")
+            else:
+                log("CODE VALIDATION: all checks passed")
+                # Record pass in episode
+                if EpisodicMemory:
+                    try:
+                        em_cv = EpisodicMemory()
+                        if em_cv.episodes:
+                            latest = em_cv.episodes[-1]
+                            if latest.get("task", "")[:60] == task[:60]:
+                                latest.setdefault("tags", []).append("code_validation:pass")
+                                em_cv._save()
+                    except Exception:
+                        pass
+        except Exception as e:
+            log(f"Code validation gate failed (non-fatal): {e}")
+            _pf_errors.append("code_validation")
+    timings["code_validation"] = round(time.monotonic() - t743, 3)
 
     # === 7.45 PERFORMANCE GATE: Run after code-modifying heartbeats ===
     t745 = time.monotonic()
@@ -1426,8 +1573,8 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
                 # Prefer canonical tag emitted by preflight when available
                 task_for_marking = task
                 try:
-                    if isinstance(preflight, dict) and preflight.get("task_tag"):
-                        task_for_marking = f"[{preflight['task_tag']}]"
+                    if isinstance(preflight_data, dict) and preflight_data.get("task_tag"):
+                        task_for_marking = f"[{preflight_data['task_tag']}]"
                 except Exception:
                     pass
                 result_mark = _mark_task_in_queue(task_for_marking, timestamp)

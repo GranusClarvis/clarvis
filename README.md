@@ -222,8 +222,8 @@ When the top-ranked task is too large (oversized), the system now **falls back t
 flowchart LR
     START[Pick Top Task] --> SIZING{Task Sizing}
     SIZING -->|oversized| SPLIT[Auto-split to subtasks]
-    SPLIT --> MARK[Mark parent [~]]
-    MARK --> NEXT[Try Next Candidate]
+    SPLIT --> MARK["Mark parent [~]"]
+    MARK --> NEXT[Try Next]
     SIZING -->|OK| VERIFY{Verification}
     VERIFY -->|fail| NEXT
     VERIFY -->|pass| EXEC[Execute Task]

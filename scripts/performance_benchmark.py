@@ -697,6 +697,57 @@ def benchmark_self_improvement():
 
 
 # ============================================================
+# QUALITY METRICS (added 2026-03-13) — Beyond binary success
+# ============================================================
+
+def benchmark_quality():
+    """Quality metrics: task quality, code quality, semantic depth.
+
+    Addresses audit finding that "88% success could mean 88% mediocre".
+    These metrics measure HOW WELL we do things, not just completion.
+    """
+    try:
+        from clarvis.metrics.quality import (
+            compute_task_quality_score,
+            compute_code_quality_score,
+            compute_semantic_depth,
+        )
+
+        task_quality = compute_task_quality_score(days=7)
+        code_quality = compute_code_quality_score(days=7)
+        semantic_depth = compute_semantic_depth()
+
+        return {
+            "task_quality_score": task_quality.get("quality_score", 0.5),
+            "task_quality_components": task_quality.get("components", {}),
+            "code_quality_score": code_quality.get("quality_score", 0.5),
+            "code_quality_components": code_quality.get("components", {}),
+            "semantic_depth_score": semantic_depth.get("depth_score", 0.5),
+            "semantic_depth_components": semantic_depth.get("components", {}),
+            "raw": {
+                "task": task_quality,
+                "code": code_quality,
+                "semantic": semantic_depth,
+            }
+        }
+    except ImportError as e:
+        # Quality module not yet available - return placeholders
+        return {
+            "task_quality_score": 0.5,
+            "code_quality_score": 0.5,
+            "semantic_depth_score": 0.5,
+            "error": f"quality module not available: {e}",
+        }
+    except Exception as e:
+        return {
+            "task_quality_score": 0.5,
+            "code_quality_score": 0.5,
+            "semantic_depth_score": 0.5,
+            "error": str(e),
+        }
+
+
+# ============================================================
 # PERFORMANCE INDEX (PI) — imported from clarvis.metrics.benchmark
 # ============================================================
 # compute_pi() is imported at module top from clarvis.metrics.benchmark
@@ -805,6 +856,9 @@ def run_full_benchmark():
     intelligence = _safe_bench(lambda: benchmark_intelligence(retrieval_data=retrieval, speed_data=speed), "intelligence")
     self_improvement = _safe_bench(benchmark_self_improvement, "self_improvement")
 
+    # Quality metrics (beyond binary success) — added 2026-03-13
+    quality = _safe_bench(benchmark_quality, "quality")
+
     bench_duration = round(time.monotonic() - t0, 2)
 
     # Flatten key metrics (use .get() with defaults for resilience)
@@ -824,6 +878,9 @@ def run_full_benchmark():
         "bloat_score":          brain_stats.get("bloat_score", 0.0),
         "brief_compression":    context.get("brief_compression", 0.0),
         "load_degradation_pct": load.get("degradation_pct", 0.0),
+        # New quality metrics (beyond binary success)
+        "task_quality_score":   quality.get("task_quality_score", 0.5),
+        "code_quality_score":   quality.get("code_quality_score", 0.5),
     }
 
     # Evaluate each metric against targets
@@ -880,6 +937,7 @@ def run_full_benchmark():
             "consciousness": consciousness,
             "intelligence": intelligence,
             "self_improvement": self_improvement,
+            "quality": quality,  # Beyond binary success
         },
     }
 

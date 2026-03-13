@@ -192,7 +192,11 @@ def scan_all(do_fix=False):
 
 
 def record_history(summary):
-    """Append summary to quality trend history (90-day cap)."""
+    """Append summary to quality trend history (90-day cap).
+
+    Also checks for week-over-week regression and auto-queues a P1 fix task
+    via queue_writer when clean_ratio drops >15%.
+    """
     HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
     history = []
     if HISTORY_FILE.exists():
@@ -201,6 +205,28 @@ def record_history(summary):
                 history = json.load(f)
         except (json.JSONDecodeError, ValueError):
             history = []
+
+    # Regression guard: compare against ~7 days ago
+    if len(history) >= 7:
+        week_ago = history[-7]
+        current_ratio = summary["clean_ratio"]
+        prev_ratio = week_ago.get("clean_ratio", current_ratio)
+        if prev_ratio > 0:
+            pct_drop = (prev_ratio - current_ratio) / prev_ratio
+            if pct_drop > 0.15:
+                try:
+                    sys.path.insert(0, str(SCRIPTS_DIR))
+                    from queue_writer import add_task
+                    drop_pct = round(pct_drop * 100)
+                    fix_desc = (
+                        f"[CODE_QUALITY_FIX] clean_ratio dropped {drop_pct}% "
+                        f"week-over-week ({prev_ratio:.0%} -> {current_ratio:.0%}). "
+                        f"Top issues: {summary.get('by_type', {})}. "
+                        f"Run `code_quality_gate.py fix` to auto-fix unused imports."
+                    )
+                    add_task(fix_desc, priority="P1", source="quality_regression")
+                except Exception:
+                    pass  # Non-fatal — don't break the gate
 
     history.append(summary)
     history = history[-90:]

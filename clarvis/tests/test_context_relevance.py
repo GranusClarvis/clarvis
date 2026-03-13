@@ -3,6 +3,7 @@
 import json
 import os
 import tempfile
+from datetime import datetime, timezone
 
 import pytest
 
@@ -336,3 +337,157 @@ class TestRegenerateReport:
         # No report file created
         report_path = tmp_path / "data" / "benchmarks" / "brief_v2_report.json"
         assert not report_path.exists()
+
+
+# === Feedback Loop: Relevance-Weighted Budget Adjustment ===
+
+from clarvis.context.assembly import (
+    load_relevance_weights,
+    get_adjusted_budgets,
+    TIER_BUDGETS,
+    BUDGET_FLOOR,
+    BUDGET_CEILING,
+    _BUDGET_TO_SECTIONS,
+)
+
+
+class TestLoadRelevanceWeights:
+    @staticmethod
+    def _patch_aggregate(monkeypatch, relevance_file):
+        """Monkeypatch aggregate_relevance to use a custom file path."""
+        import clarvis.cognition.context_relevance as cr_mod
+        orig_agg = aggregate_relevance
+
+        def patched_agg(days=7, relevance_file_arg=None):
+            return orig_agg(days=days, relevance_file=relevance_file_arg or relevance_file)
+
+        monkeypatch.setattr(cr_mod, "aggregate_relevance", patched_agg)
+
+    def test_returns_empty_when_insufficient_episodes(self, tmp_path, monkeypatch):
+        """Returns empty dict when fewer than min_episodes exist."""
+        relevance_file = str(tmp_path / "context_relevance.jsonl")
+        now = datetime.now(timezone.utc).isoformat()
+        entries = [
+            {"ts": now, "overall": 0.7, "per_section": {"knowledge": 0.3}, "outcome": "success"},
+            {"ts": now, "overall": 0.5, "per_section": {"knowledge": 0.2}, "outcome": "success"},
+        ]
+        with open(relevance_file, "w") as f:
+            for e in entries:
+                f.write(json.dumps(e) + "\n")
+
+        self._patch_aggregate(monkeypatch, relevance_file)
+        weights = load_relevance_weights()
+        assert weights == {}
+
+    def test_returns_weights_with_sufficient_episodes(self, tmp_path, monkeypatch):
+        """Returns scaling factors when enough episodes exist."""
+        relevance_file = str(tmp_path / "context_relevance.jsonl")
+        now = datetime.now(timezone.utc).isoformat()
+        for _ in range(6):
+            entry = {
+                "ts": now, "overall": 0.65,
+                "per_section": {
+                    "decision_context": 0.5, "failure_avoidance": 0.1,
+                    "meta_gradient": 0.0, "working_memory": 0.3,
+                    "attention": 0.4, "gwt_broadcast": 0.2,
+                    "brain_context": 0.3, "related_tasks": 0.8,
+                    "metrics": 0.05, "completions": 0.3,
+                    "episodes": 0.6, "reasoning": 0.4,
+                },
+                "outcome": "success",
+            }
+            with open(relevance_file, "a") as f:
+                f.write(json.dumps(entry) + "\n")
+
+        self._patch_aggregate(monkeypatch, relevance_file)
+        weights = load_relevance_weights()
+        assert len(weights) > 0
+        assert weights["related_tasks"] > weights["metrics"]
+        for key, w in weights.items():
+            assert BUDGET_FLOOR <= w <= BUDGET_CEILING, f"{key}={w} out of bounds"
+
+    def test_respects_min_episodes_param(self, tmp_path, monkeypatch):
+        """min_episodes parameter is respected."""
+        relevance_file = str(tmp_path / "context_relevance.jsonl")
+        now = datetime.now(timezone.utc).isoformat()
+        for _ in range(3):
+            entry = {
+                "ts": now, "overall": 0.5, "outcome": "success",
+                "per_section": {"decision_context": 0.4, "metrics": 0.1, "episodes": 0.5},
+            }
+            with open(relevance_file, "a") as f:
+                f.write(json.dumps(entry) + "\n")
+
+        self._patch_aggregate(monkeypatch, relevance_file)
+        assert load_relevance_weights() == {}
+        assert load_relevance_weights(min_episodes=2) != {}
+
+
+class TestGetAdjustedBudgets:
+    def test_returns_static_budgets_when_no_data(self, monkeypatch):
+        """Falls back to static TIER_BUDGETS when no relevance data exists."""
+        import clarvis.context.assembly as asm
+        monkeypatch.setattr(asm, "load_relevance_weights", lambda: {})
+
+        result = get_adjusted_budgets("standard")
+        assert result == TIER_BUDGETS["standard"]
+
+    def test_adjusts_budgets_with_weights(self, monkeypatch):
+        """Adjusts budgets proportionally when weights are available."""
+        import clarvis.context.assembly as asm
+        # Mock weights: decision_context high, metrics low
+        mock_weights = {
+            "decision_context": 1.3,
+            "spotlight": 0.8,
+            "related_tasks": 1.0,
+            "metrics": 0.4,
+            "completions": 0.6,
+            "episodes": 1.2,
+            "reasoning_scaffold": 0.9,
+        }
+        monkeypatch.setattr(asm, "load_relevance_weights", lambda: mock_weights)
+
+        result = get_adjusted_budgets("standard")
+        base = TIER_BUDGETS["standard"]
+
+        # Total budget should be approximately preserved
+        total_base = sum(v for k, v in base.items() if k != "total" and v > 0)
+        total_adjusted = sum(v for k, v in result.items() if k != "total" and v > 0)
+        assert abs(total_base - total_adjusted) <= len(base)  # rounding tolerance
+
+        # High-weight section should get more than low-weight section
+        # (relative to their base ratios)
+        assert result["decision_context"] / base["decision_context"] > result["metrics"] / base["metrics"]
+
+    def test_minimal_tier_unchanged(self, monkeypatch):
+        """Minimal tier has all-zero budgets so should not change."""
+        import clarvis.context.assembly as asm
+        monkeypatch.setattr(asm, "load_relevance_weights", lambda: {"decision_context": 1.3})
+
+        result = get_adjusted_budgets("minimal")
+        assert result == TIER_BUDGETS["minimal"]
+
+    def test_budget_floor_enforced(self, monkeypatch):
+        """No section goes below minimum 10 tokens after adjustment."""
+        import clarvis.context.assembly as asm
+        # Very low weights for everything
+        mock_weights = {k: BUDGET_FLOOR for k in _BUDGET_TO_SECTIONS}
+        monkeypatch.setattr(asm, "load_relevance_weights", lambda: mock_weights)
+
+        result = get_adjusted_budgets("standard")
+        for key, value in result.items():
+            if key != "total" and TIER_BUDGETS["standard"].get(key, 0) > 0:
+                assert value >= 10, f"{key}={value} below minimum"
+
+    def test_full_tier_adjusts(self, monkeypatch):
+        """Full tier also gets adjusted."""
+        import clarvis.context.assembly as asm
+        mock_weights = {"episodes": 1.4, "metrics": 0.4}
+        monkeypatch.setattr(asm, "load_relevance_weights", lambda: mock_weights)
+
+        result = get_adjusted_budgets("full")
+        base = TIER_BUDGETS["full"]
+        # Episodes should be relatively larger than metrics vs base ratio
+        ep_ratio = result["episodes"] / base["episodes"]
+        met_ratio = result["metrics"] / base["metrics"]
+        assert ep_ratio > met_ratio

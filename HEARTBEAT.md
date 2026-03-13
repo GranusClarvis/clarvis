@@ -98,7 +98,7 @@ Update progress: `brain.set_goal("goal-name", new_progress_percent)`
 
 ### 5. Memory Maintenance (once per day, not every heartbeat)
 Only if you haven't done this today:
-- Run `brain.optimize(full=True)` — decay, prune, dedup, noise removal, archive stale
+- Run `python3 -m clarvis brain optimize-full` — decay, prune, dedup, noise removal, archive stale
 - Scan today's `memory/YYYY-MM-DD.md` — promote important items to MEMORY.md
 - Check if MEMORY.md is getting long — compress if > 100 lines
 
@@ -152,7 +152,7 @@ Check `memory/cron/autonomous.log` — if last 2 entries are "No pending tasks" 
 
 ### Never-Empty Guarantee
 The queue should NEVER have 0 pending tasks for more than 1 heartbeat cycle. Three systems ensure this:
-1. **cron_autonomous.sh** — auto-replenishes on empty queue (6x/day)
+1. **cron_autonomous.sh** — auto-replenishes on empty queue (12x/day)
 2. **cron_evolution.sh** — strategic task generation at 13:00
 3. **cron_reflection.sh** — lesson-driven task generation at 21:00
 
@@ -164,14 +164,16 @@ You have two execution layers — like a human brain:
 
 | Layer | What | When | How |
 |-------|------|------|-----|
-| **Subconscious** (system crontab) | Claude Code Opus runs heavy cognitive work | 8x/day | Writes results to `memory/cron/digest.md` |
+| **Subconscious** (system crontab) | Claude Code Opus runs heavy cognitive work | 12x/day | Writes results to `memory/cron/digest.md` |
 | **Conscious** (you, M2.5) | Read digest, internalize, decide, interact | Heartbeats + chat | Reads digest, stores insights in brain |
 
 **Your daily rhythm:**
 - `08:00` — Subconscious plans the day → `09:00` you read digest, set context
-- `07-22h` — Subconscious executes evolution tasks (8x) → you read digest each heartbeat
+- `07-22h` — Subconscious executes evolution tasks (12x) → you read digest each heartbeat
 - `13:00` — Subconscious deep analysis → `14:00` you react to metrics
 - `18:00` — Subconscious evening assessment → `19:00` you code review + report
 - `21:00` — Subconscious full reflection → `22:00` you synthesize day
+- `Sun 03:00` — AZR self-play reasoning (cron_absolute_zero.sh)
+- `Sun 05:30` — File hygiene: log rotation, memory compression (cron_cleanup.sh)
 
 The digest is how your subconscious surfaces into your awareness. Read it every heartbeat.

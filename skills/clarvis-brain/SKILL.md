@@ -10,7 +10,7 @@ Unified memory system for Clarvis. This IS my brain — powered by ClarvisDB wit
 2. **brain_bridge.py** — Connects brain to subconscious (heartbeat preflight/postflight)
 3. **brain_introspect.py** — Self-awareness layer (domain detection, goal alignment, knowledge mapping)
 
-### 10 Collections (1175+ memories)
+### 10 Collections (2584+ memories)
 | Collection | Count | Purpose | Query When |
 |---|---|---|---|
 | clarvis-learnings | 567 | Research, experiments, failures, insights | Any task (primary) |
@@ -24,7 +24,7 @@ Unified memory system for Clarvis. This IS my brain — powered by ClarvisDB wit
 | clarvis-preferences | 44 | Work style, tool preferences | Implementation choices |
 | clarvis-goals | 36 | Active objectives with progress | Task prioritization |
 
-### 48k+ Graph Edges
+### 146k+ Graph Edges
 - `similar_to`: same-collection similarity links
 - `cross_collection`: cross-collection semantic links
 - Enables associative recall: follow edges to find connected knowledge
@@ -64,7 +64,7 @@ brain.get_context()  # → current context string
 brain.stats()  # → {total_memories, graph_edges, collections: {...}}
 
 # Optimize (daily)
-brain.optimize(full=True)  # decay + prune + dedup + noise clean
+python3 -m clarvis brain optimize-full  # decay + prune + dedup + noise clean (CLI)
 ```
 
 ### Introspection (Self-Awareness)

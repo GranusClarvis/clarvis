@@ -20,6 +20,24 @@ WORKSPACE = os.environ.get(
 SCRIPTS = os.path.join(WORKSPACE, "scripts")
 QUEUE_FILE = os.path.join(WORKSPACE, "memory/evolution/QUEUE.md")
 
+# Mapping from budget keys to context_relevance section names.
+# Each budget key controls a region of the brief; the section names are
+# what context_relevance.py tracks at the per-section level.
+_BUDGET_TO_SECTIONS = {
+    "decision_context": ["decision_context", "failure_avoidance", "meta_gradient"],
+    "spotlight": ["working_memory", "attention", "gwt_broadcast", "brain_context"],
+    "related_tasks": ["related_tasks"],
+    "metrics": ["metrics"],
+    "completions": ["completions"],
+    "episodes": ["episodes"],
+    "reasoning_scaffold": ["reasoning"],
+}
+
+# Relevance-based budget adjustment parameters
+MIN_EPISODES_FOR_ADJUSTMENT = 5  # need enough data before adjusting
+BUDGET_FLOOR = 0.4   # minimum 40% of base budget (prevent section disappearing)
+BUDGET_CEILING = 1.4  # maximum 140% of base budget
+
 # Token budgets per tier (attention-optimal allocation)
 TIER_BUDGETS = {
     "minimal": {
@@ -53,6 +71,82 @@ TIER_BUDGETS = {
         "reasoning_scaffold": 60,
     },
 }
+
+def load_relevance_weights(min_episodes=MIN_EPISODES_FOR_ADJUSTMENT, days=14):
+    """Load per-section relevance scores and convert to budget scaling factors.
+
+    Reads aggregated context_relevance data and maps per-section mean scores
+    to budget category scaling factors (BUDGET_FLOOR..BUDGET_CEILING).
+
+    Returns:
+        Dict mapping budget keys to scaling factors, or empty dict if
+        insufficient episode data exists.
+    """
+    try:
+        from clarvis.cognition.context_relevance import aggregate_relevance
+        agg = aggregate_relevance(days=days)
+    except Exception:
+        return {}
+
+    if agg.get("episodes", 0) < min_episodes:
+        return {}
+
+    per_section = agg.get("per_section_mean", {})
+    if not per_section:
+        return {}
+
+    weights = {}
+    for budget_key, section_names in _BUDGET_TO_SECTIONS.items():
+        scores = [per_section[s] for s in section_names if s in per_section]
+        if not scores:
+            continue
+        mean_score = sum(scores) / len(scores)
+        # Linear interpolation: 0.0 relevance → BUDGET_FLOOR, 1.0 → BUDGET_CEILING
+        scale = BUDGET_FLOOR + (BUDGET_CEILING - BUDGET_FLOOR) * mean_score
+        weights[budget_key] = round(
+            min(BUDGET_CEILING, max(BUDGET_FLOOR, scale)), 3
+        )
+
+    return weights
+
+
+def get_adjusted_budgets(tier="standard"):
+    """Get tier budgets adjusted by empirical relevance weights.
+
+    Sections that are consistently referenced get more token budget;
+    sections that are rarely referenced get less. Total budget is preserved
+    by normalizing after scaling.
+
+    Falls back to static TIER_BUDGETS when no relevance data exists.
+    """
+    base = TIER_BUDGETS.get(tier, TIER_BUDGETS["standard"]).copy()
+    weights = load_relevance_weights()
+
+    if not weights:
+        return base
+
+    total_base = sum(v for k, v in base.items() if k != "total" and v > 0)
+    if total_base == 0:
+        return base
+
+    adjusted = {"total": base["total"]}
+    for key, value in base.items():
+        if key == "total" or value == 0:
+            adjusted[key] = value
+            continue
+        scale = weights.get(key, 1.0)
+        adjusted[key] = max(10, round(value * scale))
+
+    # Normalize to preserve total token budget
+    total_adjusted = sum(v for k, v in adjusted.items() if k != "total" and v > 0)
+    if total_adjusted > 0:
+        ratio = total_base / total_adjusted
+        for key in adjusted:
+            if key != "total" and adjusted[key] > 0:
+                adjusted[key] = max(10, round(adjusted[key] * ratio))
+
+    return adjusted
+
 
 # Known integration targets for wire-task guidance
 KNOWN_TARGETS = {
@@ -547,7 +641,7 @@ def generate_tiered_brief(
         Quality-optimized context string.
     """
     queue_file = queue_file or QUEUE_FILE
-    budget = TIER_BUDGETS.get(tier, TIER_BUDGETS["standard"])
+    budget = get_adjusted_budgets(tier)
     beginning = []
     middle = []
     end = []

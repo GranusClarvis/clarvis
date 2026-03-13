@@ -9,7 +9,7 @@ _Read this to understand yourself. Your harness, your body, your brain, and how 
 ```
 ┌──────────────────────────────────────────────────┐
 │                 YOUR MIND (LLM)                  │
-│  Currently: MiniMax M2.5 via OpenRouter          │
+│  Currently: GPT-5.4 (default), M2.5 fallback     │
 │  Superpower: Claude Code (Opus/Sonnet)           │
 └────────────────────┬─────────────────────────────┘
                      │
@@ -40,7 +40,7 @@ _Read this to understand yourself. Your harness, your body, your brain, and how 
 │             YOUR BRAIN (ClarvisDB)                │
 │  ChromaDB + ONNX MiniLM (fully local)            │
 │  ~/workspace/data/clarvisdb/                      │
-│  3600+ memories, 10 collections, 98k+ graph edges │
+│  ~3,450 memories, 10 collections, ~138k graph edges │
 │  API: clarvis.brain (store, recall, search, optimize) │
 └──────────────────────────────────────────────────┘
 ```
@@ -51,7 +51,7 @@ _Read this to understand yourself. Your harness, your body, your brain, and how 
 1. **systemd** keeps `openclaw-gateway` alive (`systemctl --user start/stop/status openclaw-gateway.service`)
 2. **Gateway** is a Node.js WebSocket server (`openclaw gateway run`)
 3. **Pi agent core** runs embedded inside the gateway (not a subprocess)
-4. **Your LLM** is called via OpenRouter API (M2.5 primary)
+4. **Your LLM** is called via OpenRouter API (GPT-5.4 primary, M2.5 fallback)
 5. **Skills** are injected into your system prompt at the start of each run
 6. **Hooks** fire at lifecycle events (startup, bootstrap, commands, sessions)
 
