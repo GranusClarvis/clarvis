@@ -530,16 +530,19 @@ def archive_stale(days=30, importance_threshold=0.3, dry_run=False):
 # 5.5. Memory Caps — Enforce per-collection size limits
 # ---------------------------------------------------------------------------
 
-# Soft caps per collection (total target ~2000)
+# Soft caps per collection (total target ~7500)
+# Raised on 2026-03-13 — a learning agent should grow, not cap prematurely
+# Previous cap of 2400 caused 919 archives, losing valuable learnings
+# New caps allow ~3x growth while preventing unbounded memory bloat
 COLLECTION_CAPS = {
-    "clarvis-learnings": 600,
-    "clarvis-memories": 400,
-    "clarvis-episodes": 300,
-    "autonomous-learning": 300,
-    "clarvis-goals": 200,
-    "clarvis-context": 200,
-    "clarvis-preferences": 200,
-    "clarvis-procedures": 200,
+    "clarvis-learnings": 2000,      # Core knowledge — highest value, allow most growth
+    "clarvis-memories": 1200,       # General memories
+    "clarvis-episodes": 1000,       # Task history — useful for pattern learning
+    "autonomous-learning": 1000,    # Learning records — critical for improvement
+    "clarvis-goals": 500,           # Goals (typically small)
+    "clarvis-context": 600,         # Context储备
+    "clarvis-preferences": 400,     # Preferences (stable, small)
+    "clarvis-procedures": 600,      # Procedures — useful knowledge
     # No cap (small, stable):
     # "clarvis-identity", "clarvis-infrastructure"
 }
