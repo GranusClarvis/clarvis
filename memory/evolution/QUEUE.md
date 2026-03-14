@@ -53,6 +53,7 @@ _Dependency chain: GATE → EVAL → RETRY → FEEDBACK. Each phase is independe
 
 
 
+
 ## Pillar 3: Performance & Reliability (PI > 0.70)
 
 
@@ -99,12 +100,48 @@ _Consolidated into Pillar 2 above. See `docs/ORCHESTRATOR_PLAN_2026-03-06.md` fo
 
 ## NEW ITEMS
 
-- [ ] [EXECUTION_MONITOR_ALL_SPAWNERS] Extend `execution_monitor.py` integration from only `cron_autonomous.sh` to all Claude-spawning cron scripts: `cron_morning.sh`, `cron_evolution.sh`, `cron_implementation_sprint.sh`, `cron_reflection.sh`, `cron_research.sh`. Currently only autonomous runs get mid-execution monitoring — other spawners run blind. Improves autonomous execution reliability.
-- [ ] [CODE_QUALITY_METRIC_COMPLETENESS] Wire `first_pass_success_rate` and `test_pass_rate` into the composite code_quality_score in `clarvis/metrics/quality.py`. Currently both return None and don't contribute — the 0.655 score is computed from only 3 of 5 sub-metrics. (1) Add a postflight step to capture pytest results into `data/test_results.json` so test_pass_rate has fresh data. (2) Tag code-specific episodes in episodic memory so first_pass_success_rate can find ≥5 qualifying episodes. Directly targets Code Generation Quality 0.655→0.75.
-- [ ] [CRON_SHELLCHECK_LINT] Non-code quality: install ShellCheck and run it against all `.sh` scripts in `scripts/`. Fix all findings rated "error" or "warning" severity. Cron orchestrators (`cron_autonomous.sh`, `cron_morning.sh`, etc.) are bash with zero lint coverage — this is the non-Python equivalent of the code quality metric gap.
-- [x] [RESEARCH_IMPLEMENTATION_BRIDGE] Create `scripts/research_to_queue.py` that scans `memory/research/ingested/` for papers with actionable findings, cross-references QUEUE.md for existing tasks, and prints candidate queue items for unimplemented research. Start with the 4 ingested papers (code_generation_agent_survey, sage_rl, self_debugging_architectures, veriguard_ticoder). Run monthly via cron_reflection.sh. _(Done 2026-03-13: Script created. Scans 19 papers, found 218 uncovered proposals. Top: multi-path planning for Code Gen Quality. 5 brain memories stored.)_
+- [~] [HEARTBEAT_POSTFLIGHT_DECOMPOSITION] `run_postflight()` in `scripts/heartbeat_postflight.py` is 1457 lines — the largest function in the codebase. Decompose into 10-15 named sub-functions (one per §section) called from a clean dispatcher. Preserve all behavior; each section (§1 episode encoding through §14 cleanup) becomes its own testable function. Directly improves `reasonable_function_length` metric (currently 0.739, 79 functions >100 lines). **Targets Code Generation Quality.** P1.
+  - [ ] [AUTO_SPLIT 2026-03-13] [HEARTBEAT_POSTFLIGHT_DECOMPOSITION_1] Analyze: read relevant source files, identify change boundary
+  - [ ] [AUTO_SPLIT 2026-03-13] [HEARTBEAT_POSTFLIGHT_DECOMPOSITION_2] Implement: core logic change in one focused increment
+  - [ ] [AUTO_SPLIT 2026-03-13] [HEARTBEAT_POSTFLIGHT_DECOMPOSITION_3] Test: add/update test(s) covering the new behavior
+  - [ ] [AUTO_SPLIT 2026-03-13] [HEARTBEAT_POSTFLIGHT_DECOMPOSITION_4] Verify: run existing tests, confirm no regressions
+- [~] [SELF_MODEL_CODE_GEN_AUDIT] `clarvis/metrics/self_model.py::_assess_code_generation()` is 209 lines and the primary self-assessment for code generation capability. Audit: verify it leverages the new quality.py enhancements (structural checks, test pass rate, first-pass success rate from today's [CODE_QUALITY_METRIC_COMPLETENESS] work), ensure scoring aligns with PI `code_quality_score` dimension, and refactor the function below 100 lines. **Targets Code Generation Quality.** P1.
+  - [ ] [AUTO_SPLIT 2026-03-13] [SELF_MODEL_CODE_GEN_AUDIT_1] Analyze: read relevant source files, identify change boundary
+  - [ ] [AUTO_SPLIT 2026-03-13] [SELF_MODEL_CODE_GEN_AUDIT_2] Implement: core logic change in one focused increment
+  - [ ] [AUTO_SPLIT 2026-03-13] [SELF_MODEL_CODE_GEN_AUDIT_3] Test: add/update test(s) covering the new behavior
+  - [ ] [AUTO_SPLIT 2026-03-13] [SELF_MODEL_CODE_GEN_AUDIT_4] Verify: run existing tests, confirm no regressions
+
 
 ## P1 — This Week
 
 
 ## P2 — When Idle
+
+## P0 — Do Next Heartbeat (2026-03-14)
+
+
+## P1 — Agent Benchmarking
+
+### CLR Benchmark — Clarvis Agent Score
+
+Create a comprehensive agent benchmark called "CLR" (Clarvis Rating) that measures:
+- **Memory quality**: recall accuracy, retrieval latency, context relevance
+- **Brain integration**: graph edges, cross-collection links, importance decay
+- **Task success**: code generation, execution, reasoning chain depth
+- **Prompt quality**: context assembly score, brief coherence
+- **Self-improvement**: evolution loop effectiveness, meta-learning gains
+- **Autonomy**: success rate without human intervention, cost efficiency
+
+Each dimension 0-1, weighted composite score. Compare baseline (no brain) vs Clarvis (full) to measure value add.
+
+Implementation: `scripts/clr_benchmark.py` that runs tiered tests and outputs JSON.
+
+### A/B Comparison Benchmark (Fixed)
+
+Fix ab_comparison_benchmark.py:
+- Write prompts to temp file, read via stdin or file flag
+- Or use direct API calls instead of spawn_claude.sh
+- Run 10+ comparison pairs with hard tasks (not trivial "count files")
+- Measure: success rate, quality score, duration, context usage
+
+Wiring: Results should feed into evolution queue as metrics.
