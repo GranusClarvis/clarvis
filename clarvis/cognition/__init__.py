@@ -18,4 +18,5 @@ from .context_relevance import (
     score_section_relevance,
     record_relevance,
     aggregate_relevance,
+    get_suppressed_sections,
 )

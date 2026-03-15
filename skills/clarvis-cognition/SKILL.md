@@ -24,13 +24,7 @@ python3 /home/agent/.openclaw/workspace/scripts/brain.py health
 
 ### Capability Scores (7 domains)
 ```bash
-python3 -c "
-import sys; sys.path.insert(0, '/home/agent/.openclaw/workspace/scripts')
-from self_model import SelfModel
-sm = SelfModel()
-for domain, score in sm.get_capabilities().items():
-    print(f'{domain}: {score:.2f}')
-"
+python3 -m clarvis metrics self-model
 ```
 
 ### Consciousness Metric (Phi)

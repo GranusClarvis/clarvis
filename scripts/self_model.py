@@ -34,6 +34,8 @@ from clarvis.metrics.self_model import (  # noqa: E402
     # Assessment
     assess_all_capabilities, generate_remediation_tasks,
     inject_tasks_to_queue, check_weekly_regression, daily_update,
+    # Class interface
+    SelfModel,
 )
 
 

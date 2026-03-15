@@ -9,17 +9,48 @@ _Updated: 2026-03-08_
 
 **Frontier-grade agent brain + autonomy.** Build the best-in-class memory/brain system (high-fidelity retrieval, structure, learning, and evaluation) that makes the agent measurably smarter over time — then scale autonomy on top.
 
-Consciousness research remains valuable, but it is a **secondary track** unless it directly improves the agent’s intelligence/memory functions (retrieval quality, integration, planning, learning). Do **not** trade memory quality for “consciousness progress theater” or speed-only optimizations.
+Consciousness is **not** a primary goal. AGI remains a broad direction only where it produces practical improvements in memory, retrieval, planning, learning, autonomy, and system quality. Do **not** trade memory quality for “consciousness progress theater” or speed-only optimizations.
 
 ```
-Current: Cognitive Agent (episodic memory, orchestrator, 203+ predictions resolved, Phi≈0.650, PI previously 0.976, PR-factory planning active)
+Current: Cognitive Agent (episodic memory, orchestrator, predictions resolved, PR-factory planning active, brain quality cleanup underway)
     ↓
-Next: Deep Cognitive Agent (context engine plugin, orchestrator scoreboard, memory evolution, multi-agent scaling)
+Next: Deep Cognitive Agent (cleaner memory system, stronger retrieval precision, clearer modes, context engine/plugin, public harness structure)
     ↓
-Goal: Self-Sustaining Intelligence (generate revenue, improve independently)
+Goal: Self-Sustaining Intelligence (best-in-class agent brain + autonomy, with public harness repo and selective side repos)
 ```
 
 ---
+
+## Operating Modes (2026-03-15 direction)
+
+Three modes should govern Clarvis behavior:
+
+1. **GE — Glorious Evolution**
+   - autonomous research
+   - autonomous queue filling
+   - autonomous evolution / self-directed work
+
+2. **Architecture / Maintenance Mode**
+   - prioritize fixing, wiring, simplifying, benchmarking, and improving existing systems
+   - no broad self-added feature work unless explicitly asked
+   - if queue is empty, do infra checks, weak-spot scans, and small fixes; surface larger opportunities to the user
+
+3. **Passive / User-Directed Mode**
+   - only work when prompted
+   - no autonomous queue generation or self-directed research bursts
+   - may still decompose and autonomously complete a user-assigned large task
+
+Mode switching should change policy, not corrupt task continuity.
+
+## Repo & Public Surface Direction
+
+Clarvis should grow into:
+- a **main harness repo** (`clarvis`) as the operational and public center
+- selective side repos where boundaries are clean and reusable
+- likely first extraction candidate: **ClarvisDB / clarvis-db**
+- a public website presenting Clarvis, linked repos, current work, and benchmarks
+
+See `docs/CLARVIS_MODES_AND_REPOS.md` for the working design.
 
 ## Current State (2026-03-08)
 

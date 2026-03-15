@@ -85,7 +85,7 @@ if json_lines:
         f.write(json_lines[-1])
 " 2>> "$LOGFILE"
 
-    eval $(python3 -c "
+    eval "$(python3 -c "
 import json, sys, shlex
 with open('$PREFLIGHT_FILE') as f:
     d = json.load(f)
@@ -100,7 +100,7 @@ if proc and proc.get('steps'):
     print(f'PROC_HINT={shlex.quote(hint)}')
 else:
     print(\"PROC_HINT=''\")
-" 2>> "$LOGFILE")
+" 2>> "$LOGFILE")"
 else
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WARN: Preflight failed (exit $PREFLIGHT_EXIT), running without context" >> "$LOGFILE"
     CONTEXT_BRIEF=$(python3 "$SCRIPTS/context_compressor.py" brief 2>> "$LOGFILE")
@@ -136,11 +136,8 @@ INSTRUCTIONS:
 - When done, output a summary listing what you did, comma-separated.
 ENDPROMPT
 
-timeout 1500 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT /home/agent/.local/bin/claude -p \
-    "$(cat "$PROMPT_FILE")" \
-    --dangerously-skip-permissions --model claude-opus-4-6 \
-    > "$TASK_OUTPUT_FILE" 2>&1
-TASK_EXIT=$?
+run_claude_monitored 1500 "$TASK_OUTPUT_FILE" "$PROMPT_FILE" "$LOGFILE"
+TASK_EXIT=$MONITORED_EXIT
 TASK_DURATION=$((SECONDS - TASK_START))
 rm -f "$PROMPT_FILE"
 

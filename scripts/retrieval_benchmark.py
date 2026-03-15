@@ -207,6 +207,44 @@ def check_hit(result: dict, pair: dict) -> bool:
     return False
 
 
+# Patterns that indicate synthetic/bridge/boost memories (not organic user content)
+_SYNTHETIC_PATTERNS = [
+    "bridge", "sbridge", "BRIDGE", "Sbridge",
+    "Connection between", "connection between",
+    "boost_", "fresh_mirror", "INTRA_DENSITY",
+    "Synthesized insight:", "SEMANTIC_BRIDGE",
+]
+
+
+def is_synthetic(result: dict) -> bool:
+    """Detect if a result is a synthetic bridge/boost memory rather than canonical."""
+    doc = result.get("document", "")
+    rid = result.get("id", "")
+    # Check ID prefixes
+    if rid.startswith(("bridge_", "sbridge_", "boost_", "fresh_mirror_")):
+        return True
+    # Check document content for synthetic markers
+    for pat in _SYNTHETIC_PATTERNS:
+        if pat in doc:
+            return True
+    return False
+
+
+def _usefulness_score(result: dict, query: str) -> float:
+    """Compute per-result usefulness score using CRAG composite scoring.
+
+    Combines semantic similarity, keyword overlap, importance, and recency
+    into a single 0-1 score indicating how useful this result is for the query.
+    """
+    try:
+        from clarvis.brain.retrieval_eval import score_result
+        return score_result(result, query)
+    except ImportError:
+        # Fallback: simple distance-based score
+        d = result.get("distance", 2.0)
+        return round(1.0 / (1.0 + d), 4)
+
+
 def run_benchmark(use_smart=True, k=3) -> dict:
     """
     Run all 20 benchmark queries. Measure precision@k, recall, P@1, and MRR.
@@ -226,6 +264,10 @@ def run_benchmark(use_smart=True, k=3) -> dict:
     total_precision1 = 0.0
     total_recall = 0
     total_mrr = 0.0
+    total_synthetic = 0
+    total_results_seen = 0
+    total_canonical_hits = 0
+    total_usefulness = 0.0
     category_stats = {}
 
     for pair in BENCHMARK_PAIRS:
@@ -238,25 +280,41 @@ def run_benchmark(use_smart=True, k=3) -> dict:
         # Score each result
         hits_in_k = 0
         first_hit_rank = 0
+        query_synthetic = 0
+        query_usefulness = 0.0
         result_details = []
         for i, r in enumerate(results[:k]):
             is_hit = check_hit(r, pair)
+            synthetic = is_synthetic(r)
+            useful = _usefulness_score(r, query)
             if is_hit:
                 hits_in_k += 1
                 if first_hit_rank == 0:
                     first_hit_rank = i + 1
+                if not synthetic:
+                    total_canonical_hits += 1
+            if synthetic:
+                query_synthetic += 1
+                total_synthetic += 1
+            query_usefulness += useful
+            total_results_seen += 1
             result_details.append({
                 "rank": i + 1,
                 "hit": is_hit,
+                "synthetic": synthetic,
+                "usefulness": round(useful, 4),
                 "collection": r.get("collection"),
                 "distance": round(r.get("distance", 999), 4),
                 "text_preview": r.get("document", "")[:80],
             })
 
+        n_results = len(results[:k])
         precision_at_k = hits_in_k / k if k > 0 else 0
         precision_at_1 = 1.0 if first_hit_rank == 1 else 0.0
         recall_hit = 1 if hits_in_k > 0 else 0
         rr = 1.0 / first_hit_rank if first_hit_rank > 0 else 0.0
+        avg_useful = query_usefulness / n_results if n_results > 0 else 0.0
+        total_usefulness += avg_useful
 
         total_precision += precision_at_k
         total_precision1 += precision_at_1
@@ -285,6 +343,8 @@ def run_benchmark(use_smart=True, k=3) -> dict:
             "reciprocal_rank": round(rr, 4),
             "hits_in_k": hits_in_k,
             "first_hit_rank": first_hit_rank,
+            "synthetic_count": query_synthetic,
+            "avg_usefulness": round(avg_useful, 4),
             "results": result_details,
         })
 
@@ -306,6 +366,12 @@ def run_benchmark(use_smart=True, k=3) -> dict:
             "mrr": round(stats["mrr_sum"] / c, 3) if c > 0 else 0,
         }
 
+    # Contamination and quality metrics
+    contamination_rate = round(total_synthetic / total_results_seen, 4) if total_results_seen > 0 else 0.0
+    total_hits_all = sum(q["hits_in_k"] for q in query_results)
+    canonical_hit_rate = round(total_canonical_hits / total_hits_all, 4) if total_hits_all > 0 else 0.0
+    avg_usefulness = round(total_usefulness / n, 4) if n > 0 else 0.0
+
     # Failed queries (recall=0, i.e. no hit in top-k)
     failures = [q for q in query_results if q["recall"] == 0]
 
@@ -318,8 +384,13 @@ def run_benchmark(use_smart=True, k=3) -> dict:
         "avg_precision_at_1": avg_precision1,
         "avg_recall": avg_recall,
         "mrr": mrr,
+        "contamination_rate": contamination_rate,
+        "canonical_hit_rate": canonical_hit_rate,
+        "avg_usefulness": avg_usefulness,
         "total_hits": total_recall,
         "total_misses": n - total_recall,
+        "total_synthetic": total_synthetic,
+        "total_results": total_results_seen,
         "by_category": category_report,
         "failures": [{"id": f["id"], "query": f["query"], "category": f["category"]} for f in failures],
         "details": query_results,
@@ -343,8 +414,12 @@ def save_report(report: dict):
         "avg_precision_at_1": report.get("avg_precision_at_1", 0),
         "avg_recall": report["avg_recall"],
         "mrr": report.get("mrr", 0),
+        "contamination_rate": report.get("contamination_rate", 0),
+        "canonical_hit_rate": report.get("canonical_hit_rate", 0),
+        "avg_usefulness": report.get("avg_usefulness", 0),
         "total_hits": report["total_hits"],
         "total_misses": report["total_misses"],
+        "total_synthetic": report.get("total_synthetic", 0),
         "by_category": report["by_category"],
         "failure_ids": [f["id"] for f in report["failures"]],
     }
@@ -398,8 +473,8 @@ def show_trend(days: int = 30):
         return
 
     print(f"=== Retrieval Benchmark Trend ({days} days, {len(recent)} runs) ===\n")
-    print(f"{'Date':>12s}  {'P@1':>6s}  {'P@3':>6s}  {'MRR':>6s}  {'Recall':>6s}  {'Hits':>4s}  {'Miss':>4s}  Failures")
-    print("-" * 85)
+    print(f"{'Date':>12s}  {'P@1':>6s}  {'P@3':>6s}  {'MRR':>6s}  {'Recall':>6s}  {'Contam':>6s}  {'Useful':>6s}  {'Hits':>4s}  Failures")
+    print("-" * 100)
 
     for h in recent:
         ts = h.get("timestamp", "")[:10]
@@ -407,10 +482,11 @@ def show_trend(days: int = 30):
         p = h.get("avg_precision_at_k", 0)
         m = h.get("mrr", 0)
         r = h.get("avg_recall", 0)
+        contam = h.get("contamination_rate", 0)
+        useful = h.get("avg_usefulness", 0)
         hits = h.get("total_hits", 0)
-        misses = h.get("total_misses", 0)
         fails = ",".join(h.get("failure_ids", []))
-        print(f"{ts:>12s}  {p1:>6.3f}  {p:>6.3f}  {m:>6.3f}  {r:>6.3f}  {hits:>4d}  {misses:>4d}  {fails or '-'}")
+        print(f"{ts:>12s}  {p1:>6.3f}  {p:>6.3f}  {m:>6.3f}  {r:>6.3f}  {contam:>6.3f}  {useful:>6.3f}  {hits:>4d}  {fails or '-'}")
 
     # Summary
     if len(recent) >= 2:
@@ -428,10 +504,13 @@ def print_report(report: dict):
     print("  RETRIEVAL BENCHMARK — Ground Truth Evaluation")
     print("=" * 65)
     print(f"  Method: {report['method']}  |  k={report['k']}  |  Queries: {report['num_queries']}")
-    print(f"  P@1:          {report.get('avg_precision_at_1', 0):.3f}")
-    print(f"  P@{report['k']}:          {report['avg_precision_at_k']:.3f}")
-    print(f"  MRR:          {report.get('mrr', 0):.3f}")
-    print(f"  Recall:       {report['avg_recall']:.3f}  ({report['total_hits']}/{report['num_queries']} queries hit)")
+    print(f"  P@1:              {report.get('avg_precision_at_1', 0):.3f}")
+    print(f"  P@{report['k']}:              {report['avg_precision_at_k']:.3f}")
+    print(f"  MRR:              {report.get('mrr', 0):.3f}")
+    print(f"  Recall:           {report['avg_recall']:.3f}  ({report['total_hits']}/{report['num_queries']} queries hit)")
+    print(f"  Contamination:    {report.get('contamination_rate', 0):.3f}  ({report.get('total_synthetic', 0)}/{report.get('total_results', 0)} synthetic)")
+    print(f"  Canonical hits:   {report.get('canonical_hit_rate', 0):.3f}  (organic hits / total hits)")
+    print(f"  Avg usefulness:   {report.get('avg_usefulness', 0):.3f}  (CRAG composite)")
     print()
 
     # Per-category
@@ -485,8 +564,12 @@ def run_golden_qa():
         "precision_at_3": report["avg_precision_at_k"],
         "mrr": report.get("mrr", 0),
         "recall": report["avg_recall"],
+        "contamination_rate": report.get("contamination_rate", 0),
+        "canonical_hit_rate": report.get("canonical_hit_rate", 0),
+        "avg_usefulness": report.get("avg_usefulness", 0),
         "total_hits": report["total_hits"],
         "total_misses": report["total_misses"],
+        "total_synthetic": report.get("total_synthetic", 0),
         "by_category": report["by_category"],
         "failures": report["failures"],
     }

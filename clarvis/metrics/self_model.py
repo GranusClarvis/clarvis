@@ -588,22 +588,11 @@ def _assess_autonomous_execution():
     return max(0.0, min(1.0, score)), evidence
 
 
-def _assess_code_generation():
-    """Score code generation based on commits, compile health, and test pass rate.
-
-    Scoring (continuous, quality-based — max 1.0):
-      - Git commits today: scaled 0–0.2 (1 commit=0.05, 3+=0.1, 6+=0.2)
-      - Code change complexity (lines changed today): 0–0.1 (500+ lines for full)
-      - Scripts exist (baseline infrastructure): +0.1 (reduced from 0.3)
-      - Key scripts compile clean: 0–0.2 (proportional to clean/total)
-      - Test pass rate (if test infra exists): 0–0.3
-      - Commit message quality bonus: +0.1 if avg msg length > 20 chars
-    """
+def _code_gen_git_activity():
+    """Git commit activity and quality for code generation scoring."""
     score = 0.0
     evidence = []
-
     try:
-        # Use 24-hour rolling window (not calendar day) to avoid time-of-day crashes
         result = subprocess.run(
             ["git", "log", "--oneline", "--since=24 hours ago", "--format=%s"],
             capture_output=True, text=True, timeout=10,
@@ -611,191 +600,130 @@ def _assess_code_generation():
         )
         commits = [l.strip() for l in result.stdout.strip().split('\n') if l.strip()]
         if commits:
-            if len(commits) >= 6:
-                commit_score = 0.2
-            elif len(commits) >= 3:
-                commit_score = 0.1
-            else:
-                commit_score = 0.05
+            commit_score = 0.20 if len(commits) >= 6 else (0.10 if len(commits) >= 3 else 0.05)
             score += commit_score
             evidence.append(f"{len(commits)} commits today (+{commit_score:.2f})")
-
-            # Commit message quality: longer messages suggest more thoughtful commits
             avg_msg_len = sum(len(c) for c in commits) / len(commits)
             if avg_msg_len > 20:
-                score += 0.1
-                evidence.append(f"avg commit msg {avg_msg_len:.0f} chars (+0.10)")
+                score += 0.05
+                evidence.append(f"avg commit msg {avg_msg_len:.0f} chars (+0.05)")
     except Exception as e:
         evidence.append(f"git error: {e}")
+    return score, evidence
 
-    # Code change complexity: lines changed in last 24h (quality signal, not just commit count)
+
+def _code_gen_heartbeat_outcomes():
+    """Heartbeat-recorded code quality outcomes (syntax checks + task success)."""
     try:
-        diff_result = subprocess.run(
-            ["git", "log", "--numstat", "--since=24 hours ago", "--format="],
-            capture_output=True, text=True, timeout=10,
-            cwd="/home/agent/.openclaw/workspace"
-        )
-        # Parse numstat output: "additions\tdeletions\tfilename" per line
-        lines_changed = 0
-        for line in diff_result.stdout.strip().split('\n'):
-            parts = line.split('\t')
-            if len(parts) >= 2:
-                try:
-                    # Binary files show '-' instead of numbers
-                    add = int(parts[0]) if parts[0] != '-' else 0
-                    delete = int(parts[1]) if parts[1] != '-' else 0
-                    lines_changed += add + delete
-                except ValueError:
+        outcomes_file = Path("/home/agent/.openclaw/workspace/data/code_gen_outcomes.jsonl")
+        if not outcomes_file.exists():
+            return 0.0, [], False
+        from datetime import timedelta
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=48)
+        recent = []
+        with open(outcomes_file) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
                     continue
-        if lines_changed > 0:
-            complexity_score = min(0.1, lines_changed / 500 * 0.1)
-            score += complexity_score
-            evidence.append(f"{lines_changed} lines changed today (+{complexity_score:.2f})")
-    except Exception:
-        pass
+                try:
+                    entry = json.loads(line)
+                    ts = datetime.fromisoformat(entry["timestamp"].replace("Z", "+00:00"))
+                    if ts >= cutoff:
+                        recent.append(entry)
+                except (json.JSONDecodeError, KeyError, ValueError):
+                    continue
+        if not recent:
+            return 0.0, [], False
+        score = 0.0
+        evidence = []
+        total_ok = sum(e.get("syntax_ok", 0) for e in recent)
+        total_fail = sum(e.get("syntax_fail", 0) for e in recent)
+        total_checked = total_ok + total_fail
+        if total_checked > 0:
+            syntax_ratio = total_ok / total_checked
+            syntax_score = syntax_ratio * 0.20
+            score += syntax_score
+            evidence.append(f"heartbeat syntax: {total_ok}/{total_checked} clean ({syntax_ratio:.0%}) (+{syntax_score:.2f})")
+        else:
+            score += 0.10
+            evidence.append("heartbeat outcomes exist, no syntax checks needed (+0.10)")
+        successes = sum(1 for e in recent if e.get("task_status") == "success")
+        success_rate = successes / len(recent)
+        success_score = success_rate * 0.20
+        score += success_score
+        evidence.append(f"heartbeat success: {successes}/{len(recent)} ({success_rate:.0%}) (+{success_score:.2f})")
+        return score, evidence, True
+    except Exception as e:
+        return 0.0, [f"heartbeat outcomes error: {e}"], False
 
-    # Baseline: scripts directory has files (reduced — existence is not quality)
+
+def _assess_code_generation():
+    """Score code generation quality — aligned with PI code_quality_score.
+
+    Scoring (continuous, max 1.0):
+      - Git activity: commits + message quality          (0–0.25)
+      - Heartbeat outcomes: syntax + task success         (0–0.40)
+      - quality.py composite: structural, test, 1st-pass  (0–0.25)
+      - Scripts baseline (infrastructure exists)          (+0.10)
+
+    Uses quality.py's compute_code_quality_score() for static analysis,
+    test pass rate, and first-pass success rate — avoiding duplicate work.
+    """
+    score = 0.0
+    evidence = []
+
+    # 1. Git activity (0–0.25)
+    git_score, git_evidence = _code_gen_git_activity()
+    score += git_score
+    evidence.extend(git_evidence)
+
+    # 2. Scripts baseline (+0.10)
     try:
         scripts = list(Path("/home/agent/.openclaw/workspace/scripts").glob("*.py"))
         if len(scripts) >= 5:
-            score += 0.1
+            score += 0.10
             evidence.append(f"{len(scripts)} Python scripts (baseline +0.10)")
     except Exception:
         pass
 
-    # Live heartbeat outcomes: actual code quality from heartbeat postflight recordings
-    # (primary signal — syntax check results + task success from real executions)
-    outcomes_used = False
+    # 3. Heartbeat outcomes (0–0.40, primary signal when available)
+    hb_score, hb_evidence, hb_used = _code_gen_heartbeat_outcomes()
+    score += hb_score
+    evidence.extend(hb_evidence)
+
+    # 4. quality.py composite — structural checks, test rate, first-pass rate (0–0.25)
+    # Replaces redundant live pytest + py_compile with cached/analyzed data
     try:
-        outcomes_file = Path("/home/agent/.openclaw/workspace/data/code_gen_outcomes.jsonl")
-        if outcomes_file.exists():
-            from datetime import timedelta
-            cutoff = datetime.now(timezone.utc) - timedelta(hours=48)
-            recent = []
-            with open(outcomes_file) as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    try:
-                        entry = json.loads(line)
-                        ts = datetime.fromisoformat(entry["timestamp"].replace("Z", "+00:00"))
-                        if ts >= cutoff:
-                            recent.append(entry)
-                    except (json.JSONDecodeError, KeyError, ValueError):
-                        continue
-
-            if recent:
-                outcomes_used = True
-                # Syntax ratio across recent outcomes (0–0.25)
-                total_ok = sum(e.get("syntax_ok", 0) for e in recent)
-                total_fail = sum(e.get("syntax_fail", 0) for e in recent)
-                total_checked = total_ok + total_fail
-                if total_checked > 0:
-                    syntax_ratio = total_ok / total_checked
-                    syntax_score = syntax_ratio * 0.25
-                    score += syntax_score
-                    evidence.append(f"heartbeat syntax: {total_ok}/{total_checked} clean ({syntax_ratio:.0%}) (+{syntax_score:.2f})")
-                else:
-                    score += 0.15  # Had code outcomes but no files to check
-                    evidence.append("heartbeat outcomes exist, no syntax checks needed (+0.15)")
-
-                # Task success rate for code-touching heartbeats (0–0.25)
-                successes = sum(1 for e in recent if e.get("task_status") == "success")
-                success_rate = successes / len(recent)
-                success_score = success_rate * 0.25
-                score += success_score
-                evidence.append(f"heartbeat success: {successes}/{len(recent)} ({success_rate:.0%}) (+{success_score:.2f})")
+        from clarvis.metrics.quality import compute_code_quality_score
+        cqs = compute_code_quality_score(days=3)
+        q_score = cqs.get("quality_score", 0.5)
+        quality_contrib = q_score * 0.25
+        score += quality_contrib
+        components = cqs.get("components", {})
+        parts = []
+        if "test_pass_rate" in components:
+            parts.append(f"test={components['test_pass_rate']:.0%}")
+        if "first_pass_success_rate" in components:
+            parts.append(f"1st-pass={components['first_pass_success_rate']:.0%}")
+        if "structural_pass_rate" in components:
+            parts.append(f"struct={components['structural_pass_rate']:.0%}")
+        detail = ", ".join(parts) if parts else f"composite={q_score:.2f}"
+        evidence.append(f"quality.py: {detail} (+{quality_contrib:.2f})")
     except Exception as e:
-        evidence.append(f"heartbeat outcomes error: {e}")
-
-    if not outcomes_used:
-        # Fallback: static code quality checks (when no heartbeat data exists)
-        # Code quality gate: use pyflakes clean_ratio from nightly quality gate
-        quality_gate_used = False
+        # Fallback: quality gate history or py_compile
         try:
             qg_file = Path("/home/agent/.openclaw/workspace/data/code_quality_history.json")
             if qg_file.exists():
                 with open(qg_file) as f:
                     qg_history = json.load(f)
                 if qg_history:
-                    latest = qg_history[-1]
-                    clean_ratio = latest.get("clean_ratio", 0)
-                    syntax_errs = latest.get("syntax_errors", 0)
-                    total_issues = latest.get("total_issues", 0)
-                    qg_score = clean_ratio * 0.2
-                    score += qg_score
-                    evidence.append(f"quality gate: {clean_ratio:.0%} clean ({total_issues} issues, {syntax_errs} syntax errs) (+{qg_score:.2f})")
-                    quality_gate_used = True
+                    clean_ratio = qg_history[-1].get("clean_ratio", 0)
+                    fallback_score = clean_ratio * 0.20
+                    score += fallback_score
+                    evidence.append(f"quality gate fallback: {clean_ratio:.0%} clean (+{fallback_score:.2f})")
         except Exception:
-            pass
-
-        if not quality_gate_used:
-            try:
-                key_scripts = ["brain.py", "self_model.py", "attention.py", "working_memory.py"]
-                clean = 0
-                checked = 0
-                for s in key_scripts:
-                    path = f"/home/agent/.openclaw/workspace/scripts/{s}"
-                    if os.path.exists(path):
-                        checked += 1
-                        r = subprocess.run(["python3", "-m", "py_compile", path],
-                                           capture_output=True, text=True, timeout=5)
-                        if r.returncode == 0:
-                            clean += 1
-                if checked > 0:
-                    compile_score = (clean / checked) * 0.2
-                    score += compile_score
-                    evidence.append(f"{clean}/{checked} key scripts compile clean (+{compile_score:.2f})")
-            except Exception:
-                pass
-
-    # Test pass rate (always scored — independent of heartbeat vs fallback path)
-    # Uses a representative subset (8 files) to stay within timeout budget
-    try:
-        test_dirs = [
-            Path("/home/agent/.openclaw/workspace/tests"),
-            Path("/home/agent/.openclaw/workspace/scripts/tests"),
-            Path("/home/agent/.openclaw/workspace/packages/clarvis-db/tests"),
-            Path("/home/agent/.openclaw/workspace/clarvis/tests"),
-        ]
-        test_files = []
-        for td in test_dirs:
-            if td.exists():
-                test_files.extend(td.glob("test_*.py"))
-                test_files.extend(td.glob("*_test.py"))
-
-        if test_files:
-            # Sample up to 2 files per directory for a fast representative check
-            sampled = []
-            for td in test_dirs:
-                td_files = [f for f in test_files if str(f).startswith(str(td))]
-                sampled.extend(td_files[:2])
-            if not sampled:
-                sampled = test_files[:8]
-            r = subprocess.run(
-                ["python3", "-m", "pytest", "--tb=no", "-q"]
-                + [str(f) for f in sampled],
-                capture_output=True, text=True, timeout=300,
-                cwd="/home/agent/.openclaw/workspace"
-            )
-            output = r.stdout + r.stderr
-            import re
-            passed_m = re.search(r'(\d+) passed', output)
-            failed_m = re.search(r'(\d+) failed', output)
-            passed = int(passed_m.group(1)) if passed_m else 0
-            failed = int(failed_m.group(1)) if failed_m else 0
-            total_tests = passed + failed
-            if total_tests > 0:
-                pass_rate = passed / total_tests
-                test_score = pass_rate * 0.3
-                score += test_score
-                evidence.append(f"test pass rate={pass_rate:.0%} ({passed}/{total_tests}) (+{test_score:.2f})")
-            elif r.returncode == 0:
-                score += 0.05
-                evidence.append("test infra exists but no tests collected (+0.05)")
-    except Exception:
-        pass
+            evidence.append(f"quality.py unavailable: {e}")
 
     return max(0.0, min(1.0, score)), evidence
 
@@ -1584,3 +1512,44 @@ def daily_update():
         print(f"{'!'*40}")
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# SelfModel class — OO wrapper around the function-based API
+# ---------------------------------------------------------------------------
+
+class SelfModel:
+    """Object-oriented interface to the Clarvis self-model.
+
+    Wraps the module-level functions so callers can do:
+        sm = SelfModel()
+        scores = sm.get_capabilities()
+    """
+
+    def get_capabilities(self):
+        """Return dict mapping domain name -> score (float 0-1)."""
+        results = assess_all_capabilities()
+        return {domain: data["score"] for domain, data in results.items()}
+
+    def assess(self):
+        """Run full assessment, returning detailed results per domain."""
+        return assess_all_capabilities()
+
+    def daily_update(self):
+        """Run daily capability assessment with history comparison."""
+        return daily_update()
+
+    def get_awareness_level(self):
+        return get_awareness_level()
+
+    def set_awareness_level(self, level):
+        return set_awareness_level(level)
+
+    def get_cognitive_state(self):
+        return get_cognitive_state()
+
+    def set_cognitive_state(self, state):
+        return set_cognitive_state(state)
+
+    def think_about_thinking(self, thought):
+        return think_about_thinking(thought)

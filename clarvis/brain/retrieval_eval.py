@@ -264,19 +264,41 @@ def strip_refine(results: list[dict], query: str,
     return refined
 
 
+def filter_by_score(results: list[dict], scores: list[float],
+                    threshold: float = AMBIGUOUS_THRESHOLD) -> list[dict]:
+    """Remove individual results whose composite score is below *threshold*.
+
+    This is per-result filtering (as opposed to batch-level classification).
+    Results with score < threshold are noise — dropping them improves context
+    relevance without losing useful information.
+
+    Args:
+        results: Recall result dicts (same order as *scores*).
+        scores: Composite scores from :func:`classify_batch`.
+        threshold: Minimum per-result score to keep.
+
+    Returns:
+        Filtered list (may be empty if all results are below threshold).
+    """
+    if len(scores) != len(results):
+        return results  # safety: don't filter if lengths mismatch
+    return [r for r, s in zip(results, scores) if s >= threshold]
+
+
 def evaluate_retrieval(results: list[dict], query: str,
                        apply_strip: bool = True) -> dict:
     """Full retrieval evaluation pipeline.
 
     1. Score each result
-    2. Classify batch
-    3. On AMBIGUOUS: apply strip refinement
-    4. Return evaluation dict
+    2. Classify batch as CORRECT / AMBIGUOUS / INCORRECT
+    3. Filter out individual results scoring below AMBIGUOUS_THRESHOLD
+    4. Apply strip refinement on CORRECT and AMBIGUOUS batches
+    5. Return evaluation dict with refined results
 
     Args:
         results: List of recall result dicts
         query: The search query
-        apply_strip: Whether to apply strip refinement on AMBIGUOUS
+        apply_strip: Whether to apply strip refinement
 
     Returns:
         {
@@ -285,6 +307,7 @@ def evaluate_retrieval(results: list[dict], query: str,
             "scores": list[float],
             "n_results": int,
             "n_above_threshold": int,
+            "n_filtered_out": int,
             "refined_results": list[dict] | None,
             "strip_applied": bool,
         }
@@ -295,17 +318,26 @@ def evaluate_retrieval(results: list[dict], query: str,
 
     refined = None
     strip_applied = False
+    n_filtered_out = 0
 
-    if apply_strip and verdict == AMBIGUOUS and results:
-        refined = strip_refine(results, query)
-        strip_applied = True
-        # Re-classify after refinement
-        if refined:
-            _, new_max, new_scores = classify_batch(refined, query)
-            if new_max >= CORRECT_THRESHOLD:
-                verdict = CORRECT
+    if verdict != INCORRECT and results:
+        # Step 1: Drop individual low-scoring results (per-result filtering)
+        filtered = filter_by_score(results, scores)
+        n_filtered_out = len(results) - len(filtered)
+
+        # Step 2: Apply strip refinement on remaining results (sentence-level noise removal)
+        if apply_strip and filtered:
+            refined = strip_refine(filtered, query)
+            strip_applied = True
+            # Re-classify after refinement
+            if refined:
+                _, new_max, new_scores = classify_batch(refined, query)
+                if new_max >= CORRECT_THRESHOLD:
+                    verdict = CORRECT
                 max_score = new_max
                 scores = new_scores
+        elif filtered:
+            refined = filtered
 
     return {
         "verdict": verdict,
@@ -313,6 +345,7 @@ def evaluate_retrieval(results: list[dict], query: str,
         "scores": [round(s, 4) for s in scores],
         "n_results": len(results),
         "n_above_threshold": n_above,
+        "n_filtered_out": n_filtered_out,
         "refined_results": refined,
         "strip_applied": strip_applied,
     }
@@ -439,6 +472,7 @@ def adaptive_recall(brain_instance, query: str, tier: str = "DEEP_RETRIEVAL",
 
     # Step 3: If CORRECT or AMBIGUOUS (with strip refinement), return
     if original_verdict in (CORRECT, AMBIGUOUS):
+        # Use refined results (per-result filtered + strip-refined) when available
         results = eval_out.get("refined_results") or original_results
         return {
             "verdict": original_verdict,
@@ -447,6 +481,7 @@ def adaptive_recall(brain_instance, query: str, tier: str = "DEEP_RETRIEVAL",
             "retried": False,
             "retry_query": None,
             "original_verdict": original_verdict,
+            "n_filtered_out": eval_out.get("n_filtered_out", 0),
         }
 
     # Step 4: INCORRECT — corrective retry

@@ -148,20 +148,24 @@ class TestComputePI:
 
     def _compute(self, **metric_overrides):
         from performance_benchmark import compute_pi
-        # Default metrics at target values
+        # Default metrics at target values (must match TARGETS in clarvis/metrics/benchmark.py)
         metrics = {
-            "brain_query_avg_ms": 8000.0,
-            "brain_query_p95_ms": 9000.0,
-            "retrieval_hit_rate": 0.80,
-            "retrieval_precision3": 0.60,
-            "episode_success_rate": 0.70,
-            "action_accuracy": 0.80,
-            "phi": 0.50,
-            "context_relevance": 0.70,
-            "graph_density": 1.0,
-            "bloat_score": 0.50,
-            "brief_compression": 0.50,
-            "load_degradation_pct": 20.0,
+            "brain_query_avg_ms": 800.0,
+            "brain_query_p95_ms": 1500.0,
+            "retrieval_hit_rate": 0.85,
+            "retrieval_precision3": 0.70,
+            "avg_tokens_per_op": 15000,
+            "heartbeat_overhead_s": 12.0,
+            "episode_success_rate": 0.85,
+            "action_accuracy": 0.90,
+            "phi": 0.70,
+            "context_relevance": 0.75,
+            "task_quality_score": 0.70,
+            "code_quality_score": 0.75,
+            "graph_density": 1.5,
+            "bloat_score": 0.40,
+            "brief_compression": 0.55,
+            "load_degradation_pct": 15.0,
         }
         metrics.update(metric_overrides)
         return compute_pi(metrics)
@@ -169,14 +173,18 @@ class TestComputePI:
     def test_perfect_score(self):
         """All metrics at or beyond targets should give PI=1.0."""
         result = self._compute(
-            brain_query_avg_ms=5000,  # better than target (lower)
-            brain_query_p95_ms=6000,
+            brain_query_avg_ms=500,   # better than target (lower)
+            brain_query_p95_ms=1000,
             retrieval_hit_rate=0.95,
             retrieval_precision3=0.80,
-            episode_success_rate=0.90,
+            avg_tokens_per_op=10000,
+            heartbeat_overhead_s=8.0,
+            episode_success_rate=0.95,
             action_accuracy=0.95,
-            phi=0.70,
+            phi=0.80,
             context_relevance=0.85,
+            task_quality_score=0.80,
+            code_quality_score=0.85,
             graph_density=2.0,
             bloat_score=0.20,
             brief_compression=0.70,
@@ -193,18 +201,22 @@ class TestComputePI:
     def test_all_critical(self):
         """All metrics at critical thresholds should give PI=0.0."""
         result = self._compute(
-            brain_query_avg_ms=12000,
-            brain_query_p95_ms=14000,
-            retrieval_hit_rate=0.40,
-            retrieval_precision3=0.25,
-            episode_success_rate=0.35,
-            action_accuracy=0.45,
-            phi=0.20,
-            context_relevance=0.35,
-            graph_density=0.2,
-            bloat_score=0.80,
-            brief_compression=0.15,
-            load_degradation_pct=70.0,
+            brain_query_avg_ms=2000,
+            brain_query_p95_ms=3000,
+            retrieval_hit_rate=0.50,
+            retrieval_precision3=0.30,
+            avg_tokens_per_op=30000,
+            heartbeat_overhead_s=30.0,
+            episode_success_rate=0.50,
+            action_accuracy=0.60,
+            phi=0.30,
+            context_relevance=0.40,
+            task_quality_score=0.40,
+            code_quality_score=0.45,
+            graph_density=0.3,
+            bloat_score=0.70,
+            brief_compression=0.20,
+            load_degradation_pct=60.0,
         )
         assert result["pi"] == 0.0
         assert "Critical" in result["interpretation"]
@@ -212,18 +224,22 @@ class TestComputePI:
     def test_midpoint_score(self):
         """Metrics halfway between target and critical should give ~0.5."""
         result = self._compute(
-            brain_query_avg_ms=10000,  # midpoint of 8000-12000
-            brain_query_p95_ms=11500,  # midpoint of 9000-14000
-            retrieval_hit_rate=0.60,   # midpoint of 0.40-0.80
-            retrieval_precision3=0.425, # midpoint of 0.25-0.60
-            episode_success_rate=0.525, # midpoint of 0.35-0.70
-            action_accuracy=0.625,     # midpoint of 0.45-0.80
-            phi=0.35,                  # midpoint of 0.20-0.50
-            context_relevance=0.525,   # midpoint of 0.35-0.70
-            graph_density=0.6,         # midpoint of 0.2-1.0
-            bloat_score=0.65,          # midpoint of 0.50-0.80
-            brief_compression=0.325,   # midpoint of 0.15-0.50
-            load_degradation_pct=45.0, # midpoint of 20-70
+            brain_query_avg_ms=1400,    # midpoint of 800-2000
+            brain_query_p95_ms=2250,    # midpoint of 1500-3000
+            retrieval_hit_rate=0.675,   # midpoint of 0.50-0.85
+            retrieval_precision3=0.50,  # midpoint of 0.30-0.70
+            avg_tokens_per_op=22500,    # midpoint of 15000-30000
+            heartbeat_overhead_s=21.0,  # midpoint of 12-30
+            episode_success_rate=0.675, # midpoint of 0.50-0.85
+            action_accuracy=0.75,       # midpoint of 0.60-0.90
+            phi=0.50,                   # midpoint of 0.30-0.70
+            context_relevance=0.575,    # midpoint of 0.40-0.75
+            task_quality_score=0.55,    # midpoint of 0.40-0.70
+            code_quality_score=0.60,    # midpoint of 0.45-0.75
+            graph_density=0.9,          # midpoint of 0.3-1.5
+            bloat_score=0.55,           # midpoint of 0.40-0.70
+            brief_compression=0.375,    # midpoint of 0.20-0.55
+            load_degradation_pct=37.5,  # midpoint of 15-60
         )
         assert 0.40 <= result["pi"] <= 0.60, f"Midpoint PI={result['pi']} not near 0.5"
 

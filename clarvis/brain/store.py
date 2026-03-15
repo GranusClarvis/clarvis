@@ -87,6 +87,136 @@ class StoreMixin:
         except Exception:
             pass
 
+    # === BELIEF REVISION ===
+
+    def revise(self, old_memory_id, new_text, collection=None, reason="updated",
+               confidence=None, valid_until=None):
+        """Store a new memory that supersedes an old one.
+
+        The old memory gets metadata status='superseded' and superseded_by=<new_id>.
+        The new memory gets metadata supersedes=<old_id> plus optional confidence
+        and valid_until fields.
+
+        Args:
+            old_memory_id: ID of the memory being revised
+            new_text: Updated belief text
+            collection: Collection to search (auto-detected if None)
+            reason: Why the revision happened (e.g. "corrected", "updated", "refined")
+            confidence: 0.0-1.0 certainty level (None = default 0.5)
+            valid_until: ISO date string after which this belief should be re-evaluated
+
+        Returns:
+            dict with old_id, new_id, and status
+        """
+        # Find the old memory
+        old_meta = None
+        old_col = collection
+        if old_col:
+            cols_to_check = [old_col]
+        else:
+            cols_to_check = list(self.collections.keys())
+
+        for col_name in cols_to_check:
+            if col_name not in self.collections:
+                continue
+            try:
+                result = self.collections[col_name].get(ids=[old_memory_id])
+                if result["ids"]:
+                    old_meta = result["metadatas"][0] if result.get("metadatas") else {}
+                    old_col = col_name
+                    break
+            except Exception:
+                continue
+
+        if old_meta is None:
+            return {"success": False, "message": f"Memory '{old_memory_id}' not found"}
+
+        # Store the new memory
+        importance = old_meta.get("importance", 0.5)
+        tags = []
+        try:
+            tags_raw = old_meta.get("tags", "[]")
+            tags = json.loads(tags_raw) if isinstance(tags_raw, str) else (tags_raw or [])
+        except Exception:
+            pass
+
+        new_id = self.store(
+            new_text,
+            collection=old_col,
+            importance=importance,
+            tags=tags,
+            source=f"revision:{reason}",
+        )
+
+        # Add revision metadata to new memory
+        new_result = self.collections[old_col].get(ids=[new_id])
+        if new_result["ids"]:
+            new_meta = new_result["metadatas"][0] if new_result.get("metadatas") else {}
+            new_meta["supersedes"] = old_memory_id
+            new_meta["revision_reason"] = reason
+            if confidence is not None:
+                new_meta["confidence"] = max(0.0, min(1.0, float(confidence)))
+            if valid_until:
+                new_meta["valid_until"] = valid_until
+            self.collections[old_col].update(
+                ids=[new_id], metadatas=[new_meta]
+            )
+
+        # Mark old memory as superseded
+        old_meta["status"] = "superseded"
+        old_meta["superseded_by"] = new_id
+        old_meta["superseded_at"] = datetime.now(timezone.utc).isoformat()
+        self.collections[old_col].update(
+            ids=[old_memory_id], metadatas=[old_meta]
+        )
+
+        self._invalidate_cache(old_col)
+
+        return {
+            "success": True,
+            "old_id": old_memory_id,
+            "new_id": new_id,
+            "collection": old_col,
+            "reason": reason,
+        }
+
+    def mark_uncertain(self, memory_id, confidence, collection=None):
+        """Mark a memory with a confidence level (0.0=uncertain, 1.0=certain).
+
+        Low-confidence memories are deprioritized in recall.
+        """
+        for col_name in ([collection] if collection else list(self.collections.keys())):
+            if col_name not in self.collections:
+                continue
+            try:
+                result = self.collections[col_name].get(ids=[memory_id])
+                if result["ids"]:
+                    meta = result["metadatas"][0] if result.get("metadatas") else {}
+                    meta["confidence"] = max(0.0, min(1.0, float(confidence)))
+                    self.collections[col_name].update(ids=[memory_id], metadatas=[meta])
+                    self._invalidate_cache(col_name)
+                    return {"success": True, "memory_id": memory_id, "confidence": confidence}
+            except Exception:
+                continue
+        return {"success": False, "message": f"Memory '{memory_id}' not found"}
+
+    def set_valid_until(self, memory_id, valid_until, collection=None):
+        """Set a time bound on a memory — it should be re-evaluated after this date."""
+        for col_name in ([collection] if collection else list(self.collections.keys())):
+            if col_name not in self.collections:
+                continue
+            try:
+                result = self.collections[col_name].get(ids=[memory_id])
+                if result["ids"]:
+                    meta = result["metadatas"][0] if result.get("metadatas") else {}
+                    meta["valid_until"] = valid_until
+                    self.collections[col_name].update(ids=[memory_id], metadatas=[meta])
+                    self._invalidate_cache(col_name)
+                    return {"success": True, "memory_id": memory_id, "valid_until": valid_until}
+            except Exception:
+                continue
+        return {"success": False, "message": f"Memory '{memory_id}' not found"}
+
     # === GOAL TRACKING ===
 
     def get_goals(self, include_archived=False):

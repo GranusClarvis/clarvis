@@ -391,9 +391,20 @@ class EpisodicMemory:
         # Auto-detect causal links with recent episodes
         self._auto_link(episode)
 
+        # Auto-tag code-related episodes for first_pass_success_rate metric
+        import re
+        _code_pattern = re.compile(
+            r'code|implement|fix|create|add|write|refactor|migrate|wire|test|build',
+            re.I
+        )
+        if _code_pattern.search(task_text):
+            episode["is_code_task"] = True
+
         # Store searchable version in brain
         importance = min(1.0, 0.5 + valence * 0.3)
         tags = ["episode", outcome, section]
+        if episode.get("is_code_task"):
+            tags.append("code_task")
         summary = f"Episode: {task_text[:100]} -> {outcome}"
         if error_msg:
             summary += f" (error: {error_msg[:80]})"
@@ -414,6 +425,10 @@ class EpisodicMemory:
             pass  # Don't let somatic tagging break episode encoding
 
         return episode
+
+    def get_recent(self, limit=50):
+        """Return the most recent episodes (newest first), up to `limit`."""
+        return list(reversed(self.episodes[-limit:]))
 
     def recall_similar(self, query, n=5, use_spreading_activation=True):
         """Recall episodes similar to the current situation.

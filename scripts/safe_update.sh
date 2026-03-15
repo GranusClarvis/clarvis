@@ -64,7 +64,6 @@ if [ "${SAFE_UPDATE_DETACHED:-}" != "1" ]; then
     done
 
     if [ "$is_child_of_gateway" = true ]; then
-      SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
       LOG_DIR="$HOME/.openclaw/backups"
       mkdir -p "$LOG_DIR"
       echo "[$(date '+%Y-%m-%d %H:%M:%S')] SAFETY: Detected running inside gateway process tree (gateway PID: $gateway_pid)." | tee -a "$LOG_DIR/update.log"
@@ -384,7 +383,7 @@ spawn_gateway_watchdog() {
   (
     # Wait for the update to complete or the parent to die
     # Check every 10 seconds, give the update up to 10 minutes
-    for i in $(seq 1 60); do
+    for _i in $(seq 1 60); do
       sleep 10
       # If parent is still alive, the update is still running — keep waiting
       if kill -0 "$parent_pid" 2>/dev/null; then

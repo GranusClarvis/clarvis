@@ -55,6 +55,7 @@ list_backups() {
   echo "Available backups:"
   echo "===================="
   local i=0
+  # shellcheck disable=SC2012,SC2045  # backup dirs are date-named, no whitespace risk; need mtime sort
   for dir in $(ls -dt "$BACKUP_ROOT"/2*/ 2>/dev/null); do
     local name
     name=$(basename "$dir")
@@ -90,6 +91,7 @@ resolve_backup() {
     fi
   elif [ -n "$TARGET_DATE" ]; then
     # Find closest backup to the given date
+    # shellcheck disable=SC2012,SC2010  # backup dirs are date-named, grep on dir names is safe
     RESOLVED=$(ls -dt "$BACKUP_ROOT"/2*/ 2>/dev/null | grep "$TARGET_DATE" | head -1)
     if [ -z "$RESOLVED" ]; then
       # Fall back to closest before the date
@@ -114,7 +116,8 @@ resolve_backup() {
 
 # --- Pre-restore safety snapshot ---
 create_pre_restore_snapshot() {
-  local snap_dir="$PRE_RESTORE_DIR/$(date +%Y-%m-%d_%H%M%S)"
+  local snap_dir
+  snap_dir="$PRE_RESTORE_DIR/$(date +%Y-%m-%d_%H%M%S)"
   mkdir -p "$snap_dir"
   log "Creating pre-restore snapshot: $snap_dir"
 
@@ -210,8 +213,6 @@ print(f\"  Created:  {m['created_at']}\")
   # Verify restored files against manifest
   if [ -f "$backup_dir/manifest.json" ]; then
     log "Verifying restored files..."
-    local verify_ok=0
-    local verify_fail=0
     python3 -c "
 import json, hashlib, sys
 
@@ -254,6 +255,7 @@ do_restore_file() {
 
   # Search for the file across backups (newest first)
   log "Searching for: $TARGET_FILE"
+  # shellcheck disable=SC2012,SC2045  # backup dirs are date-named, no whitespace risk; need mtime sort
   for dir in $(ls -dt "$BACKUP_ROOT"/2*/ 2>/dev/null); do
     local candidate="$dir/$TARGET_FILE"
     if [ -f "$candidate" ]; then

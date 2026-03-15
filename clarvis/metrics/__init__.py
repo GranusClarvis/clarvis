@@ -10,6 +10,8 @@ Canonical spine modules:
 
 from .phi import compute_phi
 from .benchmark import compute_pi
-from .self_model import assess_all_capabilities as assess
+from .clr import compute_clr, record_clr, format_clr, get_clr_trend
+from .self_model import assess_all_capabilities as assess, SelfModel
 from .code_validation import validate_python_file, validate_output
 from .quality import compute_code_quality_score, compute_task_quality_score, get_all_quality_metrics
+from .memory_audit import run_full_audit, audit_memory_ratios, audit_archived_vs_active

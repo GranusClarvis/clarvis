@@ -67,6 +67,19 @@ ARCHITECTURAL_KEYWORDS = [
     "heartbeat.md", "agents.md", "roadmap", "prompt", "schedule",
 ]
 
+# IMPROVE_EXISTING_OVER_NEW policy — boosts fix/improve tasks, penalizes new features.
+# Active when CLARVIS_IMPROVE_EXISTING env var is set or policy file exists.
+# Rationale: prevents surface area sprawl; prioritizes fixing, wiring, validating.
+IMPROVE_EXISTING_KEYWORDS = [
+    "fix", "simplify", "wire", "validate", "benchmark", "optimize",
+    "test", "improve", "repair", "migrate", "soak", "verify",
+    "reduce", "consolidate", "decompose", "cleanup", "stabilize",
+]
+NEW_FEATURE_KEYWORDS = [
+    "new feature", "add new", "create new", "build new", "implement new",
+    "introduce", "design new", "prototype",
+]
+
 
 def _compute_novelty(task_text, recent_tasks, min_words=3):
     """Compute novelty score (0.0-1.0) as inverse Jaccard similarity to recent tasks.
@@ -333,7 +346,10 @@ def score_tasks(tasks, codelet_result=None):
         # Novelty: boost tasks that differ from recent completed work
         novelty = _compute_novelty(text, recent_completed)
 
-        total_boost = agi_boost + integration_boost + architectural_boost - failure_penalty
+        # Improve-existing-over-new policy bias
+        improve_bias = _improve_existing_bias(text)
+
+        total_boost = agi_boost + integration_boost + architectural_boost - failure_penalty + improve_bias
 
         effective_relevance = min(1.0, relevance + spotlight_align * 0.15)
         item = attention.submit(
@@ -373,6 +389,7 @@ def score_tasks(tasks, codelet_result=None):
                 "somatic_signal": somatic_signal,
                 "codelet_bias": round(codelet_bias, 4),
                 "failure_penalty": round(failure_penalty, 3),
+                "improve_bias": round(improve_bias, 3),
                 "novelty": round(novelty, 4),
                 "base_salience": round(salience, 4),
             }
@@ -438,3 +455,55 @@ def _is_repair_task(task_text):
         "fix brain", "debug memory", "investigate failure",
     ]
     return any(kw in text_lower for kw in repair_keywords)
+
+
+# ---------------------------------------------------------------------------
+# IMPROVE_EXISTING_OVER_NEW policy
+# ---------------------------------------------------------------------------
+
+_IMPROVE_POLICY_FILE = os.path.join(
+    os.path.dirname(QUEUE_FILE), "..", "..", "data", "improve_existing_policy.json"
+)
+
+
+def _is_improve_existing_active():
+    """Check if the improve-existing-over-new policy is active.
+
+    Active when:
+    - CLARVIS_IMPROVE_EXISTING=1 env var is set, OR
+    - data/improve_existing_policy.json exists with active=true
+    """
+    if os.environ.get("CLARVIS_IMPROVE_EXISTING", "").strip() in ("1", "true"):
+        return True
+    try:
+        if os.path.exists(_IMPROVE_POLICY_FILE):
+            with open(_IMPROVE_POLICY_FILE) as f:
+                data = json.load(f)
+            return data.get("active", False)
+    except Exception:
+        pass
+    return False
+
+
+def _improve_existing_bias(task_text):
+    """Return a scoring bias for the improve-existing-over-new policy.
+
+    Returns positive bias for fix/improve/optimize tasks,
+    negative bias for new feature tasks, 0.0 for neutral.
+    """
+    if not _is_improve_existing_active():
+        return 0.0
+
+    text_lower = task_text.lower()
+
+    # Boost for improving existing systems
+    improve_hits = sum(1 for kw in IMPROVE_EXISTING_KEYWORDS if kw in text_lower)
+    if improve_hits > 0:
+        return min(0.25, improve_hits * 0.08)
+
+    # Penalty for new feature surface area
+    new_hits = sum(1 for kw in NEW_FEATURE_KEYWORDS if kw in text_lower)
+    if new_hits > 0:
+        return max(-0.20, -(new_hits * 0.10))
+
+    return 0.0

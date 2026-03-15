@@ -36,7 +36,7 @@ def compute_task_quality_score(days=7):
     whether the same task recurs (indicating poor fix).
     """
     try:
-        from episodic_memory import EpisodicMemory
+        from clarvis.memory.episodic_memory import EpisodicMemory
         em = EpisodicMemory()
         stats = em.get_stats()
 
@@ -60,7 +60,7 @@ def compute_task_quality_score(days=7):
 
         # Quality factor 3: Recurrence penalty
         # Same task appearing repeatedly = poor quality fix
-        from brain import brain
+        from clarvis.brain import brain
         try:
             # Count how many "fix" tasks are in recent episodes
             recent_episodes = em.get_recent(limit=50)
@@ -197,13 +197,18 @@ def _first_pass_success_rate():
     Returns float 0.0-1.0 or None if insufficient data.
     """
     try:
-        sys.path.insert(0, os.path.join(WORKSPACE, "scripts"))
-        from episodic_memory import EpisodicMemory
+        from clarvis.memory.episodic_memory import EpisodicMemory
         em = EpisodicMemory()
         recent = em.get_recent(limit=50)
 
-        code_pattern = re.compile(r'code|implement|fix|create|add|write|refactor|migrate', re.I)
-        code_episodes = [ep for ep in recent if code_pattern.search(ep.get("task", ""))]
+        code_pattern = re.compile(
+            r'code|implement|fix|create|add|write|refactor|migrate|wire|test|build',
+            re.I
+        )
+        code_episodes = [
+            ep for ep in recent
+            if ep.get("is_code_task") or code_pattern.search(ep.get("task", ""))
+        ]
 
         if len(code_episodes) < 5:
             return None
@@ -413,7 +418,7 @@ def compute_code_quality_score(days=7):
 def compute_semantic_depth():
     """Compute semantic depth score - how meaningful are connections?"""
     try:
-        from brain import brain
+        from clarvis.brain import brain
         stats = brain.stats()
 
         # Semantic depth based on:
@@ -463,7 +468,7 @@ def compute_efficiency_score():
         # This would ideally come from cost tracking
         # For now, derive from context compression * success rate
 
-        from context_compressor import generate_tiered_brief
+        from clarvis.context.compressor import generate_tiered_brief
 
         # Measure compression efficiency
         brief = generate_tiered_brief("efficiency test", "standard", [])
@@ -478,7 +483,7 @@ def compute_efficiency_score():
 
         # Success rate from episodes
         try:
-            from episodic_memory import EpisodicMemory
+            from clarvis.memory.episodic_memory import EpisodicMemory
             em = EpisodicMemory()
             stats = em.get_stats()
             outcomes = stats.get("outcomes", {})

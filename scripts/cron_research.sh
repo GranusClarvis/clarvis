@@ -69,7 +69,7 @@ if [ -z "$RESEARCH_TASK" ]; then
     fi
     echo $$ > "$DISC_LOCKFILE"
     # Update trap to clean discovery lockfile AND lock_helper's locks
-    trap "rm -f $DISC_LOCKFILE; _lock_helper_cleanup 2>/dev/null" EXIT
+    trap 'rm -f "$DISC_LOCKFILE"; _lock_helper_cleanup 2>/dev/null' EXIT
 
     # Run discovery inline (same logic as cron_research_discovery.sh)
     CONTEXT_BRIEF_DISC=$(python3 "$SCRIPTS/prompt_builder.py" context-brief --task "identify valuable research topics" --tier standard 2>/dev/null || echo "")
@@ -138,11 +138,8 @@ OUTPUT FORMAT (mandatory): TOPICS ADDED: <count>. Then list each topic on its ow
 ENDDISC
 
     # Category: research (1800s) — matches spawn_claude.sh --category=research
-    timeout 1800 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT /home/agent/.local/bin/claude -p \
-        "$(cat "$DISC_PROMPT_FILE")" \
-        --dangerously-skip-permissions --model claude-opus-4-6 \
-        > "$DISC_OUTPUT_FILE" 2>&1
-    DISC_EXIT=$?
+    run_claude_monitored 1800 "$DISC_OUTPUT_FILE" "$DISC_PROMPT_FILE" "$LOGFILE"
+    DISC_EXIT=$MONITORED_EXIT
     DISC_DURATION=$((SECONDS - DISC_START))
     rm -f "$DISC_PROMPT_FILE"
 
@@ -221,10 +218,8 @@ STEPS:
 OUTPUT FORMAT (mandatory): LEARNED: <1-sentence summary>. STORED: <count> brain memories. APPLIED: <how this helps Clarvis>."
 fi
 
-timeout 1800 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT /home/agent/.local/bin/claude -p \
-    "$RESEARCH_PROMPT" \
-    --dangerously-skip-permissions --model claude-opus-4-6 > "$TASK_OUTPUT_FILE" 2>&1
-TASK_EXIT=$?
+run_claude_monitored 1800 "$TASK_OUTPUT_FILE" "$RESEARCH_PROMPT" "$LOGFILE"
+TASK_EXIT=$MONITORED_EXIT
 TASK_DURATION=$((SECONDS - TASK_START))
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] RESEARCH EXECUTION: exit=$TASK_EXIT duration=${TASK_DURATION}s" >> "$LOGFILE"

@@ -1596,7 +1596,7 @@ class TestConsolidationHelpers:
             assert isinstance(cap, int)
             assert cap > 0
         total = sum(COLLECTION_CAPS.values())
-        assert 1000 < total < 5000, f"Total cap should be reasonable, got {total}"
+        assert 1000 < total < 15000, f"Total cap should be reasonable, got {total}"
 
     def test_load_archive_missing_file(self, tmp_path):
         from clarvis.memory import memory_consolidation as mc

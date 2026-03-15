@@ -582,6 +582,15 @@ def search(query, n=5, min_importance=None, collections=None):
     return brain.recall(query, n=n, min_importance=min_importance, collections=collections)
 
 
+def synthesize(query, n=10, collections=None):
+    """Synthesize conclusions across multiple memories for a topic.
+
+    Groups evidence into bundles, detects contradictions, and returns
+    structured synthesis instead of loosely related top hits.
+    """
+    return brain.synthesize(query, n=n, collections=collections)
+
+
 def global_search(query, level="C1", top_k=5):
     """GraphRAG-style global search over community summaries."""
     from clarvis.brain.graphrag import global_search as _gs

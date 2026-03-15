@@ -19,8 +19,6 @@ emit_dashboard_event task_started --task-name "Monthly structural reflection" --
 # Pre-compute metrics for prompt
 WEAKEST_METRIC=$(get_weakest_metric)
 
-SCRIPTS="/home/agent/.openclaw/workspace/scripts"
-
 # Build the Claude Code prompt
 PROMPT_FILE=$(mktemp --suffix=.txt)
 cat > "$PROMPT_FILE" << 'ENDPROMPT'

@@ -315,7 +315,7 @@ fi
 
 # --- Prune old backups ---
 log "Pruning old backups (keeping $MAX_BACKUPS)..."
-BACKUP_DIRS=($(ls -dt "$BACKUP_ROOT"/2*/ 2>/dev/null))
+mapfile -t BACKUP_DIRS < <(ls -dt "$BACKUP_ROOT"/2*/ 2>/dev/null)
 if [ "${#BACKUP_DIRS[@]}" -gt "$MAX_BACKUPS" ]; then
   for ((i=$MAX_BACKUPS; i<${#BACKUP_DIRS[@]}; i++)); do
     log "  Removing old backup: $(basename "${BACKUP_DIRS[$i]}")"

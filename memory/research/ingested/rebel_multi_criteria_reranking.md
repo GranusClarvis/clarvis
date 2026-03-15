@@ -1,0 +1,7 @@
+# REBEL — Multi-Criteria Reranking for RAG
+
+REBEL ("RErank BEyond reLevance") argues that standard RAG pipelines over-optimize for topical relevance and thereby create an information bottleneck: retrieved chunks may match the query yet still be poor context for producing the best answer. The paper shows this empirically by comparing retrieval precision against downstream answer similarity. Relevance-only rerankers such as Cohere and LLM rerankers improve retrieval precision, but can degrade end-to-end answer quality. REBEL fixes this by scoring documents on relevance plus secondary properties that matter for generation quality.
+
+Its one-turn variant uses a fixed prompt that rates each document on relevance, depth, diversity, clarity/specificity, authoritativeness, and recency, then combines them with a weighted composite score. Its two-turn variant first infers query-dependent criteria and weights, then performs reranking using that custom rubric. The result is a new inference-time compute tradeoff: more deliberative reranking buys higher system quality instead of merely spending latency for marginal relevance gains.
+
+Practical implication for Clarvis: retrieval should rank context for answer usefulness, not just semantic closeness. REBEL is especially relevant for adaptive RAG and ClarvisDB recall, where multi-criteria reranking could improve context relevance, multi-hop usefulness, and response reliability without retraining the base model.

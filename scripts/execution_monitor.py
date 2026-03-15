@@ -2,12 +2,12 @@
 """Execution Monitor — Mid-execution progress monitoring for heartbeat pipeline.
 
 Implements Cognitive Pattern 9: Commitment & Reconsideration (Wray et al. 2505.07087).
-Monitors a spawned Claude Code task's output file during execution. Surfaces a
-reconsideration flag when progress stalls and optionally triggers graceful abort.
+Monitors a spawned Claude Code task during execution. Uses process-level heuristics
+(CPU activity, child processes, /proc state) as PRIMARY stall detection, since Claude
+Code buffers all stdout — visible output is unreliable as a liveness signal.
 
-Progress checkpoint detection: Scans output for progress markers (TODO completions,
-RESULT lines, task completions) to distinguish "productive but slow" from "stuck".
-Writes a progress summary (.progress.json) for postflight quality scoring.
+Progress checkpoint detection: Scans output for progress markers when output IS visible,
+but absence of output is NOT treated as a stall signal on its own.
 
 Usage:
     python3 execution_monitor.py <output_file> <timeout_secs> <target_pid>
@@ -21,15 +21,17 @@ import json
 import os
 import re
 import signal
+import subprocess
 import sys
 import time
 from pathlib import Path
 
 POLL_INTERVAL = 15  # seconds between checks
-RECONSIDER_FRACTION = 0.50  # flag reconsideration at 50% of timeout
-ABORT_FRACTION = 0.90  # graceful abort at 90% of timeout (was 0.75 — too aggressive,
-                        # Claude Code buffers output causing false "no output" detection)
+RECONSIDER_FRACTION = 0.60  # flag reconsideration at 60% (was 50% — too early for buffered output)
+ABORT_FRACTION = 0.92  # graceful abort at 92% of timeout
 MIN_OUTPUT_BYTES = 50  # below this = "no meaningful output"
+# Number of consecutive idle polls (no CPU, no children) before declaring stall
+IDLE_POLLS_FOR_STALL = 3  # 3 × 15s = 45s of confirmed process inactivity
 
 LOG_FILE = Path("/home/agent/.openclaw/workspace/data/reconsider_log.jsonl")
 
@@ -56,12 +58,10 @@ def count_checkpoints(text: str) -> dict:
     for pattern in CHECKPOINT_PATTERNS:
         matches = pattern.findall(text)
         if matches:
-            # Use a short label from the pattern
             label = pattern.pattern[:30].strip()
             counts[label] = len(matches)
             total += len(matches)
 
-    # Progress score: 0.0 (no checkpoints) to 1.0 (5+ checkpoints)
     score = min(1.0, total / 5.0)
 
     return {
@@ -71,11 +71,106 @@ def count_checkpoints(text: str) -> dict:
     }
 
 
-def monitor(output_file: str, timeout_secs: int, target_pid: int):
-    """Poll output file and flag/abort stalled execution.
+def _get_process_tree(pid: int) -> list:
+    """Get all PIDs in the process tree (parent + all descendants)."""
+    try:
+        result = subprocess.run(
+            ["pgrep", "-P", str(pid)],
+            capture_output=True, text=True, timeout=5
+        )
+        children = [int(p) for p in result.stdout.strip().split() if p]
+        # Recurse one level for grandchildren (Claude → node → subprocesses)
+        grandchildren = []
+        for child in children:
+            try:
+                r2 = subprocess.run(
+                    ["pgrep", "-P", str(child)],
+                    capture_output=True, text=True, timeout=5
+                )
+                grandchildren.extend(int(p) for p in r2.stdout.strip().split() if p)
+            except Exception:
+                pass
+        return [pid] + children + grandchildren
+    except Exception:
+        return [pid]
 
-    Tracks progress checkpoints in the output to distinguish productive work
-    from stalls. Writes a progress summary on completion.
+
+def _get_cpu_ticks(pids: list) -> int:
+    """Sum utime + stime from /proc/<pid>/stat for all pids."""
+    total = 0
+    for p in pids:
+        try:
+            with open(f"/proc/{p}/stat") as f:
+                fields = f.read().split()
+                total += int(fields[13]) + int(fields[14])
+        except (OSError, IndexError, ValueError):
+            pass
+    return total
+
+
+def _get_process_state(pid: int) -> str:
+    """Get process state character from /proc/<pid>/stat. Returns '' on error."""
+    try:
+        with open(f"/proc/{pid}/stat") as f:
+            fields = f.read().split()
+            return fields[2]  # R=running, S=sleeping, D=disk, Z=zombie, T=stopped
+    except (OSError, IndexError):
+        return ""
+
+
+def _count_live_children(pid: int) -> int:
+    """Count non-zombie child processes."""
+    try:
+        result = subprocess.run(
+            ["pgrep", "-P", str(pid)],
+            capture_output=True, text=True, timeout=5
+        )
+        children = [int(p) for p in result.stdout.strip().split() if p]
+        live = 0
+        for c in children:
+            state = _get_process_state(c)
+            if state and state != "Z":
+                live += 1
+        return live
+    except Exception:
+        return 0
+
+
+def _process_is_active(pid: int) -> bool:
+    """Check if the process tree is actively using CPU.
+
+    Samples CPU ticks over a 2-second window across the full process tree.
+    Also checks for live child processes (Claude Code spawns subprocesses).
+    """
+    pids = _get_process_tree(pid)
+
+    # Check 1: Any live children = likely active (Claude spawns node, git, etc.)
+    live_children = _count_live_children(pid)
+    if live_children > 0:
+        return True
+
+    # Check 2: CPU tick delta over 2s window
+    ticks_before = _get_cpu_ticks(pids)
+    time.sleep(2)
+    ticks_after = _get_cpu_ticks(pids)
+
+    if ticks_after > ticks_before:
+        return True
+
+    # Check 3: Process state — D (disk wait) or R (running) = active
+    state = _get_process_state(pid)
+    if state in ("R", "D"):
+        return True
+
+    return False
+
+
+def monitor(output_file: str, timeout_secs: int, target_pid: int):
+    """Poll process liveness and output file, flag/abort truly stalled execution.
+
+    PRIMARY stall detection: process-level heuristics (CPU ticks, child processes,
+    /proc state). Output-based checkpoints are a secondary positive signal.
+    Zero output is treated as NORMAL for Claude Code (buffered stdout).
     """
     flag_file = f"{output_file}.reconsider.json"
     progress_file = f"{output_file}.progress.json"
@@ -84,6 +179,8 @@ def monitor(output_file: str, timeout_secs: int, target_pid: int):
     last_checkpoint_count = 0
     last_checkpoint_time = start
     checkpoint_timeline = []  # [(elapsed_s, count)]
+    consecutive_idle_polls = 0  # count of polls where process tree shows no activity
+    last_active_time = start  # last time process showed CPU/child activity
 
     while True:
         time.sleep(POLL_INTERVAL)
@@ -97,7 +194,15 @@ def monitor(output_file: str, timeout_secs: int, target_pid: int):
         except (OSError, ProcessLookupError):
             break  # process finished normally
 
-        # Check output file size
+        # === Process-level liveness (PRIMARY signal) ===
+        process_active = _process_is_active(target_pid)
+        if process_active:
+            consecutive_idle_polls = 0
+            last_active_time = time.time()
+        else:
+            consecutive_idle_polls += 1
+
+        # === Output-based checkpoints (SECONDARY signal) ===
         try:
             size = os.path.getsize(output_file)
         except (OSError, FileNotFoundError):
@@ -105,7 +210,6 @@ def monitor(output_file: str, timeout_secs: int, target_pid: int):
 
         has_output = size >= MIN_OUTPUT_BYTES
 
-        # Check for progress checkpoints in output
         cp_data = {"checkpoint_count": 0, "progress_score": 0.0}
         if has_output:
             try:
@@ -115,59 +219,61 @@ def monitor(output_file: str, timeout_secs: int, target_pid: int):
             except OSError:
                 pass
 
-        # Track checkpoint timeline (new checkpoints = real progress)
         current_cp = cp_data["checkpoint_count"]
         if current_cp > last_checkpoint_count:
             checkpoint_timeline.append((round(elapsed), current_cp))
             last_checkpoint_count = current_cp
             last_checkpoint_time = time.time()
+            consecutive_idle_polls = 0  # checkpoint = definite progress
 
-        # Progress-aware stall detection: if we have checkpoints, the task
-        # is making progress even if it's slow. Only flag stall if no new
-        # checkpoints for a significant portion of the timeout.
-        stall_duration = time.time() - last_checkpoint_time
-        has_recent_progress = stall_duration < (timeout_secs * 0.4)
+        # === Stall determination ===
+        # A process is stalled only if BOTH conditions are true:
+        # 1. Process tree shows no CPU/child activity for multiple consecutive polls
+        # 2. No new output checkpoints
+        # Zero output alone is NOT a stall (Claude Code buffers everything).
+        is_process_stalled = consecutive_idle_polls >= IDLE_POLLS_FOR_STALL
+        time_since_activity = time.time() - last_active_time
 
-        # Output appeared after flag → clear reconsideration
-        if flagged and (has_output or has_recent_progress):
+        # Output appeared or process active after flag → clear reconsideration
+        if flagged and (process_active or has_output):
             try:
                 os.remove(flag_file)
             except OSError:
                 pass
             flagged = False
 
-        # 50% threshold: flag reconsideration (skip if making checkpoint progress)
-        if frac >= RECONSIDER_FRACTION and not has_output and not flagged and not has_recent_progress:
+        # 60% threshold: flag reconsideration ONLY if process is truly stalled
+        if (frac >= RECONSIDER_FRACTION and is_process_stalled
+                and not flagged and not process_active):
             flagged = True
             verdict = {
                 "reconsider": True,
                 "aborted": False,
-                "reason": f"No output after {elapsed:.0f}s ({frac:.0%} of {timeout_secs}s timeout)",
+                "reason": (f"Process idle for {consecutive_idle_polls} polls "
+                           f"({time_since_activity:.0f}s) at {frac:.0%} of timeout"),
                 "elapsed_secs": round(elapsed),
                 "output_bytes": size,
                 "checkpoints": current_cp,
+                "idle_polls": consecutive_idle_polls,
                 "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             }
             _write_flag(flag_file, verdict)
 
-        # 90% threshold: graceful abort (only if process is truly idle AND no recent progress)
-        if frac >= ABORT_FRACTION and not has_output and not has_recent_progress:
-            # Check if process tree is actively using CPU before aborting
-            if _process_is_active(target_pid):
-                continue  # process is working, skip abort
-
+        # 92% threshold: graceful abort ONLY if process is truly stalled
+        if frac >= ABORT_FRACTION and is_process_stalled and not process_active:
             verdict = {
                 "reconsider": True,
                 "aborted": True,
-                "reason": f"No output after {elapsed:.0f}s ({frac:.0%} of {timeout_secs}s timeout) — aborting",
+                "reason": (f"Process idle for {consecutive_idle_polls} polls "
+                           f"({time_since_activity:.0f}s) at {frac:.0%} of timeout — aborting"),
                 "elapsed_secs": round(elapsed),
                 "output_bytes": size,
                 "checkpoints": current_cp,
+                "idle_polls": consecutive_idle_polls,
                 "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             }
             _write_flag(flag_file, verdict)
             _log_event(verdict)
-            # Graceful abort: SIGTERM to timeout process (forwards to Claude)
             try:
                 os.kill(target_pid, signal.SIGTERM)
             except (OSError, ProcessLookupError):
@@ -194,6 +300,7 @@ def monitor(output_file: str, timeout_secs: int, target_pid: int):
         "checkpoint_details": final_cp["checkpoint_details"],
         "checkpoint_timeline": checkpoint_timeline,
         "was_flagged": flagged,
+        "idle_polls_at_end": consecutive_idle_polls,
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
     _write_flag(progress_file, progress_summary)
@@ -206,43 +313,6 @@ def _write_flag(path: str, data: dict):
             json.dump(data, f, indent=2)
     except OSError:
         pass
-
-
-def _process_is_active(pid: int) -> bool:
-    """Check if the process (or its children) are actively using CPU.
-
-    Reads /proc/<pid>/stat to get cumulative CPU ticks, waits briefly,
-    and checks if ticks increased. Returns True if CPU activity detected.
-    """
-    import subprocess
-
-    try:
-        # Get all PIDs in the process tree
-        result = subprocess.run(
-            ["pgrep", "-P", str(pid)],
-            capture_output=True, text=True, timeout=5
-        )
-        pids = [pid] + [int(p) for p in result.stdout.strip().split() if p]
-    except Exception:
-        pids = [pid]
-
-    def get_cpu_ticks(pids):
-        total = 0
-        for p in pids:
-            try:
-                with open(f"/proc/{p}/stat") as f:
-                    fields = f.read().split()
-                    # fields 13,14 = utime, stime (in clock ticks)
-                    total += int(fields[13]) + int(fields[14])
-            except (OSError, IndexError, ValueError):
-                pass
-        return total
-
-    ticks_before = get_cpu_ticks(pids)
-    time.sleep(2)
-    ticks_after = get_cpu_ticks(pids)
-
-    return ticks_after > ticks_before
 
 
 def _log_event(data: dict):

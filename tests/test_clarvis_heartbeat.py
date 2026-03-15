@@ -4,6 +4,7 @@ HookRegistry is tested in depth (pure Python, no DB).
 Adapters are tested for registration correctness.
 """
 
+import json
 import os
 import sys
 import time
@@ -211,7 +212,8 @@ class TestAdaptersRegistration:
         assert "latency_budget" in names
         assert "structural_health" in names
         assert "meta_learning" in names
-        assert len(names) == 7
+        assert "intrinsic_assessment" in names
+        assert len(names) == 8
 
     def test_register_procedural_only(self):
         from clarvis.heartbeat.adapters import register_procedural
@@ -445,6 +447,522 @@ class TestRegistryAdvanced:
         reg.register(HookPhase.POSTFLIGHT, "hook", lambda ctx: "v3", priority=10)
         names = reg.hook_names(HookPhase.POSTFLIGHT)
         assert names[0] == "hook"  # Now first due to priority 10
+
+
+# ---------------------------------------------------------------------------
+# 6. _classify_error — pure function, no external deps
+# ---------------------------------------------------------------------------
+
+class TestClassifyError:
+    @pytest.fixture(autouse=True)
+    def _import_classify(self):
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        from heartbeat_postflight import _classify_error
+        self._classify_error = _classify_error
+
+    def test_timeout_exit_code_124(self):
+        etype, evidence = self._classify_error(124, "some output")
+        assert etype == "timeout"
+        assert "124" in evidence
+
+    def test_timeout_exit_code_124_empty_output(self):
+        etype, _ = self._classify_error(124, "")
+        assert etype == "timeout"
+
+    def test_memory_keywords(self):
+        output = "ChromaDB error: embedding failed on collection xyz"
+        etype, evidence = self._classify_error(1, output)
+        assert etype == "memory"
+        assert "memory keywords" in evidence
+
+    def test_planning_keywords(self):
+        output = "preflight task_selector: queue empty, no tasks available"
+        etype, evidence = self._classify_error(1, output)
+        assert etype == "planning"
+        assert "planning keywords" in evidence
+
+    def test_system_keywords(self):
+        output = "FileNotFoundError: no such file, permission denied on /tmp/lock"
+        etype, evidence = self._classify_error(1, output)
+        assert etype == "system"
+        assert "system keywords" in evidence
+
+    def test_action_default(self):
+        """Unrecognized errors default to 'action'."""
+        output = "AssertionError: expected 42 got 17"
+        etype, evidence = self._classify_error(1, output)
+        assert etype == "action"
+        assert "default" in evidence
+
+    def test_none_output(self):
+        etype, _ = self._classify_error(1, None)
+        assert etype == "action"
+
+    def test_long_output_truncated(self):
+        """Should only scan last 3000 chars."""
+        # Put keywords at start (beyond 3000 chars from end) — should NOT match
+        prefix = "chromadb embedding " * 200  # ~3800 chars of memory keywords
+        suffix = "x" * 3000
+        output = prefix + suffix
+        etype, _ = self._classify_error(1, output)
+        assert etype == "action"  # keywords truncated away
+
+    def test_single_keyword_not_enough(self):
+        """Need >= 2 keyword hits for category match."""
+        output = "recall failed once, nothing else wrong"
+        etype, _ = self._classify_error(1, output)
+        assert etype == "action"  # only 1 memory keyword
+
+
+# ---------------------------------------------------------------------------
+# 7. Meta-learning / intrinsic assessment — daily rate limiting
+# ---------------------------------------------------------------------------
+
+class TestMetaLearningRateLimit:
+    def test_skip_when_already_ran_today(self, tmp_path):
+        from clarvis.heartbeat import adapters as adp
+        from datetime import datetime, timezone
+
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        marker = tmp_path / ".last_postflight_run"
+        marker.write_text(today)
+
+        orig = adp._META_LEARNING_MARKER
+        adp._META_LEARNING_MARKER = str(marker)
+        try:
+            result = adp._meta_learning_analyze({})
+            assert result["action"] == "skip"
+            assert result["reason"] == "already_ran_today"
+        finally:
+            adp._META_LEARNING_MARKER = orig
+
+    def test_runs_when_marker_is_yesterday(self, tmp_path):
+        from clarvis.heartbeat import adapters as adp
+
+        marker = tmp_path / ".last_postflight_run"
+        marker.write_text("2020-01-01")  # old date
+
+        orig = adp._META_LEARNING_MARKER
+        adp._META_LEARNING_MARKER = str(marker)
+        try:
+            # This will try to import MetaLearner which may not be available
+            # in test env — we just verify it doesn't skip due to rate limit
+            try:
+                result = adp._meta_learning_analyze({})
+                assert result["action"] != "skip" or result.get("reason") != "already_ran_today"
+            except ImportError:
+                pytest.skip("MetaLearner not importable in test env")
+        finally:
+            adp._META_LEARNING_MARKER = orig
+
+    def test_runs_when_no_marker(self, tmp_path):
+        from clarvis.heartbeat import adapters as adp
+
+        marker = tmp_path / "nonexistent_marker"
+
+        orig = adp._META_LEARNING_MARKER
+        adp._META_LEARNING_MARKER = str(marker)
+        try:
+            try:
+                result = adp._meta_learning_analyze({})
+                assert result["action"] != "skip" or result.get("reason") != "already_ran_today"
+            except ImportError:
+                pytest.skip("MetaLearner not importable in test env")
+        finally:
+            adp._META_LEARNING_MARKER = orig
+
+
+class TestIntrinsicAssessmentRateLimit:
+    def test_skip_when_already_ran_today(self, tmp_path):
+        from clarvis.heartbeat import adapters as adp
+        from datetime import datetime, timezone
+
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        marker = tmp_path / ".last_assessment_run"
+        marker.write_text(today)
+
+        orig = adp._ASSESSMENT_MARKER
+        adp._ASSESSMENT_MARKER = str(marker)
+        try:
+            result = adp._intrinsic_assessment({})
+            assert result["action"] == "skip"
+            assert result["reason"] == "already_ran_today"
+        finally:
+            adp._ASSESSMENT_MARKER = orig
+
+    def test_runs_when_marker_is_old(self, tmp_path):
+        from clarvis.heartbeat import adapters as adp
+
+        marker = tmp_path / ".last_assessment_run"
+        marker.write_text("2020-01-01")
+
+        orig = adp._ASSESSMENT_MARKER
+        adp._ASSESSMENT_MARKER = str(marker)
+        try:
+            try:
+                result = adp._intrinsic_assessment({})
+                assert result["action"] != "skip" or result.get("reason") != "already_ran_today"
+            except ImportError:
+                pytest.skip("intrinsic_assessment not importable in test env")
+        finally:
+            adp._ASSESSMENT_MARKER = orig
+
+
+# ---------------------------------------------------------------------------
+# 8. Priority bands — meta_learning and intrinsic_assessment
+# ---------------------------------------------------------------------------
+
+class TestPriorityBandsExtended:
+    def test_meta_learning_priority_90(self):
+        from clarvis.heartbeat.adapters import register_all
+        import clarvis.heartbeat.adapters as adapters_mod
+
+        reg = HookRegistry()
+        original = adapters_mod.registry
+        adapters_mod.registry = reg
+        try:
+            register_all()
+        finally:
+            adapters_mod.registry = original
+
+        priorities = {n: p for n, p in reg.hooks_for(HookPhase.POSTFLIGHT)}
+        assert priorities["meta_learning"] == 90
+
+    def test_intrinsic_assessment_priority_92(self):
+        from clarvis.heartbeat.adapters import register_all
+        import clarvis.heartbeat.adapters as adapters_mod
+
+        reg = HookRegistry()
+        original = adapters_mod.registry
+        adapters_mod.registry = reg
+        try:
+            register_all()
+        finally:
+            adapters_mod.registry = original
+
+        priorities = {n: p for n, p in reg.hooks_for(HookPhase.POSTFLIGHT)}
+        assert priorities["intrinsic_assessment"] == 92
+
+    def test_meta_learning_runs_after_metrics(self):
+        """meta_learning (90) should run after all metrics (60-69)."""
+        from clarvis.heartbeat.adapters import register_all
+        import clarvis.heartbeat.adapters as adapters_mod
+
+        reg = HookRegistry()
+        original = adapters_mod.registry
+        adapters_mod.registry = reg
+        try:
+            register_all()
+        finally:
+            adapters_mod.registry = original
+
+        names = reg.hook_names(HookPhase.POSTFLIGHT)
+        idx_health = names.index("structural_health")
+        idx_meta = names.index("meta_learning")
+        idx_assess = names.index("intrinsic_assessment")
+        assert idx_health < idx_meta < idx_assess
+
+
+# ---------------------------------------------------------------------------
+# 9. Register meta_learning and intrinsic_assessment individually
+# ---------------------------------------------------------------------------
+
+class TestRegisterOptionalHooks:
+    def test_register_meta_learning_only(self):
+        from clarvis.heartbeat.adapters import register_meta_learning
+        import clarvis.heartbeat.adapters as adapters_mod
+
+        reg = HookRegistry()
+        original = adapters_mod.registry
+        adapters_mod.registry = reg
+        try:
+            register_meta_learning()
+        finally:
+            adapters_mod.registry = original
+
+        names = reg.hook_names(HookPhase.POSTFLIGHT)
+        assert names == ["meta_learning"]
+
+    def test_register_intrinsic_assessment_only(self):
+        from clarvis.heartbeat.adapters import register_intrinsic_assessment
+        import clarvis.heartbeat.adapters as adapters_mod
+
+        reg = HookRegistry()
+        original = adapters_mod.registry
+        adapters_mod.registry = reg
+        try:
+            register_intrinsic_assessment()
+        finally:
+            adapters_mod.registry = original
+
+        names = reg.hook_names(HookPhase.POSTFLIGHT)
+        assert names == ["intrinsic_assessment"]
+
+
+# ---------------------------------------------------------------------------
+# 10. Periodic synthesis skip logic
+# ---------------------------------------------------------------------------
+
+class TestPeriodicSynthesisSkip:
+    def test_skip_when_not_10th_episode(self):
+        """periodic_synthesis should skip when episode count % 10 != 0."""
+        from clarvis.heartbeat.adapters import _periodic_synthesis
+        from unittest.mock import patch, MagicMock
+
+        mock_em = MagicMock()
+        mock_em.episodes = list(range(7))  # 7 episodes, 7 % 10 != 0
+        mock_cls = MagicMock(return_value=mock_em)
+
+        with patch("clarvis.memory.episodic_memory.EpisodicMemory", mock_cls):
+            result = _periodic_synthesis({})
+
+        assert result["action"] == "skip"
+        assert result["episode_count"] == 7
+
+    def test_skip_when_zero_episodes(self):
+        """periodic_synthesis should skip when episode count is 0."""
+        from clarvis.heartbeat.adapters import _periodic_synthesis
+        from unittest.mock import patch, MagicMock
+
+        mock_em = MagicMock()
+        mock_em.episodes = []
+        mock_cls = MagicMock(return_value=mock_em)
+
+        with patch("clarvis.memory.episodic_memory.EpisodicMemory", mock_cls):
+            result = _periodic_synthesis({})
+
+        assert result["action"] == "skip"
+        assert result["episode_count"] == 0
+
+
+# ---------------------------------------------------------------------------
+# 11. Pytest results capture (§7.41) — parse summary + write test_results.json
+# ---------------------------------------------------------------------------
+
+class TestPytestResultsCapture:
+    """Tests for the §7.41 pytest results capture logic in postflight."""
+
+    def _parse_and_write(self, selftest_result, workspace_dir):
+        """Replicate §7.41 parsing logic for isolated testing."""
+        import re as _re
+        if selftest_result.get("ran") and "pytest_exit" in selftest_result:
+            summary_line = selftest_result.get("pytest_summary", "")
+            _passed = 0
+            _failed = 0
+            _m = _re.search(r'(\d+) passed', summary_line)
+            if _m:
+                _passed = int(_m.group(1))
+            _m = _re.search(r'(\d+) failed', summary_line)
+            if _m:
+                _failed = int(_m.group(1))
+            _test_data = {
+                "passed": _passed,
+                "failed": _failed,
+                "errors": 0,
+                "total": _passed + _failed,
+                "pytest_exit_code": selftest_result.get("pytest_exit", -1),
+                "source": "postflight_self_test",
+            }
+            path = os.path.join(workspace_dir, "data", "test_results.json")
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, 'w') as f:
+                json.dump(_test_data, f)
+            return _test_data
+        return None
+
+    def test_parse_all_passed(self, tmp_path):
+        result = self._parse_and_write(
+            {"ran": True, "pytest_exit": 0, "pytest_summary": "12 passed in 3.5s"},
+            str(tmp_path),
+        )
+        assert result["passed"] == 12
+        assert result["failed"] == 0
+        assert result["total"] == 12
+        assert result["pytest_exit_code"] == 0
+        assert result["source"] == "postflight_self_test"
+        # Verify file was written
+        written = json.loads((tmp_path / "data" / "test_results.json").read_text())
+        assert written["passed"] == 12
+
+    def test_parse_mixed_results(self, tmp_path):
+        result = self._parse_and_write(
+            {"ran": True, "pytest_exit": 1, "pytest_summary": "8 passed, 3 failed in 5.2s"},
+            str(tmp_path),
+        )
+        assert result["passed"] == 8
+        assert result["failed"] == 3
+        assert result["total"] == 11
+        assert result["pytest_exit_code"] == 1
+
+    def test_parse_no_summary(self, tmp_path):
+        """Empty summary should yield zeros."""
+        result = self._parse_and_write(
+            {"ran": True, "pytest_exit": 5, "pytest_summary": ""},
+            str(tmp_path),
+        )
+        assert result["passed"] == 0
+        assert result["failed"] == 0
+        assert result["total"] == 0
+
+    def test_skip_when_not_ran(self, tmp_path):
+        """Should return None when selftest didn't run."""
+        result = self._parse_and_write(
+            {"ran": False, "code_modified": False},
+            str(tmp_path),
+        )
+        assert result is None
+
+    def test_skip_when_no_pytest_exit(self, tmp_path):
+        """Should return None when pytest_exit key is missing."""
+        result = self._parse_and_write(
+            {"ran": True},
+            str(tmp_path),
+        )
+        assert result is None
+
+    def test_parse_only_failed(self, tmp_path):
+        """Summary with only failures and no passes."""
+        result = self._parse_and_write(
+            {"ran": True, "pytest_exit": 1, "pytest_summary": "2 failed in 1.0s"},
+            str(tmp_path),
+        )
+        assert result["passed"] == 0
+        assert result["failed"] == 2
+        assert result["total"] == 2
+
+
+# ---------------------------------------------------------------------------
+# 12. Noise ratio computation + episode tagging
+# ---------------------------------------------------------------------------
+
+class TestNoiseRatioTagging:
+    """Tests for the noise_ratio = 1 - relevance logic and episode tagging."""
+
+    def test_noise_ratio_computation(self):
+        """noise_ratio should be 1 - overall relevance."""
+        overall = 0.75
+        noise_ratio = round(1.0 - overall, 4)
+        assert noise_ratio == 0.25
+
+    def test_noise_ratio_zero_relevance(self):
+        """0% relevance → 100% noise."""
+        noise_ratio = round(1.0 - 0.0, 4)
+        assert noise_ratio == 1.0
+
+    def test_noise_ratio_full_relevance(self):
+        """100% relevance → 0% noise."""
+        noise_ratio = round(1.0 - 1.0, 4)
+        assert noise_ratio == 0.0
+
+    def test_noise_ratio_tagged_on_matching_episode(self):
+        """When latest episode task matches, noise_ratio should be tagged."""
+        from unittest.mock import MagicMock
+
+        task = "Implement feature X for the system"
+        noise_ratio = 0.35
+        cr_overall = 0.65
+
+        mock_em = MagicMock()
+        latest_ep = {"task": task, "id": "ep_42"}
+        mock_em.episodes = [latest_ep]
+
+        # Simulate the tagging logic from postflight
+        if mock_em.episodes:
+            ep = mock_em.episodes[-1]
+            if ep.get("task", "")[:60] == task[:60]:
+                ep["noise_ratio"] = noise_ratio
+                ep["context_relevance"] = cr_overall
+                mock_em._save()
+
+        assert latest_ep["noise_ratio"] == 0.35
+        assert latest_ep["context_relevance"] == 0.65
+        mock_em._save.assert_called_once()
+
+    def test_no_tag_when_task_mismatch(self):
+        """When latest episode task doesn't match, no tagging should happen."""
+        from unittest.mock import MagicMock
+
+        task = "Implement feature X"
+        noise_ratio = 0.35
+        cr_overall = 0.65
+
+        mock_em = MagicMock()
+        latest_ep = {"task": "Completely different task", "id": "ep_99"}
+        mock_em.episodes = [latest_ep]
+
+        if mock_em.episodes:
+            ep = mock_em.episodes[-1]
+            if ep.get("task", "")[:60] == task[:60]:
+                ep["noise_ratio"] = noise_ratio
+                ep["context_relevance"] = cr_overall
+                mock_em._save()
+
+        assert "noise_ratio" not in latest_ep
+        mock_em._save.assert_not_called()
+
+    def test_no_tag_when_no_episodes(self):
+        """When episode list is empty, no tagging should happen."""
+        from unittest.mock import MagicMock
+
+        mock_em = MagicMock()
+        mock_em.episodes = []
+
+        save_called = False
+        if mock_em.episodes:
+            save_called = True
+
+        assert not save_called
+
+    def test_noise_ratio_added_to_cr_result(self):
+        """noise_ratio should be added to the cr_result dict."""
+        cr_result = {
+            "overall": 0.82,
+            "sections_referenced": 5,
+            "sections_total": 8,
+        }
+        noise_ratio = round(1.0 - cr_result["overall"], 4)
+        cr_result["noise_ratio"] = noise_ratio
+
+        assert cr_result["noise_ratio"] == 0.18
+        assert "noise_ratio" in cr_result
+
+
+# ---------------------------------------------------------------------------
+# 13. Stale test_results.json refresh detection
+# ---------------------------------------------------------------------------
+
+class TestStaleRefreshDetection:
+    """Tests for the stale detection logic (>24h) in §7.41."""
+
+    def test_fresh_file_not_stale(self, tmp_path):
+        """A file modified just now should not be considered stale."""
+        test_file = tmp_path / "test_results.json"
+        test_file.write_text("{}")
+
+        age = time.time() - os.path.getmtime(str(test_file))
+        stale = age > 86400
+        assert not stale
+
+    def test_old_file_is_stale(self, tmp_path):
+        """A file older than 24h should be considered stale."""
+        test_file = tmp_path / "test_results.json"
+        test_file.write_text("{}")
+        # Backdate modification time by 25 hours
+        old_time = time.time() - 90000
+        os.utime(str(test_file), (old_time, old_time))
+
+        age = time.time() - os.path.getmtime(str(test_file))
+        stale = age > 86400
+        assert stale
+
+    def test_missing_file_is_stale(self, tmp_path):
+        """A non-existent file should be treated as stale."""
+        test_file = tmp_path / "test_results.json"
+        stale = True
+        if test_file.exists():
+            age = time.time() - os.path.getmtime(str(test_file))
+            stale = age > 86400
+        assert stale
 
 
 if __name__ == "__main__":

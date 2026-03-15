@@ -261,6 +261,7 @@ case "$ACTION" in
     fi
     ;;
   all)
+    # shellcheck disable=SC2012,SC2045  # backup dirs are date-named, no whitespace risk; need mtime sort
     for dir in $(ls -dt "$BACKUP_ROOT"/2*/ 2>/dev/null); do
       verify_backup_with_arg "$dir"
     done

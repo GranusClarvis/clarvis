@@ -151,9 +151,6 @@ tail -c 2000 "$OUTPUT_FILE" >> "$LOGFILE" 2>/dev/null
 
 # === Telegram Delivery ===
 if [ "$SEND_TG" = "true" ]; then
-    # Extract last 1500 chars of output as the summary
-    SUMMARY=$(tail -c 1500 "$OUTPUT_FILE" 2>/dev/null || echo "(no output)")
-
     python3 - "$OUTPUT_FILE" "$RESULT" "${TASK:0:80}" "$TG_CHAT_ID" "$TG_TOPIC" << 'PYEOF'
 import json, urllib.request, urllib.parse, sys, os
 

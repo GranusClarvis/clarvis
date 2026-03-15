@@ -242,6 +242,29 @@ def record_relevance(result: dict) -> str:
     return RELEVANCE_FILE
 
 
+def get_suppressed_sections(
+    threshold: float = 0.13,
+    min_episodes: int = 10,
+    days: int = 14,
+    relevance_file: str = RELEVANCE_FILE,
+) -> set[str]:
+    """Return set of section names whose mean relevance is below threshold.
+
+    Sections consistently below the threshold are noise — the context they
+    provide is almost never referenced in task output.  Callers (preflight,
+    assembly) should skip injecting these sections to improve overall
+    context relevance.
+
+    Returns empty set when insufficient data exists (< min_episodes).
+    """
+    agg = aggregate_relevance(days=days, relevance_file=relevance_file)
+    if agg.get("episodes", 0) < min_episodes:
+        return set()
+
+    per_section = agg.get("per_section_mean", {})
+    return {name for name, score in per_section.items() if score < threshold}
+
+
 def aggregate_relevance(days: int = 7, relevance_file: str = RELEVANCE_FILE) -> dict:
     """Aggregate context relevance scores from episode history.
 

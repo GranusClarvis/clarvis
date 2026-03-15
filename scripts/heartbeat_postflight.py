@@ -896,6 +896,63 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
         _pf_errors.append("self_test")
     timings["self_test"] = round(time.monotonic() - t74, 3)
 
+    # === 7.41 PYTEST RESULTS CAPTURE: Write data/test_results.json for code_quality_score ===
+    try:
+        if selftest_result.get("ran") and "pytest_exit" in selftest_result:
+            import re as _re74
+            summary_line = selftest_result.get("pytest_summary", "")
+            _passed = 0
+            _failed = 0
+            _m = _re74.search(r'(\d+) passed', summary_line)
+            if _m:
+                _passed = int(_m.group(1))
+            _m = _re74.search(r'(\d+) failed', summary_line)
+            if _m:
+                _failed = int(_m.group(1))
+            _test_data = {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "passed": _passed,
+                "failed": _failed,
+                "errors": 0,
+                "total": _passed + _failed,
+                "pytest_exit_code": selftest_result.get("pytest_exit", -1),
+                "test_suites": ["packages/clarvis-db/tests/"],
+                "source": "postflight_self_test"
+            }
+            _test_results_path = os.path.join(WORKSPACE, "data", "test_results.json")
+            with open(_test_results_path, 'w') as _tf:
+                json.dump(_test_data, _tf, indent=2)
+            log(f"Captured test results: {_passed} passed, {_failed} failed → data/test_results.json")
+        else:
+            # Self-test didn't run — refresh test_results.json if stale (>24h)
+            _test_results_path = os.path.join(WORKSPACE, "data", "test_results.json")
+            _stale = True
+            if os.path.exists(_test_results_path):
+                _age = time.time() - os.path.getmtime(_test_results_path)
+                _stale = _age > 86400
+            if _stale:
+                import subprocess as _sp74
+                _pr = _sp74.run(
+                    ["python3", "-m", "pytest", "packages/clarvis-db/tests/", "-q", "--tb=no"],
+                    cwd=WORKSPACE, capture_output=True, text=True, timeout=60
+                )
+                import re as _re74b
+                _m = _re74b.search(r'(\d+) passed', _pr.stdout)
+                _p = int(_m.group(1)) if _m else 0
+                _m = _re74b.search(r'(\d+) failed', _pr.stdout)
+                _f = int(_m.group(1)) if _m else 0
+                with open(_test_results_path, 'w') as _tf:
+                    json.dump({
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "passed": _p, "failed": _f, "errors": 0, "total": _p + _f,
+                        "pytest_exit_code": _pr.returncode,
+                        "test_suites": ["packages/clarvis-db/tests/"],
+                        "source": "postflight_stale_refresh"
+                    }, _tf, indent=2)
+                log(f"Refreshed stale test results: {_p} passed, {_f} failed")
+    except Exception as e:
+        log(f"Test results capture failed (non-fatal): {e}")
+
     # === 7.42 CODE_GEN OUTCOME: Record actual code quality metrics for self_model ===
     t742 = time.monotonic()
     try:
@@ -1329,11 +1386,27 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
                 # Tag with MMR category for adaptive lambda feedback loop
                 if classify_mmr_category:
                     cr_result["mmr_category"] = classify_mmr_category(task)
+                # Compute noise_ratio (inverse of relevance) before recording
+                noise_ratio = round(1.0 - cr_result["overall"], 4)
+                cr_result["noise_ratio"] = noise_ratio
                 log(f"CONTEXT RELEVANCE: {cr_result['sections_referenced']}/{cr_result['sections_total']} "
-                    f"sections referenced ({cr_result['overall']:.1%})"
+                    f"sections referenced ({cr_result['overall']:.1%}), noise={noise_ratio:.1%}"
                     + (f" [{cr_result.get('mmr_category', '?')}]" if classify_mmr_category else ""))
                 if cr_record:
                     cr_record(cr_result)
+                if EpisodicMemory:
+                    try:
+                        em_nr = EpisodicMemory()
+                        if em_nr.episodes:
+                            latest_ep = em_nr.episodes[-1]
+                            if latest_ep.get("task", "")[:60] == task[:60]:
+                                latest_ep["noise_ratio"] = noise_ratio
+                                latest_ep["context_relevance"] = cr_result["overall"]
+                                em_nr._save()
+                                log(f"NOISE RATIO: {noise_ratio:.1%} tagged on episode {latest_ep.get('id', '?')}")
+                    except Exception as e:
+                        log(f"Noise ratio tagging failed (non-fatal): {e}")
+
                 # Periodically update adaptive MMR lambdas from accumulated data
                 # Rate-limit: skip when no useful signal or insufficient new episodes
                 if mmr_update_lambdas:

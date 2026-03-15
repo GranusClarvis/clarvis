@@ -4,9 +4,10 @@ import pytest
 from unittest.mock import MagicMock
 from clarvis.brain.retrieval_eval import (
     score_result, classify_batch, strip_refine, evaluate_retrieval,
+    filter_by_score,
     _keyword_overlap, _semantic_sim, _recency_score,
     _extract_keywords, _rewrite_query, adaptive_recall,
-    CORRECT, AMBIGUOUS, INCORRECT,
+    CORRECT, AMBIGUOUS, INCORRECT, AMBIGUOUS_THRESHOLD,
 )
 
 
@@ -64,7 +65,9 @@ class TestKeywordOverlap:
 
 class TestRecencyScore:
     def test_recent_memory(self):
-        r = _make_result(created_at="2026-03-09T00:00:00+00:00")
+        from datetime import datetime, timezone, timedelta
+        recent = (datetime.now(timezone.utc) - timedelta(hours=12)).isoformat()
+        r = _make_result(created_at=recent)
         score = _recency_score(r)
         assert score > 0.9  # Very recent
 
@@ -126,6 +129,39 @@ class TestClassifyBatch:
 # Strip refinement
 # ---------------------------------------------------------------------------
 
+class TestFilterByScore:
+    def test_removes_low_scoring_results(self):
+        results = [_make_result(doc="good"), _make_result(doc="bad")]
+        scores = [0.8, 0.1]
+        filtered = filter_by_score(results, scores)
+        assert len(filtered) == 1
+        assert filtered[0]["document"] == "good"
+
+    def test_keeps_all_above_threshold(self):
+        results = [_make_result(doc="a"), _make_result(doc="b")]
+        scores = [0.6, 0.5]
+        filtered = filter_by_score(results, scores)
+        assert len(filtered) == 2
+
+    def test_removes_all_below_threshold(self):
+        results = [_make_result(doc="a"), _make_result(doc="b")]
+        scores = [0.1, 0.2]
+        filtered = filter_by_score(results, scores)
+        assert len(filtered) == 0
+
+    def test_length_mismatch_returns_original(self):
+        results = [_make_result(doc="a")]
+        scores = [0.5, 0.6]  # mismatched length
+        filtered = filter_by_score(results, scores)
+        assert len(filtered) == 1  # returns original unfiltered
+
+    def test_custom_threshold(self):
+        results = [_make_result(doc="a"), _make_result(doc="b")]
+        scores = [0.4, 0.6]
+        filtered = filter_by_score(results, scores, threshold=0.5)
+        assert len(filtered) == 1
+
+
 class TestStripRefine:
     def test_keeps_relevant_sentences(self):
         r = _make_result(
@@ -163,7 +199,8 @@ class TestEvaluateRetrieval:
         ev = evaluate_retrieval(results, "chromadb singleton factory")
         assert ev["verdict"] == CORRECT
         assert ev["n_results"] == 1
-        assert not ev["strip_applied"]  # No strip on CORRECT
+        assert ev["strip_applied"]  # Strip now applied on CORRECT too
+        assert "n_filtered_out" in ev
 
     def test_incorrect_evaluation(self):
         results = [_make_result(distance=2.0, importance=0.1,
@@ -187,6 +224,27 @@ class TestEvaluateRetrieval:
         assert ev["verdict"] == INCORRECT
         assert ev["n_results"] == 0
         assert ev["strip_applied"] is False
+
+    def test_filters_low_scoring_individual_results(self):
+        """Mixed batch: good result + noise result → noise filtered out."""
+        results = [
+            _make_result(distance=0.1, importance=0.9, doc="chromadb vector embeddings"),
+            _make_result(distance=2.0, importance=0.1, doc="random weather noise pattern"),
+        ]
+        ev = evaluate_retrieval(results, "chromadb vector embeddings")
+        assert ev["n_filtered_out"] >= 1  # noise result should be dropped
+        assert ev["refined_results"] is not None
+        assert len(ev["refined_results"]) < len(results)
+
+    def test_correct_batch_gets_strip_refined(self):
+        """CORRECT batches now get strip refinement applied."""
+        results = [_make_result(
+            distance=0.1, importance=0.9,
+            doc="ChromaDB vector search is fast. The weather is nice today. Embeddings work.",
+        )]
+        ev = evaluate_retrieval(results, "chromadb vector search embeddings")
+        assert ev["verdict"] == CORRECT
+        assert ev["strip_applied"] is True
 
 
 # ---------------------------------------------------------------------------

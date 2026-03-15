@@ -29,7 +29,7 @@ DUAL_WRITE="${CLARVIS_GRAPH_DUAL_WRITE:-1}"
 
 if [ "$DUAL_WRITE" = "0" ]; then
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Dual-write disabled — running SQLite integrity check only" >> "$LOGFILE"
-    OUTPUT=$(python3 - <<'PY'
+    OUTPUT=$(python3 - 2>&1 <<'PY'
 import sys
 from clarvis.brain.graph_store_sqlite import GraphStoreSQLite
 store = GraphStoreSQLite("/home/agent/.openclaw/workspace/data/clarvisdb/graph.db")
@@ -39,7 +39,7 @@ store.close()
 print({"integrity_ok": ok, "nodes": stats.get("nodes"), "edges": stats.get("edges")})
 sys.exit(0 if ok else 1)
 PY
-    2>&1)
+)
     EXIT_CODE=$?
 else
     OUTPUT=$(python3 -m clarvis brain graph-verify --sample-n 200 2>&1)

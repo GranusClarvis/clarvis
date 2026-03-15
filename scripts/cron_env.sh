@@ -23,7 +23,7 @@ export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNT
 
 # Workspace
 export CLARVIS_WORKSPACE="/home/agent/.openclaw/workspace"
-cd "$CLARVIS_WORKSPACE"
+cd "$CLARVIS_WORKSPACE" || exit 1
 
 # Graph storage backend: "json" (default) or "sqlite"
 # Uncomment the line below to enable SQLite graph backend for soak testing.
@@ -52,6 +52,69 @@ check_pid_is_clarvis() {
         return 1  # PID recycled — not a clarvis process
     fi
     return 0  # /proc not available — trust kill -0
+}
+
+# Run Claude Code with execution monitor (background launch + progress tracking).
+# The monitor detects stuck processes and can SIGTERM them at 90% timeout.
+# Sets MONITORED_EXIT to the Claude process exit code.
+# Writes <output_file>.progress.json for postflight consumption.
+#
+# Usage: run_claude_monitored <timeout_secs> <output_file> <prompt_file_or_string> [logfile]
+run_claude_monitored() {
+    local _timeout="$1"
+    local _output_file="$2"
+    local _prompt="$3"
+    local _logfile="${4:-/dev/null}"
+    local _scripts="$CLARVIS_WORKSPACE/scripts"
+
+    # Ensure prompt is in a file to avoid ARG_MAX for large prompts.
+    # If caller passed a file path, use it directly; otherwise write to temp file.
+    local _prompt_file _owns_prompt_file=0
+    if [ -f "$_prompt" ]; then
+        _prompt_file="$_prompt"
+    else
+        _prompt_file="$(mktemp /tmp/clarvis_prompt_XXXXXX.txt)"
+        printf '%s' "$_prompt" > "$_prompt_file"
+        _owns_prompt_file=1
+    fi
+
+    # Launch Claude Code in background, feeding prompt via stdin (not argv)
+    timeout "$_timeout" env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \
+        /home/agent/.local/bin/claude -p \
+        --dangerously-skip-permissions --model claude-opus-4-6 \
+        < "$_prompt_file" > "$_output_file" 2>&1 &
+    local _claude_pid=$!
+
+    # Launch execution monitor in background
+    python3 "$_scripts/execution_monitor.py" "$_output_file" "$_timeout" "$_claude_pid" >> "$_logfile" 2>&1 &
+    local _monitor_pid=$!
+
+    # Wait for Claude (monitor may SIGTERM it before timeout)
+    wait "$_claude_pid"
+    MONITORED_EXIT=$?
+
+    # Clean up monitor
+    kill "$_monitor_pid" 2>/dev/null
+    wait "$_monitor_pid" 2>/dev/null
+
+    # Check reconsider file
+    local _reconsider_file="${_output_file}.reconsider.json"
+    if [ -f "$_reconsider_file" ]; then
+        local _recon_info
+        _recon_info=$(python3 -c "
+import json
+with open('$_reconsider_file') as f:
+    d = json.load(f)
+print(f\"reason={d.get('reason','?')} aborted={d.get('aborted',False)}\")
+" 2>/dev/null || echo "reason=unknown aborted=unknown")
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] MONITOR: RECONSIDER $_recon_info" >> "$_logfile"
+        rm -f "$_reconsider_file"
+    fi
+
+    # Clean up temp prompt file if we created one
+    [ "$_owns_prompt_file" -eq 1 ] && rm -f "$_prompt_file"
+
+    return $MONITORED_EXIT
 }
 
 # Dashboard event publisher (no-op if script missing; never blocks caller)

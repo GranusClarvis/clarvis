@@ -72,7 +72,7 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-eval $(python3 -c "
+eval "$(python3 -c "
 import json, sys, shlex
 with open('$PREFLIGHT_FILE') as f:
     d = json.load(f)
@@ -106,7 +106,7 @@ else:
 # Timings summary
 timings = d.get('timings', {})
 print(f'PF_TOTAL_TIME={shlex.quote(str(timings.get(\"total\", \"?\")))}')
-" 2>> "$LOGFILE")
+" 2>> "$LOGFILE")"
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] PREFLIGHT: status=$PF_STATUS task_salience=$BEST_SALIENCE route=$ROUTE_EXECUTOR confidence_tier=$CONFIDENCE_TIER time=${PF_TOTAL_TIME}s" >> "$LOGFILE"
 
@@ -149,7 +149,7 @@ fi
 BATCH_TASKS="$NEXT_TASK"
 BATCH_COUNT=1
 if [ "$ROUTE_EXECUTOR" = "claude" ]; then
-    eval $(NEXT_TASK="$NEXT_TASK" python3 - <<'PY'
+    eval "$(NEXT_TASK="$NEXT_TASK" python3 - <<'PY'
 import os, re, shlex, sys
 sys.path.insert(0,'/home/agent/.openclaw/workspace/scripts')
 from cognitive_load import estimate_task_complexity
@@ -212,7 +212,7 @@ for t in unchecked:
 print(f"BATCH_COUNT={len(batch)}")
 print(f"BATCH_TASKS={shlex.quote(chr(10).join(batch))}")
 PY
-) 2>> "$LOGFILE" || true
+)" 2>> "$LOGFILE" || true
 fi
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] EXECUTING (salience=$BEST_SALIENCE, section=$TASK_SECTION, route=$ROUTE_EXECUTOR tier=$ROUTE_TIER, batch=$BATCH_COUNT): ${NEXT_TASK:0:100}" >> "$LOGFILE"
@@ -319,7 +319,7 @@ fi
 # Kill switch — set to false in cron_env.sh to disable OpenRouter routing
 OPENROUTER_ROUTING="${OPENROUTER_ROUTING:-true}"
 
-if [ "$OPENROUTER_ROUTING" = "true" ] && [ "$ROUTE_EXECUTOR" = "gemini" -o "$ROUTE_EXECUTOR" = "openrouter" ]; then
+if [ "$OPENROUTER_ROUTING" = "true" ] && { [ "$ROUTE_EXECUTOR" = "gemini" ] || [ "$ROUTE_EXECUTOR" = "openrouter" ]; }; then
     # === TRY OPENROUTER CHEAP MODEL FIRST ===
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] ROUTING to OpenRouter (tier=$ROUTE_TIER, score=$ROUTE_SCORE)" >> "$LOGFILE"
     EXECUTOR_USED="openrouter"

@@ -9,7 +9,7 @@ if [ -f "$LOCKFILE" ]; then
     if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then exit 0; fi
 fi
 echo $$ > "$LOCKFILE"
-trap "rm -f $LOCKFILE" EXIT
+trap 'rm -f "$LOCKFILE"' EXIT
 
 python3 << 'PYEOF'
 import sys
@@ -19,6 +19,7 @@ import urllib.request
 import urllib.parse
 from datetime import datetime, timedelta, timezone
 import os
+import subprocess
 sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
 
 today_str = datetime.now(timezone.utc).strftime('%Y-%m-%d')
@@ -125,9 +126,16 @@ for i in range(1, 11):
 if not research_pending:
     research_pending = ["All done!"]
 
-# ==== BRAIN STATS ====
-from brain import brain
-stats = brain.stats()
+# ==== BRAIN STATS (canonical CLI entrypoint) ====
+try:
+    _stats_out = subprocess.run(
+        ['python3', '-m', 'clarvis', 'brain', 'stats'],
+        capture_output=True, text=True, timeout=30,
+        cwd='/home/agent/.openclaw/workspace'
+    )
+    stats = json.loads(_stats_out.stdout)
+except Exception:
+    stats = {'total_memories': 0, 'collections': {}}
 
 # ==== BUILD REPORT ====
 lines = []
@@ -191,7 +199,8 @@ lines.append("")
 lines.append("🎯 GOALS")
 lines.append("-" * 20)
 try:
-    goals = brain.get_goals()
+    from clarvis.brain import brain as _brain
+    goals = _brain.get_goals()
     for g in goals[:3]:
         doc = g.get('document', '')
         prog_match = re.search(r'progress: (\d+)%', doc)

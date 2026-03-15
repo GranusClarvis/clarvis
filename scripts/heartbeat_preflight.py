@@ -73,6 +73,11 @@ except ImportError:
     compress_episodes = None
 
 try:
+    from clarvis.context.assembly import dycp_prune_brief
+except ImportError:
+    dycp_prune_brief = None
+
+try:
     from clarvis.orch.router import classify_task
 except ImportError:
     classify_task = None
@@ -901,18 +906,48 @@ def run_preflight(dry_run=False):
             result["retrieval_max_score"] = ar_out["max_score"]
             result["retrieval_retried"] = ar_out["retried"]
             result["retrieval_original_verdict"] = ar_out["original_verdict"]
+            result["retrieval_n_filtered"] = ar_out.get("n_filtered_out", 0)
             if ar_out["retry_query"]:
                 result["retrieval_retry_query"] = ar_out["retry_query"]
             log(f"Retrieval eval: {retrieval_verdict} "
                 f"(max={ar_out['max_score']}, retried={ar_out['retried']}, "
-                f"orig={ar_out['original_verdict']})")
-            # If INCORRECT after retry, omit knowledge_hints
+                f"orig={ar_out['original_verdict']}, "
+                f"filtered={ar_out.get('n_filtered_out', 0)})")
+            # If INCORRECT after retry, omit knowledge_hints entirely
             if retrieval_verdict == "INCORRECT":
                 log("Retrieval INCORRECT (even after retry) — knowledge_hints omitted")
                 result["knowledge_hints"] = ""
-            elif ar_out["retried"] and ar_out["results"]:
-                # Retry improved verdict — use retry results for knowledge hints
-                log(f"Adaptive retry improved verdict {ar_out['original_verdict']}→{retrieval_verdict}")
+            elif ar_out["results"]:
+                # Rebuild knowledge_hints from filtered/refined results
+                # This replaces noisy raw results with CRAG-evaluated content
+                _filtered_results = ar_out["results"]
+                _rebuilt_hints = []
+                for _mem in _filtered_results:
+                    doc = _mem.get("document", "")[:120]
+                    src = _mem.get("metadata", {}).get("source", "")
+                    tags = _mem.get("metadata", {}).get("tags", "")
+                    col = _mem.get("collection", "")
+                    if "dream" in str(tags):
+                        prefix = "[DREAM]"
+                    elif "research" in str(src) or "research" in str(tags):
+                        prefix = "[RESEARCH]"
+                    elif "synthesis" in str(src):
+                        prefix = "[SYNTHESIS]"
+                    elif "episode" in col:
+                        prefix = "[EPISODE]"
+                    elif "procedur" in col:
+                        prefix = "[PROCEDUR]"
+                    else:
+                        prefix = "[LEARNING]"
+                    _rebuilt_hints.append(f"  {prefix} {doc}")
+                if _rebuilt_hints:
+                    prev_len = len(result.get("knowledge_hints", ""))
+                    result["knowledge_hints"] = "\n".join(_rebuilt_hints)
+                    log(f"Knowledge hints rebuilt from eval: "
+                        f"{len(eval_results)}→{len(_filtered_results)} results, "
+                        f"{prev_len}→{len(result['knowledge_hints'])}B"
+                        + (f" (retry improved {ar_out['original_verdict']}→{retrieval_verdict})"
+                           if ar_out["retried"] else ""))
         else:
             result["retrieval_verdict"] = "NO_RESULTS"
     except Exception as e:
@@ -1063,6 +1098,16 @@ def run_preflight(dry_run=False):
     elif similar_episodes or failure_episodes:
         compressed_episodes = f"{similar_episodes}\n---\n{failure_episodes}"
 
+    # Load suppressed sections (data-driven noise gate)
+    _suppressed_sections = set()
+    try:
+        from clarvis.cognition.context_relevance import get_suppressed_sections
+        _suppressed_sections = get_suppressed_sections(threshold=0.13, min_episodes=10)
+        if _suppressed_sections:
+            log(f"Section gate: suppressing {_suppressed_sections}")
+    except Exception:
+        pass
+
     # Generate tiered brief (adapts to executor)
     context_brief = ""
     executor = result["route_executor"]
@@ -1098,19 +1143,19 @@ def run_preflight(dry_run=False):
             log(f"Context compression failed: {e}")
 
     # Append brain goals to context brief (direct brain → subconscious link)
-    if brain_goals:
+    if brain_goals and "brain_goals" not in _suppressed_sections:
         context_brief += f"\nBRAIN GOALS (active objectives):\n{brain_goals[:500]}\n"
-    if brain_context:
+    if brain_context and "brain_context" not in _suppressed_sections:
         context_brief += f"\nBRAIN CONTEXT: {brain_context[:200]}\n"
 
     # Append brain working memory (what recent heartbeats were doing)
-    if brain_working_memory:
+    if brain_working_memory and "working_memory" not in _suppressed_sections:
         context_brief += f"\nWORKING MEMORY (recent activity):\n{brain_working_memory[:300]}\n"
 
     # Append world model prediction (success probability + novelty signal)
     wm_p = result.get("wm_p_success")
     wm_curiosity = result.get("wm_curiosity")
-    if wm_p is not None:
+    if wm_p is not None and "world_model" not in _suppressed_sections:
         wm_hint = f"WORLD MODEL: P(success)={wm_p:.0%}"
         if wm_curiosity and wm_curiosity > 0.6:
             wm_hint += f", novelty={wm_curiosity:.2f} (explore broadly)"
@@ -1119,7 +1164,7 @@ def run_preflight(dry_run=False):
         context_brief += f"\n{wm_hint}\n"
 
     # Append failure avoidance signals (somatic markers + causal chains)
-    if failure_avoidance:
+    if failure_avoidance and "failure_avoidance" not in _suppressed_sections:
         context_brief += f"\n{failure_avoidance}\n"
 
     # Append recommended approach from procedural memory (top-2 procedures)
@@ -1138,11 +1183,11 @@ def run_preflight(dry_run=False):
         log(f"Procedure injection: {len(procs_for_injection)} procedure(s) injected into prompt")
 
     # Append synaptic associations (neural co-activation patterns)
-    if synaptic_associations:
+    if synaptic_associations and "synaptic" not in _suppressed_sections:
         context_brief += f"\n{synaptic_associations}\n"
 
     # Append codelet competition results (LIDA domain focus)
-    if codelet_result:
+    if codelet_result and "attention" not in _suppressed_sections:
         winner = codelet_result.get("winner", "?")
         coalition = codelet_result.get("coalition", [])
         activations = codelet_result.get("activations", {})
@@ -1152,11 +1197,11 @@ def run_preflight(dry_run=False):
                          f"winner={winner} coalition={','.join(coalition)} [{act_str}]\n")
 
     # Append GWT broadcast to context brief (makes broadcast visible to task executor)
-    if gwt_broadcast_text:
+    if gwt_broadcast_text and "gwt_broadcast" not in _suppressed_sections:
         context_brief += f"\nGWT BROADCAST (conscious workspace):\n{gwt_broadcast_text[:400]}\n"
 
     # Append brain introspection (self-awareness context — raised from 600 to 1200 chars)
-    if introspection_text:
+    if introspection_text and "introspection" not in _suppressed_sections:
         context_brief += f"\n{introspection_text[:1200]}\n"
 
     # Append code generation templates (scaffolds for CODE-type tasks)
@@ -1218,6 +1263,20 @@ def run_preflight(dry_run=False):
     result["timings"]["cognitive_workspace"] = round(time.monotonic() - t106, 3)
 
     result["episodic_hints"] = compressed_episodes
+
+    # DyCP: Final query-dependent pruning of supplementary sections
+    # Removes sections that are both historically low-relevance AND irrelevant
+    # to this specific task. Targets Context Relevance metric (0.387→0.75).
+    if dycp_prune_brief and next_task:
+        try:
+            pre_len = len(context_brief)
+            context_brief = dycp_prune_brief(context_brief, next_task)
+            pruned_bytes = pre_len - len(context_brief)
+            if pruned_bytes > 0:
+                log(f"DyCP pruning: removed {pruned_bytes}B of irrelevant context")
+        except Exception as e:
+            log(f"DyCP pruning failed (non-fatal): {e}")
+
     result["context_brief"] = context_brief
     result["timings"]["context"] = round(time.monotonic() - t10, 3)
 

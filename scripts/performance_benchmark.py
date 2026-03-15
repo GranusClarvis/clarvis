@@ -321,7 +321,7 @@ def benchmark_episodes():
     not real execution failures. Including them inflates the failure rate.
     """
     try:
-        from episodic_memory import EpisodicMemory
+        from clarvis.memory.episodic_memory import EpisodicMemory
         em = EpisodicMemory()
         stats = em.get_stats()
         outcomes = stats.get("outcomes", {})
@@ -944,6 +944,97 @@ def run_full_benchmark():
     return report
 
 
+def run_refresh_benchmark():
+    """Daily refresh: quality + episodes + brain_stats + speed, then merge with stored metrics.
+
+    Runs in <30s. Updates the stored metrics file with fresh values for the
+    dimensions that change daily, preserving cached values for expensive
+    benchmarks (retrieval, load scaling, context, phi).
+    """
+    timestamp = datetime.now(timezone.utc).isoformat()
+    t0 = time.monotonic()
+
+    # Run the fast-changing benchmarks
+    speed = _safe_bench(benchmark_brain_speed, "brain_speed")
+    brain_stats = _safe_bench(benchmark_brain_stats, "brain_stats")
+    episodes = _safe_bench(benchmark_episodes, "episodes")
+    quality = _safe_bench(benchmark_quality, "quality")
+
+    bench_duration = round(time.monotonic() - t0, 2)
+
+    # Load previously stored full metrics as base
+    prev_metrics = {}
+    prev_details = {}
+    if os.path.exists(METRICS_FILE):
+        try:
+            with open(METRICS_FILE) as f:
+                stored = json.load(f)
+            prev_metrics = stored.get("metrics", {})
+            prev_details = stored.get("details", {})
+        except Exception:
+            pass
+
+    # Merge: refresh overwrites, previous fills gaps
+    metrics = dict(prev_metrics)
+    metrics.update({
+        "brain_query_avg_ms":   speed.get("avg_ms", 0),
+        "brain_query_p95_ms":   speed.get("p95_ms", 0),
+        "episode_success_rate": episodes.get("success_rate", prev_metrics.get("episode_success_rate", 0.0)),
+        "action_accuracy":      episodes.get("action_accuracy", prev_metrics.get("action_accuracy", 0.0)),
+        "graph_density":        brain_stats.get("graph_density", 0.0),
+        "brain_total_memories": brain_stats.get("total_memories", 0),
+        "bloat_score":          brain_stats.get("bloat_score", 0.0),
+        "task_quality_score":   quality.get("task_quality_score", 0.5),
+        "code_quality_score":   quality.get("code_quality_score", 0.5),
+    })
+
+    # Evaluate each metric against targets
+    results = {}
+    for key, meta in TARGETS.items():
+        value = metrics.get(key)
+        target = meta["target"]
+        direction = meta["direction"]
+        if value is None or direction == "monitor":
+            status = "tracking"
+        elif direction == "lower":
+            status = "PASS" if value <= target else "FAIL"
+        else:
+            status = "PASS" if value >= target else "FAIL"
+        results[key] = {"value": value, "target": target, "status": status, "label": meta["label"]}
+
+    pass_count = sum(1 for r in results.values() if r["status"] == "PASS")
+    fail_count = sum(1 for r in results.values() if r["status"] == "FAIL")
+    total_scored = pass_count + fail_count
+
+    pi_data = compute_pi(metrics)
+
+    # Merge details
+    details = dict(prev_details)
+    details.update({
+        "speed": speed,
+        "brain_stats": brain_stats,
+        "episodes": episodes,
+        "quality": quality,
+    })
+
+    return {
+        "timestamp": timestamp,
+        "type": "refresh",
+        "bench_duration_s": bench_duration,
+        "metrics": metrics,
+        "results": results,
+        "pi": pi_data,
+        "summary": {
+            "pass": pass_count,
+            "fail": fail_count,
+            "total_scored": total_scored,
+            "score": round(pass_count / max(total_scored, 1), 3),
+            "pi": pi_data["pi"],
+        },
+        "details": details,
+    }
+
+
 def run_quick_benchmark():
     """Fast subset: brain speed + stats + PI estimate (~2s)."""
     timestamp = datetime.now(timezone.utc).isoformat()
@@ -1344,6 +1435,13 @@ if __name__ == "__main__":
         if alerts:
             print(f"Self-optimization: {len(alerts)} alert(s), "
                   f"{report.get('_optimization_tasks_pushed', 0)} task(s) pushed")
+
+    elif cmd == "refresh":
+        report = record(run_refresh_benchmark())
+        pi = report.get("pi", {}).get("pi", 0)
+        dur = report.get("bench_duration_s", 0)
+        print(f"PI refresh: {pi:.3f} ({dur}s)")
+        print(f"Recorded to {METRICS_FILE}")
 
     elif cmd == "trend":
         days = int(sys.argv[2]) if len(sys.argv) > 2 else 30

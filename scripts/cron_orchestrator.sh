@@ -22,16 +22,7 @@ acquire_local_lock "/tmp/clarvis_orchestrator.lock" "$LOGFILE"
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Orchestrator maintenance started ===" >> "$LOGFILE"
 emit_dashboard_event task_started --task-name "Orchestrator daily" --section cron_orchestrator --executor python
 
-# Get list of active agents (parse JSON names)
-AGENTS=$(python3 "$SCRIPTS/project_agent.py" list 2>/dev/null | python3 -c "
-import sys, json
-agents = json.load(sys.stdin)
-for a in agents:
-    if a.get('tasks', 0) > 0 or a.get('status') != 'idle':
-        print(a['name'])
-" 2>/dev/null)
-
-# Also include agents with any task history (even if currently idle)
+# Get list of all agents
 ALL_AGENTS=$(python3 "$SCRIPTS/project_agent.py" list 2>/dev/null | python3 -c "
 import sys, json
 for a in json.load(sys.stdin):

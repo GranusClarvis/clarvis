@@ -80,6 +80,20 @@ class GraphMixin:
                 except Exception as exc:
                     _log.error("Failed to initialize SQLite graph store: %s", exc)
 
+    def _force_save_graph(self):
+        """Save graph WITHOUT merge — used by pruning operations that intentionally remove edges."""
+        import tempfile
+        self.graph["_edge_count"] = len(self.graph.get("edges", []))
+        self.graph["_last_synced"] = datetime.now(timezone.utc).isoformat()
+        try:
+            dir_path = os.path.dirname(self.graph_file)
+            fd, tmp_path = tempfile.mkstemp(dir=dir_path, suffix=".json.tmp")
+            with os.fdopen(fd, "w") as f:
+                json.dump(self.graph, f, default=str)
+            os.replace(tmp_path, self.graph_file)
+        except (IOError, OSError) as exc:
+            _log.error("Force save failed: %s", exc)
+
     def _save_graph(self):
         """Save relationship graph atomically with file locking to prevent race conditions"""
         if os.path.exists(self.graph_file):
@@ -550,6 +564,99 @@ class GraphMixin:
             "total_before": total_before,
             "total_after": len(keep),
             "avg_weight": round(avg_weight, 4),
+        }
+
+    def prune_high_degree(self, max_degree=200, weak_types=None, dry_run=False):
+        """Prune weak edges from high-degree nodes to reduce graph bloat.
+
+        For each node with degree > max_degree, removes the weakest edges
+        (by type priority and age) until degree <= max_degree.
+
+        Pruning priority (removed first):
+          1. cross_collection edges from bridge nodes
+          2. transitive_cross edges
+          3. hebbian_association with low/no weight
+          4. similar_to with high distance
+
+        Args:
+            max_degree: Maximum edges per node (default 200).
+            weak_types: Edge types eligible for pruning (default: common weak types).
+            dry_run: If True, report what would be pruned without modifying.
+
+        Returns:
+            dict: {pruned, nodes_affected, total_before, total_after}
+        """
+        if weak_types is None:
+            weak_types = {
+                "cross_collection", "transitive_cross", "hebbian_association",
+                "similar_to", "boosted_bridge", "mirror_bridge",
+                "semantic_bridge", "bridged_similarity",
+            }
+
+        edges = self.graph.get("edges", [])
+        total_before = len(edges)
+
+        # Build adjacency: node_id -> list of (edge_index, edge)
+        from collections import defaultdict
+        adjacency = defaultdict(list)
+        for i, edge in enumerate(edges):
+            adjacency[edge.get("from", "")].append((i, edge))
+            adjacency[edge.get("to", "")].append((i, edge))
+
+        # Identify edges to prune from high-degree nodes
+        prune_indices = set()
+        nodes_affected = 0
+
+        # Priority score: lower = pruned first
+        type_priority = {
+            "cross_collection": 0, "transitive_cross": 1,
+            "boosted_bridge": 2, "mirror_bridge": 2,
+            "semantic_bridge": 3, "bridged_similarity": 3,
+            "hebbian_association": 4, "similar_to": 5,
+        }
+
+        for node_id, edge_list in adjacency.items():
+            if len(edge_list) <= max_degree:
+                continue
+
+            nodes_affected += 1
+
+            # Separate pruneable vs protected edges
+            pruneable = []
+            protected_count = 0
+            for idx, edge in edge_list:
+                etype = edge.get("type", "unknown")
+                if etype in weak_types:
+                    priority = type_priority.get(etype, 10)
+                    weight = edge.get("weight", 0.5)
+                    pruneable.append((idx, priority, weight))
+                else:
+                    protected_count += 1
+
+            # Sort: lowest priority first, then lowest weight
+            pruneable.sort(key=lambda x: (x[1], x[2]))
+
+            # Prune enough to get to max_degree
+            excess = len(edge_list) - max_degree
+            for idx, _pri, _wt in pruneable[:excess]:
+                prune_indices.add(idx)
+
+        pruned = len(prune_indices)
+
+        if not dry_run and pruned > 0:
+            self.graph["edges"] = [e for i, e in enumerate(edges)
+                                   if i not in prune_indices]
+            self.graph["_edge_count"] = len(self.graph["edges"])
+            # Direct write — bypass _save_graph() merge which would re-add pruned edges
+            if self._sqlite_store is None or self._dual_write_enabled():
+                self._force_save_graph()
+
+        return {
+            "pruned": pruned,
+            "nodes_affected": nodes_affected,
+            "total_before": total_before,
+            "total_after": total_before - pruned if not dry_run else total_before,
+            "dry_run": dry_run,
         }
 
     # ------------------------------------------------------------------

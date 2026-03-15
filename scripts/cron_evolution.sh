@@ -37,7 +37,7 @@ if [ "$EVO_EXIT" -ne 0 ]; then
     PENDING_COUNT=$(grep -c '^\- \[ \]' memory/evolution/QUEUE.md 2>/dev/null || echo 0)
 else
     # Parse all results in a single python invocation
-    eval $(python3 -c "
+    eval "$(python3 -c "
 import json, shlex
 with open('$EVO_PREFLIGHT_FILE') as f:
     d = json.load(f)
@@ -50,7 +50,7 @@ print(f'EVO_PF_TIME={shlex.quote(str(t.get(\"total\", \"?\")))}')
 print(f'PHI_SHORT={shlex.quote(str(d.get(\"phi_trend\", \"Phi unknown\"))[:100])}')
 print(f'WEAKEST={shlex.quote(str(d.get(\"capabilities\", \"unknown\"))[:100])}')
 print(f'CALIBRATION_SHORT={shlex.quote(str(d.get(\"calibration\", \"\"))[:100])}')
-" 2>> "$LOGFILE")
+" 2>> "$LOGFILE")"
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] PREFLIGHT: Collected all metrics in ${EVO_PF_TIME}s" >> "$LOGFILE"
 fi
 
@@ -84,10 +84,10 @@ $COMPRESSED_HEALTH
 OUTPUT FORMAT (mandatory): Start with "ANALYSIS: <1-sentence verdict>". Then "TASKS ADDED: <count>". Then list each task.
 ENDPROMPT
 
-timeout 1200 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \
-    /home/agent/.local/bin/claude -p "$(cat "$EVO_PROMPT_FILE")" \
-    --dangerously-skip-permissions --model claude-opus-4-6 >> "$LOGFILE" 2>&1
-rm -f "$EVO_PROMPT_FILE"
+EVO_OUTPUT_FILE=$(mktemp)
+run_claude_monitored 1200 "$EVO_OUTPUT_FILE" "$EVO_PROMPT_FILE" "$LOGFILE"
+cat "$EVO_OUTPUT_FILE" >> "$LOGFILE"
+rm -f "$EVO_PROMPT_FILE" "$EVO_OUTPUT_FILE"
 
 # ============================================================================
 # DIGEST (lightweight — single subprocess)

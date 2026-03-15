@@ -368,7 +368,8 @@ def get_context_brief(tier="standard", task=None):
                 # (introspect stores results but doesn't expose IDs in formatted output)
                 # We do a lightweight follow-up recall just for IDs
                 from brain import brain
-                id_results = brain.recall(task, n=5, caller="prompt_builder_ids")
+                id_results = brain.recall(task, n=5, caller="prompt_builder_ids",
+                                          cross_collection_expand=True)
                 recalled_ids = [r.get("id", "") for r in id_results if r.get("id")]
             except Exception:
                 pass

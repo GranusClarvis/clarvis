@@ -261,6 +261,21 @@ def run(threshold=0.50, top_n=5, dry_run=False, verbose=True):
     """
     Main bridge building pipeline.
 
+    DEPRECATED: Static bridge creation is superseded by dynamic cross-collection
+    query expansion in brain.recall(cross_collection_expand=True). New bridge
+    creation is disabled. Use 'status' subcommand to inspect existing bridges.
+
+    Returns summary dict."""
+    # Gate: no new bridge creation — dynamic expansion replaces static bridges
+    if not dry_run:
+        print("⚠ Bridge creation disabled — using dynamic cross-collection expansion instead.")
+        print("  See: brain.recall(cross_collection_expand=True)")
+        print("  Run with --dry-run to see what WOULD have been created.")
+        return {"status": "disabled", "reason": "dynamic_expansion_replaces_static_bridges"}
+
+    """
+    Legacy pipeline (retained for dry-run analysis):
+
     1. Find all collection pairs with semantic overlap < threshold
     2. For each weak pair, find top-N most similar cross-collection memories
     3. Create bridge memories referencing both sides

@@ -39,6 +39,26 @@ BUDGET_FLOOR = 0.4   # minimum 40% of base budget (prevent section disappearing)
 BUDGET_CEILING = 1.4  # maximum 140% of base budget
 
 # Token budgets per tier (attention-optimal allocation)
+# Sections that are never pruned by DyCP (high-value regardless of task overlap)
+DYCP_PROTECTED_SECTIONS = frozenset({
+    "decision_context", "reasoning", "knowledge", "related_tasks",
+    "episodes", "completions",
+})
+
+# Minimum containment (section∩task / section) to keep a prunable section.
+# Calibrated from per-section data: sections with mean relevance < 0.10
+# almost never contribute. A low threshold ensures we only prune true noise.
+DYCP_MIN_CONTAINMENT = 0.04
+
+# Also consider historical mean relevance — sections historically below
+# this AND below task-containment threshold get pruned.
+DYCP_HISTORICAL_FLOOR = 0.13
+
+# Sections with zero task overlap AND historical score below this
+# stricter ceiling are also pruned (DyCP query-dependent tier 2).
+DYCP_ZERO_OVERLAP_CEILING = 0.16
+
+
 TIER_BUDGETS = {
     "minimal": {
         "total": 200,
@@ -367,20 +387,27 @@ def build_decision_context(current_task, tier="standard"):
         parts.append("AVOID THESE FAILURE PATTERNS:")
         parts.extend(failure_patterns)
 
-    # Meta-gradient RL
+    # Meta-gradient RL (gated by section relevance — mean 0.049 historically)
+    _meta_suppressed = False
     try:
-        from meta_gradient_rl import load_meta_params
-        mg_params = load_meta_params()
-        explore = mg_params.get("exploration_rate", 0.3)
-        weights = mg_params.get("strategy_weights", {})
-        best_strategy = max(weights, key=weights.get) if weights else None
-        if best_strategy and weights[best_strategy] > 1.2:
-            parts.append(
-                f"META-GRADIENT: Prefer '{best_strategy}' strategy "
-                f"(weight={weights[best_strategy]:.2f}), explore={explore:.0%}"
-            )
+        from clarvis.cognition.context_relevance import get_suppressed_sections
+        _meta_suppressed = "meta_gradient" in get_suppressed_sections()
     except Exception:
         pass
+    if not _meta_suppressed:
+        try:
+            from meta_gradient_rl import load_meta_params
+            mg_params = load_meta_params()
+            explore = mg_params.get("exploration_rate", 0.3)
+            weights = mg_params.get("strategy_weights", {})
+            best_strategy = max(weights, key=weights.get) if weights else None
+            if best_strategy and weights[best_strategy] > 1.2:
+                parts.append(
+                    f"META-GRADIENT: Prefer '{best_strategy}' strategy "
+                    f"(weight={weights[best_strategy]:.2f}), explore={explore:.0%}"
+                )
+        except Exception:
+            pass
 
     # Weak capabilities warning
     scores = get_latest_scores()
@@ -615,6 +642,136 @@ def get_recent_completions(queue_file=None, n=3):
     return completions[:n]
 
 
+def _dycp_task_containment(section_text: str, task_text: str) -> float:
+    """Compute bidirectional containment between section and task tokens.
+
+    Returns max(section_in_task, task_in_section) — captures relevance
+    regardless of which text is larger.
+    """
+    sec_tokens = set(re.findall(r"[a-z][a-z0-9_]{2,}", section_text.lower()))
+    task_tokens = set(re.findall(r"[a-z][a-z0-9_]{2,}", task_text.lower()))
+    # Remove stopwords
+    _sw = {"the", "and", "for", "are", "but", "not", "you", "all", "can",
+           "had", "her", "was", "one", "our", "out", "has", "have", "from",
+           "with", "this", "that", "they", "been", "will", "each", "make",
+           "like", "into", "than", "its", "also", "use", "two", "how"}
+    sec_tokens -= _sw
+    task_tokens -= _sw
+    if not sec_tokens or not task_tokens:
+        return 0.0
+    sec_in_task = len(sec_tokens & task_tokens) / len(sec_tokens)
+    task_in_sec = len(sec_tokens & task_tokens) / len(task_tokens)
+    return max(sec_in_task, task_in_sec)
+
+
+def _load_historical_section_means() -> dict:
+    """Load per-section historical mean relevance scores.
+
+    Returns dict mapping section_name → mean_relevance, or empty dict on error.
+    """
+    try:
+        from clarvis.cognition.context_relevance import aggregate_relevance
+        agg = aggregate_relevance(days=14)
+        if agg.get("episodes", 0) >= 5:
+            return agg.get("per_section_mean", {})
+    except Exception:
+        pass
+    return {}
+
+
+def dycp_prune_brief(brief_text: str, task_text: str) -> str:
+    """Dynamic Context Pruning — remove sections irrelevant to the current task.
+
+    Inspired by DyCP (arXiv:2601.07994): query-dependent segment-level pruning.
+    Each section is scored against the task query using token containment.
+    Sections that are both historically low-relevance AND have low task-overlap
+    are pruned to reduce noise in the context.
+
+    Protected sections (decision_context, reasoning, knowledge, etc.) are
+    never pruned — they carry critical task-shaping information.
+
+    Args:
+        brief_text: The assembled context brief (with section markers).
+        task_text: The current task description.
+
+    Returns:
+        Pruned brief text with irrelevant sections removed.
+    """
+    if not brief_text or not task_text:
+        return brief_text
+
+    try:
+        from clarvis.cognition.context_relevance import parse_brief_sections
+    except ImportError:
+        return brief_text
+
+    sections = parse_brief_sections(brief_text)
+    if len(sections) <= 3:
+        return brief_text  # too few sections to prune
+
+    historical = _load_historical_section_means()
+    pruned_names = set()
+
+    for name, content in sections.items():
+        if name in DYCP_PROTECTED_SECTIONS:
+            continue
+        # Compute task-relevance via containment
+        containment = _dycp_task_containment(content, task_text)
+        if containment >= DYCP_MIN_CONTAINMENT:
+            continue  # section has task-relevant content, keep it
+        # Check historical performance
+        hist_score = historical.get(name, 0.5)  # default=keep if no data
+        # Tier 1: Historically weak sections with low task overlap → prune
+        if hist_score < DYCP_HISTORICAL_FLOOR:
+            pruned_names.add(name)
+        # Tier 2 (DyCP query-dependent): Zero overlap + borderline history → prune
+        elif containment == 0.0 and hist_score < DYCP_ZERO_OVERLAP_CEILING:
+            pruned_names.add(name)
+
+    if not pruned_names:
+        return brief_text
+
+    # Rebuild brief without pruned sections
+    # Walk through original text, skip sections that match pruned names
+    lines = brief_text.split("\n")
+    from clarvis.cognition.context_relevance import _SECTION_MARKERS
+    result_lines = []
+    current_section = None
+    skip_until_next = False
+
+    for line in lines:
+        # Check if this line starts a new section
+        new_section = None
+        for sname, pattern in _SECTION_MARKERS:
+            if pattern.search(line):
+                new_section = sname
+                break
+
+        if new_section is not None:
+            current_section = new_section
+            skip_until_next = current_section in pruned_names
+            if skip_until_next:
+                continue
+        elif line.strip() == "---":
+            # Separator — don't skip, but reset skip state
+            skip_until_next = False
+
+        if not skip_until_next:
+            result_lines.append(line)
+
+    # Clean up consecutive --- separators and trailing ---
+    cleaned = []
+    for line in result_lines:
+        if line.strip() == "---" and cleaned and cleaned[-1].strip() == "---":
+            continue
+        cleaned.append(line)
+    # Remove trailing ---
+    while cleaned and cleaned[-1].strip() == "---":
+        cleaned.pop()
+
+    return "\n".join(cleaned)
+
+
 def generate_tiered_brief(
     current_task,
     tier="standard",
@@ -747,4 +904,10 @@ def generate_tiered_brief(
         parts.append("---")
         parts.extend(end)
 
-    return "\n".join(parts)
+    assembled = "\n".join(parts)
+
+    # DyCP: Query-dependent pruning — remove sections irrelevant to this task
+    if tier != "minimal":
+        assembled = dycp_prune_brief(assembled, current_task)
+
+    return assembled

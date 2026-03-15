@@ -15,7 +15,7 @@ if [ -f "$LOCKFILE" ]; then
     fi
 fi
 echo $$ > "$LOCKFILE"
-trap "rm -f $LOCKFILE" EXIT
+trap 'rm -f "$LOCKFILE"' EXIT
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Weekly cleanup started ==="
 python3 /home/agent/.openclaw/workspace/scripts/cleanup_policy.py

@@ -2,20 +2,27 @@
 """
 research_to_queue.py — Bridge between ingested research and the evolution queue.
 
+Every research finding must be classified into one of four dispositions:
+  - benchmark_target: maps to a measurable metric improvement
+  - code_change: maps to a specific file/function modification
+  - queue_item: maps to a new QUEUE.md task (not benchmark or code)
+  - discard: theory-only, already covered, or too vague to act on
+
 Scans memory/research/ingested/ for papers with actionable findings,
 cross-references QUEUE.md + QUEUE_ARCHIVE.md for existing tasks,
-and prints candidate queue items for unimplemented research.
-
-Optionally injects top candidates into QUEUE.md via queue_writer.
+classifies each proposal, and injects actionable ones into QUEUE.md.
+Discarded proposals are logged to a disposition log for audit.
 
 Usage:
-    python3 research_to_queue.py scan          # Print candidates (dry run)
-    python3 research_to_queue.py inject        # Inject top candidates into QUEUE.md
+    python3 research_to_queue.py scan          # Print candidates with dispositions
+    python3 research_to_queue.py inject        # Inject actionable candidates into QUEUE.md
     python3 research_to_queue.py inject --max 3  # Inject up to 3 candidates
+    python3 research_to_queue.py audit         # Show disposition stats and discard reasons
 
 Run monthly via cron_reflection.sh.
 """
 
+import json
 import os
 import re
 import sys
@@ -25,6 +32,10 @@ WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace
 INGESTED_DIR = os.path.join(WORKSPACE, "memory", "research", "ingested")
 QUEUE_FILE = os.path.join(WORKSPACE, "memory", "evolution", "QUEUE.md")
 ARCHIVE_FILE = os.path.join(WORKSPACE, "memory", "evolution", "QUEUE_ARCHIVE.md")
+DISPOSITION_LOG = os.path.join(WORKSPACE, "data", "research_dispositions.jsonl")
+
+# Disposition categories — every proposal MUST be classified into one
+DISPOSITIONS = ("benchmark_target", "code_change", "queue_item", "discard")
 
 # Actionable signal patterns — sections/headings that indicate concrete proposals
 ACTIONABLE_PATTERNS = [
@@ -206,6 +217,86 @@ def _score_proposal(proposal: str) -> float:
     return min(1.0, max(0.0, score))
 
 
+# --- Disposition keywords for classification ---
+_BENCHMARK_KEYWORDS = [
+    "metric", "benchmark", "score", "target", "threshold", "measure",
+    "latency", "speed", "accuracy", "precision", "recall", "f1",
+    "context relevance", "pi ", "performance index", "retrieval quality",
+]
+_CODE_CHANGE_KEYWORDS = [
+    "modify", "refactor", "implement", "add to", "change", "fix",
+    "update", "wire", "integrate", "replace", "rewrite", "patch",
+    ".py", ".sh", "function", "class", "module", "method",
+    "brain.py", "search.py", "store.py", "recall()", "store()",
+]
+_DISCARD_KEYWORDS = [
+    "theoretical", "philosophy", "conceptual framework", "future work",
+    "long-term vision", "speculative", "open question",
+]
+
+
+def classify_disposition(proposal: str, covered: bool) -> tuple[str, str]:
+    """Classify a proposal into a disposition category.
+
+    Returns (disposition, reason) where disposition is one of DISPOSITIONS.
+    """
+    text = proposal.lower()
+
+    # Already covered by existing queue item → discard
+    if covered:
+        return "discard", "already covered by existing queue/archive item"
+
+    # Too short or vague → discard
+    if len(proposal) < 30:
+        return "discard", "too vague (under 30 chars)"
+
+    # Check for discard signals
+    discard_hits = sum(1 for kw in _DISCARD_KEYWORDS if kw in text)
+    if discard_hits >= 2:
+        return "discard", f"theory-only ({discard_hits} abstract keywords)"
+
+    # Check for benchmark target signals
+    benchmark_hits = sum(1 for kw in _BENCHMARK_KEYWORDS if kw in text)
+    code_hits = sum(1 for kw in _CODE_CHANGE_KEYWORDS if kw in text)
+
+    if benchmark_hits >= 2 and benchmark_hits > code_hits:
+        return "benchmark_target", f"maps to measurable metric ({benchmark_hits} benchmark signals)"
+    if code_hits >= 2:
+        return "code_change", f"maps to specific code modification ({code_hits} code signals)"
+
+    # Default: actionable but general → queue_item
+    if len(proposal) >= 40:
+        return "queue_item", "actionable proposal for evolution queue"
+
+    return "discard", "insufficient actionable signals"
+
+
+def _log_disposition(entry: dict):
+    """Append a disposition record to the JSONL log."""
+    try:
+        os.makedirs(os.path.dirname(DISPOSITION_LOG), exist_ok=True)
+        with open(DISPOSITION_LOG, "a") as f:
+            f.write(json.dumps(entry, default=str) + "\n")
+    except Exception:
+        pass
+
+
+def _load_disposition_log() -> list[dict]:
+    """Load all disposition records."""
+    if not os.path.exists(DISPOSITION_LOG):
+        return []
+    entries = []
+    try:
+        with open(DISPOSITION_LOG) as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    entries.append(json.loads(line))
+    except Exception:
+        pass
+    return entries
+
+
 def scan_papers() -> list[dict]:
     """Scan all ingested papers and extract actionable proposals.
 
@@ -241,6 +332,7 @@ def scan_papers() -> list[dict]:
         for proposal in proposals:
             covered = _is_covered(proposal, queue_items)
             score = _score_proposal(proposal)
+            disposition, reason = classify_disposition(proposal, covered)
             results.append({
                 "paper": title,
                 "paper_file": filename,
@@ -248,15 +340,18 @@ def scan_papers() -> list[dict]:
                 "proposal": proposal,
                 "score": score,
                 "covered": covered,
+                "disposition": disposition,
+                "disposition_reason": reason,
             })
 
-    # Sort: uncovered first, then by score descending
-    results.sort(key=lambda r: (r["covered"], -r["score"]))
+    # Sort: actionable first (non-discard), then by score descending
+    disposition_order = {"benchmark_target": 0, "code_change": 1, "queue_item": 2, "discard": 3}
+    results.sort(key=lambda r: (disposition_order.get(r["disposition"], 9), -r["score"]))
     return results
 
 
 def format_queue_item(result: dict) -> str:
-    """Format a research proposal as a QUEUE.md task."""
+    """Format a research proposal as a QUEUE.md task with disposition tag."""
     # Generate a tag from the paper filename
     tag = re.sub(r"\.md$", "", result["paper_file"])
     tag = re.sub(r"[-_]+", "_", tag).upper()
@@ -275,12 +370,16 @@ def format_queue_item(result: dict) -> str:
     if result["source"]:
         paper_ref += f" ({result['source']})"
 
-    return f"[RESEARCH_{tag}] From {paper_ref}: {proposal}"
+    # Include disposition type so queue consumers know what kind of action
+    disp = result.get("disposition", "queue_item")
+    disp_label = {"benchmark_target": "BENCH", "code_change": "CODE", "queue_item": "TASK"}.get(disp, "TASK")
+
+    return f"[RESEARCH_{tag}] [{disp_label}] From {paper_ref}: {proposal}"
 
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: research_to_queue.py scan|inject [--max N]")
+        print("Usage: research_to_queue.py scan|inject|audit [--max N]")
         sys.exit(1)
 
     cmd = sys.argv[1]
@@ -289,36 +388,59 @@ def main():
         if arg == "--max" and i + 1 < len(sys.argv):
             max_inject = int(sys.argv[i + 1])
 
+    if cmd == "audit":
+        _cmd_audit()
+        return
+
     results = scan_papers()
 
     if not results:
         print("No actionable proposals found in ingested papers.")
         return
 
-    uncovered = [r for r in results if not r["covered"]]
-    covered = [r for r in results if r["covered"]]
+    # Group by disposition
+    by_disp = {}
+    for r in results:
+        by_disp.setdefault(r["disposition"], []).append(r)
 
-    print(f"=== Research-to-Queue Bridge ===")
+    actionable = [r for r in results if r["disposition"] != "discard"]
+    discarded = by_disp.get("discard", [])
+
+    print(f"=== Research-to-Action Pipeline ===")
     print(f"Papers scanned: {len(set(r['paper_file'] for r in results))}")
     print(f"Total proposals: {len(results)}")
-    print(f"Uncovered (new): {len(uncovered)}")
-    print(f"Already covered: {len(covered)}")
+    for disp in DISPOSITIONS:
+        count = len(by_disp.get(disp, []))
+        print(f"  {disp}: {count}")
     print()
 
-    if uncovered:
-        print("--- NEW CANDIDATES (not in QUEUE) ---")
-        for i, r in enumerate(uncovered[:15], 1):
-            status = f"[score={r['score']:.2f}]"
-            print(f"  {i}. {status} {format_queue_item(r)}")
+    # Log all dispositions
+    now = datetime.now(timezone.utc).isoformat()
+    for r in results:
+        _log_disposition({
+            "timestamp": now,
+            "paper": r["paper"],
+            "paper_file": r["paper_file"],
+            "proposal": r["proposal"][:200],
+            "disposition": r["disposition"],
+            "reason": r["disposition_reason"],
+            "score": r["score"],
+        })
+
+    if actionable:
+        print("--- ACTIONABLE PROPOSALS ---")
+        for i, r in enumerate(actionable[:15], 1):
+            status = f"[{r['disposition']}] [score={r['score']:.2f}]"
+            print(f"  {i}. {status} {r['paper']}: {r['proposal'][:100]}")
         print()
 
-    if covered:
-        print(f"--- ALREADY COVERED ({len(covered)} items, showing top 5) ---")
-        for r in covered[:5]:
-            print(f"  - {r['paper']}: {r['proposal'][:80]}...")
+    if discarded:
+        print(f"--- DISCARDED ({len(discarded)} proposals) ---")
+        for r in discarded[:5]:
+            print(f"  - [{r['disposition_reason']}] {r['paper']}: {r['proposal'][:60]}...")
         print()
 
-    if cmd == "inject" and uncovered:
+    if cmd == "inject" and actionable:
         # Import queue_writer for injection
         sys.path.insert(0, os.path.join(WORKSPACE, "scripts"))
         try:
@@ -327,17 +449,51 @@ def main():
             print("ERROR: Could not import queue_writer", file=sys.stderr)
             sys.exit(1)
 
-        tasks = [format_queue_item(r) for r in uncovered[:max_inject]]
+        tasks = [format_queue_item(r) for r in actionable[:max_inject]]
         added = add_tasks(tasks, priority="P1", source="research_bridge")
         print(f"Injected {len(added)} task(s) into QUEUE.md (P1)")
         for t in added:
             print(f"  + {t[:100]}...")
 
     elif cmd == "scan":
-        if uncovered:
-            print(f"Run 'research_to_queue.py inject' to add top {min(max_inject, len(uncovered))} to QUEUE.md")
+        if actionable:
+            print(f"Run 'research_to_queue.py inject' to add top {min(max_inject, len(actionable))} to QUEUE.md")
+        else:
+            print("No actionable proposals found (all discarded).")
     else:
-        print("No new candidates to inject.")
+        print("No actionable candidates to inject.")
+
+
+def _cmd_audit():
+    """Show disposition statistics from the log."""
+    entries = _load_disposition_log()
+    if not entries:
+        print("No disposition records yet. Run 'scan' or 'inject' first.")
+        return
+
+    by_disp = {}
+    by_reason = {}
+    for e in entries:
+        d = e.get("disposition", "unknown")
+        by_disp[d] = by_disp.get(d, 0) + 1
+        if d == "discard":
+            r = e.get("reason", "unknown")
+            by_reason[r] = by_reason.get(r, 0) + 1
+
+    total = len(entries)
+    print(f"=== Research Disposition Audit ({total} records) ===")
+    for d in DISPOSITIONS:
+        count = by_disp.get(d, 0)
+        pct = (count / total * 100) if total else 0
+        print(f"  {d}: {count} ({pct:.0f}%)")
+
+    action_count = total - by_disp.get("discard", 0)
+    print(f"\nActionable rate: {action_count}/{total} ({action_count/total*100:.0f}%)" if total else "")
+
+    if by_reason:
+        print(f"\nDiscard reasons:")
+        for reason, count in sorted(by_reason.items(), key=lambda x: -x[1]):
+            print(f"  {count}x {reason}")
 
 
 if __name__ == "__main__":

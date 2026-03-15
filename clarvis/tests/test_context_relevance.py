@@ -344,11 +344,146 @@ class TestRegenerateReport:
 from clarvis.context.assembly import (
     load_relevance_weights,
     get_adjusted_budgets,
+    dycp_prune_brief,
+    _dycp_task_containment,
+    DYCP_PROTECTED_SECTIONS,
     TIER_BUDGETS,
     BUDGET_FLOOR,
     BUDGET_CEILING,
     _BUDGET_TO_SECTIONS,
 )
+
+
+class TestDyCPTaskContainment:
+    def test_overlapping_tokens(self):
+        section = "SQLite graph migration edges parity check"
+        task = "Migrate graph storage to SQLite backend"
+        score = _dycp_task_containment(section, task)
+        assert score > 0.2  # "graph", "sqlite", "migrate" overlap
+
+    def test_no_overlap(self):
+        section = "ATTENTION CODELETS winner=code coalition=research"
+        task = "Fix Telegram bot message formatting"
+        score = _dycp_task_containment(section, task)
+        assert score == 0.0
+
+    def test_empty_inputs(self):
+        assert _dycp_task_containment("", "some task") == 0.0
+        assert _dycp_task_containment("some section", "") == 0.0
+
+    def test_bidirectional(self):
+        """Max of both directions should be returned."""
+        small = "retrieval"
+        big = "implement retrieval evaluator with golden QA benchmark scoring"
+        score = _dycp_task_containment(small, big)
+        assert score > 0.0
+
+
+class TestDyCPPruneBrief:
+    def test_prunes_irrelevant_sections(self, monkeypatch):
+        """Sections with low historical score AND low task overlap are pruned."""
+        import clarvis.context.assembly as asm
+        # Mock historical means: meta_gradient and brain_goals are weak
+        monkeypatch.setattr(asm, "_load_historical_section_means", lambda: {
+            "meta_gradient": 0.05,
+            "brain_goals": 0.08,
+            "knowledge": 0.20,
+            "decision_context": 0.30,
+            "reasoning": 0.17,
+        })
+
+        brief = (
+            "SUCCESS CRITERIA: Migrate graph storage to SQLite\n"
+            "META-GRADIENT: Prefer explore strategy (weight=1.50), explore=30%\n"
+            "RELEVANT KNOWLEDGE:\nSQLite WAL mode provides better concurrency\n"
+            "BRAIN GOALS (active objectives):\nImprove consciousness metrics above threshold\n"
+            "APPROACH: Read the file first, then implement migration."
+        )
+        task = "Migrate graph storage from JSON to SQLite backend"
+        pruned = dycp_prune_brief(brief, task)
+
+        sections = parse_brief_sections(pruned)
+        assert "meta_gradient" not in sections  # hist=0.05, no task overlap
+        assert "brain_goals" not in sections     # hist=0.08, no task overlap
+        assert "knowledge" in sections           # protected
+        assert "decision_context" in sections    # protected
+        assert "reasoning" in sections           # protected
+
+    def test_keeps_sections_with_task_overlap(self, monkeypatch):
+        """Even historically weak sections are kept if they overlap with task."""
+        import clarvis.context.assembly as asm
+        monkeypatch.setattr(asm, "_load_historical_section_means", lambda: {
+            "synaptic": 0.10,  # historically weak
+        })
+
+        brief = (
+            "SUCCESS CRITERIA: improve retrieval\n"
+            "SYNAPTIC ASSOCIATIONS (neural co-activation):\n"
+            "brain.py -> search -> retrieval -> recall\n"
+        )
+        task = "Improve brain retrieval quality and search scoring"
+        pruned = dycp_prune_brief(brief, task)
+
+        sections = parse_brief_sections(pruned)
+        assert "synaptic" in sections  # task mentions retrieval/search/brain
+
+    def test_preserves_protected_sections(self, monkeypatch):
+        """Protected sections are never pruned even with no overlap."""
+        import clarvis.context.assembly as asm
+        monkeypatch.setattr(asm, "_load_historical_section_means", lambda: {})
+
+        brief = (
+            "SUCCESS CRITERIA: do something\n"
+            "RELEVANT KNOWLEDGE:\nCompletely unrelated knowledge\n"
+            "RELATED TASKS:\n  - Unrelated task A\n"
+            "APPROACH: step by step\n"
+        )
+        task = "Fix telegram bot"
+        pruned = dycp_prune_brief(brief, task)
+
+        sections = parse_brief_sections(pruned)
+        for protected in ["decision_context", "knowledge", "related_tasks", "reasoning"]:
+            if protected in parse_brief_sections(brief):
+                assert protected in sections, f"Protected section {protected} was pruned"
+
+    def test_passthrough_when_few_sections(self, monkeypatch):
+        """Brief with <= 3 sections is returned unchanged."""
+        import clarvis.context.assembly as asm
+        monkeypatch.setattr(asm, "_load_historical_section_means", lambda: {
+            "meta_gradient": 0.01,
+        })
+
+        brief = "SUCCESS CRITERIA: test\nMETA-GRADIENT: fix\n"
+        result = dycp_prune_brief(brief, "some task")
+        assert result == brief  # unchanged
+
+    def test_empty_inputs(self):
+        assert dycp_prune_brief("", "task") == ""
+        assert dycp_prune_brief("brief", "") == "brief"
+
+    def test_tier2_zero_overlap_pruning(self, monkeypatch):
+        """Tier 2: sections with zero overlap and borderline history get pruned."""
+        import clarvis.context.assembly as asm
+        monkeypatch.setattr(asm, "_load_historical_section_means", lambda: {
+            "attention": 0.15,    # above HISTORICAL_FLOOR but below ZERO_OVERLAP_CEILING
+            "brain_context": 0.14,  # same
+        })
+
+        brief = (
+            "SUCCESS CRITERIA: fix tests\n"
+            "RELEVANT KNOWLEDGE:\ntest framework info\n"
+            "ATTENTION CODELETS (LIDA): winner=code coalition=research\n"
+            "BRAIN CONTEXT: GWT broadcast about consciousness\n"
+            "APPROACH: run tests first\n"
+        )
+        task = "Fix pytest failures in test_brain_roundtrip.py"
+        pruned = dycp_prune_brief(brief, task)
+
+        sections = parse_brief_sections(pruned)
+        # attention and brain_context have 0 overlap with "pytest failures"
+        # and hist < 0.16, so tier 2 prunes them
+        assert "attention" not in sections
+        assert "brain_context" not in sections
 
 
 class TestLoadRelevanceWeights:

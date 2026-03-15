@@ -203,6 +203,17 @@ def cmd_run():
     # 2. Graph parity verification
     graph_ok = run_graph_verify()
 
+    # 2b. High-degree node pruning (cap at 200 edges per node)
+    prune_result = {}
+    if graph_ok:
+        try:
+            from clarvis.brain import brain
+            prune_result = brain.prune_high_degree(max_degree=200)
+            _log(f"Graph pruning: {prune_result.get('pruned', 0)} edges removed from "
+                 f"{prune_result.get('nodes_affected', 0)} high-degree nodes")
+        except Exception as e:
+            _log(f"WARN: Graph pruning failed: {e}")
+
     # 3. Full optimization (dedup + noise + archive)
     # Skip if graph verification failed — optimizing a broken graph can worsen corruption
     if not graph_ok:
@@ -216,6 +227,7 @@ def cmd_run():
         stats["hygiene_run"] = {
             "orphans_backfilled": orphans,
             "graph_verified": graph_ok,
+            "graph_pruned": prune_result.get("pruned", 0),
             "optimize_ok": opt_ok,
             "duration_s": round(time.time() - start, 1),
         }
@@ -230,6 +242,20 @@ def cmd_run():
             _log(f"REGRESSIONS DETECTED: {len(issues)} issue(s)")
         else:
             _log("No regressions detected")
+
+    # 6. Memory audit — canonical vs synthetic ratios
+    try:
+        from clarvis.metrics.memory_audit import run_full_audit, record_audit
+        audit = run_full_audit()
+        record_audit(audit)
+        _log(f"Memory audit: {audit['overall_health']}, "
+             f"{len(audit['ratios']['alerts'])} alerts, "
+             f"{audit['archive_vs_active']['quality_signals']['low_importance_synthetic_count']} low-imp synthetic")
+        if audit["ratios"]["alerts"]:
+            for alert in audit["ratios"]["alerts"]:
+                _log(f"  AUDIT: {alert}")
+    except Exception as e:
+        _log(f"WARN: Memory audit failed: {e}")
 
     elapsed = round(time.time() - start, 1)
     _log(f"=== Brain hygiene complete ({elapsed}s) ===")

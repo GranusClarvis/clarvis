@@ -5,12 +5,9 @@ source /home/agent/.openclaw/workspace/scripts/cron_env.sh
 
 DATE=$(date '+%Y-%m-%d %H:%M:%S')
 LOG_DIR="/home/agent/.openclaw/workspace/monitoring"
-ALERT=0
-
 # === SYSTEM HEALTH ===
 MEM_TOTAL=$(free -m | awk '/^Mem:/{print $2}')
 MEM_USED=$(free -m | awk '/^Mem:/{print $3}')
-MEM_AVAIL=$(free -m | awk '/^Mem:/{print $7}')
 MEM_PCT=$((MEM_USED * 100 / MEM_TOTAL))
 
 DISK_USED=$(df -h / | awk 'NR==2 {print $5}' | tr -d '%')
@@ -23,7 +20,7 @@ if ! ss -tlnp 2>/dev/null | grep -q ":18789 "; then
     # Attempt auto-recovery via systemd (preferred) or PM2 (fallback)
     systemctl --user start openclaw-gateway.service 2>/dev/null \
         || pm2 start openclaw-gateway 2>/dev/null || true
-    ALERT=1
+
 fi
 
 # Check dashboard (non-critical — log only, no auto-restart)
@@ -64,12 +61,12 @@ echo "[$DATE] MEM:${MEM_PCT}% DISK:${DISK_USED}% LOAD:$LOAD PORTS:$OPEN_PORTS SS
 # === ALERTS ===
 if [ "${MEM_PCT:-0}" -gt 90 ]; then
     echo "[$DATE] [CRITICAL] Memory usage at ${MEM_PCT}%" >> "$LOG_DIR"/alerts.log
-    ALERT=1
+
 fi
 
 if [ "${DISK_USED:-0}" -gt 90 ]; then
     echo "[$DATE] [CRITICAL] Disk usage at ${DISK_USED}%" >> "$LOG_DIR"/alerts.log
-    ALERT=1
+
 fi
 
 if [ "${SUSPICIOUS:-0}" -gt 0 ]; then
@@ -86,7 +83,7 @@ fi
 if [ "$BRAIN_STALE" = true ]; then
     python3 /home/agent/.openclaw/workspace/scripts/brain_hygiene.py check >> "$LOG_DIR"/health.log 2>&1 || {
         echo "[$DATE] [WARNING] Brain hygiene check failed or detected regression" >> "$LOG_DIR"/alerts.log
-        ALERT=1
+    
     }
     touch "$BRAIN_CACHE"
 fi
@@ -113,7 +110,7 @@ except Exception:
         echo "[$DATE] PI=$PI_NUM" >> "$LOG_DIR"/health.log
         if python3 -c "import sys; sys.exit(0 if float('$PI_NUM') < 0.70 else 1)" 2>/dev/null; then
             echo "[$DATE] [WARNING] Performance Index below 0.70: PI=$PI_NUM" >> "$LOG_DIR"/alerts.log
-            ALERT=1
+            : # PI below threshold — alert logged above
         fi
     fi
     touch "$PI_CACHE"

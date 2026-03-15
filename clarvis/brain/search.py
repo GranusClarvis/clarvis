@@ -1,12 +1,34 @@
-"""Brain search operations — recall, query routing, embedding cache."""
+"""Brain search operations — recall, query routing, embedding cache, synthesis.
+
+Belief revision filtering:
+  - Superseded memories (status='superseded') are excluded from recall by default.
+  - Low-confidence memories (confidence < 0.3) are deprioritized.
+  - Expired memories (valid_until < now) are deprioritized.
+
+Conclusion synthesis:
+  - synthesize() draws conclusions across multiple memories.
+  - Groups results into evidence bundles by semantic proximity.
+  - Detects contradictions within bundles.
+  - Returns structured synthesis with supporting/contradicting evidence.
+"""
 
 import copy
 import logging
+import math
+import re
 import time
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 from .constants import DEFAULT_COLLECTIONS, ALL_COLLECTIONS, route_query
+
+# Patterns that identify synthetic bridge/boost memories by ID or content
+_BRIDGE_ID_PREFIXES = ("bridge_", "sbridge_", "cross_link_", "xlink_", "boost_", "tm_")
+_BRIDGE_TEXT_PREFIXES = (
+    "BRIDGE [", "Connection between", "Phi action:", "Phi integration",
+    "Cross-domain link:", "Cross-domain insight:", "Semantic bridge between",
+)
 
 _log = logging.getLogger("clarvis.brain.search")
 
@@ -15,12 +37,75 @@ _log = logging.getLogger("clarvis.brain.search")
 _observer_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="brain-obs")
 
 
+def _is_bridge_memory(result: dict) -> bool:
+    """Check if a recall result is a synthetic bridge/boost memory."""
+    mem_id = result.get("id", "")
+    if any(mem_id.startswith(p) for p in _BRIDGE_ID_PREFIXES):
+        return True
+    doc = result.get("document", "")
+    if any(doc.startswith(p) for p in _BRIDGE_TEXT_PREFIXES):
+        return True
+    return False
+
+
+def _deprioritize_bridges(results: list) -> list:
+    """Move bridge memories to end of results (don't remove — may still be useful)."""
+    organic = []
+    bridges = []
+    for r in results:
+        if _is_bridge_memory(r):
+            bridges.append(r)
+        else:
+            organic.append(r)
+    return organic + bridges
+
+
+def _filter_belief_revision(results: list) -> list:
+    """Filter out superseded memories and deprioritize low-confidence/expired ones.
+
+    - status='superseded' → removed entirely (replaced by newer memory)
+    - confidence < 0.3 → moved to end (uncertain, might still be useful)
+    - valid_until < now → moved to end (expired, needs re-evaluation)
+    """
+    active = []
+    deprioritized = []
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    for r in results:
+        meta = r.get("metadata", {})
+
+        # Skip superseded memories entirely
+        if str(meta.get("status", "")).lower() == "superseded":
+            continue
+
+        # Deprioritize low-confidence memories
+        confidence = meta.get("confidence")
+        if confidence is not None:
+            try:
+                if float(confidence) < 0.3:
+                    deprioritized.append(r)
+                    continue
+            except (ValueError, TypeError):
+                pass
+
+        # Deprioritize expired memories
+        valid_until = meta.get("valid_until")
+        if valid_until and valid_until < now_iso:
+            deprioritized.append(r)
+            continue
+
+        active.append(r)
+
+    return active + deprioritized
+
+
 class SearchMixin:
     """Search operations for ClarvisBrain (mixed into the main class)."""
 
     def recall(self, query, collections=None, n=5, min_importance=None,
                include_related=False, since_days=None, attention_boost=False,
-               caller=None, graph_expand=False):
+               caller=None, graph_expand=False, filter_bridges=True,
+               cross_collection_expand=False):
         """Recall memories matching a query.
 
         Uses registered hooks for scoring (actr), boosting (attention/hebbian),
@@ -28,7 +113,9 @@ class SearchMixin:
         directly — dependency inversion breaks the circular import SCC.
 
         graph_expand: If True, expand top results with 1-hop graph neighbors.
-            Neighbor documents are fetched and appended as lower-weight context.
+        filter_bridges: If True (default), deprioritize synthetic bridge memories.
+        cross_collection_expand: If True, dynamically query adjacent collections
+            for cross-domain matches (replaces static bridge memories).
         """
         if collections is None:
             routed = route_query(query)
@@ -154,7 +241,23 @@ class SearchMixin:
                 return semantic_relevance * 0.85 + (importance + boost) * 0.15
             all_results.sort(key=sort_key, reverse=True)
 
+        # --- Bridge filtering: deprioritize synthetic bridge memories ---
+        if filter_bridges:
+            all_results = _deprioritize_bridges(all_results)
+
+        # --- Belief revision: filter superseded, deprioritize uncertain/expired ---
+        all_results = _filter_belief_revision(all_results)
+
         final_results = all_results[:n * len(collections)]
+
+        # --- Dynamic cross-collection expansion (replaces static bridges) ---
+        if cross_collection_expand and query_embedding is not None:
+            try:
+                final_results = self._cross_collection_expand(
+                    query, query_embedding, final_results, collections, n
+                )
+            except Exception:
+                _log.debug("Cross-collection expansion failed", exc_info=True)
 
         # --- Graph expansion: fetch 1-hop neighbor documents ---
         if graph_expand and final_results:
@@ -275,6 +378,84 @@ class SearchMixin:
 
         return results
 
+    def _cross_collection_expand(self, query, query_embedding, results,
+                                   queried_collections, n, max_extra=3):
+        """Dynamically query adjacent collections not in the original set.
+
+        This replaces static bridge memories: instead of permanent synthetic
+        memories linking collections, we do a lightweight probe of unqueried
+        collections at query time. Only top-scoring cross-collection hits
+        (distance < median of primary results) are included.
+
+        Args:
+            query: Original query text
+            query_embedding: Pre-computed embedding vector
+            results: Current results from primary collections
+            queried_collections: Collections already searched
+            n: Original n parameter
+            max_extra: Max results to add from expansion (default 3)
+        """
+        # Find collections NOT already queried
+        adjacent = [c for c in ALL_COLLECTIONS
+                    if c not in queried_collections and c in self.collections]
+        if not adjacent:
+            return results
+
+        # Compute distance threshold from primary results (median distance)
+        distances = [r.get("distance") for r in results if r.get("distance") is not None]
+        if not distances:
+            return results
+        distances.sort()
+        threshold = distances[len(distances) // 2]  # median
+
+        existing_ids = {r.get("id") for r in results}
+        extra = []
+
+        from concurrent.futures import ThreadPoolExecutor as _TPE, as_completed
+
+        def _probe_collection(col_name):
+            """Query one adjacent collection for cross-domain matches."""
+            col = self.collections[col_name]
+            try:
+                res = col.query(query_embeddings=[query_embedding], n_results=2)
+            except Exception:
+                return []
+            hits = []
+            if res["documents"] and res["documents"][0]:
+                for i, doc in enumerate(res["documents"][0]):
+                    dist = res["distances"][0][i] if res.get("distances") else None
+                    rid = res["ids"][0][i]
+                    if rid in existing_ids:
+                        continue
+                    # Only include if closer than median primary distance
+                    if dist is not None and dist <= threshold:
+                        meta = res["metadatas"][0][i] if res.get("metadatas") else {}
+                        hits.append({
+                            "document": doc,
+                            "metadata": meta,
+                            "collection": col_name,
+                            "id": rid,
+                            "distance": dist,
+                            "related": [],
+                            "_cross_collection_expanded": True,
+                        })
+            return hits
+
+        with _TPE(max_workers=min(len(adjacent), 6)) as executor:
+            futures = {executor.submit(_probe_collection, c): c for c in adjacent}
+            for future in as_completed(futures):
+                try:
+                    extra.extend(future.result())
+                except Exception:
+                    pass
+
+        if extra:
+            # Sort by distance, take best max_extra
+            extra.sort(key=lambda x: x.get("distance", 999))
+            results = list(results) + extra[:max_extra]
+
+        return results
+
     def get(self, collection, n=100):
         """Get all memories from a collection"""
         if collection not in self.collections:
@@ -351,3 +532,307 @@ class SearchMixin:
         result = self.get(collection_name, n=10000)
         self._collection_cache[collection_name] = (now, result)
         return result
+
+    # === Conclusion Synthesis ===
+
+    def synthesize(self, query, n=10, collections=None,
+                   contradiction_threshold=0.7, bundle_distance=1.2):
+        """Draw conclusions across multiple memories for a query.
+
+        Instead of returning loosely related top hits, this method:
+        1. Recalls relevant memories across collections
+        2. Groups them into evidence bundles by semantic proximity
+        3. Detects contradictions within and across bundles
+        4. Returns structured synthesis with conclusions
+
+        Args:
+            query: The topic/question to synthesize across
+            n: Number of memories to retrieve per collection set
+            collections: Collections to search (default: all)
+            contradiction_threshold: Distance below which two memories
+                with opposing signals are flagged as contradictions (0-2)
+            bundle_distance: Max distance between memories in same bundle
+
+        Returns:
+            {
+                "query": str,
+                "bundles": [{"theme": str, "evidence": [...], "contradictions": [...]}],
+                "cross_bundle_contradictions": [...],
+                "conclusion": str,  # synthesized summary
+                "confidence": float,  # 0-1 based on evidence quality
+                "n_memories": int,
+                "n_bundles": int,
+                "n_contradictions": int,
+            }
+        """
+        if collections is None:
+            collections = ALL_COLLECTIONS
+
+        # Step 1: Broad recall across all requested collections
+        results = self.recall(
+            query, collections=collections, n=n,
+            attention_boost=True, filter_bridges=True,
+            caller="synthesize",
+        )
+
+        if not results:
+            return {
+                "query": query,
+                "bundles": [],
+                "cross_bundle_contradictions": [],
+                "conclusion": "No relevant memories found.",
+                "confidence": 0.0,
+                "n_memories": 0,
+                "n_bundles": 0,
+                "n_contradictions": 0,
+            }
+
+        # Step 2: Group into evidence bundles by semantic proximity
+        bundles = _build_evidence_bundles(results, bundle_distance)
+
+        # Step 3: Detect contradictions within each bundle
+        all_contradictions = []
+        for bundle in bundles:
+            contras = _detect_contradictions(bundle["evidence"],
+                                             contradiction_threshold)
+            bundle["contradictions"] = contras
+            all_contradictions.extend(contras)
+
+        # Step 4: Cross-bundle contradiction check (compare bundle themes)
+        cross_contradictions = _detect_cross_bundle_contradictions(bundles)
+
+        # Step 5: Synthesize conclusion
+        conclusion, confidence = _synthesize_conclusion(
+            bundles, all_contradictions + cross_contradictions
+        )
+
+        return {
+            "query": query,
+            "bundles": bundles,
+            "cross_bundle_contradictions": cross_contradictions,
+            "conclusion": conclusion,
+            "confidence": round(confidence, 3),
+            "n_memories": len(results),
+            "n_bundles": len(bundles),
+            "n_contradictions": len(all_contradictions) + len(cross_contradictions),
+        }
+
+
+# === Synthesis helpers (module-level for testability) ===
+
+# Contradiction signal words — pairs of opposing concepts
+_CONTRADICTION_PAIRS = [
+    ({"always", "must", "required", "mandatory"}, {"never", "optional", "unnecessary"}),
+    ({"increase", "higher", "more", "grow"}, {"decrease", "lower", "less", "shrink"}),
+    ({"enable", "activate", "start", "on"}, {"disable", "deactivate", "stop", "off"}),
+    ({"true", "yes", "correct"}, {"false", "no", "incorrect", "wrong"}),
+    ({"add", "include", "install"}, {"remove", "exclude", "uninstall"}),
+    ({"success", "working", "fixed"}, {"failure", "broken", "bug"}),
+]
+
+
+def _tokenize_lower(text):
+    """Lowercase tokenize for contradiction detection."""
+    return set(re.findall(r"[a-z][a-z0-9_]+", text.lower()))
+
+
+def _stem_match(tokens, target_set):
+    """Check if any token starts with a word in the target set (simple stemming)."""
+    for token in tokens:
+        for target in target_set:
+            if token.startswith(target) or target.startswith(token):
+                return True
+    return False
+
+
+def _has_opposing_signals(tokens_a, tokens_b):
+    """Check if two token sets contain opposing concepts."""
+    for pos_set, neg_set in _CONTRADICTION_PAIRS:
+        a_pos = _stem_match(tokens_a, pos_set)
+        a_neg = _stem_match(tokens_a, neg_set)
+        b_pos = _stem_match(tokens_b, pos_set)
+        b_neg = _stem_match(tokens_b, neg_set)
+        # One says positive, other says negative
+        if (a_pos and b_neg) or (a_neg and b_pos):
+            return True
+    return False
+
+
+def _build_evidence_bundles(results, max_distance=1.2):
+    """Group recall results into evidence bundles by semantic proximity.
+
+    Uses single-linkage clustering: assign each result to the nearest
+    existing bundle (if within max_distance), or start a new bundle.
+    """
+    bundles = []  # list of {"theme": str, "evidence": [result], "distances": [float]}
+
+    for r in results:
+        doc = r.get("document", "")
+        dist = r.get("distance", 999)
+        assigned = False
+
+        # Try to assign to existing bundle
+        for bundle in bundles:
+            # Compare with first item in bundle (centroid proxy)
+            bundle_doc = bundle["evidence"][0].get("document", "")
+            tokens_r = _tokenize_lower(doc)
+            tokens_b = _tokenize_lower(bundle_doc)
+
+            if not tokens_r or not tokens_b:
+                continue
+
+            # Jaccard similarity as clustering metric
+            intersection = len(tokens_r & tokens_b)
+            union = len(tokens_r | tokens_b)
+            jaccard_sim = intersection / union if union > 0 else 0
+
+            if jaccard_sim > 0.15:  # Threshold for "same topic"
+                bundle["evidence"].append(r)
+                bundle["distances"].append(dist)
+                assigned = True
+                break
+
+        if not assigned:
+            # Extract theme from first ~50 chars of document
+            theme = doc[:80].split(".")[0].strip() if doc else "Unknown"
+            bundles.append({
+                "theme": theme,
+                "evidence": [r],
+                "distances": [dist],
+                "contradictions": [],
+            })
+
+    # Clean up internal distances field (not needed in output)
+    for bundle in bundles:
+        del bundle["distances"]
+
+    return bundles
+
+
+def _detect_contradictions(evidence, distance_threshold=0.7):
+    """Find contradictions within an evidence bundle.
+
+    Two memories contradict if they are semantically close (low distance)
+    but contain opposing signal words.
+
+    Returns list of contradiction dicts.
+    """
+    contradictions = []
+    for i, a in enumerate(evidence):
+        tokens_a = _tokenize_lower(a.get("document", ""))
+        for b in evidence[i + 1:]:
+            tokens_b = _tokenize_lower(b.get("document", ""))
+
+            if _has_opposing_signals(tokens_a, tokens_b):
+                contradictions.append({
+                    "memory_a": {
+                        "id": a.get("id", ""),
+                        "text": a.get("document", "")[:150],
+                        "collection": a.get("collection", ""),
+                    },
+                    "memory_b": {
+                        "id": b.get("id", ""),
+                        "text": b.get("document", "")[:150],
+                        "collection": b.get("collection", ""),
+                    },
+                    "type": "opposing_signals",
+                })
+
+    return contradictions
+
+
+def _detect_cross_bundle_contradictions(bundles):
+    """Detect contradictions between different evidence bundles."""
+    contradictions = []
+    for i, ba in enumerate(bundles):
+        # Use all evidence tokens from bundle A
+        tokens_a = set()
+        for e in ba["evidence"]:
+            tokens_a |= _tokenize_lower(e.get("document", ""))
+
+        for bb in bundles[i + 1:]:
+            tokens_b = set()
+            for e in bb["evidence"]:
+                tokens_b |= _tokenize_lower(e.get("document", ""))
+
+            if _has_opposing_signals(tokens_a, tokens_b):
+                contradictions.append({
+                    "bundle_a_theme": ba["theme"],
+                    "bundle_b_theme": bb["theme"],
+                    "type": "cross_bundle_opposition",
+                })
+
+    return contradictions
+
+
+def _synthesize_conclusion(bundles, contradictions):
+    """Produce a textual conclusion and confidence score from evidence bundles.
+
+    Confidence is based on:
+    - Number of supporting memories (more = higher)
+    - Consistency (fewer contradictions = higher)
+    - Evidence quality (lower distances = higher)
+    """
+    if not bundles:
+        return "Insufficient evidence for synthesis.", 0.0
+
+    # Count total evidence
+    total_evidence = sum(len(b["evidence"]) for b in bundles)
+    n_contradictions = len(contradictions)
+
+    # Evidence volume factor: 1 memory = 0.3, 5+ = 0.8, 10+ = 1.0
+    volume_factor = min(1.0, 0.3 + total_evidence * 0.07)
+
+    # Consistency factor: penalize contradictions
+    if total_evidence > 0:
+        contradiction_ratio = n_contradictions / total_evidence
+        consistency_factor = max(0.0, 1.0 - contradiction_ratio * 2)
+    else:
+        consistency_factor = 0.0
+
+    # Quality factor: average semantic similarity of top results
+    all_distances = []
+    for b in bundles:
+        for e in b["evidence"]:
+            d = e.get("distance")
+            if d is not None:
+                all_distances.append(d)
+
+    if all_distances:
+        avg_sim = 1.0 / (1.0 + sum(all_distances) / len(all_distances))
+        quality_factor = avg_sim
+    else:
+        quality_factor = 0.5
+
+    confidence = (
+        0.35 * volume_factor +
+        0.35 * consistency_factor +
+        0.30 * quality_factor
+    )
+
+    # Build conclusion text
+    parts = []
+
+    # Summarize each bundle
+    for b in bundles:
+        n_ev = len(b["evidence"])
+        theme = b["theme"]
+        collections = set(e.get("collection", "") for e in b["evidence"])
+        col_str = ", ".join(sorted(collections)) if collections else "unknown"
+        parts.append(f"[{n_ev} memories, from {col_str}] {theme}")
+
+    conclusion_lines = [f"Synthesis across {total_evidence} memories in {len(bundles)} evidence bundles:"]
+    for p in parts[:5]:  # Cap at 5 bundles in summary
+        conclusion_lines.append(f"  - {p}")
+
+    if n_contradictions > 0:
+        conclusion_lines.append(
+            f"  WARNING: {n_contradictions} contradiction(s) detected — "
+            f"review evidence before acting."
+        )
+
+    if confidence < 0.4:
+        conclusion_lines.append("  NOTE: Low confidence — evidence is sparse or inconsistent.")
+
+    conclusion = "\n".join(conclusion_lines)
+    return conclusion, confidence
