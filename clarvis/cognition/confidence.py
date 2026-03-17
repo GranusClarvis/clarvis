@@ -80,12 +80,24 @@ def predict(event: str, expected: str, confidence: float) -> dict:
         expected: What you think will happen (e.g. "no errors")
         confidence: 0.0 to 1.0 how confident you are
     """
+    global _predictions_cache, _predictions_cache_mtime
     confidence = max(0.0, min(1.0, float(confidence)))
 
-    # Confidence recalibration: auto-downgrade in poorly-calibrated bands
+    # Confidence recalibration: adjust in poorly-calibrated bands
     original_confidence = confidence
     recalibrated = False
-    if 0.85 <= confidence < 0.95:
+    if 0.6 <= confidence < 0.8:
+        # Underconfidence correction: if actual accuracy is much higher than
+        # predicted, boost confidence toward the actual rate.
+        acc, n = _band_accuracy(0.6, 0.8)
+        if acc is not None and acc > 0.85:
+            # Boost by half the gap between actual accuracy and midpoint (0.70)
+            boost = min(0.10, (acc - 0.70) * 0.5)
+            confidence = min(0.92, confidence + boost)
+            recalibrated = True
+            print(f"Recalibrated: {original_confidence:.0%} → {confidence:.0%} "
+                  f"(band 60-80% accuracy={acc:.0%}, n={n}, underconfident)", file=sys.stderr)
+    elif 0.85 <= confidence < 0.95:
         acc, n = _band_accuracy(0.85, 0.95)
         if acc is not None and acc < 0.80:
             confidence = max(0.3, confidence - 0.10)
@@ -114,6 +126,10 @@ def predict(event: str, expected: str, confidence: float) -> dict:
 
     with open(PREDICTIONS_FILE, "a") as f:
         f.write(json.dumps(entry) + "\n")
+
+    # Invalidate cache so subsequent _load_predictions() sees this entry
+    _predictions_cache = None
+    _predictions_cache_mtime = 0
 
     # Store in brain
     _brain_store(

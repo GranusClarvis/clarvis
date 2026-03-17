@@ -70,22 +70,15 @@ def _introspect_for_task(task, tier):
 
 
 def _get_brain_goals(limit=5):
-    """Get top goals by progress from brain vector DB."""
+    """Get top goals by progress from brain — uses canonical summary."""
     try:
         from brain import brain
-        goals = brain.get_goals()
-        if not goals:
+        summary = brain.get_goals_summary(top_n=limit)
+        if not summary:
             return ""
-        goals.sort(
-            key=lambda g: g.get("metadata", {}).get("progress", 0),
-            reverse=True,
-        )
         lines = []
-        for g in goals[:limit]:
-            meta = g.get("metadata", {})
-            name = meta.get("goal", g.get("id", "?"))
-            progress = meta.get("progress", 0)
-            lines.append(f"  - {name}: {progress}%")
+        for g in summary:
+            lines.append(f"  - {g['name']}: {g['progress']}%")
         return "ACTIVE GOALS:\n" + "\n".join(lines)
     except Exception:
         return ""

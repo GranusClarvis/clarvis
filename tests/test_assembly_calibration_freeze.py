@@ -1,0 +1,199 @@
+"""Assembly calibration freeze tests — prevent regressions from fork merges.
+
+These tests pin the tuned constants in clarvis/context/assembly.py that were
+calibrated using 14-day per-section relevance data (2026-03-15). Any fork
+merge that changes these values will break these tests, forcing an explicit
+review of whether the new values are backed by evidence.
+
+If you need to update a constant: update the test AND add a comment in
+assembly.py explaining why the new value is better (link data/evidence).
+"""
+
+import pytest
+
+
+# ---------------------------------------------------------------------------
+# §1  DyCP threshold freeze — these control what gets pruned
+# ---------------------------------------------------------------------------
+
+def test_dycp_min_containment_frozen():
+    from clarvis.context.assembly import DYCP_MIN_CONTAINMENT
+    assert DYCP_MIN_CONTAINMENT == 0.04, (
+        f"DYCP_MIN_CONTAINMENT changed to {DYCP_MIN_CONTAINMENT} — "
+        "was calibrated to 0.04 on 2026-03-15. Update test only with evidence."
+    )
+
+
+def test_dycp_historical_floor_frozen():
+    from clarvis.context.assembly import DYCP_HISTORICAL_FLOOR
+    assert DYCP_HISTORICAL_FLOOR == 0.16, (
+        f"DYCP_HISTORICAL_FLOOR changed to {DYCP_HISTORICAL_FLOOR} — "
+        "raised from 0.13 to 0.16 on 2026-03-15 based on 14-day data."
+    )
+
+
+def test_dycp_zero_overlap_ceiling_frozen():
+    from clarvis.context.assembly import DYCP_ZERO_OVERLAP_CEILING
+    assert DYCP_ZERO_OVERLAP_CEILING == 0.20, (
+        f"DYCP_ZERO_OVERLAP_CEILING changed to {DYCP_ZERO_OVERLAP_CEILING} — "
+        "raised from 0.16 to 0.20 on 2026-03-15 to catch borderline noise."
+    )
+
+
+# ---------------------------------------------------------------------------
+# §2  Default-suppress list freeze — sections suppressed before generation
+# ---------------------------------------------------------------------------
+
+EXPECTED_DEFAULT_SUPPRESS = frozenset({
+    "meta_gradient",
+    "brain_goals",
+    "failure_avoidance",
+    "metrics",
+    "synaptic",
+    "world_model",
+    "gwt_broadcast",
+    "introspection",
+    "working_memory",
+    "attention",
+})
+
+
+def test_default_suppress_set_frozen():
+    from clarvis.context.assembly import DYCP_DEFAULT_SUPPRESS
+    assert DYCP_DEFAULT_SUPPRESS == EXPECTED_DEFAULT_SUPPRESS, (
+        f"DYCP_DEFAULT_SUPPRESS changed.\n"
+        f"  Added: {DYCP_DEFAULT_SUPPRESS - EXPECTED_DEFAULT_SUPPRESS}\n"
+        f"  Removed: {EXPECTED_DEFAULT_SUPPRESS - DYCP_DEFAULT_SUPPRESS}\n"
+        "Update test only with per-section relevance evidence."
+    )
+
+
+def test_default_suppress_containment_override_frozen():
+    from clarvis.context.assembly import DYCP_DEFAULT_SUPPRESS_CONTAINMENT_OVERRIDE
+    assert DYCP_DEFAULT_SUPPRESS_CONTAINMENT_OVERRIDE == 0.10
+
+
+# ---------------------------------------------------------------------------
+# §3  Protected sections freeze — these must never be pruned
+# ---------------------------------------------------------------------------
+
+EXPECTED_PROTECTED = frozenset({
+    "decision_context", "reasoning", "knowledge", "related_tasks",
+    "episodes", "completions",
+})
+
+
+def test_protected_sections_frozen():
+    from clarvis.context.assembly import DYCP_PROTECTED_SECTIONS
+    assert DYCP_PROTECTED_SECTIONS == EXPECTED_PROTECTED, (
+        f"DYCP_PROTECTED_SECTIONS changed.\n"
+        f"  Added: {DYCP_PROTECTED_SECTIONS - EXPECTED_PROTECTED}\n"
+        f"  Removed: {EXPECTED_PROTECTED - DYCP_PROTECTED_SECTIONS}\n"
+        "Protected sections must never be pruned — change with extreme care."
+    )
+
+
+# ---------------------------------------------------------------------------
+# §4  Budget structure freeze — tier allocations
+# ---------------------------------------------------------------------------
+
+def test_tier_budgets_keys_stable():
+    from clarvis.context.assembly import TIER_BUDGETS
+    assert set(TIER_BUDGETS.keys()) == {"minimal", "standard", "full"}
+
+
+def test_standard_tier_total_frozen():
+    from clarvis.context.assembly import TIER_BUDGETS
+    assert TIER_BUDGETS["standard"]["total"] == 600
+
+
+def test_full_tier_total_frozen():
+    from clarvis.context.assembly import TIER_BUDGETS
+    assert TIER_BUDGETS["full"]["total"] == 1000
+
+
+def test_budget_section_keys_stable():
+    """All tiers have the same section keys."""
+    from clarvis.context.assembly import TIER_BUDGETS
+    keys = None
+    for tier, budget in TIER_BUDGETS.items():
+        tier_keys = set(budget.keys())
+        if keys is None:
+            keys = tier_keys
+        else:
+            assert tier_keys == keys, f"Tier '{tier}' has different keys: {tier_keys ^ keys}"
+
+
+def test_standard_tier_allocations_frozen():
+    """Pin the standard tier allocations that were tuned for context quality."""
+    from clarvis.context.assembly import TIER_BUDGETS
+    std = TIER_BUDGETS["standard"]
+    expected = {
+        "total": 600,
+        "decision_context": 100,
+        "spotlight": 80,
+        "related_tasks": 60,
+        "metrics": 40,
+        "completions": 40,
+        "episodes": 60,
+        "reasoning_scaffold": 40,
+    }
+    assert std == expected, (
+        f"Standard tier budget changed — was tuned on 2026-03-15.\n"
+        f"Diff: {set(std.items()) ^ set(expected.items())}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# §5  Budget adjustment parameters freeze
+# ---------------------------------------------------------------------------
+
+def test_budget_floor_ceiling_frozen():
+    from clarvis.context.assembly import BUDGET_FLOOR, BUDGET_CEILING
+    assert BUDGET_FLOOR == 0.4, f"BUDGET_FLOOR={BUDGET_FLOOR}, expected 0.4"
+    assert BUDGET_CEILING == 1.4, f"BUDGET_CEILING={BUDGET_CEILING}, expected 1.4"
+
+
+def test_min_episodes_for_adjustment_frozen():
+    from clarvis.context.assembly import MIN_EPISODES_FOR_ADJUSTMENT
+    assert MIN_EPISODES_FOR_ADJUSTMENT == 5
+
+
+# ---------------------------------------------------------------------------
+# §6  Behavioral invariants — assembly logic contracts
+# ---------------------------------------------------------------------------
+
+def test_protected_sections_never_suppressed():
+    """should_suppress_section returns False for all protected sections."""
+    from clarvis.context.assembly import (
+        should_suppress_section, DYCP_PROTECTED_SECTIONS
+    )
+    for section in DYCP_PROTECTED_SECTIONS:
+        assert should_suppress_section(section, "any task text") is False
+
+
+def test_suppressed_sections_return_true_without_task():
+    """Default-suppressed sections are suppressed when no task context given."""
+    from clarvis.context.assembly import (
+        should_suppress_section, DYCP_DEFAULT_SUPPRESS
+    )
+    for section in DYCP_DEFAULT_SUPPRESS:
+        assert should_suppress_section(section, "") is True
+
+
+def test_generate_tiered_brief_returns_string():
+    """generate_tiered_brief returns a non-empty string for basic input."""
+    from clarvis.context.assembly import generate_tiered_brief
+    result = generate_tiered_brief("test task", tier="minimal")
+    assert isinstance(result, str)
+
+
+def test_budget_to_sections_covers_all_budget_keys():
+    """Every non-total budget key has a section mapping."""
+    from clarvis.context.assembly import _BUDGET_TO_SECTIONS, TIER_BUDGETS
+    budget_keys = {k for k in TIER_BUDGETS["standard"] if k != "total"}
+    mapped_keys = set(_BUDGET_TO_SECTIONS.keys())
+    assert budget_keys == mapped_keys, (
+        f"Budget/section mapping mismatch: "
+        f"unmapped={budget_keys - mapped_keys}, orphan={mapped_keys - budget_keys}"
+    )

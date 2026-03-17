@@ -51,6 +51,7 @@ _Dependency chain: GATE → EVAL → RETRY → FEEDBACK. Each phase is independe
 ## Research Sessions
 
 
+
 ## Pillar 3: Performance & Reliability (PI > 0.70)
 
 
@@ -85,7 +86,9 @@ _Consolidated into Pillar 2 above. See `docs/ORCHESTRATOR_PLAN_2026-03-06.md` fo
 
 ## P1
 
-- [ ] [RESEARCH_DISCOVERY 2026-03-15] Research: Context Engineering Survey — Systematic Context Optimization (arXiv:2507.13334, Li et al. 2025). Comprehensive 1400-paper survey formalizing context engineering as a discipline: retrieval, processing, management as unified pipeline. Covers context assembly patterns, prompt construction taxonomy, dynamic context budgeting. Directly targets Context Relevance (0.387→0.75) — provides the missing theoretical framework for WHY our CR keeps dropping despite good retrieval. Extract: assembly-order effects, context budget allocation strategies, noise-vs-signal tradeoffs in multi-source context. Source: arxiv.org/abs/2507.13334
+- [~] [RESEARCH_DISCOVERY 2026-03-16] Research: SParC-RAG — Adaptive Sequential-Parallel Scaling with Context Management (arXiv:2602.00083). Multi-agent RAG with Query Rewriter (diversity), Answer Evaluator (stop criterion), and Context Manager (cross-round evidence consolidation + noise filtering). +6.2 F1 on multi-hop QA. Targets Context Relevance (0.387→0.75) via principled multi-round retrieval with selective integration. Compare to A-RAG hierarchical retrieval and MacRAG multi-scale. Source: arxiv.org/abs/2602.00083
+- [x] [RESEARCH_DISCOVERY 2026-03-16] Research: SWE-Pruner — Self-Adaptive Context Pruning for Coding Agents (arXiv:2601.16746). (2026-03-17: Research complete. 5 brain memories stored. Note: memory/research/swe_pruner_sparc_rag_context_pruning.md)
+  - [x] [AUTO_SPLIT 2026-03-16] [RESEARCH_DISCOVERY 2026-03-16_2] Implement: core logic change in one focused increment (2026-03-17: Deep research on SWE-Pruner + SParC-RAG. 5 brain memories stored. Research note: memory/research/swe_pruner_sparc_rag_context_pruning.md. Key finding: line-level goal-conditioned pruning within sections + enriched related_tasks are highest-ROI improvements for Context Relevance.)
 - [~] [SPINE_MIGRATION_WAVE3_ORCH] Migrate orchestrator logic from `scripts/` into `clarvis/orch/` in phases (task routing, project-agent internals, shared PR-factory pipeline pieces). Preserve behavior; reduce direct script-to-script coupling. _(Phase 1 done 2026-03-10: `pr_factory_rules.py` → `clarvis/orch/pr_rules.py`, `pr_factory_intake.py` → `clarvis/orch/pr_intake.py`, `pr_factory_indexes.py` → `clarvis/orch/pr_indexes.py`. Scripts converted to thin deprecated wrappers. 70/70 tests pass. Remaining: `pr_factory.py` (Phase 3 execution brief), `project_agent.py` (large, multi-session), `agent_orchestrator.py`, benchmarks/scoreboard.)_
 - [~] [LEGACY_SCRIPT_WRAPPER_REDUCTION] Audit high-value Python scripts and convert mature ones into thin wrappers over canonical `clarvis.*` modules. Prioritize scripts still carrying business logic that should live in the spine. _(2026-03-10: Audited 8 scripts. pr_factory_{rules,intake,indexes} already thin wrappers — updated 5 callers to import from canonical `clarvis.orch.*` directly. phi_metric.py already done. context_compressor.py blocked on `compress_health` migration. heartbeat_{pre,post}flight.py are canonical sources — inverted delegation, multi-session migration needed.)_
 - [~] [CRON_CANONICAL_ENTRYPOINTS] Gradually migrate cron/invocation paths from direct `python3 scripts/X.py` calls to canonical `python3 -m clarvis ...` entrypoints where parity exists. Use soak periods and diff checks to prevent regressions. _(2026-03-14: Third migration — `cron_report_{morning,evening}.sh` `from brain import brain; brain.stats()` → `subprocess.run(['python3', '-m', 'clarvis', 'brain', 'stats'])`. 2026-03-12: Second — `cron_reflection.sh` `brain.optimize()` → `python3 -m clarvis brain optimize`. 2026-03-10: First — `cron_reflection.sh` `brain.py crosslink` → `python3 -m clarvis brain crosslink`. Next candidate: context_compressor gc.)_
@@ -98,12 +101,17 @@ _Consolidated into Pillar 2 above. See `docs/ORCHESTRATOR_PLAN_2026-03-06.md` fo
 
 ## NEW ITEMS
 
+
 - [~] [HEARTBEAT_POSTFLIGHT_DECOMPOSITION] `run_postflight()` in `scripts/heartbeat_postflight.py` is 1457 lines — the largest function in the codebase. Decompose into 10-15 named sub-functions (one per §section) called from a clean dispatcher. Preserve all behavior; each section (§1 episode encoding through §14 cleanup) becomes its own testable function. Directly improves `reasonable_function_length` metric (currently 0.739, 79 functions >100 lines). **Targets Code Generation Quality.** P1.
   - [ ] [AUTO_SPLIT 2026-03-13] [HEARTBEAT_POSTFLIGHT_DECOMPOSITION_3] Test: add/update test(s) covering the new behavior
-- [ ] [CR_NOISE_PRUNE 2026-03-15] Context Relevance: aggressively prune noise sections from briefs. 14-day data shows 9 sections below 0.15 mean relevance (meta_gradient=0.056, brain_goals=0.089, failure_avoidance=0.092, metrics=0.100, synaptic=0.112, world_model=0.122, gwt_broadcast=0.128, introspection=0.129, working_memory=0.147). Current DyCP thresholds are too permissive — raise `DYCP_HISTORICAL_FLOOR` from 0.13 to 0.16, `DYCP_ZERO_OVERLAP_CEILING` from 0.16 to 0.20, and add these 9 sections to a default-suppress list in `assembly.py` unless they have high task-containment (>0.10). This alone should lift CR from 0.387 to ~0.55+ by eliminating 40-60% of noise sections. **Targets Context Relevance (0.387→0.75).** P1.
-- [ ] [CR_SECTION_QUALITY 2026-03-15] Context Relevance: improve quality of top-3 sections (decision_context=0.284, related_tasks=0.316, episodes=0.273). These are the highest-value sections but still low. For `decision_context`: include the actual task description and success criteria more prominently. For `related_tasks`: filter to only tasks with >0.5 semantic similarity to current task (currently includes distant matches). For `episodes`: rank by recency AND task similarity, not just recency. Implement in `clarvis/context/assembly.py`. **Targets Context Relevance.** P1.
-- [ ] [CRON_SCHEDULE_AUDIT 2026-03-15] Non-code: audit crontab for schedule conflicts and resource contention. The 12x/day autonomous runs (1,6,7,9,11,12,15,17,19,20,22,23h) overlap with research (10,16h), evolution (13h), and implementation sprint (14h) — all share the same global lock. Measure actual lock contention (grep for "lock held" in `/tmp/clarvis_*.lock` logs), identify slots where autonomous runs are consistently blocked, and consolidate or redistribute. Update CLAUDE.md cron table if schedule changes. **Non-Python task.** P1.
-- [ ] [CONTAINMENT_TO_WEIGHTED_RELEVANCE 2026-03-15] Context Relevance: replace binary containment threshold with weighted section scoring in `context_relevance.py`. Currently a section is either "referenced" (containment >= 0.15) or not — this loses signal. Replace with: `weighted_relevance = sum(containment_i * importance_i) / sum(importance_i)` where importance is empirical mean relevance from history. Sections like `decision_context` (0.284) and `episodes` (0.273) should count more than `metrics` (0.100). This gives a more accurate CR signal and better feedback for DyCP tuning. **Targets Context Relevance measurement accuracy.** P2.
+
+- [~] [CONTEXT_RELATED_TASKS_QUALITY 2026-03-16] `related_tasks` has the highest importance weight (0.304) but often scores 0.0 containment in recent episodes. Root-cause: the section likely contains task titles/queue items that share zero tokens with Claude Code output. Fix: in `assembly.py`, enrich `related_tasks` with actionable context (file paths, function names, concrete overlap with current task) instead of raw queue lines. Validate by checking containment on 5+ recent episodes. **Targets Context Relevance (weakest metric).** P1.
+  - [ ] [AUTO_SPLIT 2026-03-16] [CONTEXT_RELATED_TASKS_QUALITY 2026-03-16_1] Analyze: read relevant source files, identify change boundary
+  - [ ] [AUTO_SPLIT 2026-03-16] [CONTEXT_RELATED_TASKS_QUALITY 2026-03-16_2] Implement: core logic change in one focused increment
+  - [ ] [AUTO_SPLIT 2026-03-16] [CONTEXT_RELATED_TASKS_QUALITY 2026-03-16_3] Test: add/update test(s) covering the new behavior
+
+
+
 
 
 ## P1 — This Week
@@ -120,25 +128,29 @@ _Consolidated into Pillar 2 above. See `docs/ORCHESTRATOR_PLAN_2026-03-06.md` fo
 ## P0 — Brain v2 / Clarvis Quality Window
 
 
+
+## P0 — Fork Integration Execution Phases
+
+### Phase 1 — Architecture Contracts & Benchmark Core
+
+### Phase 2 — Mode System
+
+### Phase 3 — Host Compatibility & Open-Source Readiness
+
+### Phase 4 — Wiring Into Real Runtime
+
+### Phase 5 — Public Surface (only after readiness gates)
+
+### Guard Rails / Explicit Non-Goals
+
 ## P1 — Agent Benchmarking
 
 ### Research Additions
 
-- [ ] [RESEARCH_REPO_OPENVIKING] Deep review https://github.com/volcengine/OpenViking — open-source context database for AI agents. Study the core concept, repo architecture, file-system-paradigm context model, database/storage design, hierarchical context delivery, self-evolving patterns, and how memory/resources/skills are unified. Extract: concrete ideas Clarvis can adopt for brain structure, context delivery, benchmarking, and long-term agent architecture; identify overlap/conflict with ClarvisDB and whether to borrow, adapt, or discard specific patterns.
 
 ### CLR Benchmark — Clarvis Agent Score
 
-Create a comprehensive agent benchmark called "CLR" (Clarvis Rating) that measures:
-- **Memory quality**: recall accuracy, retrieval latency, context relevance
-- **Brain integration**: graph edges, cross-collection links, importance decay
-- **Task success**: code generation, execution, reasoning chain depth
-- **Prompt quality**: context assembly score, brief coherence
-- **Self-improvement**: evolution loop effectiveness, meta-learning gains
-- **Autonomy**: success rate without human intervention, cost efficiency
-
-Each dimension 0-1, weighted composite score. Compare baseline (no brain) vs Clarvis (full) to measure value add.
-
-Implementation: `scripts/clr_benchmark.py` that runs tiered tests and outputs JSON.
+_Superseded by fork merge tasks above. Implementation from fork: `clarvis/metrics/clr.py` (672 lines, schema v1.0 frozen, 6 dimensions). See `FORK_MERGE_CLR` task._
 
 ### A/B Comparison Benchmark (Fixed)
 

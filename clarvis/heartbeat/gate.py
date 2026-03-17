@@ -105,6 +105,15 @@ def check_gate() -> Tuple[str, str, List[str]]:
         (decision, reason, changes)
         decision: "wake" or "skip"
     """
+    # Mode gating: passive mode blocks autonomous execution
+    try:
+        from clarvis.runtime.mode import mode_policies
+        policies = mode_policies()
+        if not policies.get("allow_autonomous_execution", True):
+            return "skip", f"Mode '{policies['mode']}' blocks autonomous execution", ["mode_passive"]
+    except ImportError:
+        pass  # Mode system not installed — allow all
+
     state = load_state()
     changes: List[str] = []
     now = time.time()

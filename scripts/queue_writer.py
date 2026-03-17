@@ -120,6 +120,20 @@ def add_tasks(tasks: list, priority: str = "P0", source: str = "unknown") -> lis
     if not tasks:
         return []
 
+    # Mode gating: check if task injection is allowed by current runtime mode
+    try:
+        from clarvis.runtime.mode import should_allow_auto_task_injection
+        filtered_tasks = []
+        for task in tasks:
+            allowed, _reason = should_allow_auto_task_injection(task, source)
+            if allowed:
+                filtered_tasks.append(task)
+        tasks = filtered_tasks
+        if not tasks:
+            return []
+    except ImportError:
+        pass  # Mode system not installed yet — allow all
+
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     # Atomic file lock to prevent race conditions

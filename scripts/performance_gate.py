@@ -235,6 +235,44 @@ def gate_browser_smoke(verbose=False):
     return asyncio.run(_browser_smoke(verbose))
 
 
+# ── Gate 5: Trajectory Eval ─────────────────────────────────
+def gate_trajectory_eval(verbose=False):
+    """Trajectory evaluation gate — warmup-aware."""
+    try:
+        from clarvis.metrics.trajectory import (
+            GATE_THRESHOLDS as TRAJ_THRESHOLDS,
+            load_trajectory_events,
+            summarize_trajectory,
+        )
+    except ImportError:
+        _log("Trajectory: module not available — SKIP", verbose)
+        return {"gate": "trajectory_eval", "passed": True,
+                "detail": {"status": "skip", "reason": "module_not_available"}}
+
+    events = load_trajectory_events(hours=24)
+    summary = summarize_trajectory(events)
+    episodes = summary.get("episodes", 0)
+    min_ep = TRAJ_THRESHOLDS.get("min_episodes", 5)
+
+    if episodes < min_ep:
+        _log(f"Trajectory: warmup ({episodes}/{min_ep} episodes) — soft PASS", verbose)
+        return {"gate": "trajectory_eval", "passed": True,
+                "detail": {"status": "warmup", "episodes": episodes,
+                           "min_episodes": min_ep}}
+
+    gate = summary.get("gate", {})
+    passed = gate.get("pass", False)
+    _log(f"Trajectory: {episodes} episodes, avg={summary.get('avg_score', 0):.3f}, "
+         f"pass_rate={summary.get('pass_rate', 0):.1%} — {'PASS' if passed else 'FAIL'}",
+         verbose)
+    return {"gate": "trajectory_eval", "passed": passed,
+            "detail": {"status": "active", "episodes": episodes,
+                       "avg_score": summary.get("avg_score"),
+                       "pass_rate": summary.get("pass_rate"),
+                       "gate_pass": passed,
+                       "gate_failures": gate.get("failures", [])}}
+
+
 # ── Main Runner ─────────────────────────────────────────────
 def run_gate(skip_browser=False, verbose=False):
     """Run all gates, return unified report."""

@@ -210,6 +210,11 @@ except ImportError:
     cv_validate_file = None
     cv_validate_output = None
 
+try:
+    from clarvis.metrics.trajectory import record_trajectory_event
+except ImportError:
+    record_trajectory_event = None
+
 # Cost tracking
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'packages', 'clarvis-cost'))
 try:
@@ -290,6 +295,7 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
     _pf_errors = []  # Track stage failures for completeness scoring
 
     # Shared constants used by multiple sections
+    WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
     QUEUE_FILE = "/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md"
     QUEUE_ARCHIVE = "/home/agent/.openclaw/workspace/memory/evolution/QUEUE_ARCHIVE.md"
     RETRY_FILE = "/home/agent/.openclaw/workspace/data/task_retries.json"
@@ -551,6 +557,29 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
             log(f"Episodic encoding failed: {e}")
             _pf_errors.append("episodic")
     timings["episodic"] = round(time.monotonic() - t5, 3)
+
+    # === 5.01 TRAJECTORY SCORING: Score episode execution quality ===
+    t501 = time.monotonic()
+    if record_trajectory_event:
+        try:
+            traj_event = {
+                "task": task[:200],
+                "task_outcome": task_status,
+                "duration_s": task_duration,
+                "retrieval_verdict": preflight_data.get("retrieval_verdict", "SKIPPED"),
+                "code_validation_errors": 0,  # not yet computed at this stage
+                "tool_call_count": None,  # not available from postflight
+                "error_type": error_type,
+                "task_section": task_section,
+            }
+            scored = record_trajectory_event(traj_event)
+            log(f"TRAJECTORY: score={scored['trajectory_score']:.3f} "
+                f"(completion={scored['trajectory_components']['completion']:.2f}, "
+                f"efficiency={scored['trajectory_components']['efficiency']:.2f}, "
+                f"retrieval={scored['trajectory_components']['retrieval_alignment']:.2f})")
+        except Exception as e:
+            log(f"Trajectory scoring failed (non-fatal): {e}")
+    timings["trajectory"] = round(time.monotonic() - t501, 3)
 
     # === 5.05 PROMPT OPTIMIZATION: Record prompt→outcome pair (APE/SPO loop) ===
     t505 = time.monotonic()

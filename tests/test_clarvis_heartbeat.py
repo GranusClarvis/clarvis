@@ -832,6 +832,65 @@ class TestPytestResultsCapture:
 
 
 # ---------------------------------------------------------------------------
+# 11b. Regression: WORKSPACE must be defined before §7.41 test capture
+# ---------------------------------------------------------------------------
+
+class TestWorkspaceDefined:
+    """Regression test for POSTFLIGHT_TEST_CAPTURE_WORKSPACE_FIX (2026-03-15).
+
+    The §7.41 test-results capture block uses WORKSPACE for path construction
+    and subprocess cwd. If WORKSPACE is not defined, the block raises NameError
+    and silently fails (non-fatal). This test ensures the constant is always
+    set before any code that references it.
+    """
+
+    def test_workspace_defined_in_postflight_constants(self):
+        """WORKSPACE must be assigned in the shared-constants block of run_postflight."""
+        import ast
+        src_path = os.path.join(
+            os.path.dirname(__file__), "..", "scripts", "heartbeat_postflight.py"
+        )
+        with open(src_path) as f:
+            tree = ast.parse(f.read())
+        # Find the run_postflight function
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and node.name == "run_postflight":
+                # Collect all Name targets assigned before line 1000 (well before §7.41)
+                assigned = set()
+                for child in ast.walk(node):
+                    if isinstance(child, ast.Assign):
+                        for target in child.targets:
+                            if isinstance(target, ast.Name):
+                                assigned.add(target.id)
+                assert "WORKSPACE" in assigned, (
+                    "WORKSPACE must be defined as a local constant in run_postflight "
+                    "(regression: POSTFLIGHT_TEST_CAPTURE_WORKSPACE_FIX)"
+                )
+                return
+        pytest.fail("run_postflight function not found in heartbeat_postflight.py")
+
+    def test_workspace_used_in_path_construction(self):
+        """os.path.join calls for test_results.json in §7.41 must use WORKSPACE."""
+        src_path = os.path.join(
+            os.path.dirname(__file__), "..", "scripts", "heartbeat_postflight.py"
+        )
+        with open(src_path) as f:
+            lines = f.readlines()
+        in_block = False
+        for i, line in enumerate(lines, 1):
+            if "7.41" in line and "PYTEST RESULTS CAPTURE" in line:
+                in_block = True
+            elif in_block and line.strip().startswith("# ===") and "7.4" not in line:
+                break
+            # Only check actual path construction lines
+            if in_block and "os.path.join" in line and "test_results" in line:
+                assert "WORKSPACE" in line, (
+                    f"Line {i}: os.path.join for test_results must use WORKSPACE, "
+                    f"not a hardcoded path: {line.strip()}"
+                )
+
+
+# ---------------------------------------------------------------------------
 # 12. Noise ratio computation + episode tagging
 # ---------------------------------------------------------------------------
 

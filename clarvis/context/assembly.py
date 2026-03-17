@@ -52,11 +52,46 @@ DYCP_MIN_CONTAINMENT = 0.04
 
 # Also consider historical mean relevance — sections historically below
 # this AND below task-containment threshold get pruned.
-DYCP_HISTORICAL_FLOOR = 0.13
+# Raised 0.13→0.16 on 2026-03-15: 14-day data shows 9 sections below 0.15
+# mean relevance — previous floor was too permissive.
+DYCP_HISTORICAL_FLOOR = 0.16
 
 # Sections with zero task overlap AND historical score below this
 # stricter ceiling are also pruned (DyCP query-dependent tier 2).
-DYCP_ZERO_OVERLAP_CEILING = 0.16
+# Raised 0.16→0.20 on 2026-03-15: borderline sections (0.12-0.16) still
+# caused noise; wider ceiling catches them when task overlap is zero.
+DYCP_ZERO_OVERLAP_CEILING = 0.20
+
+# Sections that are default-suppressed due to consistently low relevance
+# (14-day mean < 0.15 as of 2026-03-15). These are still included if their
+# task-containment exceeds DYCP_DEFAULT_SUPPRESS_CONTAINMENT_OVERRIDE.
+# This list is separate from DyCP pruning — DyCP prunes post-assembly,
+# while default-suppress prevents generation in the first place (cheaper).
+DYCP_DEFAULT_SUPPRESS = frozenset({
+    "meta_gradient",      # mean=0.056
+    "brain_goals",        # mean=0.089
+    "failure_avoidance",  # mean=0.092
+    "metrics",            # mean=0.100
+    "synaptic",           # mean=0.112
+    "world_model",        # mean=0.122
+    "gwt_broadcast",      # mean=0.128
+    "introspection",      # mean=0.129
+    "working_memory",     # mean=0.147
+    "attention",          # mean=0.146
+})
+# Task-containment threshold to override default suppression — if the task
+# tokens overlap significantly with a suppressed section, include it anyway.
+DYCP_DEFAULT_SUPPRESS_CONTAINMENT_OVERRIDE = 0.10
+
+# Cache of section name → content token sample from the last assembled brief.
+# Populated by dycp_prune_brief(); used by _dycp_task_containment_fast() so
+# that suppression decisions consider actual section content, not just the
+# section name.  First run (empty cache) falls back to name-only matching.
+_section_content_cache: dict = {}
+
+# Maximum number of content tokens to sample per section for the cache.
+# Kept small to make the containment check fast (O(n) set intersection).
+_CONTENT_SAMPLE_SIZE = 40
 
 
 TIER_BUDGETS = {
@@ -166,6 +201,56 @@ def get_adjusted_budgets(tier="standard"):
                 adjusted[key] = max(10, round(adjusted[key] * ratio))
 
     return adjusted
+
+
+def should_suppress_section(section_name: str, task_text: str = "") -> bool:
+    """Check if a section should be suppressed before generation.
+
+    Returns True if the section is in the default-suppress list AND
+    its task-containment is below the override threshold. This allows
+    callers (preflight, assembly) to skip generating noise sections,
+    saving tokens and compute.
+
+    Protected sections are never suppressed.
+    """
+    if section_name in DYCP_PROTECTED_SECTIONS:
+        return False
+    if section_name not in DYCP_DEFAULT_SUPPRESS:
+        return False
+    if not task_text:
+        return True  # no task context → suppress by default
+    containment = _dycp_task_containment_fast(section_name, task_text)
+    return containment < DYCP_DEFAULT_SUPPRESS_CONTAINMENT_OVERRIDE
+
+
+def _dycp_task_containment_fast(section_name: str, task_text: str) -> float:
+    """Fast containment check using section name + cached content vs task tokens.
+
+    Checks both the section *name* tokens AND a small sample of actual content
+    tokens (cached from the previous brief assembly).  This prevents sections
+    with relevant content but non-matching names from being wrongly suppressed.
+    """
+    task_lower = task_text.lower()
+    task_words = set(re.findall(r"[a-z][a-z0-9_]{2,}", task_lower))
+    if not task_words:
+        return 0.0
+
+    # Name-based score (original heuristic)
+    name_words = set(section_name.replace("_", " ").split())
+    name_score = (
+        len(name_words & task_words) / len(name_words) if name_words else 0.0
+    )
+
+    # Content-based score from cache (populated by previous dycp_prune_brief)
+    content_tokens = _section_content_cache.get(section_name)
+    if content_tokens:
+        overlap = len(content_tokens & task_words)
+        content_score = overlap / max(1, len(content_tokens))
+    else:
+        content_score = 0.0
+
+    # Return the higher of the two — either signal is enough to keep
+    return max(name_score, content_score)
 
 
 # Known integration targets for wire-task guidance
@@ -356,6 +441,18 @@ def build_decision_context(current_task, tier="standard"):
     """
     parts = []
 
+    # Task description — prominent placement for LLM grounding
+    # Extract task tag if present (e.g., [SOME_TAG 2026-03-15])
+    tag_match = re.match(r'\[([A-Z_]+(?:\s+\d{4}-\d{2}-\d{2})?)\]\s*', current_task)
+    task_tag = tag_match.group(1) if tag_match else None
+    task_body = current_task[tag_match.end():] if tag_match else current_task
+    # Truncate to first 200 chars for the summary line
+    task_summary = task_body[:200].strip()
+    if task_tag:
+        parts.append(f"CURRENT TASK: [{task_tag}] {task_summary}")
+    else:
+        parts.append(f"CURRENT TASK: {task_summary}")
+
     # Success criteria from task text
     targets = []
     for m in re.finditer(
@@ -369,9 +466,18 @@ def build_decision_context(current_task, tier="standard"):
     )
     if done_verbs:
         targets.extend(v.strip()[:60] for v in done_verbs[:3])
+    # Also extract "Success criteria:" lines if present
+    sc_match = re.search(
+        r'[Ss]uccess\s+criteria[:\s]+(.+?)(?:\.\s*\*\*|$)',
+        current_task, re.DOTALL
+    )
+    if sc_match:
+        sc_text = sc_match.group(1).strip()[:120]
+        if sc_text and sc_text not in targets:
+            targets.insert(0, sc_text)
     if targets:
         parts.append("SUCCESS CRITERIA:")
-        for t in targets[:4]:
+        for t in targets[:5]:
             parts.append(f"  - {t}")
 
     # Wire guidance
@@ -379,22 +485,17 @@ def build_decision_context(current_task, tier="standard"):
     if wire_guidance:
         parts.append(wire_guidance)
 
-    # Failure patterns
-    failure_patterns = get_failure_patterns(
-        current_task, n=3 if tier == "full" else 2
-    )
-    if failure_patterns:
-        parts.append("AVOID THESE FAILURE PATTERNS:")
-        parts.extend(failure_patterns)
+    # Failure patterns (default-suppressed unless task-relevant)
+    if not should_suppress_section("failure_avoidance", current_task):
+        failure_patterns = get_failure_patterns(
+            current_task, n=3 if tier == "full" else 2
+        )
+        if failure_patterns:
+            parts.append("AVOID THESE FAILURE PATTERNS:")
+            parts.extend(failure_patterns)
 
-    # Meta-gradient RL (gated by section relevance — mean 0.049 historically)
-    _meta_suppressed = False
-    try:
-        from clarvis.cognition.context_relevance import get_suppressed_sections
-        _meta_suppressed = "meta_gradient" in get_suppressed_sections()
-    except Exception:
-        pass
-    if not _meta_suppressed:
+    # Meta-gradient RL (default-suppressed — mean=0.056 historically)
+    if not should_suppress_section("meta_gradient", current_task):
         try:
             from meta_gradient_rl import load_meta_params
             mg_params = load_meta_params()
@@ -553,6 +654,9 @@ def _semantic_rank(current_task, parsed_tasks, embed_fn):
         # Skip near-duplicates (same task)
         if sim > 0.9:
             continue
+        # Skip distant matches — only include tasks with meaningful similarity
+        if sim < 0.3:
+            continue
         # Combined score: semantic similarity * priority weight
         score = sim * priority_w
         if score > 0.05:
@@ -614,6 +718,67 @@ def find_related_tasks(current_task, queue_file=None, max_tasks=3):
     # Fallback to word overlap
     scored = _word_overlap_rank(current_task, parsed)
     return [text for _, text in scored[:max_tasks]]
+
+
+def rerank_episodes_by_task(episodic_hints: str, current_task: str) -> str:
+    """Re-rank episode lines by combined recency + task similarity.
+
+    Episodes come as pre-compressed text lines. This function parses them,
+    scores each by task-token overlap (content relevance) and position
+    (recency proxy), then returns them sorted by combined score.
+
+    Lines that share more tokens with the current task float to the top.
+    This improves episodes section relevance from ~0.27 baseline.
+    """
+    if not episodic_hints or not current_task:
+        return episodic_hints
+
+    lines = [l for l in episodic_hints.strip().split('\n') if l.strip()]
+    if len(lines) <= 1:
+        return episodic_hints
+
+    # Separate header/separator lines from episode content lines
+    episode_lines = []
+    other_lines = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith('[') or stripped.startswith('Episode:') or (
+            len(stripped) > 20 and not stripped.startswith('---')
+        ):
+            episode_lines.append(line)
+        else:
+            other_lines.append(line)
+
+    if len(episode_lines) <= 1:
+        return episodic_hints
+
+    # Score each episode line by task-token overlap + recency (position)
+    task_tokens = set(re.findall(r'[a-z][a-z0-9_]{2,}', current_task.lower()))
+    _sw = {"the", "and", "for", "are", "but", "not", "you", "all", "can",
+           "had", "was", "one", "our", "out", "has", "have", "from",
+           "with", "this", "that", "they", "been", "will", "each", "make",
+           "like", "into", "than", "its", "also", "use", "two", "how"}
+    task_tokens -= _sw
+
+    scored = []
+    n_eps = len(episode_lines)
+    for i, line in enumerate(episode_lines):
+        ep_tokens = set(re.findall(r'[a-z][a-z0-9_]{2,}', line.lower())) - _sw
+        if task_tokens and ep_tokens:
+            overlap = len(task_tokens & ep_tokens) / max(1, len(task_tokens))
+        else:
+            overlap = 0.0
+        # Recency bonus: later episodes (higher index = more recent) get a boost
+        recency = (i + 1) / n_eps  # 0..1
+        # Combined: 60% task similarity, 40% recency
+        combined = 0.6 * overlap + 0.4 * recency
+        scored.append((combined, line))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+
+    # Rebuild: other_lines first (headers), then sorted episodes
+    result = other_lines + [line for _, line in scored]
+    return '\n'.join(result)
 
 
 def get_recent_completions(queue_file=None, n=3):
@@ -709,14 +874,33 @@ def dycp_prune_brief(brief_text: str, task_text: str) -> str:
     if len(sections) <= 3:
         return brief_text  # too few sections to prune
 
+    # Update the content cache so future _dycp_task_containment_fast calls
+    # (in should_suppress_section) consider actual section content.
+    _sw = {"the", "and", "for", "are", "but", "not", "you", "all", "can",
+           "had", "was", "one", "our", "out", "has", "have", "from",
+           "with", "this", "that", "they", "been", "will", "each", "make",
+           "like", "into", "than", "its", "also", "use", "two", "how"}
+    global _section_content_cache
+    new_cache = {}
+    for sname, scontent in sections.items():
+        tokens = set(re.findall(r"[a-z][a-z0-9_]{2,}", scontent.lower())) - _sw
+        # Sample up to _CONTENT_SAMPLE_SIZE tokens (sorted for determinism)
+        if len(tokens) > _CONTENT_SAMPLE_SIZE:
+            tokens = set(sorted(tokens)[:_CONTENT_SAMPLE_SIZE])
+        new_cache[sname] = tokens
+    _section_content_cache = new_cache
+
     historical = _load_historical_section_means()
     pruned_names = set()
 
     for name, content in sections.items():
         if name in DYCP_PROTECTED_SECTIONS:
             continue
-        # Compute task-relevance via containment
-        containment = _dycp_task_containment(content, task_text)
+        # Compute task-relevance via containment.
+        # Include section name in content so header keywords count
+        # (parse_brief_sections strips the header line).
+        enriched = f"{name.replace('_', ' ')} {content}"
+        containment = _dycp_task_containment(enriched, task_text)
         if containment >= DYCP_MIN_CONTAINMENT:
             continue  # section has task-relevant content, keep it
         # Check historical performance
@@ -847,8 +1031,8 @@ def generate_tiered_brief(
             for t in related:
                 middle.append(f"  - {t}")
 
-    # Metrics
-    if budget["metrics"] > 0:
+    # Metrics (default-suppressed unless task-relevant)
+    if budget["metrics"] > 0 and not should_suppress_section("metrics", current_task):
         scores = get_latest_scores()
         if scores:
             if tier == "full" and "capabilities" in scores:
@@ -881,14 +1065,15 @@ def generate_tiered_brief(
 
     # === END — High attention zone ===
 
-    # Episodic Lessons
+    # Episodic Lessons — reranked by task similarity + recency
     if budget["episodes"] > 0 and episodic_hints:
+        ranked_episodes = rerank_episodes_by_task(episodic_hints, current_task)
         max_chars = budget["episodes"] * 4
-        if len(episodic_hints) > max_chars * 1.5:
-            compressed_episodes, _ = compress_text(episodic_hints, ratio=0.3)
+        if len(ranked_episodes) > max_chars * 1.5:
+            compressed_episodes, _ = compress_text(ranked_episodes, ratio=0.3)
             end.append(compressed_episodes[:max_chars])
         else:
-            end.append(episodic_hints[:max_chars])
+            end.append(ranked_episodes[:max_chars])
 
     # Reasoning Scaffold
     if budget.get("reasoning_scaffold", 0) > 0:

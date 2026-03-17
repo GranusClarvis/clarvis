@@ -54,7 +54,18 @@ if found:
 " 2>> "$LOGFILE")
 
 if [ -z "$RESEARCH_TASK" ]; then
-    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] No pending research tasks — running discovery fallback" >> "$LOGFILE"
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] No pending research tasks" >> "$LOGFILE"
+
+    # Research auto-replenish can be paused by user preference.
+    # When paused, cron_research only executes explicitly queued research tasks
+    # and does NOT auto-discover/add new research topics.
+    RESEARCH_AUTO_REPLENISH="${RESEARCH_AUTO_REPLENISH:-0}"
+    if [ "$RESEARCH_AUTO_REPLENISH" != "1" ]; then
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Auto-replenish paused; exiting without discovery fallback" >> "$LOGFILE"
+        exit 0
+    fi
+
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Auto-replenish enabled — running discovery fallback" >> "$LOGFILE"
     # Discovery fallback: instead of a separate cron_research_discovery.sh slot,
     # we discover new topics when the research queue is empty.
     # This saves one Claude Code slot per day (was 14:00, now freed for implementation sprint).

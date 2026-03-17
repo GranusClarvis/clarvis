@@ -22,6 +22,7 @@ Usage:
 Run monthly via cron_reflection.sh.
 """
 
+import hashlib
 import json
 import os
 import re
@@ -271,14 +272,65 @@ def classify_disposition(proposal: str, covered: bool) -> tuple[str, str]:
     return "discard", "insufficient actionable signals"
 
 
-def _log_disposition(entry: dict):
-    """Append a disposition record to the JSONL log."""
+def _dedup_key(entry: dict) -> str:
+    """Compute an idempotency key from paper_file + normalized proposal + disposition."""
+    paper = entry.get("paper_file", "")
+    proposal = re.sub(r"\s+", " ", entry.get("proposal", "")).strip().lower()
+    disposition = entry.get("disposition", "")
+    raw = f"{paper}|{proposal}|{disposition}"
+    return hashlib.sha256(raw.encode()).hexdigest()[:16]
+
+
+def _load_existing_keys(path: str) -> set[str]:
+    """Load dedup keys from an existing disposition log."""
+    keys: set[str] = set()
+    if not os.path.exists(path):
+        return keys
     try:
-        os.makedirs(os.path.dirname(DISPOSITION_LOG), exist_ok=True)
-        with open(DISPOSITION_LOG, "a") as f:
-            f.write(json.dumps(entry, default=str) + "\n")
+        with open(path) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    rec = json.loads(line)
+                    k = rec.get("dedup_key") or _dedup_key(rec)
+                    keys.add(k)
+                except json.JSONDecodeError:
+                    pass
     except Exception:
         pass
+    return keys
+
+
+def _log_dispositions(entries: list[dict]):
+    """Append disposition records to the JSONL log, skipping duplicates.
+
+    Deduplication uses a hash of (paper_file, normalized proposal, disposition).
+    Records already in the log (matched by dedup_key) are silently skipped.
+    """
+    if not entries:
+        return
+    try:
+        os.makedirs(os.path.dirname(DISPOSITION_LOG), exist_ok=True)
+    except Exception:
+        return
+
+    existing_keys = _load_existing_keys(DISPOSITION_LOG)
+    new_count = 0
+    try:
+        with open(DISPOSITION_LOG, "a") as f:
+            for entry in entries:
+                key = _dedup_key(entry)
+                if key in existing_keys:
+                    continue
+                entry["dedup_key"] = key
+                f.write(json.dumps(entry, default=str) + "\n")
+                existing_keys.add(key)
+                new_count += 1
+    except Exception:
+        pass
+    return new_count
 
 
 def _load_disposition_log() -> list[dict]:
@@ -414,10 +466,10 @@ def main():
         print(f"  {disp}: {count}")
     print()
 
-    # Log all dispositions
+    # Log all dispositions (idempotent — duplicates are skipped)
     now = datetime.now(timezone.utc).isoformat()
-    for r in results:
-        _log_disposition({
+    log_entries = [
+        {
             "timestamp": now,
             "paper": r["paper"],
             "paper_file": r["paper_file"],
@@ -425,7 +477,12 @@ def main():
             "disposition": r["disposition"],
             "reason": r["disposition_reason"],
             "score": r["score"],
-        })
+        }
+        for r in results
+    ]
+    new_count = _log_dispositions(log_entries)
+    if new_count:
+        print(f"Logged {new_count} new disposition(s) ({len(log_entries) - new_count} already recorded).")
 
     if actionable:
         print("--- ACTIONABLE PROPOSALS ---")

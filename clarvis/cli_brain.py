@@ -142,6 +142,27 @@ def recent(days: int = 7):
 
 
 @app.command()
+def goals(
+    top_n: int = typer.Option(10, "--top", "-n", help="Max goals to show."),
+    as_json: bool = typer.Option(False, "--json", help="Output as JSON."),
+):
+    """Show active goals — clean, deduped, sorted by progress."""
+    b = _get_brain()
+    summary = b.get_goals_summary(top_n=top_n)
+    if as_json:
+        print(json.dumps(summary, indent=2))
+        return
+    if not summary:
+        print("No active goals found.")
+        return
+    print(f"{'Goal':<40} {'Progress':>8}  {'Importance':>10}  Updated")
+    print("-" * 85)
+    for g in summary:
+        updated = g["updated"][:10] if g["updated"] else "—"
+        print(f"{g['name'][:40]:<40} {g['progress']:>7}%  {g['importance']:>10.3f}  {updated}")
+
+
+@app.command()
 def stale():
     """Show memories not accessed in 30+ days."""
     b = _get_brain()

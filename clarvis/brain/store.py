@@ -305,6 +305,87 @@ class StoreMixin:
             metadatas=[goal_data]
         )
 
+    def get_goals_summary(self, top_n=10, min_progress=0):
+        """Return a clean, deduped, sorted summary of active goals.
+
+        Filters out garbage goals (short names, 0-progress junk with no
+        recent updates), dedupes by normalized name, and returns a list
+        sorted by progress descending, then importance descending.
+
+        Each item: {name, progress, importance, updated, subtasks, source, id}
+        """
+        raw = self.get_goals(include_archived=False)
+        now = datetime.now(timezone.utc)
+
+        # Garbage filters
+        GARBAGE_PATTERNS = [
+            "bridge", "sbridge", "connection between", "fm goals",
+            "outcome", "gwt broadcast", "boost_", "fresh_mirror",
+        ]
+
+        seen_names = {}  # normalized_name -> best goal dict
+        for g in raw:
+            meta = g.get("metadata", {})
+            name = meta.get("goal", g.get("id", ""))
+            progress = meta.get("progress", 0)
+            if isinstance(progress, str):
+                try:
+                    progress = int(progress)
+                except ValueError:
+                    progress = 0
+            importance = meta.get("importance", 0.5)
+            if isinstance(importance, str):
+                try:
+                    importance = float(importance)
+                except ValueError:
+                    importance = 0.5
+
+            # Skip garbage
+            if not name or len(name.strip()) < 10:
+                continue
+            name_lower = name.lower().strip()
+            if any(p in name_lower for p in GARBAGE_PATTERNS):
+                continue
+
+            # Skip stale zero-progress goals (no update in 14 days)
+            if progress <= min_progress and progress == 0:
+                updated_str = meta.get("updated", "")
+                if updated_str:
+                    try:
+                        updated_dt = datetime.fromisoformat(
+                            updated_str.replace("Z", "+00:00")
+                        )
+                        if (now - updated_dt).days > 14:
+                            continue
+                    except (ValueError, TypeError):
+                        pass
+
+            # Dedupe: keep the one with higher progress, then higher importance
+            norm_key = name_lower
+            entry = {
+                "name": name.strip(),
+                "progress": progress,
+                "importance": round(importance, 3),
+                "updated": meta.get("updated", ""),
+                "subtasks": meta.get("subtasks", ""),
+                "source": meta.get("source", ""),
+                "id": g.get("id", ""),
+            }
+            if norm_key in seen_names:
+                existing = seen_names[norm_key]
+                if (progress, importance) > (existing["progress"], existing["importance"]):
+                    seen_names[norm_key] = entry
+            else:
+                seen_names[norm_key] = entry
+
+        # Sort: progress desc, importance desc
+        goals = sorted(
+            seen_names.values(),
+            key=lambda x: (x["progress"], x["importance"]),
+            reverse=True,
+        )
+        return goals[:top_n]
+
     def archive_stale_goals(self, max_age_days=7):
         """Archive goals stuck at 0% for more than max_age_days."""
         col = self.collections[GOALS]

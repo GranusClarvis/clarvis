@@ -25,6 +25,7 @@ def _register_subcommands():
     from clarvis.cli_cost import app as cost_app
     from clarvis.cli_cron import app as cron_app
     from clarvis.cli_heartbeat import app as heartbeat_app
+    from clarvis.cli_mode import app as mode_app
     from clarvis.cli_queue import app as queue_app
     from clarvis.cli_metrics import app as metrics_app
 
@@ -34,6 +35,7 @@ def _register_subcommands():
     app.add_typer(cron_app, name="cron", help="Cron job inspection and execution.")
     app.add_typer(heartbeat_app, name="heartbeat", help="Heartbeat pipeline.")
     app.add_typer(metrics_app, name="metrics", help="Metrics: self-model, phi, PI.")
+    app.add_typer(mode_app, name="mode", help="Runtime mode control-plane.")
     app.add_typer(queue_app, name="queue", help="Evolution queue management.")
 
 

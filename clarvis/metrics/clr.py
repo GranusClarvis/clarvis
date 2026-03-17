@@ -15,15 +15,18 @@ Baseline (no brain, no memory) is estimated at ~0.215 CLR.
 """
 
 import json
+import math
 import os
 import time
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
+from typing import Any
 
-WORKSPACE = "/home/agent/.openclaw/workspace"
+WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
 CLR_FILE = os.path.join(WORKSPACE, "data/clr_benchmark.json")
 CLR_HISTORY = os.path.join(WORKSPACE, "data/clr_history.jsonl")
 MAX_HISTORY = 400
+CLR_SCHEMA_VERSION = "1.0"
 
 # Dimension weights — must sum to 1.0
 WEIGHTS = {
@@ -35,6 +38,17 @@ WEIGHTS = {
     "efficiency": 0.10,
 }
 
+GATE_THRESHOLDS = {
+    "min_clr": 0.40,
+    "min_value_add": 0.05,
+    "min_dimensions": {
+        "memory_quality": 0.25,
+        "retrieval_precision": 0.25,
+        "prompt_context": 0.20,
+        "task_success": 0.35,
+    },
+}
+
 # Estimated baseline scores (bare Claude Code, no Clarvis brain)
 BASELINE = {
     "memory_quality": 0.0,       # No persistent memory
@@ -44,6 +58,51 @@ BASELINE = {
     "autonomy": 0.20,            # No autonomous loop
     "efficiency": 0.40,          # No optimization, but no overhead either
 }
+
+
+def validate_weights(weights: dict[str, float] | None = None) -> tuple[bool, float]:
+    """Validate that CLR dimension weights sum to 1.0 (within tolerance)."""
+    ws = weights or WEIGHTS
+    total = sum(ws.values())
+    valid = abs(total - 1.0) <= 1e-6
+    return valid, total
+
+
+def evaluate_clr_gates(
+    result: dict[str, Any],
+    thresholds: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Evaluate CLR quality gates for release/benchmark decisions."""
+    cfg = thresholds or GATE_THRESHOLDS
+    failures: list[str] = []
+    details: dict[str, Any] = {
+        "min_clr": cfg.get("min_clr"),
+        "min_value_add": cfg.get("min_value_add"),
+        "min_dimensions": cfg.get("min_dimensions", {}),
+    }
+
+    clr = float(result.get("clr", 0.0))
+    value_add = float(result.get("value_add", 0.0))
+    if clr < cfg.get("min_clr", 0.0):
+        failures.append(f"clr<{cfg['min_clr']} ({clr:.3f})")
+    if value_add < cfg.get("min_value_add", 0.0):
+        failures.append(f"value_add<{cfg['min_value_add']} ({value_add:.3f})")
+
+    min_dims = cfg.get("min_dimensions", {})
+    dims = result.get("dimensions", {})
+    for dim, min_score in min_dims.items():
+        score = dims.get(dim, {}).get("score")
+        if score is None:
+            failures.append(f"{dim}=missing")
+            continue
+        if float(score) < float(min_score):
+            failures.append(f"{dim}<{min_score} ({float(score):.3f})")
+
+    return {
+        "pass": len(failures) == 0,
+        "failures": failures,
+        "details": details,
+    }
 
 
 def _score_memory_quality():
@@ -358,6 +417,7 @@ def compute_clr(quick=False):
         score, evidence = assessor()
         results[dim] = {"score": score, "evidence": evidence}
 
+    weights_valid, weights_total = validate_weights()
     weighted_sum = 0.0
     total_weight = 0.0
     for dim, weight in WEIGHTS.items():
@@ -369,14 +429,19 @@ def compute_clr(quick=False):
     baseline_clr = sum(WEIGHTS[d] * BASELINE[d] for d in WEIGHTS)
     value_add = round(clr - baseline_clr, 3)
 
-    return {
+    result = {
         "clr": clr,
         "baseline_clr": round(baseline_clr, 3),
         "value_add": value_add,
         "dimensions": results,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "quick": quick,
+        "schema_version": CLR_SCHEMA_VERSION,
+        "weights_valid": weights_valid,
+        "weights_total": round(weights_total, 6),
     }
+    result["gate"] = evaluate_clr_gates(result)
+    return result
 
 
 def record_clr(result):
@@ -388,6 +453,8 @@ def record_clr(result):
         "clr": result["clr"],
         "baseline_clr": result["baseline_clr"],
         "value_add": result["value_add"],
+        "schema_version": result.get("schema_version", CLR_SCHEMA_VERSION),
+        "gate_pass": bool(result.get("gate", {}).get("pass", False)),
         "dimensions": {d: result["dimensions"][d]["score"] for d in result["dimensions"]},
     }
 
@@ -410,6 +477,7 @@ def format_clr(result):
     lines = []
     lines.append("=== CLR Benchmark — Clarvis Rating ===")
     lines.append(f"Timestamp: {result['timestamp']}")
+    lines.append(f"Schema: {result.get('schema_version', CLR_SCHEMA_VERSION)}")
     if result.get("quick"):
         lines.append("(Quick mode — some dimensions skipped)")
     lines.append("")
@@ -426,6 +494,15 @@ def format_clr(result):
     lines.append(f"  CLR Score:    {result['clr']:.3f}")
     lines.append(f"  Baseline:     {result['baseline_clr']:.3f}")
     lines.append(f"  Value Add:    +{result['value_add']:.3f}")
+    lines.append(
+        f"  Weights:      {'OK' if result.get('weights_valid') else 'INVALID'} "
+        f"(sum={result.get('weights_total', '?')})"
+    )
+    gate = result.get("gate", {})
+    lines.append(f"  Gate:         {'PASS' if gate.get('pass') else 'FAIL'}")
+    if gate.get("failures"):
+        for failure in gate["failures"]:
+            lines.append(f"    - {failure}")
 
     clr = result["clr"]
     if clr >= 0.80:
@@ -452,10 +529,80 @@ def get_clr_trend(days=14):
         return []
 
     with open(CLR_HISTORY) as f:
-        entries = [json.loads(line.strip()) for line in f if line.strip()]
+        entries = []
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entries.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
 
     if not entries:
         return []
 
     cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
     return [e for e in entries if e["timestamp"] >= cutoff]
+
+
+def evaluate_clr_stability(
+    entries: list[dict[str, Any]] | None = None,
+    *,
+    days: int = 14,
+    min_runs: int = 14,
+    max_stddev: float = 0.12,
+    max_regression: float = 0.08,
+) -> dict[str, Any]:
+    """Evaluate CLR trend stability across recent history.
+
+    This is a governance gate intended for release readiness:
+    - enough benchmark samples exist in the analysis window
+    - CLR volatility remains bounded
+    - latest CLR does not regress materially from earliest sample
+    """
+
+    trend = entries if entries is not None else get_clr_trend(days=days)
+    failures: list[str] = []
+    stats: dict[str, Any] = {
+        "days": days,
+        "runs": len(trend),
+        "min_runs": min_runs,
+        "max_stddev": max_stddev,
+        "max_regression": max_regression,
+    }
+
+    if len(trend) < min_runs:
+        failures.append(f"insufficient_runs<{min_runs} ({len(trend)})")
+        return {
+            "pass": False,
+            "failures": failures,
+            "stats": stats,
+        }
+
+    clr_values = [float(e.get("clr", 0.0)) for e in trend]
+    mean = sum(clr_values) / len(clr_values)
+    variance = sum((v - mean) ** 2 for v in clr_values) / len(clr_values)
+    stddev = math.sqrt(variance)
+    delta = clr_values[-1] - clr_values[0]
+
+    stats.update(
+        {
+            "mean": round(mean, 4),
+            "stddev": round(stddev, 4),
+            "delta": round(delta, 4),
+            "min": round(min(clr_values), 4),
+            "max": round(max(clr_values), 4),
+        }
+    )
+
+    if stddev > max_stddev:
+        failures.append(f"stddev>{max_stddev} ({stddev:.4f})")
+    if delta < -max_regression:
+        failures.append(f"regression>{max_regression} ({delta:.4f})")
+
+    return {
+        "pass": len(failures) == 0,
+        "failures": failures,
+        "stats": stats,
+    }

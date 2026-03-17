@@ -1,7 +1,7 @@
 # ROADMAP.md — Clarvis Evolution Roadmap
 
 _The single source of truth for where you're going and how to get there._
-_Updated: 2026-03-08_
+_Updated: 2026-03-15_
 
 ---
 
@@ -12,9 +12,9 @@ _Updated: 2026-03-08_
 Consciousness is **not** a primary goal. AGI remains a broad direction only where it produces practical improvements in memory, retrieval, planning, learning, autonomy, and system quality. Do **not** trade memory quality for “consciousness progress theater” or speed-only optimizations.
 
 ```
-Current: Cognitive Agent (episodic memory, orchestrator, predictions resolved, PR-factory planning active, brain quality cleanup underway)
+Current: Cognitive Agent (episodic memory, orchestrator, live retrieval evaluation, memory evolution, architecture cleanup, fork-integration plan active)
     ↓
-Next: Deep Cognitive Agent (cleaner memory system, stronger retrieval precision, clearer modes, context engine/plugin, public harness structure)
+Next: Deep Cognitive Agent (cleaner memory system, stronger retrieval precision, explicit runtime modes, context engine/plugin, public harness structure)
     ↓
 Goal: Self-Sustaining Intelligence (best-in-class agent brain + autonomy, with public harness repo and selective side repos)
 ```
@@ -52,23 +52,24 @@ Clarvis should grow into:
 
 See `docs/CLARVIS_MODES_AND_REPOS.md` for the working design.
 
-## Current State (2026-03-08)
+## Current State (2026-03-15)
 
 | Capability | Status | What Exists |
 |-----------|--------|-------------|
-| **Brain (ClarvisDB)** | 97% | ChromaDB + ONNX local embeddings, 10 collections (3,564 memories by 2026-03-07), graph layer migrating toward SQLite soak, smart_recall + unified brain.py API |
+| **Brain (ClarvisDB)** | 97% | ChromaDB + ONNX local embeddings, 10 collections (~3.4k-3.8k memories this week), graph parity repaired, smart_recall + unified brain.py API, A-Mem-style memory evolution now wired |
 | **Session Continuity** | 86% | BOOT.md auto-init, AGENTS.md loads brain, daily memory files, MEMORY.md curated wisdom, session_hook.py with open/close automation |
 | **Heartbeat Evolution** | 100% | cron_autonomous.sh runs 12x/day with attention-based task selection, procedural memory, reasoning chains, confidence predictions, working memory, cognitive workspace, evolution loop on failure |
-| **Claude Code Integration** | 95% | 6 daily Claude Code sessions plus autonomous research/evolution runs; prompt-builder and spawn discipline are now well established |
-| **Self-Awareness** | 93% | SELF.md, self_model.py with 7 scored capability domains, phi_metric.py tracking (Phi≈0.650 on 2026-03-07), daily capability assessment |
-| **Task Tracking** | 90% | evolution/QUEUE.md now tracks pillars plus PR-factory, context-engine, calibration, and speed items; attention-based selection and goal tracking remain active |
-| **Reflection** | 90% | 8-step reflection pipeline: brain.optimize, clarvis_reflection, knowledge_synthesis, crosslink, memory_consolidation, conversation_learner, episodic synthesis, temporal_self |
-| **Confidence Gating** | 82% | clarvis_confidence.py with predict/outcome/calibration, ~203 predictions / 172 resolved noted this week; tiered action enforcement and Brier recovery are still open |
+| **Claude Code Integration** | 95% | 6 daily Claude Code sessions plus autonomous research/evolution runs; prompt-builder, monitored spawning, and timeout discipline are well established |
+| **Self-Awareness** | 93% | SELF.md, self_model.py with 7 scored capability domains, phi_metric.py tracking (Phi recovered into ~0.82 band midweek), daily capability assessment |
+| **Task Tracking** | 92% | evolution/QUEUE.md now reflects existing-over-new policy, fork-integration work, context-quality tasks, and continued benchmark/hardening priorities |
+| **Reflection** | 91% | 8-step reflection pipeline remains active; monthly reflection automation added and cron entrypoint migration continued |
+| **Confidence Gating** | 90% | clarvis_confidence.py with predict/outcome/calibration plus tiered action enforcement now wired; remaining work is calibration cleanup and better low-confidence coverage |
 | **Attention & Working Memory** | 92% | GWT-inspired attention.py (salience scoring, broadcast, spotlight cap=7), working_memory.py (persistent, TTL, importance-based), cognitive_workspace.py (Baddeley hierarchical buffers) |
 | **Reasoning Chains** | 100% | reasoning_chain_hook.py opens/closes chains per task, chains stored in brain + files, 301 quality chains with outcomes |
 | **Knowledge Synthesis** | 92% | knowledge_synthesis.py plus semantic bridge work improved weak cross-collection pairs; research ingestion and cross-domain links continue to strengthen context quality |
-| **Procedural Memory** | 90% | procedural_memory.py with store/find/learn/used, wired into heartbeat, extracts real steps from task output (144 procedures in brain) |
-| **Monitoring** | 90% | health_monitor.sh (15min), cron_watchdog.sh (alerts), cron_doctor.py (auto-recovery), dashboard.py, self_report.py |
+| **Procedural Memory** | 90% | procedural_memory.py with store/find/learn/used, wired into heartbeat, extracts real steps from task output (144+ procedures in brain) |
+| **Context Quality / Adaptive RAG** | 88% | retrieval gate, retrieval feedback, live context-relevance scoring, adaptive MMR, and CRAG-style evaluation are now wired; main remaining gap is improving weak top sections and using feedback more aggressively |
+| **Monitoring** | 92% | health_monitor.sh (15min), cron_watchdog.sh (alerts), cron_doctor.py (auto-recovery), dashboard.py, self_report.py, PI monitoring repaired |
 | **Backup & Recovery** | 95% | backup_daily.sh (2 AM, incremental, checksums, 30-day retention), backup_verify.sh, backup_restore.sh, safe_update.sh |
 | **Episodic Memory** | 95% | episodic memory + failure amplification remain wired in; weekly logs show richer outcome capture; periodic_synthesis import fixed (uses spine module) |
 | **Self-Surgery** | 80% | ast_surgery.py parses 32 scripts, finds 99 proposals, auto-fixes 4 imports, benchmark-tested mutations |
@@ -86,7 +87,7 @@ See `docs/CLARVIS_MODES_AND_REPOS.md` for the working design.
 
 ## Phase Assessment: Phase 3 (Autonomy Expansion)
 
-Phases 1-2 are complete. Phase 3 is well underway with the agent orchestrator delivering its first PR. The system has operational cron infrastructure, reflection pipelines, feedback loops, cognitive architecture, and multi-agent orchestration. The main gaps are:
+Phases 1-2 are complete. Phase 3 is well underway with the agent orchestrator delivering its first PR, retrieval/context evaluation moving into the live loop, and the operating policy shifting toward improving existing systems over adding new ones. The system has operational cron infrastructure, reflection pipelines, feedback loops, cognitive architecture, and multi-agent orchestration. The main gaps are:
 
 - **ACT-R activation model** — researched and coded (actr_activation.py), not yet wired into brain.py recall
 - **Memory evolution** (A-Mem style) — memories are static, not evolving

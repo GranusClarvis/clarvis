@@ -21,7 +21,6 @@ Usage:
 import json
 import os
 import re
-import subprocess
 import sys
 import tempfile
 import time
@@ -37,11 +36,11 @@ WORKSPACE = "/home/agent/.openclaw/workspace"
 RESULTS_DIR = Path(WORKSPACE) / "data" / "ab_benchmark"
 RESULTS_FILE = RESULTS_DIR / "results.json"
 CLAUDE_BIN = "/home/agent/.local/bin/claude"
-TIMEOUT = 300  # 5 min per task (short tasks only)
+TIMEOUT = 600  # 10 min per task (>=600s required for Claude Code)
 
 # === TASK PAIRS ===
 # Each pair is a short, evaluable task with clear success criteria.
-# Tasks are designed to complete in <5 min and have deterministic scoring.
+# Tasks are designed to complete within the timeout and have deterministic scoring.
 TASK_PAIRS = [
     {
         "id": 1,
@@ -193,59 +192,9 @@ def _build_prompt(task: str, with_context: bool) -> str:
     )
 
 
-def _run_claude(prompt: str, label: str) -> dict:
-    """Run Claude Code with a prompt written to a temp file. Returns result dict."""
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".txt", prefix=f"ab_{label}_", delete=False, dir="/tmp"
-    ) as pf:
-        pf.write(prompt)
-        prompt_file = pf.name
-
-    output_file = f"/tmp/ab_output_{label}_{os.getpid()}.txt"
-
-    start = time.monotonic()
-    try:
-        result = subprocess.run(
-            [
-                "timeout", str(TIMEOUT),
-                "env", "-u", "CLAUDECODE", "-u", "CLAUDE_CODE_ENTRYPOINT",
-                CLAUDE_BIN, "-p", f"$(cat {prompt_file})",
-                "--dangerously-skip-permissions", "--model", "claude-opus-4-6",
-            ],
-            capture_output=True, text=True, timeout=TIMEOUT + 30,
-            cwd=WORKSPACE,
-            # Read prompt from file via shell to avoid arg-length limits
-            shell=False,
-        )
-        elapsed = time.monotonic() - start
-        output = result.stdout
-        exit_code = result.returncode
-    except subprocess.TimeoutExpired:
-        elapsed = time.monotonic() - start
-        output = ""
-        exit_code = 124
-    except Exception as e:
-        elapsed = time.monotonic() - start
-        output = f"ERROR: {e}"
-        exit_code = 1
-    finally:
-        # Clean up temp files
-        try:
-            os.unlink(prompt_file)
-        except OSError:
-            pass
-
-    return {
-        "output": output[:5000],  # Cap stored output
-        "exit_code": exit_code,
-        "elapsed_s": round(elapsed, 1),
-        "output_length": len(output),
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-    }
-
-
 def _run_claude_via_shell(prompt: str, label: str) -> dict:
-    """Run Claude Code using shell + temp file (proper approach)."""
+    """Run Claude Code using shell + temp file. Prompt is written to a temp file
+    and read via $(cat ...) in a shell command to avoid arg-length/quoting issues."""
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".txt", prefix=f"ab_{label}_", delete=False, dir="/tmp"
     ) as pf:

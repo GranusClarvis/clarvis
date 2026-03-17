@@ -26,6 +26,7 @@ Usage:
     python3 goal_hygiene.py stats      # Quick stats
 """
 
+import json
 import os
 import sys
 import re
@@ -42,6 +43,14 @@ WORKSPACE = "/home/agent/.openclaw/workspace"
 GOALS_COLLECTION = "clarvis-goals"
 
 # Stale consciousness-first patterns to flag
+SNAPSHOT_FILE = os.path.join(WORKSPACE, "data", "goals_snapshot.json")
+
+# Garbage patterns — noise from auto-store that aren't real goals
+GARBAGE_PATTERNS = [
+    "bridge", "sbridge", "connection between", "fm goals",
+    "outcome", "gwt broadcast", "boost_", "fresh_mirror",
+]
+
 CONSCIOUSNESS_PATTERNS = [
     r'(?:develop|achieve|reach|build|create)\b.*\bconsciousness\b',
     r'\bsentien[ct]',
@@ -306,8 +315,64 @@ def show_stats():
     print(f"  Health:                {'GOOD' if candidates == 0 else f'{candidates} goals need attention'}")
 
 
+def purge_garbage(dry_run=False):
+    """Archive goals matching garbage patterns (noise from auto-store)."""
+    goals = get_all_goals()
+    purged = 0
+    col = brain.collections[GOALS_COLLECTION]
+
+    for goal in goals:
+        meta = goal["metadata"]
+        if str(meta.get("archived", "")).lower() == "true":
+            continue
+        if meta.get("lifecycle") in ("deprecated", "archived"):
+            continue
+
+        name = meta.get("goal", goal["id"])
+        if not name or len(name.strip()) < 10:
+            if dry_run:
+                print(f"  [DRY-RUN] Would archive (short name): {goal['id'][:50]}")
+            else:
+                meta["archived"] = "true"
+                col.update(ids=[goal["id"]], metadatas=[meta])
+                print(f"  Archived (short name): {goal['id'][:50]}")
+            purged += 1
+            continue
+
+        nl = name.lower().strip()
+        if any(p in nl for p in GARBAGE_PATTERNS):
+            if dry_run:
+                print(f"  [DRY-RUN] Would archive (garbage): {name[:50]}")
+            else:
+                meta["archived"] = "true"
+                col.update(ids=[goal["id"]], metadatas=[meta])
+                print(f"  Archived (garbage): {name[:50]}")
+            purged += 1
+
+    print(f"\nPurged {purged} garbage goals.")
+    return purged
+
+
+def write_snapshot():
+    """Write a compact goals snapshot using canonical get_goals_summary()."""
+    summary = brain.get_goals_summary(top_n=15)
+    snapshot = {
+        "generated": datetime.now(timezone.utc).isoformat(),
+        "active_goals": summary,
+    }
+    os.makedirs(os.path.dirname(SNAPSHOT_FILE), exist_ok=True)
+    with open(SNAPSHOT_FILE, "w") as f:
+        json.dump(snapshot, f, indent=2)
+    print(f"\nSnapshot written: {SNAPSHOT_FILE} ({len(summary)} goals)")
+    return snapshot
+
+
 def clean():
-    """Full pipeline: audit → deprecate → archive."""
+    """Full pipeline: purge garbage → audit → deprecate → archive → snapshot."""
+    print("=== Step 0: Purge Garbage ===")
+    purge_garbage()
+    print()
+
     print("=== Step 1: Audit ===")
     states = audit_goals()
     print()
@@ -320,6 +385,10 @@ def clean():
 
     print("=== Step 3: Archive (deprecated >14 days) ===")
     archive_goals()
+    print()
+
+    print("=== Step 4: Snapshot ===")
+    write_snapshot()
 
 
 if __name__ == "__main__":

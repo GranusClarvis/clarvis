@@ -165,6 +165,94 @@ def golden_qa(verbose: bool = typer.Option(False, "--verbose", "-v", help="Show 
     print(f"\n  Results saved to {rb.LATEST_FILE}")
 
 
+@app.command(name="trajectory-check")
+def trajectory_check(
+    hours: int = typer.Option(24, "--hours", "-H", help="Hours of history to evaluate"),
+):
+    """Run trajectory evaluation gate on recent episodes."""
+    from clarvis.metrics.trajectory import (
+        format_trajectory_summary,
+        load_trajectory_events,
+        summarize_trajectory,
+    )
+    events = load_trajectory_events(hours=hours)
+    summary = summarize_trajectory(events)
+    print(format_trajectory_summary(summary, hours=hours))
+    if not summary.get("gate", {}).get("pass"):
+        raise typer.Exit(1)
+
+
+@app.command(name="trajectory-summary")
+def trajectory_summary(
+    hours: int = typer.Option(24, "--hours", "-H", help="Hours of history"),
+    json_output: bool = typer.Option(False, "--json", help="Print JSON output"),
+):
+    """Show trajectory evaluation summary."""
+    from clarvis.metrics.trajectory import (
+        format_trajectory_summary,
+        load_trajectory_events,
+        summarize_trajectory,
+    )
+    events = load_trajectory_events(hours=hours)
+    summary = summarize_trajectory(events)
+    if json_output:
+        print(json.dumps(summary, indent=2))
+    else:
+        print(format_trajectory_summary(summary, hours=hours))
+
+
+@app.command(name="retrieval-report")
+def retrieval_report(
+    as_json: bool = typer.Option(False, "--json", help="Output as JSON."),
+):
+    """Show retrieval quality report — hit rate, dead recall, diagnosis."""
+    sys.path.insert(0, f"{WORKSPACE}/scripts")
+    import retrieval_quality
+    report = retrieval_quality.tracker.report()
+    if as_json:
+        print(json.dumps(report, indent=2, default=str))
+        return
+    if report.get("status") == "no_data":
+        print(f"No recent retrieval events (have {report.get('total_events', 0)} total).")
+        return
+    print("=== Retrieval Quality Report ===\n")
+    hit_rate = report.get("hit_rate")
+    avg_dist = report.get("avg_distance_overall")
+    print(f"  Period:          {report.get('period_days', 7)} days")
+    print(f"  Total events:    {report.get('total_events', 0)}")
+    print(f"  Empty recalls:   {report.get('empty_recalls', 0)}")
+    print(f"  Dead recall:     {report.get('dead_recall_rate', 0):.1%}")
+    print(f"  Hit rate:        {f'{hit_rate:.1%}' if hit_rate is not None else 'N/A (no rated events)'}")
+    print(f"  Avg distance:    {f'{avg_dist:.4f}' if avg_dist is not None else 'N/A'}")
+    print(f"  Diagnosis:       {report.get('diagnosis', 'unknown')}")
+    rec = report.get("recommendation")
+    if rec:
+        print(f"  Recommendation:  {rec}")
+    callers = report.get("by_caller", {})
+    if callers:
+        print(f"\n  By caller:")
+        for caller, stats in sorted(callers.items()):
+            hr = stats.get("hit_rate")
+            hr_str = f"{hr:.1%}" if hr is not None else "N/A"
+            print(f"    {caller:<30} {stats.get('total_recalls', 0):>4} recalls  hit_rate={hr_str}")
+    # Feedback stats
+    try:
+        from clarvis.brain.retrieval_feedback import get_feedback
+        fb = get_feedback()
+        fb_stats = fb.stats()
+        print(f"\n  Feedback loop:")
+        print(f"    Verdict counts: {fb_stats.get('verdict_counts', {})}")
+        avg_r = fb_stats.get("avg_reward", 0)
+        print(f"    Avg reward:     {avg_r:.3f}" if avg_r else "    Avg reward:     N/A")
+        suggestions = fb_stats.get("suggestions", [])
+        if suggestions:
+            print(f"    Suggestions:    {len(suggestions)}")
+            for s in suggestions[:3]:
+                print(f"      - {s}")
+    except Exception:
+        pass
+
+
 @app.command(name="golden-qa-trend")
 def golden_qa_trend(days: int = typer.Argument(30, help="Number of days to show")):
     """Show golden QA retrieval benchmark trend."""

@@ -4,9 +4,11 @@ source /home/agent/.openclaw/workspace/scripts/cron_env.sh
 source /home/agent/.openclaw/workspace/scripts/lock_helper.sh
 LOGFILE="memory/cron/evening.log"
 
-# Acquire locks: local + global Claude
+# Acquire local lock only during Python assessment phase.
+# Global Claude lock is acquired later, just before Claude Code spawn (line ~100).
+# Previously held global lock for 2+ hours while running non-Claude Python work,
+# which blocked autonomous runs unnecessarily. Fixed 2026-03-15 per cron schedule audit.
 acquire_local_lock "/tmp/clarvis_evening.lock" "$LOGFILE"
-acquire_global_claude_lock "$LOGFILE"
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Evening routine started ===" >> "$LOGFILE"
 emit_dashboard_event task_started --task-name "Evening assessment" --section cron_evening --executor claude-opus
@@ -79,10 +81,24 @@ echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Regenerating dashboard..." >> "$LOGFILE"
 python3 /home/agent/.openclaw/workspace/scripts/dashboard.py >> "$LOGFILE" 2>&1 || true
 
 # === EXISTING: Claude Code evening audit ===
-echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running evening audit..." >> "$LOGFILE"
-WEAKEST_METRIC=$(get_weakest_metric)
-EVENING_PROMPT_FILE=$(mktemp)
-cat > "$EVENING_PROMPT_FILE" << ENDPROMPT
+# Try to acquire global Claude lock — if held, skip audit but continue to digest
+AUDIT_SKIPPED=""
+if [ -f "$GLOBAL_LOCK" ]; then
+    _gpid=$(cat "$GLOBAL_LOCK" 2>/dev/null)
+    _glock_age=$(( $(date +%s) - $(stat -c %Y "$GLOBAL_LOCK" 2>/dev/null || echo 0) ))
+    if [ -n "$_gpid" ] && _is_clarvis_process "$_gpid" && [ "$_glock_age" -le 2400 ]; then
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Evening audit SKIPPED: Claude lock held (PID $_gpid, age=${_glock_age}s)" >> "$LOGFILE"
+        AUDIT_SKIPPED="true"
+    fi
+fi
+
+if [ -z "$AUDIT_SKIPPED" ]; then
+    # Acquire lock (handles stale reclaim) — exits only if truly contested
+    acquire_global_claude_lock "$LOGFILE"
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running evening audit..." >> "$LOGFILE"
+    WEAKEST_METRIC=$(get_weakest_metric)
+    EVENING_PROMPT_FILE=$(mktemp)
+    cat > "$EVENING_PROMPT_FILE" << ENDPROMPT
 You are Clarvis's evening auditor.
 QUEUE: Check memory/evolution/QUEUE.md — note any stale or blocked tasks.
 WEAKEST METRIC: $WEAKEST_METRIC — flag if today's work helped or hurt this.
@@ -94,16 +110,17 @@ STEPS:
 
 OUTPUT FORMAT (mandatory): "AUDIT: pass|issues_found — <1 sentence>. FIXES: <count>. METRIC_IMPACT: improved|neutral|degraded."
 ENDPROMPT
-timeout 1200 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \
-    /home/agent/.local/bin/claude -p "$(cat "$EVENING_PROMPT_FILE")" \
-    --dangerously-skip-permissions --model claude-opus-4-6 >> "$LOGFILE" 2>&1
-rm -f "$EVENING_PROMPT_FILE"
+    timeout 1200 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \
+        /home/agent/.local/bin/claude -p "$(cat "$EVENING_PROMPT_FILE")" \
+        --dangerously-skip-permissions --model claude-opus-4-6 >> "$LOGFILE" 2>&1
+    rm -f "$EVENING_PROMPT_FILE"
+fi
 
 # === DIGEST: Write first-person summary for M2.5 agent ===
 PHI_DIGEST=$(echo "$PHI_OUTPUT" | grep -oP 'Phi\s*=\s*[\d.]+' | head -1 || echo "Phi not measured")
 ASSESSMENT_DIGEST=$(echo "$ASSESSMENT_OUTPUT" | grep -oP '^\s+\S.*:\s[\d.]+' | head -7 | tr '\n' '; ' || echo "assessment unavailable")
 python3 /home/agent/.openclaw/workspace/scripts/digest_writer.py evening \
-    "Evening assessment complete. $PHI_DIGEST. Capability scores: $ASSESSMENT_DIGEST. Ran retrieval benchmark, self-report, and dashboard regeneration. Evening code audit done." \
+    "Evening assessment complete. $PHI_DIGEST. Capability scores: $ASSESSMENT_DIGEST. Ran retrieval benchmark, self-report, and dashboard regeneration. Evening code audit ${AUDIT_SKIPPED:+skipped (lock held)}${AUDIT_SKIPPED:-done}." \
     >> "$LOGFILE" 2>&1 || true
 
 # === DAILY MEMORY LOG: Generate memory/YYYY-MM-DD.md from digest ===

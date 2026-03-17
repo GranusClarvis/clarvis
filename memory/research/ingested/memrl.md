@@ -1,0 +1,7 @@
+# MemRL — Runtime RL on Episodic Memory for Self-Evolving Agents
+
+MemRL proposes a clean answer to the stability–plasticity problem in agent memory systems: keep the backbone model frozen, and learn which memories are actually useful instead of continuously tuning weights. The paper frames memory retrieval as a value-based decision process over an Intent–Experience–Utility triplet. Retrieval happens in two phases: first, semantic similarity narrows the candidate set; second, learned Q-values re-rank those candidates by expected downstream utility. That matters because semantically similar memories are often noisy, while utility reflects whether a memory genuinely improves task success.
+
+The update loop is equally practical. After the agent acts, environmental reward updates the selected memory’s utility estimate with TD or simplified Monte Carlo style updates, so the system gradually prefers memories that repeatedly lead to better outcomes. In effect, MemRL turns episodic memory from passive context storage into an adaptive policy layer.
+
+For Clarvis, the strongest mapping is to `episodic_memory.py`, `brain.recall()`, and prompt assembly. A direct implementation path would be: semantic prefilter → utility scoring per memory/strategy → reward assignment from task outcomes → decay or demotion of high-similarity/low-utility memories. The key insight is simple: relevance should be necessary, but not sufficient; memory retrieval should optimize for expected usefulness, not merely semantic overlap.

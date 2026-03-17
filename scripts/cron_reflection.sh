@@ -5,9 +5,11 @@ source /home/agent/.openclaw/workspace/scripts/lock_helper.sh
 
 LOGFILE="memory/cron/reflection.log"
 
-# Acquire locks: local + global Claude (reflection writes to brain/QUEUE/graph)
+# Acquire local lock only — reflection runs Python steps (no Claude Code spawning)
+# Previously acquired global Claude lock but this blocked autonomous runs for 3+ hours
+# unnecessarily (reflection only does brain optimization, not Claude Code execution).
+# Removed 2026-03-15 per cron schedule audit.
 acquire_local_lock "/tmp/clarvis_reflection.lock" "$LOGFILE"
-acquire_global_claude_lock "$LOGFILE"
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Reflection starting ===" >> "$LOGFILE"
 emit_dashboard_event task_started --task-name "Daily reflection" --section cron_reflection --executor claude-opus

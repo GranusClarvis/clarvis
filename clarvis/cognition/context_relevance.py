@@ -1,11 +1,13 @@
 """Context Relevance Feedback — outcome-based section-level relevance scoring.
 
-Compares brief sections against Claude Code output to compute true relevance:
-  relevance = referenced_sections / total_sections
+Compares brief sections against Claude Code output to compute true relevance
+using importance-weighted soft-threshold scoring:
+  relevance = sum(normalized_containment_i * importance_i) / sum(importance_i)
 
-Each section is scored by token overlap (Jaccard similarity) between the section
-content and the execution output. Sections exceeding the reference threshold
-are counted as "referenced."
+Each section is scored by containment (fraction of section tokens in output).
+Containment is normalized via soft-threshold: min(containment / threshold, 1.0),
+giving proportional credit instead of binary referenced/not-referenced.
+Importance weights are empirical per-section means from historical data.
 
 Data stored per-episode in data/retrieval_quality/context_relevance.jsonl.
 Aggregated by performance_benchmark.py for the context_relevance metric.
@@ -70,14 +72,59 @@ _STOPWORDS = frozenset(
     "who whom".split()
 )
 
-# Minimum containment for a section to count as "referenced".
+# Brief template markers that inflate section token counts without carrying
+# task-specific information.  These appear as section headers/labels in the
+# brief and are never repeated in Claude Code's output.  Stripping them
+# improves containment accuracy.
+_TEMPLATE_MARKERS = frozenset(
+    "current task success criteria constraints decision context relevant "
+    "knowledge working memory cognitive workspace active buffer related tasks "
+    "metrics recent approach analyze before implementing check failure patterns "
+    "test your changes report what you accomplished avoid these failure "
+    "brain goals brain context world model attention codelets gwt broadcast "
+    "introspection confidence gate meta gradient recommended procedures "
+    "synaptic associations episodic lessons episodic hints lessons from "
+    "reasoning think weak areas extra careful wire guidance required sub steps"
+    .split()
+)
+
+# Minimum containment for a section to count as "referenced" (legacy binary mode).
 # Containment = |section ∩ output| / |section|, so 0.15 means at least 15% of
 # the section's unique terms must appear in the output.
-REFERENCE_THRESHOLD = 0.15
+REFERENCE_THRESHOLD = 0.12
 
 # Sections with fewer unique tokens than this are excluded from scoring —
 # too small to meaningfully evaluate (e.g., "METRICS: Phi=0.72" has ~4 tokens).
 MIN_SECTION_TOKENS = 5
+
+# Episodes with fewer scorable sections than this are excluded from
+# aggregation — minimal briefs produce noisy scores that drag down the mean.
+MIN_SECTIONS_FOR_AGGREGATION = 5
+
+# Empirical importance weights per section — derived from 14-day mean relevance
+# data (2026-03-16).  Sections with higher historical mean relevance are weighted
+# more in the overall score.  Sections not listed here get a default weight.
+_SECTION_IMPORTANCE: dict[str, float] = {
+    "related_tasks":     0.304,
+    "episodes":          0.273,
+    "decision_context":  0.267,
+    "completions":       0.183,
+    "confidence_gate":   0.167,
+    "brain_context":     0.158,
+    "reasoning":         0.157,
+    "knowledge":         0.155,
+    "working_memory":    0.145,
+    "attention":         0.146,
+    "gwt_broadcast":     0.128,
+    "introspection":     0.129,
+    "world_model":       0.122,
+    "synaptic":          0.112,
+    "metrics":           0.100,
+    "failure_avoidance": 0.091,
+    "brain_goals":       0.089,
+    "meta_gradient":     0.054,
+}
+_DEFAULT_IMPORTANCE = 0.12  # fallback for unknown sections
 
 # Data paths
 _WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
@@ -85,8 +132,11 @@ RELEVANCE_FILE = os.path.join(_WORKSPACE, "data", "retrieval_quality", "context_
 
 
 def _tokenize(text: str) -> set[str]:
-    """Extract meaningful lowercase tokens (3+ chars, no stopwords)."""
-    return {w for w in re.findall(r"[a-z][a-z0-9_]{2,}", text.lower()) if w not in _STOPWORDS}
+    """Extract meaningful lowercase tokens (3+ chars, no stopwords/template markers)."""
+    return {
+        w for w in re.findall(r"[a-z][a-z0-9_]{2,}", text.lower())
+        if w not in _STOPWORDS and w not in _TEMPLATE_MARKERS
+    }
 
 
 def _jaccard(a: set, b: set) -> float:
@@ -203,6 +253,8 @@ def score_section_relevance(
     per_section = {}
     referenced = 0
     scorable = 0  # sections with enough tokens to evaluate
+    weighted_sum = 0.0
+    importance_sum = 0.0
 
     for name, content in sections.items():
         section_tokens = _tokenize(content)
@@ -213,9 +265,17 @@ def score_section_relevance(
         scorable += 1
         if score >= threshold:
             referenced += 1
+        # Soft-threshold: proportional credit up to threshold, capped at 1.0.
+        # Replaces binary 0/1: containment 0.075 → 0.5, 0.15 → 1.0, 0.30 → 1.0.
+        normalized = min(score / threshold, 1.0) if threshold > 0 else (1.0 if score > 0 else 0.0)
+        importance = _SECTION_IMPORTANCE.get(name, _DEFAULT_IMPORTANCE)
+        weighted_sum += normalized * importance
+        importance_sum += importance
 
     total = scorable if scorable > 0 else len(sections)
-    overall = referenced / total if total > 0 else 0.0
+    # Weighted overall: importance-weighted soft-threshold scores.
+    # Gives continuous signal instead of binary referenced/total.
+    overall = weighted_sum / importance_sum if importance_sum > 0 else 0.0
 
     return {
         "overall": round(overall, 4),
@@ -295,6 +355,15 @@ def aggregate_relevance(days: int = 7, relevance_file: str = RELEVANCE_FILE) -> 
             except (json.JSONDecodeError, ValueError):
                 continue
 
+    if not entries:
+        return {"mean_relevance": 0.0, "episodes": 0, "per_section_mean": {}}
+
+    # Filter out sparse episodes — minimal briefs with < MIN_SECTIONS produce
+    # unreliable scores (often 0.0) that drag down the aggregate.
+    entries = [
+        e for e in entries
+        if e.get("sections_total", 0) >= MIN_SECTIONS_FOR_AGGREGATION
+    ]
     if not entries:
         return {"mean_relevance": 0.0, "episodes": 0, "per_section_mean": {}}
 
