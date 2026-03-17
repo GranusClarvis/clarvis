@@ -86,9 +86,6 @@ _Consolidated into Pillar 2 above. See `docs/ORCHESTRATOR_PLAN_2026-03-06.md` fo
 
 ## P1
 
-- [~] [RESEARCH_DISCOVERY 2026-03-16] Research: SParC-RAG — Adaptive Sequential-Parallel Scaling with Context Management (arXiv:2602.00083). Multi-agent RAG with Query Rewriter (diversity), Answer Evaluator (stop criterion), and Context Manager (cross-round evidence consolidation + noise filtering). +6.2 F1 on multi-hop QA. Targets Context Relevance (0.387→0.75) via principled multi-round retrieval with selective integration. Compare to A-RAG hierarchical retrieval and MacRAG multi-scale. Source: arxiv.org/abs/2602.00083
-- [x] [RESEARCH_DISCOVERY 2026-03-16] Research: SWE-Pruner — Self-Adaptive Context Pruning for Coding Agents (arXiv:2601.16746). (2026-03-17: Research complete. 5 brain memories stored. Note: memory/research/swe_pruner_sparc_rag_context_pruning.md)
-  - [x] [AUTO_SPLIT 2026-03-16] [RESEARCH_DISCOVERY 2026-03-16_2] Implement: core logic change in one focused increment (2026-03-17: Deep research on SWE-Pruner + SParC-RAG. 5 brain memories stored. Research note: memory/research/swe_pruner_sparc_rag_context_pruning.md. Key finding: line-level goal-conditioned pruning within sections + enriched related_tasks are highest-ROI improvements for Context Relevance.)
 - [~] [SPINE_MIGRATION_WAVE3_ORCH] Migrate orchestrator logic from `scripts/` into `clarvis/orch/` in phases (task routing, project-agent internals, shared PR-factory pipeline pieces). Preserve behavior; reduce direct script-to-script coupling. _(Phase 1 done 2026-03-10: `pr_factory_rules.py` → `clarvis/orch/pr_rules.py`, `pr_factory_intake.py` → `clarvis/orch/pr_intake.py`, `pr_factory_indexes.py` → `clarvis/orch/pr_indexes.py`. Scripts converted to thin deprecated wrappers. 70/70 tests pass. Remaining: `pr_factory.py` (Phase 3 execution brief), `project_agent.py` (large, multi-session), `agent_orchestrator.py`, benchmarks/scoreboard.)_
 - [~] [LEGACY_SCRIPT_WRAPPER_REDUCTION] Audit high-value Python scripts and convert mature ones into thin wrappers over canonical `clarvis.*` modules. Prioritize scripts still carrying business logic that should live in the spine. _(2026-03-10: Audited 8 scripts. pr_factory_{rules,intake,indexes} already thin wrappers — updated 5 callers to import from canonical `clarvis.orch.*` directly. phi_metric.py already done. context_compressor.py blocked on `compress_health` migration. heartbeat_{pre,post}flight.py are canonical sources — inverted delegation, multi-session migration needed.)_
 - [~] [CRON_CANONICAL_ENTRYPOINTS] Gradually migrate cron/invocation paths from direct `python3 scripts/X.py` calls to canonical `python3 -m clarvis ...` entrypoints where parity exists. Use soak periods and diff checks to prevent regressions. _(2026-03-14: Third migration — `cron_report_{morning,evening}.sh` `from brain import brain; brain.stats()` → `subprocess.run(['python3', '-m', 'clarvis', 'brain', 'stats'])`. 2026-03-12: Second — `cron_reflection.sh` `brain.optimize()` → `python3 -m clarvis brain optimize`. 2026-03-10: First — `cron_reflection.sh` `brain.py crosslink` → `python3 -m clarvis brain crosslink`. Next candidate: context_compressor gc.)_
@@ -103,12 +100,8 @@ _Consolidated into Pillar 2 above. See `docs/ORCHESTRATOR_PLAN_2026-03-06.md` fo
 
 
 - [~] [HEARTBEAT_POSTFLIGHT_DECOMPOSITION] `run_postflight()` in `scripts/heartbeat_postflight.py` is 1457 lines — the largest function in the codebase. Decompose into 10-15 named sub-functions (one per §section) called from a clean dispatcher. Preserve all behavior; each section (§1 episode encoding through §14 cleanup) becomes its own testable function. Directly improves `reasonable_function_length` metric (currently 0.739, 79 functions >100 lines). **Targets Code Generation Quality.** P1.
-  - [ ] [AUTO_SPLIT 2026-03-13] [HEARTBEAT_POSTFLIGHT_DECOMPOSITION_3] Test: add/update test(s) covering the new behavior
 
 - [~] [CONTEXT_RELATED_TASKS_QUALITY 2026-03-16] `related_tasks` has the highest importance weight (0.304) but often scores 0.0 containment in recent episodes. Root-cause: the section likely contains task titles/queue items that share zero tokens with Claude Code output. Fix: in `assembly.py`, enrich `related_tasks` with actionable context (file paths, function names, concrete overlap with current task) instead of raw queue lines. Validate by checking containment on 5+ recent episodes. **Targets Context Relevance (weakest metric).** P1.
-  - [ ] [AUTO_SPLIT 2026-03-16] [CONTEXT_RELATED_TASKS_QUALITY 2026-03-16_1] Analyze: read relevant source files, identify change boundary
-  - [ ] [AUTO_SPLIT 2026-03-16] [CONTEXT_RELATED_TASKS_QUALITY 2026-03-16_2] Implement: core logic change in one focused increment
-  - [ ] [AUTO_SPLIT 2026-03-16] [CONTEXT_RELATED_TASKS_QUALITY 2026-03-16_3] Test: add/update test(s) covering the new behavior
 
 
 
@@ -128,6 +121,45 @@ _Consolidated into Pillar 2 above. See `docs/ORCHESTRATOR_PLAN_2026-03-06.md` fo
 ## P0 — Brain v2 / Clarvis Quality Window
 
 
+
+## P0 — 14-Day Delivery Window (Deadline: 2026-03-31)
+
+### Delivery Goal
+Presentable Clarvis by 2026-03-31:
+- open-source-ready main repo
+- working/public-ready website v0
+- clean repo boundaries and consolidation plan
+- stronger Clarvis brain / recall / context quality
+- reliable orchestration and benchmarks
+- clearly wired, tested, maintainable structure
+
+### Milestone A — Foundation Freeze (by 2026-03-19)
+- [ ] [DLV_DEADLINE_LOCK_2026-03-17] Lock the next 14 days around delivery work only: cleanup, consolidation, wiring, testing, context quality, website, open-source readiness. No broad feature expansion unless required for delivery.
+- [ ] [DLV_CRITICAL_PATH_BOARD_2026-03-17] Create a single critical-path delivery board/status artifact for the 14-day window with milestone tracking and blockers.
+- [ ] [DLV_QUEUE_PRUNE_2026-03-17] Prune or demote non-essential queue items that do not contribute directly to: presentability, open-source readiness, website, brain quality, or orchestration reliability.
+- [ ] [DLV_OPEN_SOURCE_GAP_AUDIT_2026-03-17] Produce a hard gap list: what still blocks public repo release today.
+
+### Milestone B — Brain / Context Quality (by 2026-03-23)
+- [ ] [DLV_CONTEXT_RELEVANCE_RECOVERY_2026-03-17] Raise Context Relevance from current weak state via related_tasks quality, section quality, pruning, and better scoring.
+- [ ] [DLV_BRAIN_QUERY_POLICY_2026-03-17] Implement or refine explicit policy for when Clarvis should query memory vs stay lean.
+- [ ] [DLV_RECALL_PRECISION_REPORT_2026-03-17] Add a visible retrieval quality report: precision, contamination, usefulness, and current weak spots.
+- [ ] [DLV_GOAL_HYGIENE_FINAL_2026-03-17] Finish removal/demotion of stale steering so active goals match current direction.
+
+### Milestone C — Repo / Open-Source Readiness (by 2026-03-26)
+- [ ] [DLV_REPO_CONSOLIDATION_EXEC_2026-03-17] Execute repo consolidation decisions around clarvis / clarvis-db / clarvis-p and remove or defer vanity fragmentation.
+- [ ] [DLV_OPEN_SOURCE_SMOKE_GREEN_2026-03-17] Make open-source smoke/readiness checks green and trustworthy.
+- [ ] [DLV_STRUCTURE_CLEANUP_2026-03-17] Reduce bloat, dead surfaces, and half-wired internal-only clutter from main repo.
+- [ ] [DLV_MODE_SYSTEM_WIRING_2026-03-17] Ensure GE / Architecture / Passive modes are not just present but actually govern runtime behavior reliably.
+
+### Milestone D — Public Surface (by 2026-03-29)
+- [ ] [DLV_WEBSITE_V0_BUILD_2026-03-17] Build website/landing page v0 on raw IP: who Clarvis is, current work, roadmap, repos, mode, benchmarks.
+- [ ] [DLV_PUBLIC_FEED_SAFE_2026-03-17] Create/sanitize the public-safe feed for website status data.
+- [ ] [DLV_REPO_PRESENTATION_2026-03-17] Make repo/docs/readme presentation coherent and externally understandable.
+
+### Milestone E — Final Validation (by 2026-03-31)
+- [ ] [DLV_FINAL_BENCH_PASS_2026-03-17] Run final benchmark/readiness pass: CLR, retrieval quality, smoke checks, orchestration sanity, website health.
+- [ ] [DLV_PRESENTABILITY_REVIEW_2026-03-17] Final review against user ask: presentable, open-sourceable, usable, structured, beautiful enough, real quality.
+- [ ] [DLV_LAUNCH_PACKET_2026-03-17] Prepare concise launch packet: what Clarvis is, repo map, website, usage, current capabilities, known limitations.
 
 ## P0 — Fork Integration Execution Phases
 
