@@ -32,6 +32,7 @@ class TestRetrievalTier:
             "collections": ["a", "b"],
             "n_results": 3,
             "graph_expand": False,
+            "query_budget": 0,
         }
 
     def test_defaults(self):
@@ -204,7 +205,6 @@ class TestLightRetrieval:
     @pytest.mark.parametrize("task", [
         "Fix the login button CSS",
         "Add type annotations to brain.py",
-        "Wire up the new endpoint",
         "Refactor the cost tracker output",
         "[SOME_UNKNOWN_TAG] Implement feature X",
         "Update the Telegram bot message handler",
@@ -213,16 +213,25 @@ class TestLightRetrieval:
         result = classify_retrieval(task)
         assert result.tier == "LIGHT_RETRIEVAL", f"Expected LIGHT for: {task}"
         assert result.reason == "default: scoped implementation"
+
+    @pytest.mark.parametrize("task", [
+        "Wire up the new endpoint",
+        "Connect the retrieval evaluator",
+        "Hook the postflight into brain bridge",
+    ])
+    def test_light_retrieval_scoped_keyword(self, task):
+        result = classify_retrieval(task)
+        assert result.tier == "LIGHT_RETRIEVAL", f"Expected LIGHT for: {task}"
+        assert "scoped keyword:" in result.reason
         assert result.collections == _LIGHT_COLLECTIONS
         assert result.n_results == 3
         assert result.graph_expand is False
 
-    def test_light_has_three_collections(self):
+    def test_light_has_two_collections(self):
         result = classify_retrieval("Add a new test file")
-        assert len(result.collections) == 3
+        assert len(result.collections) == 2
         assert "clarvis-learnings" in result.collections
         assert "clarvis-procedures" in result.collections
-        assert "clarvis-episodes" in result.collections
 
 
 # ---------------------------------------------------------------------------

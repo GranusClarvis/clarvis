@@ -14,6 +14,8 @@ from clarvis.context.assembly import (
     _cosine_similarity,
     _semantic_rank,
     _word_overlap_rank,
+    _extract_actionable_context,
+    _enrich_task,
     find_related_tasks,
 )
 
@@ -209,8 +211,8 @@ class TestSemanticRank:
             (0.7, "Refactor cost tracker", "Refactor cost tracker to use real API data"),
         ]
         scored = _semantic_rank("brain memory retrieval optimization", parsed, self._mock_embed_fn)
-        # Brain-related task should rank first
-        assert scored[0][1] == "Fix brain health check"
+        # Brain-related task should rank first (enriched text starts with core)
+        assert scored[0][1].startswith("Fix brain health check")
 
     def test_priority_weighting(self):
         """Higher priority tasks should score higher when similarity is equal."""
@@ -263,8 +265,8 @@ class TestWordOverlapRank:
         ]
         scored = _word_overlap_rank("brain health optimization", parsed)
         assert len(scored) > 0
-        # Brain health task should rank first (more word overlap)
-        assert scored[0][1] == "Fix brain health check"
+        # Brain health task should rank first (more word overlap, enriched text starts with core)
+        assert scored[0][1].startswith("Fix brain health check")
 
     def test_skips_near_duplicates(self):
         """Jaccard > 0.6 should be filtered (too similar = same task)."""
@@ -297,6 +299,104 @@ class TestWordOverlapRank:
         ]
         scored = _word_overlap_rank("some real task description", parsed)
         assert len(scored) == 0
+
+
+# === find_related_tasks integration tests ===
+
+# === _extract_actionable_context tests ===
+
+class TestExtractActionableContext:
+    def test_extracts_backtick_items(self):
+        text = "Fix `assembly.py` and `run_postflight()` for better output"
+        result = _extract_actionable_context(text)
+        assert "assembly.py" in result
+        assert "run_postflight()" in result
+
+    def test_no_backticks_extracts_file_like(self):
+        """Without backticks, should still extract file-like tokens."""
+        text = "Fix the assembly.py module for better output from brain.py"
+        result = _extract_actionable_context(text)
+        assert "assembly.py" in result
+        assert "brain.py" in result
+
+    def test_no_backticks_extracts_underscore_ids(self):
+        """Without backticks, should extract underscore identifiers."""
+        text = "Fix run_postflight and context_compressor for better output"
+        result = _extract_actionable_context(text)
+        assert "run_postflight" in result
+        assert "context_compressor" in result
+
+    def test_domain_keyword_fallback(self):
+        """When no code identifiers, should extract domain keywords."""
+        text = "Improve retrieval quality and precision scoring"
+        result = _extract_actionable_context(text)
+        assert "retrieval" in result or "precision" in result or "quality" in result
+
+    def test_very_short_text_returns_empty(self):
+        """Very short text with only stopwords returns empty."""
+        text = "Do it now"
+        assert _extract_actionable_context(text) == ""
+
+    def test_deduplicates(self):
+        text = "Update `brain.py` then re-test `brain.py` and `search()`"
+        result = _extract_actionable_context(text)
+        assert result.count("brain.py") == 1
+
+    def test_filters_short_tokens(self):
+        text = "Set `x` to `42` and update `heartbeat_postflight.py`"
+        result = _extract_actionable_context(text)
+        assert "x" not in result.split(", ")
+        assert "42" not in result.split(", ")
+        assert "heartbeat_postflight.py" in result
+
+    def test_limits_to_5_items(self):
+        text = " ".join(f"`item_{i}.py`" for i in range(10))
+        result = _extract_actionable_context(text)
+        # Count items inside brackets
+        items = result.strip(" []").split(", ")
+        assert len(items) <= 5
+
+    def test_bracket_format(self):
+        text = "Fix `assembly.py` for context"
+        result = _extract_actionable_context(text)
+        assert result.startswith(" [")
+        assert result.endswith("]")
+
+    def test_extracts_camel_case(self):
+        """Should extract CamelCase identifiers like ChromaDB, ClarvisDB."""
+        text = "Optimize ChromaDB queries in ClarvisDB module"
+        result = _extract_actionable_context(text)
+        assert "ChromaDB" in result or "ClarvisDB" in result
+
+    def test_mixed_sources(self):
+        """Backtick items should come first, then file-like, then underscore."""
+        text = "Fix `search()` in brain.py and run_postflight module"
+        result = _extract_actionable_context(text)
+        assert "search()" in result
+        assert "brain.py" in result
+        assert "run_postflight" in result
+
+
+class TestEnrichTask:
+    def test_adds_context_to_core(self):
+        core = "Fix brain health check"
+        full = "Fix `brain.py` health check `timeout` issue"
+        result = _enrich_task(core, full)
+        assert result.startswith("Fix brain health check")
+        assert "brain.py" in result
+
+    def test_no_backticks_enriches_with_keywords(self):
+        core = "Fix brain health"
+        full = "Fix brain health check timeout"
+        result = _enrich_task(core, full)
+        # Should now include domain keywords from the full text
+        assert len(result) > len(core)
+
+    def test_respects_max_len(self):
+        core = "A" * 100
+        full = "Fix `very_long_filename_that_pushes_over_limit.py` context"
+        result = _enrich_task(core, full, max_len=120)
+        assert len(result) <= 120
 
 
 # === find_related_tasks integration tests ===
@@ -372,13 +472,13 @@ class TestFindRelatedTasks:
         for item in result:
             assert isinstance(item, str)
 
-    def test_results_max_80_chars(self, tmp_path):
+    def test_results_max_200_chars(self, tmp_path):
         queue_file = str(tmp_path / "QUEUE.md")
         with open(queue_file, "w") as f:
             f.write(SAMPLE_QUEUE)
         result = find_related_tasks("optimize performance", queue_file=queue_file)
         for item in result:
-            assert len(item) <= 80
+            assert len(item) <= 200
 
     def test_semantic_matching_finds_synonyms(self, tmp_path):
         """Semantic matching should find tasks with different vocabulary but similar meaning."""

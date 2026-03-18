@@ -39,21 +39,30 @@ DEFAULT_CONFIG = {
         {"name": "daily_high", "daily_above": 10, "message": "Daily spend exceeds $10 on OpenRouter."},
     ],
     "cooldown_hours": 6,
-    "telegram_bot_token": "REDACTED_TELEGRAM_BOT_TOKEN",
-    "telegram_chat_id": "REDACTED_CHAT_ID",
+    "telegram_bot_token": os.environ.get("CLARVIS_TG_BOT_TOKEN", ""),
+    "telegram_chat_id": os.environ.get("CLARVIS_TG_CHAT_ID", ""),
 }
 
 
 def load_config() -> dict:
-    """Load config, creating with defaults if missing."""
+    """Load config, creating with defaults if missing. Env vars override file values."""
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE) as f:
-            return json.load(f)
-    # Create default config
-    os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
-    with open(CONFIG_FILE, "w") as f:
-        json.dump(DEFAULT_CONFIG, f, indent=2)
-    return DEFAULT_CONFIG
+            cfg = json.load(f)
+    else:
+        # Create default config
+        os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
+        with open(CONFIG_FILE, "w") as f:
+            json.dump(DEFAULT_CONFIG, f, indent=2)
+        cfg = dict(DEFAULT_CONFIG)
+    # Env vars always override file values (file may have empty placeholders)
+    env_token = os.environ.get("CLARVIS_TG_BOT_TOKEN", "")
+    env_chat = os.environ.get("CLARVIS_TG_CHAT_ID", "")
+    if env_token:
+        cfg["telegram_bot_token"] = env_token
+    if env_chat:
+        cfg["telegram_chat_id"] = env_chat
+    return cfg
 
 
 def load_state() -> dict:

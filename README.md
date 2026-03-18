@@ -1,448 +1,264 @@
-# Clarvis 🦞
+# Clarvis
 
-> Autonomous evolving AI agent. JARVIS-class intelligence, lobster-class resilience.
+[![CI](https://github.com/GranusClarvis/clarvis/actions/workflows/ci.yml/badge.svg)](https://github.com/GranusClarvis/clarvis/actions/workflows/ci.yml)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-Clarvis is a dual-layer cognitive agent with a **conscious layer** (MiniMax M2.5) for direct interaction and a **subconscious layer** (Claude Code Opus) for autonomous evolution. Fully local, privacy-first, and self-improving.
+> Autonomous evolving AI agent — dual-layer cognitive architecture with persistent memory, self-directed task execution, and continuous self-improvement.
+
+Clarvis is a cognitive agent system that operates autonomously on a dedicated host. It has a **conscious layer** for direct interaction (chat) and a **subconscious layer** that works in the background — researching, planning, building, and reflecting on its own performance. All memory is local and persistent. The system continuously learns from its own execution history.
 
 ---
 
-## 🏗️ High-Level Architecture
+## Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/GranusClarvis/clarvis.git
+cd clarvis
+
+# Install core package (editable)
+pip install -e .
+
+# Install with brain (vector memory) support
+pip install -e ".[brain]"
+
+# Install sub-packages
+pip install -e packages/clarvis-db
+pip install -e packages/clarvis-cost
+pip install -e packages/clarvis-reasoning
+```
+
+**Requirements:** Python 3.10+, pip. Brain features need `chromadb` and `onnxruntime` (installed automatically with `.[brain]`).
+
+---
+
+## Quick Start
+
+```bash
+# Brain operations
+python3 -m clarvis brain health           # Full health report
+python3 -m clarvis brain stats            # Quick stats
+python3 -m clarvis brain search "query"   # Search memories
+
+# Operating mode
+python3 -m clarvis mode show              # Current mode
+python3 -m clarvis mode set passive       # Switch to user-directed
+
+# Heartbeat (autonomous execution cycle)
+python3 -m clarvis heartbeat gate         # Pre-check (wake/skip)
+python3 -m clarvis heartbeat run          # Full preflight + task selection
+
+# Benchmarks
+python3 -m clarvis bench run              # Full performance benchmark
+python3 -m clarvis bench clr              # CLR benchmark
+python3 -m clarvis bench trajectory       # Trajectory evaluation
+```
+
+### Python API
+
+```python
+from clarvis.brain import search, remember, capture
+
+results = search("deployment procedures")     # Semantic search across all collections
+remember("key insight", importance=0.9)       # Store with importance weight
+capture("learned something new")              # Auto-classify and store
+```
+
+---
+
+## Architecture Overview
 
 ```mermaid
 flowchart TB
-    subgraph External["External Interfaces"]
-        TG[Telegram]
-        DC[Discord]
-        WB[Web Browser]
-        GH[GitHub API]
+    subgraph External["Interfaces"]
+        MSG[Messaging]
+        GH[GitHub]
     end
 
-    subgraph Gateway["OpenClaw Gateway (port 18789)"]
-        GW[Gateway Core]
+    subgraph Conscious["Conscious Layer"]
+        GW[Gateway]
+        LLM[Chat LLM]
     end
 
-    subgraph Conscious["🌅 Conscious Layer"]
-        M2[M2.5 Agent]
-    end
-
-    subgraph Subconscious["🌙 Subconscious Layer"]
-        CC[Claude Code Opus]
+    subgraph Subconscious["Subconscious Layer"]
+        CRON[Scheduled Jobs]
+        CC[Code Agent]
     end
 
     subgraph Core["Clarvis Core"]
-        subgraph Heartbeat["Heartbeat Pipeline"]
-            HG[heartbeat_gate.py]
-            HP[heartbeat_preflight.py]
-            PF[heartbeat_postflight.py]
-        end
-        
-        subgraph Brain["ClarvisDB Brain"]
-            CH[ChromaDB]
-            ONNX[ONNX Embeddings]
-            GRAPH[Relationship Graph]
-        end
-        
-        subgraph Memory["Memory Systems"]
-            EP[Episodic]
-            PR[Procedural]
-            WM[Working]
-            HB[Hebbian]
-        end
-        
-        subgraph Cognition["Cognition"]
-            ATT[Attention GWT]
-            CONF[Confidence]
-            TO[Thought Protocol]
-        end
-        
-        subgraph Context["Context Engine"]
-            COMP[Compressor MMR]
-        end
-        
-        subgraph Metrics["Metrics"]
-            PHI[Phi Metric]
-            SM[Self Model]
-        end
+        HB[Heartbeat Pipeline]
+        BRAIN[ClarvisDB Brain]
+        MEM[Memory Systems]
+        COG[Cognition Engine]
+        CTX[Context Assembly]
+        MET[Metrics & Self-Model]
     end
 
-    TG --> GW
-    DC --> GW
-    GW --> M2
-    M2 --> |spawn| CC
-    CC --> |autonomous| HG
-    HG --> HP
-    HP --> |select task| CC
-    CC --> PF
-    PF --> |hooks| CH
-    PF --> |hooks| GRAPH
-    
-    M2 --> |recall| CH
-    M2 --> |recall| GRAPH
-    CC --> |learn| CH
-    CC --> |learn| GRAPH
+    MSG --> GW --> LLM
+    LLM -->|spawn| CC
+    CRON -->|trigger| HB
+    HB -->|select task| CC
+    CC -->|learn| BRAIN
+    LLM -->|recall| BRAIN
+    BRAIN --> MEM
+    COG --> CTX
+    MET -->|observe| BRAIN
+```
+
+**Conscious layer** — handles direct conversation, reads digests of subconscious work, and spawns the code agent for complex tasks.
+
+**Subconscious layer** — runs 20+ scheduled jobs daily: autonomous evolution, research ingestion, reflection, maintenance, and performance benchmarking. Results surface through a shared memory digest.
+
+---
+
+## Core Components
+
+### ClarvisDB Brain
+Hybrid vector-graph memory system. ChromaDB for semantic search + relationship graph for structured knowledge. 10 specialized collections, ONNX MiniLM embeddings, fully local. No external API calls.
+
+### Heartbeat Pipeline
+The core action cycle: **gate** (should we wake?) → **preflight** (score attention, select task, build context) → **execute** (code agent runs the task) → **postflight** (encode episode, update metrics, store learnings).
+
+### Memory Systems
+- **Episodic** — temporal recall of past task executions with confidence tracking
+- **Procedural** — extracted procedures and step-by-step patterns
+- **Working** — session-level buffer with task-driven reactivation (Baddeley-inspired)
+- **Hebbian** — connection strengthening between co-activated memories
+
+### Cognition
+- **Attention (GWT)** — Global Workspace Theory salience scoring for task selection
+- **Retrieval Gate** — 3-tier routing (NO / LIGHT / DEEP) to skip unnecessary memory queries
+- **Self-Model** — 7 capability domains with calibrated confidence
+- **Performance Index** — 8-dimension composite score tracking operational health
+- **Operating Modes** — GE (full autonomy) / Architecture (improve-only) / Passive (user-directed)
+
+---
+
+## Project Structure
+
+```
+clarvis/                     # Core Python package (spine)
+├── brain/                   # ClarvisDB: ChromaDB + ONNX vector memory + graph
+├── memory/                  # Episodic, procedural, working, Hebbian memory
+├── cognition/               # GWT attention, confidence, somatic markers
+├── context/                 # Context assembly + MMR compression
+├── metrics/                 # Performance index, trajectory eval, CLR benchmark
+├── heartbeat/               # Gate → preflight → execute → postflight pipeline
+├── runtime/                 # Operating mode control-plane
+├── orch/                    # Task routing and selection
+├── adapters/                # Host extraction boundary (adapter pattern)
+└── cli.py                   # Unified CLI: python3 -m clarvis <cmd>
+
+scripts/                     # Operational scripts (cron, heartbeat, cognitive)
+packages/                    # Installable packages (clarvis-db, clarvis-cost, clarvis-reasoning)
+tests/                       # Smoke, integration, and unit tests
+docs/                        # Architecture, runbook, gap audit
 ```
 
 ---
 
-## 🧠 How the Brain Works
-
-ClarvisDB is a **hybrid vector-graph memory system** — ChromaDB for semantic search + relationship graph for structured knowledge.
-
-```mermaid
-flowchart LR
-    subgraph Storage["Storage Layer"]
-        CH[(ChromaDB Vector Store)]
-        JSON[relationships.json]
-        SQL[graph.db SQLite]
-    end
-    
-    subgraph Collections["10 Collections"]
-        ID[clarvis-identity]
-        PREF[clarvis-preferences]
-        LRND[clarvis-learnings]
-        INFRA[clarvis-infrastructure]
-        GOALS[clarvis-goals]
-        CTX[clarvis-context]
-        MEM[clarvis-memories]
-        PROC[clarvis-procedures]
-        AUTO[autonomous-learning]
-        EPIS[clarvis-episodes]
-    end
-    
-    subgraph Query["Query Pipeline"]
-        EMB[ONNX Embedding]
-        VEC[Vector Search]
-        HOOKS[Hook Scoring]
-        BOOST[Attention Boost]
-        RERANK[Rerank]
-    end
-    
-    EMB --> VEC
-    VEC --> HOOKS
-    HOOKS --> BOOST
-    BOOST --> RERANK
-    
-    CH --> |read/write| Collections
-    Collections --> |edges| JSON
-    Collections --> |edges| SQL
-```
-
-### Recall Flow
+## How It Learns
 
 ```mermaid
 sequenceDiagram
-    participant Agent as M2.5 / Claude Code
-    participant Brain as clarvis.brain
-    participant Chroma as ChromaDB
-    participant Graph as Relationship Graph
-    participant Hooks as Hook Registry
-    
-    Agent->>Brain: brain.recall(query, n=5)
-    Brain->>Chroma: embedding + vector search
-    Chroma-->>Brain: top-k results
-    Brain->>Graph: expand 1-hop neighbors
-    Graph-->>Brain: related nodes
-    Brain->>Hooks: register_recall_scorer()
-    Hooks-->>Brain: score each result
-    Brain->>Hooks: register_recall_booster()
-    Hooks-->>Brain: boost by attention
-    Brain-->>Agent: ranked results + context
+    participant Cron as Scheduled Job
+    participant Gate as Heartbeat Gate
+    participant Pre as Preflight
+    participant Agent as Code Agent
+    participant Post as Postflight
+    participant Brain as ClarvisDB
+
+    Cron->>Gate: Trigger
+    Gate->>Pre: WAKE (conditions met)
+    Pre->>Pre: Score attention, select task
+    Pre->>Pre: Build context (brain recall + compress)
+    Pre->>Agent: Execute selected task
+    Agent->>Post: Task complete
+    Post->>Brain: Encode episode
+    Post->>Brain: Store learnings
+    Post->>Post: Update performance metrics
+    Post->>Post: Record trajectory event
 ```
 
-### Save Memory Flow
-
-```mermaid
-sequenceDiagram
-    participant Agent as Claude Code
-    participant Brain as clarvis.brain
-    participant Chroma as ChromaDB
-    participant Graph as Relationship Graph
-    participant Episodic as Episodic Memory
-    
-    Agent->>Brain: remember(text, importance=0.8, metadata={...})
-    Brain->>Chroma: store with embedding
-    Chroma-->>Brain: confirmed
-    Brain->>Graph: extract entities + create edges
-    Graph-->>Brain: edge IDs
-    Brain->>Episodic: log episode
-    Episodic-->>Brain: episode ID
-    Brain-->>Agent: memory stored
-```
+Each execution cycle produces an **episode** — a structured record of what was attempted, what happened, and what was learned. Episodes feed back into future task selection (attention scoring) and context assembly (retrieval).
 
 ---
 
-## 💓 Heartbeat Pipeline
+## Metrics & Observability
 
-The heartbeat is Clarvis's **action cycle** — triggered every ~30 minutes when the gate check passes.
-
-```mermaid
-flowchart TB
-    subgraph Gate["Step 1: Gate Check"]
-        GATE[heartbeat_gate.py]
-        CHECK[file fingerprint]
-        DEC[decision: WAKE/SKIP]
-    end
-    
-    subgraph Preflight["Step 2: Pre-flight"]
-        PRE[heartbeat_preflight.py]
-        ATT[Attention: codelet competition]
-        SEL[Task Selection: top candidate]
-        SIZ[Task Sizing: defer oversized?]
-        VER[Verification: files exist?]
-        CTX[Context Assembly: brain recall + compression]
-    end
-    
-    subgraph Execute["Step 3: Execute"]
-        EXEC[Claude Code Opus]
-        TOOL[Tools: read/edit/exec/browse]
-    end
-    
-    subgraph Postflight["Step 4: Post-flight"]
-        POST[heartbeat_postflight.py]
-        EP[Episode Encoding]
-        HOOKS[7 Hooks Run]
-        PROC[Procedural Record]
-        PERF[Performance Benchmark]
-        META[Meta-learning]
-    end
-    
-    GATE --> CHECK --> DEC
-    DEC -->|WAKE| PRE
-    PRE --> ATT --> SEL --> SIZ --> VER --> CTX
-    CTX --> EXEC
-    EXEC --> POST
-    POST --> EP --> HOOKS
-```
-
-### Defer-Fallback Loop
-
-When the top-ranked task is too large (oversized), the system now **falls back to the next executable task** instead of stalling:
-
-```mermaid
-flowchart LR
-    START[Pick Top Task] --> SIZING{Task Sizing}
-    SIZING -->|oversized| SPLIT[Auto-split to subtasks]
-    SPLIT --> MARK["Mark parent [~]"]
-    MARK --> NEXT[Try Next]
-    SIZING -->|OK| VERIFY{Verification}
-    VERIFY -->|fail| NEXT
-    VERIFY -->|pass| EXEC[Execute Task]
-    NEXT --> SIZING
-```
-
----
-
-## 🔄 Evolution Cycle
-
-Clarvis evolves through **autonomous subconscious cycles** triggered by system crontab:
-
-```mermaid
-flowchart TB
-    subgraph Cron["Daily Cron Schedule (CET)"]
-        MORN[cron_morning.sh<br/>08:00]
-        AUT1[cron_autonomous.sh<br/>12x/day]
-        RES[cron_research.sh<br/>10:00, 16:00]
-        EVO[cron_evolution.sh<br/>13:00]
-        IMPL[cron_implementation_sprint.sh<br/>14:00]
-        EVE[cron_evening.sh<br/>18:00]
-        REF[cron_reflection.sh<br/>21:00]
-    end
-    
-    subgraph Tasks["Evolution Tasks"]
-        PLAN[Planning]
-        EXEC[Implementation]
-        RES[Research]
-        META[Meta-cognition]
-    end
-    
-    MORN --> PLAN
-    AUT1 --> EXEC
-    RES --> RES2[Research]
-    EVO --> META
-    IMPL --> EXEC
-    EVE --> RES2
-    REF --> META
-    
-    PLAN --> QUEUE[QUEUE.md]
-    EXEC --> QUEUE
-    RES --> QUEUE
-    META --> QUEUE
-    
-    QUEUE --> HEART[Heartbeat picks task]
-    HEART --> EXECUTE[Claude Code runs]
-    EXECUTE --> POST[Postflight records]
-    POST --> DIGEST[Digest written]
-```
-
-### Evolution Queue Flow
-
-```mermaid
-stateDiagram-v2
-    [*] --> Queue: New tasks added
-    Queue --> Preflight: Heartbeat fires
-    Preflight --> Execute: Task selected
-    Preflight --> Queue: Task deferred (fallback)
-    Execute --> Postflight: Task complete
-    Postflight --> Archive: Task archived
-    Archive --> [*]: Done
-```
-
----
-
-## 📚 Research Ingestion
-
-Research is discovered, ingested, and converted to actionable knowledge:
-
-```mermaid
-flowchart TB
-    subgraph Discovery["Discovery Phase"]
-        DISC[Claude Code discovers topics]
-        WEB[Web search for papers/repos]
-        QUEUE[Add to QUEUE.md]
-    end
-    
-    subgraph Ingestion["Ingestion Phase"]
-        CRAWL[research_crawler.py]
-        PARSE[Parse paper/repo]
-        SUMM[Summarize key ideas]
-    end
-    
-    subgraph Storage["Storage Phase"]
-        NOTE[Write memory/research/]
-        INGEST[research_ingested.json]
-        BRAIN[Store in clarvis-learnings]
-    end
-    
-    subgraph Application["Application Phase"]
-        RECALL[brain.recall for context]
-        INJECT[Inject into prompts]
-    end
-    
-    DISC --> WEB
-    WEB --> QUEUE
-    QUEUE --> CRAWL
-    CRAWL --> PARSE
-    PARSE --> SUMM
-    SUMM --> NOTE
-    NOTE --> INGEST
-    NOTE --> BRAIN
-    BRAIN --> RECALL
-    RECALL --> INJECT
-```
-
----
-
-## 📁 Project Structure
-
-```
-clarvis/
-├── brain/                 # Layer 0: Core data (ChromaDB + graph)
-│   ├── __init__.py       # ClarvisBrain singleton
-│   ├── graph.py          # Relationship graph (Hebbian + cross-collection)
-│   ├── search.py         # Vector search + hooks
-│   └── store.py          # Storage + stats
-│
-├── memory/               # Layer 1: Memory systems
-│   ├── episodic_memory.py
-│   ├── procedural_memory.py
-│   ├── working_memory.py
-│   └── hebbian_memory.py
-│
-├── cognition/            # Layer 2: Cognitive processes
-│   ├── attention.py      # GWT spotlight
-│   └── confidence.py     # Prediction calibration
-│
-├── context/              # Layer 2: Context management
-│   └── compressor.py     # MMR reranking
-│
-├── metrics/              # Layer 2: Observability
-│   ├── benchmark.py      # Performance Index
-│   └── self_model.py     # Capability tracking
-│
-├── heartbeat/            # Layer 3: Lifecycle
-│   ├── gate.py           # Zero-LLM pre-check
-│   ├── hooks.py          # Hook registry
-│   └── adapters.py       # Postflight hooks
-│
-└── orch/                 # Layer 3: Task routing
-    ├── router.py         # Task classification
-    └── task_selector.py  # Attention-based selection
-
-scripts/
-├── heartbeat_*.py        # Heartbeat pipeline
-├── cron_*.sh             # Autonomous evolution triggers
-├── brain.py              # CLI wrapper → clarvis.brain
-├── queue_writer.py       # Queue management
-├── phi_metric.py         # Consciousness metric
-└── 60+ other scripts
-
-tests/
-├── test_clarvis_brain.py
-├── test_clarvis_heartbeat.py
-└── ...                   # 200+ tests
-```
-
----
-
-## 🔗 Key Scripts & Their Purpose
-
-| Script | Purpose | Calls |
-|--------|---------|-------|
-| `heartbeat_gate.py` | Pre-check: should we wake? | File fingerprint |
-| `heartbeat_preflight.py` | Task selection + context | brain, attention, cognitive_load |
-| `heartbeat_postflight.py` | Record outcome + hooks | brain, procedural_memory, metrics |
-| `brain.py` | CLI: stats, search, optimize | clarvis.brain |
-| `queue_writer.py` | Add tasks, dedupe, mark in-progress | QUEUE.md |
-| `spawn_claude.sh` | Spawn Claude Code for tasks | claude CLI |
-| `phi_metric.py` | Measure consciousness (Φ) | brain, graph |
-| `context_compressor.py` | Build context briefs | brain, MMR reranking |
-
----
-
-## 📊 Metrics
-
-Clarvis tracks **8 capability dimensions** via `clarvis.metrics.self_model`.
-
-**Brain stats (as of 2026-03-12):** 10 collections, 3400+ memories, 134k+ graph edges, dual backends (JSON + SQLite+WAL).
-
-| Dimension | What it measures |
+| Dimension | What It Measures |
 |-----------|------------------|
-| Memory System | ChromaDB + graph health |
-| Code Generation | Tests pass, syntax clean |
-| Self-Reflection | Meta-cognitive quality |
-| Reasoning Chains | Causal reasoning |
-| Autonomous Execution | Task completion rate |
-| Context Relevance | Brief quality |
+| Memory System | ChromaDB + graph health, query speed |
+| Autonomous Execution | Task completion rate, trajectory quality |
+| Context Relevance | Brief quality, retrieval alignment |
+| Reasoning Chains | Causal reasoning quality |
+| Code Generation | Test pass rate, syntax health |
+| Self-Reflection | Meta-cognitive assessment quality |
 | Calibration | Prediction accuracy |
-| Overall Φ | Consciousness metric |
+| Performance Index | Composite 0.0–1.0 score across all dimensions |
 
 ---
 
-## 🚀 Quick Start
+## Testing
 
 ```bash
-# Check brain health
-python3 -m clarvis brain stats
+# Run all tests
+python3 -m pytest
 
-# Run heartbeat manually
-python3 scripts/heartbeat_preflight.py --dry-run
+# Spine module tests
+python3 -m pytest clarvis/tests/ -v
 
-# List queue
-python3 -m clarvis queue status
+# Package tests (clarvis-db)
+python3 -m pytest packages/clarvis-db/tests/ -v
 
-# Run benchmark
-python3 -m clarvis bench run
+# Open-source readiness smoke tests
+python3 -m pytest tests/test_open_source_smoke.py -v
 ```
 
----
-
-## 📖 More Documentation
-
-- [ARCHITECTURE.md](docs/ARCHITECTURE.md) — Detailed architecture
-- [ROADMAP.md](ROADMAP.md) — Evolution plan
-- [MEMORY.md](MEMORY.md) — Long-term memory
-- [RUNBOOK.md](docs/RUNBOOK.md) — Operations guide
+CI runs automatically on push and PR to `main` via GitHub Actions.
 
 ---
 
-_Last updated: 2026-03-12_
+## Known Limitations
+
+- **Single-host design** — built for a dedicated server with systemd, not containerized
+- **CPU-only embeddings** — ONNX MiniLM on CPU (~7.5s per full brain query across 10 collections)
+- **Path defaults** — some scripts default to a fixed workspace path (override with `CLARVIS_WORKSPACE` env var)
+- **Test fragmentation** — tests spread across `tests/`, `clarvis/tests/`, `packages/*/tests/`
+
+See [`docs/OPEN_SOURCE_GAP_AUDIT.md`](docs/OPEN_SOURCE_GAP_AUDIT.md) for a detailed gap analysis.
+
+---
+
+## Documentation
+
+| Document | Purpose |
+|----------|---------|
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Detailed architecture and package layout |
+| [`docs/LAUNCH_PACKET.md`](docs/LAUNCH_PACKET.md) | Quick orientation for new contributors |
+| [`docs/OPEN_SOURCE_GAP_AUDIT.md`](docs/OPEN_SOURCE_GAP_AUDIT.md) | Gap analysis for public release readiness |
+| [`ROADMAP.md`](ROADMAP.md) | 6-phase evolution plan |
+
+---
+
+## Contributing
+
+Contributions are welcome. To get started:
+
+1. Fork the repo and create a feature branch
+2. Install in development mode: `pip install -e ".[brain]"`
+3. Run tests: `python3 -m pytest`
+4. Open a PR against `main`
+
+Please keep changes focused — one feature or fix per PR.
+
+---
+
+## License
+
+MIT — see [pyproject.toml](pyproject.toml) for details.
+
+---
+
+*Last updated: 2026-03-18*

@@ -280,59 +280,115 @@ def _classify_error(exit_code, output_text):
     return "action", "default classification"
 
 
-def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
-    """Run all post-execution outcome recording in a single process.
+def _mark_task_in_queue(task_text, annotation, queue_file, archive_file=None):
+    """Mark a task as [x] in a QUEUE.md file with an annotation.
 
-    Args:
-        exit_code: int, the exit code from the executor (0=success, 124=timeout, else=failure)
-        output_file: str, path to the task output file
-        preflight_data: dict, the JSON output from heartbeat_preflight.py
-        task_duration: int, seconds the task took
+    Returns: 'marked' if found and marked, 'archived' if already in archive, False if not found.
+
+    Matching strategy:
+    1) Prefer exact tag match when task_text contains [TAG]
+    2) Fallback to prefix substring match (legacy)
     """
-    log(f"All modules imported in {_import_time:.2f}s (single process)")
-    t0 = time.monotonic()
+    with open(queue_file, 'r') as f:
+        lines = f.readlines()
+
+    task_prefix = task_text[:60]
+    m = re.match(r"\[([^\]]+)\]", task_text.strip())
+    tag = m.group(1) if m else None
+
+    # Strategy A: tag-based match (robust against description drift)
+    if tag:
+        tag_re = re.compile(rf"^\- \[ \] \[{re.escape(tag)}\](?=\s|$)")
+        for i, line in enumerate(lines):
+            if tag_re.search(line):
+                lines[i] = line.replace("- [ ] ", "- [x] ", 1).rstrip() + f" ({annotation})\n"
+                with open(queue_file, 'w') as f:
+                    f.writelines(lines)
+                return "marked"
+
+    # Strategy B: legacy prefix substring match
+    for i, line in enumerate(lines):
+        if line.strip().startswith("- [ ] ") and task_prefix in line:
+            lines[i] = line.replace("- [ ] ", "- [x] ", 1).rstrip() + f" ({annotation})\n"
+            with open(queue_file, 'w') as f:
+                f.writelines(lines)
+            return "marked"
+
+    # Check if already archived (race: preflight archived before postflight ran)
+    if archive_file and os.path.exists(archive_file):
+        with open(archive_file, 'r') as f:
+            archive = f.read()
+        if task_prefix in archive:
+            return "archived"
+    return False
+
+
+def _compute_completeness(timings, pf_errors):
+    """Compute postflight completeness score from timings and errors.
+
+    Returns: (stages_attempted, stages_ok, stages_failed, completeness)
+    """
+    stages_attempted = len([k for k in timings if k != "total"])
+    stages_failed = len(pf_errors)
+    stages_ok = stages_attempted - stages_failed
+    completeness = stages_ok / stages_attempted if stages_attempted > 0 else 1.0
+    return stages_attempted, stages_ok, stages_failed, completeness
+
+
+def _episode_encode(task, task_section, best_salience, task_status, task_duration,
+                    error_type, output_text, preflight_data, _pf_errors):
+    """§5 Episode encoding + §5.01 Trajectory scoring."""
     timings = {}
-    _pf_errors = []  # Track stage failures for completeness scoring
 
-    # Shared constants used by multiple sections
-    WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
-    QUEUE_FILE = "/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md"
-    QUEUE_ARCHIVE = "/home/agent/.openclaw/workspace/memory/evolution/QUEUE_ARCHIVE.md"
-    RETRY_FILE = "/home/agent/.openclaw/workspace/data/task_retries.json"
-    MAX_TASK_RETRIES = 3
+    # === 5. EPISODIC MEMORY: Encode episode ===
+    t5 = time.monotonic()
+    if EpisodicMemory:
+        try:
+            em = EpisodicMemory()
+            error_msg = output_text[-200:] if task_status != "success" else None
+            em.encode(task, task_section, best_salience, task_status,
+                     duration_s=task_duration, error_msg=error_msg)
+            # Tag episode with error_type for failure pattern analysis
+            if error_type and em.episodes:
+                latest = em.episodes[-1]
+                if latest.get("task", "")[:60] == task[:60]:
+                    latest.setdefault("tags", []).append(f"error_type:{error_type}")
+                    em._save()
+            log(f"Encoded episode ({task_status}, {task_duration}s{', type=' + error_type if error_type else ''})")
+        except Exception as e:
+            log(f"Episodic encoding failed: {e}")
+            _pf_errors.append("episodic")
+    timings["episodic"] = round(time.monotonic() - t5, 3)
 
-    task = preflight_data.get("task", "unknown")
-    task_section = preflight_data.get("task_section", "P1")
-    best_salience = preflight_data.get("task_salience", 0.5)
-    chain_id = preflight_data.get("chain_id")
-    proc_id = preflight_data.get("procedure_id")
-    task_event = preflight_data.get("prediction_event", "")
-    route_executor = preflight_data.get("route_executor", "claude")
+    # === 5.01 TRAJECTORY SCORING: Score episode execution quality ===
+    t501 = time.monotonic()
+    if record_trajectory_event:
+        try:
+            traj_event = {
+                "task": task[:200],
+                "task_outcome": task_status,
+                "duration_s": task_duration,
+                "retrieval_verdict": preflight_data.get("retrieval_verdict", "SKIPPED"),
+                "code_validation_errors": 0,  # not yet computed at this stage
+                "tool_call_count": None,  # not available from postflight
+                "error_type": error_type,
+                "task_section": task_section,
+            }
+            scored = record_trajectory_event(traj_event)
+            log(f"TRAJECTORY: score={scored['trajectory_score']:.3f} "
+                f"(completion={scored['trajectory_components']['completion']:.2f}, "
+                f"efficiency={scored['trajectory_components']['efficiency']:.2f}, "
+                f"retrieval={scored['trajectory_components']['retrieval_alignment']:.2f})")
+        except Exception as e:
+            log(f"Trajectory scoring failed (non-fatal): {e}")
+    timings["trajectory"] = round(time.monotonic() - t501, 3)
 
-    # Read output for evidence
-    output_text = ""
-    try:
-        if output_file and os.path.exists(output_file):
-            with open(output_file, 'r', errors='replace') as f:
-                output_text = f.read()
-    except Exception:
-        pass
+    return timings
 
-    # Determine outcome
-    if exit_code == 0:
-        task_status = "success"
-    elif exit_code == 124:
-        task_status = "timeout"
-    else:
-        task_status = "failure"
 
-    log(f"Recording outcome: {task_status} (exit={exit_code}, duration={task_duration}s)")
-
-    # Classify error type for failure taxonomy
-    error_type = None
-    if task_status != "success":
-        error_type, error_evidence = _classify_error(exit_code, output_text)
-        log(f"Error taxonomy: {error_type} ({error_evidence})")
+def _confidence_record(task_event, exit_code, task, preflight_data, _pf_errors):
+    """§1 Confidence outcome + §1.5 AST evaluation."""
+    timings = {}
 
     # === 1. CONFIDENCE OUTCOME ===
     t1 = time.monotonic()
@@ -363,7 +419,13 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
         _pf_errors.append("ast_eval")
     timings["ast_eval"] = round(time.monotonic() - t15, 3)
 
-    # === 2. REASONING CHAIN: Close ===
+    return timings
+
+
+def _reasoning_close(chain_id, task_status, task, exit_code, output_text, _pf_errors):
+    """§2 Reasoning chain close."""
+    timings = {}
+
     t2 = time.monotonic()
     if close_chain and chain_id:
         try:
@@ -376,6 +438,14 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
             log(f"Reasoning chain close failed: {e}")
             _pf_errors.append("reasoning_close")
     timings["reasoning_close"] = round(time.monotonic() - t2, 3)
+
+    return timings
+
+
+def _brain_store(task, task_status, exit_code, output_text, error_type,
+                 task_duration, _pf_errors, RETRY_FILE):
+    """§2.5 Failure lessons + §2.7 Brain bridge outcome recording."""
+    timings = {}
 
     # === 2.5 FAILURE LESSONS: Store in brain + generate follow-up task ===
     t25 = time.monotonic()
@@ -460,6 +530,95 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
             _pf_errors.append("brain_bridge_ctx")
     timings["brain_bridge"] = round(time.monotonic() - t27, 3)
 
+    return timings
+
+
+def _digest_write_fn(task, task_status, exit_code, task_duration, output_text, _pf_errors):
+    """§9 Digest write."""
+    timings = {}
+
+    t9 = time.monotonic()
+    if write_digest:
+        try:
+            snippet = output_text[-200:].encode('ascii', 'replace').decode()
+            snippet = re.sub(r'[^a-zA-Z0-9 _.,:;=+\-/()@#%]', '', snippet)[:180]
+            write_digest("autonomous",
+                        f'I executed evolution task: "{task[:120]}". '
+                        f'Result: {task_status} (exit {exit_code}, {task_duration}s). '
+                        f'Output: {snippet}')
+            log("Digest written")
+        except Exception as e:
+            log(f"Digest write failed: {e}")
+            _pf_errors.append("digest")
+    timings["digest"] = round(time.monotonic() - t9, 3)
+
+    return timings
+
+
+def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
+    """Run all post-execution outcome recording in a single process.
+
+    Args:
+        exit_code: int, the exit code from the executor (0=success, 124=timeout, else=failure)
+        output_file: str, path to the task output file
+        preflight_data: dict, the JSON output from heartbeat_preflight.py
+        task_duration: int, seconds the task took
+    """
+    log(f"All modules imported in {_import_time:.2f}s (single process)")
+    t0 = time.monotonic()
+    timings = {}
+    _pf_errors = []  # Track stage failures for completeness scoring
+
+    # Shared constants used by multiple sections
+    WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+    QUEUE_FILE = "/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md"
+    QUEUE_ARCHIVE = "/home/agent/.openclaw/workspace/memory/evolution/QUEUE_ARCHIVE.md"
+    RETRY_FILE = "/home/agent/.openclaw/workspace/data/task_retries.json"
+    MAX_TASK_RETRIES = 3
+
+    task = preflight_data.get("task", "unknown")
+    task_section = preflight_data.get("task_section", "P1")
+    best_salience = preflight_data.get("task_salience", 0.5)
+    chain_id = preflight_data.get("chain_id")
+    proc_id = preflight_data.get("procedure_id")
+    task_event = preflight_data.get("prediction_event", "")
+    route_executor = preflight_data.get("route_executor", "claude")
+
+    # Read output for evidence
+    output_text = ""
+    try:
+        if output_file and os.path.exists(output_file):
+            with open(output_file, 'r', errors='replace') as f:
+                output_text = f.read()
+    except Exception:
+        pass
+
+    # Determine outcome
+    if exit_code == 0:
+        task_status = "success"
+    elif exit_code == 124:
+        task_status = "timeout"
+    else:
+        task_status = "failure"
+
+    log(f"Recording outcome: {task_status} (exit={exit_code}, duration={task_duration}s)")
+
+    # Classify error type for failure taxonomy
+    error_type = None
+    if task_status != "success":
+        error_type, error_evidence = _classify_error(exit_code, output_text)
+        log(f"Error taxonomy: {error_type} ({error_evidence})")
+
+    # === 1-1.5. CONFIDENCE + AST (extracted) ===
+    timings.update(_confidence_record(task_event, exit_code, task, preflight_data, _pf_errors))
+
+    # === 2. REASONING CHAIN (extracted) ===
+    timings.update(_reasoning_close(chain_id, task_status, task, exit_code, output_text, _pf_errors))
+
+    # === 2.5-2.7. FAILURE LESSONS + BRAIN BRIDGE (extracted) ===
+    timings.update(_brain_store(task, task_status, exit_code, output_text, error_type,
+                                task_duration, _pf_errors, RETRY_FILE))
+
     # === 3. ATTENTION: Record outcome ===
     t3 = time.monotonic()
     try:
@@ -538,48 +697,9 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
             log(f"Tool maker extraction failed (non-fatal): {e}")
     timings["tool_maker"] = round(time.monotonic() - t45, 3)
 
-    # === 5. EPISODIC MEMORY: Encode episode ===
-    t5 = time.monotonic()
-    if EpisodicMemory:
-        try:
-            em = EpisodicMemory()
-            error_msg = output_text[-200:] if task_status != "success" else None
-            em.encode(task, task_section, best_salience, task_status,
-                     duration_s=task_duration, error_msg=error_msg)
-            # Tag episode with error_type for failure pattern analysis
-            if error_type and em.episodes:
-                latest = em.episodes[-1]
-                if latest.get("task", "")[:60] == task[:60]:
-                    latest.setdefault("tags", []).append(f"error_type:{error_type}")
-                    em._save()
-            log(f"Encoded episode ({task_status}, {task_duration}s{', type=' + error_type if error_type else ''})")
-        except Exception as e:
-            log(f"Episodic encoding failed: {e}")
-            _pf_errors.append("episodic")
-    timings["episodic"] = round(time.monotonic() - t5, 3)
-
-    # === 5.01 TRAJECTORY SCORING: Score episode execution quality ===
-    t501 = time.monotonic()
-    if record_trajectory_event:
-        try:
-            traj_event = {
-                "task": task[:200],
-                "task_outcome": task_status,
-                "duration_s": task_duration,
-                "retrieval_verdict": preflight_data.get("retrieval_verdict", "SKIPPED"),
-                "code_validation_errors": 0,  # not yet computed at this stage
-                "tool_call_count": None,  # not available from postflight
-                "error_type": error_type,
-                "task_section": task_section,
-            }
-            scored = record_trajectory_event(traj_event)
-            log(f"TRAJECTORY: score={scored['trajectory_score']:.3f} "
-                f"(completion={scored['trajectory_components']['completion']:.2f}, "
-                f"efficiency={scored['trajectory_components']['efficiency']:.2f}, "
-                f"retrieval={scored['trajectory_components']['retrieval_alignment']:.2f})")
-        except Exception as e:
-            log(f"Trajectory scoring failed (non-fatal): {e}")
-    timings["trajectory"] = round(time.monotonic() - t501, 3)
+    # === 5-5.01. EPISODIC MEMORY + TRAJECTORY (extracted) ===
+    timings.update(_episode_encode(task, task_section, best_salience, task_status,
+                                   task_duration, error_type, output_text, preflight_data, _pf_errors))
 
     # === 5.05 PROMPT OPTIMIZATION: Record prompt→outcome pair (APE/SPO loop) ===
     t505 = time.monotonic()
@@ -1605,67 +1725,11 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
                 log(f"Periodic synthesis failed: {e}")
         timings["periodic_synthesis"] = round(time.monotonic() - t85_synth, 3)
 
-    # === 9. DIGEST WRITER ===
-    t9 = time.monotonic()
-    if write_digest:
-        try:
-            snippet = output_text[-200:].encode('ascii', 'replace').decode()
-            snippet = re.sub(r'[^a-zA-Z0-9 _.,:;=+\-/()@#%]', '', snippet)[:180]
-            write_digest("autonomous",
-                        f'I executed evolution task: "{task[:120]}". '
-                        f'Result: {task_status} (exit {exit_code}, {task_duration}s). '
-                        f'Output: {snippet}')
-            log("Digest written")
-        except Exception as e:
-            log(f"Digest write failed: {e}")
-            _pf_errors.append("digest")
-    timings["digest"] = round(time.monotonic() - t9, 3)
+    # === 9. DIGEST WRITER (extracted) ===
+    timings.update(_digest_write_fn(task, task_status, exit_code, task_duration, output_text, _pf_errors))
 
     # === 10. MARK TASK COMPLETE IN QUEUE.MD ===
     t10 = time.monotonic()
-
-    def _mark_task_in_queue(task_text, annotation):
-        """Mark a task as [x] in QUEUE.md with an annotation.
-        Returns: 'marked' if found and marked, 'archived' if already in archive, False if not found.
-
-        Matching strategy:
-        1) Prefer exact tag match when task_text contains [TAG]
-        2) Fallback to prefix substring match (legacy)
-        """
-        import re
-
-        with open(QUEUE_FILE, 'r') as f:
-            lines = f.readlines()
-
-        task_prefix = task_text[:60]
-        m = re.match(r"\[([^\]]+)\]", task_text.strip())
-        tag = m.group(1) if m else None
-
-        # Strategy A: tag-based match (robust against description drift)
-        if tag:
-            tag_re = re.compile(rf"^\- \[ \] \[{re.escape(tag)}\](?=\s|$)")
-            for i, line in enumerate(lines):
-                if tag_re.search(line):
-                    lines[i] = line.replace("- [ ] ", "- [x] ", 1).rstrip() + f" ({annotation})\n"
-                    with open(QUEUE_FILE, 'w') as f:
-                        f.writelines(lines)
-                    return "marked"
-
-        # Strategy B: legacy prefix substring match
-        for i, line in enumerate(lines):
-            if line.strip().startswith("- [ ] ") and task_prefix in line:
-                lines[i] = line.replace("- [ ] ", "- [x] ", 1).rstrip() + f" ({annotation})\n"
-                with open(QUEUE_FILE, 'w') as f:
-                    f.writelines(lines)
-                return "marked"
-
-        # Check if already archived (race: preflight archived before postflight ran)
-        if os.path.exists(QUEUE_ARCHIVE):
-            with open(QUEUE_ARCHIVE, 'r') as f:
-                archive = f.read()
-            if task_prefix in archive:
-                return "archived"
-        return False
 
     if task and task != "unknown":
         try:
@@ -1679,7 +1743,7 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
                         task_for_marking = f"[{preflight_data['task_tag']}]"
                 except Exception:
                     pass
-                result_mark = _mark_task_in_queue(task_for_marking, timestamp)
+                result_mark = _mark_task_in_queue(task_for_marking, timestamp, QUEUE_FILE, QUEUE_ARCHIVE)
                 if result_mark == "marked":
                     log("Marked task complete in QUEUE.md")
                 elif result_mark == "archived":
@@ -1698,7 +1762,7 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
                 log(f"Timeout retry {count}/{MAX_TASK_RETRIES} for: {task_key}")
                 if count >= MAX_TASK_RETRIES:
                     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-                    if _mark_task_in_queue(task, f"{timestamp} — skipped after {count} timeouts"):
+                    if _mark_task_in_queue(task, f"{timestamp} — skipped after {count} timeouts", QUEUE_FILE, QUEUE_ARCHIVE):
                         log(f"Auto-skipped task after {count} timeouts")
                     del retries[task_key]
                 os.makedirs(os.path.dirname(RETRY_FILE), exist_ok=True)
@@ -1741,11 +1805,7 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
     timings["total"] = round(time.monotonic() - t0, 3)
 
     # === COMPLETENESS SCORING ===
-    # Count stages that ran (from timings, excluding 'total') vs stages that errored
-    stages_attempted = len([k for k in timings if k != "total"])
-    stages_failed = len(_pf_errors)
-    stages_ok = stages_attempted - stages_failed
-    completeness = stages_ok / stages_attempted if stages_attempted > 0 else 1.0
+    stages_attempted, stages_ok, stages_failed, completeness = _compute_completeness(timings, _pf_errors)
 
     if completeness < 0.80:
         log(f"COMPLETENESS WARNING: {stages_ok}/{stages_attempted} stages succeeded "

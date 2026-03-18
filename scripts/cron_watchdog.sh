@@ -167,13 +167,16 @@ Recovery log: memory/cron/doctor.log
 Watchdog log: memory/cron/watchdog.log"
 
   python3 << PYEOF
-import json, urllib.request, urllib.parse
+import json, urllib.request, urllib.parse, os
 try:
-    with open('/home/agent/.openclaw/openclaw.json') as f:
-        config = json.load(f)
-    token = config['channels']['telegram']['botToken']
+    token = os.environ.get("CLARVIS_TG_BOT_TOKEN", "")
+    if not token:
+        with open('/home/agent/.openclaw/openclaw.json') as f:
+            config = json.load(f)
+        token = config['channels']['telegram']['botToken']
+    chat_id = os.environ.get("CLARVIS_TG_CHAT_ID", "REDACTED_CHAT_ID")
     msg = """$ALERT_MSG"""
-    data = urllib.parse.urlencode({"chat_id": "REDACTED_CHAT_ID", "text": msg})
+    data = urllib.parse.urlencode({"chat_id": chat_id, "text": msg})
     req = urllib.request.Request(f"https://api.telegram.org/bot{token}/sendMessage", data=data.encode())
     urllib.request.urlopen(req, timeout=10)
     print("Alert sent to Telegram")

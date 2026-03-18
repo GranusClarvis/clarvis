@@ -24,10 +24,12 @@ sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
 
 today_str = datetime.now(timezone.utc).strftime('%Y-%m-%d')
 
-# Get bot token
-with open('/home/agent/.openclaw/openclaw.json') as f:
-    config = json.load(f)
-TOKEN = config['channels']['telegram']['botToken']
+# Get bot token from env (preferred) or openclaw config (fallback)
+TOKEN = os.environ.get("CLARVIS_TG_BOT_TOKEN", "")
+if not TOKEN:
+    with open('/home/agent/.openclaw/openclaw.json') as f:
+        config = json.load(f)
+    TOKEN = config['channels']['telegram']['botToken']
 
 # ==== PARSE DIGEST ====
 digest_path = "/home/agent/.openclaw/workspace/memory/cron/digest.md"
@@ -221,7 +223,7 @@ report = "\n".join(lines)
 # Send to Telegram — Reports topic in group + DM fallback
 GROUP_CHAT_ID = "REDACTED_GROUP_ID"
 REPORTS_TOPIC = "5"
-DM_CHAT_ID = "REDACTED_CHAT_ID"
+DM_CHAT_ID = os.environ.get("CLARVIS_TG_CHAT_ID", "REDACTED_CHAT_ID")
 
 # Primary: send to Reports topic in group
 params = {"chat_id": GROUP_CHAT_ID, "text": report, "message_thread_id": REPORTS_TOPIC}

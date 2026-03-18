@@ -1,0 +1,7 @@
+# SParC-RAG — Adaptive Sequential-Parallel Scaling with Context Management
+
+SParC-RAG addresses a familiar RAG failure mode: simply adding more retrieval rounds or more parallel branches often makes answers worse, not better, because context grows noisier and computation becomes redundant. The paper frames this as two coupled problems: context contamination and scaling inefficiency. Its solution is a multi-agent inference-time controller that treats depth, width, and memory state as explicit resources rather than letting them expand blindly.
+
+The architecture adds three coordinating agents around a standard retrieve-reason-generate loop. A Query Rewriter creates complementary sub-queries so parallel branches cover different evidence instead of duplicating each other. An Answer Evaluator judges whether the current answer is sufficiently grounded and accurate, providing a principled stop/continue signal. A Context Manager maintains a shared global memory, selectively consolidating useful evidence across branches and rounds while filtering noise. This is the real contribution: not just “more agents,” but explicit evidence curation between sequential and parallel scaling steps.
+
+The reported result is strong for practical RAG design: roughly +6.2 average F1 across single- and multi-hop QA benchmarks at lower inference cost than prior baselines. For Clarvis, the key lesson is that adaptive retrieval quality depends less on raw retrieval volume and more on controlled query diversity, selective cross-round memory updates, and reliable stopping criteria.

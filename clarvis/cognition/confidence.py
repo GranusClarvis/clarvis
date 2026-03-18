@@ -89,18 +89,21 @@ def predict(event: str, expected: str, confidence: float) -> dict:
     if 0.6 <= confidence < 0.8:
         # Underconfidence correction: if actual accuracy is much higher than
         # predicted, boost confidence toward the actual rate.
+        # 2026-03-17 reflection: 60-80% band has +18% gap (88% actual vs 70%
+        # predicted). Increased boost cap 0.10→0.12, trigger 0.85→0.83.
         acc, n = _band_accuracy(0.6, 0.8)
-        if acc is not None and acc > 0.85:
-            # Boost by half the gap between actual accuracy and midpoint (0.70)
-            boost = min(0.10, (acc - 0.70) * 0.5)
+        if acc is not None and acc > 0.83:
+            boost = min(0.12, (acc - 0.70) * 0.55)
             confidence = min(0.92, confidence + boost)
             recalibrated = True
             print(f"Recalibrated: {original_confidence:.0%} → {confidence:.0%} "
                   f"(band 60-80% accuracy={acc:.0%}, n={n}, underconfident)", file=sys.stderr)
     elif 0.85 <= confidence < 0.95:
+        # 2026-03-17 reflection: 90-100% band at 87% accuracy vs 90% predicted.
+        # Tightened trigger from acc < 0.80 to acc < 0.85 to catch mild overconfidence.
         acc, n = _band_accuracy(0.85, 0.95)
-        if acc is not None and acc < 0.80:
-            confidence = max(0.3, confidence - 0.10)
+        if acc is not None and acc < 0.85:
+            confidence = max(0.3, confidence - 0.08)
             recalibrated = True
             print(f"Recalibrated: {original_confidence:.0%} → {confidence:.0%} "
                   f"(band 85-95% accuracy={acc:.0%}, n={n})", file=sys.stderr)

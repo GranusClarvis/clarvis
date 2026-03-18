@@ -46,9 +46,22 @@ GOALS_COLLECTION = "clarvis-goals"
 SNAPSHOT_FILE = os.path.join(WORKSPACE, "data", "goals_snapshot.json")
 
 # Garbage patterns — noise from auto-store that aren't real goals
+# Matched against goal name (metadata 'goal' field) and document text.
 GARBAGE_PATTERNS = [
     "bridge", "sbridge", "connection between", "fm goals",
     "outcome", "gwt broadcast", "boost_", "fresh_mirror",
+]
+# Document-level garbage — entries that are clearly not goals (reasoning chains,
+# outcomes, procedures, self-representations, meta-learning alerts, etc.)
+DOC_GARBAGE_PATTERNS = [
+    "reasoning chain",
+    "self-representation update",
+    "self-state z_t",
+    "meta-learning alert",
+    "gwt broadcast context",
+    "procedure:",
+    "evening code review",
+    "morning plan",
 ]
 
 CONSCIOUSNESS_PATTERNS = [
@@ -340,13 +353,28 @@ def purge_garbage(dry_run=False):
             continue
 
         nl = name.lower().strip()
+        doc_lower = goal.get("document", "").lower()
+
+        # Match name-level garbage patterns
         if any(p in nl for p in GARBAGE_PATTERNS):
             if dry_run:
-                print(f"  [DRY-RUN] Would archive (garbage): {name[:50]}")
+                print(f"  [DRY-RUN] Would archive (garbage name): {name[:50]}")
             else:
                 meta["archived"] = "true"
                 col.update(ids=[goal["id"]], metadatas=[meta])
-                print(f"  Archived (garbage): {name[:50]}")
+                print(f"  Archived (garbage name): {name[:50]}")
+            purged += 1
+            continue
+
+        # Match document-level garbage patterns (non-goal content stored in goals)
+        if any(p in doc_lower for p in DOC_GARBAGE_PATTERNS):
+            matched = next(p for p in DOC_GARBAGE_PATTERNS if p in doc_lower)
+            if dry_run:
+                print(f"  [DRY-RUN] Would archive (garbage doc: '{matched}'): {name[:50]}")
+            else:
+                meta["archived"] = "true"
+                col.update(ids=[goal["id"]], metadatas=[meta])
+                print(f"  Archived (garbage doc: '{matched}'): {name[:50]}")
             purged += 1
 
     print(f"\nPurged {purged} garbage goals.")

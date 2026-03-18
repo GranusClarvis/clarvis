@@ -23,11 +23,14 @@ QUEUE_FILE = os.path.join(WORKSPACE, "memory/evolution/QUEUE.md")
 # Mapping from budget keys to context_relevance section names.
 # Each budget key controls a region of the brief; the section names are
 # what context_relevance.py tracks at the per-section level.
+# Note: brain_goals, metrics folded into decision_context; synaptic folded
+# into spotlight (2026-03-18) — all had mean relevance < 0.12 as standalone.
 _BUDGET_TO_SECTIONS = {
-    "decision_context": ["decision_context", "failure_avoidance", "meta_gradient"],
-    "spotlight": ["working_memory", "attention", "gwt_broadcast", "brain_context"],
+    "decision_context": ["decision_context", "failure_avoidance", "meta_gradient",
+                         "brain_goals", "metrics"],
+    "spotlight": ["working_memory", "attention", "gwt_broadcast", "brain_context",
+                  "synaptic"],
     "related_tasks": ["related_tasks"],
-    "metrics": ["metrics"],
     "completions": ["completions"],
     "episodes": ["episodes"],
     "reasoning_scaffold": ["reasoning"],
@@ -47,14 +50,17 @@ DYCP_PROTECTED_SECTIONS = frozenset({
 
 # Minimum containment (section∩task / section) to keep a prunable section.
 # Calibrated from per-section data: sections with mean relevance < 0.10
-# almost never contribute. A low threshold ensures we only prune true noise.
-DYCP_MIN_CONTAINMENT = 0.04
+# almost never contribute. Raised 0.04→0.08 on 2026-03-18 to prune more
+# aggressively — the 5 weakest sections (mean < 0.12) were still leaking through.
+DYCP_MIN_CONTAINMENT = 0.08
 
 # Also consider historical mean relevance — sections historically below
 # this AND below task-containment threshold get pruned.
-# Raised 0.13→0.16 on 2026-03-15: 14-day data shows 9 sections below 0.15
-# mean relevance — previous floor was too permissive.
-DYCP_HISTORICAL_FLOOR = 0.16
+# Raised 0.13→0.16 on 2026-03-15, then 0.16→0.20 on 2026-03-18:
+# 14-day data shows weakest 5 sections (meta_gradient, brain_goals,
+# failure_avoidance, metrics, synaptic) all below 0.12 — higher floor
+# ensures they're pruned even with marginal task overlap.
+DYCP_HISTORICAL_FLOOR = 0.20
 
 # Sections with zero task overlap AND historical score below this
 # stricter ceiling are also pruned (DyCP query-dependent tier 2).
@@ -100,27 +106,24 @@ TIER_BUDGETS = {
         "decision_context": 0,
         "spotlight": 0,
         "related_tasks": 0,
-        "metrics": 0,
         "completions": 0,
         "episodes": 0,
         "reasoning_scaffold": 0,
     },
     "standard": {
         "total": 600,
-        "decision_context": 100,
+        "decision_context": 140,   # +40 from merged metrics
         "spotlight": 80,
         "related_tasks": 60,
-        "metrics": 40,
         "completions": 40,
         "episodes": 60,
         "reasoning_scaffold": 40,
     },
     "full": {
         "total": 1000,
-        "decision_context": 150,
+        "decision_context": 230,   # +80 from merged metrics
         "spotlight": 120,
         "related_tasks": 100,
-        "metrics": 80,
         "completions": 60,
         "episodes": 120,
         "reasoning_scaffold": 60,
@@ -633,6 +636,82 @@ def _parse_queue_tasks(content):
     return results
 
 
+def _extract_actionable_context(full_text):
+    """Extract file paths, function names, and code identifiers from task text.
+
+    Pulls backtick-wrapped content (e.g., `assembly.py`, `run_postflight()`)
+    which are the tokens most likely to appear in Claude Code output,
+    improving containment scoring for the related_tasks section.
+
+    When no backtick items are found, falls back to extracting technical
+    keywords (file-like names, underscore_identifiers, domain terms) that
+    Claude Code output is likely to contain.
+    """
+    items = []
+    seen = set()
+
+    # 1. Extract backtick-wrapped tokens (highest signal)
+    backtick_items = re.findall(r'`([^`]+)`', full_text)
+    for item in backtick_items:
+        if item not in seen and len(item) > 2:
+            seen.add(item)
+            items.append(item)
+
+    # 2. Extract file-like tokens (foo.py, bar.sh, baz.json, etc.)
+    file_like = re.findall(r'\b[\w/.-]+\.(?:py|sh|js|ts|json|md|yaml|yml|toml)\b', full_text)
+    for item in file_like:
+        if item not in seen:
+            seen.add(item)
+            items.append(item)
+
+    # 3. Extract underscore_identifiers (function/variable names: run_postflight, brain_health)
+    underscore_ids = re.findall(r'\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b', full_text)
+    for item in underscore_ids:
+        if item not in seen and len(item) > 5:
+            seen.add(item)
+            items.append(item)
+
+    # 4. Extract CamelCase identifiers (class names: ChromaDB, ClarvisDB, MiniLM)
+    camel_ids = re.findall(r'\b[A-Z][a-z]+(?:[A-Z][a-zA-Z]*)+\b', full_text)
+    for item in camel_ids:
+        if item not in seen:
+            seen.add(item)
+            items.append(item)
+
+    # 5. If no code identifiers found, extract domain keywords from full text
+    #    that Claude Code output is likely to contain (4+ char words, no stopwords)
+    if not items:
+        _stop = {"the", "and", "for", "are", "but", "not", "you", "all", "can",
+                 "had", "was", "one", "our", "out", "has", "have", "from",
+                 "with", "this", "that", "they", "been", "will", "each", "make",
+                 "like", "into", "than", "its", "also", "use", "how", "what",
+                 "when", "where", "which", "there", "still", "just", "only",
+                 "should", "would", "could", "very", "more", "most", "some",
+                 "other", "about", "after", "before", "ensure", "implement",
+                 "produce", "raise", "current", "today", "blocks", "public",
+                 "hard", "list", "finish", "execute", "around"}
+        words = re.findall(r'[a-z]{4,}', full_text.lower())
+        domain = []
+        seen_kw = set()
+        for w in words:
+            if w not in _stop and w not in seen_kw:
+                seen_kw.add(w)
+                domain.append(w)
+        if domain:
+            items = domain[:5]
+
+    if not items:
+        return ""
+    return " [" + ", ".join(items[:5]) + "]"
+
+
+def _enrich_task(core, full_text, max_len=200):
+    """Return core enriched with actionable context from full_text."""
+    context = _extract_actionable_context(full_text)
+    enriched = core + context
+    return enriched[:max_len]
+
+
 def _cosine_similarity(a, b):
     """Compute cosine similarity between two vectors."""
     import numpy as np
@@ -660,7 +739,7 @@ def _semantic_rank(current_task, parsed_tasks, embed_fn):
         # Combined score: semantic similarity * priority weight
         score = sim * priority_w
         if score > 0.05:
-            scored.append((score, core))
+            scored.append((score, _enrich_task(core, _full)))
 
     scored.sort(reverse=True)
     return scored
@@ -682,7 +761,7 @@ def _word_overlap_rank(current_task, parsed_tasks):
             continue  # skip near-duplicates
         relevance = len(task_words & candidate_words) / max(1, len(candidate_words))
         if relevance > 0.1:
-            scored.append((relevance * priority_w, core))
+            scored.append((relevance * priority_w, _enrich_task(core, full_text)))
 
     scored.sort(reverse=True)
     return scored
@@ -1031,29 +1110,20 @@ def generate_tiered_brief(
             for t in related:
                 middle.append(f"  - {t}")
 
-    # Metrics (default-suppressed unless task-relevant)
-    if budget["metrics"] > 0 and not should_suppress_section("metrics", current_task):
+    # Metrics — folded into decision_context as a compact one-liner (2026-03-18).
+    # Previously a standalone middle section; mean relevance=0.100 suggested it
+    # was noise on its own but the Phi score is useful alongside decision context.
+    if not should_suppress_section("metrics", current_task):
         scores = get_latest_scores()
         if scores:
-            if tier == "full" and "capabilities" in scores:
+            phi = scores.get("phi", "?")
+            if "capabilities" in scores:
                 caps = scores["capabilities"]
                 worst_k = min(caps, key=caps.get) if caps else "?"
                 worst_v = caps.get(worst_k, "?") if caps else "?"
-                middle.append(
-                    f"METRICS: Phi={scores.get('phi', '?')}, "
-                    f"cap_avg={scores.get('capability_avg', '?')}, "
-                    f"worst={worst_k}={worst_v}"
-                )
-                middle.append(f"  {', '.join(f'{k}={v}' for k, v in sorted(caps.items(), key=lambda x: x[1]))}")
+                beginning.append(f"METRICS: Phi={phi}, worst={worst_k}={worst_v}")
             else:
-                phi = scores.get("phi", "?")
-                if "capabilities" in scores:
-                    caps = scores["capabilities"]
-                    worst_k = min(caps, key=caps.get) if caps else "?"
-                    worst_v = caps.get(worst_k, "?") if caps else "?"
-                    middle.append(f"METRICS: Phi={phi}, worst_cap={worst_k}={worst_v}")
-                else:
-                    middle.append(f"METRICS: Phi={phi}")
+                beginning.append(f"METRICS: Phi={phi}")
 
     # Recent Completions
     if budget["completions"] > 0:

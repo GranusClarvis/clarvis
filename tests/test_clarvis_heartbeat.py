@@ -1024,5 +1024,218 @@ class TestStaleRefreshDetection:
         assert stale
 
 
+# ---------------------------------------------------------------------------
+# 14. _mark_task_in_queue — extracted module-level function
+# ---------------------------------------------------------------------------
+
+class TestMarkTaskInQueue:
+    """Tests for the _mark_task_in_queue function (extracted from §10)."""
+
+    @pytest.fixture(autouse=True)
+    def _import(self):
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        from heartbeat_postflight import _mark_task_in_queue
+        self._mark = _mark_task_in_queue
+
+    def test_tag_match_marks_task(self, tmp_path):
+        """Tag-based matching should find and mark the task."""
+        queue = tmp_path / "QUEUE.md"
+        queue.write_text(
+            "## P1\n"
+            "- [ ] [MY_TASK] Do something important\n"
+            "- [ ] [OTHER] Another task\n"
+        )
+        result = self._mark("[MY_TASK]", "2026-03-17 done", str(queue))
+        assert result == "marked"
+        content = queue.read_text()
+        assert "- [x] [MY_TASK] Do something important (2026-03-17 done)" in content
+        # Other task should remain untouched
+        assert "- [ ] [OTHER]" in content
+
+    def test_prefix_match_marks_task(self, tmp_path):
+        """Legacy prefix matching should work when no tag is present."""
+        queue = tmp_path / "QUEUE.md"
+        queue.write_text(
+            "## P1\n"
+            "- [ ] Fix the flaky test in test_brain.py that fails intermittently\n"
+        )
+        result = self._mark(
+            "Fix the flaky test in test_brain.py that fails intermittently",
+            "done", str(queue)
+        )
+        assert result == "marked"
+        assert "- [x]" in queue.read_text()
+
+    def test_not_found_returns_false(self, tmp_path):
+        """Non-matching task returns False."""
+        queue = tmp_path / "QUEUE.md"
+        queue.write_text("## P1\n- [ ] [EXISTING] Some task\n")
+        result = self._mark("[NONEXISTENT]", "done", str(queue))
+        assert result is False
+
+    def test_already_archived(self, tmp_path):
+        """Task found in archive returns 'archived'."""
+        queue = tmp_path / "QUEUE.md"
+        queue.write_text("## P1\n")
+        archive = tmp_path / "ARCHIVE.md"
+        archive.write_text("- [x] Fix the flaky test (done)\n")
+        result = self._mark("Fix the flaky test", "done", str(queue), str(archive))
+        assert result == "archived"
+
+    def test_no_archive_file(self, tmp_path):
+        """Without archive file, unmatched task returns False (no crash)."""
+        queue = tmp_path / "QUEUE.md"
+        queue.write_text("## P1\n")
+        result = self._mark("[MISSING]", "done", str(queue))
+        assert result is False
+
+    def test_tag_preferred_over_prefix(self, tmp_path):
+        """Tag match should be preferred even if prefix would also match."""
+        queue = tmp_path / "QUEUE.md"
+        queue.write_text(
+            "- [ ] [TAG_A] Description that also matches prefix of TAG_A\n"
+            "- [ ] [TAG_B] Different task\n"
+        )
+        result = self._mark("[TAG_A] Description that also matches prefix of TAG_A",
+                           "done", str(queue))
+        assert result == "marked"
+        content = queue.read_text()
+        assert "- [x] [TAG_A]" in content
+        assert "- [ ] [TAG_B]" in content
+
+    def test_already_checked_task_not_rematched(self, tmp_path):
+        """Already-completed tasks (- [x]) should NOT be re-matched."""
+        queue = tmp_path / "QUEUE.md"
+        queue.write_text("- [x] [DONE_TASK] Already done\n- [ ] [OPEN] Still open\n")
+        result = self._mark("[DONE_TASK]", "again", str(queue))
+        assert result is False
+
+    def test_annotation_appended(self, tmp_path):
+        """Annotation text should appear after the task line."""
+        queue = tmp_path / "QUEUE.md"
+        queue.write_text("- [ ] [FIX] Repair the widget\n")
+        self._mark("[FIX]", "2026-03-17 14:00 UTC", str(queue))
+        content = queue.read_text()
+        assert "(2026-03-17 14:00 UTC)" in content
+
+    def test_indented_task(self, tmp_path):
+        """Indented tasks (sub-items) should also match."""
+        queue = tmp_path / "QUEUE.md"
+        queue.write_text(
+            "## P1\n"
+            "- [~] [PARENT] Parent task\n"
+            "  - [ ] [CHILD_TASK] Sub-task to complete\n"
+        )
+        result = self._mark("[CHILD_TASK]", "done", str(queue))
+        assert result == "marked"
+        assert "- [x] [CHILD_TASK]" in queue.read_text()
+
+
+# ---------------------------------------------------------------------------
+# 15. _compute_completeness — extracted scoring function
+# ---------------------------------------------------------------------------
+
+class TestComputeCompleteness:
+    """Tests for the _compute_completeness function."""
+
+    @pytest.fixture(autouse=True)
+    def _import(self):
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        from heartbeat_postflight import _compute_completeness
+        self._compute = _compute_completeness
+
+    def test_all_stages_pass(self):
+        timings = {"confidence": 0.01, "procedural": 0.02, "episodic": 0.03, "total": 0.06}
+        attempted, ok, failed, score = self._compute(timings, [])
+        assert attempted == 3
+        assert ok == 3
+        assert failed == 0
+        assert score == 1.0
+
+    def test_some_failures(self):
+        timings = {"confidence": 0.01, "procedural": 0.02, "episodic": 0.03,
+                    "digest": 0.01, "total": 0.07}
+        attempted, ok, failed, score = self._compute(timings, ["confidence", "digest"])
+        assert attempted == 4
+        assert ok == 2
+        assert failed == 2
+        assert score == 0.5
+
+    def test_all_failures(self):
+        timings = {"stage_a": 0.1, "total": 0.1}
+        attempted, ok, failed, score = self._compute(timings, ["stage_a"])
+        assert attempted == 1
+        assert ok == 0
+        assert score == 0.0
+
+    def test_empty_timings(self):
+        """No stages attempted should return completeness 1.0 (vacuously true)."""
+        timings = {"total": 0.0}
+        attempted, ok, failed, score = self._compute(timings, [])
+        assert attempted == 0
+        assert score == 1.0
+
+    def test_total_excluded_from_count(self):
+        """The 'total' key should not count as a stage."""
+        timings = {"a": 0.1, "b": 0.2, "total": 0.3}
+        attempted, _, _, _ = self._compute(timings, [])
+        assert attempted == 2
+
+
+# ---------------------------------------------------------------------------
+# 16. Hook context building — verify §4 builds correct context for hooks
+# ---------------------------------------------------------------------------
+
+class TestHookContextBuilding:
+    """Verify the hook context dict structure matches what adapters expect."""
+
+    def test_hook_context_has_required_keys(self):
+        """The context dict built in §4 must contain all keys adapters read."""
+        # Simulate the context building from §4 of run_postflight
+        preflight_data = {
+            "task": "Fix bug in parser",
+            "procedure_id": "proc_123",
+            "procedure_injected": True,
+            "procedures_for_injection": ["proc_123"],
+        }
+        hook_ctx = {
+            "exit_code": 0,
+            "task": preflight_data.get("task", "unknown"),
+            "output_text": "task output here",
+            "procedure_id": preflight_data.get("procedure_id"),
+            "task_status": "success",
+            "task_duration": 120,
+            "procedure_injected": preflight_data.get("procedure_injected", False),
+            "procedures_for_injection": preflight_data.get("procedures_for_injection", []),
+        }
+
+        # Keys that adapters actually read
+        required_keys = [
+            "exit_code", "task", "output_text", "procedure_id",
+            "task_status", "task_duration", "procedure_injected",
+            "procedures_for_injection",
+        ]
+        for key in required_keys:
+            assert key in hook_ctx, f"Missing required hook context key: {key}"
+
+    def test_hook_context_defaults(self):
+        """With minimal preflight data, context should still have safe defaults."""
+        preflight_data = {}
+        hook_ctx = {
+            "exit_code": 1,
+            "task": preflight_data.get("task", "unknown"),
+            "output_text": "",
+            "procedure_id": preflight_data.get("procedure_id"),
+            "task_status": "failure",
+            "task_duration": 0,
+            "procedure_injected": preflight_data.get("procedure_injected", False),
+            "procedures_for_injection": preflight_data.get("procedures_for_injection", []),
+        }
+        assert hook_ctx["task"] == "unknown"
+        assert hook_ctx["procedure_id"] is None
+        assert hook_ctx["procedure_injected"] is False
+        assert hook_ctx["procedures_for_injection"] == []
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

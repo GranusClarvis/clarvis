@@ -7,6 +7,27 @@ Classifies tasks into retrieval tiers to avoid unnecessary brain.recall() calls:
 
 Part of the Adaptive RAG pipeline (GATE → EVAL → RETRY → FEEDBACK).
 
+== BRAIN QUERY POLICY ==
+
+When to query memory (brain.recall / smart_recall):
+  ALWAYS query: research tasks, design/architecture decisions, identity/soul work,
+    cross-module wiring, anything touching consciousness/phi/self-model.
+  LIGHT query (3 results, 3 collections): scoped implementation, bug fixes, tests,
+    delivery tasks (DLV_*), single-file changes, wiring existing components.
+  NEVER query: maintenance (backup, cleanup, vacuum, checkpoint, lint),
+    cron health, dream engine, dead-script sweeps.
+
+When to stay lean:
+  - Tasks with clear file paths and no ambiguity → LIGHT or NO
+  - Build/website/presentation tasks → LIGHT (only procedures + learnings)
+  - Pure code generation with no prior context needed → NO
+  - Repeated tasks within same session → NO (context already loaded)
+
+Query budget per tier:
+  NO_RETRIEVAL:    0 brain.recall calls, 0 collections, 0 results
+  LIGHT_RETRIEVAL: 1-2 brain.recall calls, 3 collections, 3 results max
+  DEEP_RETRIEVAL:  3-4 brain.recall calls, 10 collections, 7-10 results, graph expand
+
 Usage:
     from clarvis.brain.retrieval_gate import classify_retrieval
 
@@ -28,6 +49,7 @@ class RetrievalTier:
     collections: List[str] = field(default_factory=list)
     n_results: int = 0
     graph_expand: bool = False
+    query_budget: int = 0  # max brain.recall calls allowed for this tier
 
     def to_dict(self):
         return {
@@ -36,7 +58,16 @@ class RetrievalTier:
             "collections": self.collections,
             "n_results": self.n_results,
             "graph_expand": self.graph_expand,
+            "query_budget": self.query_budget,
         }
+
+
+# Query budgets per tier (max brain.recall calls)
+_QUERY_BUDGETS = {
+    "NO_RETRIEVAL": 0,
+    "LIGHT_RETRIEVAL": 2,
+    "DEEP_RETRIEVAL": 4,
+}
 
 
 # --- Keyword patterns ---
@@ -48,6 +79,14 @@ _NO_RETRIEVAL_PATTERNS = [
     re.compile(r'\b(cron_cleanup|cron_watchdog|backup_daily|backup_verify)\b', re.I),
     re.compile(r'\b(shellcheck|lint|format|dead.script|deprecated)\b', re.I),
     re.compile(r'\b(dream_engine|counterfactual)\b', re.I),
+]
+
+# Tasks that should use LIGHT retrieval (scoped, not deep)
+_LIGHT_RETRIEVAL_PATTERNS = [
+    re.compile(r'\b(website|landing.page|build|presentation|readme|docs)\b', re.I),
+    re.compile(r'\b(DLV_|delivery|open.source|launch.packet|consolidat)\b', re.I),
+    re.compile(r'\b(test|benchmark|smoke.check|readiness)\b', re.I),
+    re.compile(r'\b(wire|hook|connect|integrate)\b', re.I),
 ]
 
 # Tags that indicate maintenance tasks (from QUEUE.md [TAG] format)
@@ -75,7 +114,7 @@ _DEEP_RETRIEVAL_TAGS = {
 }
 
 # Collections for each tier
-_LIGHT_COLLECTIONS = ["clarvis-learnings", "clarvis-procedures", "clarvis-episodes"]
+_LIGHT_COLLECTIONS = ["clarvis-learnings", "clarvis-procedures"]
 _DEEP_COLLECTIONS = [
     "clarvis-identity", "clarvis-preferences", "clarvis-learnings",
     "clarvis-infrastructure", "clarvis-goals", "clarvis-context",
@@ -112,6 +151,7 @@ def classify_retrieval(task_text: str) -> RetrievalTier:
         return RetrievalTier(
             tier="NO_RETRIEVAL",
             reason=f"maintenance tag: {tag}",
+            query_budget=0,
         )
 
     # 2. Keyword-based NO_RETRIEVAL (check but don't return yet — may conflict)
@@ -130,6 +170,7 @@ def classify_retrieval(task_text: str) -> RetrievalTier:
             collections=_DEEP_COLLECTIONS,
             n_results=10,
             graph_expand=True,
+            query_budget=4,
         )
 
     # 4. Count deep keyword matches
@@ -151,10 +192,12 @@ def classify_retrieval(task_text: str) -> RetrievalTier:
                 collections=_LIGHT_COLLECTIONS,
                 n_results=3,
                 graph_expand=False,
+                query_budget=2,
             )
         return RetrievalTier(
             tier="NO_RETRIEVAL",
             reason=f"maintenance keyword: {no_retrieval_match}",
+            query_budget=0,
         )
 
     # 6. Deep retrieval
@@ -165,6 +208,7 @@ def classify_retrieval(task_text: str) -> RetrievalTier:
             collections=_DEEP_COLLECTIONS,
             n_results=10,
             graph_expand=True,
+            query_budget=4,
         )
 
     if deep_matches == 1:
@@ -175,7 +219,21 @@ def classify_retrieval(task_text: str) -> RetrievalTier:
             collections=_DEEP_COLLECTIONS,
             n_results=7,
             graph_expand=False,
+            query_budget=4,
         )
+
+    # 6.5. Explicit LIGHT patterns (delivery, website, wiring, tests)
+    for pat in _LIGHT_RETRIEVAL_PATTERNS:
+        m = pat.search(task_text)
+        if m:
+            return RetrievalTier(
+                tier="LIGHT_RETRIEVAL",
+                reason=f"scoped keyword: {m.group(0)}",
+                collections=_LIGHT_COLLECTIONS,
+                n_results=3,
+                graph_expand=False,
+                query_budget=2,
+            )
 
     # 7. Default: LIGHT_RETRIEVAL (scoped implementation, wiring, fixes)
     return RetrievalTier(
@@ -184,6 +242,7 @@ def classify_retrieval(task_text: str) -> RetrievalTier:
         collections=_LIGHT_COLLECTIONS,
         n_results=3,
         graph_expand=False,
+        query_budget=2,
     )
 
 

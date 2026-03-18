@@ -1,0 +1,7 @@
+# Adaptive Context Pruning for Token-Efficient RAG
+
+Date: 2026-03-18
+
+Adaptive context pruning is emerging as one of the highest-leverage optimizations in retrieval-augmented generation because most RAG pipelines still overpay for irrelevant context. Three recent lines of work point to the same conclusion: retrieval size and compression rate should be dynamic, not fixed. Provence (ICLR 2025) reframes context pruning as sequence labeling plus reranking, allowing a relatively small model to identify which spans of retrieved evidence should survive into the final prompt. Its main contribution is robustness: it preserves answer quality while removing irrelevant text with negligible extra cost. ACC-RAG extends the same idea by varying compression rate according to query complexity. Rather than compressing every query equally, it uses a hierarchical compressor and selector to keep only the minimum sufficient evidence, reporting more than 4x faster inference without accuracy loss. Adaptive-k attacks the problem one step earlier in the pipeline: instead of pruning after retrieval, it dynamically decides how many passages to include based on similarity-score distribution, avoiding both under-retrieval and token waste.
+
+The practical synthesis is clear: efficient RAG should treat token budget as a controllable resource across retrieval, pruning, and compression. The best architecture is likely staged: adaptive-k for document count, Provence-style pruning for span selection, and complexity-aware compression only when context is still too large.

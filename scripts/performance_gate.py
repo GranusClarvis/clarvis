@@ -2,11 +2,12 @@
 """
 Performance Gate — single go/no-go check for Clarvis system health.
 
-Runs 4 checks in sequence, fails (exit 1) if any exceed thresholds:
+Runs 5 checks in sequence, fails (exit 1) if any exceed thresholds:
   1. Brain health     — store/recall/stats smoke test
   2. Retrieval bench  — query speed + semantic hit quality
   3. Performance PI   — composite score across all dimensions
   4. Browser smoke    — CDP reachable, navigation, snapshot+refs
+  5. Trajectory eval  — warmup-aware execution quality scoring
 
 Exit codes:
   0 = all gates PASS
@@ -300,6 +301,10 @@ def run_gate(skip_browser=False, verbose=False):
     else:
         _log("── Gate 4: Browser Smoke (SKIPPED) ──", verbose)
 
+    # Gate 5: trajectory eval (fast, reads history.jsonl)
+    _log("── Gate 5: Trajectory Eval ──", verbose)
+    gates.append(gate_trajectory_eval(verbose))
+
     elapsed_s = round(time.monotonic() - t0, 2)
 
     all_passed = all(g["passed"] for g in gates)
@@ -358,6 +363,20 @@ def print_report(report):
                       f"({detail.get('elapsed_ms', '?')}ms)")
             else:
                 print(f"         error: {detail.get('error', 'unknown')}")
+        elif g["gate"] == "trajectory_eval":
+            status = detail.get("status", "unknown")
+            if status == "skip":
+                print(f"         skipped: {detail.get('reason', 'N/A')}")
+            elif status == "warmup":
+                print(f"         warmup: {detail.get('episodes', 0)}/"
+                      f"{detail.get('min_episodes', 5)} episodes")
+            else:
+                avg = detail.get("avg_score", 0)
+                pr = detail.get("pass_rate", 0)
+                print(f"         episodes={detail.get('episodes', '?')} "
+                      f"avg_score={avg:.3f} pass_rate={pr:.1%}")
+                for f in detail.get("gate_failures", []):
+                    print(f"           - {f}")
 
         if not g["passed"] and "error" in detail:
             print(f"         error: {detail['error']}")

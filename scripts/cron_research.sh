@@ -185,6 +185,9 @@ WEAKEST_METRIC=$(get_weakest_metric)
 # Generate a minimal context brief
 CONTEXT_BRIEF=$(python3 "$SCRIPTS/context_compressor.py" brief 2>> "$LOGFILE")
 
+# Inject cross-run lessons (MetaClaw-inspired pattern)
+PAST_LESSONS=$(python3 "$SCRIPTS/research_lesson_store.py" inject 2>/dev/null || echo "")
+
 # Execute via Claude Code with generous timeout (research = deep thinking)
 TASK_OUTPUT_FILE=$(mktemp)
 TASK_START=$SECONDS
@@ -195,12 +198,25 @@ if echo "$RESEARCH_TASK" | grep -q "^Bundle "; then
     IS_BUNDLE="true"
 fi
 
+# Structured output format shared by both prompt types
+STRUCTURED_OUTPUT_FMT="OUTPUT FORMAT (mandatory — must appear at end of your response):
+RESEARCH_RESULT:
+  TOPIC: <topic name>
+  DECISION: APPLY|ARCHIVE|DISCARD
+  FINDINGS: <1-3 sentence summary of what was learned>
+  RELEVANCE: <how this helps Clarvis specifically>
+  QUEUE_ITEMS: <semicolon-separated list of concrete implementation tasks, or 'none'>
+  EFFORT: S|M|L
+  STORED: <count> brain memories
+If DECISION=APPLY, also queue items: python3 scripts/queue_writer.py add '<task>' --priority P1 --source research"
+
 if [ "$IS_BUNDLE" = "true" ]; then
     RESEARCH_PROMPT="You are Clarvis's research engine. BUNDLE session — scan 3 related topics.
 TIME BUDGET: ~25 min. ~7 min/topic.
 QUEUE: Mark this task [x] in memory/evolution/QUEUE.md when done.
 WEAKEST METRIC: $WEAKEST_METRIC — note if research findings relate to this.
 CONTEXT: $CONTEXT_BRIEF
+$PAST_LESSONS
 
 BUNDLE: $RESEARCH_TASK
 
@@ -209,14 +225,16 @@ STEPS:
 2. Write ONE combined note to memory/research/ (NOT ingested/). Focus on cross-topic patterns.
 3. Store 3-5 insights: python3 scripts/brain.py remember 'I learned that [insight]' --importance 0.7 --collection clarvis-learnings
 4. Mark task [x] in QUEUE.md with date.
+5. Evaluate: is this actionable for Clarvis? Set DECISION accordingly.
 
-OUTPUT FORMAT (mandatory): LEARNED: <1-sentence summary>. STORED: <count> brain memories. APPLIED: <how this helps Clarvis>."
+$STRUCTURED_OUTPUT_FMT"
 else
     RESEARCH_PROMPT="You are Clarvis's research engine. DEEP DIVE session — one topic, thorough.
 TIME BUDGET: ~25 min.
 QUEUE: Mark this task [x] in memory/evolution/QUEUE.md when done.
 WEAKEST METRIC: $WEAKEST_METRIC — note if research findings relate to this.
 CONTEXT: $CONTEXT_BRIEF
+$PAST_LESSONS
 
 RESEARCH TASK: $RESEARCH_TASK
 
@@ -225,8 +243,9 @@ STEPS:
 2. Store 3-5 insights: python3 scripts/brain.py remember 'I learned that [insight]' --importance 0.8 --collection clarvis-learnings
 3. Write research note to memory/research/ (NOT ingested/): title, 3-5 ideas, Clarvis application.
 4. Mark task [x] in QUEUE.md with date.
+5. Evaluate: is this actionable for Clarvis? Set DECISION accordingly.
 
-OUTPUT FORMAT (mandatory): LEARNED: <1-sentence summary>. STORED: <count> brain memories. APPLIED: <how this helps Clarvis>."
+$STRUCTURED_OUTPUT_FMT"
 fi
 
 run_claude_monitored 1800 "$TASK_OUTPUT_FILE" "$RESEARCH_PROMPT" "$LOGFILE"
@@ -280,6 +299,47 @@ if os.path.exists(ingested_dir):
                            capture_output=True, text=True)
 " >> "$LOGFILE" 2>&1
 fi
+
+    # === LESSON RECORDING: Extract structured output and record lesson ===
+    python3 -c "
+import sys, os, re
+sys.path.insert(0, '$SCRIPTS')
+from research_lesson_store import ResearchLessonStore
+
+output_file = '$TASK_OUTPUT_FILE'
+if not os.path.exists(output_file):
+    sys.exit(0)
+
+with open(output_file) as f:
+    text = f.read()
+
+# Parse RESEARCH_RESULT block from output
+topic = decision = findings = queue_items_str = ''
+for line in text.split('\n'):
+    line = line.strip()
+    if line.startswith('TOPIC:'):
+        topic = line[6:].strip()
+    elif line.startswith('DECISION:'):
+        decision = line[9:].strip().upper()
+    elif line.startswith('FINDINGS:'):
+        findings = line[9:].strip()
+    elif line.startswith('QUEUE_ITEMS:'):
+        queue_items_str = line[12:].strip()
+
+if not topic:
+    topic = '''${RESEARCH_TASK:0:100}'''
+if not decision:
+    decision = 'ARCHIVE'  # Default if Claude didn't produce structured output
+if not findings:
+    # Fall back to last 200 chars of output
+    findings = text[-200:].strip()
+
+queue_items = [i.strip() for i in queue_items_str.split(';') if i.strip() and i.strip().lower() != 'none']
+
+store = ResearchLessonStore()
+lesson = store.record(topic=topic, decision=decision, findings=findings, queue_items=queue_items)
+print(f'Lesson recorded: [{lesson.decision}] {lesson.topic[:60]}')
+" >> "$LOGFILE" 2>&1
 
 # Log cost estimate (Claude Code research sessions ~5k input, ~2k output tokens per minute)
 python3 -c "

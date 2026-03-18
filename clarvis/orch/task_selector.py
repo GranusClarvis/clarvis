@@ -44,6 +44,7 @@ except Exception:
     _wm = None
 
 QUEUE_FILE = "/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md"
+DELIVERY_LOCK_FILE = "/home/agent/.openclaw/workspace/DELIVERY_LOCK.md"
 QUALITY_GATE_FILE = "/home/agent/.openclaw/workspace/data/memory_quality_gate.json"
 EPISODES_FILE = "/home/agent/.openclaw/workspace/data/episodes.json"
 
@@ -274,12 +275,29 @@ def score_tasks(tasks, codelet_result=None):
     except Exception:
         pass
 
+    # Mode compliance filter: skip tasks not allowed in current operating mode
+    _current_mode = None
+    try:
+        from clarvis.runtime.mode import get_mode, is_task_allowed_for_mode
+        _current_mode = get_mode()
+    except ImportError:
+        pass
+
     scored = []
 
     for task in tasks:
         text = task["text"]
         section = task["section"]
         text_lower = text.lower()
+
+        # Mode gate: skip tasks disallowed by current operating mode
+        if _current_mode and _current_mode != "ge":
+            try:
+                allowed, _mode_reason = is_task_allowed_for_mode(text, _current_mode)
+                if not allowed:
+                    continue
+            except Exception:
+                pass
 
         section_importance = {"P0": 0.9, "P1": 0.6, "P2": 0.3}.get(section, 0.3)
 
@@ -394,6 +412,19 @@ def score_tasks(tasks, codelet_result=None):
                 "base_salience": round(salience, 4),
             }
         })
+
+    # Delivery lock: penalize non-delivery tasks when lock is active
+    _delivery_locked = os.path.exists(DELIVERY_LOCK_FILE)
+    if _delivery_locked:
+        _DLV_KEYWORDS = {"dlv", "delivery", "cleanup", "consolidat", "wire", "wiring",
+                         "test", "context", "website", "open-source", "readiness",
+                         "presentation", "repo", "bug", "fix"}
+        for item in scored:
+            t = item["text"].lower()
+            is_delivery = any(kw in t for kw in _DLV_KEYWORDS)
+            if not is_delivery:
+                item["salience"] = round(item["salience"] * 0.3, 4)
+                item["details"]["delivery_lock_penalty"] = True
 
     scored.sort(key=lambda x: x["salience"], reverse=True)
 

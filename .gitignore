@@ -75,3 +75,8 @@ data/
 
 # --- Agent worktrees (managed by agent_lifecycle.py) ---
 .claude/worktrees/
+
+# --- Transient state ---
+*.lock
+.pytest_cache/
+.pi/

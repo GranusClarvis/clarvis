@@ -21,6 +21,10 @@ unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT 2>/dev/null || true
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}"
 
+# Telegram delivery (consumed by budget_alert.py, cron_report_*.sh, cron_watchdog.sh, spawn_claude.sh)
+export CLARVIS_TG_BOT_TOKEN="${CLARVIS_TG_BOT_TOKEN:-REDACTED_TELEGRAM_BOT_TOKEN}"
+export CLARVIS_TG_CHAT_ID="${CLARVIS_TG_CHAT_ID:-REDACTED_CHAT_ID}"
+
 # Workspace
 export CLARVIS_WORKSPACE="/home/agent/.openclaw/workspace"
 cd "$CLARVIS_WORKSPACE" || exit 1

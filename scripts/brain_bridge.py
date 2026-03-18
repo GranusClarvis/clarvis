@@ -29,7 +29,8 @@ except ImportError:
     _HAS_ACTR = False
 
 
-def brain_preflight_context(task_text, n_knowledge=5, n_goals=5, graph_expand=False):
+def brain_preflight_context(task_text, n_knowledge=5, n_goals=5, graph_expand=False,
+                            collections=None):
     """Gather brain context for a task before execution.
 
     Queries brain for:
@@ -40,6 +41,8 @@ def brain_preflight_context(task_text, n_knowledge=5, n_goals=5, graph_expand=Fa
 
     Args:
         graph_expand: If True, expand recall results with 1-hop graph neighbors.
+        collections: Override which collections to query for knowledge recall.
+                     If None, uses default [LEARNINGS, MEMORIES, EPISODES].
 
     Returns dict with keys: goals_text, context, knowledge_hints, working_memory
     All values are strings safe for prompt injection.
@@ -88,9 +91,10 @@ def brain_preflight_context(task_text, n_knowledge=5, n_goals=5, graph_expand=Fa
     # 3. Relevant knowledge (multi-collection: learnings + memories + episodes)
     t2 = time.monotonic()
     try:
+        _recall_collections = collections if collections else [LEARNINGS, MEMORIES, EPISODES]
         knowledge = b.recall(
             task_text,
-            collections=[LEARNINGS, MEMORIES, EPISODES],
+            collections=_recall_collections,
             n=n_knowledge,
             min_importance=0.3,
             attention_boost=True,

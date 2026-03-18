@@ -4,15 +4,8 @@ from __future__ import annotations
 
 from clarvis.adapters.base import AdapterResult, HostAdapter
 
-try:  # Prefer extracted bridge packages when available.
-    from clarvis_db import remember, search
-except ImportError:  # pragma: no cover - exercised in environments without bridge installs.
-    from clarvis.brain import remember, search
-
-try:  # Prefer extracted bridge packages when available.
-    from clarvis_p import generate_tiered_brief
-except ImportError:  # pragma: no cover - exercised in environments without bridge installs.
-    from clarvis.context.assembly import generate_tiered_brief
+from clarvis.brain import remember, search
+from clarvis.context.assembly import generate_tiered_brief
 
 
 class OpenClawAdapter(HostAdapter):
