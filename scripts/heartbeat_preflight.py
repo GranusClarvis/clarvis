@@ -433,6 +433,19 @@ def run_preflight(dry_run=False):
             except Exception:
                 pass
 
+            # Gate 4: Mode compliance — skip tasks disallowed by operating mode
+            try:
+                from clarvis.runtime.mode import is_task_allowed_for_mode
+                allowed, mode_reason = is_task_allowed_for_mode(cand_task)
+                if not allowed:
+                    deferred_tasks.append({"task": cand_task[:80], "reason": f"mode_gate: {mode_reason}"})
+                    log(f"Skipping (mode gate): {cand_task[:60]}... ({mode_reason})")
+                    continue
+            except ImportError:
+                pass  # Mode system not available — allow all
+            except Exception as e:
+                log(f"Mode gate check failed (non-fatal): {e}")
+
             selected = cand_task
             selected_section = cand_section
             selected_salience = cand_salience
@@ -783,16 +796,21 @@ def run_preflight(dry_run=False):
     else:
         result["retrieval_tier"] = "DEEP_RETRIEVAL"  # fallback: full recall
     result["timings"]["retrieval_gate"] = round(time.monotonic() - t78, 3)
+    _rt = result.get("retrieval_tier", "DEEP_RETRIEVAL")
 
     # === 8. EPISODIC MEMORY: Recall similar episodes ===
+    # Gated by retrieval_tier from §7.8 — NO_RETRIEVAL skips entirely
     t8 = time.monotonic()
     similar_episodes = ""
     failure_episodes = ""
 
-    if EpisodicMemory:
+    if _rt == "NO_RETRIEVAL":
+        log("Episodic recall SKIPPED — retrieval gate: NO_RETRIEVAL")
+    elif EpisodicMemory:
         try:
             em = EpisodicMemory()
-            similar = em.recall_similar(next_task, n=5)
+            _ep_n = 3 if _rt == "LIGHT_RETRIEVAL" else 5
+            similar = em.recall_similar(next_task, n=_ep_n)
             if similar:
                 similar_episodes = "\n".join(
                     f"  [{e.get('outcome', '?')}] {e.get('task', '')[:80]}"
@@ -817,21 +835,25 @@ def run_preflight(dry_run=False):
     brain_context = ""
     brain_working_memory = ""
     brain_ctx = {}
-    _rt = result.get("retrieval_tier", "DEEP_RETRIEVAL")
 
     if _rt == "NO_RETRIEVAL":
         log("Brain bridge SKIPPED — retrieval gate: NO_RETRIEVAL (saving ~7.5s)")
     elif brain_preflight_context:
         try:
-            # Adjust recall depth and graph expansion based on retrieval tier
+            # Adjust recall depth, collections, and graph expansion based on retrieval tier
             _graph_expand = False
+            _tier_collections = None
             if _rt == "LIGHT_RETRIEVAL":
                 _n_knowledge = 3
+                # Use tier's collection list (capped to 2 for LIGHT)
+                if retrieval_tier_info and retrieval_tier_info.collections:
+                    _tier_collections = retrieval_tier_info.collections[:2]
             else:  # DEEP_RETRIEVAL
                 _graph_expand = bool(retrieval_tier_info and retrieval_tier_info.graph_expand)
                 _n_knowledge = 10 if _graph_expand else 5
             brain_ctx = brain_preflight_context(next_task, n_knowledge=_n_knowledge, n_goals=5,
-                                                graph_expand=_graph_expand)
+                                                graph_expand=_graph_expand,
+                                                collections=_tier_collections)
             knowledge_hints = brain_ctx.get("knowledge_hints", "")
             brain_goals = brain_ctx.get("goals_text", "")
             brain_context = brain_ctx.get("context", "")
@@ -1266,7 +1288,7 @@ def run_preflight(dry_run=False):
 
     # DyCP: Final query-dependent pruning of supplementary sections
     # Removes sections that are both historically low-relevance AND irrelevant
-    # to this specific task. Targets Context Relevance metric (0.387→0.75).
+    # to this specific task. Targets Context Relevance metric toward 0.75.
     if dycp_prune_brief and next_task:
         try:
             pre_len = len(context_brief)

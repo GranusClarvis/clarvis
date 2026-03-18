@@ -22,7 +22,7 @@ TIMEOUT="${2:-1200}"
 SEND_TG="true"
 ISOLATED="false"
 TG_TOPIC=""
-TG_CHAT_ID="REDACTED_CHAT_ID"
+TG_CHAT_ID="${CLARVIS_TG_CHAT_ID:-REDACTED_CHAT_ID}"
 CATEGORY=""
 # Parse optional flags from args 3+
 for arg in "${@:3}"; do
@@ -52,7 +52,7 @@ if [ -z "$TASK" ]; then
     echo "Use --isolated to run in git worktree isolation."
     echo "Use --category=CAT to set timeout by task type: quick=600s, standard=1200s, research=1800s, build=1800s."
     echo "Use --topic=N to deliver output to a specific Telegram topic thread."
-    echo "Use --chat=ID to deliver to a specific chat (default: DM REDACTED_CHAT_ID)."
+    echo "Use --chat=ID to deliver to a specific chat (default: \$CLARVIS_TG_CHAT_ID)."
     exit 1
 fi
 
@@ -114,113 +114,94 @@ echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] Spawning with ${TIMEOUT}s t
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] Task: ${TASK:0:100}..." >> "$LOGFILE"
 
 # Acquire global Claude lock — prevent concurrent Claude Code spawns
-LOGFILE="/tmp/spawn_claude_$$.log"
-acquire_global_claude_lock "$LOGFILE"
+SPAWN_LOGFILE="/tmp/spawn_claude_$$.log"
+acquire_global_claude_lock "$SPAWN_LOGFILE"
 
 # Immediate stdout feedback — so exec() monitoring sees output (prevents SIGTERM from no-output watchdog)
 echo "[spawn_claude] Spawned with ${TIMEOUT}s timeout ${CATEGORY_TAG}. Task: ${TASK:0:80}"
 echo "[spawn_claude] Output will be delivered via Telegram when complete."
 
-# Belt-and-suspenders: forcibly unset Claude Code nesting guards
-# (cron_env.sh already does this, but extra safety for manual invocations)
+# The actual Claude run happens in a detached worker so the parent exec session can die
+# without taking the Claude job down with it.
+WORKER_SCRIPT="/tmp/spawn_claude_worker_$$.sh"
+cat > "$WORKER_SCRIPT" <<EOF
+#!/bin/bash
+set -euo pipefail
+source /home/agent/.openclaw/workspace/scripts/cron_env.sh
+GLOBAL_LOCK="/tmp/clarvis_claude_global.lock"
+echo \$\$ > "\$GLOBAL_LOCK"
+cleanup() {
+  rm -f "\$GLOBAL_LOCK" "$WORKER_SCRIPT"
+}
+trap cleanup EXIT
 unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT 2>/dev/null || true
-
-# Spawn Claude Code — setsid detaches from parent process group (prevents SIGTERM from
-# OpenClaw exec() killing Claude Code when it doesn't see output for >480s)
-# Capture exit code without letting set -e kill the script
 RESULT=0
-setsid timeout "$TIMEOUT" env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \
-    /home/agent/.local/bin/claude -p "$(cat "$PROMPT_FILE")" \
-    --dangerously-skip-permissions \
-    --model claude-opus-4-6 \
-    > "$OUTPUT_FILE" 2>&1 || RESULT=$?
+run_claude_monitored "$TIMEOUT" "$OUTPUT_FILE" "$PROMPT_FILE" "/home/agent/.openclaw/workspace/memory/cron/spawn_claude.log" || RESULT=\$MONITORED_EXIT
 rm -f "$PROMPT_FILE"
-
-if [ $RESULT -eq 124 ]; then
-    echo "[spawn_claude] TIMEOUT after ${TIMEOUT}s" >> "$OUTPUT_FILE"
-    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] TIMEOUT after ${TIMEOUT}s" >> "$LOGFILE"
-elif [ $RESULT -ne 0 ]; then
-    echo "[spawn_claude] FAILED with exit code $RESULT" >> "$OUTPUT_FILE"
-    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] FAILED exit=$RESULT" >> "$LOGFILE"
+LOGFILE="/home/agent/.openclaw/workspace/memory/cron/spawn_claude.log"
+if [ \$RESULT -eq 124 ]; then
+  echo "[spawn_claude] TIMEOUT after ${TIMEOUT}s" >> "$OUTPUT_FILE"
+  echo "[\$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] TIMEOUT after ${TIMEOUT}s" >> "\$LOGFILE"
+elif [ \$RESULT -ne 0 ]; then
+  echo "[spawn_claude] FAILED with exit code \$RESULT" >> "$OUTPUT_FILE"
+  echo "[\$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] FAILED exit=\$RESULT" >> "\$LOGFILE"
 else
-    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] Completed successfully" >> "$LOGFILE"
+  echo "[\$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] Completed successfully" >> "\$LOGFILE"
 fi
-
-# Log output (truncated)
-tail -c 2000 "$OUTPUT_FILE" >> "$LOGFILE" 2>/dev/null
-
-# === Telegram Delivery ===
+tail -c 2000 "$OUTPUT_FILE" >> "\$LOGFILE" 2>/dev/null || true
 if [ "$SEND_TG" = "true" ]; then
-    python3 - "$OUTPUT_FILE" "$RESULT" "${TASK:0:80}" "$TG_CHAT_ID" "$TG_TOPIC" << 'PYEOF'
+python3 - "$OUTPUT_FILE" "\$RESULT" "${TASK:0:80}" "$TG_CHAT_ID" "$TG_TOPIC" << 'PYEOF'
 import json, urllib.request, urllib.parse, sys, os
-
 output_file = sys.argv[1]
 exit_code = int(sys.argv[2])
 task_short = sys.argv[3]
-chat_id = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4] else "REDACTED_CHAT_ID"
+chat_id = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4] else os.environ.get("CLARVIS_TG_CHAT_ID", "REDACTED_CHAT_ID")
 topic_id = sys.argv[5] if len(sys.argv) > 5 and sys.argv[5] else ""
-
-# Get bot token from openclaw config
-with open('/home/agent/.openclaw/openclaw.json') as f:
-    config = json.load(f)
-token = config['channels']['telegram']['botToken']
-
+token = os.environ.get("CLARVIS_TG_BOT_TOKEN", "")
+if not token:
+    with open('/home/agent/.openclaw/openclaw.json') as f:
+        config = json.load(f)
+    token = config['channels']['telegram']['botToken']
 status = "TIMEOUT" if exit_code == 124 else ("FAIL" if exit_code != 0 else "OK")
 emoji = "\u23f0" if exit_code == 124 else ("\u274c" if exit_code != 0 else "\u2705")
-
-# Read output
 try:
     with open(output_file) as f:
         content = f.read()
     summary = content[-1500:] if content else "(no output)"
 except Exception:
     summary = "(output file missing)"
-
 msg = f"{emoji} Claude Code Spawn: {status}\n\n\U0001f4cb Task: {task_short}\n\n\U0001f4dd Result:\n{summary}"
-
-# Truncate to Telegram max (4096 chars)
 if len(msg) > 4000:
     msg = msg[:3997] + "..."
-
 params = {"chat_id": chat_id, "text": msg}
-# Send to specific topic thread if provided (for forum supergroups)
 if topic_id and topic_id != "1":
     params["message_thread_id"] = topic_id
-
 data = urllib.parse.urlencode(params)
 req = urllib.request.Request(f"https://api.telegram.org/bot{token}/sendMessage", data=data.encode())
-try:
-    urllib.request.urlopen(req, timeout=10)
-    target = f"chat={chat_id}" + (f" topic={topic_id}" if topic_id else "")
-    print(f"[spawn_claude] TG delivery: OK ({target})", file=sys.stderr)
-except Exception as e:
-    print(f"[spawn_claude] TG delivery failed: {e}", file=sys.stderr)
+urllib.request.urlopen(req, timeout=10)
 PYEOF
 fi
-
-# Also print to stdout for callers that capture output
-cat "$OUTPUT_FILE" 2>/dev/null || true
-rm -f "$OUTPUT_FILE"
-
-# === Worktree cleanup ===
 if [ "$ISOLATED" = "true" ] && [ -n "$WORKTREE_PATH" ]; then
-    # Check if the worktree has changes worth keeping
-    CHANGES=$(git -C "$WORKTREE_PATH" diff --stat HEAD 2>/dev/null || echo "")
-    STAGED=$(git -C "$WORKTREE_PATH" diff --stat --cached HEAD 2>/dev/null || echo "")
-
-    if [ -n "$CHANGES" ] || [ -n "$STAGED" ]; then
-        # Auto-commit changes in worktree so they're preserved on the branch
-        git -C "$WORKTREE_PATH" add -A 2>/dev/null || true
-        git -C "$WORKTREE_PATH" commit -m "Agent work: ${TASK:0:60}" 2>/dev/null || true
-        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] ISOLATED: changes committed to $WORKTREE_BRANCH" >> "$LOGFILE"
-        echo "[spawn_claude] Changes saved on branch $WORKTREE_BRANCH"
-        echo "[spawn_claude] Merge with: git merge $WORKTREE_BRANCH"
-        echo "[spawn_claude] Or: python3 scripts/agent_lifecycle.py merge <id>"
-    else
-        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] ISOLATED: no changes, removing worktree" >> "$LOGFILE"
-        git -C /home/agent/.openclaw/workspace worktree remove --force "$WORKTREE_PATH" 2>/dev/null || true
-        git -C /home/agent/.openclaw/workspace branch -D "$WORKTREE_BRANCH" 2>/dev/null || true
-    fi
+  CHANGES=\$(git -C "$WORKTREE_PATH" diff --stat HEAD 2>/dev/null || echo "")
+  STAGED=\$(git -C "$WORKTREE_PATH" diff --stat --cached HEAD 2>/dev/null || echo "")
+  if [ -n "\$CHANGES" ] || [ -n "\$STAGED" ]; then
+    git -C "$WORKTREE_PATH" add -A 2>/dev/null || true
+    git -C "$WORKTREE_PATH" commit -m "Agent work: ${TASK:0:60}" 2>/dev/null || true
+    echo "[\$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] ISOLATED: changes committed to $WORKTREE_BRANCH" >> "\$LOGFILE"
+  else
+    echo "[\$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] ISOLATED: no changes, removing worktree" >> "\$LOGFILE"
+    git -C /home/agent/.openclaw/workspace worktree remove --force "$WORKTREE_PATH" 2>/dev/null || true
+    git -C /home/agent/.openclaw/workspace branch -D "$WORKTREE_BRANCH" 2>/dev/null || true
+  fi
 fi
+rm -f "$OUTPUT_FILE"
+exit \$RESULT
+EOF
+chmod +x "$WORKER_SCRIPT"
+nohup "$WORKER_SCRIPT" >/dev/null 2>&1 &
+WORKER_PID=$!
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] Worker detached pid=$WORKER_PID" >> "/home/agent/.openclaw/workspace/memory/cron/spawn_claude.log"
+echo "$WORKER_PID" > /tmp/clarvis_claude_global.lock
 
-exit $RESULT
+# Parent exits immediately; detached worker handles Claude, Telegram delivery, and cleanup.
+exit 0

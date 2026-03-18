@@ -974,6 +974,17 @@ def run_refresh_benchmark():
         except Exception:
             pass
 
+    # Refresh context_relevance from live episode data to avoid stale cached values
+    try:
+        from clarvis.cognition.context_relevance import aggregate_relevance
+        agg = aggregate_relevance(days=7)
+        if agg.get("episodes", 0) >= 5:
+            fresh_context_relevance = round(agg["mean_relevance"], 3)
+        else:
+            fresh_context_relevance = prev_metrics.get("context_relevance", 0.0)
+    except Exception:
+        fresh_context_relevance = prev_metrics.get("context_relevance", 0.0)
+
     # Merge: refresh overwrites, previous fills gaps
     metrics = dict(prev_metrics)
     metrics.update({
@@ -981,6 +992,7 @@ def run_refresh_benchmark():
         "brain_query_p95_ms":   speed.get("p95_ms", 0),
         "episode_success_rate": episodes.get("success_rate", prev_metrics.get("episode_success_rate", 0.0)),
         "action_accuracy":      episodes.get("action_accuracy", prev_metrics.get("action_accuracy", 0.0)),
+        "context_relevance":    fresh_context_relevance,
         "graph_density":        brain_stats.get("graph_density", 0.0),
         "brain_total_memories": brain_stats.get("total_memories", 0),
         "bloat_score":          brain_stats.get("bloat_score", 0.0),
@@ -1499,6 +1511,15 @@ if __name__ == "__main__":
             with open(METRICS_FILE) as f:
                 stored = json.load(f)
             metrics = stored.get("metrics", {})
+            # Refresh context_relevance live from episode data to avoid
+            # stale cached values between full benchmark runs.
+            try:
+                from clarvis.cognition.context_relevance import aggregate_relevance
+                agg = aggregate_relevance(days=7)
+                if agg.get("episodes", 0) >= 5:
+                    metrics["context_relevance"] = round(agg["mean_relevance"], 3)
+            except Exception:
+                pass
             # Compute margin-to-target ratio for each scored metric
             worst_name, worst_margin = None, float("inf")
             for key, meta in TARGETS.items():
