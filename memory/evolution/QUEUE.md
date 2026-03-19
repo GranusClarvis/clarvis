@@ -48,6 +48,7 @@ Presentable Clarvis by 2026-03-31:
 ## P1 — This Week
 
 
+- [ ] [LLM_BRAIN_REVIEW 2026-03-19] [LLM_BRAIN_REVIEW] Add recent episode summaries to temporal collection — Temporal queries are weakest dimension
 ---
 
 ## P2 — When Idle (Demoted 2026-03-17)
@@ -65,8 +66,6 @@ Presentable Clarvis by 2026-03-31:
 
 ### Benchmarking
 - CLR Benchmark implementation from fork: `clarvis/metrics/clr.py` (672 lines, schema v1.0 frozen, 6 dimensions).
-- [ ] [CLR_BASELINE_WIRING] Wire CLR into the canonical benchmark path so it can run from the main repo without fork-only assumptions. Ensure outputs land in structured JSON/JSONL with commit SHA, timestamp, and component subscores.
-- [ ] [CLR_PHIID_DIMENSION] Implement a new CLR dimension: **Integration Dynamics** based on ΦID-inspired engineering proxies. Start with `redundancy_ratio`, `unique_contribution_score`, and `synergy_gain`. Design reference: `docs/CLR_PHIID_BENCHMARK_PLAN.md`.
 - [ ] [CLR_PERTURBATION_HARNESS] Build a deterministic perturbation / ablation harness for context assembly and recall. Toggle modules such as episodic recall, graph expansion, related_tasks, decision_context, and reasoning scaffold; record score deltas and failure modes.
 - [ ] [CLR_DELTA_TRACKING] Persist per-run benchmark history with before/after deltas for autonomous changes. Goal: answer whether additions actually improved Clarvis or merely changed code shape.
 - A/B Comparison Benchmark: fix `ab_comparison_benchmark.py` — temp file prompts, 10+ pairs, measure success/quality/duration.
@@ -84,7 +83,7 @@ _(Completed items archived.)_
 
 - [ ] [CALIBRATION_BRIER_AUDIT] Audit and recalibrate confidence predictions in `scripts/clarvis_confidence.py`. Brier capability score=0.10 (worst metric). Review domain-specific accuracy, prune stale predictions older than 30 days, recalibrate domain thresholds. Check if low Brier score is due to prediction staleness or systematic over/under-confidence.
 
-- [ ] [SEMANTIC_CROSS_COLLECTION_BRIDGES] Strengthen weak cross-collection semantic links. Current semantic_cross_collection=0.62 (target >0.75). Run targeted `knowledge_synthesis.py` bridge-building for the lowest-overlap pairs: clarvis-procedures↔clarvis-learnings, clarvis-context↔clarvis-goals, clarvis-episodes↔clarvis-infrastructure. Verify improvement via `phi_metric.py`.
+- [~] [SEMANTIC_CROSS_COLLECTION_BRIDGES] Strengthen weak cross-collection semantic links. Current semantic_cross_collection=0.62 (target >0.75). _(2026-03-19: Added 13 bridge memories across 3 weakest pairs. Phi full computation times out at 120s due to 99k graph edges + 720 ONNX queries. Pair scores: proc↔learn=0.600, ctx↔goals=0.644, ep↔infra=0.555. Need graph compaction or parallel queries to verify full Phi. Blocked on compute time.)_
 
 - [ ] [BENCHMARK_SCORECARD_STRATEGY] Create a benchmark scorecard strategy that explicitly maps current goals to measurable benchmark dimensions. Tie existing goals (Session Continuity, Heartbeat Efficiency, Self-Reflection, CLR, context quality, Phi/integration) to concrete daily/weekly metrics so every major addition has an evaluation lane.
 
