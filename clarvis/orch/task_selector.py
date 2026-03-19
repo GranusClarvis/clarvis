@@ -428,6 +428,22 @@ def score_tasks(tasks, codelet_result=None):
 
     scored.sort(key=lambda x: x["salience"], reverse=True)
 
+    # P0 priority floor: guarantee P0 tasks always rank in top-3.
+    # Without this, well-aligned P1/P2 tasks can outrank P0 delivery items,
+    # undermining deadline commitments.
+    _P0_FLOOR_RANK = 3
+    p0_in_top = sum(1 for s in scored[:_P0_FLOOR_RANK] if s["section"] == "P0")
+    p0_below = [i for i, s in enumerate(scored) if s["section"] == "P0" and i >= _P0_FLOOR_RANK]
+    if p0_below:
+        # Find non-P0 items in top-3 that can be displaced
+        non_p0_top = [i for i in range(_P0_FLOOR_RANK) if i < len(scored) and scored[i]["section"] != "P0"]
+        for p0_idx in p0_below:
+            if not non_p0_top:
+                break
+            swap_idx = non_p0_top.pop()  # displace lowest non-P0 in top-3
+            scored[swap_idx], scored[p0_idx] = scored[p0_idx], scored[swap_idx]
+            scored[swap_idx]["details"]["p0_floor_promoted"] = True
+
     # World model re-ranking: adjust scores by predicted success probability
     if _wm is not None and len(scored) > 1:
         try:

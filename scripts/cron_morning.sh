@@ -16,6 +16,10 @@ emit_dashboard_event task_started --task-name "Morning planning" --section cron_
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running session open..." >> "$LOGFILE"
 python3 /home/agent/.openclaw/workspace/scripts/session_hook.py open >> "$LOGFILE" 2>&1
 
+# Step 0.5: Bootstrap daily memory file so all subsequent cron jobs have it
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Bootstrapping daily memory file..." >> "$LOGFILE"
+python3 /home/agent/.openclaw/workspace/scripts/daily_memory_log.py >> "$LOGFILE" 2>&1 || true
+
 # === MORNING PLANNING (with context from prompt_builder) ===
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running morning planning..." >> "$LOGFILE"
 SCRIPTS="/home/agent/.openclaw/workspace/scripts"

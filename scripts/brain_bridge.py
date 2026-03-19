@@ -114,6 +114,13 @@ def brain_preflight_context(task_text, n_knowledge=5, n_goals=5, graph_expand=Fa
                 knowledge = mmr_rerank(knowledge, task_text, lambda_param=_lambda)
             except Exception:
                 pass  # fall through to unranked results
+        # Contextual enrichment: add collection + metadata prefix (pilot collections)
+        if knowledge:
+            try:
+                from clarvis.brain.search import contextual_enrich
+                knowledge = contextual_enrich(knowledge)
+            except ImportError:
+                pass  # graceful fallback — no enrichment
         result["raw_results"] = knowledge or []
         if knowledge:
             hints = []
@@ -124,7 +131,8 @@ def brain_preflight_context(task_text, n_knowledge=5, n_goals=5, graph_expand=Fa
                 if _HAS_ACTR and score is not None:
                     actr_scores.append(score)
 
-                doc = mem.get("document", "")[:120]
+                # Use contextually-enriched document when available
+                doc = mem.get("_contextual_document", mem.get("document", ""))[:160]
                 src = mem.get("metadata", {}).get("source", "")
                 tags = mem.get("metadata", {}).get("tags", "")
                 col = mem.get("collection", "")

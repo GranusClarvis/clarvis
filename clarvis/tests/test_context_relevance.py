@@ -16,6 +16,11 @@ from clarvis.cognition.context_relevance import (
     _tokenize,
     _jaccard,
     _containment,
+    _cosine_similarity,
+    _semantic_containment,
+    _embed_text,
+    SEMANTIC_WEIGHT,
+    TOKEN_WEIGHT,
 )
 
 
@@ -135,6 +140,111 @@ class TestContainment:
         big = {"a", "b", "c", "d", "e", "f", "g", "h", "i", "j"}
         assert _containment(small, big) == 1.0  # all of small in big
         assert _containment(big, small) == 0.2  # only 2/10 of big in small
+
+
+class TestCosineSimilarity:
+    def test_identical_vectors(self):
+        a = [1.0, 0.0, 0.0]
+        assert abs(_cosine_similarity(a, a) - 1.0) < 1e-6
+
+    def test_orthogonal_vectors(self):
+        a = [1.0, 0.0]
+        b = [0.0, 1.0]
+        assert abs(_cosine_similarity(a, b)) < 1e-6
+
+    def test_zero_vector(self):
+        assert _cosine_similarity([0.0, 0.0], [1.0, 0.0]) == 0.0
+
+
+class TestSemanticContainment:
+    """Test semantic blending with mock embeddings."""
+
+    @staticmethod
+    def _make_mock_embed_fn(mapping: dict):
+        """Return a fake embed_fn that maps text prefixes to fixed vectors."""
+        def mock_fn(texts):
+            results = []
+            for t in texts:
+                for prefix, vec in mapping.items():
+                    if prefix in t:
+                        results.append(vec)
+                        break
+                else:
+                    results.append([0.0] * 384)
+            return results
+        return mock_fn
+
+    def test_semantic_containment_similar(self):
+        """High cosine similarity → high semantic containment."""
+        vec = [1.0] * 384
+        embed_fn = self._make_mock_embed_fn({"section": vec, "output": vec})
+        output_emb = _embed_text("output text", embed_fn)
+        score = _semantic_containment("section text", output_emb, embed_fn)
+        assert score is not None
+        assert score > 0.9
+
+    def test_semantic_containment_dissimilar(self):
+        """Orthogonal embeddings → low semantic containment."""
+        sec_vec = [1.0] + [0.0] * 383
+        out_vec = [0.0] + [1.0] + [0.0] * 382
+        embed_fn = self._make_mock_embed_fn({"section": sec_vec, "output": out_vec})
+        output_emb = _embed_text("output text", embed_fn)
+        score = _semantic_containment("section text", output_emb, embed_fn)
+        assert score is not None
+        assert score < 0.1
+
+    def test_semantic_containment_none_when_no_embed_fn(self):
+        """Returns None when embed_fn is None."""
+        score = _semantic_containment("text", None, None)
+        assert score is None
+
+    def test_blend_weights_sum_to_one(self):
+        assert abs(SEMANTIC_WEIGHT + TOKEN_WEIGHT - 1.0) < 1e-6
+
+
+class TestScoreWithSemanticBlend:
+    """Test that score_section_relevance integrates semantic scores when available."""
+
+    def test_fallback_to_token_when_no_embeddings(self, monkeypatch):
+        """When embeddings unavailable, scores should still work (token-only)."""
+        import clarvis.cognition.context_relevance as cr_mod
+        monkeypatch.setattr(cr_mod, "_embed_available", False)
+
+        result = score_section_relevance(
+            SAMPLE_BRIEF, SAMPLE_OUTPUT_RELEVANT,
+            task="graph cutover", outcome="success",
+        )
+        assert result["overall"] > 0.0
+        assert result["sections_total"] >= 7
+
+    def test_with_mock_embeddings(self, monkeypatch):
+        """When embeddings available, blended score should be >= token-only."""
+        import clarvis.cognition.context_relevance as cr_mod
+
+        # Get token-only score first
+        monkeypatch.setattr(cr_mod, "_embed_available", False)
+        token_result = score_section_relevance(
+            SAMPLE_BRIEF, SAMPLE_OUTPUT_RELEVANT,
+            task="graph cutover", outcome="success",
+        )
+
+        # Now with mock embeddings that return high similarity
+        high_sim_vec = [0.5] * 384
+
+        def mock_embed_fn(texts):
+            return [high_sim_vec for _ in texts]
+
+        monkeypatch.setattr(cr_mod, "_embed_fn", mock_embed_fn)
+        monkeypatch.setattr(cr_mod, "_embed_available", True)
+        # Override _get_embed_fn to return our mock
+        monkeypatch.setattr(cr_mod, "_get_embed_fn", lambda: mock_embed_fn)
+
+        blended_result = score_section_relevance(
+            SAMPLE_BRIEF, SAMPLE_OUTPUT_RELEVANT,
+            task="graph cutover", outcome="success",
+        )
+        # With high semantic similarity, blended score should be at least as high
+        assert blended_result["overall"] >= token_result["overall"] * 0.8
 
 
 class TestParseBriefSections:
@@ -465,8 +575,8 @@ class TestDyCPPruneBrief:
         """Tier 2: sections with zero overlap and borderline history get pruned."""
         import clarvis.context.assembly as asm
         monkeypatch.setattr(asm, "_load_historical_section_means", lambda: {
-            "attention": 0.15,    # above HISTORICAL_FLOOR but below ZERO_OVERLAP_CEILING
-            "brain_context": 0.14,  # same
+            "attention": 0.13,    # below Tier 0 threshold (0.15)
+            "brain_context": 0.14,  # below Tier 0 threshold (0.15)
         })
 
         brief = (
@@ -480,8 +590,7 @@ class TestDyCPPruneBrief:
         pruned = dycp_prune_brief(brief, task)
 
         sections = parse_brief_sections(pruned)
-        # attention and brain_context have 0 overlap with "pytest failures"
-        # and hist < 0.16, so tier 2 prunes them
+        # attention and brain_context have hist < 0.15, caught by Tier 0
         assert "attention" not in sections
         assert "brain_context" not in sections
 
@@ -493,8 +602,9 @@ class TestLoadRelevanceWeights:
         import clarvis.cognition.context_relevance as cr_mod
         orig_agg = aggregate_relevance
 
-        def patched_agg(days=7, relevance_file_arg=None):
-            return orig_agg(days=days, relevance_file=relevance_file_arg or relevance_file)
+        def patched_agg(days=7, relevance_file_arg=None, **kwargs):
+            return orig_agg(days=days, relevance_file=relevance_file_arg or relevance_file,
+                            **{k: v for k, v in kwargs.items() if k == 'recency_boost'})
 
         monkeypatch.setattr(cr_mod, "aggregate_relevance", patched_agg)
 
@@ -515,7 +625,7 @@ class TestLoadRelevanceWeights:
         assert weights == {}
 
     def test_returns_weights_with_sufficient_episodes(self, tmp_path, monkeypatch):
-        """Returns scaling factors when enough episodes exist."""
+        """Returns tiered scaling factors when enough episodes exist."""
         relevance_file = str(tmp_path / "context_relevance.jsonl")
         now = datetime.now(timezone.utc).isoformat()
         for _ in range(6):
@@ -537,9 +647,12 @@ class TestLoadRelevanceWeights:
         self._patch_aggregate(monkeypatch, relevance_file)
         weights = load_relevance_weights()
         assert len(weights) > 0
-        assert weights["related_tasks"] > weights["decision_context"] or len(weights) > 0
+        # Tiered scaling: values must be 0.0, 0.5, or 1.0
         for key, w in weights.items():
-            assert BUDGET_FLOOR <= w <= BUDGET_CEILING, f"{key}={w} out of bounds"
+            assert w in (0.0, 0.5, 1.0), f"{key}={w} not a valid tier"
+        # related_tasks (mean=0.8) and episodes (mean=0.6) → 1.0 (high tier)
+        assert weights["related_tasks"] == 1.0
+        assert weights["episodes"] == 1.0
 
     def test_respects_min_episodes_param(self, tmp_path, monkeypatch):
         """min_episodes parameter is respected."""
@@ -555,7 +668,11 @@ class TestLoadRelevanceWeights:
 
         self._patch_aggregate(monkeypatch, relevance_file)
         assert load_relevance_weights() == {}
-        assert load_relevance_weights(min_episodes=2) != {}
+        weights = load_relevance_weights(min_episodes=2)
+        assert weights != {}
+        # Tiered: decision_context (0.4≥0.25→1.0), episodes (0.5≥0.25→1.0)
+        for key, w in weights.items():
+            assert w in (0.0, 0.5, 1.0), f"{key}={w} not a valid tier"
 
 
 class TestGetAdjustedBudgets:
@@ -568,30 +685,35 @@ class TestGetAdjustedBudgets:
         assert result == TIER_BUDGETS["standard"]
 
     def test_adjusts_budgets_with_weights(self, monkeypatch):
-        """Adjusts budgets proportionally when weights are available."""
+        """Adjusts budgets using tiered adaptive caps with redistribution."""
         import clarvis.context.assembly as asm
-        # Mock weights: decision_context high, completions low
+        # Mock tiered weights: some full, some half, some zero
         mock_weights = {
-            "decision_context": 1.3,
-            "spotlight": 0.8,
-            "related_tasks": 1.0,
-            "completions": 0.6,
-            "episodes": 1.2,
-            "reasoning_scaffold": 0.9,
+            "decision_context": 1.0,   # full
+            "spotlight": 0.5,          # half
+            "related_tasks": 1.0,      # full
+            "completions": 0.0,        # pruned
+            "episodes": 1.0,           # full
+            "reasoning_scaffold": 0.5, # half
         }
         monkeypatch.setattr(asm, "load_relevance_weights", lambda: mock_weights)
 
         result = get_adjusted_budgets("standard")
         base = TIER_BUDGETS["standard"]
 
-        # Total budget should be approximately preserved
+        # Total budget should be approximately preserved (freed tokens redistributed)
         total_base = sum(v for k, v in base.items() if k != "total" and v > 0)
         total_adjusted = sum(v for k, v in result.items() if k != "total" and v > 0)
-        assert abs(total_base - total_adjusted) <= len(base)  # rounding tolerance
+        assert abs(total_base - total_adjusted) <= len(base) + 5  # rounding tolerance
 
-        # High-weight section should get more than low-weight section
-        # (relative to their base ratios)
-        assert result["decision_context"] / base["decision_context"] > result["completions"] / base["completions"]
+        # Pruned section should have zero budget
+        assert result["completions"] == 0
+
+        # Half-budget sections should be less than base
+        assert result["spotlight"] < base["spotlight"]
+
+        # Full-budget sections should get more than base (redistribution)
+        assert result["decision_context"] >= base["decision_context"]
 
     def test_minimal_tier_unchanged(self, monkeypatch):
         """Minimal tier has all-zero budgets so should not change."""
@@ -601,17 +723,17 @@ class TestGetAdjustedBudgets:
         result = get_adjusted_budgets("minimal")
         assert result == TIER_BUDGETS["minimal"]
 
-    def test_budget_floor_enforced(self, monkeypatch):
-        """No section goes below minimum 10 tokens after adjustment."""
+    def test_zero_budget_sections_pruned(self, monkeypatch):
+        """Sections with scale=0.0 get zero budget (hard-pruned)."""
         import clarvis.context.assembly as asm
-        # Very low weights for everything
-        mock_weights = {k: BUDGET_FLOOR for k in _BUDGET_TO_SECTIONS}
+        mock_weights = {k: 0.0 for k in _BUDGET_TO_SECTIONS}
         monkeypatch.setattr(asm, "load_relevance_weights", lambda: mock_weights)
 
         result = get_adjusted_budgets("standard")
         for key, value in result.items():
             if key != "total" and TIER_BUDGETS["standard"].get(key, 0) > 0:
-                assert value >= 10, f"{key}={value} below minimum"
+                # All sections are scale=0.0 so no redistribution target exists
+                assert value == 0, f"{key}={value} should be 0 when scale=0.0"
 
     def test_full_tier_adjusts(self, monkeypatch):
         """Full tier also gets adjusted."""

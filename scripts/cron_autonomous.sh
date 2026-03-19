@@ -36,6 +36,13 @@ if [ "$STUCK_COUNT" -gt 0 ] 2>/dev/null; then
     python3 "$SCRIPTS/agent_orchestrator.py" heal >> "$LOGFILE" 2>&1
 fi
 
+# Bootstrap daily memory file if missing (first run of day creates it)
+DAILY_MEM="memory/$(date -u +%Y-%m-%d).md"
+if [ ! -f "$DAILY_MEM" ]; then
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Bootstrapping daily memory file..." >> "$LOGFILE"
+    python3 /home/agent/.openclaw/workspace/scripts/daily_memory_log.py >> "$LOGFILE" 2>&1 || true
+fi
+
 # Pre-compute weakest metric for prompt injection
 WEAKEST_METRIC=$(get_weakest_metric)
 

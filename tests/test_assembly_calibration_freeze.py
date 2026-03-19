@@ -18,25 +18,25 @@ import pytest
 
 def test_dycp_min_containment_frozen():
     from clarvis.context.assembly import DYCP_MIN_CONTAINMENT
-    assert DYCP_MIN_CONTAINMENT == 0.04, (
+    assert DYCP_MIN_CONTAINMENT == 0.08, (
         f"DYCP_MIN_CONTAINMENT changed to {DYCP_MIN_CONTAINMENT} — "
-        "was calibrated to 0.04 on 2026-03-15. Update test only with evidence."
+        "raised to 0.08 on 2026-03-18 (stricter task-overlap threshold)."
     )
 
 
 def test_dycp_historical_floor_frozen():
     from clarvis.context.assembly import DYCP_HISTORICAL_FLOOR
-    assert DYCP_HISTORICAL_FLOOR == 0.16, (
+    assert DYCP_HISTORICAL_FLOOR == 0.15, (
         f"DYCP_HISTORICAL_FLOOR changed to {DYCP_HISTORICAL_FLOOR} — "
-        "raised from 0.13 to 0.16 on 2026-03-15 based on 14-day data."
+        "lowered to 0.15 on 2026-03-19: 0.20 was pruning moderately useful sections."
     )
 
 
 def test_dycp_zero_overlap_ceiling_frozen():
     from clarvis.context.assembly import DYCP_ZERO_OVERLAP_CEILING
-    assert DYCP_ZERO_OVERLAP_CEILING == 0.20, (
+    assert DYCP_ZERO_OVERLAP_CEILING == 0.15, (
         f"DYCP_ZERO_OVERLAP_CEILING changed to {DYCP_ZERO_OVERLAP_CEILING} — "
-        "raised from 0.16 to 0.20 on 2026-03-15 to catch borderline noise."
+        "lowered to 0.15 on 2026-03-19: borderline sections (0.15-0.20) are useful."
     )
 
 
@@ -44,18 +44,29 @@ def test_dycp_zero_overlap_ceiling_frozen():
 # §2  Default-suppress list freeze — sections suppressed before generation
 # ---------------------------------------------------------------------------
 
-EXPECTED_DEFAULT_SUPPRESS = frozenset({
+EXPECTED_HARD_SUPPRESS = frozenset({
     "meta_gradient",
     "brain_goals",
     "failure_avoidance",
     "metrics",
     "synaptic",
+})
+
+EXPECTED_DEFAULT_SUPPRESS = frozenset({
     "world_model",
     "gwt_broadcast",
     "introspection",
-    "working_memory",
-    "attention",
 })
+
+
+def test_hard_suppress_set_frozen():
+    from clarvis.context.assembly import HARD_SUPPRESS
+    assert HARD_SUPPRESS == EXPECTED_HARD_SUPPRESS, (
+        f"HARD_SUPPRESS changed.\n"
+        f"  Added: {HARD_SUPPRESS - EXPECTED_HARD_SUPPRESS}\n"
+        f"  Removed: {EXPECTED_HARD_SUPPRESS - HARD_SUPPRESS}\n"
+        "Bottom-5 noise sections (mean<0.12) — update with evidence only."
+    )
 
 
 def test_default_suppress_set_frozen():
@@ -64,7 +75,7 @@ def test_default_suppress_set_frozen():
         f"DYCP_DEFAULT_SUPPRESS changed.\n"
         f"  Added: {DYCP_DEFAULT_SUPPRESS - EXPECTED_DEFAULT_SUPPRESS}\n"
         f"  Removed: {EXPECTED_DEFAULT_SUPPRESS - DYCP_DEFAULT_SUPPRESS}\n"
-        "Update test only with per-section relevance evidence."
+        "Soft-suppressed (mean 0.12-0.13) — update with evidence only."
     )
 
 
@@ -130,16 +141,15 @@ def test_standard_tier_allocations_frozen():
     std = TIER_BUDGETS["standard"]
     expected = {
         "total": 600,
-        "decision_context": 100,
+        "decision_context": 140,   # +40 from merged metrics (2026-03-18)
         "spotlight": 80,
         "related_tasks": 60,
-        "metrics": 40,
         "completions": 40,
         "episodes": 60,
         "reasoning_scaffold": 40,
     }
     assert std == expected, (
-        f"Standard tier budget changed — was tuned on 2026-03-15.\n"
+        f"Standard tier budget changed — retuned 2026-03-18.\n"
         f"Diff: {set(std.items()) ^ set(expected.items())}"
     )
 
@@ -152,6 +162,19 @@ def test_budget_floor_ceiling_frozen():
     from clarvis.context.assembly import BUDGET_FLOOR, BUDGET_CEILING
     assert BUDGET_FLOOR == 0.4, f"BUDGET_FLOOR={BUDGET_FLOOR}, expected 0.4"
     assert BUDGET_CEILING == 1.4, f"BUDGET_CEILING={BUDGET_CEILING}, expected 1.4"
+
+
+def test_adaptive_thresholds_frozen():
+    """Pin the adaptive section cap thresholds (2026-03-19)."""
+    from clarvis.context.assembly import ADAPTIVE_HIGH_THRESHOLD, ADAPTIVE_MID_THRESHOLD
+    assert ADAPTIVE_HIGH_THRESHOLD == 0.25, (
+        f"ADAPTIVE_HIGH_THRESHOLD={ADAPTIVE_HIGH_THRESHOLD} — "
+        "sections with mean ≥0.25 get full budget."
+    )
+    assert ADAPTIVE_MID_THRESHOLD == 0.12, (
+        f"ADAPTIVE_MID_THRESHOLD={ADAPTIVE_MID_THRESHOLD} — "
+        "sections with mean 0.12-0.25 get 50% budget, <0.12 get zero."
+    )
 
 
 def test_min_episodes_for_adjustment_frozen():
@@ -175,10 +198,21 @@ def test_protected_sections_never_suppressed():
 def test_suppressed_sections_return_true_without_task():
     """Default-suppressed sections are suppressed when no task context given."""
     from clarvis.context.assembly import (
-        should_suppress_section, DYCP_DEFAULT_SUPPRESS
+        should_suppress_section, DYCP_DEFAULT_SUPPRESS, HARD_SUPPRESS
     )
     for section in DYCP_DEFAULT_SUPPRESS:
         assert should_suppress_section(section, "") is True
+    for section in HARD_SUPPRESS:
+        assert should_suppress_section(section, "") is True
+
+
+def test_hard_suppress_ignores_task_containment():
+    """Hard-suppressed sections are always suppressed, even with matching task."""
+    from clarvis.context.assembly import should_suppress_section, HARD_SUPPRESS
+    # Use a task that contains the section name words — should still suppress
+    for section in HARD_SUPPRESS:
+        task = f"fix the {section.replace('_', ' ')} system completely"
+        assert should_suppress_section(section, task) is True
 
 
 def test_generate_tiered_brief_returns_string():

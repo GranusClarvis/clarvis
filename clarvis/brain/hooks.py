@@ -18,12 +18,20 @@ _SCRIPTS_DIR = "/home/agent/.openclaw/workspace/scripts"
 
 
 def _make_actr_scorer():
-    """Create an ACT-R scorer hook: fn(results) -> mutates with _actr_score."""
+    """Create an ACT-R scorer hook: fn(results) -> mutates with _actr_score.
+
+    Gated by CLARVIS_ACTR_RECALL=1 env var for A/B comparison.
+    When disabled, raises RuntimeError so search.py falls through to
+    the distance+importance fallback scorer.
+    """
+    import os
     if _SCRIPTS_DIR not in sys.path:
         sys.path.insert(0, _SCRIPTS_DIR)
     from actr_activation import actr_score
 
     def scorer(results):
+        if os.environ.get("CLARVIS_ACTR_RECALL") != "1":
+            raise RuntimeError("ACTR scoring disabled (set CLARVIS_ACTR_RECALL=1)")
         for r in results:
             boost = r["metadata"].get("_attention_boost", 0)
             r["_actr_score"] = actr_score(r) + boost * 0.15

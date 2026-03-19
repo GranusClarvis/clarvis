@@ -120,8 +120,8 @@ def test_suppress_overridden_by_content_cache():
 
 
 def test_suppress_still_works_with_irrelevant_cache():
-    """A section with irrelevant cached content is still suppressed."""
-    section = "meta_gradient"
+    """A soft-suppressed section with irrelevant cached content is still suppressed."""
+    section = "world_model"
     assert section in DYCP_DEFAULT_SUPPRESS
 
     assembly._section_content_cache[section] = {
@@ -129,6 +129,19 @@ def test_suppress_still_works_with_irrelevant_cache():
     }
     # Task is about "database migration" — no overlap with cache
     assert should_suppress_section(section, "run database migration") is True
+
+
+def test_hard_suppress_ignores_content_cache():
+    """Hard-suppressed section stays suppressed even with relevant cached content."""
+    from clarvis.context.assembly import HARD_SUPPRESS
+    section = "meta_gradient"
+    assert section in HARD_SUPPRESS
+
+    assembly._section_content_cache[section] = {
+        "meta", "gradient", "exploration", "reward", "learning"
+    }
+    # Even with matching content, hard-suppressed sections stay suppressed
+    assert should_suppress_section(section, "fix meta gradient exploration") is True
 
 
 # ---------------------------------------------------------------------------

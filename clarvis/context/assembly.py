@@ -38,8 +38,16 @@ _BUDGET_TO_SECTIONS = {
 
 # Relevance-based budget adjustment parameters
 MIN_EPISODES_FOR_ADJUSTMENT = 5  # need enough data before adjusting
-BUDGET_FLOOR = 0.4   # minimum 40% of base budget (prevent section disappearing)
-BUDGET_CEILING = 1.4  # maximum 140% of base budget
+BUDGET_FLOOR = 0.4   # minimum 40% of base budget (legacy, used as fallback)
+BUDGET_CEILING = 1.4  # maximum 140% of base budget (legacy, used as fallback)
+
+# Adaptive section cap thresholds — tiered budget allocation based on
+# rolling 14-day mean relevance score per budget category.
+# Replaces smooth linear interpolation with aggressive stepped scaling.
+# Evidence: last 30 episodes show clear tier separation (2026-03-19).
+ADAPTIVE_HIGH_THRESHOLD = 0.25   # mean ≥ 0.25 → 100% budget
+ADAPTIVE_MID_THRESHOLD = 0.12    # mean 0.12-0.25 → 50% budget
+# mean < 0.12 → 0% budget (hard-pruned)
 
 # Token budgets per tier (attention-optimal allocation)
 # Sections that are never pruned by DyCP (high-value regardless of task overlap)
@@ -56,34 +64,37 @@ DYCP_MIN_CONTAINMENT = 0.08
 
 # Also consider historical mean relevance — sections historically below
 # this AND below task-containment threshold get pruned.
-# Raised 0.13→0.16 on 2026-03-15, then 0.16→0.20 on 2026-03-18:
-# 14-day data shows weakest 5 sections (meta_gradient, brain_goals,
-# failure_avoidance, metrics, synaptic) all below 0.12 — higher floor
-# ensures they're pruned even with marginal task overlap.
-DYCP_HISTORICAL_FLOOR = 0.20
+# History: 0.13→0.16 (2026-03-15) → 0.20 (2026-03-18) → 0.15 (2026-03-19).
+# Lowered back: 0.20 was too aggressive — pruned moderately useful sections
+# (brain_context=0.163, confidence_gate=0.167) that agents do reference.
+# Tier 0 (hardcoded < 0.15) still catches truly noisy sections.
+DYCP_HISTORICAL_FLOOR = 0.15
 
 # Sections with zero task overlap AND historical score below this
 # stricter ceiling are also pruned (DyCP query-dependent tier 2).
-# Raised 0.16→0.20 on 2026-03-15: borderline sections (0.12-0.16) still
-# caused noise; wider ceiling catches them when task overlap is zero.
-DYCP_ZERO_OVERLAP_CEILING = 0.20
+# Lowered 0.20→0.15 on 2026-03-19: same rationale — borderline-useful
+# sections (hist 0.15-0.20) shouldn't be pruned even with zero overlap.
+DYCP_ZERO_OVERLAP_CEILING = 0.15
 
-# Sections that are default-suppressed due to consistently low relevance
-# (14-day mean < 0.15 as of 2026-03-15). These are still included if their
-# task-containment exceeds DYCP_DEFAULT_SUPPRESS_CONTAINMENT_OVERRIDE.
+# Hard-suppressed: bottom-5 noise sections with 14-day mean < 0.12.
+# These are ALWAYS suppressed — no task-containment override.  They waste
+# ~800 tokens per brief for near-zero downstream signal (2026-03-18 analysis).
+HARD_SUPPRESS = frozenset({
+    "meta_gradient",      # mean=0.058
+    "brain_goals",        # mean=0.089
+    "failure_avoidance",  # mean=0.090
+    "metrics",            # mean=0.097
+    "synaptic",           # mean=0.112
+})
+
+# Soft-suppressed: borderline sections (mean 0.12-0.13) that ARE included
+# when task-containment exceeds DYCP_DEFAULT_SUPPRESS_CONTAINMENT_OVERRIDE.
 # This list is separate from DyCP pruning — DyCP prunes post-assembly,
 # while default-suppress prevents generation in the first place (cheaper).
 DYCP_DEFAULT_SUPPRESS = frozenset({
-    "meta_gradient",      # mean=0.056
-    "brain_goals",        # mean=0.089
-    "failure_avoidance",  # mean=0.092
-    "metrics",            # mean=0.100
-    "synaptic",           # mean=0.112
     "world_model",        # mean=0.122
     "gwt_broadcast",      # mean=0.128
     "introspection",      # mean=0.129
-    "working_memory",     # mean=0.147
-    "attention",          # mean=0.146
 })
 # Task-containment threshold to override default suppression — if the task
 # tokens overlap significantly with a suppressed section, include it anyway.
@@ -130,11 +141,20 @@ TIER_BUDGETS = {
     },
 }
 
+RECENCY_BOOST_EPISODES = 5  # last N episodes get up to 3x weight in budget adjustment
+
 def load_relevance_weights(min_episodes=MIN_EPISODES_FOR_ADJUSTMENT, days=14):
-    """Load per-section relevance scores and convert to budget scaling factors.
+    """Load per-section relevance scores and convert to adaptive budget scaling factors.
 
     Reads aggregated context_relevance data and maps per-section mean scores
-    to budget category scaling factors (BUDGET_FLOOR..BUDGET_CEILING).
+    to budget category scaling factors using tiered thresholds:
+      - mean ≥ ADAPTIVE_HIGH_THRESHOLD (0.25): scale=1.0 (full budget)
+      - ADAPTIVE_MID_THRESHOLD ≤ mean < ADAPTIVE_HIGH_THRESHOLD: scale=0.5 (half budget)
+      - mean < ADAPTIVE_MID_THRESHOLD (0.12): scale=0.0 (hard-pruned)
+
+    Uses exponential recency weighting so the last 5 episodes have ~3x
+    influence — budget adjustments respond within 1-2 heartbeat cycles
+    instead of waiting for the full 14-day window to rotate.
 
     Returns:
         Dict mapping budget keys to scaling factors, or empty dict if
@@ -142,7 +162,7 @@ def load_relevance_weights(min_episodes=MIN_EPISODES_FOR_ADJUSTMENT, days=14):
     """
     try:
         from clarvis.cognition.context_relevance import aggregate_relevance
-        agg = aggregate_relevance(days=days)
+        agg = aggregate_relevance(days=days, recency_boost=RECENCY_BOOST_EPISODES)
     except Exception:
         return {}
 
@@ -155,25 +175,39 @@ def load_relevance_weights(min_episodes=MIN_EPISODES_FOR_ADJUSTMENT, days=14):
 
     weights = {}
     for budget_key, section_names in _BUDGET_TO_SECTIONS.items():
-        scores = [per_section[s] for s in section_names if s in per_section]
-        if not scores:
+        # Exclude HARD_SUPPRESS sections from averaging — they're already
+        # suppressed at generation time and shouldn't drag down the budget
+        # of the category they were folded into (e.g., meta_gradient=0.058
+        # shouldn't penalize decision_context=0.300).
+        active_scores = [
+            per_section[s] for s in section_names
+            if s in per_section and s not in HARD_SUPPRESS
+        ]
+        if not active_scores:
             continue
-        mean_score = sum(scores) / len(scores)
-        # Linear interpolation: 0.0 relevance → BUDGET_FLOOR, 1.0 → BUDGET_CEILING
-        scale = BUDGET_FLOOR + (BUDGET_CEILING - BUDGET_FLOOR) * mean_score
-        weights[budget_key] = round(
-            min(BUDGET_CEILING, max(BUDGET_FLOOR, scale)), 3
-        )
+        mean_score = sum(active_scores) / len(active_scores)
+        # Tiered adaptive scaling (replaces linear interpolation 2026-03-19)
+        if mean_score >= ADAPTIVE_HIGH_THRESHOLD:
+            scale = 1.0
+        elif mean_score >= ADAPTIVE_MID_THRESHOLD:
+            scale = 0.5
+        else:
+            scale = 0.0
+        weights[budget_key] = scale
 
     return weights
 
 
 def get_adjusted_budgets(tier="standard"):
-    """Get tier budgets adjusted by empirical relevance weights.
+    """Get tier budgets adjusted by adaptive relevance-based caps.
 
-    Sections that are consistently referenced get more token budget;
-    sections that are rarely referenced get less. Total budget is preserved
-    by normalizing after scaling.
+    Uses tiered scaling from load_relevance_weights():
+      - High relevance (≥0.25): full budget
+      - Mid relevance (0.12-0.25): 50% budget
+      - Low relevance (<0.12): 0 tokens (hard-pruned from brief)
+
+    Tokens freed by pruned/halved sections are redistributed to full-budget
+    sections proportionally, keeping total token budget constant.
 
     Falls back to static TIER_BUDGETS when no relevance data exists.
     """
@@ -192,16 +226,19 @@ def get_adjusted_budgets(tier="standard"):
         if key == "total" or value == 0:
             adjusted[key] = value
             continue
-        scale = weights.get(key, 1.0)
-        adjusted[key] = max(10, round(value * scale))
+        scale = weights.get(key, 1.0)  # default 1.0 = keep full if no data
+        adjusted[key] = round(value * scale)
 
-    # Normalize to preserve total token budget
-    total_adjusted = sum(v for k, v in adjusted.items() if k != "total" and v > 0)
-    if total_adjusted > 0:
-        ratio = total_base / total_adjusted
-        for key in adjusted:
-            if key != "total" and adjusted[key] > 0:
-                adjusted[key] = max(10, round(adjusted[key] * ratio))
+    # Redistribute freed tokens to full-budget sections (scale=1.0)
+    total_adjusted = sum(v for k, v in adjusted.items() if k != "total")
+    freed = total_base - total_adjusted
+    if freed > 0:
+        full_keys = [k for k in adjusted if k != "total" and weights.get(k, 1.0) >= 1.0 and adjusted[k] > 0]
+        if full_keys:
+            full_total = sum(adjusted[k] for k in full_keys)
+            for k in full_keys:
+                share = adjusted[k] / full_total if full_total > 0 else 1.0 / len(full_keys)
+                adjusted[k] += round(freed * share)
 
     return adjusted
 
@@ -209,15 +246,20 @@ def get_adjusted_budgets(tier="standard"):
 def should_suppress_section(section_name: str, task_text: str = "") -> bool:
     """Check if a section should be suppressed before generation.
 
-    Returns True if the section is in the default-suppress list AND
-    its task-containment is below the override threshold. This allows
-    callers (preflight, assembly) to skip generating noise sections,
-    saving tokens and compute.
+    Hard-suppressed sections (bottom-5 noise, mean < 0.12) are ALWAYS
+    suppressed — no task-containment override.
+
+    Soft-suppressed sections (DYCP_DEFAULT_SUPPRESS) are suppressed only
+    when their task-containment is below the override threshold.
 
     Protected sections are never suppressed.
     """
     if section_name in DYCP_PROTECTED_SECTIONS:
         return False
+    # Hard suppress: unconditional — these sections are pure noise
+    if section_name in HARD_SUPPRESS:
+        return True
+    # Soft suppress: can be overridden by task containment
     if section_name not in DYCP_DEFAULT_SUPPRESS:
         return False
     if not task_text:
@@ -984,8 +1026,13 @@ def dycp_prune_brief(brief_text: str, task_text: str) -> str:
             continue  # section has task-relevant content, keep it
         # Check historical performance
         hist_score = historical.get(name, 0.5)  # default=keep if no data
+        # Tier 0 (aggressive): Historical mean < 0.15 → always stub-collapse
+        # regardless of task containment. These sections are chronic noise;
+        # even marginal containment hits don't justify full rendering.
+        if hist_score < 0.15:
+            pruned_names.add(name)
         # Tier 1: Historically weak sections with low task overlap → prune
-        if hist_score < DYCP_HISTORICAL_FLOOR:
+        elif hist_score < DYCP_HISTORICAL_FLOOR:
             pruned_names.add(name)
         # Tier 2 (DyCP query-dependent): Zero overlap + borderline history → prune
         elif containment == 0.0 and hist_score < DYCP_ZERO_OVERLAP_CEILING:
@@ -994,8 +1041,9 @@ def dycp_prune_brief(brief_text: str, task_text: str) -> str:
     if not pruned_names:
         return brief_text
 
-    # Rebuild brief without pruned sections
-    # Walk through original text, skip sections that match pruned names
+    # Rebuild brief: pruned sections become 1-line stubs (preserves signal,
+    # removes noise). Stubs let the LLM know the section exists without
+    # the token cost of full rendering.
     lines = brief_text.split("\n")
     from clarvis.cognition.context_relevance import _SECTION_MARKERS
     result_lines = []
@@ -1014,6 +1062,11 @@ def dycp_prune_brief(brief_text: str, task_text: str) -> str:
             current_section = new_section
             skip_until_next = current_section in pruned_names
             if skip_until_next:
+                # Emit a 1-line stub instead of the full section
+                hist_score = historical.get(current_section, 0.0)
+                result_lines.append(
+                    f"[{current_section}: pruned — hist_relevance={hist_score:.2f}]"
+                )
                 continue
         elif line.strip() == "---":
             # Separator — don't skip, but reset skip state

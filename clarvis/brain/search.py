@@ -32,6 +32,74 @@ _BRIDGE_TEXT_PREFIXES = (
 
 _log = logging.getLogger("clarvis.brain.search")
 
+# --- Contextual Retrieval: collection-level metadata synthesis ---
+# Pilot collections for chunk-level contextual enrichment (2026-03-19).
+# Adds collection purpose + metadata summary as a prefix to each result's
+# document text, so downstream consumers (context assembly) get
+# self-contextualizing chunks.  Inspired by Anthropic's Contextual Retrieval
+# benchmark (49% fewer failed retrievals with contextual embeddings).
+_CONTEXTUAL_PILOT_COLLECTIONS = frozenset({
+    "clarvis-learnings",
+    "clarvis-context",
+})
+
+_COLLECTION_DESCRIPTIONS = {
+    "clarvis-learnings": "Insight/lesson learned",
+    "clarvis-context": "Current working context",
+}
+
+
+def contextual_enrich(results):
+    """Add collection-level contextual prefix to recall results (pilot collections).
+
+    For each result from a pilot collection, synthesizes a short metadata
+    prefix from: collection purpose, source, creation date, and tags.
+    Stores the enriched text in ``_contextual_document`` (original ``document``
+    is preserved).  Non-pilot results get ``_contextual_document = document``.
+
+    This is read-time enrichment — cheaper than re-embedding but gives the LLM
+    self-contextualizing chunks when they appear in the context brief.
+    """
+    for r in results:
+        col = r.get("collection", "")
+        doc = r.get("document", "")
+
+        if col not in _CONTEXTUAL_PILOT_COLLECTIONS:
+            r["_contextual_document"] = doc
+            continue
+
+        meta = r.get("metadata", {})
+        parts = []
+
+        # Collection purpose
+        desc = _COLLECTION_DESCRIPTIONS.get(col, col)
+        parts.append(desc)
+
+        # Source attribution
+        source = meta.get("source", "")
+        if source:
+            parts.append(f"src={source}")
+
+        # Temporal anchor
+        created = meta.get("created_at", "")
+        if created:
+            parts.append(created[:10])  # date only
+
+        # Tags for topical grounding
+        tags = meta.get("tags", "")
+        if tags:
+            if isinstance(tags, list):
+                tags = ",".join(tags[:3])
+            elif isinstance(tags, str) and len(tags) > 60:
+                tags = tags[:60]
+            parts.append(f"[{tags}]")
+
+        prefix = " | ".join(parts)
+        r["_contextual_document"] = f"({prefix}) {doc}"
+
+    return results
+
+
 # Shared daemon executor for fire-and-forget observer hooks.
 # Daemon threads die with the process — no need for explicit shutdown.
 _observer_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="brain-obs")

@@ -96,6 +96,34 @@ def _get_phi() -> str:
     return "?"
 
 
+def ensure_daily_log(target_date: str | None = None) -> str:
+    """Create a minimal daily log stub if the file doesn't exist yet.
+
+    This is a fast, no-fail path — no brain/ChromaDB imports, no log parsing.
+    Designed to be called from health_monitor.sh (every 15 min) so consumers
+    never encounter a missing file.
+
+    Returns the path to the file (existing or newly created).
+    """
+    if target_date is None:
+        target_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    out_path = MEMORY_DIR / f"{target_date}.md"
+
+    if out_path.exists():
+        return str(out_path)
+
+    # Create minimal stub — generate_daily_log() will enrich it later
+    phi = _get_phi()
+    content = (
+        f"# {target_date} — Clarvis Daily Log\n\n"
+        f"**Brain**: pending | **Phi**: {phi}\n\n"
+        f"_No digest entries recorded for this date._\n"
+    )
+    out_path.write_text(content)
+    return str(out_path)
+
+
 def generate_daily_log(target_date: str | None = None) -> str:
     """Generate daily memory log for the given date.
 
@@ -170,6 +198,11 @@ def generate_daily_log(target_date: str | None = None) -> str:
 
 
 if __name__ == "__main__":
-    target = sys.argv[1] if len(sys.argv) > 1 else None
-    path = generate_daily_log(target)
-    print(f"Daily log written: {path}")
+    if len(sys.argv) > 1 and sys.argv[1] == "ensure":
+        target = sys.argv[2] if len(sys.argv) > 2 else None
+        path = ensure_daily_log(target)
+        print(f"Daily log ensured: {path}")
+    else:
+        target = sys.argv[1] if len(sys.argv) > 1 else None
+        path = generate_daily_log(target)
+        print(f"Daily log written: {path}")

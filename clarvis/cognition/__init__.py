@@ -19,4 +19,5 @@ from .context_relevance import (
     record_relevance,
     aggregate_relevance,
     get_suppressed_sections,
+    refresh_weights,
 )

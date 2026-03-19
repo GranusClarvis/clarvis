@@ -31,9 +31,12 @@ Usage:
 """
 
 import json
+import logging
 import os
 import re
 from datetime import datetime, timezone, timedelta
+
+_log = logging.getLogger(__name__)
 
 # Section markers used in tiered briefs (assembly.py) and supplementary
 # context appended by heartbeat_preflight.py.
@@ -101,10 +104,8 @@ MIN_SECTION_TOKENS = 5
 # aggregation — minimal briefs produce noisy scores that drag down the mean.
 MIN_SECTIONS_FOR_AGGREGATION = 5
 
-# Empirical importance weights per section — derived from 14-day mean relevance
-# data (2026-03-16).  Sections with higher historical mean relevance are weighted
-# more in the overall score.  Sections not listed here get a default weight.
-_SECTION_IMPORTANCE: dict[str, float] = {
+# Hardcoded baseline importance weights (fallback when no disk file exists).
+_SECTION_IMPORTANCE_DEFAULTS: dict[str, float] = {
     "related_tasks":     0.304,
     "episodes":          0.273,
     "decision_context":  0.267,
@@ -113,22 +114,41 @@ _SECTION_IMPORTANCE: dict[str, float] = {
     "brain_context":     0.158,
     "reasoning":         0.157,
     "knowledge":         0.155,
-    "working_memory":    0.145,
     "attention":         0.146,
+    "working_memory":    0.145,
     "gwt_broadcast":     0.128,
     "introspection":     0.129,
     "world_model":       0.122,
     "synaptic":          0.112,
-    "metrics":           0.100,
-    "failure_avoidance": 0.091,
+    "metrics":           0.097,
+    "failure_avoidance": 0.090,
     "brain_goals":       0.089,
-    "meta_gradient":     0.054,
+    "meta_gradient":     0.058,
 }
 _DEFAULT_IMPORTANCE = 0.12  # fallback for unknown sections
 
 # Data paths
 _WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
 RELEVANCE_FILE = os.path.join(_WORKSPACE, "data", "retrieval_quality", "context_relevance.jsonl")
+WEIGHTS_FILE = os.path.join(_WORKSPACE, "data", "retrieval_quality", "section_weights.json")
+
+
+def _load_section_importance() -> dict[str, float]:
+    """Load section importance weights from disk, falling back to hardcoded defaults."""
+    try:
+        with open(WEIGHTS_FILE) as f:
+            data = json.load(f)
+        weights = data.get("weights", {})
+        if weights and isinstance(weights, dict):
+            return weights
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        pass
+    return dict(_SECTION_IMPORTANCE_DEFAULTS)
+
+
+# Live weights — loaded from disk if available, otherwise hardcoded defaults.
+# Refreshed nightly by `python3 -m clarvis cognition context-relevance refresh`.
+_SECTION_IMPORTANCE: dict[str, float] = _load_section_importance()
 
 
 def _tokenize(text: str) -> set[str]:
@@ -157,6 +177,78 @@ def _containment(section_tokens: set, output_tokens: set) -> float:
     if not section_tokens or not output_tokens:
         return 0.0
     return len(section_tokens & output_tokens) / len(section_tokens)
+
+
+# ---------------------------------------------------------------------------
+# Semantic containment via MiniLM embeddings
+# ---------------------------------------------------------------------------
+
+# Blend ratio: semantic vs token containment.
+# Semantic captures synonyms/rephrasings that token overlap misses.
+SEMANTIC_WEIGHT = 0.6
+TOKEN_WEIGHT = 0.4
+
+# Singleton embedding function — lazily loaded to avoid import cost in tests.
+_embed_fn = None
+_embed_available: bool | None = None  # None = not yet checked
+
+
+def _get_embed_fn():
+    """Lazily load the MiniLM embedding function. Returns None if unavailable."""
+    global _embed_fn, _embed_available
+    if _embed_available is False:
+        return None
+    if _embed_fn is not None:
+        return _embed_fn
+    try:
+        from clarvis.brain.factory import get_embedding_function
+        _embed_fn = get_embedding_function(use_onnx=True)
+        _embed_available = True
+        return _embed_fn
+    except Exception as exc:
+        _log.debug("Semantic containment unavailable: %s", exc)
+        _embed_available = False
+        return None
+
+
+def _cosine_similarity(a, b) -> float:
+    """Cosine similarity between two embedding vectors."""
+    import numpy as np
+    a, b = np.asarray(a, dtype=float), np.asarray(b, dtype=float)
+    dot = np.dot(a, b)
+    norm = np.linalg.norm(a) * np.linalg.norm(b)
+    return float(dot / norm) if norm > 0 else 0.0
+
+
+def _embed_text(text: str, embed_fn) -> list[float] | None:
+    """Embed a single text string. Returns None on failure."""
+    if not text or not text.strip():
+        return None
+    try:
+        # ChromaDB embedding functions expect a list and return a list of embeddings
+        result = embed_fn([text])
+        if result and len(result) > 0:
+            return result[0]
+    except Exception as exc:
+        _log.debug("Embedding failed: %s", exc)
+    return None
+
+
+def _semantic_containment(section_text: str, output_embedding, embed_fn) -> float | None:
+    """Compute semantic similarity between section content and output.
+
+    Returns cosine similarity in [0, 1], or None if embedding fails.
+    The output_embedding is pre-computed (one per scoring call) to avoid
+    re-embedding the full output for every section.
+    """
+    if output_embedding is None or embed_fn is None:
+        return None
+    section_emb = _embed_text(section_text, embed_fn)
+    if section_emb is None:
+        return None
+    sim = _cosine_similarity(section_emb, output_embedding)
+    # Cosine similarity is in [-1, 1]; clamp to [0, 1]
+    return max(0.0, sim)
 
 
 def parse_brief_sections(brief_text: str) -> dict[str, str]:
@@ -250,6 +342,13 @@ def score_section_relevance(
         }
 
     output_tokens = _tokenize(output_text)
+
+    # Try to get semantic embeddings (lazy, cached singleton)
+    embed_fn = _get_embed_fn()
+    output_embedding = None
+    if embed_fn is not None:
+        output_embedding = _embed_text(output_text[:4000], embed_fn)  # truncate for perf
+
     per_section = {}
     referenced = 0
     scorable = 0  # sections with enough tokens to evaluate
@@ -258,7 +357,15 @@ def score_section_relevance(
 
     for name, content in sections.items():
         section_tokens = _tokenize(content)
-        score = _containment(section_tokens, output_tokens)
+        token_score = _containment(section_tokens, output_tokens)
+
+        # Blend semantic similarity when available
+        sem_score = _semantic_containment(content, output_embedding, embed_fn)
+        if sem_score is not None:
+            score = SEMANTIC_WEIGHT * sem_score + TOKEN_WEIGHT * token_score
+        else:
+            score = token_score  # fallback: token-only
+
         per_section[name] = round(score, 4)
         if len(section_tokens) < MIN_SECTION_TOKENS:
             continue  # too small to meaningfully evaluate
@@ -302,6 +409,18 @@ def record_relevance(result: dict) -> str:
     return RELEVANCE_FILE
 
 
+# Bottom-5 noise sections unconditionally suppressed (mean < 0.12).
+# Mirrored from assembly.HARD_SUPPRESS — defined here too so preflight
+# can import without pulling in the full assembly module.
+HARD_SUPPRESS = frozenset({
+    "meta_gradient",      # mean=0.058
+    "brain_goals",        # mean=0.089
+    "failure_avoidance",  # mean=0.090
+    "metrics",            # mean=0.097
+    "synaptic",           # mean=0.112
+})
+
+
 def get_suppressed_sections(
     threshold: float = 0.13,
     min_episodes: int = 10,
@@ -310,32 +429,43 @@ def get_suppressed_sections(
 ) -> set[str]:
     """Return set of section names whose mean relevance is below threshold.
 
-    Sections consistently below the threshold are noise — the context they
-    provide is almost never referenced in task output.  Callers (preflight,
-    assembly) should skip injecting these sections to improve overall
-    context relevance.
+    Always includes HARD_SUPPRESS sections (unconditional noise gate).
+    Additionally includes any section whose historical mean is below threshold
+    when sufficient episode data exists.
 
-    Returns empty set when insufficient data exists (< min_episodes).
+    Returns at minimum HARD_SUPPRESS even when insufficient data exists.
     """
+    result = set(HARD_SUPPRESS)
+
     agg = aggregate_relevance(days=days, relevance_file=relevance_file)
     if agg.get("episodes", 0) < min_episodes:
-        return set()
+        return result
 
     per_section = agg.get("per_section_mean", {})
-    return {name for name, score in per_section.items() if score < threshold}
+    result |= {name for name, score in per_section.items() if score < threshold}
+    return result
 
 
-def aggregate_relevance(days: int = 7, relevance_file: str = RELEVANCE_FILE) -> dict:
+def aggregate_relevance(days: int = 7, relevance_file: str = RELEVANCE_FILE,
+                        recency_boost: int = 0) -> dict:
     """Aggregate context relevance scores from episode history.
 
     Args:
         days: Look back N days from now.
         relevance_file: Path to the JSONL file.
+        recency_boost: If > 0, apply exponential recency weighting where the
+            most recent `recency_boost` episodes get up to 3x weight.  Episodes
+            are sorted newest-first; weight = 1 + 2*exp(-rank * ln(3) / recency_boost)
+            so rank-0 (newest) gets 3x, rank=recency_boost gets ~2x, and older
+            episodes taper toward 1x.  This lets budget adjustments respond
+            within 1-2 cycles instead of waiting for the 14-day window to rotate.
 
     Returns:
         Dict with mean_relevance, episode count, per_section means,
         and success vs failure breakdown.
     """
+    import math
+
     if not os.path.exists(relevance_file):
         return {"mean_relevance": 0.0, "episodes": 0, "per_section_mean": {}}
 
@@ -367,31 +497,58 @@ def aggregate_relevance(days: int = 7, relevance_file: str = RELEVANCE_FILE) -> 
     if not entries:
         return {"mean_relevance": 0.0, "episodes": 0, "per_section_mean": {}}
 
-    # Overall mean
-    overall_scores = [e["overall"] for e in entries if "overall" in e]
-    mean_relevance = sum(overall_scores) / len(overall_scores) if overall_scores else 0.0
+    # Sort newest-first by timestamp for recency weighting
+    entries.sort(key=lambda e: e.get("ts", ""), reverse=True)
 
-    # Per-section means
-    section_scores: dict[str, list[float]] = {}
-    for entry in entries:
+    # Compute per-entry weights
+    if recency_boost > 0 and len(entries) > 1:
+        decay = math.log(3) / max(recency_boost, 1)
+        entry_weights = [1.0 + 2.0 * math.exp(-i * decay) for i in range(len(entries))]
+    else:
+        entry_weights = [1.0] * len(entries)
+
+    # Overall weighted mean
+    weighted_sum = 0.0
+    weight_total = 0.0
+    for entry, w in zip(entries, entry_weights):
+        if "overall" in entry:
+            weighted_sum += entry["overall"] * w
+            weight_total += w
+    mean_relevance = weighted_sum / weight_total if weight_total > 0 else 0.0
+
+    # Per-section weighted means
+    section_weighted: dict[str, float] = {}
+    section_weight_totals: dict[str, float] = {}
+    for entry, w in zip(entries, entry_weights):
         for name, score in entry.get("per_section", {}).items():
-            section_scores.setdefault(name, []).append(score)
+            section_weighted[name] = section_weighted.get(name, 0.0) + score * w
+            section_weight_totals[name] = section_weight_totals.get(name, 0.0) + w
 
     per_section_mean = {
-        name: round(sum(scores) / len(scores), 4)
-        for name, scores in section_scores.items()
+        name: round(section_weighted[name] / section_weight_totals[name], 4)
+        for name in section_weighted
+        if section_weight_totals.get(name, 0) > 0
     }
 
     # Breakdown by outcome
-    success_scores = [e["overall"] for e in entries if e.get("outcome") == "success" and "overall" in e]
-    failure_scores = [e["overall"] for e in entries if e.get("outcome") != "success" and "overall" in e]
+    success_sum, success_w = 0.0, 0.0
+    failure_sum, failure_w = 0.0, 0.0
+    for entry, w in zip(entries, entry_weights):
+        if "overall" not in entry:
+            continue
+        if entry.get("outcome") == "success":
+            success_sum += entry["overall"] * w
+            success_w += w
+        else:
+            failure_sum += entry["overall"] * w
+            failure_w += w
 
     return {
         "mean_relevance": round(mean_relevance, 4),
         "episodes": len(entries),
         "per_section_mean": per_section_mean,
-        "success_mean": round(sum(success_scores) / len(success_scores), 4) if success_scores else 0.0,
-        "failure_mean": round(sum(failure_scores) / len(failure_scores), 4) if failure_scores else 0.0,
+        "success_mean": round(success_sum / success_w, 4) if success_w > 0 else 0.0,
+        "failure_mean": round(failure_sum / failure_w, 4) if failure_w > 0 else 0.0,
     }
 
 
@@ -432,3 +589,53 @@ def regenerate_report(days: int = 7) -> dict:
         json.dump(report, f, indent=2)
 
     return agg
+
+
+def refresh_weights(days: int = 14, recency_boost: int = 5,
+                    min_episodes: int = 10) -> dict:
+    """Aggregate recent episode data and write updated section importance weights to disk.
+
+    This closes the feedback loop: postflight records per-section relevance,
+    this function aggregates it into weights, and assembly.py / scoring reads
+    the weights on next import.
+
+    Returns dict with weights written and metadata.
+    """
+    agg = aggregate_relevance(days=days, recency_boost=recency_boost)
+
+    if agg.get("episodes", 0) < min_episodes:
+        return {
+            "status": "skipped",
+            "reason": f"insufficient episodes ({agg.get('episodes', 0)} < {min_episodes})",
+            "episodes": agg.get("episodes", 0),
+        }
+
+    per_section = agg.get("per_section_mean", {})
+    # Merge with defaults so all known sections have a weight
+    weights = dict(_SECTION_IMPORTANCE_DEFAULTS)
+    weights.update(per_section)
+
+    output = {
+        "weights": weights,
+        "episodes": agg["episodes"],
+        "mean_relevance": agg["mean_relevance"],
+        "days": days,
+        "recency_boost": recency_boost,
+        "refreshed": datetime.now(timezone.utc).isoformat(),
+    }
+
+    os.makedirs(os.path.dirname(WEIGHTS_FILE), exist_ok=True)
+    with open(WEIGHTS_FILE, "w") as f:
+        json.dump(output, f, indent=2)
+
+    # Update in-memory weights for this process
+    global _SECTION_IMPORTANCE
+    _SECTION_IMPORTANCE = weights
+
+    return {
+        "status": "ok",
+        "weights_file": WEIGHTS_FILE,
+        "episodes": agg["episodes"],
+        "mean_relevance": agg["mean_relevance"],
+        "sections": len(weights),
+    }

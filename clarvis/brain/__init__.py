@@ -27,7 +27,7 @@ from .constants import (
 )
 from .factory import get_chroma_client, get_embedding_function
 from .graph import GraphMixin
-from .search import SearchMixin
+from .search import SearchMixin, contextual_enrich
 from .store import StoreMixin
 
 

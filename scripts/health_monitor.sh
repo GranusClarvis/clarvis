@@ -5,6 +5,11 @@ source /home/agent/.openclaw/workspace/scripts/cron_env.sh
 
 DATE=$(date '+%Y-%m-%d %H:%M:%S')
 LOG_DIR="/home/agent/.openclaw/workspace/monitoring"
+mkdir -p "$LOG_DIR"
+
+# === DAILY MEMORY FILE BOOTSTRAP (ensure it exists for consumers) ===
+python3 /home/agent/.openclaw/workspace/scripts/daily_memory_log.py ensure >/dev/null 2>&1 || true
+
 # === SYSTEM HEALTH ===
 MEM_TOTAL=$(free -m | awk '/^Mem:/{print $2}')
 MEM_USED=$(free -m | awk '/^Mem:/{print $3}')
@@ -114,6 +119,94 @@ except Exception:
         fi
     fi
     touch "$PI_CACHE"
+fi
+
+# === PHI SUB-METRICS CHECK (once per hour, cached) ===
+PHI_SUB_CACHE="/tmp/clarvis_phi_sub_cache"
+PHI_SUB_STALE=true
+if [ -f "$PHI_SUB_CACHE" ]; then
+    PHI_SUB_AGE=$(( $(date +%s) - $(stat -c%Y "$PHI_SUB_CACHE" 2>/dev/null || echo 0) ))
+    [ "$PHI_SUB_AGE" -lt 3600 ] && PHI_SUB_STALE=false
+fi
+if [ "$PHI_SUB_STALE" = true ]; then
+    PHI_SUB_JSON=$(cd /home/agent/.openclaw/workspace && python3 -c "
+import sys, json
+sys.path.insert(0, '.')
+try:
+    from clarvis.metrics.phi import compute_phi
+    result = compute_phi()
+    print(json.dumps({'phi': result['phi'], 'components': result['components']}))
+except Exception as e:
+    print(json.dumps({'error': str(e)}))
+" 2>/dev/null)
+    if echo "$PHI_SUB_JSON" | python3 -c "import sys,json; json.load(sys.stdin)['components']" 2>/dev/null; then
+        # Extract values
+        PHI_TOTAL=$(echo "$PHI_SUB_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin)['phi'])")
+        # Find 3 weakest sub-metrics and report
+        PHI_WEAK=$(echo "$PHI_SUB_JSON" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+comps = data['components']
+ranked = sorted(comps.items(), key=lambda x: x[1])
+for name, val in ranked[:3]:
+    print(f'  {name}={val:.4f}')
+")
+        echo "[$DATE] Phi=$PHI_TOTAL weakest:" >> "$LOG_DIR"/health.log
+        echo "$PHI_WEAK" >> "$LOG_DIR"/health.log
+
+        # Alert on any sub-metric below 0.50
+        ALERTS_NEEDED=$(echo "$PHI_SUB_JSON" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+alerts = []
+for name, val in data['components'].items():
+    if val < 0.50:
+        alerts.append(f'{name}={val:.4f}')
+if alerts:
+    print(' | '.join(alerts))
+" 2>/dev/null)
+        if [ -n "$ALERTS_NEEDED" ]; then
+            echo "[$DATE] [WARNING] Phi sub-metric(s) below 0.50: $ALERTS_NEEDED" >> "$LOG_DIR"/alerts.log
+            # Telegram alert
+            TG_TOKEN="${CLARVIS_TG_BOT_TOKEN:-}"
+            TG_CHAT="${CLARVIS_TG_CHAT_ID:-}"
+            if [ -n "$TG_TOKEN" ] && [ -n "$TG_CHAT" ]; then
+                TG_MSG="⚠️ Phi sub-metric alert
+$ALERTS_NEEDED
+Phi=$PHI_TOTAL | Weakest 3:
+$PHI_WEAK"
+                curl -s --max-time 10 \
+                    "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+                    -d chat_id="$TG_CHAT" \
+                    -d text="$TG_MSG" \
+                    -d parse_mode="HTML" >/dev/null 2>&1 || true
+            fi
+        fi
+    fi
+    touch "$PHI_SUB_CACHE"
+fi
+
+# === CONTEXT RELEVANCE TREND ===
+CR_CACHE="/tmp/clarvis_cr_cache"
+CR_STALE=true
+if [ -f "$CR_CACHE" ]; then
+    CACHE_AGE=$(( $(date +%s) - $(stat -c%Y "$CR_CACHE" 2>/dev/null || echo 0) ))
+    [ "$CACHE_AGE" -lt 3600 ] && CR_STALE=false
+fi
+if $CR_STALE; then
+    CR_VAL=$(python3 -m clarvis cognition context-relevance aggregate --days 7 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('mean_relevance',0))" 2>/dev/null)
+    if [ -n "$CR_VAL" ] && [ "$CR_VAL" != "0" ]; then
+        echo "[$DATE] CR=$CR_VAL" >> "$LOG_DIR"/context_relevance_trend.log
+        # Alert if drop > 0.05 from 14-day baseline
+        CR_BASELINE=$(python3 -m clarvis cognition context-relevance aggregate --days 14 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('mean_relevance',0))" 2>/dev/null)
+        if [ -n "$CR_BASELINE" ] && python3 -c "
+delta = float('$CR_BASELINE') - float('$CR_VAL')
+exit(0 if delta > 0.05 else 1)
+" 2>/dev/null; then
+            echo "[$DATE] [WARNING] Context relevance dropped >0.05: 7d=$CR_VAL vs 14d=$CR_BASELINE" >> "$LOG_DIR"/alerts.log
+        fi
+    fi
+    touch "$CR_CACHE"
 fi
 
 # Keep last 1000 lines of health log
