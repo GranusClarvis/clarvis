@@ -25,6 +25,8 @@ Presentable Clarvis by 2026-03-31:
 
 ### Milestone E — Final Validation (by 2026-03-31)
 
+### P0 Fixes Added — 2026-03-19 Evening Code Review
+
 ---
 
 ## P0 — Fork Integration Execution Phases
@@ -63,6 +65,10 @@ Presentable Clarvis by 2026-03-31:
 
 ### Benchmarking
 - CLR Benchmark implementation from fork: `clarvis/metrics/clr.py` (672 lines, schema v1.0 frozen, 6 dimensions).
+- [ ] [CLR_BASELINE_WIRING] Wire CLR into the canonical benchmark path so it can run from the main repo without fork-only assumptions. Ensure outputs land in structured JSON/JSONL with commit SHA, timestamp, and component subscores.
+- [ ] [CLR_PHIID_DIMENSION] Implement a new CLR dimension: **Integration Dynamics** based on ΦID-inspired engineering proxies. Start with `redundancy_ratio`, `unique_contribution_score`, and `synergy_gain`. Design reference: `docs/CLR_PHIID_BENCHMARK_PLAN.md`.
+- [ ] [CLR_PERTURBATION_HARNESS] Build a deterministic perturbation / ablation harness for context assembly and recall. Toggle modules such as episodic recall, graph expansion, related_tasks, decision_context, and reasoning scaffold; record score deltas and failure modes.
+- [ ] [CLR_DELTA_TRACKING] Persist per-run benchmark history with before/after deltas for autonomous changes. Goal: answer whether additions actually improved Clarvis or merely changed code shape.
 - A/B Comparison Benchmark: fix `ab_comparison_benchmark.py` — temp file prompts, 10+ pairs, measure success/quality/duration.
 
 ### Adaptive RAG Pipeline
@@ -73,15 +79,17 @@ _(Completed items archived.)_
 
 ## NEW ITEMS
 
-- [ ] [FIX_QUEUE_DELETED_SEMANTIC_BRIDGE_BUILDER] P0: Repair broken queue/docs references to `scripts/semantic_bridge_builder.py` — the script was deleted, but QUEUE.md still assigns cross-collection repair work to it. Replace with the canonical implementation/path or restore a thin compatibility wrapper before the task is scheduled.
-- [x] [DAILY_MEMORY_FILE_AUTOCREATE] P0: Ensure cron/reporting path creates `memory/YYYY-MM-DD.md` for the current date before writing daily outputs. 2026-03-18 had no daily memory file, which breaks continuity and weakens end-of-day review/auditability. _(2026-03-18: Created the missing daily file to restore continuity; follow-up automation still advisable if cron paths can miss file creation.)_
-- [ ] [CONTEXT_RELEVANCE_FAST_FEEDBACK] Add recent-episode fast-path weighting in `clarvis/context/assembly.py` — current budget adjustment uses 14-day historical aggregate, meaning pruning improvements take 2 weeks to register. Add exponential recency weighting (last 5 episodes = 3x weight) so DYCP budget adjustments respond within 1-2 cycles. **Target: context_relevance ≥ 0.75.**
-- [ ] [P0_PRIORITY_FLOOR] Add P0 priority floor in `clarvis/orch/task_selector.py` — guarantee P0 tasks always rank in top-3 regardless of spotlight alignment score. Currently P0 gets 0.9 importance weight but can be outranked by well-aligned P1/P2 tasks, undermining delivery deadlines.
-- [ ] [CONTEXT_SECTION_PRUNING] Add aggressive per-section pruning in `clarvis/context/assembly.py` — sections with historical mean relevance < 0.15 should be collapsed to a 1-line stub instead of full rendering. Currently `_BUDGET_TO_SECTIONS` maps groups but no section is ever fully dropped. Directly reduces noise in the brief. **Target: context_relevance ≥ 0.75.**
-- [ ] [SEMANTIC_CROSS_COLLECTION_REPAIR] Boost `semantic_cross_collection` from 0.65 toward 0.75 — run targeted `semantic_bridge_builder.py` on the weakest collection pairs (identify via `phi_metric.py` breakdown), then verify edge count and overlap improvement. Improves Phi composite.
+
+- [ ] [BRIEF_TOP_SECTION_ENRICHMENT] Improve content quality of the 3 highest-importance brief sections (related_tasks=0.304, episodes=0.273, decision_context=0.267) in `clarvis/context/assembly.py`. Related_tasks should include task dependencies and blockers from QUEUE.md; episodes should surface failure-avoidance patterns inline; decision_context should inject success criteria keywords that match output vocabulary. Direct target: context_relevance ≥0.73 (currently 0.701).
+
+- [ ] [CALIBRATION_BRIER_AUDIT] Audit and recalibrate confidence predictions in `scripts/clarvis_confidence.py`. Brier capability score=0.10 (worst metric). Review domain-specific accuracy, prune stale predictions older than 30 days, recalibrate domain thresholds. Check if low Brier score is due to prediction staleness or systematic over/under-confidence.
+
+- [ ] [SEMANTIC_CROSS_COLLECTION_BRIDGES] Strengthen weak cross-collection semantic links. Current semantic_cross_collection=0.62 (target >0.75). Run targeted `knowledge_synthesis.py` bridge-building for the lowest-overlap pairs: clarvis-procedures↔clarvis-learnings, clarvis-context↔clarvis-goals, clarvis-episodes↔clarvis-infrastructure. Verify improvement via `phi_metric.py`.
+
+- [ ] [BENCHMARK_SCORECARD_STRATEGY] Create a benchmark scorecard strategy that explicitly maps current goals to measurable benchmark dimensions. Tie existing goals (Session Continuity, Heartbeat Efficiency, Self-Reflection, CLR, context quality, Phi/integration) to concrete daily/weekly metrics so every major addition has an evaluation lane.
+
+
 
 ## Research Additions
-
-- [x] [RESEARCH_ADAPTIVE_CONTEXT_PRUNING_RAG] Research adaptive context pruning for token-efficient RAG pipelines. (2026-03-18)
 
 
