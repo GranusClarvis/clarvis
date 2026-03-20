@@ -1,5 +1,5 @@
 #!/bin/bash
-# Evening Report - 22:05 CET
+# Evening Report - 22:30 UTC
 # Comprehensive report: what happened today, metrics, accomplishments
 source /home/agent/.openclaw/workspace/scripts/cron_env.sh
 
@@ -20,8 +20,8 @@ import urllib.parse
 from datetime import datetime, timezone
 import os
 import subprocess
-sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
 
+WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
 today_str = datetime.now(timezone.utc).strftime('%Y-%m-%d')
 
 # Get bot token from env (preferred) or openclaw config (fallback)
@@ -31,14 +31,58 @@ if not TOKEN:
         config = json.load(f)
     TOKEN = config['channels']['telegram']['botToken']
 
-# ==== PARSE DIGEST ====
-digest_path = "/home/agent/.openclaw/workspace/memory/cron/digest.md"
-digest_content = ""
-if os.path.exists(digest_path):
-    with open(digest_path) as f:
-        digest_content = f.read()
 
-# Parse all entries for today
+def read_file(path):
+    try:
+        with open(path) as f:
+            return f.read()
+    except (FileNotFoundError, PermissionError):
+        return ""
+
+
+def extract_task_id(context):
+    """Extract task ID from digest entry context."""
+    m = re.search(r'\[([A-Z][A-Z0-9_]+)\]', context)
+    if m:
+        return m.group(1)
+    return None
+
+
+def extract_task_desc(context, entry_type):
+    """Extract meaningful task description from digest entry."""
+    if 'Autonomous' in entry_type or 'Sprint' in entry_type:
+        tid = extract_task_id(context)
+        if tid:
+            return tid
+        return "Evolution task"
+
+    if 'Research' in entry_type:
+        tid = extract_task_id(context)
+        if tid and tid.startswith('RESEARCH'):
+            return tid
+        m = re.search(r'(?:Researched|Research|Bundle\s+\w+):\s*(.+?)(?:\.|—|Result|\n)', context)
+        if m:
+            return m.group(1).strip()[:45]
+        return "Research task"
+
+    if 'Evolution' in entry_type:
+        return "Evolution analysis"
+
+    if 'Morning' in entry_type:
+        return "Morning planning"
+
+    if 'Evening' in entry_type:
+        return "Evening assessment"
+
+    if 'Reflection' in entry_type:
+        return "Reflection cycle"
+
+    return entry_type.split('—')[0].strip()[:30]
+
+
+# ==== PARSE DIGEST ====
+digest_content = read_file(os.path.join(WORKSPACE, "memory/cron/digest.md"))
+
 entries = []
 pattern = r'### (.+?) — (\d{2}:\d{2}) UTC'
 for match in re.finditer(pattern, digest_content):
@@ -49,149 +93,149 @@ for match in re.finditer(pattern, digest_content):
     if end == -1:
         end = len(digest_content)
     context = digest_content[start:end].strip()
-    entries.append({'type': entry_type, 'time': timestamp, 'context': context})
 
-# Filter to daytime entries (10:00 to 22:00)
-daytime_entries = []
-for e in entries:
-    hour = int(e['time'].split(':')[0])
-    if 10 <= hour <= 22:
-        daytime_entries.append(e)
+    result_match = re.search(r'Result: (\w+)', context)
+    result = result_match.group(1) if result_match else None
 
-# ==== TASK EXTRACTION ====
-def extract_task_details(context, entry_type):
-    if 'Autonomous' in entry_type:
-        task_match = re.search(r'\[([A-Z_]+)\]', context)
-        if task_match:
-            return f"{task_match.group(1)}"
-        return "Evolution task"
-    
-    if 'Research' in entry_type:
-        bundle_match = re.search(r'Researched:\s*(Bundle \w+|.+?)(?:\.|—|Result)', context)
-        if bundle_match:
-            return bundle_match.group(1).strip()[:45]
-        return "Research task"
-    
-    if 'Morning' in entry_type or 'Evening' in entry_type:
-        return "Planning cycle"
-    
-    return entry_type[:30]
+    entries.append({
+        'type': entry_type,
+        'time': timestamp,
+        'context': context,
+        'result': result,
+    })
 
-# ==== GIT TODAY ====
-today_commits = []
+# All entries are today's (digest resets daily at midnight UTC)
+# Separate by time period
+morning_entries = [e for e in entries if int(e['time'].split(':')[0]) < 10]
+daytime_entries = [e for e in entries if 10 <= int(e['time'].split(':')[0]) < 22]
+all_entries = entries
+
+# Count successes/failures/timeouts from digest
+success_count = sum(1 for e in all_entries if e['result'] == 'success')
+fail_count = sum(1 for e in all_entries if e['result'] in ('failure', 'error'))
+timeout_count = sum(1 for e in all_entries if e['result'] == 'timeout')
+
+# ==== COMPLETED TASKS — source of truth: QUEUE_ARCHIVE.md ====
+archive_content = read_file(os.path.join(WORKSPACE, "memory/evolution/QUEUE_ARCHIVE.md"))
+
+today_completed = []
+for line in archive_content.split('\n'):
+    if today_str in line and re.match(r'\s*- \[x\]', line):
+        tid_match = re.search(r'\[([A-Z][A-Z0-9_]+)\]', line)
+        if tid_match:
+            tid = tid_match.group(1)
+            # Skip meta-entries (sub-tasks that aren't standalone completions)
+            if tid not in ('CODE_VALIDATION', 'AUTO_SPLIT', 'LLM_BRAIN_REVIEW'):
+                if tid not in today_completed:
+                    today_completed.append(tid)
+
+# ==== GIT COMMITS TODAY ====
+git_commits = []
 try:
     result = subprocess.run(
-        ['git', 'log', '--oneline', f'--since={today_str} 00:00:00', f'--until={today_str} 23:59:59'],
-        cwd='/home/agent/.openclaw/workspace',
-        capture_output=True, text=True, timeout=5
+        ['git', 'log', '--oneline', f'--since={today_str} 00:00:00',
+         f'--until={today_str} 23:59:59'],
+        cwd=WORKSPACE, capture_output=True, text=True, timeout=5
     )
     for line in result.stdout.strip().split('\n'):
-        if line:
+        if line.strip():
             msg = re.sub(r'^[a-f0-9]+\s*', '', line)
             if msg:
-                today_commits.append(msg[:50])
-except:
+                git_commits.append(msg[:50])
+except Exception:
     pass
 
-# ==== QUEUE ====
-queue_path = "/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md"
-with open(queue_path) as f:
-    queue_content = f.read()
+# ==== PARSE QUEUE ====
+queue_content = read_file(os.path.join(WORKSPACE, "memory/evolution/QUEUE.md"))
 
-# Today's completed items
-today_completed = []
-for match in re.finditer(r'- \[x\] \[([^\]]+)\].*?(\d{4}-\d{2}-\d{2})', queue_content):
-    date = match.group(2)
-    if today_str in date:
-        today_completed.append(match.group(1)[:35])
+pending_items = []
+in_progress_items = []
+current_section = "Unknown"
+for line in queue_content.split('\n'):
+    if line.startswith('## '):
+        current_section = line.strip('# ').strip()
+    elif line.startswith('### '):
+        current_section = line.strip('# ').strip()
 
-# Pending items
-p0_pending = []
-for match in re.finditer(r'- \[ \] \[([^\]]+)\]', queue_content):
-    if len(p0_pending) < 2:
-        p0_pending.append(match.group(1))
+    m = re.match(r'\s*- \[ \] \[([A-Z][A-Z0-9_]+)\]', line)
+    if m:
+        pending_items.append({'id': m.group(1), 'section': current_section})
 
-# ==== RESEARCH ====
-research_done = []
-for i in range(1, 11):
-    if f'[x] P{i}:' in queue_content:
-        m = re.search(rf'\[x\] P{i}:\s*(.+?)\s*—', queue_content)
-        if m:
-            research_done.append(f"P{i}: {m.group(1)[:20]}")
+    m2 = re.match(r'\s*- \[~\] \[([A-Z][A-Z0-9_]+)\]', line)
+    if m2:
+        in_progress_items.append({'id': m2.group(1), 'section': current_section})
 
-# ==== BRAIN STATS (canonical CLI entrypoint) ====
+total_pending = len(pending_items) + len(in_progress_items)
+
+# ==== BRAIN STATS ====
 try:
     _stats_out = subprocess.run(
         ['python3', '-m', 'clarvis', 'brain', 'stats'],
         capture_output=True, text=True, timeout=30,
-        cwd='/home/agent/.openclaw/workspace'
+        cwd=WORKSPACE
     )
     stats = json.loads(_stats_out.stdout)
 except Exception:
-    stats = {'total_memories': 0, 'collections': {}}
+    stats = {'total_memories': '?', 'collections': {}}
 
 # ==== BUILD REPORT ====
 lines = []
-
 lines.append("🌙 Clarvis Evening Report")
 lines.append("=" * 40)
 lines.append("")
 
-# Today's activity
+# Today's work — full day from digest
 lines.append("📅 TODAY'S WORK")
 lines.append("-" * 20)
-if daytime_entries:
-    for e in daytime_entries:
-        result_match = re.search(r'Result: (\w+)', e['context'])
-        result = result_match.group(1) if result_match else "?"
-        task = extract_task_details(e['context'], e['type'])
-        lines.append(f"  {e['time']} → {task} [{result}]")
+if all_entries:
+    for e in all_entries:
+        result_str = f"[{e['result']}]" if e['result'] else ""
+        task = extract_task_desc(e['context'], e['type'])
+        lines.append(f"  {e['time']} → {task} {result_str}".rstrip())
+    lines.append(f"  — {success_count} success, {fail_count} fail, {timeout_count} timeout")
 else:
-    lines.append("  (No daytime activity)")
+    lines.append("  (No activity in digest)")
 lines.append("")
 
-# Completed today
+# Completed tasks (from archive — real source of truth)
 lines.append("✅ COMPLETED TODAY")
 lines.append("-" * 20)
 if today_completed:
     for t in today_completed:
         lines.append(f"  • {t}")
+    lines.append(f"  Total: {len(today_completed)} tasks")
 else:
-    lines.append("  Nothing completed today")
+    lines.append("  (No tasks archived today)")
 lines.append("")
 
 # Git commits
 lines.append("📝 GIT COMMITS")
 lines.append("-" * 20)
-if today_commits:
-    for c in today_commits[:4]:
+if git_commits:
+    for c in git_commits[:5]:
         lines.append(f"  • {c}")
 else:
     lines.append("  None")
 lines.append("")
 
-# Research
-lines.append("🔬 RESEARCH")
-lines.append("-" * 20)
-lines.append(f"  Done: {len(research_done)}/10")
-for r in research_done[-3:]:
-    lines.append(f"    ✓ {r}")
-lines.append("")
-
 # Queue
 lines.append("📋 QUEUE")
 lines.append("-" * 20)
-if p0_pending:
-    lines.append(f"  P0: {', '.join(p0_pending)}")
-else:
-    lines.append("  P0: empty")
-lines.append(f"  Today: {len(today_completed)} items done")
+lines.append(f"  Pending: {len(pending_items)}, In-progress: {len(in_progress_items)}")
+if pending_items:
+    next_ids = [i['id'] for i in pending_items[:3]]
+    lines.append(f"  Next: {', '.join(next_ids)}")
 lines.append("")
 
 # Brain
 lines.append("🧠 BRAIN")
 lines.append("-" * 20)
-lines.append(f"  Memories: {stats['total_memories']}")
+lines.append(f"  Memories: {stats.get('total_memories', '?')}")
+cols = stats.get('collections', {})
+if cols:
+    top_cols = sorted(cols.items(), key=lambda x: x[1], reverse=True)[:3]
+    cols_str = ", ".join([f"{k.split('-')[-1]}({v})" for k, v in top_cols])
+    lines.append(f"  Top: {cols_str}")
 
 lines.append("")
 lines.append("=" * 40)
@@ -199,12 +243,11 @@ lines.append("Good night, sir.")
 
 report = "\n".join(lines)
 
-# Send to Telegram — Reports topic in group + DM fallback
+# Send to Telegram
 GROUP_CHAT_ID = "REDACTED_GROUP_ID"
 REPORTS_TOPIC = "5"
 DM_CHAT_ID = os.environ.get("CLARVIS_TG_CHAT_ID", "REDACTED_CHAT_ID")
 
-# Primary: send to Reports topic in group
 params = {"chat_id": GROUP_CHAT_ID, "text": report, "message_thread_id": REPORTS_TOPIC}
 data = urllib.parse.urlencode(params)
 req = urllib.request.Request(f"https://api.telegram.org/bot{TOKEN}/sendMessage", data=data.encode())
@@ -212,11 +255,13 @@ try:
     urllib.request.urlopen(req, timeout=10)
     print("[report_evening] Sent to Reports topic")
 except Exception as e:
-    # Fallback: send to DM if group delivery fails
     print(f"[report_evening] Group delivery failed ({e}), falling back to DM")
     data = urllib.parse.urlencode({"chat_id": DM_CHAT_ID, "text": report})
     req = urllib.request.Request(f"https://api.telegram.org/bot{TOKEN}/sendMessage", data=data.encode())
-    urllib.request.urlopen(req, timeout=10)
+    try:
+        urllib.request.urlopen(req, timeout=10)
+    except Exception as e2:
+        print(f"[report_evening] DM delivery also failed: {e2}")
 
 print(report)
 PYEOF
