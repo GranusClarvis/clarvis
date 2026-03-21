@@ -30,8 +30,10 @@ When you spawn Claude Code (via `spawn_claude.sh` or `exec` with `claude -p`):
 ### Rule 4: Never promise without recording — speech ≠ state transition
 - NEVER say "I'll do X going forward" / "I'll handle that automatically" / "from now on I will..." without also recording a durable obligation.
 - **Promise = obligation entry OR explicit decline.** There is no third option.
-- To record: `python3 scripts/obligation_tracker.py add "description" --freq daily`
+- **Preferred:** Use `/promise_track "description"` skill — it records and confirms in one step.
+- Manual: `python3 scripts/obligation_tracker.py add "description" --freq daily`
 - Or via Python: `from obligation_tracker import ObligationTracker; ObligationTracker().record_obligation(label="...", description="...", frequency="daily", source="user_directive")`
+- **Auto-detect trigger:** If your response contains "I will ... going forward", "from now on", "I'll always/never", or any recurring commitment, you MUST call `/promise_track` before sending.
 - If you cannot enforce the promise (no check mechanism, too vague, unsafe to automate), say so explicitly instead of making an empty promise.
 - The heartbeat pipeline checks obligations every run. Violations escalate automatically.
 

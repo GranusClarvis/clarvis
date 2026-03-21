@@ -351,6 +351,160 @@ class ObligationTracker:
 
         return result
 
+    # ── AUTO-COMMIT+PUSH (git hygiene enforcement) ─────────────────
+
+    # Files/patterns that must NEVER be auto-committed
+    SECRET_PATTERNS = (
+        ".env", "credentials", "auth.json", "secret", "token",
+        ".pem", ".key", "id_rsa", "id_ed25519", ".p12",
+        "budget_config.json",  # contains Telegram bot token
+    )
+
+    def auto_commit_push(self, dry_run: bool = False) -> dict:
+        """Auto-commit and push if dirty tree >60min and changes are safe.
+
+        Safety checks:
+        1. No files matching secret patterns
+        2. No binary files over 1MB
+        3. Dirty age > 60 minutes (avoids committing in-progress work)
+        4. Only pushes if commits are ahead of origin
+
+        Returns:
+            {acted: bool, action: str, detail: str}
+        """
+        result = {"acted": False, "action": "none", "detail": ""}
+
+        try:
+            hygiene = self.git_hygiene_check()
+
+            # Case 1: Unpushed commits — push them
+            if hygiene["unpushed_commits"] > 0 and hygiene["dirty_files"] == 0:
+                if dry_run:
+                    result["action"] = "would_push"
+                    result["detail"] = f"{hygiene['unpushed_commits']} unpushed commits"
+                    return result
+                push = subprocess.run(
+                    ["git", "push", "origin", "main"],
+                    capture_output=True, text=True, timeout=60, cwd=WORKSPACE,
+                )
+                if push.returncode == 0:
+                    result["acted"] = True
+                    result["action"] = "pushed"
+                    result["detail"] = f"Pushed {hygiene['unpushed_commits']} commits"
+                    self._log_event("git-hygiene", "auto_pushed", result["detail"])
+                else:
+                    result["detail"] = f"Push failed: {push.stderr.strip()[:200]}"
+                    self._log_event("git-hygiene", "auto_push_failed", result["detail"])
+                return result
+
+            # Case 2: Dirty tree — check if safe to commit
+            if hygiene["dirty_files"] == 0:
+                result["detail"] = "clean tree"
+                return result
+
+            if hygiene["dirty_age_minutes"] < 60:
+                result["detail"] = f"Dirty {hygiene['dirty_age_minutes']:.0f}m (< 60m threshold)"
+                return result
+
+            # Get list of changed files
+            status = subprocess.run(
+                ["git", "status", "--porcelain"],
+                capture_output=True, text=True, timeout=10, cwd=WORKSPACE,
+            )
+            changed_files = []
+            for line in status.stdout.strip().split("\n"):
+                if not line.strip():
+                    continue
+                # Extract filename (handle renames: "R  old -> new")
+                parts = line[3:].strip()
+                if " -> " in parts:
+                    parts = parts.split(" -> ")[-1]
+                changed_files.append(parts)
+
+            if not changed_files:
+                result["detail"] = "no changed files detected"
+                return result
+
+            # Safety check: no secrets
+            for f in changed_files:
+                f_lower = f.lower()
+                for pattern in self.SECRET_PATTERNS:
+                    if pattern.lower() in f_lower:
+                        result["detail"] = f"Blocked: {f} matches secret pattern '{pattern}'"
+                        self._log_event("git-hygiene", "auto_commit_blocked_secret", result["detail"])
+                        return result
+
+            # Safety check: no large binary files (>1MB)
+            for f in changed_files:
+                fpath = os.path.join(WORKSPACE, f)
+                if os.path.exists(fpath) and os.path.getsize(fpath) > 1_000_000:
+                    # Check if it's binary
+                    try:
+                        with open(fpath, "rb") as fh:
+                            chunk = fh.read(8192)
+                            if b"\x00" in chunk:
+                                result["detail"] = f"Blocked: {f} is a large binary ({os.path.getsize(fpath)} bytes)"
+                                self._log_event("git-hygiene", "auto_commit_blocked_binary", result["detail"])
+                                return result
+                    except (OSError, IOError):
+                        pass
+
+            if dry_run:
+                result["action"] = "would_commit_push"
+                result["detail"] = f"{len(changed_files)} files, {hygiene['dirty_age_minutes']:.0f}m old"
+                return result
+
+            # Stage all changes
+            add_result = subprocess.run(
+                ["git", "add", "-A"],
+                capture_output=True, text=True, timeout=30, cwd=WORKSPACE,
+            )
+            if add_result.returncode != 0:
+                result["detail"] = f"git add failed: {add_result.stderr.strip()[:200]}"
+                return result
+
+            # Commit with descriptive message
+            file_summary = ", ".join(changed_files[:5])
+            if len(changed_files) > 5:
+                file_summary += f" (+{len(changed_files) - 5} more)"
+            commit_msg = (
+                f"chore: auto-commit {len(changed_files)} files "
+                f"(dirty {hygiene['dirty_age_minutes']:.0f}m)\n\n"
+                f"Files: {file_summary}\n"
+                f"Auto-committed by obligation_tracker git-hygiene enforcement."
+            )
+            commit_result = subprocess.run(
+                ["git", "commit", "-m", commit_msg],
+                capture_output=True, text=True, timeout=30, cwd=WORKSPACE,
+            )
+            if commit_result.returncode != 0:
+                result["detail"] = f"git commit failed: {commit_result.stderr.strip()[:200]}"
+                self._log_event("git-hygiene", "auto_commit_failed", result["detail"])
+                return result
+
+            # Push
+            push_result = subprocess.run(
+                ["git", "push", "origin", "main"],
+                capture_output=True, text=True, timeout=60, cwd=WORKSPACE,
+            )
+            if push_result.returncode == 0:
+                result["acted"] = True
+                result["action"] = "committed_and_pushed"
+                result["detail"] = f"Committed {len(changed_files)} files ({hygiene['dirty_age_minutes']:.0f}m old) and pushed"
+                self._log_event("git-hygiene", "auto_committed_pushed", result["detail"])
+            else:
+                # Commit succeeded but push failed — still count as acted
+                result["acted"] = True
+                result["action"] = "committed"
+                result["detail"] = f"Committed {len(changed_files)} files but push failed: {push_result.stderr.strip()[:200]}"
+                self._log_event("git-hygiene", "auto_committed_push_failed", result["detail"])
+
+        except Exception as e:
+            result["detail"] = f"auto_commit_push error: {e}"
+            self._log_event("git-hygiene", "auto_commit_push_error", str(e)[:200])
+
+        return result
+
     def escalate_to_queue(self, ob: dict, reason: str = ""):
         """Push an escalation task to QUEUE.md via queue_writer if available."""
         tag = f"OBLIGATION_ESCALATION_{ob['id']}"
@@ -683,6 +837,14 @@ def main():
                 freq = sys.argv[idx + 1]
         ob = tracker.record_obligation(label=desc, description=desc, frequency=freq, source="cli")
         print(f"Recorded: {ob['id']}")
+
+    elif cmd == "auto-fix":
+        dry = "--dry-run" in sys.argv
+        result = tracker.auto_commit_push(dry_run=dry)
+        print(f"Auto-fix: {result['action']}")
+        print(f"  {result['detail']}")
+        if result["acted"]:
+            print("  Git hygiene enforced successfully.")
 
     elif cmd == "git-hygiene":
         result = tracker.git_hygiene_check()

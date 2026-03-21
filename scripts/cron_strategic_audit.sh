@@ -207,7 +207,7 @@ Analyze everything above and answer these questions honestly:
 
 ## OUTPUT FORMAT
 
-Write your audit as a structured report. Then at the END, output a section called:
+Write your audit as a structured report. Then at the END, output TWO things:
 
 ### QUEUE ACTIONS
 List concrete changes to QUEUE.md in this exact format:
@@ -215,7 +215,20 @@ List concrete changes to QUEUE.md in this exact format:
 - ADD P1: [task description]
 - DEPRIORITIZE: [task description that should be lowered]
 
-Focus on 3-5 high-impact actions. Quality over quantity." \
+Focus on 3-5 high-impact actions. Quality over quantity.
+
+### STRUCTURED FINDINGS
+Output a JSON block (fenced with \`\`\`json) with this exact schema:
+\`\`\`json
+{
+  \"findings\": [
+    {\"priority\": \"P0\", \"category\": \"metric_integrity|brain_quality|module_utilization|build_consolidate|autonomy|direction\", \"title\": \"short title\", \"description\": \"what and why\", \"action\": \"concrete task to add to queue\"},
+  ],
+  \"autonomy_score\": 7,
+  \"biggest_gap\": \"one sentence\"
+}
+\`\`\`
+Include ALL P0/P1 findings in this JSON. This is machine-parsed for reliable queue injection." \
     --dangerously-skip-permissions 2>> "$LOGFILE")
 
 AUDIT_EXIT=$?
@@ -237,24 +250,72 @@ echo "$AUDIT_OUTPUT" > "data/strategic_audits/audit_${AUDIT_DATE}.md"
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Audit report saved." >> "$LOGFILE"
 
-# === APPLY QUEUE ACTIONS ===
-# Extract ADD P0/P1 lines and append to QUEUE.md
-echo "$AUDIT_OUTPUT" | grep -E "^- ADD P[012]:" | while read -r line; do
-    PRIORITY=$(echo "$line" | grep -oP 'P[012]')
-    TASK_DESC=$(echo "$line" | sed 's/^- ADD P[012]: //')
+# === APPLY QUEUE ACTIONS (robust Python parser) ===
+# Tries JSON structured findings first, falls back to grep-based extraction
+python3 - "$AUDIT_OUTPUT" << 'PYEOF' >> "$LOGFILE" 2>&1
+import json
+import re
+import sys
+import os
 
-    if [ -n "$TASK_DESC" ]; then
-        # Check for duplicates (word overlap)
-        ALREADY_EXISTS=$(grep -c "$TASK_DESC" memory/evolution/QUEUE.md 2>/dev/null || echo 0)
-        if [ "$ALREADY_EXISTS" -eq 0 ]; then
-            # Add to appropriate section
-            python3 scripts/queue_writer.py add "[STRATEGIC AUDIT] $TASK_DESC" --priority "$PRIORITY" --source "strategic_audit" >> "$LOGFILE" 2>&1
-            echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] QUEUE: Added $PRIORITY task: $TASK_DESC" >> "$LOGFILE"
-        else
-            echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] QUEUE: Skipped duplicate: $TASK_DESC" >> "$LOGFILE"
-        fi
-    fi
-done
+sys.path.insert(0, os.path.join(os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace"), "scripts"))
+from queue_writer import add_task
+
+audit_text = sys.argv[1] if len(sys.argv) > 1 else ""
+added = []
+
+# Strategy 1: Parse JSON structured findings block
+json_match = re.search(r'```json\s*(\{.*?\})\s*```', audit_text, re.DOTALL)
+if json_match:
+    try:
+        data = json.loads(json_match.group(1))
+        findings = data.get("findings", [])
+        for f in findings:
+            priority = f.get("priority", "P1")
+            if priority not in ("P0", "P1"):
+                priority = "P1"
+            action = f.get("action", "").strip()
+            title = f.get("title", "").strip()
+            category = f.get("category", "").strip()
+            if not action:
+                continue
+            task_desc = f"[STRATEGIC_AUDIT/{category}] {action}"
+            if add_task(task_desc, priority=priority, source="strategic_audit"):
+                added.append(f"{priority}: {title}")
+                print(f"QUEUE: Added {priority} task from JSON: {title}")
+            else:
+                print(f"QUEUE: Skipped (duplicate/cap): {title}")
+        # Save structured data for downstream use
+        findings_path = os.path.join(
+            os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace"),
+            "data", "strategic_audit_findings.json"
+        )
+        data["extracted_at"] = __import__("datetime").datetime.now().isoformat()
+        with open(findings_path, "w") as fp:
+            json.dump(data, fp, indent=2)
+        print(f"Saved structured findings to {findings_path}")
+    except (json.JSONDecodeError, KeyError) as e:
+        print(f"JSON parse failed ({e}), falling back to grep")
+        json_match = None
+
+# Strategy 2: Fallback — grep for "- ADD P0/P1:" lines
+if not json_match or not added:
+    for line in audit_text.split("\n"):
+        m = re.match(r'^- ADD (P[012]): (.+)', line.strip())
+        if not m:
+            continue
+        priority, task_desc = m.group(1), m.group(2).strip()
+        if not task_desc:
+            continue
+        full_desc = f"[STRATEGIC_AUDIT] {task_desc}"
+        if add_task(full_desc, priority=priority, source="strategic_audit"):
+            added.append(f"{priority}: {task_desc[:60]}")
+            print(f"QUEUE: Added {priority} task from grep: {task_desc[:60]}")
+        else:
+            print(f"QUEUE: Skipped (duplicate/cap): {task_desc[:60]}")
+
+print(f"Total queue actions applied: {len(added)}")
+PYEOF
 
 # === WRITE DIGEST ===
 # Summarize audit findings for M2.5 to read

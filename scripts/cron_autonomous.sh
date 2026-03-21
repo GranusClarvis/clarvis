@@ -457,6 +457,14 @@ print('?')
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] POSTFLIGHT: complete in ${PF_POST_TIME}s" >> "$LOGFILE"
 fi
 
+# === GIT HYGIENE AUTO-FIX (obligation enforcement) ===
+# Auto-commit+push if dirty tree >60min and changes are safe (no secrets, no large binaries)
+GIT_AUTOFIX=$(python3 "$SCRIPTS/obligation_tracker.py" auto-fix 2>> "$LOGFILE")
+GIT_AUTOFIX_ACTION=$(echo "$GIT_AUTOFIX" | head -1)
+if echo "$GIT_AUTOFIX_ACTION" | grep -qE "committed|pushed"; then
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] GIT-HYGIENE: $GIT_AUTOFIX_ACTION — $(echo "$GIT_AUTOFIX" | tail -1)" >> "$LOGFILE"
+fi
+
 # Cleanup
 rm -f "$TASK_OUTPUT_FILE" "$PREFLIGHT_FILE" "${TASK_OUTPUT_FILE}.reconsider.json"
 
