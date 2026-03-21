@@ -6,11 +6,11 @@ a bare Claude Code agent. It combines 7 dimensions into a single 0-1 score:
 
   1. Memory Quality          (w=0.18) — recall accuracy, retrieval precision, hit rate
   2. Retrieval Precision     (w=0.17) — context relevance, noise ratio, eval verdict
-  3. Prompt/Context          (w=0.13) — brief quality, compression ratio, relevance
+  3. Prompt/Context          (w=0.18) — brief quality, context_relevance score, compression
   4. Task Success            (w=0.18) — episode success rate, quality score, reasoning depth
-  5. Autonomy                (w=0.12) — unattended success, cost efficiency
-  6. Efficiency              (w=0.08) — query speed, token economy, brain bloat
-  7. Integration Dynamics    (w=0.14) — ΦID-inspired: redundancy, unique contribution, synergy
+  5. Autonomy                (w=0.11) — unattended success, cost efficiency
+  6. Efficiency              (w=0.06) — query speed, token economy, brain bloat
+  7. Integration Dynamics    (w=0.12) — ΦID-inspired: redundancy, unique contribution, synergy
 
 Baseline (no brain, no memory) is estimated at ~0.215 CLR.
 """
@@ -31,14 +31,16 @@ MAX_HISTORY = 400
 CLR_SCHEMA_VERSION = "1.0"
 
 # Dimension weights — must sum to 1.0
+# 2026-03-21: prompt_context raised 0.13→0.18 (context relevance is weakest metric).
+# Rebalanced: efficiency 0.08→0.06, integration_dynamics 0.14→0.12, autonomy 0.12→0.11.
 WEIGHTS = {
     "memory_quality": 0.18,
     "retrieval_precision": 0.17,
-    "prompt_context": 0.13,
+    "prompt_context": 0.18,
     "task_success": 0.18,
-    "autonomy": 0.12,
-    "efficiency": 0.08,
-    "integration_dynamics": 0.14,
+    "autonomy": 0.11,
+    "efficiency": 0.06,
+    "integration_dynamics": 0.12,
 }
 
 GATE_THRESHOLDS = {
@@ -58,9 +60,9 @@ BASELINE = {
     "retrieval_precision": 0.0,  # No retrieval
     "prompt_context": 0.30,      # Basic context from files only
     "task_success": 0.50,        # Claude is still good at tasks
-    "autonomy": 0.20,            # No autonomous loop
-    "efficiency": 0.40,          # No optimization, but no overhead either
-    "integration_dynamics": 0.0, # No integration without cognitive architecture
+    "autonomy": 0.20,            # No autonomous loop (w=0.11)
+    "efficiency": 0.40,          # No optimization, but no overhead either (w=0.06)
+    "integration_dynamics": 0.0, # No integration without cognitive architecture (w=0.12)
 }
 
 
@@ -216,7 +218,7 @@ def _score_retrieval_precision():
 
 
 def _score_prompt_context():
-    """Dimension 3: Prompt/Context Quality — brief quality, compression."""
+    """Dimension 3: Prompt/Context Quality — brief quality, context_relevance, compression."""
     evidence = []
     scores = []
 
@@ -261,8 +263,74 @@ def _score_prompt_context():
     except Exception as e:
         evidence.append(f"error: {e}")
 
+    # Sub-score: direct context_relevance from episode feedback loop.
+    # This gives CLR direct visibility into how relevant the assembled
+    # brief sections actually are to downstream task outputs.
+    cr_score = _get_context_relevance_score()
+    if cr_score is not None:
+        scores.append(cr_score)
+        evidence.append(f"context_relevance={cr_score:.3f}")
+
     score = sum(scores) / len(scores) if scores else 0.3
     return round(score, 3), evidence
+
+
+def _get_context_relevance_score() -> float | None:
+    """Read aggregate context_relevance and return a 0-1 score.
+
+    Uses the mean of per-section relevance scores (not the overall episode
+    score) because per-section scores have useful dynamic range (0.08-0.33
+    typically) while the overall score saturates near 0.8.
+
+    This score is also exposed via get_latest_context_relevance() for
+    assembly adaptive thresholds to consume.
+    """
+    try:
+        from clarvis.cognition.context_relevance import aggregate_relevance
+        agg = aggregate_relevance(days=14, recency_boost=5)
+        if agg.get("episodes", 0) < 3:
+            return None
+        per_section = agg.get("per_section_mean", {})
+        if not per_section:
+            return None
+        # Mean of per-section scores — typically 0.10-0.25 range.
+        # Normalize: map [0, 0.35] → [0, 1.0] for useful CLR dynamic range.
+        section_mean = sum(per_section.values()) / len(per_section)
+        return min(1.0, round(section_mean / 0.35, 3))
+    except Exception:
+        return None
+
+
+def get_latest_context_relevance() -> dict:
+    """Get the latest context_relevance data for assembly feedback.
+
+    Returns dict with:
+        score: normalized 0-1 context relevance score (from per-section mean)
+        raw_section_mean: raw mean of per-section scores
+        per_section: per-section mean scores
+        episodes: number of episodes in window
+
+    Assembly can use 'score' to adjust adaptive thresholds — e.g.,
+    if score < 0.5 (section_mean < 0.175), boost high-relevance sections.
+    """
+    try:
+        from clarvis.cognition.context_relevance import aggregate_relevance
+        agg = aggregate_relevance(days=14, recency_boost=5)
+        eps = agg.get("episodes", 0)
+        if eps < 3:
+            return {"score": None, "raw_section_mean": None, "per_section": {}, "episodes": eps}
+        per_section = agg.get("per_section_mean", {})
+        if not per_section:
+            return {"score": None, "raw_section_mean": None, "per_section": {}, "episodes": eps}
+        section_mean = sum(per_section.values()) / len(per_section)
+        return {
+            "score": min(1.0, round(section_mean / 0.35, 3)),
+            "raw_section_mean": round(section_mean, 4),
+            "per_section": per_section,
+            "episodes": eps,
+        }
+    except Exception:
+        return {"score": None, "raw_section_mean": None, "per_section": {}, "episodes": 0}
 
 
 def _score_task_success():

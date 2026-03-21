@@ -1230,6 +1230,94 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
         _pf_errors.append("code_gen_outcome")
     timings["code_gen_outcome"] = round(time.monotonic() - t742, 3)
 
+    # === 7.421 COMPLEXITY GATE: Auto-queue decomposition for long functions ===
+    t7421 = time.monotonic()
+    try:
+        import ast as _ast
+        _cg_changed = set()
+        if 'changed_py' in dir():
+            _cg_changed = changed_py
+        else:
+            # Re-detect changed files if code_gen_outcome failed
+            import subprocess
+            _ws = "/home/agent/.openclaw/workspace"
+            for _cmd in [
+                ["git", "diff", "--name-only", "--diff-filter=ACMR", "HEAD~1", "HEAD", "--", "*.py"],
+                ["git", "diff", "--name-only", "--diff-filter=ACMR", "--", "*.py"],
+            ]:
+                _p = subprocess.run(_cmd, capture_output=True, text=True, timeout=10, cwd=_ws)
+                for _l in _p.stdout.strip().split("\n"):
+                    _l = _l.strip()
+                    if _l.endswith(".py"):
+                        _cg_changed.add(_l)
+
+        _long_funcs = []
+        _max_func_lines = 80
+        _ws = "/home/agent/.openclaw/workspace"
+        for relpath in sorted(_cg_changed)[:15]:
+            fpath = os.path.join(_ws, relpath)
+            if not os.path.exists(fpath):
+                continue
+            try:
+                with open(fpath) as _f:
+                    source = _f.read()
+                tree = _ast.parse(source)
+                for node in _ast.walk(tree):
+                    if isinstance(node, (_ast.FunctionDef, _ast.AsyncFunctionDef)):
+                        end_line = getattr(node, "end_lineno", None)
+                        if end_line is None:
+                            continue
+                        func_len = end_line - node.lineno + 1
+                        if func_len > _max_func_lines:
+                            _long_funcs.append({
+                                "file": relpath,
+                                "function": node.name,
+                                "lines": func_len,
+                                "start": node.lineno,
+                                "end": end_line,
+                            })
+            except Exception:
+                pass
+
+        if _long_funcs:
+            log(f"Complexity gate: {len(_long_funcs)} function(s) exceed {_max_func_lines} lines")
+            # Auto-queue decomposition task as P1
+            queue_path = os.path.join(_ws, "memory/evolution/QUEUE.md")
+            if os.path.exists(queue_path):
+                with open(queue_path) as _qf:
+                    queue_content = _qf.read()
+
+                # Build task description from long functions
+                _func_descs = []
+                for lf in _long_funcs[:5]:
+                    _func_descs.append(f"`{lf['file']}:{lf['function']}` ({lf['lines']} lines)")
+                _funcs_str = ", ".join(_func_descs)
+                _task_tag = "[DECOMPOSE_LONG_FUNCTIONS]"
+
+                # Only add if not already queued
+                if _task_tag not in queue_content:
+                    _task_line = (
+                        f"- [ ] {_task_tag} Decompose oversized functions: "
+                        f"{_funcs_str}. Target: all functions ≤{_max_func_lines} lines."
+                    )
+                    # Insert into P1 section
+                    if "## P1" in queue_content:
+                        queue_content = queue_content.replace(
+                            "## P1 — This Week\n",
+                            f"## P1 — This Week\n\n{_task_line}\n",
+                            1,
+                        )
+                        with open(queue_path, "w") as _qf:
+                            _qf.write(queue_content)
+                        log(f"Complexity gate: queued {_task_tag} as P1")
+                else:
+                    log(f"Complexity gate: {_task_tag} already in queue")
+        else:
+            log("Complexity gate: all functions within limit")
+    except Exception as e:
+        log(f"Complexity gate failed (non-fatal): {e}")
+    timings["complexity_gate"] = round(time.monotonic() - t7421, 3)
+
     # === 7.43 CODE VALIDATION GATE: Self-repair feedback loop (Self-Refine pattern) ===
     t743 = time.monotonic()
     if cv_validate_output or cv_validate_file:

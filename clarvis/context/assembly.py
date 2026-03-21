@@ -273,6 +273,9 @@ def get_adjusted_budgets(tier="standard"):
       - Mid relevance (0.12-0.25): 50% budget
       - Low relevance (<0.12): 0 tokens (hard-pruned from brief)
 
+    When CLR's context_relevance sub-score is below 0.5 (raw < 0.25),
+    high-relevance sections get a 20% boost to improve brief quality.
+
     Tokens freed by pruned/halved sections are redistributed to full-budget
     sections proportionally, keeping total token budget constant.
 
@@ -284,6 +287,19 @@ def get_adjusted_budgets(tier="standard"):
     if not weights:
         return base
 
+    # Check CLR context_relevance score for adaptive boost
+    clr_boost = 1.0
+    try:
+        from clarvis.metrics.clr import get_latest_context_relevance
+        cr = get_latest_context_relevance()
+        cr_score = cr.get("score")
+        if cr_score is not None and cr_score < 0.5:
+            # Context relevance is weak — boost high-relevance sections by 20%
+            # to increase signal density in the brief.
+            clr_boost = 1.2
+    except Exception:
+        pass
+
     total_base = sum(v for k, v in base.items() if k != "total" and v > 0)
     if total_base == 0:
         return base
@@ -294,6 +310,9 @@ def get_adjusted_budgets(tier="standard"):
             adjusted[key] = value
             continue
         scale = weights.get(key, 1.0)  # default 1.0 = keep full if no data
+        # Apply CLR boost only to full-budget (high-relevance) sections
+        if scale >= 1.0 and clr_boost > 1.0:
+            scale *= clr_boost
         adjusted[key] = round(value * scale)
 
     # Redistribute freed tokens to full-budget sections (scale=1.0)

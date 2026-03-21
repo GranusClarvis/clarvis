@@ -1375,3 +1375,8 @@ _Last archived: 2026-03-17_
 - [x] [EPISODIC_MEMORY_WRAPPER_NAMEERROR] Already fixed — wrapper correctly imports and calls `main()` from `clarvis.memory.episodic_memory`. Verified 2026-03-21.
 - [x] [CONTEXT_IMPORTANCE_RECALIBRATE] Recalibrated from 95 episodes (14-day recency-weighted). Updated hardcoded defaults, promoted failure_avoidance out of HARD_SUPPRESS (mean=0.126 > 0.12), synced assembly.py + tests. 2026-03-21.
 - [x] [RESEARCH_RETRIEVAL_OPTIMIZATION] Survey retrieval optimization for RAG: late interaction retrieval, adaptive context compression, query expansion, and sentence-level focus. (2026-03-21)
+
+## Archived 2026-03-21
+- [x] [STRATEGIC_AUDIT_ARG_LENGTH_GUARD] Reads from `data/strategic_audit_last.md` file instead of argv. Done 2026-03-21.
+- [x] [GIT_HYGIENE_UNTRACKED_AGE_FIX] Now parses `??` untracked files from porcelain output for mtime. Done 2026-03-21.
+- [x] [OBLIGATION_TRACKER 2026-03-21] [OBLIGATION_ESCALATION_ob_20260321_112950_0] Resolved by committing pending work. Done 2026-03-21.

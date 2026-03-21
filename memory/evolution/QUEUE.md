@@ -27,8 +27,6 @@ Presentable Clarvis by 2026-03-31:
 ### Milestone E — Final Validation (by 2026-03-31)
 
 ### P0 Fixes Added — 2026-03-19 Evening Code Review
-- [x] [STRATEGIC_AUDIT_ARG_LENGTH_GUARD] Reads from `data/strategic_audit_last.md` file instead of argv. Done 2026-03-21.
-- [x] [GIT_HYGIENE_UNTRACKED_AGE_FIX] Now parses `??` untracked files from porcelain output for mtime. Done 2026-03-21.
 
 ---
 
@@ -51,8 +49,7 @@ Presentable Clarvis by 2026-03-31:
 ## P1 — This Week
 
 
-- [x] [OBLIGATION_TRACKER 2026-03-21] [OBLIGATION_ESCALATION_ob_20260321_112950_0] Resolved by committing pending work. Done 2026-03-21.
-- [ ] [STRATEGIC_AUDIT 2026-03-21] [STRATEGIC_AUDIT/autonomy] [COMPLEXITY_GATE] Add function-length check to heartbeat postflight — if new code introduces functions >80 lines, auto-queue a decomposition task as P1.
+- [x] [STRATEGIC_AUDIT 2026-03-21] [STRATEGIC_AUDIT/autonomy] [COMPLEXITY_GATE] _(2026-03-21: Added §7.421 complexity gate to heartbeat_postflight.py. AST-parses changed .py files, detects functions >80 lines, auto-queues [DECOMPOSE_LONG_FUNCTIONS] as P1 in QUEUE.md. Tested: correctly identifies oversized functions.)_
 ---
 
 ## P2 — When Idle (Demoted 2026-03-17)
@@ -80,7 +77,7 @@ _(Completed items archived.)_
 
 ## NEW ITEMS
 
-- [ ] [CLR_RELEVANCE_DIMENSION_WEIGHT] Increase prompt_context weight in CLR scoring (clr.py) from 0.13 → 0.18, rebalance other weights, and add a direct context_relevance sub-score that feeds assembly adaptive thresholds. Validates that CLR improvements actually improve brief quality. _(Targets weakest metric: Context Relevance via CLR feedback)_
+- [x] [CLR_RELEVANCE_DIMENSION_WEIGHT] _(2026-03-21: prompt_context 0.13→0.18, rebalanced efficiency/integration/autonomy. Added context_relevance sub-score to `_score_prompt_context()` + `get_latest_context_relevance()` API. Assembly `get_adjusted_budgets()` now boosts high-relevance sections 20% when CLR context_relevance < 0.5. Verified: CLR=0.785, prompt_context=0.685 with context_relevance=0.496 sub-score.)_
 - [ ] [CRON_MAINTENANCE_TIMEOUT_GUARD] Add timeout and stale-lock detection to the 04:00-05:05 maintenance window scripts (cron_graph_checkpoint.sh, cron_graph_compaction.sh, cron_graph_verify.sh, cron_chromadb_vacuum.sh). Currently they share /tmp/clarvis_maintenance.lock but have no max-wait or deadlock recovery. _(Bash task — operational reliability)_
 - [ ] [HEARTBEAT_CONTEXT_RELEVANCE_GATE] Add context_relevance as an explicit dimension in heartbeat_gate.py capability assessment. If context_relevance < 0.60, auto-prioritize context-improvement tasks over other queue items. Currently heartbeat asks "which capability is weakest" but doesn't consider context_relevance. _(Targets weakest metric: Context Relevance via prioritization)_
 - [ ] [DIRECTIVE_LLM_CLASSIFIER_UPGRADE] Add optional LLM-based classification fallback for ambiguous directives where rule-based classifier confidence < 0.5. Use task_router to pick cheapest model. Gate behind env var DIRECTIVE_LLM_CLASSIFY=true. _(Promise enforcement: handles nuanced instructions the rule-based classifier misses)_
