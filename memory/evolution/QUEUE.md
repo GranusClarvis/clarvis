@@ -48,6 +48,8 @@ Presentable Clarvis by 2026-03-31:
 
 ## P1 — This Week
 
+- [ ] [PROMISE_ENFORCEMENT_AUTO_COMMIT] Wire obligation_tracker git-hygiene check to actually auto-commit+push when dirty tree >60min and changes are safe (no secrets, passes lint). Currently it detects and escalates but does not auto-act. Add to cron_autonomous.sh post-execution or as a standalone cron entry.
+- [ ] [PROMISE_ENFORCEMENT_TELEGRAM_HOOK] Add promise detection to M2.5 conscious layer: when Clarvis says "I will do X going forward" in Telegram, auto-call obligation_tracker.py add via tool/skill. Currently only postflight output scanning exists.
 
 ---
 

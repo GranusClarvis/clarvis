@@ -133,6 +133,11 @@ try:
 except ImportError:
     gate_classify = None
 
+try:
+    from obligation_tracker import ObligationTracker
+except ImportError:
+    ObligationTracker = None
+
 _import_time = time.monotonic() - start_import
 log = lambda msg: print(f"[{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S')}] PREFLIGHT: {msg}", file=sys.stderr)
 
@@ -1298,6 +1303,24 @@ def run_preflight(dry_run=False):
                 log(f"DyCP pruning: removed {pruned_bytes}B of irrelevant context")
         except Exception as e:
             log(f"DyCP pruning failed (non-fatal): {e}")
+
+    # === OBLIGATION CHECK: inject violations/git-hygiene into context ===
+    t_ob = time.monotonic()
+    obligation_result = {}
+    if ObligationTracker:
+        try:
+            tracker = ObligationTracker()
+            obligation_result = tracker.preflight_check()
+            ob_ctx = obligation_result.get("obligation_context", "")
+            if ob_ctx:
+                context_brief += f"\n{ob_ctx}\n"
+                log(f"Obligation check: {obligation_result.get('checked', 0)} checked, "
+                    f"{len(obligation_result.get('violations', []))} violations")
+            result["obligation_violations"] = obligation_result.get("violations", [])
+            result["obligation_git_hygiene"] = obligation_result.get("git_hygiene", {})
+        except Exception as e:
+            log(f"Obligation check failed (non-fatal): {e}")
+    result["timings"]["obligation_check"] = round(time.monotonic() - t_ob, 3)
 
     result["context_brief"] = context_brief
     result["timings"]["context"] = round(time.monotonic() - t10, 3)

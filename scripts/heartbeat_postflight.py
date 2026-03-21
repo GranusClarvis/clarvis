@@ -215,6 +215,11 @@ try:
 except ImportError:
     record_trajectory_event = None
 
+try:
+    from obligation_tracker import ObligationTracker as OT_Postflight
+except ImportError:
+    OT_Postflight = None
+
 # Cost tracking
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'packages', 'clarvis-cost'))
 try:
@@ -1801,6 +1806,18 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
             log(f"Cognitive workspace: closed task, reuse_rate={reuse:.1%}, buffers={cw_result.get('buffers', {})}")
         except Exception as e:
             log(f"Cognitive workspace close failed: {e}")
+
+    # === OBLIGATION POSTFLIGHT: record promise/obligation outcomes ===
+    t_ob = time.monotonic()
+    if OT_Postflight:
+        try:
+            ob_tracker = OT_Postflight()
+            ob_tracker.postflight_record(task, task_status, output_text)
+            log(f"Obligation postflight recorded ({task_status})")
+        except Exception as e:
+            log(f"Obligation postflight failed (non-fatal): {e}")
+            _pf_errors.append("obligation_postflight")
+    timings["obligation_postflight"] = round(time.monotonic() - t_ob, 3)
 
     timings["total"] = round(time.monotonic() - t0, 3)
 

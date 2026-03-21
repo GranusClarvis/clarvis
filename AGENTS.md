@@ -27,6 +27,20 @@ When you spawn Claude Code (via `spawn_claude.sh` or `exec` with `claude -p`):
 - Do NOT run gate checks, brain stats, digest reads, or queue reviews during active work.
 - A heartbeat during a spawned task should cost < 20 tokens total.
 
+### Rule 4: Never promise without recording — speech ≠ state transition
+- NEVER say "I'll do X going forward" / "I'll handle that automatically" / "from now on I will..." without also recording a durable obligation.
+- **Promise = obligation entry OR explicit decline.** There is no third option.
+- To record: `python3 scripts/obligation_tracker.py add "description" --freq daily`
+- Or via Python: `from obligation_tracker import ObligationTracker; ObligationTracker().record_obligation(label="...", description="...", frequency="daily", source="user_directive")`
+- If you cannot enforce the promise (no check mechanism, too vague, unsafe to automate), say so explicitly instead of making an empty promise.
+- The heartbeat pipeline checks obligations every run. Violations escalate automatically.
+
+### Rule 5: Git hygiene is a standing instruction
+- Commit and push useful work without being prompted. This is enforced by `obligation_tracker.py`.
+- If the tree has been dirty for >60 minutes with useful work, commit it.
+- If there are unpushed commits, push them (to `main` for this repo).
+- If autonomous commit/push is not safe for a specific change, create a queue task or escalate instead of ignoring.
+
 ## First Run
 
 If `BOOTSTRAP.md` exists, that's your birth certificate. Follow it, figure out who you are, then delete it. You won't need it again.
