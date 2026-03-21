@@ -1366,3 +1366,7 @@ _Last archived: 2026-03-17_
 ## Archived 2026-03-21
 - [x] [CONTEXT_SECTION_BUDGET_ENFORCER] Wire context_relevance feedback loop into assembly.py: sections with historical mean relevance < 0.12 (knowledge, working_memory, attention, meta_gradient, brain_goals) should be collapsed to single-line stubs or omitted entirely. Measure before/after context_relevance delta. Target: push context_relevance from 0.481 → 0.65+. _(Targets weakest metric: Context Relevance)_ (2026-03-21 14:04 UTC)
 - [x] [RESEARCH_RETRIEVAL_ROUTING_LATE_INTERACTION] Research adaptive retrieval routing + late-interaction systems. Wrote `memory/research/retrieval-routing-late-interaction-systems-2026-03-21.md`. (2026-03-21)
+
+## Archived 2026-03-21
+- [x] [DIRECTIVE_TELEGRAM_REALTIME_HOOK] Added --context and --priority CLI args to directive_engine.py ingest; updated promise-track SKILL.md to pass $CONTEXT from conversation. M2.5 now sends raw_context for emotional dampening and scope classification at chat time. _(2026-03-21)_
+- [x] [DIRECTIVE_CONFLICT_RESOLUTION] Added _detect_conflicts() to DirectiveEngine.ingest(): Jaccard word overlap + negation pattern matching detects contradictions. Same-source conflicts auto-supersede; cross-source conflicts flagged for user. Verification test #17 added. _(2026-03-21)_

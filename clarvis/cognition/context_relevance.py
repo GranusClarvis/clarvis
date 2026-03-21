@@ -106,24 +106,25 @@ MIN_SECTIONS_FOR_AGGREGATION = 5
 
 # Hardcoded baseline importance weights (fallback when no disk file exists).
 _SECTION_IMPORTANCE_DEFAULTS: dict[str, float] = {
-    "related_tasks":     0.304,
-    "episodes":          0.273,
-    "decision_context":  0.267,
-    "completions":       0.183,
+    # Recalibrated 2026-03-21 from 95 episodes (14-day recency-weighted)
+    "episodes":          0.330,
+    "related_tasks":     0.320,
+    "decision_context":  0.308,
+    "knowledge":         0.224,
+    "working_memory":    0.213,
+    "brain_context":     0.199,
+    "attention":         0.172,
+    "completions":       0.167,
     "confidence_gate":   0.167,
-    "brain_context":     0.158,
-    "reasoning":         0.157,
-    "knowledge":         0.155,
-    "attention":         0.146,
-    "working_memory":    0.145,
-    "gwt_broadcast":     0.128,
+    "reasoning":         0.141,
     "introspection":     0.129,
+    "gwt_broadcast":     0.128,
+    "failure_avoidance": 0.126,
     "world_model":       0.122,
     "synaptic":          0.112,
-    "metrics":           0.097,
-    "failure_avoidance": 0.090,
+    "metrics":           0.099,
     "brain_goals":       0.089,
-    "meta_gradient":     0.058,
+    "meta_gradient":     0.083,
 }
 _DEFAULT_IMPORTANCE = 0.12  # fallback for unknown sections
 
@@ -409,14 +410,14 @@ def record_relevance(result: dict) -> str:
     return RELEVANCE_FILE
 
 
-# Bottom-5 noise sections unconditionally suppressed (mean < 0.12).
+# Bottom-4 noise sections unconditionally suppressed (mean < 0.12).
 # Mirrored from assembly.HARD_SUPPRESS — defined here too so preflight
 # can import without pulling in the full assembly module.
+# Recalibrated 2026-03-21: failure_avoidance promoted (mean=0.126 > 0.12)
 HARD_SUPPRESS = frozenset({
-    "meta_gradient",      # mean=0.058
+    "meta_gradient",      # mean=0.083
     "brain_goals",        # mean=0.089
-    "failure_avoidance",  # mean=0.090
-    "metrics",            # mean=0.097
+    "metrics",            # mean=0.099
     "synaptic",           # mean=0.112
 })
 

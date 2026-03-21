@@ -47,7 +47,6 @@ def test_dycp_zero_overlap_ceiling_frozen():
 EXPECTED_HARD_SUPPRESS = frozenset({
     "meta_gradient",
     "brain_goals",
-    "failure_avoidance",
     "metrics",
     "synaptic",
 })

@@ -81,14 +81,14 @@ DYCP_HISTORICAL_FLOOR = 0.15
 # sections (hist 0.15-0.20) shouldn't be pruned even with zero overlap.
 DYCP_ZERO_OVERLAP_CEILING = 0.15
 
-# Hard-suppressed: bottom-5 noise sections with 14-day mean < 0.12.
+# Hard-suppressed: bottom-4 noise sections with 14-day mean < 0.12.
 # These are ALWAYS suppressed — no task-containment override.  They waste
-# ~800 tokens per brief for near-zero downstream signal (2026-03-18 analysis).
+# ~600 tokens per brief for near-zero downstream signal.
+# Recalibrated 2026-03-21: failure_avoidance promoted (mean=0.126 > 0.12)
 HARD_SUPPRESS = frozenset({
-    "meta_gradient",      # mean=0.058
+    "meta_gradient",      # mean=0.083
     "brain_goals",        # mean=0.089
-    "failure_avoidance",  # mean=0.090
-    "metrics",            # mean=0.097
+    "metrics",            # mean=0.099
     "synaptic",           # mean=0.112
 })
 
