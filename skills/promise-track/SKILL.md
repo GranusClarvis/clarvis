@@ -1,28 +1,36 @@
 ---
 name: promise-track
-description: "Record a promise/obligation when you commit to doing something going forward. Usage: /promise_track 'description'. Enforces Rule 4: speech = state transition."
+description: "Record a promise/obligation with smart classification (scope, confidence, emotional dampening). Usage: /promise_track 'description'. Enforces Rule 4: speech = state transition."
 metadata: {"clawdbot":{"emoji":"🤝"}}
 user-invocable: true
 ---
 
-# /promise_track — Record Durable Obligation
+# /promise_track — Record Durable Directive
 
 **When to use:** Any time you (Clarvis) say "I will do X going forward", "from now on I'll...",
 "I'll handle that automatically", or make any commitment about future behavior.
 
 **Rule 4 enforcement:** Speech without state transition is a bug. This skill records the
-obligation durably so the heartbeat pipeline can enforce it.
+directive with smart classification so the heartbeat pipeline can enforce it appropriately.
+
+## What it does
+
+The directive engine automatically classifies instructions by:
+- **Scope**: standing (permanent), window (temporary), one_shot (single use), session (conversation only)
+- **Confidence**: how certain the classification is (0.0-1.0)
+- **Literalness**: how literally to apply — emotional/hyperbolic wording is dampened (0.0-1.0)
+- **Expiry**: window/one-shot directives auto-expire; standing ones sunset after 90d without reference
 
 ## Usage
 
 When invoked with a description:
 ```bash
-python3 /home/agent/.openclaw/workspace/scripts/obligation_tracker.py add "$ARGUMENTS" --freq daily
+python3 /home/agent/.openclaw/workspace/scripts/directive_engine.py ingest "$ARGUMENTS" --source user
 ```
 
-When invoked without arguments, show current obligations:
+When invoked without arguments, show current directive status:
 ```bash
-python3 /home/agent/.openclaw/workspace/scripts/obligation_tracker.py status
+python3 /home/agent/.openclaw/workspace/scripts/directive_engine.py status
 ```
 
 ## Auto-Detection Guidance
@@ -41,5 +49,13 @@ explicitly rather than making an empty promise.
 ## Response Format
 
 After recording, confirm briefly:
-> Recorded obligation: "[description]" (checked [frequency]).
-> Heartbeat will enforce this automatically.
+> Recorded directive: "[description]" (scope: [scope], checked [frequency]).
+> Heartbeat will enforce this — [standing/window/one-shot] with [literalness] literalness.
+
+## Notes
+
+- **Emotional dampening**: If the user's wording is angry/hyperbolic, the directive is still recorded
+  but with lower literalness and confidence. It won't become a rigid permanent rule.
+- **Window directives**: "This week..." or "for the next 3 days..." auto-expire after the specified period.
+- **Discretion retained**: The reasoning layer can soften, decline, or supersede any directive.
+  Directives guide behavior — they don't build a jail.

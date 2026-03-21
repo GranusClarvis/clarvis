@@ -138,6 +138,11 @@ try:
 except ImportError:
     ObligationTracker = None
 
+try:
+    from directive_engine import DirectiveEngine
+except ImportError:
+    DirectiveEngine = None
+
 _import_time = time.monotonic() - start_import
 log = lambda msg: print(f"[{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S')}] PREFLIGHT: {msg}", file=sys.stderr)
 
@@ -1321,6 +1326,25 @@ def run_preflight(dry_run=False):
         except Exception as e:
             log(f"Obligation check failed (non-fatal): {e}")
     result["timings"]["obligation_check"] = round(time.monotonic() - t_ob, 3)
+
+    # === DIRECTIVE ENGINE: scoped instruction enforcement ===
+    t_dir = time.monotonic()
+    if DirectiveEngine:
+        try:
+            deng = DirectiveEngine()
+            deng._sweep_expiry()  # Retire expired/sunset directives
+            dir_context = deng.build_context(
+                task_context=result.get("selected_task", {}).get("label", ""),
+                max_tokens=300,
+            )
+            if dir_context:
+                context_brief += f"\n{dir_context}\n"
+                active_count = len(deng.list_active())
+                log(f"Directive engine: {active_count} active directives injected")
+            result["directive_count"] = len(deng.list_active())
+        except Exception as e:
+            log(f"Directive engine failed (non-fatal): {e}")
+    result["timings"]["directive_engine"] = round(time.monotonic() - t_dir, 3)
 
     result["context_brief"] = context_brief
     result["timings"]["context"] = round(time.monotonic() - t10, 3)

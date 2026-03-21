@@ -220,6 +220,11 @@ try:
 except ImportError:
     OT_Postflight = None
 
+try:
+    from directive_engine import DirectiveEngine as DE_Postflight
+except ImportError:
+    DE_Postflight = None
+
 # Cost tracking
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'packages', 'clarvis-cost'))
 try:
@@ -1818,6 +1823,23 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
             log(f"Obligation postflight failed (non-fatal): {e}")
             _pf_errors.append("obligation_postflight")
     timings["obligation_postflight"] = round(time.monotonic() - t_ob, 3)
+
+    # === DIRECTIVE ENGINE POSTFLIGHT: expiry sweep + promise scan ===
+    t_dir = time.monotonic()
+    if DE_Postflight:
+        try:
+            deng = DE_Postflight()
+            deng._sweep_expiry()  # Retire expired/sunset directives
+            # Mark one-shot directives as enforced if task addressed them
+            for d in deng.list_active():
+                if d["scope"] == "one_shot" and deng._is_relevant(d, task):
+                    d["times_enforced"] = d.get("times_enforced", 0) + 1
+                    deng._save()
+            log(f"Directive postflight: {len(deng.list_active())} active directives")
+        except Exception as e:
+            log(f"Directive postflight failed (non-fatal): {e}")
+            _pf_errors.append("directive_postflight")
+    timings["directive_postflight"] = round(time.monotonic() - t_dir, 3)
 
     timings["total"] = round(time.monotonic() - t0, 3)
 

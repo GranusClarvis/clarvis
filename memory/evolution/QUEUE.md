@@ -48,8 +48,6 @@ Presentable Clarvis by 2026-03-31:
 
 ## P1 — This Week
 
-- [x] [PROMISE_ENFORCEMENT_AUTO_COMMIT] Wire obligation_tracker git-hygiene check to actually auto-commit+push when dirty tree >60min and changes are safe (no secrets, passes lint). Currently it detects and escalates but does not auto-act. Add to cron_autonomous.sh post-execution or as a standalone cron entry. _(Done 2026-03-21: added auto_commit_push() to obligation_tracker.py + wired into cron_autonomous.sh post-execution)_
-- [x] [PROMISE_ENFORCEMENT_TELEGRAM_HOOK] Add promise detection to M2.5 conscious layer: when Clarvis says "I will do X going forward" in Telegram, auto-call obligation_tracker.py add via tool/skill. Currently only postflight output scanning exists. _(Done 2026-03-21: created promise-track skill + updated AGENTS.md Rule 4 with auto-detect trigger + /promise_track as preferred method)_
 
 ---
 
@@ -79,10 +77,12 @@ _(Completed items archived.)_
 ## NEW ITEMS
 
 - [ ] [CONTEXT_SECTION_BUDGET_ENFORCER] Wire context_relevance feedback loop into assembly.py: sections with historical mean relevance < 0.12 (knowledge, working_memory, attention, meta_gradient, brain_goals) should be collapsed to single-line stubs or omitted entirely. Measure before/after context_relevance delta. Target: push context_relevance from 0.481 → 0.65+. _(Targets weakest metric: Context Relevance)_
-- [x] [STRATEGIC_AUDIT_ESCALATION] Make cron_strategic_audit.sh auto-extract P0/P1 findings and append them to QUEUE.md via queue_writer.py. Currently audit output sits in logs with no downstream action. Add JSON structured output + queue integration. _(Done 2026-03-21: added JSON structured findings to audit prompt + robust Python parser with grep fallback + saves findings to data/strategic_audit_findings.json)_
 - [ ] [CLR_RELEVANCE_DIMENSION_WEIGHT] Increase prompt_context weight in CLR scoring (clr.py) from 0.13 → 0.18, rebalance other weights, and add a direct context_relevance sub-score that feeds assembly adaptive thresholds. Validates that CLR improvements actually improve brief quality. _(Targets weakest metric: Context Relevance via CLR feedback)_
 - [ ] [CRON_MAINTENANCE_TIMEOUT_GUARD] Add timeout and stale-lock detection to the 04:00-05:05 maintenance window scripts (cron_graph_checkpoint.sh, cron_graph_compaction.sh, cron_graph_verify.sh, cron_chromadb_vacuum.sh). Currently they share /tmp/clarvis_maintenance.lock but have no max-wait or deadlock recovery. _(Bash task — operational reliability)_
 - [ ] [HEARTBEAT_CONTEXT_RELEVANCE_GATE] Add context_relevance as an explicit dimension in heartbeat_gate.py capability assessment. If context_relevance < 0.60, auto-prioritize context-improvement tasks over other queue items. Currently heartbeat asks "which capability is weakest" but doesn't consider context_relevance. _(Targets weakest metric: Context Relevance via prioritization)_
+- [ ] [DIRECTIVE_TELEGRAM_REALTIME_HOOK] Add real-time directive ingestion from Telegram: when M2.5 calls /promise_track, also wire it through directive_engine.ingest() with raw_context from the conversation. Currently /promise_track calls obligation_tracker.py directly — should use directive_engine as primary. _(Promise enforcement: real-time classification at chat time)_
+- [ ] [DIRECTIVE_LLM_CLASSIFIER_UPGRADE] Add optional LLM-based classification fallback for ambiguous directives where rule-based classifier confidence < 0.5. Use task_router to pick cheapest model. Gate behind env var DIRECTIVE_LLM_CLASSIFY=true. _(Promise enforcement: handles nuanced instructions the rule-based classifier misses)_
+- [ ] [DIRECTIVE_CONFLICT_RESOLUTION] Add conflict detection when ingesting directives that contradict existing active ones (e.g., "always commit" vs "don't auto-commit this week"). Auto-supersede or flag for user resolution. _(Promise enforcement: prevents contradictory standing instructions)_
 
 
 - [~] [SEMANTIC_CROSS_COLLECTION_BRIDGES] Strengthen weak cross-collection semantic links. Current semantic_cross_collection=0.62 (target >0.75). _(2026-03-19: Added 13 bridge memories across 3 weakest pairs. Phi full computation times out at 120s due to 99k graph edges + 720 ONNX queries. Pair scores: proc↔learn=0.600, ctx↔goals=0.644, ep↔infra=0.555. Need graph compaction or parallel queries to verify full Phi. Blocked on compute time.)_

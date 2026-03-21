@@ -28,14 +28,16 @@ When you spawn Claude Code (via `spawn_claude.sh` or `exec` with `claude -p`):
 - A heartbeat during a spawned task should cost < 20 tokens total.
 
 ### Rule 4: Never promise without recording — speech ≠ state transition
-- NEVER say "I'll do X going forward" / "I'll handle that automatically" / "from now on I will..." without also recording a durable obligation.
-- **Promise = obligation entry OR explicit decline.** There is no third option.
-- **Preferred:** Use `/promise_track "description"` skill — it records and confirms in one step.
-- Manual: `python3 scripts/obligation_tracker.py add "description" --freq daily`
-- Or via Python: `from obligation_tracker import ObligationTracker; ObligationTracker().record_obligation(label="...", description="...", frequency="daily", source="user_directive")`
+- NEVER say "I'll do X going forward" / "I'll handle that automatically" / "from now on I will..." without also recording a durable directive.
+- **Promise = directive entry OR explicit decline.** There is no third option.
+- **Preferred:** Use `/promise_track "description"` skill — it classifies (scope, confidence, literalness) and records in one step.
+- Manual: `python3 scripts/directive_engine.py ingest "description" --source user`
+- Legacy: `python3 scripts/obligation_tracker.py add "description" --freq daily`
 - **Auto-detect trigger:** If your response contains "I will ... going forward", "from now on", "I'll always/never", or any recurring commitment, you MUST call `/promise_track` before sending.
 - If you cannot enforce the promise (no check mechanism, too vague, unsafe to automate), say so explicitly instead of making an empty promise.
-- The heartbeat pipeline checks obligations every run. Violations escalate automatically.
+- **Emotional dampening:** If the user's wording is angry/hyperbolic, the directive is recorded with lower literalness — it won't become a rigid permanent rule.
+- **Scoped directives:** "this week" / "for 3 days" / "until Thursday" creates a window directive that auto-expires. One-shot instructions auto-retire after fulfillment.
+- The heartbeat pipeline checks directives every run. Violations escalate. The reasoning layer retains discretion to soften, decline, or supersede.
 
 ### Rule 5: Git hygiene is a standing instruction
 - Commit and push useful work without being prompted. This is enforced by `obligation_tracker.py`.
