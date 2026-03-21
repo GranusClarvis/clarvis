@@ -911,12 +911,17 @@ def _build_wire_guidance(task_text):
     return "\n".join(parts)
 
 
-def _build_reasoning_scaffold(tier="standard"):
-    """Generate reasoning scaffolding instructions appropriate to the tier.
+def _build_reasoning_scaffold(tier="standard", task_text=""):
+    """Generate task-type-specific reasoning scaffolding.
 
-    Research shows explicit step-by-step instructions improve LLM output quality
-    significantly, especially for complex tasks.
+    Delegates to canonical implementation in clarvis.context.assembly.
+    Falls back to generic scaffold if import fails.
     """
+    try:
+        from clarvis.context.assembly import build_reasoning_scaffold
+        return build_reasoning_scaffold(tier=tier, task_text=task_text)
+    except ImportError:
+        pass
     if tier == "full":
         return (
             "APPROACH: Before writing code, briefly analyze:\n"
@@ -1109,15 +1114,21 @@ def generate_tiered_brief(
             beginning.append(decision_ctx)
 
     # === SECTION 1.5: Brain Knowledge (research, dreams, synthesis) ===
+    # Task-aware reranking: drop tangential matches before injection
     if knowledge_hints and tier != "minimal":
-        beginning.append("RELEVANT KNOWLEDGE:")
-        # Compress knowledge hints via TF-IDF extraction (extractive-then-abstractive)
-        max_chars = 600 if tier == "full" else 350
-        if len(knowledge_hints) > max_chars * 1.5:
-            compressed_knowledge, _ = compress_text(knowledge_hints, ratio=0.3)
-            beginning.append(compressed_knowledge[:max_chars])
-        else:
-            beginning.append(knowledge_hints[:max_chars])
+        try:
+            from clarvis.context.assembly import rerank_knowledge_hints
+            knowledge_hints = rerank_knowledge_hints(knowledge_hints, current_task)
+        except ImportError:
+            pass  # graceful fallback — no reranking
+        if knowledge_hints and knowledge_hints.strip():
+            beginning.append("RELEVANT KNOWLEDGE:")
+            max_chars = 600 if tier == "full" else 350
+            if len(knowledge_hints) > max_chars * 1.5:
+                compressed_knowledge, _ = compress_text(knowledge_hints, ratio=0.3)
+                beginning.append(compressed_knowledge[:max_chars])
+            else:
+                beginning.append(knowledge_hints[:max_chars])
 
     # === SECTION 2: Working Memory (Cognitive Workspace + Spotlight fallback) ===
     if budget["spotlight"] > 0:

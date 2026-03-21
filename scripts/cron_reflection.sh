@@ -91,6 +91,9 @@ run_step "absolute_zero" python3 /home/agent/.openclaw/workspace/scripts/absolut
 # Step 6.95: Causal Analysis (Pearl SCM)
 run_step "causal_model" python3 /home/agent/.openclaw/workspace/scripts/causal_model.py analyze
 
+# Step 6.96: Confidence recalibration (7-day rolling window)
+run_step "recalibrate" python3 -c "from clarvis.cognition.confidence import recalibrate; r = recalibrate(); print(f'Brier 7d={r[\"brier_7d\"]}, all={r[\"brier_all\"]}, shift={r[\"shift_detected\"]}, threshold={r[\"new_threshold\"]}, archived={r[\"archived\"]}, swept={r[\"swept\"]}')"
+
 # Step 6.97: Research-to-Queue bridge (monthly — 1st of month only)
 DAY_OF_MONTH=$(date +%d)
 if [ "$DAY_OF_MONTH" = "01" ]; then

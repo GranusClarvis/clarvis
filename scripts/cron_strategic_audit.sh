@@ -111,6 +111,14 @@ if [ -f "data/strategic_audit_last.md" ]; then
     PREV_AUDIT=$(cat data/strategic_audit_last.md 2>/dev/null | head -50)
 fi
 
+# === STEP 1: CLR Perturbation / Ablation Sweep ===
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running CLR perturbation ablation sweep..." >> "$LOGFILE"
+CLR_PERTURBATION_OUTPUT=$(timeout 300 python3 /home/agent/.openclaw/workspace/clarvis/metrics/clr_perturbation.py 2>&1) || true
+echo "$CLR_PERTURBATION_OUTPUT" >> "$LOGFILE"
+# Extract summary for audit prompt
+CLR_PERTURBATION_SUMMARY=$(echo "$CLR_PERTURBATION_OUTPUT" | grep -E "^\[perturbation\]|Baseline|CRITICAL|HELPFUL|HARMFUL|NEUTRAL" | tail -15)
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] CLR perturbation complete." >> "$LOGFILE"
+
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] State gathered. Spawning Claude Code for deep analysis..." >> "$LOGFILE"
 
 # === SPAWN CLAUDE CODE FOR DEEP STRATEGIC AUDIT ===
@@ -150,6 +158,9 @@ $CODE_QUALITY
 
 ### AST Surgery (auto-fix dead imports, code quality scan)
 $AST_SURGERY_SUMMARY
+
+### CLR Perturbation / Ablation Results
+$CLR_PERTURBATION_SUMMARY
 
 ### Previous Audit Findings
 $PREV_AUDIT

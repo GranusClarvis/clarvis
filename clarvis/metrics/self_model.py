@@ -759,10 +759,14 @@ def _assess_self_reflection():
     except Exception as e:
         evidence.append(f"phi error: {e}")
 
-    # --- Prediction calibration quality: Brier score ---
+    # --- Prediction calibration quality: Brier score (windowed to last 14 days) ---
     try:
         cal_path = "/home/agent/.openclaw/workspace/data/calibration/predictions.jsonl"
         if os.path.exists(cal_path):
+            from datetime import timezone as _tz
+            _now = datetime.now(_tz.utc)
+            _cutoff = _now.timestamp() - (14 * 86400)  # 14-day window
+
             with open(cal_path) as f:
                 lines = [l.strip() for l in f if l.strip()]
             resolved = []
@@ -771,6 +775,12 @@ def _assess_self_reflection():
                     pred = json.loads(line)
                     # Exclude stale predictions — outcome unknown, not "wrong"
                     if pred.get("correct") is not None and pred.get("outcome") != "stale":
+                        # Time window: only recent predictions
+                        ts_str = pred.get("timestamp", "")
+                        if ts_str:
+                            _ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+                            if _ts.timestamp() < _cutoff:
+                                continue
                         confidence = float(pred.get("confidence", 0.5))
                         outcome = 1.0 if pred["correct"] else 0.0
                         resolved.append((confidence, outcome))
@@ -782,9 +792,9 @@ def _assess_self_reflection():
                 brier = sum((conf - outcome) ** 2 for conf, outcome in resolved) / len(resolved)
                 cal_score = (1.0 - brier) * 0.3
                 score += cal_score
-                evidence.append(f"calibration brier={brier:.3f} ({len(resolved)} predictions) (+{cal_score:.2f})")
+                evidence.append(f"calibration brier={brier:.3f} ({len(resolved)} predictions, 14d window) (+{cal_score:.2f})")
             else:
-                evidence.append(f"{len(lines)} predictions tracked (none resolved)")
+                evidence.append(f"{len(lines)} predictions tracked (none resolved in 14d window)")
         else:
             evidence.append("no calibration data")
     except Exception as e:
@@ -963,10 +973,14 @@ def _assess_learning_feedback():
     except Exception:
         evidence.append("procedural memory unavailable")
 
-    # --- Calibration: Brier score (quality, not binary "predictions tracked") ---
+    # --- Calibration: Brier score (windowed to last 14 days) ---
     try:
         cal_path = "/home/agent/.openclaw/workspace/data/calibration/predictions.jsonl"
         if os.path.exists(cal_path):
+            from datetime import timezone as _tz
+            _now = datetime.now(_tz.utc)
+            _cutoff = _now.timestamp() - (14 * 86400)  # 14-day window
+
             with open(cal_path) as f:
                 lines = [l.strip() for l in f if l.strip()]
             resolved = []
@@ -976,6 +990,11 @@ def _assess_learning_feedback():
                     pred = json.loads(line)
                     # Exclude stale predictions — outcome unknown, not "wrong"
                     if pred.get("correct") is not None and pred.get("outcome") != "stale":
+                        ts_str = pred.get("timestamp", "")
+                        if ts_str:
+                            _ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+                            if _ts.timestamp() < _cutoff:
+                                continue
                         confidence = float(pred.get("confidence", 0.5))
                         outcome = 1.0 if pred["correct"] else 0.0
                         resolved.append((confidence, outcome))
@@ -986,7 +1005,7 @@ def _assess_learning_feedback():
                 brier = sum((conf - outcome) ** 2 for conf, outcome in resolved) / len(resolved)
                 cal_score = (1.0 - brier) * 0.3
                 score += cal_score
-                evidence.append(f"calibration brier={brier:.3f} ({len(resolved)}/{total_predictions} resolved) (+{cal_score:.2f})")
+                evidence.append(f"calibration brier={brier:.3f} ({len(resolved)}/{total_predictions} resolved, 14d window) (+{cal_score:.2f})")
 
                 # Feedback loop completeness: what fraction of predictions get resolved?
                 resolution_rate = len(resolved) / total_predictions if total_predictions > 0 else 0
@@ -994,7 +1013,7 @@ def _assess_learning_feedback():
                 score += loop_score
                 evidence.append(f"resolution rate={resolution_rate:.0%} (+{loop_score:.2f})")
             else:
-                evidence.append(f"{total_predictions} predictions (none resolved)")
+                evidence.append(f"{total_predictions} predictions (none resolved in 14d window)")
         else:
             evidence.append("no calibration data")
     except Exception as e:

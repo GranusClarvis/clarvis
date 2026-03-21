@@ -99,21 +99,27 @@ def predict(event: str, expected: str, confidence: float) -> dict:
             print(f"Recalibrated: {original_confidence:.0%} → {confidence:.0%} "
                   f"(band 60-80% accuracy={acc:.0%}, n={n}, underconfident)", file=sys.stderr)
     elif 0.85 <= confidence < 0.95:
-        # 2026-03-17 reflection: 90-100% band at 87% accuracy vs 90% predicted.
-        # Tightened trigger from acc < 0.80 to acc < 0.85 to catch mild overconfidence.
+        # 2026-03-20 audit: 90-100% band has 87% accuracy vs 90% predicted.
+        # Proportional correction: pull confidence toward observed accuracy.
         acc, n = _band_accuracy(0.85, 0.95)
-        if acc is not None and acc < 0.85:
-            confidence = max(0.3, confidence - 0.08)
-            recalibrated = True
-            print(f"Recalibrated: {original_confidence:.0%} → {confidence:.0%} "
-                  f"(band 85-95% accuracy={acc:.0%}, n={n})", file=sys.stderr)
-    elif confidence >= 0.95:
-        acc, n = _band_accuracy(0.90, 1.01)
         if acc is not None and acc < 0.90:
-            confidence = max(0.3, confidence - 0.10)
+            gap = confidence - acc
+            correction = min(0.12, gap * 0.6)  # close 60% of the gap
+            confidence = max(0.3, confidence - correction)
             recalibrated = True
             print(f"Recalibrated: {original_confidence:.0%} → {confidence:.0%} "
-                  f"(band 90-100% accuracy={acc:.0%}, n={n})", file=sys.stderr)
+                  f"(band 85-95% accuracy={acc:.0%}, n={n}, gap={gap:.0%})", file=sys.stderr)
+    elif confidence >= 0.95:
+        # 2026-03-20 audit: >=95% predictions fail ~13% of the time.
+        # Aggressive correction — never predict >92% unless data supports it.
+        acc, n = _band_accuracy(0.90, 1.01)
+        if acc is not None and acc < 0.95:
+            gap = confidence - acc
+            correction = min(0.15, gap * 0.7)  # close 70% of the gap
+            confidence = max(0.3, confidence - correction)
+            recalibrated = True
+            print(f"Recalibrated: {original_confidence:.0%} → {confidence:.0%} "
+                  f"(band 90-100% accuracy={acc:.0%}, n={n}, gap={gap:.0%})", file=sys.stderr)
 
     entry = {
         "event": event,
@@ -183,15 +189,32 @@ def outcome(event: str, actual: str) -> dict | None:
     return target
 
 
-def calibration() -> dict:
+def calibration(max_age_days: int | None = None) -> dict:
     """
     Compute calibration stats.
     Groups predictions into buckets (0-30%, 30-60%, 60-90%, 90-100%)
     and shows what % actually came true in each bucket.
+
+    Args:
+        max_age_days: If set, only include predictions from the last N days.
     """
     entries = _load_predictions()
     # Exclude stale predictions — outcome unknown, not "wrong"
     resolved = [e for e in entries if e["correct"] is not None and e.get("outcome") != "stale"]
+
+    # Time window filter
+    if max_age_days is not None:
+        now = datetime.now(timezone.utc)
+        cutoff_ts = now.timestamp() - (max_age_days * 86400)
+        filtered = []
+        for e in resolved:
+            try:
+                ts = datetime.fromisoformat(e.get("timestamp", "").replace("Z", "+00:00"))
+                if ts.timestamp() >= cutoff_ts:
+                    filtered.append(e)
+            except (ValueError, TypeError):
+                pass  # skip unparseable
+        resolved = filtered
 
     if not resolved:
         return {"total": len(entries), "resolved": 0, "buckets": {}}
@@ -601,6 +624,198 @@ def _brain_store(text: str, importance: float = 0.5):
         pass  # brain not available, that's fine
 
 
+def recalibrate(window_days: int = 7, archive_days: int = 30) -> dict:
+    """7-day rolling window recalibration with distribution shift detection.
+
+    Steps:
+      1. Compute Brier over recent window vs full history — detect shift
+      2. Recompute per-band accuracy over the window
+      3. Auto-adjust domain thresholds (save to thresholds.json)
+      4. Archive stale predictions older than archive_days
+      5. Sweep unresolved predictions older than 2*window_days
+
+    Returns:
+        dict with brier_7d, brier_all, shift_detected, band_adjustments,
+        archived, swept, new_threshold
+    """
+    import math
+
+    entries = _load_predictions()
+    resolved = [
+        e for e in entries
+        if e["correct"] is not None and e.get("outcome") not in ("stale", "expired")
+    ]
+
+    now = datetime.now(timezone.utc)
+    cutoff_window = now.timestamp() - (window_days * 86400)
+
+    # Split into recent vs all
+    recent = []
+    for e in resolved:
+        try:
+            ts = datetime.fromisoformat(e.get("timestamp", "").replace("Z", "+00:00"))
+            if ts.timestamp() >= cutoff_window:
+                recent.append(e)
+        except (ValueError, TypeError):
+            pass
+
+    result = {
+        "timestamp": now.isoformat(),
+        "window_days": window_days,
+        "total_predictions": len(entries),
+        "resolved_all": len(resolved),
+        "resolved_recent": len(recent),
+    }
+
+    # Brier scores
+    def _brier(preds):
+        if not preds:
+            return None
+        return sum(
+            (e["confidence"] - (1.0 if e["correct"] else 0.0)) ** 2 for e in preds
+        ) / len(preds)
+
+    brier_all = _brier(resolved)
+    brier_recent = _brier(recent)
+    result["brier_all"] = round(brier_all, 4) if brier_all is not None else None
+    result["brier_7d"] = round(brier_recent, 4) if brier_recent is not None else None
+
+    # Distribution shift detection: compare recent vs all Brier
+    shift_detected = False
+    if brier_all is not None and brier_recent is not None and len(recent) >= 3:
+        shift = abs(brier_recent - brier_all)
+        if shift > 0.05:
+            shift_detected = True
+            result["shift_magnitude"] = round(shift, 4)
+            result["shift_direction"] = "degraded" if brier_recent > brier_all else "improved"
+    result["shift_detected"] = shift_detected
+
+    # Per-band accuracy over recent window → auto-adjust thresholds
+    bands = [
+        ("low", 0.0, 0.3),
+        ("med", 0.3, 0.6),
+        ("high", 0.6, 0.8),
+        ("very_high", 0.8, 0.95),
+        ("extreme", 0.95, 1.01),
+    ]
+    band_adjustments = {}
+    for label, lo, hi in bands:
+        in_band = [e for e in recent if lo <= e["confidence"] < hi]
+        if len(in_band) >= 2:
+            acc = sum(1 for e in in_band if e["correct"]) / len(in_band)
+            midpoint = (lo + min(hi, 1.0)) / 2
+            gap = acc - midpoint
+            band_adjustments[label] = {
+                "accuracy": round(acc, 3),
+                "predicted_avg": round(midpoint, 3),
+                "gap": round(gap, 3),
+                "n": len(in_band),
+            }
+    result["band_adjustments"] = band_adjustments
+
+    # Auto-adjust threshold based on recent data
+    if recent:
+        recent_success_rate = sum(1 for e in recent if e["correct"]) / len(recent)
+        recent_avg_conf = sum(e["confidence"] for e in recent) / len(recent)
+        # Close 50% of the gap between predicted and actual
+        gap = recent_success_rate - recent_avg_conf
+        new_threshold = recent_avg_conf + gap * 0.5
+        new_threshold = max(0.3, min(0.95, new_threshold))
+        new_threshold = round(new_threshold, 3)
+    else:
+        new_threshold = load_threshold()
+
+    result["new_threshold"] = new_threshold
+
+    # Save updated threshold
+    reason = (
+        f"recalibrate({window_days}d): "
+        f"brier_7d={result['brier_7d']}, brier_all={result['brier_all']}, "
+        f"shift={'YES' if shift_detected else 'no'}, n_recent={len(recent)}"
+    )
+    save_threshold(new_threshold, reason)
+
+    # Archive old resolved predictions (>archive_days)
+    archive_result = archive_old(max_age_days=archive_days)
+    result["archived"] = archive_result.get("archived", 0)
+
+    # Sweep unresolved predictions older than 2*window
+    sweep_result = sweep_stale(max_age_days=window_days * 2)
+    result["swept"] = sweep_result.get("closed", 0)
+
+    # Brier after cleanup
+    cal = calibration(max_age_days=window_days)
+    result["brier_7d_after"] = cal.get("brier_score")
+
+    # Store insight in brain
+    _brain_store(
+        f"Recalibration ({window_days}d window): brier_7d={result['brier_7d']}, "
+        f"brier_all={result['brier_all']}, shift={shift_detected}, "
+        f"threshold={new_threshold}, archived={result['archived']}, swept={result['swept']}",
+        importance=0.6,
+    )
+
+    # Log to recalibration history
+    history_file = f"{CALIBRATION_DIR}/recalibration_history.jsonl"
+    try:
+        with open(history_file, "a") as f:
+            f.write(json.dumps(result) + "\n")
+    except Exception:
+        pass
+
+    return result
+
+
+def archive_old(max_age_days: int = 30) -> dict:
+    """Archive resolved predictions older than max_age_days.
+
+    Moves old resolved predictions to an archive file so they don't pollute
+    the active Brier score. Unresolved predictions are kept regardless of age.
+
+    Returns:
+        dict with keys: archived (int), kept (int), brier_before, brier_after
+    """
+    entries = _load_predictions()
+    if not entries:
+        return {"archived": 0, "kept": 0, "brier_before": None, "brier_after": None}
+
+    brier_before = calibration().get("brier_score")
+
+    now = datetime.now(timezone.utc)
+    cutoff = now.timestamp() - (max_age_days * 86400)
+    keep = []
+    archive = []
+
+    for entry in entries:
+        if entry["outcome"] is None:
+            keep.append(entry)  # always keep unresolved
+            continue
+        try:
+            ts = datetime.fromisoformat(entry["timestamp"].replace("Z", "+00:00"))
+            if ts.timestamp() < cutoff:
+                archive.append(entry)
+            else:
+                keep.append(entry)
+        except (ValueError, KeyError):
+            keep.append(entry)  # keep if can't parse timestamp
+
+    if archive:
+        archive_file = f"{CALIBRATION_DIR}/predictions_archive.jsonl"
+        with open(archive_file, "a") as f:
+            for entry in archive:
+                f.write(json.dumps(entry) + "\n")
+        _save_predictions(keep)
+
+    brier_after = calibration().get("brier_score")
+
+    return {
+        "archived": len(archive),
+        "kept": len(keep),
+        "brier_before": brier_before,
+        "brier_after": brier_after,
+    }
+
+
 # CLI
 def main():
     if len(sys.argv) < 2:
@@ -715,9 +930,32 @@ def main():
         print(f"Sweep (>{max_days}d): closed={result['closed']}, remaining_open={result['remaining_open']}")
         print(f"Brier before: {result['brier_before']}, after: {result['brier_after']}")
 
+    elif cmd == "archive":
+        # Archive old resolved predictions to reduce Brier pollution
+        max_days = int(sys.argv[2]) if len(sys.argv) > 2 else 30
+        result = archive_old(max_age_days=max_days)
+        print(f"Archive (>{max_days}d): archived={result['archived']}, kept={result['kept']}")
+        print(f"Brier before: {result['brier_before']}, after: {result['brier_after']}")
+
+    elif cmd == "recalibrate":
+        # 7-day rolling window recalibration
+        window = int(sys.argv[2]) if len(sys.argv) > 2 else 7
+        result = recalibrate(window_days=window)
+        print(f"=== Recalibration ({window}d window) ===")
+        print(f"Resolved: {result['resolved_all']} all, {result['resolved_recent']} recent")
+        print(f"Brier: 7d={result['brier_7d']}, all={result['brier_all']}")
+        if result['shift_detected']:
+            print(f"SHIFT DETECTED: {result.get('shift_direction', '?')} ({result.get('shift_magnitude', '?')})")
+        print(f"New threshold: {result['new_threshold']}")
+        print(f"Archived: {result['archived']}, Swept: {result['swept']}")
+        if result.get('band_adjustments'):
+            print("Band adjustments (recent):")
+            for band, data in result['band_adjustments'].items():
+                print(f"  {band}: acc={data['accuracy']:.0%} vs pred={data['predicted_avg']:.0%} (gap={data['gap']:+.0%}, n={data['n']})")
+
     else:
         print(f"Unknown command: {cmd}")
-        print("Try: predict, outcome, calibration, list, review, dynamic, apply, threshold, predict-specific, auto-resolve, sweep")
+        print("Try: predict, outcome, calibration, list, review, dynamic, apply, threshold, predict-specific, auto-resolve, sweep, recalibrate")
 
 
 if __name__ == "__main__":

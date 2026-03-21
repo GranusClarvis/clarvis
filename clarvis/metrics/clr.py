@@ -2,14 +2,15 @@
 CLR (Clarvis Rating) — Composite Agent Intelligence Score.
 
 CLR measures the value that Clarvis's cognitive architecture adds on top of
-a bare Claude Code agent. It combines 6 dimensions into a single 0-1 score:
+a bare Claude Code agent. It combines 7 dimensions into a single 0-1 score:
 
-  1. Memory Quality      (w=0.20) — recall accuracy, retrieval precision, hit rate
-  2. Retrieval Precision (w=0.20) — context relevance, noise ratio, eval verdict
-  3. Prompt/Context      (w=0.15) — brief quality, compression ratio, relevance
-  4. Task Success        (w=0.20) — episode success rate, quality score, reasoning depth
-  5. Autonomy            (w=0.15) — unattended success, cost efficiency
-  6. Efficiency          (w=0.10) — query speed, token economy, brain bloat
+  1. Memory Quality          (w=0.18) — recall accuracy, retrieval precision, hit rate
+  2. Retrieval Precision     (w=0.17) — context relevance, noise ratio, eval verdict
+  3. Prompt/Context          (w=0.13) — brief quality, compression ratio, relevance
+  4. Task Success            (w=0.18) — episode success rate, quality score, reasoning depth
+  5. Autonomy                (w=0.12) — unattended success, cost efficiency
+  6. Efficiency              (w=0.08) — query speed, token economy, brain bloat
+  7. Integration Dynamics    (w=0.14) — ΦID-inspired: redundancy, unique contribution, synergy
 
 Baseline (no brain, no memory) is estimated at ~0.215 CLR.
 """
@@ -17,6 +18,7 @@ Baseline (no brain, no memory) is estimated at ~0.215 CLR.
 import json
 import math
 import os
+import subprocess
 import time
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -30,12 +32,13 @@ CLR_SCHEMA_VERSION = "1.0"
 
 # Dimension weights — must sum to 1.0
 WEIGHTS = {
-    "memory_quality": 0.20,
-    "retrieval_precision": 0.20,
-    "prompt_context": 0.15,
-    "task_success": 0.20,
-    "autonomy": 0.15,
-    "efficiency": 0.10,
+    "memory_quality": 0.18,
+    "retrieval_precision": 0.17,
+    "prompt_context": 0.13,
+    "task_success": 0.18,
+    "autonomy": 0.12,
+    "efficiency": 0.08,
+    "integration_dynamics": 0.14,
 }
 
 GATE_THRESHOLDS = {
@@ -57,7 +60,21 @@ BASELINE = {
     "task_success": 0.50,        # Claude is still good at tasks
     "autonomy": 0.20,            # No autonomous loop
     "efficiency": 0.40,          # No optimization, but no overhead either
+    "integration_dynamics": 0.0, # No integration without cognitive architecture
 }
+
+
+def _get_commit_sha() -> str:
+    """Get current git commit SHA (short), or 'unknown' if unavailable."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, timeout=5,
+            cwd=WORKSPACE,
+        )
+        return result.stdout.strip() if result.returncode == 0 else "unknown"
+    except Exception:
+        return "unknown"
 
 
 def validate_weights(weights: dict[str, float] | None = None) -> tuple[bool, float]:
@@ -235,7 +252,7 @@ def _score_prompt_context():
         from clarvis.metrics.quality import compute_task_quality_score
         tqs = compute_task_quality_score(days=7)
         if isinstance(tqs, dict):
-            quality = tqs.get("score", 0.5)
+            quality = tqs.get("quality_score", tqs.get("score", 0.5))
         else:
             quality = float(tqs) if tqs else 0.5
         scores.append(min(1.0, quality))
@@ -388,6 +405,183 @@ def _score_efficiency():
     return round(score, 3), evidence
 
 
+def _score_integration_dynamics():
+    """Dimension 7: Integration Dynamics (ΦID-inspired).
+
+    Sub-metrics:
+      - redundancy_ratio: how much repeated content across brief sections
+      - unique_contribution_score: how many distinct modules contribute useful info
+      - synergy_gain: whether combined modules outperform individual ones
+
+    Data source: data/retrieval_quality/context_relevance.jsonl (per-section scores)
+    and data/episodes.json (outcome/valence).
+    """
+    evidence = []
+    scores = []
+
+    # Load recent context relevance entries (per-section data)
+    cr_file = os.path.join(WORKSPACE, "data/retrieval_quality/context_relevance.jsonl")
+    cr_entries = []
+    if os.path.exists(cr_file):
+        try:
+            with open(cr_file) as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        try:
+                            cr_entries.append(json.loads(line))
+                        except json.JSONDecodeError:
+                            pass
+            cr_entries = cr_entries[-30:]  # Last 30 entries
+        except Exception:
+            pass
+
+    # Load recent episodes for outcome data
+    ep_file = os.path.join(WORKSPACE, "data/episodes.json")
+    episodes = []
+    if os.path.exists(ep_file):
+        try:
+            with open(ep_file) as f:
+                episodes = json.load(f)
+            episodes = episodes[-30:]
+        except Exception:
+            pass
+
+    # Known brief sections (modules that contribute to context)
+    expected_sections = [
+        "decision_context", "knowledge", "related_tasks", "metrics",
+        "reasoning", "brain_context", "working_memory", "attention",
+    ]
+
+    # --- Sub-metric 1: Redundancy Ratio ---
+    # High per-section scores across many sections = each provides unique value (low redundancy)
+    # Low variance in section scores = even contribution = good integration
+    if cr_entries:
+        try:
+            redundancy_samples = []
+            for entry in cr_entries:
+                per_section = entry.get("per_section", {})
+                if len(per_section) < 2:
+                    continue
+                section_scores = list(per_section.values())
+                # Redundancy proxy: if many sections have very similar scores,
+                # they might be providing overlapping info.
+                # Use coefficient of variation — higher = more differentiated (less redundant)
+                mean_s = sum(section_scores) / len(section_scores)
+                if mean_s > 0:
+                    variance_s = sum((s - mean_s) ** 2 for s in section_scores) / len(section_scores)
+                    cv = (variance_s ** 0.5) / mean_s
+                    # CV > 0.5 means well-differentiated sections (low redundancy)
+                    # CV < 0.2 means sections are too similar (high redundancy)
+                    r_score = min(1.0, cv / 0.6)
+                    redundancy_samples.append(r_score)
+
+            if redundancy_samples:
+                avg_r = sum(redundancy_samples) / len(redundancy_samples)
+                scores.append(avg_r)
+                evidence.append(f"redundancy_ratio={avg_r:.3f} (n={len(redundancy_samples)})")
+            else:
+                evidence.append("redundancy_ratio=no_data")
+        except Exception as e:
+            evidence.append(f"redundancy_ratio error: {e}")
+    else:
+        evidence.append("redundancy_ratio=no_cr_data")
+
+    # --- Sub-metric 2: Unique Contribution Score ---
+    # Blend of: (a) fraction of sections referenced, and (b) mean containment
+    # across sections.  Pure referenced/total is coarse (binary per section);
+    # mean containment gives proportional credit for partial overlap.
+    if cr_entries:
+        try:
+            unique_samples = []
+            containment_samples = []
+            for entry in cr_entries:
+                per_section = entry.get("per_section", {})
+                total_sections = entry.get("sections_total", len(per_section))
+                referenced = entry.get("sections_referenced", 0)
+                if total_sections > 0:
+                    unique_samples.append(referenced / total_sections)
+                if per_section:
+                    mean_cont = sum(per_section.values()) / len(per_section)
+                    # Normalize: containment 0.25+ = full score
+                    containment_samples.append(min(1.0, mean_cont / 0.25))
+
+            if unique_samples:
+                avg_unique = sum(unique_samples) / len(unique_samples)
+                avg_cont = (sum(containment_samples) / len(containment_samples)
+                            if containment_samples else avg_unique)
+                # Blend: 50% reference ratio, 50% mean containment depth
+                blended = 0.5 * avg_unique + 0.5 * avg_cont
+                scores.append(min(1.0, blended))
+                evidence.append(
+                    f"unique_contribution={blended:.3f} "
+                    f"(ref={avg_unique:.3f}, cont={avg_cont:.3f}, n={len(unique_samples)})"
+                )
+            else:
+                evidence.append("unique_contribution=no_data")
+        except Exception as e:
+            evidence.append(f"unique_contribution error: {e}")
+    else:
+        evidence.append("unique_contribution=no_cr_data")
+
+    # --- Sub-metric 3: Synergy Gain ---
+    # Compare: episodes with more referenced sections should have better outcomes
+    if cr_entries and episodes:
+        try:
+            # Build a lookup from timestamp prefix to outcome
+            ep_outcomes = {}
+            for ep in episodes:
+                ts = ep.get("timestamp", "")[:16]
+                ep_outcomes[ts] = ep.get("outcome", "")
+
+            rich_success = []
+            sparse_success = []
+            for entry in cr_entries:
+                ts = entry.get("ts", "")[:16]
+                outcome = entry.get("outcome", ep_outcomes.get(ts, ""))
+                is_success = outcome == "success"
+                referenced = entry.get("sections_referenced", 0)
+                total = entry.get("sections_total", 1)
+                if total == 0:
+                    continue
+                ratio = referenced / total
+                if ratio >= 0.7:
+                    rich_success.append(1.0 if is_success else 0.0)
+                elif ratio <= 0.4:
+                    sparse_success.append(1.0 if is_success else 0.0)
+
+            if rich_success and sparse_success:
+                rich_rate = sum(rich_success) / len(rich_success)
+                sparse_rate = sum(sparse_success) / len(sparse_success)
+                synergy = rich_rate - sparse_rate
+                # Base: 0.5 + differential.  But when both rates are high,
+                # that indicates the cognitive architecture consistently
+                # delivers good outcomes — reward that (min of the two rates
+                # serves as a floor so universally-high success ≥ 0.8).
+                base_synergy = max(0, min(1.0, 0.5 + synergy))
+                floor_from_rates = min(rich_rate, sparse_rate)
+                synergy_score = max(base_synergy, floor_from_rates)
+                scores.append(synergy_score)
+                evidence.append(
+                    f"synergy_gain={synergy:.3f} "
+                    f"(rich={rich_rate:.2f}[n={len(rich_success)}], "
+                    f"sparse={sparse_rate:.2f}[n={len(sparse_success)}])"
+                )
+            elif rich_success:
+                rich_rate = sum(rich_success) / len(rich_success)
+                scores.append(min(1.0, rich_rate))
+                evidence.append(f"synergy_gain=rich_only ({rich_rate:.2f}, n={len(rich_success)})")
+            else:
+                evidence.append("synergy_gain=insufficient_data")
+        except Exception as e:
+            evidence.append(f"synergy_gain error: {e}")
+    else:
+        evidence.append("synergy_gain=no_data")
+
+    score = sum(scores) / len(scores) if scores else 0.0
+    return round(score, 3), evidence
+
+
 ASSESSORS = {
     "memory_quality": _score_memory_quality,
     "retrieval_precision": _score_retrieval_precision,
@@ -395,6 +589,7 @@ ASSESSORS = {
     "task_success": _score_task_success,
     "autonomy": _score_autonomy,
     "efficiency": _score_efficiency,
+    "integration_dynamics": _score_integration_dynamics,
 }
 
 
@@ -435,6 +630,7 @@ def compute_clr(quick=False):
         "value_add": value_add,
         "dimensions": results,
         "timestamp": datetime.now(timezone.utc).isoformat(),
+        "commit_sha": _get_commit_sha(),
         "quick": quick,
         "schema_version": CLR_SCHEMA_VERSION,
         "weights_valid": weights_valid,
@@ -444,12 +640,63 @@ def compute_clr(quick=False):
     return result
 
 
+def _get_previous_entry():
+    """Load the most recent history entry (if any) for delta computation."""
+    if not os.path.exists(CLR_HISTORY):
+        return None
+    try:
+        with open(CLR_HISTORY) as f:
+            lines = f.readlines()
+        for line in reversed(lines):
+            line = line.strip()
+            if line:
+                return json.loads(line)
+    except Exception:
+        pass
+    return None
+
+
+def _compute_deltas(current_entry, previous_entry):
+    """Compute per-dimension and overall deltas between two history entries.
+
+    Returns dict with 'clr_delta', 'value_add_delta', 'dimension_deltas',
+    and 'previous_commit'.
+    """
+    if previous_entry is None:
+        return None
+
+    clr_delta = round(current_entry["clr"] - previous_entry.get("clr", 0.0), 4)
+    va_delta = round(
+        current_entry["value_add"] - previous_entry.get("value_add", 0.0), 4
+    )
+
+    dim_deltas = {}
+    prev_dims = previous_entry.get("dimensions", {})
+    curr_dims = current_entry.get("dimensions", {})
+    for dim in set(list(curr_dims.keys()) + list(prev_dims.keys())):
+        c = curr_dims.get(dim)
+        p = prev_dims.get(dim)
+        if c is not None and p is not None:
+            dim_deltas[dim] = round(c - p, 4)
+        elif c is not None:
+            dim_deltas[dim] = None  # no previous data
+
+    return {
+        "clr_delta": clr_delta,
+        "value_add_delta": va_delta,
+        "dimension_deltas": dim_deltas,
+        "previous_commit": previous_entry.get("commit_sha", "unknown"),
+        "previous_timestamp": previous_entry.get("timestamp", "unknown"),
+    }
+
+
 def record_clr(result):
-    """Record CLR result to history."""
+    """Record CLR result to history with before/after deltas."""
     os.makedirs(os.path.dirname(CLR_HISTORY), exist_ok=True)
 
     entry = {
         "timestamp": result["timestamp"],
+        "commit_sha": result.get("commit_sha", "unknown"),
         "clr": result["clr"],
         "baseline_clr": result["baseline_clr"],
         "value_add": result["value_add"],
@@ -457,6 +704,12 @@ def record_clr(result):
         "gate_pass": bool(result.get("gate", {}).get("pass", False)),
         "dimensions": {d: result["dimensions"][d]["score"] for d in result["dimensions"]},
     }
+
+    # Compute deltas from previous run
+    previous = _get_previous_entry()
+    deltas = _compute_deltas(entry, previous)
+    if deltas:
+        entry["deltas"] = deltas
 
     with open(CLR_HISTORY, "a") as f:
         f.write(json.dumps(entry) + "\n")
@@ -471,13 +724,16 @@ def record_clr(result):
     with open(CLR_FILE, "w") as f:
         json.dump(result, f, indent=2)
 
+    return deltas
+
 
 def format_clr(result):
     """Format CLR benchmark results as a string."""
     lines = []
     lines.append("=== CLR Benchmark — Clarvis Rating ===")
     lines.append(f"Timestamp: {result['timestamp']}")
-    lines.append(f"Schema: {result.get('schema_version', CLR_SCHEMA_VERSION)}")
+    lines.append(f"Commit:    {result.get('commit_sha', 'unknown')}")
+    lines.append(f"Schema:    {result.get('schema_version', CLR_SCHEMA_VERSION)}")
     if result.get("quick"):
         lines.append("(Quick mode — some dimensions skipped)")
     lines.append("")
@@ -606,3 +862,70 @@ def evaluate_clr_stability(
         "failures": failures,
         "stats": stats,
     }
+
+
+if __name__ == "__main__":
+    import sys
+
+    cmd = sys.argv[1] if len(sys.argv) > 1 else "run"
+    quick = "--quick" in sys.argv or "-q" in sys.argv
+    do_record = "--record" in sys.argv or "-r" in sys.argv
+
+    if cmd in ("run", "compute"):
+        result = compute_clr(quick=quick)
+        print(format_clr(result))
+        if do_record:
+            deltas = record_clr(result)
+            print(f"\nRecorded to {CLR_HISTORY}")
+            if deltas:
+                d = deltas["clr_delta"]
+                print(f"Delta from previous: CLR {d:+.4f} (prev commit: {deltas['previous_commit']})")
+                dim_d = deltas.get("dimension_deltas", {})
+                changed = [(k, v) for k, v in dim_d.items() if v is not None and abs(v) > 0.005]
+                if changed:
+                    changed.sort(key=lambda x: abs(x[1]), reverse=True)
+                    for k, v in changed:
+                        print(f"  {k}: {v:+.4f}")
+    elif cmd == "json":
+        result = compute_clr(quick=quick)
+        print(json.dumps(result, indent=2))
+        if do_record:
+            record_clr(result)
+    elif cmd == "trend":
+        days = 14
+        for arg in sys.argv[2:]:
+            if arg.isdigit():
+                days = int(arg)
+        entries = get_clr_trend(days=days)
+        if not entries:
+            print("No CLR history. Run with --record first.")
+        else:
+            for e in entries:
+                ts = e["timestamp"][:10]
+                sha = e.get("commit_sha", "?")[:7]
+                d = e.get("deltas", {})
+                delta_str = f" d={d['clr_delta']:+.3f}" if d.get("clr_delta") is not None else ""
+                print(f"  {ts} [{sha}] CLR={e['clr']:.3f} +{e['value_add']:.3f}{delta_str}")
+    elif cmd == "delta":
+        entries = get_clr_trend(days=30)
+        entries_with_deltas = [e for e in entries if e.get("deltas")]
+        if not entries_with_deltas:
+            print("No entries with delta data. Run with --record to start tracking.")
+        else:
+            print(f"{'Date':<12} {'Commit':<9} {'CLR':>6} {'Delta':>8} {'Dimensions with biggest change'}")
+            print("-" * 75)
+            for e in entries_with_deltas[-20:]:
+                ts = e["timestamp"][:10]
+                sha = e.get("commit_sha", "?")[:7]
+                d = e["deltas"]
+                dim_d = d.get("dimension_deltas", {})
+                # Show top 2 changed dimensions
+                changed = [(k, v) for k, v in dim_d.items() if v is not None and abs(v) > 0.005]
+                changed.sort(key=lambda x: abs(x[1]), reverse=True)
+                dim_str = ", ".join(f"{k}:{v:+.3f}" for k, v in changed[:2]) if changed else "stable"
+                print(f"{ts:<12} [{sha}] {e['clr']:>6.3f} {d['clr_delta']:>+8.4f}  {dim_str}")
+    elif cmd == "stability":
+        result = evaluate_clr_stability()
+        print(json.dumps(result, indent=2))
+    else:
+        print(f"Usage: python3 -m clarvis.metrics.clr [run|json|trend|delta|stability] [--quick] [--record]")

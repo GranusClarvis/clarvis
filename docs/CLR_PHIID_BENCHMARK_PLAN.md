@@ -179,16 +179,19 @@ With this structure, we can finally ask useful questions such as:
 
 ## Immediate Next Steps
 
-1. **Wire CLR baseline into the canonical benchmark path**
-   - ensure `clarvis/metrics/clr.py` or equivalent is executable from main benchmarking flows
+1. ~~**Wire CLR baseline into the canonical benchmark path**~~ ✓ Done 2026-03-19
+   - `clarvis/metrics/clr.py` has `__main__` block, commit_sha in output/records
+   - CLI: `python3 -m clarvis metrics clr --record`
 2. **Add perturbation benchmark harness**
    - deterministic module ablation runner for brief assembly and recall pipeline
-3. **Add three ΦID-inspired metrics first**
-   - redundancy_ratio
-   - unique_contribution_score
-   - synergy_gain
-4. **Store per-run history**
-   - benchmark JSONL with timestamp, commit sha, changed files, scores
+3. ~~**Add three ΦID-inspired metrics first**~~ ✓ Done 2026-03-19
+   - redundancy_ratio (CV of per-section relevance scores)
+   - unique_contribution_score (fraction of referenced sections)
+   - synergy_gain (success rate: rich-context vs sparse-context episodes)
+   - Implemented as 7th CLR dimension: `integration_dynamics` (w=0.14)
+   - Data source: `data/retrieval_quality/context_relevance.jsonl`
+4. ~~**Store per-run history**~~ ✓ Done 2026-03-19
+   - `data/clr_history.jsonl` with timestamp, commit_sha, dimension subscores
 5. **Show deltas next to goals**
    - tie benchmark movement to evolution queue tasks and current roadmap goals
 

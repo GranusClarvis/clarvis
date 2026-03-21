@@ -28,9 +28,15 @@ yesterday_str = (datetime.now(timezone.utc) - timedelta(days=1)).strftime('%Y-%m
 # Get bot token from env (preferred) or openclaw config (fallback)
 TOKEN = os.environ.get("CLARVIS_TG_BOT_TOKEN", "")
 if not TOKEN:
-    with open('/home/agent/.openclaw/openclaw.json') as f:
-        config = json.load(f)
-    TOKEN = config['channels']['telegram']['botToken']
+    try:
+        with open('/home/agent/.openclaw/openclaw.json') as f:
+            config = json.load(f)
+        TOKEN = config['channels']['telegram']['botToken']
+    except Exception:
+        TOKEN = ""
+if not TOKEN:
+    print("[report_morning] No Telegram token found, skipping")
+    sys.exit(0)
 
 
 def read_file(path):
@@ -217,6 +223,8 @@ try:
             goal_lines.append(f"  {name}: {prog}%")
 except Exception:
     goal_lines.append("  (unavailable)")
+if not goal_lines:
+    goal_lines.append("  (no active goals)")
 
 # ==== BUILD REPORT ====
 lines = []

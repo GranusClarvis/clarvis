@@ -13,6 +13,7 @@ from .confidence import (
     outcome,
     calibration,
     dynamic_confidence,
+    recalibrate,
 )
 from .context_relevance import (
     score_section_relevance,

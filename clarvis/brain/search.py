@@ -32,6 +32,57 @@ _BRIDGE_TEXT_PREFIXES = (
 
 _log = logging.getLogger("clarvis.brain.search")
 
+# --- Temporal intent detection ---
+# Patterns that indicate the caller wants recency-biased results.
+# Returns (since_days, recency_weight) or None if no temporal intent detected.
+
+_TEMPORAL_PATTERNS = [
+    # "last N hours/days/weeks"
+    (re.compile(r'\blast\s+(\d+)\s+hours?\b', re.I), lambda m: (max(1, int(m.group(1)) // 24) or 1, 0.7)),
+    (re.compile(r'\blast\s+(\d+)\s+days?\b', re.I), lambda m: (int(m.group(1)), 0.6)),
+    (re.compile(r'\blast\s+(\d+)\s+weeks?\b', re.I), lambda m: (int(m.group(1)) * 7, 0.5)),
+    # "past N days/hours/weeks"
+    (re.compile(r'\bpast\s+(\d+)\s+hours?\b', re.I), lambda m: (max(1, int(m.group(1)) // 24) or 1, 0.7)),
+    (re.compile(r'\bpast\s+(\d+)\s+days?\b', re.I), lambda m: (int(m.group(1)), 0.6)),
+    (re.compile(r'\bpast\s+(\d+)\s+weeks?\b', re.I), lambda m: (int(m.group(1)) * 7, 0.5)),
+    # "today", "last 24 hours"
+    (re.compile(r'\btoday\b', re.I), lambda m: (1, 0.8)),
+    (re.compile(r'\blast\s+24\s+hours?\b', re.I), lambda m: (1, 0.8)),
+    # "yesterday"
+    (re.compile(r'\byesterday\b', re.I), lambda m: (2, 0.7)),
+    # "this week"
+    (re.compile(r'\bthis\s+week\b', re.I), lambda m: (7, 0.5)),
+    # "this month"
+    (re.compile(r'\bthis\s+month\b', re.I), lambda m: (30, 0.4)),
+    # "recently", "recent", "latest"
+    (re.compile(r'\brecently\b', re.I), lambda m: (7, 0.6)),
+    (re.compile(r'\brecent\b', re.I), lambda m: (7, 0.6)),
+    (re.compile(r'\blatest\b', re.I), lambda m: (7, 0.6)),
+    # "what happened" (implicitly temporal)
+    (re.compile(r'\bwhat\s+happened\b', re.I), lambda m: (7, 0.5)),
+]
+
+
+def detect_temporal_intent(query):
+    """Detect temporal intent in a query string.
+
+    Returns (since_days, recency_weight) if temporal keywords are found,
+    or (None, 0.0) if no temporal intent detected.
+
+    Examples:
+        "what happened recently" → (7, 0.6)
+        "last 3 days progress" → (3, 0.6)
+        "today's events" → (1, 0.8)
+        "search architecture" → (None, 0.0)
+    """
+    for pattern, extractor in _TEMPORAL_PATTERNS:
+        m = pattern.search(query)
+        if m:
+            since_days, recency_weight = extractor(m)
+            return since_days, recency_weight
+    return None, 0.0
+
+
 # --- Contextual Retrieval: collection-level metadata synthesis ---
 # Pilot collections for chunk-level contextual enrichment (2026-03-19).
 # Adds collection purpose + metadata summary as a prefix to each result's
@@ -173,7 +224,7 @@ class SearchMixin:
     def recall(self, query, collections=None, n=5, min_importance=None,
                include_related=False, since_days=None, attention_boost=False,
                caller=None, graph_expand=False, filter_bridges=True,
-               cross_collection_expand=False):
+               cross_collection_expand=False, recency_weight=0.0):
         """Recall memories matching a query.
 
         Uses registered hooks for scoring (actr), boosting (attention/hebbian),
@@ -189,8 +240,17 @@ class SearchMixin:
             routed = route_query(query)
             collections = routed if routed else DEFAULT_COLLECTIONS
 
+        # --- Auto-detect temporal intent from query text ---
+        # If caller didn't explicitly set since_days or recency_weight,
+        # detect temporal keywords and apply automatically.
+        auto_since, auto_recency = detect_temporal_intent(query)
+        if since_days is None and auto_since is not None:
+            since_days = auto_since
+        if recency_weight == 0.0 and auto_recency > 0.0:
+            recency_weight = auto_recency
+
         # Result-level cache (30s TTL) — avoids repeated ChromaDB queries
-        cache_key = (query, tuple(sorted(collections)), n, min_importance, since_days, attention_boost)
+        cache_key = (query, tuple(sorted(collections)), n, min_importance, since_days, attention_boost, recency_weight)
         now_cache = time.monotonic()
         cached_result = self._recall_cache.get(cache_key)
         if cached_result and (now_cache - cached_result[0]) < self._recall_cache_ttl:
@@ -266,13 +326,26 @@ class SearchMixin:
                     items.append(result_item)
             return items
 
-        # Query all collections in parallel (up to 10 workers to cover all collections)
-        from concurrent.futures import ThreadPoolExecutor as _TPE, as_completed
-        with _TPE(max_workers=min(len(valid_collections), 10)) as executor:
-            futures = {executor.submit(_query_collection, c): c for c in valid_collections}
-            for future in as_completed(futures):
+        # Query collections — sequential by default, parallel if CLARVIS_PARALLEL_RECALL=1
+        # Benchmarked 2026-03-20: sequential ~0.28s vs parallel ~0.41s (thread overhead
+        # dominates when per-collection queries are <30ms). Enable parallel for slow
+        # backends or high collection counts.
+        import os as _os
+        _parallel = _os.environ.get("CLARVIS_PARALLEL_RECALL", "0") == "1"
+
+        if _parallel and len(valid_collections) > 1:
+            from concurrent.futures import ThreadPoolExecutor as _TPE, as_completed
+            with _TPE(max_workers=min(len(valid_collections), 10)) as executor:
+                futures = {executor.submit(_query_collection, c): c for c in valid_collections}
+                for future in as_completed(futures):
+                    try:
+                        all_results.extend(future.result())
+                    except Exception:
+                        pass
+        else:
+            for c in valid_collections:
                 try:
-                    all_results.extend(future.result())
+                    all_results.extend(_query_collection(c))
                 except Exception:
                     pass
 
@@ -294,10 +367,30 @@ class SearchMixin:
             except Exception:
                 continue
 
+        # Compute recency scores if recency_weight > 0
+        _recency_w = max(0.0, min(1.0, recency_weight))
+        if _recency_w > 0:
+            _now_ts = datetime.now(timezone.utc).timestamp()
+            _max_age = 90 * 86400  # 90 days normalisation window
+            for r in all_results:
+                created = r["metadata"].get("created_at", "")
+                try:
+                    age_s = _now_ts - datetime.fromisoformat(created).timestamp()
+                    r["_recency_score"] = max(0.0, 1.0 - age_s / _max_age)
+                except (ValueError, TypeError):
+                    r["_recency_score"] = 0.0
+
         if scored:
-            all_results.sort(key=lambda x: x.get("_actr_score", 0), reverse=True)
+            if _recency_w > 0:
+                # Blend ACTR score with recency
+                all_results.sort(
+                    key=lambda x: x.get("_actr_score", 0) * (1 - _recency_w * 0.3)
+                    + x.get("_recency_score", 0) * (_recency_w * 0.3),
+                    reverse=True)
+            else:
+                all_results.sort(key=lambda x: x.get("_actr_score", 0), reverse=True)
         else:
-            # Fallback: distance + importance scoring
+            # Fallback: distance + importance + optional recency scoring
             def sort_key(x):
                 distance = x.get("distance")
                 if distance is not None:
@@ -306,7 +399,11 @@ class SearchMixin:
                     semantic_relevance = 0.5
                 importance = x["metadata"].get("importance", 0.5)
                 boost = x["metadata"].get("_attention_boost", 0)
-                return semantic_relevance * 0.85 + (importance + boost) * 0.15
+                base = semantic_relevance * 0.85 + (importance + boost) * 0.15
+                if _recency_w > 0:
+                    recency = x.get("_recency_score", 0.0)
+                    return base * (1 - _recency_w * 0.4) + recency * (_recency_w * 0.4)
+                return base
             all_results.sort(key=sort_key, reverse=True)
 
         # --- Bridge filtering: deprioritize synthetic bridge memories ---

@@ -577,9 +577,17 @@ def evolve(old_id, old_collection, new_text, reason="contradiction"):
     return evolve_memory(brain, old_id, old_collection, new_text, reason)
 
 
-def search(query, n=5, min_importance=None, collections=None):
-    """Search ClarvisDB — use this instead of OpenClaw's memory_search."""
-    return brain.recall(query, n=n, min_importance=min_importance, collections=collections)
+def search(query, n=5, min_importance=None, collections=None, since_days=None,
+           recency_weight=0.0):
+    """Search ClarvisDB — use this instead of OpenClaw's memory_search.
+
+    since_days: If set, only return memories created within the last N days.
+    recency_weight: Float 0.0-1.0. Blend recency into ranking (0=pure semantic,
+                    1=heavily recency-biased). Useful for 'recent' queries.
+    """
+    return brain.recall(query, n=n, min_importance=min_importance,
+                        collections=collections, since_days=since_days,
+                        recency_weight=recency_weight)
 
 
 def synthesize(query, n=10, collections=None):

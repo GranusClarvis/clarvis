@@ -1,0 +1,8 @@
+# Retrieval Optimization
+
+Date: 2026-03-21
+Status: Complete
+
+Retrieval optimization for RAG is increasingly less about buying a larger embedding model and more about composing signals intelligently. Recent work points to a robust pattern: use hybrid retrieval for recall, then spend compute on reranking where it matters. The 2025 paper *Rethinking Hybrid Retrieval: When Small Embeddings and LLM Re-ranking Beat Bigger Models* argues that compact embeddings such as MiniLM-v6 can outperform larger models like BGE-Large when fused with sparse lexical and graph-based signals, especially once an LLM reranker is applied. The important implication is architectural: retrieval quality depends on compatibility with downstream reranking, not raw embedding size alone. The 2024 HYRR paper reinforces this from the training side: rerankers become more robust when trained on candidates produced by hybrid retrievers, improving generalization across both supervised and zero-shot settings.
+
+The combined lesson is straightforward. A strong retrieval stack should optimize in stages: maximize candidate diversity with dense+sparse(+graph) retrieval, train rerankers on hybrid-generated hard negatives, and reserve expensive reasoning for the final shortlist. For Clarvis, this suggests prioritizing hybrid candidate generation, recency/context-aware signals, and lightweight embeddings paired with stronger reranking over simply enlarging the vector model. That offers better relevance per unit of compute, which is rather the whole game.
