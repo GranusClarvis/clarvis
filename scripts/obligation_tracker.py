@@ -279,16 +279,23 @@ class ObligationTracker:
 
             if dirty_files:
                 result["clean"] = False
-                # Estimate dirty age from most recent file modification
+                # Estimate dirty age from tracked changes AND untracked files
                 try:
+                    # Tracked modified files from git diff
                     mtime_cmd = subprocess.run(
                         ["git", "diff", "--name-only"],
                         capture_output=True, text=True, timeout=10, cwd=WORKSPACE,
                     )
                     changed_files = [f for f in mtime_cmd.stdout.strip().split("\n") if f.strip()]
+                    # Also include untracked files from porcelain output
+                    for line in dirty_files:
+                        if line.startswith("??"):
+                            upath = line[3:].strip()
+                            if upath and upath not in changed_files:
+                                changed_files.append(upath)
                     if changed_files:
                         oldest_mtime = None
-                        for cf in changed_files[:10]:
+                        for cf in changed_files[:20]:
                             fpath = os.path.join(WORKSPACE, cf)
                             if os.path.exists(fpath):
                                 mt = os.path.getmtime(fpath)

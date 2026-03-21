@@ -1370,3 +1370,8 @@ _Last archived: 2026-03-17_
 ## Archived 2026-03-21
 - [x] [DIRECTIVE_TELEGRAM_REALTIME_HOOK] Added --context and --priority CLI args to directive_engine.py ingest; updated promise-track SKILL.md to pass $CONTEXT from conversation. M2.5 now sends raw_context for emotional dampening and scope classification at chat time. _(2026-03-21)_
 - [x] [DIRECTIVE_CONFLICT_RESOLUTION] Added _detect_conflicts() to DirectiveEngine.ingest(): Jaccard word overlap + negation pattern matching detects contradictions. Same-source conflicts auto-supersede; cross-source conflicts flagged for user. Verification test #17 added. _(2026-03-21)_
+
+## Archived 2026-03-21
+- [x] [EPISODIC_MEMORY_WRAPPER_NAMEERROR] Already fixed — wrapper correctly imports and calls `main()` from `clarvis.memory.episodic_memory`. Verified 2026-03-21.
+- [x] [CONTEXT_IMPORTANCE_RECALIBRATE] Recalibrated from 95 episodes (14-day recency-weighted). Updated hardcoded defaults, promoted failure_avoidance out of HARD_SUPPRESS (mean=0.126 > 0.12), synced assembly.py + tests. 2026-03-21.
+- [x] [RESEARCH_RETRIEVAL_OPTIMIZATION] Survey retrieval optimization for RAG: late interaction retrieval, adaptive context compression, query expansion, and sentence-level focus. (2026-03-21)

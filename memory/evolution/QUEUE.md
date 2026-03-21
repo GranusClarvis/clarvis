@@ -27,9 +27,8 @@ Presentable Clarvis by 2026-03-31:
 ### Milestone E — Final Validation (by 2026-03-31)
 
 ### P0 Fixes Added — 2026-03-19 Evening Code Review
-- [x] [EPISODIC_MEMORY_WRAPPER_NAMEERROR] Already fixed — wrapper correctly imports and calls `main()` from `clarvis.memory.episodic_memory`. Verified 2026-03-21.
-- [ ] [STRATEGIC_AUDIT_ARG_LENGTH_GUARD] Refactor `scripts/cron_strategic_audit.sh` to pass audit output to the Python parser via stdin or a temp file instead of argv; large audit bodies risk shell quoting and argument-length failures.
-- [ ] [GIT_HYGIENE_UNTRACKED_AGE_FIX] Update `obligation_tracker.py` dirty-age estimation to include untracked files from `git status --porcelain`; current logic uses `git diff --name-only`, so purely untracked work gets age=0 and may never auto-commit.
+- [x] [STRATEGIC_AUDIT_ARG_LENGTH_GUARD] Reads from `data/strategic_audit_last.md` file instead of argv. Done 2026-03-21.
+- [x] [GIT_HYGIENE_UNTRACKED_AGE_FIX] Now parses `??` untracked files from porcelain output for mtime. Done 2026-03-21.
 
 ---
 
@@ -52,6 +51,7 @@ Presentable Clarvis by 2026-03-31:
 ## P1 — This Week
 
 
+- [x] [OBLIGATION_TRACKER 2026-03-21] [OBLIGATION_ESCALATION_ob_20260321_112950_0] Resolved by committing pending work. Done 2026-03-21.
 - [ ] [STRATEGIC_AUDIT 2026-03-21] [STRATEGIC_AUDIT/autonomy] [COMPLEXITY_GATE] Add function-length check to heartbeat postflight — if new code introduces functions >80 lines, auto-queue a decomposition task as P1.
 ---
 
@@ -84,7 +84,6 @@ _(Completed items archived.)_
 - [ ] [CRON_MAINTENANCE_TIMEOUT_GUARD] Add timeout and stale-lock detection to the 04:00-05:05 maintenance window scripts (cron_graph_checkpoint.sh, cron_graph_compaction.sh, cron_graph_verify.sh, cron_chromadb_vacuum.sh). Currently they share /tmp/clarvis_maintenance.lock but have no max-wait or deadlock recovery. _(Bash task — operational reliability)_
 - [ ] [HEARTBEAT_CONTEXT_RELEVANCE_GATE] Add context_relevance as an explicit dimension in heartbeat_gate.py capability assessment. If context_relevance < 0.60, auto-prioritize context-improvement tasks over other queue items. Currently heartbeat asks "which capability is weakest" but doesn't consider context_relevance. _(Targets weakest metric: Context Relevance via prioritization)_
 - [ ] [DIRECTIVE_LLM_CLASSIFIER_UPGRADE] Add optional LLM-based classification fallback for ambiguous directives where rule-based classifier confidence < 0.5. Use task_router to pick cheapest model. Gate behind env var DIRECTIVE_LLM_CLASSIFY=true. _(Promise enforcement: handles nuanced instructions the rule-based classifier misses)_
-- [x] [CONTEXT_IMPORTANCE_RECALIBRATE] Recalibrated from 95 episodes (14-day recency-weighted). Updated hardcoded defaults, promoted failure_avoidance out of HARD_SUPPRESS (mean=0.126 > 0.12), synced assembly.py + tests. 2026-03-21.
 - [ ] [CONTEXT_SUPPRESSION_THRESHOLD_SWEEP] The preflight section gate uses threshold=0.13 (`get_suppressed_sections(threshold=0.13)`). Run a sweep of thresholds [0.08, 0.10, 0.13, 0.15, 0.18] against historical episode data to find the optimal cutoff that maximizes context_relevance without dropping sections that occasionally score high. Output: recommended threshold + per-section impact table. _(Targets weakest metric: Context Relevance — data-driven threshold tuning)_
 - [ ] [P0_DELIVERY_READINESS_CHECKLIST] Create `docs/DELIVERY_CHECKLIST.md` for the 2026-03-31 deadline. Audit: which Milestones A-E items are actually done vs empty placeholders? Cross-reference ROADMAP.md capabilities. Populate each milestone with concrete remaining work. _(Non-Python task — project management for P0 deadline)_
 - [ ] [CRON_HEALTH_DASHBOARD_HTML] Generate a static HTML dashboard (`monitoring/dashboard.html`) from health_monitor.sh and performance_benchmark.py data. Show: PI trend, context_relevance trend, cron success/fail heatmap, last 7 days. Refreshed by cron. _(Non-Python task — HTML/JS, operational visibility for open-source readiness)_
@@ -94,7 +93,6 @@ _(Completed items archived.)_
 
 ## Research Additions
 
-- [x] [RESEARCH_RETRIEVAL_OPTIMIZATION] Survey retrieval optimization for RAG: late interaction retrieval, adaptive context compression, query expansion, and sentence-level focus. (2026-03-21)
 
 
 

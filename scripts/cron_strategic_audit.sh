@@ -252,7 +252,7 @@ echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Audit report saved." >> "$LOGFILE"
 
 # === APPLY QUEUE ACTIONS (robust Python parser) ===
 # Tries JSON structured findings first, falls back to grep-based extraction
-python3 - "$AUDIT_OUTPUT" << 'PYEOF' >> "$LOGFILE" 2>&1
+python3 - << 'PYEOF' >> "$LOGFILE" 2>&1
 import json
 import re
 import sys
@@ -261,7 +261,16 @@ import os
 sys.path.insert(0, os.path.join(os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace"), "scripts"))
 from queue_writer import add_task
 
-audit_text = sys.argv[1] if len(sys.argv) > 1 else ""
+# Read audit text from saved file instead of argv (avoids ARG_MAX with large audits)
+audit_file = os.path.join(
+    os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace"),
+    "data", "strategic_audit_last.md"
+)
+try:
+    with open(audit_file, "r") as f:
+        audit_text = f.read()
+except (IOError, OSError):
+    audit_text = ""
 added = []
 
 # Strategy 1: Parse JSON structured findings block
