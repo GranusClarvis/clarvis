@@ -432,6 +432,14 @@ class DirectiveEngine:
             "decline_reason": None,
         }
 
+        # Conflict detection — check for contradicting active directives
+        conflicts = self._detect_conflicts(directive)
+        directive["conflicts"] = conflicts
+        if conflicts:
+            for c in conflicts:
+                if c["action"] == "supersede":
+                    self.supersede(c["conflicting_id"], dir_id, c["reason"])
+
         # Session-bound directives don't persist to obligation_tracker
         if scope == SCOPE_SESSION:
             directive["status"] = "session_only"
@@ -446,6 +454,7 @@ class DirectiveEngine:
             f"scope={scope}, conf={classification['confidence']}, "
             f"lit={classification['literalness']}, "
             f"emotional={classification['emotional_origin']}"
+            + (f", conflicts={len(conflicts)}" if conflicts else "")
         ))
 
         return directive
@@ -492,6 +501,82 @@ class DirectiveEngine:
         )
         directive["obligation_id"] = ob["id"]
         self._log(directive["id"], "linked_obligation", ob["id"])
+
+    # ── CONFLICT DETECTION ─────────────────────────────────────────────
+
+    # Negation patterns that flip directive intent
+    _NEGATION_PAIRS = [
+        (r'\balways\b', r'\bnever\b'),
+        (r'\bdo\b', r"\bdon'?t\b"),
+        (r'\bshould\b', r"\bshouldn'?t\b"),
+        (r'\bmust\b', r"\bmustn'?t\b"),
+        (r'\benable\b', r'\bdisable\b'),
+        (r'\bstart\b', r'\bstop\b'),
+        (r'\bauto[- ]?commit\b', r"\bdon'?t.*commit\b"),
+    ]
+
+    def _detect_conflicts(self, new_directive: dict) -> list:
+        """Check if a new directive contradicts any active directive.
+
+        Returns list of conflict dicts: {conflicting_id, reason, action, similarity}.
+        Action is 'supersede' (auto-replace) or 'flag' (needs user resolution).
+        """
+        active = [d for d in self.data["directives"]
+                  if d["status"] in ("active", "session_only")]
+        if not active:
+            return []
+
+        new_norm = new_directive["normalized"].lower()
+        new_words = set(re.findall(r'\b\w{3,}\b', new_norm))
+        conflicts = []
+
+        for existing in active:
+            ex_norm = existing["normalized"].lower()
+            ex_words = set(re.findall(r'\b\w{3,}\b', ex_norm))
+
+            # Word overlap (Jaccard) — only consider if topic overlaps significantly
+            if not new_words or not ex_words:
+                continue
+            overlap = len(new_words & ex_words) / len(new_words | ex_words)
+            if overlap < 0.25:
+                continue
+
+            # Check negation patterns
+            negated = False
+            for pos, neg in self._NEGATION_PAIRS:
+                new_has_pos = bool(re.search(pos, new_norm))
+                new_has_neg = bool(re.search(neg, new_norm))
+                ex_has_pos = bool(re.search(pos, ex_norm))
+                ex_has_neg = bool(re.search(neg, ex_norm))
+
+                if (new_has_pos and ex_has_neg) or (new_has_neg and ex_has_pos):
+                    negated = True
+                    break
+
+            if not negated:
+                # Also check if one has "not"/"don't" and other doesn't, on same topic
+                new_has_negation = bool(re.search(r"\b(not|no|don'?t|never|stop|disable)\b", new_norm))
+                ex_has_negation = bool(re.search(r"\b(not|no|don'?t|never|stop|disable)\b", ex_norm))
+                if overlap >= 0.5 and new_has_negation != ex_has_negation:
+                    negated = True
+
+            if negated:
+                # Decide action: same source + newer = supersede; different source = flag
+                if new_directive["source"] == existing["source"]:
+                    action = "supersede"
+                    reason = f"newer directive from same source contradicts: '{existing['normalized'][:60]}'"
+                else:
+                    action = "flag"
+                    reason = f"contradicts directive from {existing['source']}: '{existing['normalized'][:60]}'"
+
+                conflicts.append({
+                    "conflicting_id": existing["id"],
+                    "reason": reason,
+                    "action": action,
+                    "similarity": round(overlap, 2),
+                })
+
+        return conflicts
 
     # ── QUERY ──────────────────────────────────────────────────────────
 
@@ -1094,7 +1179,16 @@ def run_verification() -> bool:
         assert normalized.count("!") <= 3, f"Normalization should reduce punctuation: {normalized}"
         print(f"  [PASS] Normalization: '{normalized}'")
 
-        print("\n=== ALL 16 CHECKS PASSED ===")
+        # 17. Conflict detection
+        d_commit = engine.ingest("Always auto-commit code changes after tasks", source="user")
+        d_nocommit = engine.ingest("Never auto-commit code changes after tasks", source="user")
+        assert len(d_nocommit.get("conflicts", [])) > 0, "Expected conflict detection"
+        assert d_nocommit["conflicts"][0]["action"] == "supersede"
+        old_d = engine.get(d_commit["id"])
+        assert old_d["status"] == "superseded", f"Expected superseded, got {old_d['status']}"
+        print(f"  [PASS] Conflict detection: {len(d_nocommit['conflicts'])} conflict(s), auto-superseded")
+
+        print("\n=== ALL 17 CHECKS PASSED ===")
         return True
 
     except AssertionError as e:
@@ -1130,11 +1224,21 @@ def main():
             sys.exit(1)
         text = sys.argv[2]
         source = "user"
+        raw_context = ""
+        priority = "P2"
         if "--source" in sys.argv:
             idx = sys.argv.index("--source")
             if idx + 1 < len(sys.argv):
                 source = sys.argv[idx + 1]
-        d = engine.ingest(text, source=source)
+        if "--context" in sys.argv:
+            idx = sys.argv.index("--context")
+            if idx + 1 < len(sys.argv):
+                raw_context = sys.argv[idx + 1]
+        if "--priority" in sys.argv:
+            idx = sys.argv.index("--priority")
+            if idx + 1 < len(sys.argv):
+                priority = sys.argv[idx + 1]
+        d = engine.ingest(text, source=source, raw_context=raw_context, priority=priority)
         print(f"Ingested: {d['id']}")
         print(f"  Scope: {d['scope']}, Confidence: {d['confidence']}, Literalness: {d['literalness']}")
         print(f"  Emotional: {d['emotional_origin']} (score={d['emotional_score']:.2f})")
@@ -1142,6 +1246,9 @@ def main():
             print(f"  Expires: {d['expires_at'][:10]}")
         if d.get("obligation_id"):
             print(f"  Linked obligation: {d['obligation_id']}")
+        if d.get("conflicts"):
+            for c in d["conflicts"]:
+                print(f"  Conflict [{c['action'].upper()}]: {c['reason']} (sim={c['similarity']})")
 
     elif cmd == "list":
         show_all = "--all" in sys.argv

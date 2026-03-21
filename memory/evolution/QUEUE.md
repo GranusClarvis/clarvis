@@ -76,19 +76,22 @@ _(Completed items archived.)_
 
 ## NEW ITEMS
 
-- [ ] [CONTEXT_SECTION_BUDGET_ENFORCER] Wire context_relevance feedback loop into assembly.py: sections with historical mean relevance < 0.12 (knowledge, working_memory, attention, meta_gradient, brain_goals) should be collapsed to single-line stubs or omitted entirely. Measure before/after context_relevance delta. Target: push context_relevance from 0.481 → 0.65+. _(Targets weakest metric: Context Relevance)_
 - [ ] [CLR_RELEVANCE_DIMENSION_WEIGHT] Increase prompt_context weight in CLR scoring (clr.py) from 0.13 → 0.18, rebalance other weights, and add a direct context_relevance sub-score that feeds assembly adaptive thresholds. Validates that CLR improvements actually improve brief quality. _(Targets weakest metric: Context Relevance via CLR feedback)_
 - [ ] [CRON_MAINTENANCE_TIMEOUT_GUARD] Add timeout and stale-lock detection to the 04:00-05:05 maintenance window scripts (cron_graph_checkpoint.sh, cron_graph_compaction.sh, cron_graph_verify.sh, cron_chromadb_vacuum.sh). Currently they share /tmp/clarvis_maintenance.lock but have no max-wait or deadlock recovery. _(Bash task — operational reliability)_
 - [ ] [HEARTBEAT_CONTEXT_RELEVANCE_GATE] Add context_relevance as an explicit dimension in heartbeat_gate.py capability assessment. If context_relevance < 0.60, auto-prioritize context-improvement tasks over other queue items. Currently heartbeat asks "which capability is weakest" but doesn't consider context_relevance. _(Targets weakest metric: Context Relevance via prioritization)_
-- [ ] [DIRECTIVE_TELEGRAM_REALTIME_HOOK] Add real-time directive ingestion from Telegram: when M2.5 calls /promise_track, also wire it through directive_engine.ingest() with raw_context from the conversation. Currently /promise_track calls obligation_tracker.py directly — should use directive_engine as primary. _(Promise enforcement: real-time classification at chat time)_
+- [x] [DIRECTIVE_TELEGRAM_REALTIME_HOOK] Added --context and --priority CLI args to directive_engine.py ingest; updated promise-track SKILL.md to pass $CONTEXT from conversation. M2.5 now sends raw_context for emotional dampening and scope classification at chat time. _(2026-03-21)_
 - [ ] [DIRECTIVE_LLM_CLASSIFIER_UPGRADE] Add optional LLM-based classification fallback for ambiguous directives where rule-based classifier confidence < 0.5. Use task_router to pick cheapest model. Gate behind env var DIRECTIVE_LLM_CLASSIFY=true. _(Promise enforcement: handles nuanced instructions the rule-based classifier misses)_
-- [ ] [DIRECTIVE_CONFLICT_RESOLUTION] Add conflict detection when ingesting directives that contradict existing active ones (e.g., "always commit" vs "don't auto-commit this week"). Auto-supersede or flag for user resolution. _(Promise enforcement: prevents contradictory standing instructions)_
-
+- [x] [DIRECTIVE_CONFLICT_RESOLUTION] Added _detect_conflicts() to DirectiveEngine.ingest(): Jaccard word overlap + negation pattern matching detects contradictions. Same-source conflicts auto-supersede; cross-source conflicts flagged for user. Verification test #17 added. _(2026-03-21)_
+- [ ] [CONTEXT_IMPORTANCE_RECALIBRATE] Recalibrate `_SECTION_IMPORTANCE_DEFAULTS` in `clarvis/cognition/context_relevance.py` using actual episode data from `data/retrieval_quality/context_relevance.jsonl`. Current hardcoded weights (e.g., knowledge=0.155, attention=0.146) may no longer reflect true usage patterns. Script: read last 50 episodes, compute per-section mean containment, write updated weights. _(Targets weakest metric: Context Relevance — better importance calibration → more accurate scoring → smarter section gating)_
+- [ ] [CONTEXT_SUPPRESSION_THRESHOLD_SWEEP] The preflight section gate uses threshold=0.13 (`get_suppressed_sections(threshold=0.13)`). Run a sweep of thresholds [0.08, 0.10, 0.13, 0.15, 0.18] against historical episode data to find the optimal cutoff that maximizes context_relevance without dropping sections that occasionally score high. Output: recommended threshold + per-section impact table. _(Targets weakest metric: Context Relevance — data-driven threshold tuning)_
+- [ ] [P0_DELIVERY_READINESS_CHECKLIST] Create `docs/DELIVERY_CHECKLIST.md` for the 2026-03-31 deadline. Audit: which Milestones A-E items are actually done vs empty placeholders? Cross-reference ROADMAP.md capabilities. Populate each milestone with concrete remaining work. _(Non-Python task — project management for P0 deadline)_
+- [ ] [CRON_HEALTH_DASHBOARD_HTML] Generate a static HTML dashboard (`monitoring/dashboard.html`) from health_monitor.sh and performance_benchmark.py data. Show: PI trend, context_relevance trend, cron success/fail heatmap, last 7 days. Refreshed by cron. _(Non-Python task — HTML/JS, operational visibility for open-source readiness)_
 
 - [~] [SEMANTIC_CROSS_COLLECTION_BRIDGES] Strengthen weak cross-collection semantic links. Current semantic_cross_collection=0.62 (target >0.75). _(2026-03-19: Added 13 bridge memories across 3 weakest pairs. Phi full computation times out at 120s due to 99k graph edges + 720 ONNX queries. Pair scores: proc↔learn=0.600, ctx↔goals=0.644, ep↔infra=0.555. Need graph compaction or parallel queries to verify full Phi. Blocked on compute time.)_
 
 
 ## Research Additions
+
 
 
 
