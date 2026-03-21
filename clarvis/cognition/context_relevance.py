@@ -422,17 +422,61 @@ HARD_SUPPRESS = frozenset({
 })
 
 
+def _section_percentiles(days: int = 14, relevance_file: str = RELEVANCE_FILE,
+                         percentile: float = 0.90) -> dict[str, float]:
+    """Compute per-section P90 (or other percentile) from raw episode data.
+
+    Used by the variance guard: sections with high P90 are occasionally very
+    valuable and should not be suppressed even if their mean is low.
+    """
+    if not os.path.exists(relevance_file):
+        return {}
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    section_scores: dict[str, list[float]] = {}
+
+    with open(relevance_file) as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+                ts = entry.get("ts", "")
+                if ts and ts >= cutoff.isoformat():
+                    if entry.get("sections_total", 0) >= MIN_SECTIONS_FOR_AGGREGATION:
+                        for name, score in entry.get("per_section", {}).items():
+                            section_scores.setdefault(name, []).append(score)
+            except (json.JSONDecodeError, ValueError):
+                continue
+
+    result = {}
+    for name, scores in section_scores.items():
+        if len(scores) < 5:
+            continue
+        scores.sort()
+        idx = int(len(scores) * percentile)
+        idx = min(idx, len(scores) - 1)
+        result[name] = scores[idx]
+    return result
+
+
 def get_suppressed_sections(
-    threshold: float = 0.13,
+    threshold: float = 0.15,
     min_episodes: int = 10,
     days: int = 14,
     relevance_file: str = RELEVANCE_FILE,
+    p90_guard: float = 0.25,
 ) -> set[str]:
     """Return set of section names whose mean relevance is below threshold.
 
     Always includes HARD_SUPPRESS sections (unconditional noise gate).
     Additionally includes any section whose historical mean is below threshold
-    when sufficient episode data exists.
+    when sufficient episode data exists — UNLESS the section's P90 exceeds
+    p90_guard, indicating it is occasionally highly valuable.
+
+    The P90 variance guard prevents suppressing sections like failure_avoidance
+    (mean=0.124 but P90=0.299) that provide high value in specific episodes.
 
     Returns at minimum HARD_SUPPRESS even when insufficient data exists.
     """
@@ -443,7 +487,20 @@ def get_suppressed_sections(
         return result
 
     per_section = agg.get("per_section_mean", {})
-    result |= {name for name, score in per_section.items() if score < threshold}
+    candidates = {name for name, score in per_section.items() if score < threshold}
+
+    # Variance guard: protect sections with high P90
+    if p90_guard > 0 and candidates - HARD_SUPPRESS:
+        p90s = _section_percentiles(days=days, relevance_file=relevance_file)
+        protected = {
+            name for name in candidates - HARD_SUPPRESS
+            if p90s.get(name, 0) >= p90_guard
+        }
+        if protected:
+            _log.info("Variance guard protecting: %s", protected)
+        candidates -= protected
+
+    result |= candidates
     return result
 
 

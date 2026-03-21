@@ -1134,7 +1134,7 @@ def run_preflight(dry_run=False):
     _suppressed_sections = set()
     try:
         from clarvis.cognition.context_relevance import get_suppressed_sections
-        _suppressed_sections = get_suppressed_sections(threshold=0.13, min_episodes=10)
+        _suppressed_sections = get_suppressed_sections(threshold=0.15, min_episodes=10)
         if _suppressed_sections:
             log(f"Section gate: suppressing {_suppressed_sections}")
     except Exception:
