@@ -12,6 +12,7 @@ Usage:
 
 import os
 import re
+import time
 from .compressor import compress_text, get_latest_scores
 try:
     from .knowledge_synthesis import synthesize_knowledge
@@ -104,6 +105,67 @@ DYCP_DEFAULT_SUPPRESS = frozenset({
 # tokens overlap significantly with a suppressed section, include it anyway.
 DYCP_DEFAULT_SUPPRESS_CONTAINMENT_OVERRIDE = 0.10
 
+# Threshold for dynamic hard-suppression feedback loop.  Sections with
+# 14-day recency-weighted mean below this are auto-suppressed (same as
+# HARD_SUPPRESS but computed from live data instead of hardcoded).
+DYNAMIC_SUPPRESS_THRESHOLD = 0.12
+# Sections with mean between DYNAMIC_SUPPRESS_THRESHOLD and this value
+# become soft-suppressed (overridable by task containment).
+DYNAMIC_SOFT_SUPPRESS_CEILING = 0.13
+
+# Cache: (timestamp, hard_set, soft_set).  TTL = 300s (5 min) to avoid
+# re-reading the relevance JSONL on every brief assembly.
+_dynamic_suppress_cache: tuple = (0.0, None, None)
+_DYNAMIC_SUPPRESS_TTL = 300
+
+
+def _compute_dynamic_suppress():
+    """Compute hard and soft suppress sets from live relevance data.
+
+    Returns (hard_set, soft_set) where:
+      - hard_set: sections with 14-day recency-weighted mean < DYNAMIC_SUPPRESS_THRESHOLD
+      - soft_set: sections with mean in [DYNAMIC_SUPPRESS_THRESHOLD, DYNAMIC_SOFT_SUPPRESS_CEILING)
+
+    Falls back to static HARD_SUPPRESS / DYCP_DEFAULT_SUPPRESS if no data.
+    """
+    global _dynamic_suppress_cache
+    now = time.monotonic()
+    cached_ts, cached_hard, cached_soft = _dynamic_suppress_cache
+    if cached_hard is not None and (now - cached_ts) < _DYNAMIC_SUPPRESS_TTL:
+        return cached_hard, cached_soft
+
+    try:
+        from clarvis.cognition.context_relevance import aggregate_relevance
+        agg = aggregate_relevance(days=14, recency_boost=RECENCY_BOOST_EPISODES)
+    except Exception:
+        _dynamic_suppress_cache = (now, HARD_SUPPRESS, DYCP_DEFAULT_SUPPRESS)
+        return HARD_SUPPRESS, DYCP_DEFAULT_SUPPRESS
+
+    if agg.get("episodes", 0) < MIN_EPISODES_FOR_ADJUSTMENT:
+        _dynamic_suppress_cache = (now, HARD_SUPPRESS, DYCP_DEFAULT_SUPPRESS)
+        return HARD_SUPPRESS, DYCP_DEFAULT_SUPPRESS
+
+    per_section = agg.get("per_section_mean", {})
+    if not per_section:
+        _dynamic_suppress_cache = (now, HARD_SUPPRESS, DYCP_DEFAULT_SUPPRESS)
+        return HARD_SUPPRESS, DYCP_DEFAULT_SUPPRESS
+
+    hard = set()
+    soft = set()
+    for section, mean_score in per_section.items():
+        # Never suppress protected sections regardless of score
+        if section in DYCP_PROTECTED_SECTIONS:
+            continue
+        if mean_score < DYNAMIC_SUPPRESS_THRESHOLD:
+            hard.add(section)
+        elif mean_score < DYNAMIC_SOFT_SUPPRESS_CEILING:
+            soft.add(section)
+
+    hard = frozenset(hard) if hard else HARD_SUPPRESS
+    soft = frozenset(soft) if soft else DYCP_DEFAULT_SUPPRESS
+    _dynamic_suppress_cache = (now, hard, soft)
+    return hard, soft
+
 # Cache of section name → content token sample from the last assembled brief.
 # Populated by dycp_prune_brief(); used by _dycp_task_containment_fast() so
 # that suppression decisions consider actual section content, not just the
@@ -179,13 +241,14 @@ def load_relevance_weights(min_episodes=MIN_EPISODES_FOR_ADJUSTMENT, days=14):
 
     weights = {}
     for budget_key, section_names in _BUDGET_TO_SECTIONS.items():
-        # Exclude HARD_SUPPRESS sections from averaging — they're already
-        # suppressed at generation time and shouldn't drag down the budget
-        # of the category they were folded into (e.g., meta_gradient=0.058
-        # shouldn't penalize decision_context=0.300).
+        # Exclude dynamically hard-suppressed sections from averaging —
+        # they're already suppressed at generation time and shouldn't drag
+        # down the budget of the category they were folded into (e.g.,
+        # meta_gradient=0.058 shouldn't penalize decision_context=0.300).
+        dynamic_hard, _ = _compute_dynamic_suppress()
         active_scores = [
             per_section[s] for s in section_names
-            if s in per_section and s not in HARD_SUPPRESS
+            if s in per_section and s not in dynamic_hard
         ]
         if not active_scores:
             continue
@@ -250,21 +313,24 @@ def get_adjusted_budgets(tier="standard"):
 def should_suppress_section(section_name: str, task_text: str = "") -> bool:
     """Check if a section should be suppressed before generation.
 
-    Hard-suppressed sections (bottom-5 noise, mean < 0.12) are ALWAYS
-    suppressed — no task-containment override.
+    Uses a dynamic feedback loop: sections are classified as hard or soft
+    suppressed based on their 14-day recency-weighted mean relevance score
+    (computed from live context_relevance data).
 
-    Soft-suppressed sections (DYCP_DEFAULT_SUPPRESS) are suppressed only
-    when their task-containment is below the override threshold.
-
+    Hard-suppressed (mean < 0.12): ALWAYS suppressed — no override.
+    Soft-suppressed (mean 0.12-0.13): suppressed unless task-containment
+    exceeds the override threshold.
     Protected sections are never suppressed.
     """
     if section_name in DYCP_PROTECTED_SECTIONS:
         return False
-    # Hard suppress: unconditional — these sections are pure noise
-    if section_name in HARD_SUPPRESS:
+    # Dynamic feedback loop: compute suppress sets from live relevance data
+    dynamic_hard, dynamic_soft = _compute_dynamic_suppress()
+    # Hard suppress: unconditional — these sections are chronic noise
+    if section_name in dynamic_hard:
         return True
     # Soft suppress: can be overridden by task containment
-    if section_name not in DYCP_DEFAULT_SUPPRESS:
+    if section_name not in dynamic_soft:
         return False
     if not task_text:
         return True  # no task context → suppress by default
