@@ -159,7 +159,7 @@ def check_and_alert(test_mode=False) -> dict:
         # Send alert — to Reports topic in group, fallback to DM
         bot_token = config.get("telegram_bot_token", "")
         chat_id = config.get("telegram_chat_id", "")
-        group_id = "REDACTED_GROUP_ID"
+        group_id = os.environ.get("CLARVIS_TG_GROUP_ID", "")
         reports_topic = "5"
         if bot_token and chat_id:
             # Try group Reports topic first, then DM
@@ -197,7 +197,7 @@ def main():
 
         bot_token = config.get("telegram_bot_token", "")
         # Send test to Reports topic in group, fallback to DM
-        ok = send_telegram(bot_token, "REDACTED_GROUP_ID", msg, "5")
+        ok = send_telegram(bot_token, os.environ.get("CLARVIS_TG_GROUP_ID", ""), msg, "5")
         if not ok:
             ok = send_telegram(bot_token, config.get("telegram_chat_id", ""), msg)
         print(f"Test alert: {'sent successfully' if ok else 'FAILED'}")

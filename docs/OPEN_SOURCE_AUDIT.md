@@ -12,46 +12,48 @@ _Prerequisite for Milestone C (deadline 2026-03-26)._
 
 ## CRITICAL — Must Fix Before Any Public Push
 
-### 1. Telegram Bot Token (Active Credential)
+### 1. Telegram Bot Token (Active Credential) — ALL FIXED 2026-03-22
 
-| Status | File | Line | Content | Fix |
-|--------|------|------|---------|-----|
-| [ ] | `scripts/cron_env.sh` | 25 | `CLARVIS_TG_BOT_TOKEN` default contains full token `REDACTED_TELEGRAM_BOT_TOKEN` | Remove default; require env var. **Rotate token before publish.** |
-| [ ] | `docs/OPEN_SOURCE_GAP_AUDIT.md` | 8 | Token prefix `REDACTED_TOKEN_PREFIX` in text | Redact to `<REDACTED>` |
-| [ ] | `docs/OPEN_SOURCE_READINESS_AUDIT.md` | 10 | Token prefix `REDACTED_TOKEN_PREFIX` in table | Redact to `<REDACTED>` |
+| Status | File | Fix Applied |
+|--------|------|-------------|
+| [x] | `scripts/cron_env.sh` | Default removed; now loads from `.env` file |
+| [x] | `docs/OPEN_SOURCE_GAP_AUDIT.md` | Section rewritten, token redacted |
+| [x] | `docs/OPEN_SOURCE_READINESS_AUDIT.md` | Section rewritten, token redacted |
 
-### 2. Telegram Personal Chat ID (`REDACTED_CHAT_ID`)
+**Remaining**: Rotate bot token before publish.
 
-| Status | File | Line | Content | Fix |
-|--------|------|------|---------|-----|
-| [ ] | `scripts/cron_env.sh` | 26 | Default in `CLARVIS_TG_CHAT_ID` | Remove default; require env var |
-| [ ] | `scripts/spawn_claude.sh` | 25 | Fallback `${CLARVIS_TG_CHAT_ID:-REDACTED_CHAT_ID}` | Remove literal default |
-| [ ] | `scripts/spawn_claude.sh` | 158 | Python fallback `"REDACTED_CHAT_ID"` | Remove literal default |
-| [ ] | `scripts/cron_watchdog.sh` | 177 | Python fallback `"REDACTED_CHAT_ID"` | Remove literal default |
-| [ ] | `scripts/cron_report_morning.sh` | 226 | `DM_CHAT_ID` fallback | Remove literal default |
-| [ ] | `scripts/cron_report_evening.sh` | 205 | `DM_CHAT_ID` fallback | Remove literal default |
-| [ ] | `USER.md` | 32 | `Telegram: ID REDACTED_CHAT_ID` | Redact or remove line |
-| [ ] | `docs/clarvis_orchestrator_design.md` | 586 | `chatId: REDACTED_CHAT_ID` | Replace with `<CHAT_ID>` |
-| [ ] | `docs/WEBSITE_V0_INFORMATION_ARCH.md` | 120 | Chat ID in audit checklist | Replace with `<CHAT_ID>` |
-| [ ] | `docs/WEBSITE_V0_RELEASE_RUNBOOK.md` | 50 | Chat ID in test pattern | Replace with `<CHAT_ID>` |
-| [ ] | `memory/2026-02-23-2155.md` | 45,83,176 | `sender_id` in raw message dump | Delete file or redact IDs |
+### 2. Telegram Personal Chat ID — ALL FIXED 2026-03-22
 
-### 3. Telegram Group Chat ID (`REDACTED_GROUP_ID`)
+| Status | File | Fix Applied |
+|--------|------|-------------|
+| [x] | `scripts/cron_env.sh` | Default removed; loads from `.env` |
+| [x] | `scripts/spawn_claude.sh` | Literal defaults removed (both shell + Python) |
+| [x] | `scripts/cron_watchdog.sh` | Literal default removed |
+| [x] | `scripts/cron_report_morning.sh` | Uses `CLARVIS_TG_CHAT_ID` env var |
+| [x] | `scripts/cron_report_evening.sh` | Uses `CLARVIS_TG_CHAT_ID` env var |
+| [x] | `USER.md` | Chat ID removed, references `.env` |
+| [x] | `docs/clarvis_orchestrator_design.md` | Replaced with `${CLARVIS_TG_CHAT_ID}` |
+| [x] | `docs/WEBSITE_V0_INFORMATION_ARCH.md` | Redacted to pattern reference |
+| [x] | `docs/WEBSITE_V0_RELEASE_RUNBOOK.md` | Redacted to `<CHAT_ID_PATTERN>` |
+| [x] | `memory/2026-02-23-2155.md` | sender_id fields redacted |
 
-| Status | File | Line | Content | Fix |
-|--------|------|------|---------|-----|
-| [ ] | `AGENTS.md` | 280 | Group ID in agent config | Replace with `<GROUP_CHAT_ID>` |
-| [ ] | `scripts/budget_alert.py` | 162,200 | Hardcoded group ID | Use env var `CLARVIS_TG_GROUP_ID` |
-| [ ] | `scripts/cron_report_morning.sh` | 224 | `GROUP_CHAT_ID` hardcoded | Use env var |
-| [ ] | `scripts/cron_report_evening.sh` | 203 | `GROUP_CHAT_ID` hardcoded | Use env var |
-| [ ] | `skills/spawn-claude/SKILL.md` | 32,40 | Group ID in example commands | Replace with `<GROUP_CHAT_ID>` |
+### 3. Telegram Group Chat ID — ALL FIXED 2026-03-22
 
-### 4. Test Password in Tracked Files
+| Status | File | Fix Applied |
+|--------|------|-------------|
+| [x] | `AGENTS.md` | Replaced with `${CLARVIS_TG_GROUP_ID}` |
+| [x] | `scripts/budget_alert.py` | Uses `CLARVIS_TG_GROUP_ID` env var |
+| [x] | `scripts/cron_report_morning.sh` | Uses `CLARVIS_TG_GROUP_ID` env var |
+| [x] | `scripts/cron_report_evening.sh` | Uses `CLARVIS_TG_GROUP_ID` env var |
+| [x] | `skills/spawn-claude/SKILL.md` | Replaced with `${CLARVIS_TG_GROUP_ID}` |
 
-| Status | File | Line | Content | Fix |
-|--------|------|------|---------|-----|
-| [ ] | `docs/OPEN_SOURCE_GAP_AUDIT.md` | 18 | Password `REDACTED_PASSWORD` in plaintext | Redact to `<REDACTED>` |
-| [~] | `tests/test_open_source_smoke.py` | 172 | Regex pattern for detecting the password | Acceptable (detection test) |
+### 4. Test Password / Email in Tracked Files — FIXED 2026-03-22
+
+| Status | File | Fix Applied |
+|--------|------|-------------|
+| [x] | `docs/OPEN_SOURCE_GAP_AUDIT.md` | Section rewritten, password + email redacted |
+| [x] | `scripts/universal_web_agent.py` | Email replaced with `your@email.com` |
+| [~] | `tests/test_open_source_smoke.py` | Acceptable (detection regex pattern) |
 
 ---
 
@@ -78,10 +80,10 @@ These files use `/home/agent/.openclaw/workspace` without `os.environ.get()` fal
 |--------|------|------|---------|-----|
 | [ ] | `USER.md` | 3-4 | Real name "Patrick", alias "Inverse" | Anonymize or exclude from public repo |
 | [ ] | `USER.md` | 30 | GitHub username `InverseAltruism` | Anonymize |
-| [ ] | `USER.md` | 31 | Discord IDs `994258501675270234`, `939859740211691550` | Remove |
-| [ ] | `USER.md` | 32 | Telegram ID (see above) | Remove |
-| [ ] | `scripts/universal_web_agent.py` | 17 | Email `REDACTED_EMAIL` in docstring | Replace with `user@example.com` |
-| [ ] | `docs/OPEN_SOURCE_GAP_AUDIT.md` | 18 | Email `REDACTED_EMAIL` | Redact |
+| [x] | `USER.md` | 31 | Discord IDs removed | Done 2026-03-22 |
+| [x] | `USER.md` | 32 | Telegram ID removed | Done 2026-03-22 |
+| [x] | `scripts/universal_web_agent.py` | 17 | Email replaced with placeholder | Done 2026-03-22 |
+| [x] | `docs/OPEN_SOURCE_GAP_AUDIT.md` | 18 | Email + password redacted | Done 2026-03-22 |
 | [ ] | `SOUL.md` | — | References to "Inverse" as creator | Anonymize or parameterize |
 | [ ] | `AGENTS.md` | 19 | "report to Inverse" | Anonymize |
 

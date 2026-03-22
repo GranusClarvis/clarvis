@@ -71,7 +71,7 @@ Core architecture and APIs should be stable. No breaking changes after this mile
 | D2 | Public feed endpoint (`/api/status`) | **TODO** | Data contract defined in website v0 doc. |
 | D3 | CLR score visible on website | **TODO** | Depends on D1 + CLR being merged (A4 done). |
 | D4 | Architecture page | **TODO** | Content exists in SELF.md/ROADMAP.md. Needs sanitization. |
-| D5 | Repos page with extraction status | **TODO** | Two repos decided (REPO_CONSOLIDATION_PLAN). |
+| D5 | Repos page with extraction status | **DONE** | `website/static/repos.html` — 2 repos, status badges, anti-sprawl policy. |
 | D6 | Domain/deployment | **TODO** | Pre-domain: IP-first deployment. |
 
 **Remaining work:** All items. Website v0 is the largest remaining deliverable. Consider a static site generator (Hugo/Astro) for speed.

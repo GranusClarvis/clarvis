@@ -583,7 +583,7 @@ projects:
 notifiers:
   telegram:
     botToken: ${CLARVIS_TELEGRAM_TOKEN}
-    chatId: REDACTED_CHAT_ID
+    chatId: ${CLARVIS_TG_CHAT_ID}
 
   slack:
     webhook: ${SLACK_WEBHOOK_URL}

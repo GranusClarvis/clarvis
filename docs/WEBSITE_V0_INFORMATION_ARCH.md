@@ -117,8 +117,8 @@ Before ANY public exposure:
 1. Run `git ls-files '*.pyc'` — must return empty
 2. Verify `data/`, `monitoring/` are NOT tracked
 3. Search payload for Telegram bot token pattern `[0-9]+:AA[A-Za-z0-9_-]+` — must be clean
-4. Search payload for chat ID `REDACTED_CHAT_ID` — must be clean
-5. Search payload for email `REDACTED_EMAIL` — must be clean
+4. Search payload for chat ID pattern — must be clean
+5. Search payload for email pattern — must be clean
 6. Verify no `memory/` daily log content in payload
 7. Feed must be stable (no crashes/schema changes) for 7 consecutive days
 

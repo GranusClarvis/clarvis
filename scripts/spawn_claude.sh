@@ -22,7 +22,7 @@ TIMEOUT="${2:-1200}"
 SEND_TG="true"
 ISOLATED="false"
 TG_TOPIC=""
-TG_CHAT_ID="${CLARVIS_TG_CHAT_ID:-REDACTED_CHAT_ID}"
+TG_CHAT_ID="${CLARVIS_TG_CHAT_ID:-}"
 CATEGORY=""
 # Parse optional flags from args 3+
 for arg in "${@:3}"; do
@@ -155,7 +155,7 @@ import json, urllib.request, urllib.parse, sys, os
 output_file = sys.argv[1]
 exit_code = int(sys.argv[2])
 task_short = sys.argv[3]
-chat_id = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4] else os.environ.get("CLARVIS_TG_CHAT_ID", "REDACTED_CHAT_ID")
+chat_id = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4] else os.environ.get("CLARVIS_TG_CHAT_ID", "")
 topic_id = sys.argv[5] if len(sys.argv) > 5 and sys.argv[5] else ""
 token = os.environ.get("CLARVIS_TG_BOT_TOKEN", "")
 if not token:

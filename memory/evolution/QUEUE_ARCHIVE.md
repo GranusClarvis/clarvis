@@ -1422,3 +1422,14 @@ _Last archived: 2026-03-17_
 
 ## Archived 2026-03-22
 - [x] [C9_BASIC_CI_WORKFLOW] Add basic GitHub Actions CI for lint + test on the main repo. Keep it minimal and reliable. _(Checklist C9. Done 2026-03-22: added ruff lint job + test job to `.github/workflows/ci.yml`, ruff config in `pyproject.toml`.)_
+
+## Archived 2026-03-22
+- [x] [GOAL_SET_COMPACTION] Compact `brain.get_goals()` output into a curated active-goals set for weekly reviews and autonomous planning. Archive or demote stale bridge/generated goal artifacts so the meaningful goals are prominent. _(Done 2026-03-22: 65→13 goals. Removed 52 stale items: bridge artifacts, cross-domain connections, day summaries, meta-cognition logs, procedures, reasoning chains, preferences, and infrastructure facts misclassified as goals.)_
+- [x] [RETRIEVAL_PRECISION_NOISE_PRUNE] Prune duplicate/noise memories that are wasting top result slots and degrading retrieval_precision. Include a before/after measurement. _(Done 2026-03-22: 2576→2208 memories. Removed 368 items: 52 stale goals, 220 near-duplicates dist<0.03, 148 noise patterns (META-GRADIENT, GWT broadcasts, self-representation updates). Goals: 65→13 curated.)_
+- [x] [C8_ADD_CONTRIBUTING] Add `CONTRIBUTING.md` with setup, coding standards, tests, and PR expectations. _(Checklist C8. Done 2026-03-22.)_
+- [x] [RESEARCH_LATE_INTERACTION_TOKEN_PRUNING] Research late-interaction token pruning for retrieval optimization. _(2026-03-22)_
+
+## Archived 2026-03-22
+- [x] [DELIVERY_CRITICAL_PATH_BURNDOWN] _(Done 2026-03-22: Created `docs/DELIVERY_BURNDOWN.md` with 17 tasks, validation commands, blockers, and daily targets through 2026-03-31.)_
+- [x] [C1_REMOVE_HARDCODED_SECRETS] _(Done 2026-03-22: All secrets moved to `.env` (gitignored), 20 files cleaned, `git grep` verified clean. Created `.env.example`. Token rotation still needed before publish.)_
+- [x] [C2_PURGE_CREDENTIALS_FROM_CHROMADB] _(Done 2026-03-22: Purged 3 ChromaDB entries (autonomous-learning + 2 episodes) and scrubbed 4 refs in community_summaries.json. Verified clean via `search("gmail password credentials")`. Procedure in `docs/DELIVERY_BURNDOWN.md`.)_

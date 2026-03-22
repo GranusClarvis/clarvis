@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Repos &amp; Boundaries — Clarvis</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #c9d1d9;
+    --text-muted: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --yellow: #d29922;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 2rem 1rem;
+    max-width: 800px;
+    margin: 0 auto;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  nav { margin-bottom: 2rem; font-size: 0.875rem; color: var(--text-muted); }
+  nav a { margin-right: 1rem; }
+
+  h1 { font-size: 1.75rem; margin-bottom: 0.5rem; }
+  .subtitle { color: var(--text-muted); margin-bottom: 2rem; font-size: 0.95rem; }
+
+  .repo-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .repo-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+    flex-wrap: wrap;
+  }
+  .repo-name { font-size: 1.25rem; font-weight: 600; }
+  .badge {
+    font-size: 0.75rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    font-weight: 500;
+  }
+  .badge-stabilizing {
+    background: rgba(210, 153, 34, 0.15);
+    color: var(--yellow);
+    border: 1px solid rgba(210, 153, 34, 0.4);
+  }
+  .badge-internal {
+    background: rgba(139, 148, 158, 0.15);
+    color: var(--text-muted);
+    border: 1px solid rgba(139, 148, 158, 0.4);
+  }
+  .badge-public {
+    background: rgba(63, 185, 80, 0.15);
+    color: var(--green);
+    border: 1px solid rgba(63, 185, 80, 0.4);
+  }
+  .repo-desc { color: var(--text-muted); margin-bottom: 1rem; }
+  .repo-details { font-size: 0.875rem; }
+  .repo-details dt {
+    color: var(--text-muted);
+    font-weight: 600;
+    margin-top: 0.5rem;
+  }
+  .repo-details dd { margin-left: 0; }
+
+  .boundary-section {
+    margin-top: 2.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+  }
+  .boundary-section h2 { font-size: 1.25rem; margin-bottom: 0.75rem; }
+  .boundary-section p { color: var(--text-muted); margin-bottom: 1rem; font-size: 0.9rem; }
+
+  .policy-list {
+    list-style: none;
+    font-size: 0.875rem;
+  }
+  .policy-list li {
+    padding: 0.4rem 0;
+    padding-left: 1.25rem;
+    position: relative;
+    color: var(--text-muted);
+  }
+  .policy-list li::before {
+    content: ">";
+    position: absolute;
+    left: 0;
+    color: var(--accent);
+    font-weight: bold;
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="/">Home</a>
+  <a href="/architecture">Architecture</a>
+  <a href="/repos" aria-current="page">Repos</a>
+  <a href="/benchmarks">Benchmarks</a>
+  <a href="/roadmap">Roadmap</a>
+</nav>
+
+<h1>Repositories</h1>
+<p class="subtitle">Clarvis is split into two repositories with clearly defined boundaries.</p>
+
+<!-- Repo 1: clarvis (main) -->
+<div class="repo-card">
+  <div class="repo-header">
+    <span class="repo-name">clarvis</span>
+    <span class="badge badge-stabilizing">stabilizing</span>
+  </div>
+  <p class="repo-desc">
+    Autonomous cognitive agent runtime &mdash; spine, heartbeat, CLI, metrics, orchestration, and cron infrastructure.
+  </p>
+  <dl class="repo-details">
+    <dt>GitHub</dt>
+    <dd><a href="https://github.com/GranusClarvis/clarvis">github.com/GranusClarvis/clarvis</a></dd>
+    <dt>Contains</dt>
+    <dd>
+      <code>clarvis/</code> spine (brain, heartbeat, cognition, context, metrics, runtime, orchestration),
+      operational scripts, tests, skills, architecture docs, identity docs
+    </dd>
+    <dt>Language</dt>
+    <dd>Python 3.10+</dd>
+    <dt>License</dt>
+    <dd>MIT</dd>
+  </dl>
+</div>
+
+<!-- Repo 2: clarvis-db -->
+<div class="repo-card">
+  <div class="repo-header">
+    <span class="repo-name">clarvis-db</span>
+    <span class="badge badge-stabilizing">stabilizing</span>
+  </div>
+  <p class="repo-desc">
+    Standalone vector memory package &mdash; ChromaDB with Hebbian learning, STDP synapses, and graph relations.
+    Independently useful for any agent system that needs associative memory with biological learning dynamics.
+  </p>
+  <dl class="repo-details">
+    <dt>GitHub</dt>
+    <dd><a href="https://github.com/GranusClarvis/clarvis-db">github.com/GranusClarvis/clarvis-db</a></dd>
+    <dt>Contains</dt>
+    <dd>
+      <code>clarvis_db/</code> core library, tests, documented API boundary
+    </dd>
+    <dt>Language</dt>
+    <dd>Python 3.10+</dd>
+    <dt>License</dt>
+    <dd>MIT</dd>
+    <dt>API surface</dt>
+    <dd>
+      <code>remember()</code>, <code>search()</code>, <code>capture()</code>,
+      retrieval evaluation, retrieval feedback, retrieval tracing
+    </dd>
+  </dl>
+</div>
+
+<div class="boundary-section">
+  <h2>Extraction Status</h2>
+  <p>
+    <code>clarvis-db</code> is being extracted from the main repository into a standalone package.
+    The API boundary is documented and stable. Remaining work: CI pipeline, credential scrub, and public README.
+  </p>
+
+  <table style="width:100%; font-size:0.875rem; border-collapse:collapse;">
+    <thead>
+      <tr style="border-bottom:1px solid var(--border); text-align:left;">
+        <th style="padding:0.5rem 0;">Package</th>
+        <th style="padding:0.5rem 0;">Status</th>
+        <th style="padding:0.5rem 0;">Notes</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr style="border-bottom:1px solid var(--border);">
+        <td style="padding:0.5rem 0;"><code>clarvis</code></td>
+        <td style="padding:0.5rem 0;"><span class="badge badge-stabilizing">stabilizing</span></td>
+        <td style="padding:0.5rem 0; color:var(--text-muted);">Open-source prep in progress</td>
+      </tr>
+      <tr>
+        <td style="padding:0.5rem 0;"><code>clarvis-db</code></td>
+        <td style="padding:0.5rem 0;"><span class="badge badge-stabilizing">stabilizing</span></td>
+        <td style="padding:0.5rem 0; color:var(--text-muted);">API boundary stable, extraction pending</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="boundary-section">
+  <h2>Anti-Sprawl Policy</h2>
+  <p>
+    New packages or repos are only created when all of the following are true:
+  </p>
+  <ul class="policy-list">
+    <li>At least 2 independent consumers exist</li>
+    <li>Clean, documented API boundary stable for 14+ days</li>
+    <li>Meaningful test coverage (behavior, not just imports)</li>
+    <li>Independent release cadence from the main repo</li>
+    <li>Substantial logic &mdash; not a re-export wrapper</li>
+  </ul>
+</div>
+
+</body>
+</html>

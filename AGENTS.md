@@ -295,8 +295,8 @@ You have a dedicated Telegram forum group with topic-based channels. Each topic 
 - If code fix needed, spawn Claude Code
 
 ### Group Chat ID
-- Group: `REDACTED_GROUP_ID`
-- Reports topic for script delivery: thread `5`
+- Group: `${CLARVIS_TG_GROUP_ID}` (from .env)
+- Reports topic for script delivery: thread `${CLARVIS_TG_REPORTS_TOPIC}`
 - Claude Code topic for spawn output: thread `2`
 
 ## Group Chats

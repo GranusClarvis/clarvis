@@ -250,9 +250,9 @@ lines.append("Good night, sir.")
 report = "\n".join(lines)
 
 # Send to Telegram
-GROUP_CHAT_ID = "REDACTED_GROUP_ID"
-REPORTS_TOPIC = "5"
-DM_CHAT_ID = os.environ.get("CLARVIS_TG_CHAT_ID", "REDACTED_CHAT_ID")
+GROUP_CHAT_ID = os.environ.get("CLARVIS_TG_GROUP_ID", "")
+REPORTS_TOPIC = os.environ.get("CLARVIS_TG_REPORTS_TOPIC", "5")
+DM_CHAT_ID = os.environ.get("CLARVIS_TG_CHAT_ID", "")
 
 params = {"chat_id": GROUP_CHAT_ID, "text": report, "message_thread_id": REPORTS_TOPIC}
 data = urllib.parse.urlencode(params)

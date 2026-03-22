@@ -4,15 +4,10 @@
 
 ## CRITICAL (Must fix before any public exposure)
 
-### 1. Hardcoded Secrets
-| Secret | Location | Risk |
-|--------|----------|------|
-| Telegram bot token `REDACTED_TOKEN_PREFIX` | `data/budget_config.json`, `scripts/budget_alert.py` | Active bot token |
-| Telegram chat ID `REDACTED_CHAT_ID` | 6+ scripts, `USER.md`, `budget_config.json` | Links to user identity |
-| Test password `REDACTED_PASSWORD` | `data/clarvisdb/community_summaries.json`, `data/memory_archive/` | Credential in embeddings |
-| Email `REDACTED_EMAIL` | Same as above + browser session data | Account identity |
+### 1. Hardcoded Secrets — FIXED 2026-03-22
+All Telegram secrets (bot token, chat IDs) moved from hardcoded defaults to env vars loaded from `.env` (gitignored). See `.env.example`. Affected: `cron_env.sh`, `budget_alert.py`, `cron_report_*.sh`, `cron_watchdog.sh`, `spawn_claude.sh`, `USER.md`.
 
-**Fix**: Move all secrets to env vars. Regenerate ChromaDB to purge embedded credentials.
+**Remaining**: Rotate bot token. Purge test credentials from untracked ChromaDB data (C2 task).
 
 ### 2. Private Data in Tracked Directories
 | Directory | Content | Size |

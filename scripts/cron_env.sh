@@ -22,8 +22,16 @@ export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}"
 
 # Telegram delivery (consumed by budget_alert.py, cron_report_*.sh, cron_watchdog.sh, spawn_claude.sh)
-export CLARVIS_TG_BOT_TOKEN="${CLARVIS_TG_BOT_TOKEN:-REDACTED_TELEGRAM_BOT_TOKEN}"
-export CLARVIS_TG_CHAT_ID="${CLARVIS_TG_CHAT_ID:-REDACTED_CHAT_ID}"
+# Secrets loaded from .env file (not tracked). See .env.example for required vars.
+if [ -f "$CLARVIS_WORKSPACE/.env" ]; then
+    set -a; . "$CLARVIS_WORKSPACE/.env"; set +a
+elif [ -f "/home/agent/.openclaw/workspace/.env" ]; then
+    set -a; . "/home/agent/.openclaw/workspace/.env"; set +a
+fi
+export CLARVIS_TG_BOT_TOKEN="${CLARVIS_TG_BOT_TOKEN:-}"
+export CLARVIS_TG_CHAT_ID="${CLARVIS_TG_CHAT_ID:-}"
+export CLARVIS_TG_GROUP_ID="${CLARVIS_TG_GROUP_ID:-}"
+export CLARVIS_TG_REPORTS_TOPIC="${CLARVIS_TG_REPORTS_TOPIC:-5}"
 
 # Workspace
 export CLARVIS_WORKSPACE="/home/agent/.openclaw/workspace"

@@ -174,7 +174,7 @@ try:
         with open('/home/agent/.openclaw/openclaw.json') as f:
             config = json.load(f)
         token = config['channels']['telegram']['botToken']
-    chat_id = os.environ.get("CLARVIS_TG_CHAT_ID", "REDACTED_CHAT_ID")
+    chat_id = os.environ.get("CLARVIS_TG_CHAT_ID", "")
     msg = """$ALERT_MSG"""
     data = urllib.parse.urlencode({"chat_id": chat_id, "text": msg})
     req = urllib.request.Request(f"https://api.telegram.org/bot{token}/sendMessage", data=data.encode())

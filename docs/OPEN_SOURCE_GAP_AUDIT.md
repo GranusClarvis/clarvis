@@ -4,23 +4,13 @@ Hard gap list: what blocks public repo release today.
 
 ## CRITICAL (Must Fix Before Any Public Exposure)
 
-### 1. Hardcoded Telegram Secrets (8 locations)
-Bot token `REDACTED_TOKEN_PREFIX` and chat ID `REDACTED_CHAT_ID` in:
-- `scripts/budget_alert.py:42-43`
-- `scripts/cron_report_morning.sh:23`, `cron_report_evening.sh:23`
-- `scripts/cron_watchdog.sh` (embedded Python)
-- `scripts/spawn_claude.sh:25,55`
-- `data/budget_config.json:20-21`
+### 1. Hardcoded Telegram Secrets (8 locations) — FIXED 2026-03-22
+Bot token and chat IDs were hardcoded in scripts. **Remediation**: All moved to env vars loaded from `.env` file (gitignored). See `.env.example`. Affected scripts: `cron_env.sh`, `budget_alert.py`, `cron_report_*.sh`, `cron_watchdog.sh`, `spawn_claude.sh`. Token should still be rotated post-cleanup.
 
-**Fix**: Move to env vars (`CLARVIS_TELEGRAM_BOT_TOKEN`, `CLARVIS_TELEGRAM_CHAT_ID`). Rotate token.
+### 2. Test Credentials in ChromaDB Embeddings — PARTIAL
+Email and test password embedded in untracked `data/` files (ChromaDB, memory archive). Docstring reference in `universal_web_agent.py` sanitized. ChromaDB purge tracked as C2 task.
 
-### 2. Test Credentials in ChromaDB Embeddings
-Email `REDACTED_EMAIL` + password `REDACTED_PASSWORD` embedded in:
-- `data/clarvisdb/community_summaries.json`
-- `data/memory_archive/archived_memories.json`
-- `scripts/universal_web_agent.py:183` (docstring)
-
-**Fix**: Purge from brain, regenerate embeddings, sanitize docstrings.
+**Remaining**: Purge from ChromaDB embeddings and regenerate (see C2 task).
 
 ### 3. Hardcoded User Paths (146+ Python files)
 `/home/agent/.openclaw/workspace` appears in 146 Python + 7 shell files.

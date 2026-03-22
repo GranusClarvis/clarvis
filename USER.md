@@ -28,8 +28,8 @@ Founder of Granus Labs. Web3 builder, EVM developer, infrastructure thinker. Mov
 ## Platforms
 
 - **GitHub:** InverseAltruism
-- **Discord:** Inverse (Granus Labs server, IDs: 994258501675270234, 939859740211691550)
-- **Telegram:** ID REDACTED_CHAT_ID
+- **Discord:** Inverse (Granus Labs server)
+- **Telegram:** (see .env for chat ID)
 
 ---
 

@@ -14,7 +14,7 @@ Architecture:
 
 Usage:
     # Store credentials
-    python3 universal_web_agent.py creds set gmail --user REDACTED_EMAIL --password "..."
+    python3 universal_web_agent.py creds set gmail --user your@email.com --password "..."
     python3 universal_web_agent.py creds list
     python3 universal_web_agent.py creds get gmail
 
