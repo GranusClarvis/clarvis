@@ -1387,3 +1387,7 @@ _Last archived: 2026-03-17_
 
 ## Archived 2026-03-21
 - [x] [CONTEXT_SUPPRESSION_THRESHOLD_SWEEP] Swept 5 thresholds against 98 episodes. Raised threshold 0.13→0.15, added P90 variance guard (p90≥0.25 protects occasionally-high sections like failure_avoidance). Suppresses 7 sections (was 8). Results in `data/retrieval_quality/threshold_sweep_2026-03-21.txt`. _(2026-03-21)_
+
+## Archived 2026-03-22
+- [x] [OBLIGATION_TRACKER 2026-03-22] (2026-03-22) Git hygiene addressed — committed delivery checklist + queue updates + dirty files.
+- [x] [P0_DELIVERY_READINESS_CHECKLIST] (2026-03-22) Created `docs/DELIVERY_CHECKLIST.md`. Audited all 5 milestones: A=4/8 done (fork merge pending), B=7/8 (metrics met), C=0/11 (secrets blocker), D=0/6 (website not started), E=0/6. Critical path: secrets removal → README → website.
