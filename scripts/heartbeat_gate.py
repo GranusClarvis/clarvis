@@ -116,6 +116,17 @@ def _cron_runs_fingerprint() -> Optional[Dict]:
     return _dir_fingerprint(cron_dir)
 
 
+def _get_context_relevance() -> Optional[float]:
+    """Read cached context_relevance from performance_metrics.json (zero-LLM)."""
+    metrics_file = os.path.join(DATA_DIR, "performance_metrics.json")
+    try:
+        with open(metrics_file) as f:
+            data = json.load(f)
+        return data.get("metrics", {}).get("context_relevance")
+    except (FileNotFoundError, json.JSONDecodeError, KeyError):
+        return None
+
+
 def load_state() -> Dict:
     """Load previous gate state. Returns empty dict on first run or corruption."""
     if not os.path.exists(STATE_FILE):
@@ -303,9 +314,18 @@ def run_gate() -> int:
 
     save_state(new_state)
 
+    # Context relevance assessment (zero-LLM, reads cached metric)
+    cr = _get_context_relevance()
+    priority_override = None
+    if cr is not None and cr < 0.60:
+        priority_override = "context_improvement"
+
     # Output
     log(f"{decision.upper()}: {reason}")
-    output = {"decision": decision, "reason": reason, "changes": changes}
+    output = {
+        "decision": decision, "reason": reason, "changes": changes,
+        "context_relevance": cr, "priority_override": priority_override,
+    }
     print(json.dumps(output))
 
     return 0 if decision == "wake" else 1

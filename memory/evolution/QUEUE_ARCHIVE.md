@@ -1397,3 +1397,7 @@ _Last archived: 2026-03-17_
 
 ## Archived 2026-03-22
 - [x] [DECOMPOSE_LONG_FUNCTIONS] Decompose oversized functions: all 5 targets now ≤80 lines. `score_section_relevance` 91→38, `aggregate_relevance` 104→28, `_verify_task_executable` 86→50, `_evaluate_candidates` 106→25, `run_preflight` 1118→54. Extracted ~25 named sub-functions total.
+
+## Archived 2026-03-22
+- [x] [LLM_BRAIN_REVIEW 2026-03-22] [LLM_BRAIN_REVIEW] Prune noise entries from the brain. _(2026-03-22: Deleted 134 noise entries — 100+ health_probe_* stubs, ~10 test/placeholder memories <25 chars, 6 test reasoning chains, 2 "delete me" entries in autonomous-learning. Brain: 2642→2508 memories.)_
+- [x] [RESEARCH_PHI_COMPUTATION] Survey exact and approximate Phi computation methods in IIT, focusing on tractability limits, PyPhi implementation constraints, and practical surrogate measures. (2026-03-22)

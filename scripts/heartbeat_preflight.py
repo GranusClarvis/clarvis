@@ -1225,6 +1225,7 @@ def _make_preflight_result():
         "confidence_action": "execute", "confidence_for_tier": 0.7,
         "route_tier": "complex", "route_executor": "claude", "route_score": 0.5,
         "route_reason": "unknown", "prompt_variant_id": "", "prompt_variant_task_type": "",
+        "context_relevance_score": None, "priority_override": None,
         "timings": {},
     }
 
@@ -1265,6 +1266,17 @@ def run_preflight(dry_run=False):
     log(f"All modules imported in {_import_time:.2f}s (single process)")
     t0 = time.monotonic()
     result = _make_preflight_result()
+
+    # Populate context_relevance from gate/performance metrics (zero-LLM)
+    try:
+        from clarvis.heartbeat.gate import get_context_relevance, CONTEXT_RELEVANCE_THRESHOLD
+        cr = get_context_relevance()
+        result["context_relevance_score"] = cr
+        if cr is not None and cr < CONTEXT_RELEVANCE_THRESHOLD:
+            result["priority_override"] = "context_improvement"
+            log(f"Context relevance {cr:.3f} < {CONTEXT_RELEVANCE_THRESHOLD} — prioritizing context improvement tasks")
+    except Exception as e:
+        log(f"Context relevance check failed (non-fatal): {e}")
 
     codelet_result = _preflight_attention(result)
     sel = _preflight_select_task(result, codelet_result, t0)

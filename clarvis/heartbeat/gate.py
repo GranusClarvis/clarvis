@@ -38,6 +38,9 @@ WATCHED_DIRS = [
 MAX_CONSECUTIVE_SKIPS = 4
 FORCE_WAKE_AFTER_MIDNIGHT = True
 
+PERF_METRICS_FILE = os.path.join(DATA_DIR, "performance_metrics.json")
+CONTEXT_RELEVANCE_THRESHOLD = 0.60  # Below this, auto-prioritize context improvement
+
 
 def _file_fingerprint(path: str) -> Optional[Dict]:
     """File fingerprint: mtime + size + head hash."""
@@ -76,6 +79,16 @@ def _today_memory_file() -> str:
 
 def _cron_runs_fingerprint() -> Optional[Dict]:
     return _dir_fingerprint("/home/agent/.openclaw/cron/runs")
+
+
+def get_context_relevance() -> Optional[float]:
+    """Read cached context_relevance from performance_metrics.json (zero-LLM)."""
+    try:
+        with open(PERF_METRICS_FILE) as f:
+            data = json.load(f)
+        return data.get("metrics", {}).get("context_relevance")
+    except (FileNotFoundError, json.JSONDecodeError, KeyError):
+        return None
 
 
 def load_state() -> Dict:
@@ -229,5 +242,17 @@ def run_gate(verbose: bool = False) -> Tuple[str, dict]:
 
     save_state(new_state)
 
-    output = {"decision": decision, "reason": reason, "changes": changes}
+    # Add context_relevance assessment (zero-LLM, reads cached metric)
+    cr = get_context_relevance()
+    priority_override = None
+    if cr is not None and cr < CONTEXT_RELEVANCE_THRESHOLD:
+        priority_override = "context_improvement"
+
+    output = {
+        "decision": decision,
+        "reason": reason,
+        "changes": changes,
+        "context_relevance": cr,
+        "priority_override": priority_override,
+    }
     return decision, output

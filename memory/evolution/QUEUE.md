@@ -48,7 +48,6 @@ Presentable Clarvis by 2026-03-31:
 
 ## P1 — This Week
 
-- [x] [LLM_BRAIN_REVIEW 2026-03-22] [LLM_BRAIN_REVIEW] Prune noise entries from the brain. _(2026-03-22: Deleted 134 noise entries — 100+ health_probe_* stubs, ~10 test/placeholder memories <25 chars, 6 test reasoning chains, 2 "delete me" entries in autonomous-learning. Brain: 2642→2508 memories.)_
 
 
 ---
@@ -79,7 +78,7 @@ _(Completed items archived.)_
 ## NEW ITEMS
 
 - [ ] [CRON_MAINTENANCE_TIMEOUT_GUARD] Add timeout and stale-lock detection to the 04:00-05:05 maintenance window scripts (cron_graph_checkpoint.sh, cron_graph_compaction.sh, cron_graph_verify.sh, cron_chromadb_vacuum.sh). Currently they share /tmp/clarvis_maintenance.lock but have no max-wait or deadlock recovery. _(Bash task — operational reliability)_
-- [ ] [HEARTBEAT_CONTEXT_RELEVANCE_GATE] Add context_relevance as an explicit dimension in heartbeat_gate.py capability assessment. If context_relevance < 0.60, auto-prioritize context-improvement tasks over other queue items. Currently heartbeat asks "which capability is weakest" but doesn't consider context_relevance. _(Targets weakest metric: Context Relevance via prioritization)_
+- [x] [HEARTBEAT_CONTEXT_RELEVANCE_GATE] Add context_relevance as an explicit dimension in heartbeat_gate.py capability assessment. If context_relevance < 0.60, auto-prioritize context-improvement tasks over other queue items. _(Done 2026-03-22: gate reads cached CR from perf metrics, task_selector applies up to +0.35 boost to context-improvement tasks when CR < 0.60, preflight exposes context_relevance_score + priority_override fields)_
 - [ ] [DIRECTIVE_LLM_CLASSIFIER_UPGRADE] Add optional LLM-based classification fallback for ambiguous directives where rule-based classifier confidence < 0.5. Use task_router to pick cheapest model. Gate behind env var DIRECTIVE_LLM_CLASSIFY=true. _(Promise enforcement: handles nuanced instructions the rule-based classifier misses)_
 
 - [~] [SEMANTIC_CROSS_COLLECTION_BRIDGES] Strengthen weak cross-collection semantic links. Current semantic_cross_collection=0.62 (target >0.75). _(2026-03-19: Added 13 bridge memories across 3 weakest pairs. Phi full computation times out at 120s due to 99k graph edges + 720 ONNX queries. Pair scores: proc↔learn=0.600, ctx↔goals=0.644, ep↔infra=0.555. Need graph compaction or parallel queries to verify full Phi. Blocked on compute time.)_
@@ -87,7 +86,6 @@ _(Completed items archived.)_
 
 ## Research Additions
 
-- [x] [RESEARCH_PHI_COMPUTATION] Survey exact and approximate Phi computation methods in IIT, focusing on tractability limits, PyPhi implementation constraints, and practical surrogate measures. (2026-03-22)
 
 
 

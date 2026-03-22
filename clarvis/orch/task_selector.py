@@ -43,6 +43,7 @@ try:
 except Exception:
     _wm = None
 
+PERF_METRICS_FILE = "/home/agent/.openclaw/workspace/data/performance_metrics.json"
 QUEUE_FILE = "/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md"
 DELIVERY_LOCK_FILE = "/home/agent/.openclaw/workspace/DELIVERY_LOCK.md"
 QUALITY_GATE_FILE = "/home/agent/.openclaw/workspace/data/memory_quality_gate.json"
@@ -80,6 +81,14 @@ NEW_FEATURE_KEYWORDS = [
     "new feature", "add new", "create new", "build new", "implement new",
     "introduce", "design new", "prototype",
 ]
+
+# Keywords signaling context-improvement tasks (boosted when context_relevance is low)
+CONTEXT_IMPROVEMENT_KEYWORDS = [
+    "context", "relevance", "retrieval", "brain search", "recall",
+    "brief", "compression", "noise", "prune", "dedup", "quality",
+    "section", "ranking", "top-3", "preflight", "brain",
+]
+CONTEXT_RELEVANCE_THRESHOLD = 0.60
 
 
 def _compute_novelty(task_text, recent_tasks, min_words=3):
@@ -275,6 +284,17 @@ def score_tasks(tasks, codelet_result=None):
     except Exception:
         pass
 
+    # Context-improvement priority boost when context_relevance metric is low
+    _cr_boost_active = False
+    try:
+        with open(PERF_METRICS_FILE) as _pf:
+            _perf = json.load(_pf)
+        _cr_value = _perf.get("metrics", {}).get("context_relevance")
+        if _cr_value is not None and _cr_value < CONTEXT_RELEVANCE_THRESHOLD:
+            _cr_boost_active = True
+    except (FileNotFoundError, json.JSONDecodeError, KeyError):
+        pass
+
     # Mode compliance filter: skip tasks not allowed in current operating mode
     _current_mode = None
     try:
@@ -367,7 +387,14 @@ def score_tasks(tasks, codelet_result=None):
         # Improve-existing-over-new policy bias
         improve_bias = _improve_existing_bias(text)
 
-        total_boost = agi_boost + integration_boost + architectural_boost - failure_penalty + improve_bias
+        # Context-improvement boost when context_relevance < threshold
+        cr_boost = 0.0
+        if _cr_boost_active:
+            for kw in CONTEXT_IMPROVEMENT_KEYWORDS:
+                if kw in text_lower:
+                    cr_boost = min(0.35, cr_boost + 0.1)
+
+        total_boost = agi_boost + integration_boost + architectural_boost - failure_penalty + improve_bias + cr_boost
 
         effective_relevance = min(1.0, relevance + spotlight_align * 0.15)
         item = attention.submit(
