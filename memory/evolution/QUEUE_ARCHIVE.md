@@ -1409,3 +1409,8 @@ _Last archived: 2026-03-17_
 - [x] [A5_RUNTIME_MODE_CONTROL_PLANE_MERGE] Already merged in commit 66cd7ea (2026-03-17). Runtime mode fully wired: clarvis/runtime/mode.py, CLI, task_selector, gate integration, tests. _(Checklist A5.)_
 - [x] [A6_TRAJECTORY_EVAL_HARNESS_MERGE] Already merged in commit 66cd7ea (2026-03-17). Trajectory eval active: clarvis/metrics/trajectory.py, postflight integration, CLI bench commands, tests. _(Checklist A6.)_
 - [x] [CRON_MAINTENANCE_TIMEOUT_GUARD] Added `set_script_timeout` to lock_helper.sh + wired into all 5 maintenance scripts (checkpoint=300s, compaction=600s, verify=300s, vacuum=600s, soak=120s). Watchdog kills hung scripts via SIGTERM→SIGKILL, EXIT trap releases all locks. Tested. _(2026-03-22.)_
+
+## Archived 2026-03-22
+- [x] [A7_MODE_SUBCOMMAND_WIRING] Stabilize CLI by wiring `python3 -m clarvis mode ...` to the merged runtime mode control-plane. _(Done 2026-03-22: CLI stable, input validation, 12 CLI tests added.)_
+- [x] [E1_FULL_TEST_SUITE_PASS] Run and stabilize full test suite after consolidation and merges. _(Checklist E1.)_ (2026-03-22 14:03 UTC)
+- [x] [RESEARCH_PHI_COMPUTATION] Review current limits, approximations, and implementation paths for computing IIT Phi in practical systems. (2026-03-22)

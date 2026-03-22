@@ -16,8 +16,7 @@ Presentable Clarvis by 2026-03-31:
 - clearly wired, tested, maintainable structure
 
 ### Milestone A — Foundation Freeze (by 2026-03-19)
-- [x] [A7_MODE_SUBCOMMAND_WIRING] Stabilize CLI by wiring `python3 -m clarvis mode ...` to the merged runtime mode control-plane. _(Done 2026-03-22: CLI stable, input validation, 12 CLI tests added.)_
-- [ ] [A8_MERGE_ADR_DOCUMENTATION] Merge ADR-0001 and ADR-0002 from fork into the main repo docs. _(Checklist A8 — trivial but required to freeze architecture.)_
+- [x] [A8_MERGE_ADR_DOCUMENTATION] Merge ADR-0001 and ADR-0002 from fork into the main repo docs. _(Already merged in commit 66cd7ea, verified identical to fork. 2026-03-22.)_
 
 ### Milestone B — Brain / Context Quality (by 2026-03-23)
 - [~] [SEMANTIC_CROSS_COLLECTION_BRIDGES] Strengthen weak cross-collection semantic links. Current semantic_cross_collection=0.62 (target >0.75). _(2026-03-19: Added 13 bridge memories across 3 weakest pairs. Phi full computation times out at 120s due to 99k graph edges + 720 ONNX queries. Pair scores: proc↔learn=0.600, ctx↔goals=0.644, ep↔infra=0.555. Need graph compaction or parallel queries to verify full Phi. Blocked on compute time. Checklist B8.)_
@@ -43,7 +42,6 @@ Presentable Clarvis by 2026-03-31:
 - [ ] [D6_DOMAIN_AND_DEPLOYMENT] Deploy website v0 to an IP/domain-accessible target with simple, reproducible deployment notes. _(Checklist D6.)_
 
 ### Milestone E — Final Validation (by 2026-03-31)
-- [ ] [E1_FULL_TEST_SUITE_PASS] Run and stabilize full test suite after consolidation and merges. _(Checklist E1.)_
 - [ ] [E2_SECRET_SCAN_PASS] Run secret scan and verify the repo is clean after C1-C2. _(Checklist E2.)_
 - [ ] [E3_FRESH_CLONE_SETUP] Validate fresh clone + setup from scratch and write down the exact bootstrap path. _(Checklist E3 — critical path.)_
 - [ ] [E4_WEBSITE_V0_LIVE] Confirm website v0 is live and publicly accessible. _(Checklist E4.)_
@@ -56,6 +54,18 @@ Presentable Clarvis by 2026-03-31:
 
 - [ ] [DECOMPOSE_LONG_FUNCTIONS] Decompose oversized functions still above target length: `clarvis/heartbeat/gate.py:check_gate`, `clarvis/orch/task_selector.py:score_tasks`, `scripts/heartbeat_gate.py:check_gate`. Target: all functions ≤80 lines.
 - [ ] [DIRECTIVE_LLM_CLASSIFIER_UPGRADE] Add optional LLM-based classification fallback for ambiguous directives where rule-based classifier confidence < 0.5. Use task_router to pick cheapest model. Gate behind env var `DIRECTIVE_LLM_CLASSIFY=true`.
+
+### Benchmarking / CLR v2
+- [ ] [LONGMEMEVAL_ADAPTER_AND_BASELINE_RUN] Build a `clarvis bench longmemeval` adapter that can run Clarvis memory pipelines on LongMemEval-S first, with support for full-history and oracle-retrieval modes. Output per-ability scores (IE, MR, KU, TR, ABS), retrieval diagnostics, and a baseline comparison against raw long-context prompting.
+- [ ] [CLR_ORACLE_RETRIEVAL_MODE] Add an evaluation mode to CLR-Benchmark adapters that uses gold/oracle evidence when available. Purpose: separate retrieval failure from reasoning/reading failure so improvements are scientifically interpretable.
+- [ ] [MEMBENCH_ADAPTER_REFLECTIVE_OBSERVATION] Build a `clarvis bench membench` adapter covering the four MemBench quadrants: participation-factual, participation-reflective, observation-factual, observation-reflective. Report effectiveness, recall, capacity, and temporal efficiency splits.
+- [ ] [CLR_SPLIT_INTERNAL_VS_BENCHMARK] Split current CLR into (A) `CLR-Internal` for Clarvis health/architecture metrics and (B) `CLR-Benchmark` for external task-based evaluation. Preserve current composite score semantics internally, but stop treating internal telemetry as universal benchmark signal.
+- [ ] [CLR_PUBLIC_SCHEMA_V1] Design and document an open benchmark schema for memory tasks and results: task_id, benchmark, domain, ability_tags, context_length, scenario, gold_answer, gold_evidence, answer_score, abstention_score, latency_ms, token_cost, retrieval_count, and diagnostics.
+- [ ] [CLR_FAILURE_STAGE_BREAKDOWN] Add stage-separated scoring and reports for memory write/index, retrieval, reasoning over retrieved evidence, and final answer quality. LongMemEval oracle mode should feed this directly.
+- [ ] [BEAM_SUBSET_ADAPTER_AND_ABILITY_GAP_AUDIT] Build a BEAM subset adapter (not full 10M first) and produce a gap audit showing which BEAM abilities CLR currently does not measure well: contradiction resolution, event ordering, instruction following, summarization, cross-domain robustness.
+- [ ] [CLR_CONTRADICTION_EVENT_INSTRUCTION_TASKS] Add first-class task families to CLR-Benchmark for contradiction resolution, event ordering, and persistent instruction following. These are benchmark-critical gaps exposed by BEAM.
+- [ ] [CLR_EVIDENCE_ATTRIBUTION_SCORING] Add evidence-support scoring: whether answers are backed by retrieved or gold evidence, and whether cited/supporting spans actually contain the needed facts. This should work across LongMemEval/MemBench/BEAM adapters.
+- [ ] [CLR_LENGTH_DOMAIN_ROBUSTNESS_REPORTS] Add report generation for score vs context length, score vs domain, and degradation curves across retrieval mode / memory mode. This is required before open-sourcing CLR-Benchmark as a serious benchmark rather than a tuned dashboard.
 
 ---
 
@@ -81,4 +91,3 @@ _Design: `docs/ADAPTIVE_RAG_PLAN.md` — 4-phase rollout (GATE → EVAL → RETR
 
 ### Research Sessions
 _(Completed items archived.)_
-- [x] [RESEARCH_PHI_COMPUTATION] Review current limits, approximations, and implementation paths for computing IIT Phi in practical systems. (2026-03-22)
