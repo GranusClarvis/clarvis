@@ -25,10 +25,10 @@ Presentable Clarvis by 2026-03-31:
 - [ ] [C1_REMOVE_HARDCODED_SECRETS] Remove hardcoded secrets from tracked files. Audit all files flagged in `OPEN_SOURCE_READINESS_AUDIT.md`, replace with env/config references, and verify no live credentials remain in repo text. _(Checklist C1 — release blocker.)_
 - [ ] [C2_PURGE_CREDENTIALS_FROM_CHROMADB] Purge embedded credentials from ChromaDB/community summary artifacts and re-embed clean replacements. Document exact scrub/rebuild procedure. _(Checklist C2 — release blocker.)_
 - [ ] [C3_VERIFY_GITIGNORE_AND_TRACKED_DATA] Verify `data/` and `monitoring/` ignore rules by checking tracked files, untracking anything that should not be versioned, and documenting safe boundaries. _(Checklist C3.)_
-- [ ] [C4_DELETE_DEPRECATED_SCRIPTS] Delete `scripts/deprecated/` after confirming nothing still imports or references it. _(Checklist C4.)_
+- [x] [C4_DELETE_DEPRECATED_SCRIPTS] Delete `scripts/deprecated/` after confirming nothing still imports or references it. _(Already empty — only __pycache__ remained. Dir removed. 2026-03-22.)_
 - [ ] [C5_CONSOLIDATE_TESTS] Consolidate split tests under `tests/` (from `tests/`, `scripts/tests/`, `clarvis/tests/`) with minimal breakage. _(Checklist C5.)_
 - [ ] [C6_ADD_ROOT_README] Add a strong root `README.md` explaining what Clarvis is, architecture at a glance, quick start, repo boundaries, and current status. _(Checklist C6 — critical path.)_
-- [ ] [C7_ADD_LICENSE_FILE] Add standalone `LICENSE` file at repo root matching the intended license. _(Checklist C7.)_
+- [x] [C7_ADD_LICENSE_FILE] Add standalone `LICENSE` file at repo root matching the intended license. _(MIT LICENSE added at repo root. 2026-03-22.)_
 - [ ] [C8_ADD_CONTRIBUTING] Add `CONTRIBUTING.md` with setup, coding standards, tests, and PR expectations. _(Checklist C8.)_
 - [ ] [C9_BASIC_CI_WORKFLOW] Add basic GitHub Actions CI for lint + test on the main repo. Keep it minimal and reliable. _(Checklist C9.)_
 - [ ] [C11_CLARVIS_DB_EXTRACTION_PLAN] Extract or isolate `clarvis-db` boundary into a separate repo/package plan with scrubbed public-facing structure, LICENSE, and CI requirements documented. _(Checklist C11 — nice-to-have but important repo-boundary work.)_
