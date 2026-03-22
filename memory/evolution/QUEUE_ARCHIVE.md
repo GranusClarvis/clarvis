@@ -1384,3 +1384,6 @@ _Last archived: 2026-03-17_
 ## Archived 2026-03-21
 - [x] [STRATEGIC_AUDIT 2026-03-21] [STRATEGIC_AUDIT/autonomy] [COMPLEXITY_GATE] _(2026-03-21: Added §7.421 complexity gate to heartbeat_postflight.py. AST-parses changed .py files, detects functions >80 lines, auto-queues [DECOMPOSE_LONG_FUNCTIONS] as P1 in QUEUE.md. Tested: correctly identifies oversized functions.)_
 - [x] [CLR_RELEVANCE_DIMENSION_WEIGHT] _(2026-03-21: prompt_context 0.13→0.18, rebalanced efficiency/integration/autonomy. Added context_relevance sub-score to `_score_prompt_context()` + `get_latest_context_relevance()` API. Assembly `get_adjusted_budgets()` now boosts high-relevance sections 20% when CLR context_relevance < 0.5. Verified: CLR=0.785, prompt_context=0.685 with context_relevance=0.496 sub-score.)_
+
+## Archived 2026-03-21
+- [x] [CONTEXT_SUPPRESSION_THRESHOLD_SWEEP] Swept 5 thresholds against 98 episodes. Raised threshold 0.13→0.15, added P90 variance guard (p90≥0.25 protects occasionally-high sections like failure_avoidance). Suppresses 7 sections (was 8). Results in `data/retrieval_quality/threshold_sweep_2026-03-21.txt`. _(2026-03-21)_

@@ -48,6 +48,9 @@ Presentable Clarvis by 2026-03-31:
 
 ## P1 — This Week
 
+- [x] [OBLIGATION_TRACKER 2026-03-22] (2026-03-22) Git hygiene addressed — committed delivery checklist + queue updates + dirty files.
+- [ ] [DECOMPOSE_LONG_FUNCTIONS] Decompose oversized functions: `clarvis/cognition/context_relevance.py:score_section_relevance` (91 lines), `clarvis/cognition/context_relevance.py:aggregate_relevance` (104 lines), `scripts/heartbeat_preflight.py:_verify_task_executable` (86 lines), `scripts/heartbeat_preflight.py:run_preflight` (1118 lines), `scripts/heartbeat_preflight.py:_evaluate_candidates` (106 lines). Target: all functions ≤80 lines.
+
 
 ---
 
@@ -79,8 +82,7 @@ _(Completed items archived.)_
 - [ ] [CRON_MAINTENANCE_TIMEOUT_GUARD] Add timeout and stale-lock detection to the 04:00-05:05 maintenance window scripts (cron_graph_checkpoint.sh, cron_graph_compaction.sh, cron_graph_verify.sh, cron_chromadb_vacuum.sh). Currently they share /tmp/clarvis_maintenance.lock but have no max-wait or deadlock recovery. _(Bash task — operational reliability)_
 - [ ] [HEARTBEAT_CONTEXT_RELEVANCE_GATE] Add context_relevance as an explicit dimension in heartbeat_gate.py capability assessment. If context_relevance < 0.60, auto-prioritize context-improvement tasks over other queue items. Currently heartbeat asks "which capability is weakest" but doesn't consider context_relevance. _(Targets weakest metric: Context Relevance via prioritization)_
 - [ ] [DIRECTIVE_LLM_CLASSIFIER_UPGRADE] Add optional LLM-based classification fallback for ambiguous directives where rule-based classifier confidence < 0.5. Use task_router to pick cheapest model. Gate behind env var DIRECTIVE_LLM_CLASSIFY=true. _(Promise enforcement: handles nuanced instructions the rule-based classifier misses)_
-- [x] [CONTEXT_SUPPRESSION_THRESHOLD_SWEEP] Swept 5 thresholds against 98 episodes. Raised threshold 0.13→0.15, added P90 variance guard (p90≥0.25 protects occasionally-high sections like failure_avoidance). Suppresses 7 sections (was 8). Results in `data/retrieval_quality/threshold_sweep_2026-03-21.txt`. _(2026-03-21)_
-- [ ] [P0_DELIVERY_READINESS_CHECKLIST] Create `docs/DELIVERY_CHECKLIST.md` for the 2026-03-31 deadline. Audit: which Milestones A-E items are actually done vs empty placeholders? Cross-reference ROADMAP.md capabilities. Populate each milestone with concrete remaining work. _(Non-Python task — project management for P0 deadline)_
+- [x] [P0_DELIVERY_READINESS_CHECKLIST] (2026-03-22) Created `docs/DELIVERY_CHECKLIST.md`. Audited all 5 milestones: A=4/8 done (fork merge pending), B=7/8 (metrics met), C=0/11 (secrets blocker), D=0/6 (website not started), E=0/6. Critical path: secrets removal → README → website.
 - [ ] [CRON_HEALTH_DASHBOARD_HTML] Generate a static HTML dashboard (`monitoring/dashboard.html`) from health_monitor.sh and performance_benchmark.py data. Show: PI trend, context_relevance trend, cron success/fail heatmap, last 7 days. Refreshed by cron. _(Non-Python task — HTML/JS, operational visibility for open-source readiness)_
 
 - [~] [SEMANTIC_CROSS_COLLECTION_BRIDGES] Strengthen weak cross-collection semantic links. Current semantic_cross_collection=0.62 (target >0.75). _(2026-03-19: Added 13 bridge memories across 3 weakest pairs. Phi full computation times out at 120s due to 99k graph edges + 720 ONNX queries. Pair scores: proc↔learn=0.600, ctx↔goals=0.644, ep↔infra=0.555. Need graph compaction or parallel queries to verify full Phi. Blocked on compute time.)_
