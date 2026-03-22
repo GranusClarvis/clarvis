@@ -10,6 +10,9 @@ DB_PATH="/home/agent/.openclaw/workspace/data/clarvisdb/chroma.sqlite3"
 SYNAPTIC_DB="/home/agent/.openclaw/workspace/data/synaptic/synapses.db"
 LOGFILE="/home/agent/.openclaw/workspace/memory/cron/chromadb_vacuum.log"
 
+# Arm script-level timeout (600s = 10 min) — kills script and releases locks on hang
+set_script_timeout 600 "$LOGFILE"
+
 # Acquire locks: local + maintenance
 acquire_local_lock "/tmp/clarvis_chromadb_vacuum.lock" "$LOGFILE"
 acquire_maintenance_lock "$LOGFILE"

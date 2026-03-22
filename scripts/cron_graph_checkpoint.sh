@@ -15,6 +15,9 @@ SQLITE_DB="$DATA_DIR/graph.db"
 SQLITE_CHECKPOINT="$DATA_DIR/graph.checkpoint.db"
 LOG_FILE="$SCRIPT_DIR/../memory/cron/graph_checkpoint.log"
 
+# Arm script-level timeout (300s = 5 min) — kills script and releases locks on hang
+set_script_timeout 300 "$LOG_FILE"
+
 # Acquire maintenance lock (mutual exclusion with graph_compaction + chromadb_vacuum)
 acquire_maintenance_lock "$LOG_FILE"
 

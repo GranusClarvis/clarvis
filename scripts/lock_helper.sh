@@ -33,7 +33,15 @@ MAINTENANCE_LOCK="/tmp/clarvis_maintenance.lock"
 # Internal: list of lock files to clean on EXIT
 _LOCK_HELPER_FILES=()
 
+# Internal: PID of the background timeout watchdog (if any)
+_SCRIPT_TIMEOUT_PID=""
+
 _lock_helper_cleanup() {
+    # Kill timeout watchdog if running
+    if [ -n "$_SCRIPT_TIMEOUT_PID" ] && kill -0 "$_SCRIPT_TIMEOUT_PID" 2>/dev/null; then
+        kill "$_SCRIPT_TIMEOUT_PID" 2>/dev/null
+        wait "$_SCRIPT_TIMEOUT_PID" 2>/dev/null || true
+    fi
     for f in "${_LOCK_HELPER_FILES[@]}"; do
         rm -f "$f"
     done
@@ -46,6 +54,31 @@ _register_lock() {
     _LOCK_HELPER_FILES+=("$1")
     # Re-register trap with all accumulated locks
     trap _lock_helper_cleanup EXIT
+}
+
+# =============================================================================
+# set_script_timeout <seconds> <logfile>
+#
+# Arms a background watchdog that sends SIGTERM to the calling script after
+# <seconds> seconds.  Because the EXIT trap calls _lock_helper_cleanup, all
+# acquired locks are released even on timeout.
+#
+# Call once, early in the script, after sourcing lock_helper.sh.
+# =============================================================================
+set_script_timeout() {
+    local seconds="$1"
+    local logfile="$2"
+    local parent=$$
+
+    ( # Subshell watchdog — sleeps then kills parent
+        sleep "$seconds"
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] TIMEOUT: Script exceeded ${seconds}s limit — sending SIGTERM to PID $parent" >> "$logfile"
+        kill -TERM "$parent" 2>/dev/null
+        # Give 5s for graceful shutdown, then force-kill
+        sleep 5
+        kill -9 "$parent" 2>/dev/null
+    ) &
+    _SCRIPT_TIMEOUT_PID=$!
 }
 
 # =============================================================================

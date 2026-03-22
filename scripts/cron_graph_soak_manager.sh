@@ -12,6 +12,7 @@
 set -euo pipefail
 
 source /home/agent/.openclaw/workspace/scripts/cron_env.sh
+source /home/agent/.openclaw/workspace/scripts/lock_helper.sh
 
 WORKDIR="/home/agent/.openclaw/workspace"
 LOG="$WORKDIR/memory/cron/graph_soak_manager.log"
@@ -19,6 +20,9 @@ VERIFY_LOG="$WORKDIR/memory/cron/graph_verify.log"
 STATE_FILE="$WORKDIR/data/graph_soak_state.json"
 CRON_ENV="$WORKDIR/scripts/cron_env.sh"
 ARCHIVE_DIR="$WORKDIR/data/clarvisdb/archive"
+
+# Arm script-level timeout (120s = 2 min) — kills script and releases locks on hang
+set_script_timeout 120 "$LOG"
 
 TS="$(date -u +%Y-%m-%dT%H:%M:%S)"
 

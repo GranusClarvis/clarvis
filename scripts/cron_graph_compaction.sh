@@ -6,6 +6,9 @@ source /home/agent/.openclaw/workspace/scripts/lock_helper.sh
 
 LOGFILE="memory/cron/graph_compaction.log"
 
+# Arm script-level timeout (600s = 10 min) — kills script and releases locks on hang
+set_script_timeout 600 "$LOGFILE"
+
 # Acquire locks: local + maintenance
 acquire_local_lock "/tmp/clarvis_graph_compaction.lock" "$LOGFILE"
 acquire_maintenance_lock "$LOGFILE"

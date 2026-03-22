@@ -1401,3 +1401,6 @@ _Last archived: 2026-03-17_
 ## Archived 2026-03-22
 - [x] [LLM_BRAIN_REVIEW 2026-03-22] [LLM_BRAIN_REVIEW] Prune noise entries from the brain. _(2026-03-22: Deleted 134 noise entries — 100+ health_probe_* stubs, ~10 test/placeholder memories <25 chars, 6 test reasoning chains, 2 "delete me" entries in autonomous-learning. Brain: 2642→2508 memories.)_
 - [x] [RESEARCH_PHI_COMPUTATION] Survey exact and approximate Phi computation methods in IIT, focusing on tractability limits, PyPhi implementation constraints, and practical surrogate measures. (2026-03-22)
+
+## Archived 2026-03-22
+- [x] [HEARTBEAT_CONTEXT_RELEVANCE_GATE] Add context_relevance as an explicit dimension in heartbeat_gate.py capability assessment. If context_relevance < 0.60, auto-prioritize context-improvement tasks over other queue items. _(Done 2026-03-22: gate reads cached CR from perf metrics, task_selector applies up to +0.35 boost to context-improvement tasks when CR < 0.60, preflight exposes context_relevance_score + priority_override fields)_

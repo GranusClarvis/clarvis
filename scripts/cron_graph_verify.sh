@@ -16,6 +16,9 @@ if [ "${CLARVIS_GRAPH_BACKEND:-json}" != "sqlite" ]; then
     exit 0
 fi
 
+# Arm script-level timeout (300s = 5 min) — kills script and releases locks on hang
+set_script_timeout 300 "$LOGFILE"
+
 # Acquire maintenance lock (mutual exclusion with checkpoint/compaction/vacuum)
 acquire_maintenance_lock "$LOGFILE"
 
