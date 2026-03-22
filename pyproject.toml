@@ -23,6 +23,15 @@ brain = ["chromadb>=0.4.0", "onnxruntime>=1.15.0"]
 include = ["clarvis*"]
 exclude = ["packages*"]
 
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+
+[tool.ruff.lint]
+# Start strict on critical errors only; expand over time
+select = ["E9", "F63", "F7", "F82"]
+ignore = []
+
 [tool.pytest.ini_options]
 testpaths = ["clarvis/tests", "packages"]
 norecursedirs = ["scripts", "data", "memory", "monitoring", "skills", "docs", ".git"]
