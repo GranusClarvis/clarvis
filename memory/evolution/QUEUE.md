@@ -31,13 +31,12 @@ Presentable Clarvis by 2026-03-31:
 - [ ] [D2_PUBLIC_STATUS_ENDPOINT] Implement `/api/status` or equivalent public feed endpoint with the documented data contract. _(Checklist D2.)_
 - [ ] [D3_CLR_ON_WEBSITE] Surface CLR score on website v0 once endpoint/scaffold exists. _(Checklist D3.)_
 - [ ] [D4_ARCHITECTURE_PAGE] Publish sanitized architecture page derived from SELF.md/ROADMAP.md without private/internal details. _(Checklist D4.)_
-- [x] [D5_REPOS_PAGE] Add repos/boundaries page showing main repo, extracted pieces, and status. _(Checklist D5. Done 2026-03-22: `website/static/repos.html` — static page with 2 repos, extraction status, anti-sprawl policy.)_
 - [ ] [D6_DOMAIN_AND_DEPLOYMENT] Deploy website v0 to an IP/domain-accessible target with simple, reproducible deployment notes. _(Checklist D6.)_
 
 ### Milestone E — Final Validation (by 2026-03-31)
 - [ ] [E2_SECRET_SCAN_PASS] Run secret scan and verify the repo is clean after C1-C2. _(Checklist E2.)_
 - [ ] [E3_FRESH_CLONE_SETUP] Validate fresh clone + setup from scratch and write down the exact bootstrap path. _(Checklist E3 — critical path.)_
-- [ ] [E4_WEBSITE_V0_LIVE] Confirm website v0 is live and publicly accessible. _(Checklist E4.)_
+- [ ] [E4_WEBSITE_V0_LIVE] Confirm website v0 is live and publicly accessible. _(Checklist E4. Blocked on D1+D6: no scaffold or deployment exists yet. Only `website/static/repos.html` exists. 2026-03-22.)_
 - [ ] [E5_README_MATCHES_REALITY] Final pass: ensure README accurately describes current architecture, commands, and repo structure. _(Checklist E5.)_
 - [ ] [E6_PUBLIC_ROADMAP_SANITIZE] Update `ROADMAP.md` for public visibility; remove internal-only details, IDs, and operational specifics. _(Checklist E6.)_
 

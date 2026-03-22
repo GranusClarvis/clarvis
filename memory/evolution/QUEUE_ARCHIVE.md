@@ -1433,3 +1433,6 @@ _Last archived: 2026-03-17_
 - [x] [DELIVERY_CRITICAL_PATH_BURNDOWN] _(Done 2026-03-22: Created `docs/DELIVERY_BURNDOWN.md` with 17 tasks, validation commands, blockers, and daily targets through 2026-03-31.)_
 - [x] [C1_REMOVE_HARDCODED_SECRETS] _(Done 2026-03-22: All secrets moved to `.env` (gitignored), 20 files cleaned, `git grep` verified clean. Created `.env.example`. Token rotation still needed before publish.)_
 - [x] [C2_PURGE_CREDENTIALS_FROM_CHROMADB] _(Done 2026-03-22: Purged 3 ChromaDB entries (autonomous-learning + 2 episodes) and scrubbed 4 refs in community_summaries.json. Verified clean via `search("gmail password credentials")`. Procedure in `docs/DELIVERY_BURNDOWN.md`.)_
+
+## Archived 2026-03-22
+- [x] [D5_REPOS_PAGE] Add repos/boundaries page showing main repo, extracted pieces, and status. _(Checklist D5. Done 2026-03-22: `website/static/repos.html` — static page with 2 repos, extraction status, anti-sprawl policy.)_
