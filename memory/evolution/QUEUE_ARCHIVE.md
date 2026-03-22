@@ -1404,3 +1404,8 @@ _Last archived: 2026-03-17_
 
 ## Archived 2026-03-22
 - [x] [HEARTBEAT_CONTEXT_RELEVANCE_GATE] Add context_relevance as an explicit dimension in heartbeat_gate.py capability assessment. If context_relevance < 0.60, auto-prioritize context-improvement tasks over other queue items. _(Done 2026-03-22: gate reads cached CR from perf metrics, task_selector applies up to +0.35 boost to context-improvement tasks when CR < 0.60, preflight exposes context_relevance_score + priority_override fields)_
+
+## Archived 2026-03-22
+- [x] [A5_RUNTIME_MODE_CONTROL_PLANE_MERGE] Already merged in commit 66cd7ea (2026-03-17). Runtime mode fully wired: clarvis/runtime/mode.py, CLI, task_selector, gate integration, tests. _(Checklist A5.)_
+- [x] [A6_TRAJECTORY_EVAL_HARNESS_MERGE] Already merged in commit 66cd7ea (2026-03-17). Trajectory eval active: clarvis/metrics/trajectory.py, postflight integration, CLI bench commands, tests. _(Checklist A6.)_
+- [x] [CRON_MAINTENANCE_TIMEOUT_GUARD] Added `set_script_timeout` to lock_helper.sh + wired into all 5 maintenance scripts (checkpoint=300s, compaction=600s, verify=300s, vacuum=600s, soak=120s). Watchdog kills hung scripts via SIGTERM→SIGKILL, EXIT trap releases all locks. Tested. _(2026-03-22.)_

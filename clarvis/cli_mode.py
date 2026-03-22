@@ -9,12 +9,24 @@ from clarvis.runtime.mode import (
     apply_pending_mode,
     count_active_tasks,
     mode_policies,
+    normalize_mode,
     read_mode_history,
     read_mode_state,
     set_mode,
+    VALID_MODES,
 )
 
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_enable=False)
+
+
+def _validate_mode(mode: str) -> str:
+    """Normalize and validate a mode string, exiting with a clear error if invalid."""
+    try:
+        return normalize_mode(mode)
+    except ValueError:
+        valid = ", ".join(sorted(VALID_MODES))
+        typer.echo(f"Error: unknown mode '{mode}'. Valid modes: {valid}", err=True)
+        raise typer.Exit(1)
 
 
 def _state_payload(state: ModeState) -> dict:
@@ -63,6 +75,7 @@ def set_mode_cmd(
     ),
 ):
     """Set runtime mode (deferred if active tasks exist by default)."""
+    _validate_mode(mode)
     result = set_mode(mode, reason=reason, defer_if_active=not immediate)
     typer.echo(json.dumps(result, indent=2))
 
@@ -77,6 +90,7 @@ def apply_pending():
 @app.command()
 def explain(mode: str = typer.Argument(..., help="Mode to explain: ge | architecture | passive")):
     """Explain mode policy behavior."""
+    _validate_mode(mode)
     policies = mode_policies(mode)
     typer.echo(json.dumps(policies, indent=2))
 
