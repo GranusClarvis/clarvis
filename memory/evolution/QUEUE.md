@@ -48,8 +48,7 @@ Presentable Clarvis by 2026-03-31:
 
 ## P1 — This Week
 
-- [ ] [LLM_BRAIN_REVIEW 2026-03-22] [LLM_BRAIN_REVIEW] Prune noise entries from the brain — search for low-content memories like 'test memory', placeholder entries, and memories under 20 characters, then delete them. — Noise entries consume result slots and reduce perceived retrieval quality, especially on vague queries where the brain needs to surface its best general knowledge.
-- [x] [DECOMPOSE_LONG_FUNCTIONS] Decompose oversized functions: all 5 targets now ≤80 lines. `score_section_relevance` 91→38, `aggregate_relevance` 104→28, `_verify_task_executable` 86→50, `_evaluate_candidates` 106→25, `run_preflight` 1118→54. Extracted ~25 named sub-functions total.
+- [x] [LLM_BRAIN_REVIEW 2026-03-22] [LLM_BRAIN_REVIEW] Prune noise entries from the brain. _(2026-03-22: Deleted 134 noise entries — 100+ health_probe_* stubs, ~10 test/placeholder memories <25 chars, 6 test reasoning chains, 2 "delete me" entries in autonomous-learning. Brain: 2642→2508 memories.)_
 
 
 ---
@@ -88,6 +87,7 @@ _(Completed items archived.)_
 
 ## Research Additions
 
+- [x] [RESEARCH_PHI_COMPUTATION] Survey exact and approximate Phi computation methods in IIT, focusing on tractability limits, PyPhi implementation constraints, and practical surrogate measures. (2026-03-22)
 
 
 

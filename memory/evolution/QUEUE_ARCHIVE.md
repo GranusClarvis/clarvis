@@ -1394,3 +1394,6 @@ _Last archived: 2026-03-17_
 
 ## Archived 2026-03-22
 - [x] [CRON_HEALTH_DASHBOARD_HTML] Generate a static HTML dashboard (`monitoring/dashboard.html`) from health_monitor.sh and performance_benchmark.py data. Show: PI trend, context_relevance trend, cron success/fail heatmap, last 7 days. Refreshed by cron. _(Done 2026-03-22: `scripts/generate_dashboard.py` → `monitoring/dashboard.html`. Shows PI/CR/CLR/Phi trends, 6 metric cards, 7-day cron heatmap. Chart.js for line charts.)_
+
+## Archived 2026-03-22
+- [x] [DECOMPOSE_LONG_FUNCTIONS] Decompose oversized functions: all 5 targets now ≤80 lines. `score_section_relevance` 91→38, `aggregate_relevance` 104→28, `_verify_task_executable` 86→50, `_evaluate_candidates` 106→25, `run_preflight` 1118→54. Extracted ~25 named sub-functions total.
