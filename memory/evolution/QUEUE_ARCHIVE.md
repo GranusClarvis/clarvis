@@ -1391,3 +1391,6 @@ _Last archived: 2026-03-17_
 ## Archived 2026-03-22
 - [x] [OBLIGATION_TRACKER 2026-03-22] (2026-03-22) Git hygiene addressed — committed delivery checklist + queue updates + dirty files.
 - [x] [P0_DELIVERY_READINESS_CHECKLIST] (2026-03-22) Created `docs/DELIVERY_CHECKLIST.md`. Audited all 5 milestones: A=4/8 done (fork merge pending), B=7/8 (metrics met), C=0/11 (secrets blocker), D=0/6 (website not started), E=0/6. Critical path: secrets removal → README → website.
+
+## Archived 2026-03-22
+- [x] [CRON_HEALTH_DASHBOARD_HTML] Generate a static HTML dashboard (`monitoring/dashboard.html`) from health_monitor.sh and performance_benchmark.py data. Show: PI trend, context_relevance trend, cron success/fail heatmap, last 7 days. Refreshed by cron. _(Done 2026-03-22: `scripts/generate_dashboard.py` → `monitoring/dashboard.html`. Shows PI/CR/CLR/Phi trends, 6 metric cards, 7-day cron heatmap. Chart.js for line charts.)_

@@ -302,6 +302,56 @@ def parse_brief_sections(brief_text: str) -> dict[str, str]:
     return sections
 
 
+def _empty_relevance_result(task: str = "", outcome: str = "") -> dict:
+    """Return a zero-score relevance result stub."""
+    return {
+        "overall": 0.0,
+        "sections_total": 0,
+        "sections_referenced": 0,
+        "per_section": {},
+        "task": task[:120],
+        "outcome": outcome,
+    }
+
+
+def _score_section(name: str, content: str, output_tokens: set,
+                   output_embedding, embed_fn) -> float:
+    """Score a single section against output tokens, blending semantic + token."""
+    section_tokens = _tokenize(content)
+    token_score = _containment(section_tokens, output_tokens)
+    sem_score = _semantic_containment(content, output_embedding, embed_fn)
+    if sem_score is not None:
+        return SEMANTIC_WEIGHT * sem_score + TOKEN_WEIGHT * token_score
+    return token_score
+
+
+def _aggregate_section_scores(per_section: dict[str, float], sections: dict[str, str],
+                              threshold: float) -> tuple[int, int, float]:
+    """Aggregate per-section scores into (scorable, referenced, overall).
+
+    Returns (scorable_count, referenced_count, weighted_overall).
+    """
+    referenced = 0
+    scorable = 0
+    weighted_sum = 0.0
+    importance_sum = 0.0
+
+    for name, score in per_section.items():
+        section_tokens = _tokenize(sections[name])
+        if len(section_tokens) < MIN_SECTION_TOKENS:
+            continue
+        scorable += 1
+        if score >= threshold:
+            referenced += 1
+        normalized = min(score / threshold, 1.0) if threshold > 0 else (1.0 if score > 0 else 0.0)
+        importance = _SECTION_IMPORTANCE.get(name, _DEFAULT_IMPORTANCE)
+        weighted_sum += normalized * importance
+        importance_sum += importance
+
+    overall = weighted_sum / importance_sum if importance_sum > 0 else 0.0
+    return scorable, referenced, overall
+
+
 def score_section_relevance(
     brief_text: str,
     output_text: str,
@@ -311,79 +361,26 @@ def score_section_relevance(
 ) -> dict:
     """Score how much of the brief was actually referenced in the output.
 
-    Args:
-        brief_text: The context brief provided to Claude Code.
-        output_text: Claude Code's execution output.
-        task: Task description (for logging).
-        outcome: Task outcome (success/failure/timeout).
-        threshold: Containment threshold for counting a section as referenced.
-
-    Returns:
-        Dict with overall score, section counts, and per-section Jaccard scores.
+    Returns dict with overall score, section counts, and per-section scores.
     """
     if not brief_text or not output_text:
-        return {
-            "overall": 0.0,
-            "sections_total": 0,
-            "sections_referenced": 0,
-            "per_section": {},
-            "task": task[:120],
-            "outcome": outcome,
-        }
+        return _empty_relevance_result(task, outcome)
 
     sections = parse_brief_sections(brief_text)
     if not sections:
-        return {
-            "overall": 0.0,
-            "sections_total": 0,
-            "sections_referenced": 0,
-            "per_section": {},
-            "task": task[:120],
-            "outcome": outcome,
-        }
+        return _empty_relevance_result(task, outcome)
 
     output_tokens = _tokenize(output_text)
-
-    # Try to get semantic embeddings (lazy, cached singleton)
     embed_fn = _get_embed_fn()
-    output_embedding = None
-    if embed_fn is not None:
-        output_embedding = _embed_text(output_text[:4000], embed_fn)  # truncate for perf
+    output_embedding = _embed_text(output_text[:4000], embed_fn) if embed_fn else None
 
-    per_section = {}
-    referenced = 0
-    scorable = 0  # sections with enough tokens to evaluate
-    weighted_sum = 0.0
-    importance_sum = 0.0
+    per_section = {
+        name: round(_score_section(name, content, output_tokens, output_embedding, embed_fn), 4)
+        for name, content in sections.items()
+    }
 
-    for name, content in sections.items():
-        section_tokens = _tokenize(content)
-        token_score = _containment(section_tokens, output_tokens)
-
-        # Blend semantic similarity when available
-        sem_score = _semantic_containment(content, output_embedding, embed_fn)
-        if sem_score is not None:
-            score = SEMANTIC_WEIGHT * sem_score + TOKEN_WEIGHT * token_score
-        else:
-            score = token_score  # fallback: token-only
-
-        per_section[name] = round(score, 4)
-        if len(section_tokens) < MIN_SECTION_TOKENS:
-            continue  # too small to meaningfully evaluate
-        scorable += 1
-        if score >= threshold:
-            referenced += 1
-        # Soft-threshold: proportional credit up to threshold, capped at 1.0.
-        # Replaces binary 0/1: containment 0.075 → 0.5, 0.15 → 1.0, 0.30 → 1.0.
-        normalized = min(score / threshold, 1.0) if threshold > 0 else (1.0 if score > 0 else 0.0)
-        importance = _SECTION_IMPORTANCE.get(name, _DEFAULT_IMPORTANCE)
-        weighted_sum += normalized * importance
-        importance_sum += importance
-
+    scorable, referenced, overall = _aggregate_section_scores(per_section, sections, threshold)
     total = scorable if scorable > 0 else len(sections)
-    # Weighted overall: importance-weighted soft-threshold scores.
-    # Gives continuous signal instead of binary referenced/total.
-    overall = weighted_sum / importance_sum if importance_sum > 0 else 0.0
 
     return {
         "overall": round(overall, 4),
@@ -504,32 +501,15 @@ def get_suppressed_sections(
     return result
 
 
-def aggregate_relevance(days: int = 7, relevance_file: str = RELEVANCE_FILE,
-                        recency_boost: int = 0) -> dict:
-    """Aggregate context relevance scores from episode history.
+_EMPTY_AGG = {"mean_relevance": 0.0, "episodes": 0, "per_section_mean": {}}
 
-    Args:
-        days: Look back N days from now.
-        relevance_file: Path to the JSONL file.
-        recency_boost: If > 0, apply exponential recency weighting where the
-            most recent `recency_boost` episodes get up to 3x weight.  Episodes
-            are sorted newest-first; weight = 1 + 2*exp(-rank * ln(3) / recency_boost)
-            so rank-0 (newest) gets 3x, rank=recency_boost gets ~2x, and older
-            episodes taper toward 1x.  This lets budget adjustments respond
-            within 1-2 cycles instead of waiting for the 14-day window to rotate.
 
-    Returns:
-        Dict with mean_relevance, episode count, per_section means,
-        and success vs failure breakdown.
-    """
-    import math
-
+def _load_recent_entries(relevance_file: str, days: int) -> list[dict]:
+    """Load JSONL entries from the last N days, filtered for sufficient sections."""
     if not os.path.exists(relevance_file):
-        return {"mean_relevance": 0.0, "episodes": 0, "per_section_mean": {}}
-
+        return []
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     entries = []
-
     with open(relevance_file) as f:
         for line in f:
             line = line.strip()
@@ -542,71 +522,75 @@ def aggregate_relevance(days: int = 7, relevance_file: str = RELEVANCE_FILE,
                     entries.append(entry)
             except (json.JSONDecodeError, ValueError):
                 continue
+    # Filter sparse episodes — minimal briefs produce unreliable scores
+    return [e for e in entries if e.get("sections_total", 0) >= MIN_SECTIONS_FOR_AGGREGATION]
 
-    if not entries:
-        return {"mean_relevance": 0.0, "episodes": 0, "per_section_mean": {}}
 
-    # Filter out sparse episodes — minimal briefs with < MIN_SECTIONS produce
-    # unreliable scores (often 0.0) that drag down the aggregate.
-    entries = [
-        e for e in entries
-        if e.get("sections_total", 0) >= MIN_SECTIONS_FOR_AGGREGATION
-    ]
-    if not entries:
-        return {"mean_relevance": 0.0, "episodes": 0, "per_section_mean": {}}
-
-    # Sort newest-first by timestamp for recency weighting
-    entries.sort(key=lambda e: e.get("ts", ""), reverse=True)
-
-    # Compute per-entry weights
-    if recency_boost > 0 and len(entries) > 1:
+def _compute_recency_weights(n: int, recency_boost: int) -> list[float]:
+    """Compute exponential recency weights for N entries (newest-first)."""
+    import math
+    if recency_boost > 0 and n > 1:
         decay = math.log(3) / max(recency_boost, 1)
-        entry_weights = [1.0 + 2.0 * math.exp(-i * decay) for i in range(len(entries))]
-    else:
-        entry_weights = [1.0] * len(entries)
+        return [1.0 + 2.0 * math.exp(-i * decay) for i in range(n)]
+    return [1.0] * n
 
-    # Overall weighted mean
-    weighted_sum = 0.0
-    weight_total = 0.0
-    for entry, w in zip(entries, entry_weights):
+
+def _weighted_means(entries: list[dict], weights: list[float]) -> tuple[float, dict, float, float]:
+    """Compute overall mean, per-section means, success/failure means.
+
+    Returns (mean_relevance, per_section_mean, success_mean, failure_mean).
+    """
+    w_sum, w_total = 0.0, 0.0
+    sec_w: dict[str, float] = {}
+    sec_w_total: dict[str, float] = {}
+    suc_sum, suc_w, fail_sum, fail_w = 0.0, 0.0, 0.0, 0.0
+
+    for entry, w in zip(entries, weights):
         if "overall" in entry:
-            weighted_sum += entry["overall"] * w
-            weight_total += w
-    mean_relevance = weighted_sum / weight_total if weight_total > 0 else 0.0
-
-    # Per-section weighted means
-    section_weighted: dict[str, float] = {}
-    section_weight_totals: dict[str, float] = {}
-    for entry, w in zip(entries, entry_weights):
+            w_sum += entry["overall"] * w
+            w_total += w
+            if entry.get("outcome") == "success":
+                suc_sum += entry["overall"] * w
+                suc_w += w
+            else:
+                fail_sum += entry["overall"] * w
+                fail_w += w
         for name, score in entry.get("per_section", {}).items():
-            section_weighted[name] = section_weighted.get(name, 0.0) + score * w
-            section_weight_totals[name] = section_weight_totals.get(name, 0.0) + w
+            sec_w[name] = sec_w.get(name, 0.0) + score * w
+            sec_w_total[name] = sec_w_total.get(name, 0.0) + w
 
-    per_section_mean = {
-        name: round(section_weighted[name] / section_weight_totals[name], 4)
-        for name in section_weighted
-        if section_weight_totals.get(name, 0) > 0
-    }
+    mean = w_sum / w_total if w_total > 0 else 0.0
+    per_sec = {n: round(sec_w[n] / sec_w_total[n], 4) for n in sec_w if sec_w_total.get(n, 0) > 0}
+    return mean, per_sec, suc_sum / suc_w if suc_w > 0 else 0.0, fail_sum / fail_w if fail_w > 0 else 0.0
 
-    # Breakdown by outcome
-    success_sum, success_w = 0.0, 0.0
-    failure_sum, failure_w = 0.0, 0.0
-    for entry, w in zip(entries, entry_weights):
-        if "overall" not in entry:
-            continue
-        if entry.get("outcome") == "success":
-            success_sum += entry["overall"] * w
-            success_w += w
-        else:
-            failure_sum += entry["overall"] * w
-            failure_w += w
+
+def aggregate_relevance(days: int = 7, relevance_file: str = RELEVANCE_FILE,
+                        recency_boost: int = 0) -> dict:
+    """Aggregate context relevance scores from episode history.
+
+    Args:
+        days: Look back N days from now.
+        relevance_file: Path to the JSONL file.
+        recency_boost: If > 0, apply exponential recency weighting (3x newest).
+
+    Returns:
+        Dict with mean_relevance, episode count, per_section means,
+        and success vs failure breakdown.
+    """
+    entries = _load_recent_entries(relevance_file, days)
+    if not entries:
+        return dict(_EMPTY_AGG)
+
+    entries.sort(key=lambda e: e.get("ts", ""), reverse=True)
+    weights = _compute_recency_weights(len(entries), recency_boost)
+    mean, per_section_mean, suc_mean, fail_mean = _weighted_means(entries, weights)
 
     return {
-        "mean_relevance": round(mean_relevance, 4),
+        "mean_relevance": round(mean, 4),
         "episodes": len(entries),
         "per_section_mean": per_section_mean,
-        "success_mean": round(success_sum / success_w, 4) if success_w > 0 else 0.0,
-        "failure_mean": round(failure_sum / failure_w, 4) if failure_w > 0 else 0.0,
+        "success_mean": round(suc_mean, 4),
+        "failure_mean": round(fail_mean, 4),
     }
 
 

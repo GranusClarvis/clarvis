@@ -152,14 +152,39 @@ WORKSPACE = os.path.join(os.path.dirname(__file__), "..")
 LOCK_DIR = "/tmp"
 
 
+def _check_lock_conflict():
+    """Check if a conflicting clarvis/claude lock is held.
+
+    Verifies via /proc/<pid>/cmdline that the lock holder is actually
+    a clarvis/claude process (prevents false honors from PID recycling).
+    Returns list of conflict descriptions (empty = no conflict).
+    """
+    conflicts = []
+    _lock_markers = ("clarvis", "claude", "cron_", "project_agent")
+    for lockfile in ("clarvis_claude_global.lock", "clarvis_maintenance.lock"):
+        lock_path = os.path.join(LOCK_DIR, lockfile)
+        if not os.path.exists(lock_path):
+            continue
+        try:
+            with open(lock_path) as f:
+                pid = int(f.read().strip())
+            os.kill(pid, 0)  # alive?
+            cmdline_file = f"/proc/{pid}/cmdline"
+            if os.path.exists(cmdline_file):
+                with open(cmdline_file, "rb") as cf:
+                    cmdline = cf.read().replace(b"\x00", b" ").decode("utf-8", errors="replace")
+                if not any(m in cmdline for m in _lock_markers):
+                    continue  # PID recycled — not a clarvis process
+            conflicts.append(f"lock held: {lockfile} (pid {pid})")
+        except (ValueError, ProcessLookupError, PermissionError, OSError):
+            pass  # stale lock or dead process
+    return conflicts
+
+
 def _verify_task_executable(task_text):
     """Pre-execution verification gate.
 
-    Checks:
-    1. Task description parses to concrete steps (not empty/vague)
-    2. Referenced files/scripts exist
-    3. No conflicting lock held
-
+    Checks: (1) task format, (2) file references exist, (3) no lock conflict.
     Returns dict with passed, reason, hard_fail.
     """
     import re
@@ -168,114 +193,153 @@ def _verify_task_executable(task_text):
     checks_total = 3
     reasons = []
 
-    # 1. Format check: task has a tag and description
+    # 1. Format check
     tag_match = re.match(r"\[([^\]]+)\]\s*(.+)", task_text.strip())
     if tag_match:
-        tag = tag_match.group(1)
-        desc = tag_match.group(2)
-        if len(desc) < 10:
-            reasons.append(f"description too short ({len(desc)} chars)")
-        else:
+        if len(tag_match.group(2)) >= 10:
             checks_passed += 1
+        else:
+            reasons.append(f"description too short ({len(tag_match.group(2))} chars)")
+    elif len(task_text.strip()) >= 20:
+        checks_passed += 1
     else:
-        # Untagged task — still valid if has substance
-        if len(task_text.strip()) >= 20:
-            checks_passed += 1
-        else:
-            reasons.append("task too short/vague")
+        reasons.append("task too short/vague")
 
-    # 2. File reference check: find referenced scripts/files and verify they exist
+    # 2. File reference check
     file_refs = re.findall(
         r'(?:scripts/|clarvis/|packages/|data/|memory/)[\w/\-_.]+\.(?:py|sh|json|md|yaml)',
         task_text,
     )
-    missing_files = []
-    for ref in file_refs:
-        full_path = os.path.join(WORKSPACE, ref)
-        if not os.path.exists(full_path):
-            missing_files.append(ref)
+    missing_files = [r for r in file_refs if not os.path.exists(os.path.join(WORKSPACE, r))]
     if missing_files:
         reasons.append(f"missing files: {', '.join(missing_files[:3])}")
     else:
         checks_passed += 1
 
-    # 3. Lock check: ensure no conflicting lock held
-    #    Uses /proc/<pid>/cmdline to verify the lock holder is actually
-    #    a clarvis/claude process (prevents false honors from PID recycling).
-    lock_conflict = False
-    _lock_markers = ("clarvis", "claude", "cron_", "project_agent")
-    for lockfile in ("clarvis_claude_global.lock", "clarvis_maintenance.lock"):
-        lock_path = os.path.join(LOCK_DIR, lockfile)
-        if os.path.exists(lock_path):
-            try:
-                with open(lock_path) as f:
-                    pid_str = f.read().strip()
-                pid = int(pid_str)
-                os.kill(pid, 0)  # alive?
-                # Verify via /proc/<pid>/cmdline
-                cmdline_file = f"/proc/{pid}/cmdline"
-                if os.path.exists(cmdline_file):
-                    with open(cmdline_file, "rb") as cf:
-                        cmdline = cf.read().replace(b"\x00", b" ").decode("utf-8", errors="replace")
-                    if not any(m in cmdline for m in _lock_markers):
-                        # PID recycled — not a clarvis process, ignore lock
-                        continue
-                reasons.append(f"lock held: {lockfile} (pid {pid})")
-                lock_conflict = True
-            except (ValueError, ProcessLookupError, PermissionError, OSError):
-                pass  # stale lock or dead process — ignore
-    if not lock_conflict:
+    # 3. Lock check
+    lock_conflicts = _check_lock_conflict()
+    if lock_conflicts:
+        reasons.extend(lock_conflicts)
+    else:
         checks_passed += 1
 
-    passed = checks_passed == checks_total
-    hard_fail = bool(missing_files) and len(missing_files) > 2
-
     return {
-        "passed": passed,
+        "passed": checks_passed == checks_total,
         "reason": "; ".join(reasons) if reasons else "all checks passed",
         "checks_passed": checks_passed,
         "checks_total": checks_total,
-        "hard_fail": hard_fail,
+        "hard_fail": bool(missing_files) and len(missing_files) > 2,
         "missing_files": missing_files,
     }
 
 
-def run_preflight(dry_run=False):
-    """Run all pre-execution checks in a single process.
+_MAX_CANDIDATES = 20  # Wider scan to avoid burning a slot on one oversized cluster
 
-    Returns a dict with all results needed by cron_autonomous.sh.
-    """
-    log(f"All modules imported in {_import_time:.2f}s (single process)")
-    t0 = time.monotonic()
-    result = {
-        "status": "ok",
-        "task": None,
-        "task_section": None,
-        "task_salience": 0.0,
-        "cognitive_load": {},
-        "should_defer": False,
-        "procedure": None,
-        "procedure_id": None,
-        "procedure_injected": False,
-        "procedures_for_injection": [],
-        "chain_id": None,
-        "prediction_event": None,
-        "prediction_confidence": 0.7,
-        "episodic_hints": "",
-        "context_brief": "",
-        "confidence_tier": "HIGH",
-        "confidence_action": "execute",
-        "confidence_for_tier": 0.7,
-        "route_tier": "complex",
-        "route_executor": "claude",
-        "route_score": 0.5,
-        "route_reason": "unknown",
-        "prompt_variant_id": "",
-        "prompt_variant_task_type": "",
-        "timings": {},
-    }
 
-    # === 1. ATTENTION: Load + Tick + Codelet Competition (LIDA) ===
+def _try_auto_split(cand_task):
+    """Attempt to auto-split an oversized task into subtasks. Returns parent tag if split, else None."""
+    import re as _re
+    m = _re.match(r"\[([^\]]+)\]", cand_task.strip())
+    parent_tag = m.group(1).strip() if m else ""
+    if not parent_tag:
+        return None
+    try:
+        from queue_writer import ensure_subtasks_for_tag, mark_task_in_progress
+        subtasks = [
+            f"[{parent_tag}_1] Analyze: read relevant source files, identify change boundary",
+            f"[{parent_tag}_2] Implement: core logic change in one focused increment",
+            f"[{parent_tag}_3] Test: add/update test(s) covering the new behavior",
+            f"[{parent_tag}_4] Verify: run existing tests, confirm no regressions",
+        ]
+        inserted = ensure_subtasks_for_tag(parent_tag, subtasks=subtasks, source="auto_split")
+        if inserted:
+            log(f"Auto-split: inserted subtasks for [{parent_tag}] into QUEUE.md")
+            try:
+                mark_task_in_progress(parent_tag)
+                log(f"Auto-split: marked [{parent_tag}] as in-progress ([~])")
+            except Exception as me:
+                log(f"Auto-split: parent mark failed (non-fatal): {me}")
+            return parent_tag
+    except Exception as e:
+        log(f"Auto-split failed (non-fatal): {e}")
+    return None
+
+
+def _check_candidate_gates(cand_task, cand_section):
+    """Run gates 1-4 on a candidate. Returns (pass, defer_reason or None, autosplit_tag or None)."""
+    # Gate 1: Cognitive load
+    if should_defer_task:
+        try:
+            defer, load_info = should_defer_task(cand_section)
+            if defer:
+                return False, f"cognitive_load: {load_info}", None
+        except Exception as e:
+            log(f"Cognitive load check failed for candidate: {e}")
+
+    # Gate 2: Task sizing — defer oversized, try auto-split
+    if estimate_task_complexity:
+        try:
+            sizing = estimate_task_complexity(cand_task)
+            if sizing["recommendation"] == "defer_to_sprint":
+                if log_sizing:
+                    log_sizing(cand_task, sizing)
+                split_tag = _try_auto_split(cand_task)
+                reason = f"oversized (score={sizing['score']:.2f}, signals={sizing['signals']})"
+                return False, reason, split_tag
+        except Exception as e:
+            log(f"Task sizing failed for candidate: {e}")
+
+    # Gate 3: Verification (hard failures only block)
+    try:
+        verification = _verify_task_executable(cand_task)
+        if verification.get("hard_fail"):
+            return False, f"verification: {verification['reason']}", None
+    except Exception:
+        pass
+
+    # Gate 4: Mode compliance
+    try:
+        from clarvis.runtime.mode import is_task_allowed_for_mode
+        allowed, mode_reason = is_task_allowed_for_mode(cand_task)
+        if not allowed:
+            return False, f"mode_gate: {mode_reason}", None
+    except ImportError:
+        pass
+    except Exception as e:
+        log(f"Mode gate check failed (non-fatal): {e}")
+
+    return True, None, None
+
+
+def _evaluate_candidates(candidate_list, deferred_tasks, pass_name="primary"):
+    """Try candidates until one passes all gates. Returns (task, section, salience, tag, autosplit_tags)."""
+    import re as _re
+    autosplit_tags = []
+
+    for candidate in candidate_list[:_MAX_CANDIDATES]:
+        cand_task = candidate.get("text", "")
+        cand_section = candidate.get("section", "P1")
+        cand_salience = candidate.get("salience", 0.0)
+        if not cand_task:
+            continue
+
+        passed, reason, split_tag = _check_candidate_gates(cand_task, cand_section)
+        if split_tag:
+            autosplit_tags.append(split_tag)
+        if not passed:
+            deferred_tasks.append({"task": cand_task[:80], "reason": reason})
+            log(f"Skipping ({reason[:40]}): {cand_task[:60]}...")
+            continue
+
+        m = _re.match(r"\[([^\]]+)\]", cand_task.strip())
+        tag = m.group(1).strip() if m else None
+        return cand_task, cand_section, cand_salience, tag, autosplit_tags
+
+    return None, None, 0.0, None, autosplit_tags
+
+
+def _preflight_attention(result):
+    """§1: Attention load + tick + codelet competition + AST prediction."""
     t1 = time.monotonic()
     codelet_result = None
     try:
@@ -285,25 +349,21 @@ def run_preflight(dry_run=False):
     except Exception as e:
         log(f"Attention load+tick failed: {e}")
 
-    # Run LIDA codelet competition — domain-specific codelets compete for broadcast
     try:
         competition = get_codelet_competition()
         codelet_result = competition.compete()
-        winner = codelet_result.get("winner", "?")
-        coalition = codelet_result.get("coalition", [])
-        coalition_score = codelet_result.get("coalition_score", 0)
         activations = codelet_result.get("activations", {})
-        log(f"Codelet competition: winner={winner} "
-            f"coalition={','.join(coalition)} score={coalition_score:.3f} "
+        log(f"Codelet competition: winner={codelet_result.get('winner', '?')} "
+            f"coalition={','.join(codelet_result.get('coalition', []))} "
+            f"score={codelet_result.get('coalition_score', 0):.3f} "
             f"activations={activations}")
-        result["codelet_winner"] = winner
-        result["codelet_coalition"] = coalition
+        result["codelet_winner"] = codelet_result.get("winner", "?")
+        result["codelet_coalition"] = codelet_result.get("coalition", [])
         result["codelet_activations"] = activations
         result["codelet_domain_bias"] = codelet_result.get("domain_bias", {})
     except Exception as e:
         log(f"Codelet competition failed (non-fatal): {e}")
 
-    # AST: Attention Schema prediction — predict what will capture attention next
     try:
         schema = get_attention_schema()
         prediction = schema.predict_next_focus(context="heartbeat preflight")
@@ -314,31 +374,20 @@ def run_preflight(dry_run=False):
         log(f"AST prediction failed (non-fatal): {e}")
 
     result["timings"]["attention_tick"] = round(time.monotonic() - t1, 3)
+    return codelet_result
 
-    # === 2. TASK SELECTION (with fallback-on-defer loop) ===
-    t2 = time.monotonic()
-    next_task = None
-    task_section = "P1"
-    best_salience = 0.0
 
-    # Build ranked candidate list
+def _gather_candidates(codelet_result):
+    """Build ranked candidate list from queue parser or fallback grep."""
     candidates = []
     if parse_tasks and score_tasks:
         try:
             tasks = parse_tasks()
             if not tasks:
-                result["status"] = "queue_empty"
-                log("Queue empty — no tasks to execute")
-                result["timings"]["total"] = round(time.monotonic() - t0, 3)
-                return result
-
-            # Score all tasks using attention salience + codelet bias (sorted by salience)
-            scored = score_tasks(tasks, codelet_result=codelet_result)
-            candidates = scored
+                return candidates, "queue_empty"
+            candidates = score_tasks(tasks, codelet_result=codelet_result)
         except Exception as e:
             log(f"Task selector failed: {e}")
-
-    # Fallback: grep unchecked tasks (collect multiple for fallback rotation)
     if not candidates:
         try:
             import re
@@ -353,141 +402,42 @@ def run_preflight(dry_run=False):
                 log(f"Fallback: {len(candidates)} unchecked tasks found")
         except Exception as e:
             log(f"Fallback task search failed: {e}")
+    return candidates, None
+
+
+def _preflight_select_task(result, codelet_result, t0):
+    """§2: Task selection with fallback-on-defer loop + rescue pass.
+
+    Returns (next_task, task_section, best_salience) or sets result status and returns None.
+    """
+    t2 = time.monotonic()
+    candidates, early_status = _gather_candidates(codelet_result)
+
+    if early_status:
+        result["status"] = early_status
+        log(f"Queue status: {early_status}")
+        result["timings"]["total"] = round(time.monotonic() - t0, 3)
+        return None
 
     if not candidates:
         result["status"] = "no_tasks"
         result["timings"]["total"] = round(time.monotonic() - t0, 3)
-        return result
-
-    # --- DEFER-FALLBACK LOOP: Try candidates until one passes all gates ---
-    MAX_CANDIDATES = 20  # Wider scan to avoid burning a slot on one oversized cluster
-
-    def _evaluate_candidates(candidate_list, deferred_tasks, pass_name="primary"):
-        selected = None
-        selected_section = None
-        selected_salience = 0.0
-        selected_tag = None
-        autosplit_tags = []
-
-        for candidate in candidate_list[:MAX_CANDIDATES]:
-            cand_task = candidate.get("text", "")
-            cand_section = candidate.get("section", "P1")
-            cand_salience = candidate.get("salience", 0.0)
-
-            if not cand_task:
-                continue
-
-            # Gate 1: Cognitive load check (section-dependent)
-            if should_defer_task:
-                try:
-                    defer, load_info = should_defer_task(cand_section)
-                    if defer:
-                        deferred_tasks.append({"task": cand_task[:80], "reason": f"cognitive_load: {load_info}"})
-                        log(f"Skipping (cognitive load, {cand_section}): {cand_task[:60]}...")
-                        continue
-                except Exception as e:
-                    log(f"Cognitive load check failed for candidate: {e}")
-
-            # Gate 2: Task sizing — defer oversized tasks, but try auto-split first
-            if estimate_task_complexity:
-                try:
-                    sizing = estimate_task_complexity(cand_task)
-                    if sizing["recommendation"] == "defer_to_sprint":
-                        if log_sizing:
-                            log_sizing(cand_task, sizing)
-                        # Auto-split oversized tasks (non-blocking — inject meaningful subtasks + mark parent)
-                        try:
-                            import re as _re
-                            m = _re.match(r"\[([^\]]+)\]", cand_task.strip())
-                            parent_tag = m.group(1).strip() if m else ""
-                            if parent_tag:
-                                from queue_writer import ensure_subtasks_for_tag, mark_task_in_progress
-                                subtasks = [
-                                    f"[{parent_tag}_1] Analyze: read relevant source files, identify change boundary",
-                                    f"[{parent_tag}_2] Implement: core logic change in one focused increment",
-                                    f"[{parent_tag}_3] Test: add/update test(s) covering the new behavior",
-                                    f"[{parent_tag}_4] Verify: run existing tests, confirm no regressions",
-                                ]
-                                inserted = ensure_subtasks_for_tag(
-                                    parent_tag,
-                                    subtasks=subtasks,
-                                    source="auto_split",
-                                )
-                                if inserted:
-                                    autosplit_tags.append(parent_tag)
-                                    log(f"Auto-split: inserted subtasks for [{parent_tag}] into QUEUE.md")
-                                    try:
-                                        mark_task_in_progress(parent_tag)
-                                        log(f"Auto-split: marked [{parent_tag}] as in-progress ([~])")
-                                    except Exception as me:
-                                        log(f"Auto-split: parent mark failed (non-fatal): {me}")
-                        except Exception as e:
-                            log(f"Auto-split failed (non-fatal): {e}")
-
-                        deferred_tasks.append({
-                            "task": cand_task[:80],
-                            "reason": f"oversized (score={sizing['score']:.2f}, signals={sizing['signals']})",
-                        })
-                        log(f"Skipping (oversized, score={sizing['score']:.2f}): {cand_task[:60]}...")
-                        continue
-                except Exception as e:
-                    log(f"Task sizing failed for candidate: {e}")
-
-            # Gate 3: Verification (hard failures only block)
-            try:
-                verification = _verify_task_executable(cand_task)
-                if verification.get("hard_fail"):
-                    deferred_tasks.append({"task": cand_task[:80], "reason": f"verification: {verification['reason']}"})
-                    log(f"Skipping (verification hard fail): {cand_task[:60]}...")
-                    continue
-            except Exception:
-                pass
-
-            # Gate 4: Mode compliance — skip tasks disallowed by operating mode
-            try:
-                from clarvis.runtime.mode import is_task_allowed_for_mode
-                allowed, mode_reason = is_task_allowed_for_mode(cand_task)
-                if not allowed:
-                    deferred_tasks.append({"task": cand_task[:80], "reason": f"mode_gate: {mode_reason}"})
-                    log(f"Skipping (mode gate): {cand_task[:60]}... ({mode_reason})")
-                    continue
-            except ImportError:
-                pass  # Mode system not available — allow all
-            except Exception as e:
-                log(f"Mode gate check failed (non-fatal): {e}")
-
-            selected = cand_task
-            selected_section = cand_section
-            selected_salience = cand_salience
-            try:
-                import re as _re
-                m = _re.match(r"\[([^\]]+)\]", cand_task.strip())
-                selected_tag = m.group(1).strip() if m else None
-            except Exception:
-                selected_tag = None
-            break
-
-        return selected, selected_section, selected_salience, selected_tag, autosplit_tags
+        return None
 
     deferred_tasks = []
     next_task, task_section, best_salience, selected_tag, autosplit_tags = _evaluate_candidates(candidates, deferred_tasks, "primary")
 
-    # Rescue pass: if the first pass only saw oversized parents, rescan the queue so the
-    # freshly inserted subtasks can compete in the same heartbeat instead of wasting the slot.
+    # Rescue pass: freshly inserted subtasks can compete in the same heartbeat
     if not next_task and autosplit_tags:
         try:
             reparsed = parse_tasks(QUEUE_FILE) if parse_tasks else []
             rescored = score_tasks(reparsed) if (score_tasks and reparsed) else []
             deferred_prefixes = {d["task"] for d in deferred_tasks}
-            rescue_candidates = [
-                c for c in rescored
-                if c.get("text") and c.get("text")[:80] not in deferred_prefixes
-            ]
+            rescue_candidates = [c for c in rescored if c.get("text") and c.get("text")[:80] not in deferred_prefixes]
             if rescue_candidates:
                 log(f"Rescue pass: rescanning queue after auto-split ({len(autosplit_tags)} parent(s))")
                 next_task, task_section, best_salience, selected_tag, more_autosplit = _evaluate_candidates(
-                    rescue_candidates, deferred_tasks, "rescue"
-                )
+                    rescue_candidates, deferred_tasks, "rescue")
                 autosplit_tags.extend(more_autosplit)
         except Exception as e:
             log(f"Rescue pass failed (non-fatal): {e}")
@@ -498,45 +448,33 @@ def run_preflight(dry_run=False):
         result["defer_reason"] = "all_candidates_deferred"
         result["deferred_tasks"] = deferred_tasks
         try:
-            attention.submit(
-                f"ALL TASKS DEFERRED ({len(deferred_tasks)} candidates checked)",
-                source="heartbeat", importance=0.7)
+            attention.submit(f"ALL TASKS DEFERRED ({len(deferred_tasks)} candidates checked)",
+                             source="heartbeat", importance=0.7)
         except Exception:
             pass
         result["timings"]["task_selection"] = round(time.monotonic() - t2, 3)
         result["timings"]["total"] = round(time.monotonic() - t0, 3)
-        return result
+        return None
 
     if deferred_tasks:
         log(f"Skipped {len(deferred_tasks)} deferred tasks, executing fallback: {next_task[:60]}...")
         result["deferred_tasks"] = deferred_tasks
 
     result["task"] = next_task
-    # Canonical tag for deterministic QUEUE completion marking
     try:
         import re
         m = re.match(r"\[([^\]]+)\]", next_task.strip())
         result["task_tag"] = m.group(1) if m else None
     except Exception:
         result["task_tag"] = None
-
     result["task_section"] = task_section
     result["task_salience"] = round(best_salience, 4)
     result["timings"]["task_selection"] = round(time.monotonic() - t2, 3)
+    return next_task, task_section, best_salience
 
-    if dry_run:
-        result["timings"]["total"] = round(time.monotonic() - t0, 3)
-        return result
 
-    # === 3. ATTENTION: Add task context ===
-    try:
-        attention.submit(f"CURRENT TASK: {next_task}", source="heartbeat",
-                        importance=0.9, relevance=0.8)
-    except Exception:
-        pass
-
-    # === 4. COGNITIVE LOAD + TASK SIZING (already checked in defer-fallback loop above) ===
-    # Re-run sizing for the selected task to populate result fields
+def _preflight_load_sizing(result, next_task, task_section):
+    """§4+4.7: Re-run cognitive load, task sizing, and verification for result population."""
     t4 = time.monotonic()
     if should_defer_task:
         try:
@@ -560,20 +498,18 @@ def run_preflight(dry_run=False):
             log(f"Task sizing failed (non-fatal): {e}")
     result["timings"]["task_sizing"] = round(time.monotonic() - t45, 3)
 
-    # === 4.7 ACTION VERIFY GATE: Re-run for result population ===
     t47 = time.monotonic()
     try:
         verification = _verify_task_executable(next_task)
         result["verification"] = verification
-        if not verification["passed"]:
-            log(f"Verification note: {verification['reason']}")
-        else:
-            log(f"Verification OK: {verification['reason']}")
+        log(f"Verification {'OK' if verification['passed'] else 'note'}: {verification['reason']}")
     except Exception as e:
         log(f"Verification gate failed (non-fatal): {e}")
     result["timings"]["verification"] = round(time.monotonic() - t47, 3)
 
-    # === 5. PROCEDURAL MEMORY: Check for matching procedure ===
+
+def _preflight_procedural(result, next_task):
+    """§5+5.2+5.5: Procedural memory lookup, procedure injection, code templates."""
     t5 = time.monotonic()
     if find_procedure:
         try:
@@ -592,55 +528,21 @@ def run_preflight(dry_run=False):
             log(f"Procedural memory check failed: {e}")
     result["timings"]["procedural"] = round(time.monotonic() - t5, 3)
 
-    # === 5.2 PROCEDURE INJECTION: Collect top-2 procedures for prompt injection ===
+    # Collect top-2 procedures for prompt injection
     t52 = time.monotonic()
     procs_for_injection = []
     if result.get("procedure") and result["procedure"].get("steps"):
         procs_for_injection.append(result["procedure"])
-    # Try to find a 2nd procedure match via direct brain query
     if len(procs_for_injection) < 2:
-        try:
-            from brain import brain as _brain_proc, PROCEDURES as _PROCEDURES
-            extra = _brain_proc.recall(next_task, collections=[_PROCEDURES], n=3,
-                                       caller="preflight_proc_inject")
-            existing_ids = {p.get("id") for p in procs_for_injection}
-            for r in extra:
-                if r["id"] in existing_ids:
-                    continue
-                meta = r.get("metadata", {})
-                steps_raw = meta.get("steps", "[]")
-                try:
-                    steps = json.loads(steps_raw) if isinstance(steps_raw, str) else steps_raw
-                except (json.JSONDecodeError, TypeError):
-                    steps = []
-                if not steps:
-                    continue
-                dist = r.get("distance")
-                if dist is not None and dist > 0.8:
-                    continue
-                uc = int(meta.get("use_count", 0))
-                sc = int(meta.get("success_count", 0))
-                procs_for_injection.append({
-                    "id": r["id"],
-                    "name": meta.get("name", "unknown"),
-                    "steps": steps,
-                    "use_count": uc,
-                    "success_count": sc,
-                    "success_rate": sc / uc if uc > 0 else 1.0,
-                })
-                if len(procs_for_injection) >= 2:
-                    break
-        except Exception as e:
-            log(f"2nd procedure lookup failed (non-fatal): {e}")
+        procs_for_injection = _collect_extra_procedures(procs_for_injection, next_task)
     result["procedures_for_injection"] = [p.get("id", "") for p in procs_for_injection]
     result["timings"]["proc_injection_collect"] = round(time.monotonic() - t52, 3)
 
-    # === 5.5 CODE TEMPLATES: Inject scaffolds for CODE-type tasks ===
+    # Code templates
     t55 = time.monotonic()
     code_templates_hint = ""
     if find_code_templates and format_code_templates:
         try:
-            # Check if task has code-generation signals (keyword heuristic)
             task_lower = next_task.lower()
             code_signals = any(kw in task_lower for kw in [
                 "create script", "build module", "implement", "write function",
@@ -652,14 +554,51 @@ def run_preflight(dry_run=False):
                 if templates:
                     code_templates_hint = format_code_templates(templates)
                     result["code_templates"] = [t["name"] for t in templates]
-                    log(f"Code templates: {len(templates)} matched "
-                        f"({', '.join(t['name'] for t in templates)})")
+                    log(f"Code templates: {len(templates)} matched")
         except Exception as e:
             log(f"Code template lookup failed: {e}")
     result["code_templates_hint"] = code_templates_hint
     result["timings"]["code_templates"] = round(time.monotonic() - t55, 3)
+    return procs_for_injection, code_templates_hint
 
-    # === 6. REASONING CHAIN: Open ===
+
+def _collect_extra_procedures(procs_for_injection, next_task):
+    """Find up to 2nd procedure match via brain query for injection."""
+    try:
+        from brain import brain as _brain_proc, PROCEDURES as _PROCEDURES
+        extra = _brain_proc.recall(next_task, collections=[_PROCEDURES], n=3,
+                                   caller="preflight_proc_inject")
+        existing_ids = {p.get("id") for p in procs_for_injection}
+        for r in extra:
+            if r["id"] in existing_ids:
+                continue
+            meta = r.get("metadata", {})
+            steps_raw = meta.get("steps", "[]")
+            try:
+                steps = json.loads(steps_raw) if isinstance(steps_raw, str) else steps_raw
+            except (json.JSONDecodeError, TypeError):
+                steps = []
+            if not steps:
+                continue
+            dist = r.get("distance")
+            if dist is not None and dist > 0.8:
+                continue
+            uc = int(meta.get("use_count", 0))
+            sc = int(meta.get("success_count", 0))
+            procs_for_injection.append({
+                "id": r["id"], "name": meta.get("name", "unknown"),
+                "steps": steps, "use_count": uc, "success_count": sc,
+                "success_rate": sc / uc if uc > 0 else 1.0,
+            })
+            if len(procs_for_injection) >= 2:
+                break
+    except Exception as e:
+        log(f"2nd procedure lookup failed (non-fatal): {e}")
+    return procs_for_injection
+
+
+def _preflight_reasoning_chain(result, next_task, task_section, best_salience):
+    """§6: Open reasoning chain for task tracking."""
     t6 = time.monotonic()
     if open_chain:
         try:
@@ -668,28 +607,27 @@ def run_preflight(dry_run=False):
             log(f"Reasoning chain opened: {chain_id}")
             try:
                 attention.submit(f"REASONING CHAIN: {chain_id} tracking current task",
-                               source="heartbeat", importance=0.4)
+                                 source="heartbeat", importance=0.4)
             except Exception:
                 pass
         except Exception as e:
             log(f"Reasoning chain open failed: {e}")
     result["timings"]["reasoning_open"] = round(time.monotonic() - t6, 3)
 
-    # === 7. CONFIDENCE PREDICTION ===
+
+def _preflight_confidence_world_model(result, next_task, task_section):
+    """§7+7.5: Confidence prediction + world model. Returns dyn_conf."""
     t7 = time.monotonic()
     import re as _re
     task_event = _re.sub(r'[^a-zA-Z0-9]', '_', next_task[:60])
     result["prediction_event"] = task_event
-
+    dyn_conf = 0.7
     if dynamic_confidence:
         try:
             dyn_conf = dynamic_confidence()
             result["prediction_confidence"] = dyn_conf
         except Exception:
-            dyn_conf = 0.7
-    else:
-        dyn_conf = 0.7
-
+            pass
     if conf_predict:
         try:
             conf_predict(task_event, "success", dyn_conf)
@@ -698,7 +636,6 @@ def run_preflight(dry_run=False):
             log(f"Prediction logging failed: {e}")
     result["timings"]["confidence"] = round(time.monotonic() - t7, 3)
 
-    # === 7.5 WORLD MODEL: Predict task outcome (Ha&Schmidhuber + JEPA) ===
     t75 = time.monotonic()
     if wm_predict:
         try:
@@ -707,72 +644,56 @@ def run_preflight(dry_run=False):
             result["wm_p_success"] = wm_result.get("p_success", 0.5)
             result["wm_curiosity"] = wm_result.get("curiosity", 0.5)
             log(f"World model: prediction={wm_result['prediction']}, "
-                f"P(success)={wm_result['p_success']:.0%}, "
-                f"curiosity={wm_result['curiosity']:.2f}")
+                f"P(success)={wm_result['p_success']:.0%}, curiosity={wm_result['curiosity']:.2f}")
         except Exception as e:
             log(f"World model prediction failed: {e}")
     result["timings"]["world_model"] = round(time.monotonic() - t75, 3)
+    return dyn_conf
 
-    # === 7.6 CONFIDENCE TIERED ACTIONS: Gate execution by confidence level ===
-    # HIGH (≥0.8)     → execute autonomously
-    # MEDIUM (0.5-0.8) → execute with extra validation gate injected into prompt
-    # LOW (0.3-0.5)    → dry-run mode (log what would be done, skip execution)
-    # UNKNOWN (<0.3)   → skip entirely (defer to next heartbeat)
+
+def _preflight_confidence_tier(result, dyn_conf, next_task, t0):
+    """§7.6: Compute confidence tier and gate execution. Returns dyn_conf or None if deferred."""
     confidence_for_tier = dyn_conf
-    # Factor in world model P(success) if available — average with dynamic confidence
     wm_p = result.get("wm_p_success")
     if wm_p is not None:
         confidence_for_tier = (dyn_conf + wm_p) / 2
 
     if confidence_for_tier >= 0.8:
-        confidence_tier = "HIGH"
-        confidence_action = "execute"
+        tier, action = "HIGH", "execute"
     elif confidence_for_tier >= 0.5:
-        confidence_tier = "MEDIUM"
-        confidence_action = "execute_with_validation"
+        tier, action = "MEDIUM", "execute_with_validation"
     elif confidence_for_tier >= 0.3:
-        confidence_tier = "LOW"
-        confidence_action = "dry_run"
+        tier, action = "LOW", "dry_run"
     else:
-        confidence_tier = "UNKNOWN"
-        confidence_action = "skip"
+        tier, action = "UNKNOWN", "skip"
 
-    result["confidence_tier"] = confidence_tier
-    result["confidence_action"] = confidence_action
+    result["confidence_tier"] = tier
+    result["confidence_action"] = action
     result["confidence_for_tier"] = round(confidence_for_tier, 3)
-    log(f"Confidence tier: {confidence_tier} (combined={confidence_for_tier:.2f}, "
+    log(f"Confidence tier: {tier} (combined={confidence_for_tier:.2f}, "
         f"dyn={dyn_conf:.2f}, wm_p={wm_p if wm_p is not None else 'N/A'})")
 
-    # UNKNOWN confidence → defer task entirely (no useful signal)
-    if confidence_tier == "UNKNOWN":
+    if tier in ("UNKNOWN", "LOW"):
         result["should_defer"] = True
-        result["defer_reason"] = f"unknown_confidence ({confidence_for_tier:.2f})"
-        log(f"UNKNOWN confidence — deferring task: {next_task[:60]}")
+        if tier == "UNKNOWN":
+            result["defer_reason"] = f"unknown_confidence ({confidence_for_tier:.2f})"
+            msg, imp = f"TASK DEFERRED (UNKNOWN confidence={confidence_for_tier:.2f})", 0.7
+        else:
+            result["defer_reason"] = f"low_confidence_dry_run ({confidence_for_tier:.2f})"
+            result["dry_run"] = True
+            msg, imp = f"TASK DRY-RUN (LOW confidence={confidence_for_tier:.2f})", 0.6
+        log(f"{tier} confidence — {'deferring' if tier == 'UNKNOWN' else 'dry-run'}: {next_task[:60]}")
         try:
-            attention.submit(
-                f"TASK DEFERRED (UNKNOWN confidence={confidence_for_tier:.2f}): {next_task[:60]}",
-                source="heartbeat", importance=0.7)
+            attention.submit(f"{msg}: {next_task[:60]}", source="heartbeat", importance=imp)
         except Exception:
             pass
         result["timings"]["total"] = round(time.monotonic() - t0, 3)
-        return result
+        return None
+    return dyn_conf
 
-    # LOW confidence → dry-run mode (gather context but skip actual execution)
-    if confidence_tier == "LOW":
-        result["should_defer"] = True
-        result["defer_reason"] = f"low_confidence_dry_run ({confidence_for_tier:.2f})"
-        result["dry_run"] = True
-        log(f"LOW confidence — dry-run mode for task: {next_task[:60]}")
-        try:
-            attention.submit(
-                f"TASK DRY-RUN (LOW confidence={confidence_for_tier:.2f}): {next_task[:60]}",
-                source="heartbeat", importance=0.6)
-        except Exception:
-            pass
-        result["timings"]["total"] = round(time.monotonic() - t0, 3)
-        return result
 
-    # === 7.7 GWT BROADCAST: Run LIDA cognitive cycle ===
+def _preflight_gwt_retrieval_gate(result, next_task):
+    """§7.7+7.8: GWT broadcast + retrieval gate classification."""
     t77 = time.monotonic()
     gwt_broadcast_text = ""
     if WorkspaceBroadcast:
@@ -791,7 +712,6 @@ def run_preflight(dry_run=False):
     result["gwt_broadcast"] = gwt_broadcast_text
     result["timings"]["gwt_broadcast"] = round(time.monotonic() - t77, 3)
 
-    # === 7.8 RETRIEVAL GATE: Classify retrieval need before brain recall ===
     t78 = time.monotonic()
     retrieval_tier_info = None
     if gate_classify:
@@ -804,16 +724,18 @@ def run_preflight(dry_run=False):
             log(f"Retrieval gate failed (non-fatal, defaulting DEEP): {e}")
             result["retrieval_tier"] = "DEEP_RETRIEVAL"
     else:
-        result["retrieval_tier"] = "DEEP_RETRIEVAL"  # fallback: full recall
+        result["retrieval_tier"] = "DEEP_RETRIEVAL"
     result["timings"]["retrieval_gate"] = round(time.monotonic() - t78, 3)
-    _rt = result.get("retrieval_tier", "DEEP_RETRIEVAL")
 
-    # === 8. EPISODIC MEMORY: Recall similar episodes ===
-    # Gated by retrieval_tier from §7.8 — NO_RETRIEVAL skips entirely
+    _rt = result.get("retrieval_tier", "DEEP_RETRIEVAL")
+    return gwt_broadcast_text, retrieval_tier_info, _rt
+
+
+def _preflight_episodic(result, next_task, _rt):
+    """§8: Episodic memory recall (similar + failures)."""
     t8 = time.monotonic()
     similar_episodes = ""
     failure_episodes = ""
-
     if _rt == "NO_RETRIEVAL":
         log("Episodic recall SKIPPED — retrieval gate: NO_RETRIEVAL")
     elif EpisodicMemory:
@@ -826,7 +748,6 @@ def run_preflight(dry_run=False):
                     f"  [{e.get('outcome', '?')}] {e.get('task', '')[:80]}"
                     for e in (similar if isinstance(similar, list) else [similar])
                 )[:500]
-
             failures = em.recall_failures(n=3)
             if failures:
                 failure_episodes = "\n".join(
@@ -836,9 +757,32 @@ def run_preflight(dry_run=False):
         except Exception as e:
             log(f"Episodic recall failed: {e}")
     result["timings"]["episodic"] = round(time.monotonic() - t8, 3)
+    return similar_episodes, failure_episodes
 
-    # === 8.5 BRAIN BRIDGE: Full brain context (goals + context + knowledge + working memory) ===
-    # Gated by retrieval_tier from §7.8
+
+def _format_memory_hint(mem):
+    """Format a single brain memory result into a tagged hint line."""
+    doc = mem.get("document", "")[:120]
+    src = mem.get("metadata", {}).get("source", "")
+    tags = mem.get("metadata", {}).get("tags", "")
+    col = mem.get("collection", "")
+    if "dream" in str(tags):
+        prefix = "[DREAM]"
+    elif "research" in str(src) or "research" in str(tags):
+        prefix = "[RESEARCH]"
+    elif "synthesis" in str(src):
+        prefix = "[SYNTHESIS]"
+    elif "episode" in col:
+        prefix = "[EPISODE]"
+    elif "procedur" in col:
+        prefix = "[PROCEDUR]"
+    else:
+        prefix = "[LEARNING]"
+    return f"  {prefix} {doc}"
+
+
+def _preflight_brain_bridge(result, next_task, _rt, retrieval_tier_info):
+    """§8.5+8.6: Brain bridge context + retrieval eval with adaptive retry."""
     t85 = time.monotonic()
     knowledge_hints = ""
     brain_goals = ""
@@ -850,229 +794,189 @@ def run_preflight(dry_run=False):
         log("Brain bridge SKIPPED — retrieval gate: NO_RETRIEVAL (saving ~7.5s)")
     elif brain_preflight_context:
         try:
-            # Adjust recall depth, collections, and graph expansion based on retrieval tier
             _graph_expand = False
             _tier_collections = None
             if _rt == "LIGHT_RETRIEVAL":
                 _n_knowledge = 3
-                # Use tier's collection list (capped to 2 for LIGHT)
                 if retrieval_tier_info and retrieval_tier_info.collections:
                     _tier_collections = retrieval_tier_info.collections[:2]
-            else:  # DEEP_RETRIEVAL
+            else:
                 _graph_expand = bool(retrieval_tier_info and retrieval_tier_info.graph_expand)
                 _n_knowledge = 10 if _graph_expand else 5
             brain_ctx = brain_preflight_context(next_task, n_knowledge=_n_knowledge, n_goals=5,
-                                                graph_expand=_graph_expand,
-                                                collections=_tier_collections)
+                                                graph_expand=_graph_expand, collections=_tier_collections)
             knowledge_hints = brain_ctx.get("knowledge_hints", "")
             brain_goals = brain_ctx.get("goals_text", "")
             brain_context = brain_ctx.get("context", "")
             brain_working_memory = brain_ctx.get("working_memory", "")
-            brain_timings = brain_ctx.get("brain_timings", {})
             log(f"Brain bridge ({_rt}): knowledge={len(knowledge_hints)}B goals={len(brain_goals)}B "
-                f"context={len(brain_context)}B wm={len(brain_working_memory)}B "
-                f"timings={brain_timings}")
+                f"context={len(brain_context)}B wm={len(brain_working_memory)}B")
         except Exception as e:
             log(f"Brain bridge preflight failed: {e}")
     else:
-        # Fallback: ad-hoc brain recall (legacy) — only if not NO_RETRIEVAL
-        try:
-            from brain import get_brain, LEARNINGS
-            b = get_brain()
-            _n_fallback = 3 if _rt == "LIGHT_RETRIEVAL" else 5
-            learnings = b.recall(next_task, collections=[LEARNINGS], n=_n_fallback, min_importance=0.3)
-            if learnings:
-                hints = []
-                for mem in learnings:
-                    doc = mem.get("document", "")[:120]
-                    src = mem.get("metadata", {}).get("source", "")
-                    tags = mem.get("metadata", {}).get("tags", "")
-                    if "dream" in str(tags):
-                        prefix = "[DREAM]"
-                    elif "research" in str(src) or "research" in str(tags):
-                        prefix = "[RESEARCH]"
-                    elif "synthesis" in str(src):
-                        prefix = "[SYNTHESIS]"
-                    else:
-                        prefix = "[LEARNING]"
-                    hints.append(f"  {prefix} {doc}")
-                knowledge_hints = "\n".join(hints)
-                log(f"Brain knowledge (legacy, {_rt}): {len(learnings)} relevant learnings found")
-        except Exception as e:
-            log(f"Brain knowledge recall failed: {e}")
+        knowledge_hints = _brain_legacy_fallback(next_task, _rt)
+
     result["knowledge_hints"] = knowledge_hints
     result["brain_goals"] = brain_goals
     result["brain_context"] = brain_context
     result["brain_working_memory"] = brain_working_memory
-    # Extract recalled memory IDs for postflight recall_success tracking (memory evolution)
+
+    # Extract recalled memory IDs for postflight
     _recalled_ids = []
     _raw = brain_ctx.get("raw_results", []) if brain_preflight_context and brain_ctx else []
-    if not _raw:
-        _raw = locals().get("learnings", []) or []
     for _mem in (_raw if isinstance(_raw, list) else []):
-        _mid = _mem.get("id")
-        _mcol = _mem.get("collection")
+        _mid, _mcol = _mem.get("id"), _mem.get("collection")
         if _mid and _mcol:
             _recalled_ids.append({"id": _mid, "collection": _mcol})
     if _recalled_ids:
         result["recalled_memory_ids"] = _recalled_ids
     result["timings"]["knowledge"] = round(time.monotonic() - t85, 3)
 
-    # === 8.6 RETRIEVAL EVAL + ADAPTIVE RETRY: CRAG-style scoring with corrective retry ===
-    retrieval_verdict = "SKIPPED"
+    # §8.6: Retrieval eval + adaptive retry
+    _preflight_retrieval_eval(result, next_task, _rt, brain_ctx)
+    return knowledge_hints, brain_goals, brain_context, brain_working_memory, brain_ctx
+
+
+def _brain_legacy_fallback(next_task, _rt):
+    """Legacy brain recall fallback when brain_preflight_context unavailable."""
+    try:
+        from brain import get_brain, LEARNINGS
+        b = get_brain()
+        _n = 3 if _rt == "LIGHT_RETRIEVAL" else 5
+        learnings = b.recall(next_task, collections=[LEARNINGS], n=_n, min_importance=0.3)
+        if learnings:
+            hints = [_format_memory_hint(mem) for mem in learnings]
+            log(f"Brain knowledge (legacy, {_rt}): {len(learnings)} relevant learnings found")
+            return "\n".join(hints)
+    except Exception as e:
+        log(f"Brain knowledge recall failed: {e}")
+    return ""
+
+
+def _preflight_retrieval_eval(result, next_task, _rt, brain_ctx):
+    """§8.6: CRAG-style retrieval eval with corrective retry."""
     try:
         from clarvis.brain.retrieval_eval import adaptive_recall
         from brain import get_brain as _get_brain_for_retry
-        # Gather raw results from brain bridge or legacy path
         eval_results = brain_ctx.get("raw_results", []) if brain_preflight_context and brain_ctx else []
-        if not eval_results:
-            eval_results = locals().get("learnings", [])
         if eval_results and isinstance(eval_results, list) and len(eval_results) > 0:
             b_retry = _get_brain_for_retry()
-            ar_out = adaptive_recall(
-                b_retry, next_task, tier=_rt,
-                original_results=eval_results, n=len(eval_results),
-            )
-            retrieval_verdict = ar_out["verdict"]
-            result["retrieval_verdict"] = retrieval_verdict
+            ar_out = adaptive_recall(b_retry, next_task, tier=_rt,
+                                     original_results=eval_results, n=len(eval_results))
+            verdict = ar_out["verdict"]
+            result["retrieval_verdict"] = verdict
             result["retrieval_max_score"] = ar_out["max_score"]
             result["retrieval_retried"] = ar_out["retried"]
             result["retrieval_original_verdict"] = ar_out["original_verdict"]
             result["retrieval_n_filtered"] = ar_out.get("n_filtered_out", 0)
             if ar_out["retry_query"]:
                 result["retrieval_retry_query"] = ar_out["retry_query"]
-            log(f"Retrieval eval: {retrieval_verdict} "
-                f"(max={ar_out['max_score']}, retried={ar_out['retried']}, "
-                f"orig={ar_out['original_verdict']}, "
-                f"filtered={ar_out.get('n_filtered_out', 0)})")
-            # If INCORRECT after retry, omit knowledge_hints entirely
-            if retrieval_verdict == "INCORRECT":
-                log("Retrieval INCORRECT (even after retry) — knowledge_hints omitted")
+            log(f"Retrieval eval: {verdict} (max={ar_out['max_score']}, retried={ar_out['retried']})")
+            if verdict == "INCORRECT":
+                log("Retrieval INCORRECT — knowledge_hints omitted")
                 result["knowledge_hints"] = ""
             elif ar_out["results"]:
-                # Rebuild knowledge_hints from filtered/refined results
-                # This replaces noisy raw results with CRAG-evaluated content
-                _filtered_results = ar_out["results"]
-                _rebuilt_hints = []
-                for _mem in _filtered_results:
-                    doc = _mem.get("document", "")[:120]
-                    src = _mem.get("metadata", {}).get("source", "")
-                    tags = _mem.get("metadata", {}).get("tags", "")
-                    col = _mem.get("collection", "")
-                    if "dream" in str(tags):
-                        prefix = "[DREAM]"
-                    elif "research" in str(src) or "research" in str(tags):
-                        prefix = "[RESEARCH]"
-                    elif "synthesis" in str(src):
-                        prefix = "[SYNTHESIS]"
-                    elif "episode" in col:
-                        prefix = "[EPISODE]"
-                    elif "procedur" in col:
-                        prefix = "[PROCEDUR]"
-                    else:
-                        prefix = "[LEARNING]"
-                    _rebuilt_hints.append(f"  {prefix} {doc}")
-                if _rebuilt_hints:
-                    prev_len = len(result.get("knowledge_hints", ""))
-                    result["knowledge_hints"] = "\n".join(_rebuilt_hints)
-                    log(f"Knowledge hints rebuilt from eval: "
-                        f"{len(eval_results)}→{len(_filtered_results)} results, "
-                        f"{prev_len}→{len(result['knowledge_hints'])}B"
-                        + (f" (retry improved {ar_out['original_verdict']}→{retrieval_verdict})"
-                           if ar_out["retried"] else ""))
+                _rebuilt = [_format_memory_hint(m) for m in ar_out["results"]]
+                if _rebuilt:
+                    result["knowledge_hints"] = "\n".join(_rebuilt)
+                    log(f"Knowledge hints rebuilt: {len(eval_results)}→{len(ar_out['results'])} results")
         else:
             result["retrieval_verdict"] = "NO_RESULTS"
     except Exception as e:
         log(f"Retrieval eval failed (non-fatal): {e}")
         result["retrieval_verdict"] = "ERROR"
 
-    # === 8.7 BRAIN INTROSPECTION: Deep self-awareness for decision-making ===
+
+def _preflight_introspection_synaptic(result, next_task):
+    """§8.7+8.8+8.9: Brain introspection, synaptic spread, failure avoidance."""
+    # §8.7: Brain introspection
     t87 = time.monotonic()
     introspection_text = ""
     if introspect_for_task and format_introspection_for_prompt:
         try:
-            # Match budget to route tier (if routing already done, use it; else standard)
-            introspect_budget = "standard"
+            budget = "standard"
             if result.get("route_tier") in ("complex", "reasoning"):
-                introspect_budget = "full"
+                budget = "full"
             elif result.get("route_executor") in ("openrouter", "gemini"):
-                introspect_budget = "minimal"
-
-            introspection = introspect_for_task(next_task, budget=introspect_budget)
-            introspection_text = format_introspection_for_prompt(introspection, introspect_budget)
-            brain_introsp_timings = introspection.get("timings", {})
-            log(f"Brain introspection ({introspect_budget}): "
-                f"{len(introspection_text)}B, "
-                f"meta={introspection.get('meta_awareness', '')[:60]}, "
-                f"timings={brain_introsp_timings}")
+                budget = "minimal"
+            introspection = introspect_for_task(next_task, budget=budget)
+            introspection_text = format_introspection_for_prompt(introspection, budget)
+            log(f"Brain introspection ({budget}): {len(introspection_text)}B")
         except Exception as e:
             log(f"Brain introspection failed: {e}")
     result["brain_introspection"] = introspection_text
     result["timings"]["brain_introspection"] = round(time.monotonic() - t87, 3)
 
-    # === 8.8 SYNAPTIC SPREADING ACTIVATION: Neural associations beyond vector search ===
+    # §8.8: Synaptic spreading activation
     t88 = time.monotonic()
     synaptic_associations = ""
     if SynapticMemory:
         try:
-            sm = SynapticMemory()
-            # Collect memory IDs from brain introspection (which does vector recall with IDs)
-            recalled_ids = []
-            if introspect_for_task and introspection_text:
-                try:
-                    # Re-use the introspection result — it has recalled memory IDs
-                    from brain import get_brain, LEARNINGS
-                    b_syn = get_brain()
-                    syn_results = b_syn.recall(next_task, collections=[LEARNINGS], n=5, min_importance=0.3)
-                    if syn_results:
-                        for mem in syn_results:
-                            mid = mem.get("id", "")
-                            if mid:
-                                recalled_ids.append(mid)
-                except Exception:
-                    pass
-            if recalled_ids:
-                spread_results = sm.spread(recalled_ids[:5], n=5, min_weight=0.1)
-                if spread_results:
-                    # spread() returns list of (memory_id, activation) tuples
-                    # Resolve IDs to documents for context
-                    lines = []
-                    for mem_id, activation in spread_results[:5]:
-                        try:
-                            doc_results = b_syn.recall(mem_id[:30], n=1)
-                            doc_text = doc_results[0].get("document", mem_id)[:80] if doc_results else mem_id[:40]
-                        except Exception:
-                            doc_text = mem_id[:40]
-                        lines.append(f"  [{activation:.2f}] {doc_text}")
-                    synaptic_associations = "SYNAPTIC ASSOCIATIONS (neural co-activation):\n" + "\n".join(lines)
-                    log(f"Synaptic spread: {len(spread_results)} associations from {len(recalled_ids)} seeds")
+            synaptic_associations = _run_synaptic_spread(next_task, introspection_text)
         except Exception as e:
             log(f"Synaptic spreading activation failed: {e}")
     result["synaptic_associations"] = synaptic_associations
     result["timings"]["synaptic_spread"] = round(time.monotonic() - t88, 3)
 
-    # === 8.9 SOMATIC MARKERS + EPISODIC CAUSAL CHAINS: Failure avoidance signals ===
+    # §8.9: Somatic markers + episodic causal chains
     t89 = time.monotonic()
-    failure_avoidance = ""
-    try:
-        avoidance_lines = []
+    failure_avoidance = _build_failure_avoidance(next_task)
+    result["failure_avoidance"] = failure_avoidance
+    result["timings"]["failure_avoidance"] = round(time.monotonic() - t89, 3)
 
-        # Somatic markers: emotional signals from past experiences
+    return introspection_text, synaptic_associations, failure_avoidance
+
+
+def _run_synaptic_spread(next_task, introspection_text):
+    """Run synaptic spreading activation from recalled memory seeds."""
+    sm = SynapticMemory()
+    recalled_ids = []
+    if introspect_for_task and introspection_text:
+        try:
+            from brain import get_brain, LEARNINGS
+            b_syn = get_brain()
+            syn_results = b_syn.recall(next_task, collections=[LEARNINGS], n=5, min_importance=0.3)
+            if syn_results:
+                recalled_ids = [m.get("id", "") for m in syn_results if m.get("id")]
+        except Exception:
+            pass
+    if not recalled_ids:
+        return ""
+    spread_results = sm.spread(recalled_ids[:5], n=5, min_weight=0.1)
+    if not spread_results:
+        return ""
+    lines = []
+    try:
+        from brain import get_brain
+        b_syn = get_brain()
+    except Exception:
+        b_syn = None
+    for mem_id, activation in spread_results[:5]:
+        try:
+            doc_results = b_syn.recall(mem_id[:30], n=1) if b_syn else []
+            doc_text = doc_results[0].get("document", mem_id)[:80] if doc_results else mem_id[:40]
+        except Exception:
+            doc_text = mem_id[:40]
+        lines.append(f"  [{activation:.2f}] {doc_text}")
+    log(f"Synaptic spread: {len(spread_results)} associations from {len(recalled_ids)} seeds")
+    return "SYNAPTIC ASSOCIATIONS (neural co-activation):\n" + "\n".join(lines)
+
+
+def _build_failure_avoidance(next_task):
+    """Build failure avoidance text from somatic markers + episodic causal chains."""
+    avoidance_lines = []
+    try:
         if SomaticMarkerSystem:
             try:
                 somatic = SomaticMarkerSystem()
                 bias = somatic.get_bias(next_task)
                 if bias and bias.get("valence", 0) < -0.1:
-                    markers = bias.get("markers", [])
-                    for m in markers[:3]:
-                        stimulus = m.get("stimulus", "")[:60]
+                    for m in bias.get("markers", [])[:3]:
                         val = m.get("valence", 0)
                         if val < -0.1:
-                            avoidance_lines.append(f"  AVOID [{val:.2f}]: {stimulus}")
+                            avoidance_lines.append(f"  AVOID [{val:.2f}]: {m.get('stimulus', '')[:60]}")
             except Exception:
                 pass
-
-        # Episodic causal chains: root causes of recent failures
         if EpisodicMemory:
             try:
                 em_causal = EpisodicMemory()
@@ -1084,24 +988,23 @@ def run_preflight(dry_run=False):
                         if fail_id:
                             causes = em_causal.causes_of(fail_id)
                             if causes:
-                                cause_text = causes[0].get("task", causes[0].get("description", ""))[:60]
-                                avoidance_lines.append(f"  FAIL: {fail_task} <- caused by: {cause_text}")
+                                avoidance_lines.append(f"  FAIL: {fail_task} <- caused by: {causes[0].get('task', causes[0].get('description', ''))[:60]}")
                             else:
                                 lesson = fail_ep.get("lesson", fail_ep.get("error", ""))[:60]
                                 if lesson:
                                     avoidance_lines.append(f"  FAIL: {fail_task} — {lesson}")
             except Exception:
                 pass
-
-        if avoidance_lines:
-            failure_avoidance = "FAILURE AVOIDANCE (somatic markers + causal chains):\n" + "\n".join(avoidance_lines[:5])
-            log(f"Failure avoidance: {len(avoidance_lines)} signals")
     except Exception as e:
         log(f"Failure avoidance assembly failed: {e}")
-    result["failure_avoidance"] = failure_avoidance
-    result["timings"]["failure_avoidance"] = round(time.monotonic() - t89, 3)
+    if avoidance_lines:
+        log(f"Failure avoidance: {len(avoidance_lines)} signals")
+        return "FAILURE AVOIDANCE (somatic markers + causal chains):\n" + "\n".join(avoidance_lines[:5])
+    return ""
 
-    # === 9. TASK ROUTING (moved before context compression to inform tier) ===
+
+def _preflight_routing(result, next_task):
+    """§9: Task routing / classification."""
     t9 = time.monotonic()
     if classify_task:
         try:
@@ -1115,76 +1018,59 @@ def run_preflight(dry_run=False):
             log(f"Task classification failed: {e}")
     result["timings"]["routing"] = round(time.monotonic() - t9, 3)
 
-    # === 10. CONTEXT COMPRESSION (uses routing tier for budget) ===
-    t10 = time.monotonic()
 
-    # Compress episodic hints first (needed by tiered brief)
-    compressed_episodes = ""
+def _preflight_compress_episodes(similar_episodes, failure_episodes):
+    """Compress episodic hints for tiered brief."""
     if (similar_episodes or failure_episodes) and compress_episodes:
         try:
-            compressed_episodes = compress_episodes(similar_episodes, failure_episodes)
-            if not compressed_episodes:
-                compressed_episodes = f"{similar_episodes}\n---\n{failure_episodes}"
+            compressed = compress_episodes(similar_episodes, failure_episodes)
+            if compressed:
+                return compressed
         except Exception:
-            compressed_episodes = f"{similar_episodes}\n---\n{failure_episodes}"
-    elif similar_episodes or failure_episodes:
-        compressed_episodes = f"{similar_episodes}\n---\n{failure_episodes}"
+            pass
+    if similar_episodes or failure_episodes:
+        return f"{similar_episodes}\n---\n{failure_episodes}"
+    return ""
 
-    # Load suppressed sections (data-driven noise gate)
-    _suppressed_sections = set()
-    try:
-        from clarvis.cognition.context_relevance import get_suppressed_sections
-        _suppressed_sections = get_suppressed_sections(threshold=0.15, min_episodes=10)
-        if _suppressed_sections:
-            log(f"Section gate: suppressing {_suppressed_sections}")
-    except Exception:
-        pass
 
-    # Generate tiered brief (adapts to executor)
-    context_brief = ""
+def _preflight_generate_brief(result, next_task, knowledge_hints, compressed_episodes):
+    """Generate the tiered/legacy context brief."""
     executor = result["route_executor"]
     if generate_tiered_brief:
         try:
-            # Map executor to brief tier
             brief_tier = {
-                "openrouter": "minimal",
-                "gemini": "minimal",
+                "openrouter": "minimal", "gemini": "minimal",
                 "claude": "full" if result["route_tier"] in ("complex", "reasoning") else "standard",
             }.get(executor, "standard")
-
-            context_brief = generate_tiered_brief(
-                current_task=next_task,
-                tier=brief_tier,
-                episodic_hints=compressed_episodes,
-                knowledge_hints=knowledge_hints,
-            )
-            log(f"Tiered brief ({brief_tier}): {len(context_brief)} bytes")
+            brief = generate_tiered_brief(current_task=next_task, tier=brief_tier,
+                                          episodic_hints=compressed_episodes,
+                                          knowledge_hints=knowledge_hints)
+            log(f"Tiered brief ({brief_tier}): {len(brief)} bytes")
+            return brief
         except Exception as e:
             log(f"Tiered brief failed, falling back to legacy: {e}")
-            # Fallback to legacy brief
-            if generate_context_brief:
-                try:
-                    context_brief = generate_context_brief()
-                except Exception:
-                    pass
-    elif generate_context_brief:
+    if generate_context_brief:
         try:
-            context_brief = generate_context_brief()
-            log(f"Context brief (legacy): {len(context_brief)} bytes")
+            brief = generate_context_brief()
+            log(f"Context brief (legacy): {len(brief)} bytes")
+            return brief
         except Exception as e:
             log(f"Context compression failed: {e}")
+    return ""
 
-    # Append brain goals to context brief (direct brain → subconscious link)
+
+def _preflight_append_supplementary(context_brief, result, brain_goals, brain_context,
+                                     brain_working_memory, failure_avoidance, procs_for_injection,
+                                     synaptic_associations, codelet_result, gwt_broadcast_text,
+                                     introspection_text, code_templates_hint, _suppressed_sections):
+    """Append all supplementary sections to the context brief, gated by suppression."""
     if brain_goals and "brain_goals" not in _suppressed_sections:
         context_brief += f"\nBRAIN GOALS (active objectives):\n{brain_goals[:500]}\n"
     if brain_context and "brain_context" not in _suppressed_sections:
         context_brief += f"\nBRAIN CONTEXT: {brain_context[:200]}\n"
-
-    # Append brain working memory (what recent heartbeats were doing)
     if brain_working_memory and "working_memory" not in _suppressed_sections:
         context_brief += f"\nWORKING MEMORY (recent activity):\n{brain_working_memory[:300]}\n"
 
-    # Append world model prediction (success probability + novelty signal)
     wm_p = result.get("wm_p_success")
     wm_curiosity = result.get("wm_curiosity")
     if wm_p is not None and "world_model" not in _suppressed_sections:
@@ -1195,11 +1081,9 @@ def run_preflight(dry_run=False):
             wm_hint += " (low — tread carefully, check prior failures)"
         context_brief += f"\n{wm_hint}\n"
 
-    # Append failure avoidance signals (somatic markers + causal chains)
     if failure_avoidance and "failure_avoidance" not in _suppressed_sections:
         context_brief += f"\n{failure_avoidance}\n"
 
-    # Append recommended approach from procedural memory (top-2 procedures)
     if procs_for_injection:
         rec_lines = ["Recommended approach (from procedural memory):"]
         for idx, proc in enumerate(procs_for_injection[:2]):
@@ -1214,33 +1098,26 @@ def run_preflight(dry_run=False):
         result["procedure_injected"] = True
         log(f"Procedure injection: {len(procs_for_injection)} procedure(s) injected into prompt")
 
-    # Append synaptic associations (neural co-activation patterns)
     if synaptic_associations and "synaptic" not in _suppressed_sections:
         context_brief += f"\n{synaptic_associations}\n"
-
-    # Append codelet competition results (LIDA domain focus)
     if codelet_result and "attention" not in _suppressed_sections:
-        winner = codelet_result.get("winner", "?")
-        coalition = codelet_result.get("coalition", [])
         activations = codelet_result.get("activations", {})
         act_str = ", ".join(f"{d}={a:.2f}" for d, a in
-                           sorted(activations.items(), key=lambda x: x[1], reverse=True))
+                            sorted(activations.items(), key=lambda x: x[1], reverse=True))
         context_brief += (f"\nATTENTION CODELETS (LIDA): "
-                         f"winner={winner} coalition={','.join(coalition)} [{act_str}]\n")
-
-    # Append GWT broadcast to context brief (makes broadcast visible to task executor)
+                          f"winner={codelet_result.get('winner', '?')} "
+                          f"coalition={','.join(codelet_result.get('coalition', []))} [{act_str}]\n")
     if gwt_broadcast_text and "gwt_broadcast" not in _suppressed_sections:
         context_brief += f"\nGWT BROADCAST (conscious workspace):\n{gwt_broadcast_text[:400]}\n"
-
-    # Append brain introspection (self-awareness context — raised from 600 to 1200 chars)
     if introspection_text and "introspection" not in _suppressed_sections:
         context_brief += f"\n{introspection_text[:1200]}\n"
-
-    # Append code generation templates (scaffolds for CODE-type tasks)
     if code_templates_hint:
         context_brief += f"\n{code_templates_hint}\n"
+    return context_brief
 
-    # === 10.5 AUTOMATION INSIGHTS: Historical pattern warnings ===
+
+def _preflight_insights_prompt_workspace(context_brief, result, next_task, compressed_episodes):
+    """§10.5+10.52+10.55+10.6: Automation insights, confidence gate, prompt opt, cognitive workspace."""
     t105 = time.monotonic()
     if get_automation_insights:
         try:
@@ -1252,7 +1129,6 @@ def run_preflight(dry_run=False):
             log(f"Automation insights failed: {e}")
     result["timings"]["automation_insights"] = round(time.monotonic() - t105, 3)
 
-    # === 10.52 CONFIDENCE GATE: Extra validation for MEDIUM confidence tasks ===
     if result.get("confidence_tier") == "MEDIUM":
         conf_val = result.get("confidence_for_tier", 0)
         context_brief += (
@@ -1261,10 +1137,8 @@ def run_preflight(dry_run=False):
             "1. Run existing tests to confirm no regressions\n"
             "2. If creating new code, add at least one smoke test\n"
             "3. Double-check file paths and imports before writing\n"
-            "4. Prefer smaller, safer changes over ambitious rewrites\n"
-        )
+            "4. Prefer smaller, safer changes over ambitious rewrites\n")
 
-    # === 10.55 PROMPT OPTIMIZATION: Select best variant combo (APE/SPO) ===
     t1055 = time.monotonic()
     if po_select_variant:
         try:
@@ -1274,31 +1148,27 @@ def run_preflight(dry_run=False):
             meta_instr = po_result.get("meta_instruction", "")
             if meta_instr:
                 context_brief += f"\n{meta_instr}\n"
-            log(f"Prompt variant: {po_result['variant_id'][:60]} "
-                f"(type={po_result['task_type']})")
+            log(f"Prompt variant: {po_result['variant_id'][:60]} (type={po_result['task_type']})")
         except Exception as e:
             log(f"Prompt optimizer failed (non-fatal): {e}")
     result["timings"]["prompt_optimizer"] = round(time.monotonic() - t1055, 3)
 
-    # === 10.6 COGNITIVE WORKSPACE: Set task + reactivate dormant memory ===
     t106 = time.monotonic()
     if cog_workspace:
         try:
             cw_result = cog_workspace.set_task(next_task)
-            reactivated = cw_result.get("reactivated", [])
-            if reactivated:
-                log(f"Cognitive workspace: reactivated {len(reactivated)} dormant items")
-                # Sync spotlight → workspace for coherence
+            if cw_result.get("reactivated"):
+                log(f"Cognitive workspace: reactivated {len(cw_result['reactivated'])} dormant items")
                 cog_workspace.sync_from_spotlight()
         except Exception as e:
             log(f"Cognitive workspace failed: {e}")
     result["timings"]["cognitive_workspace"] = round(time.monotonic() - t106, 3)
-
     result["episodic_hints"] = compressed_episodes
+    return context_brief
 
-    # DyCP: Final query-dependent pruning of supplementary sections
-    # Removes sections that are both historically low-relevance AND irrelevant
-    # to this specific task. Targets Context Relevance metric toward 0.75.
+
+def _preflight_pruning_obligations_directives(context_brief, result, next_task):
+    """DyCP pruning + obligation check + directive engine."""
     if dycp_prune_brief and next_task:
         try:
             pre_len = len(context_brief)
@@ -1309,9 +1179,7 @@ def run_preflight(dry_run=False):
         except Exception as e:
             log(f"DyCP pruning failed (non-fatal): {e}")
 
-    # === OBLIGATION CHECK: inject violations/git-hygiene into context ===
     t_ob = time.monotonic()
-    obligation_result = {}
     if ObligationTracker:
         try:
             tracker = ObligationTracker()
@@ -1327,34 +1195,119 @@ def run_preflight(dry_run=False):
             log(f"Obligation check failed (non-fatal): {e}")
     result["timings"]["obligation_check"] = round(time.monotonic() - t_ob, 3)
 
-    # === DIRECTIVE ENGINE: scoped instruction enforcement ===
     t_dir = time.monotonic()
     if DirectiveEngine:
         try:
             deng = DirectiveEngine()
-            deng._sweep_expiry()  # Retire expired/sunset directives
+            deng._sweep_expiry()
             dir_context = deng.build_context(
                 task_context=result.get("selected_task", {}).get("label", ""),
-                max_tokens=300,
-            )
+                max_tokens=300)
             if dir_context:
                 context_brief += f"\n{dir_context}\n"
-                active_count = len(deng.list_active())
-                log(f"Directive engine: {active_count} active directives injected")
+                log(f"Directive engine: {len(deng.list_active())} active directives injected")
             result["directive_count"] = len(deng.list_active())
         except Exception as e:
             log(f"Directive engine failed (non-fatal): {e}")
     result["timings"]["directive_engine"] = round(time.monotonic() - t_dir, 3)
 
-    result["context_brief"] = context_brief
+    return context_brief
+
+
+def _make_preflight_result():
+    """Create the initial result dict with default values."""
+    return {
+        "status": "ok", "task": None, "task_section": None, "task_salience": 0.0,
+        "cognitive_load": {}, "should_defer": False, "procedure": None,
+        "procedure_id": None, "procedure_injected": False, "procedures_for_injection": [],
+        "chain_id": None, "prediction_event": None, "prediction_confidence": 0.7,
+        "episodic_hints": "", "context_brief": "", "confidence_tier": "HIGH",
+        "confidence_action": "execute", "confidence_for_tier": 0.7,
+        "route_tier": "complex", "route_executor": "claude", "route_score": 0.5,
+        "route_reason": "unknown", "prompt_variant_id": "", "prompt_variant_task_type": "",
+        "timings": {},
+    }
+
+
+def _preflight_assemble_context(result, next_task, similar_episodes, failure_episodes,
+                                 knowledge_hints, brain_goals, brain_context, brain_working_memory,
+                                 failure_avoidance, procs_for_injection, synaptic_associations,
+                                 codelet_result, gwt_broadcast_text, introspection_text,
+                                 code_templates_hint, compressed_episodes):
+    """§10: Full context assembly pipeline (brief + supplements + enrichments + pruning)."""
+    t10 = time.monotonic()
+    _suppressed_sections = set()
+    try:
+        from clarvis.cognition.context_relevance import get_suppressed_sections
+        _suppressed_sections = get_suppressed_sections(threshold=0.15, min_episodes=10)
+        if _suppressed_sections:
+            log(f"Section gate: suppressing {_suppressed_sections}")
+    except Exception:
+        pass
+
+    brief = _preflight_generate_brief(result, next_task, knowledge_hints, compressed_episodes)
+    brief = _preflight_append_supplementary(
+        brief, result, brain_goals, brain_context, brain_working_memory,
+        failure_avoidance, procs_for_injection, synaptic_associations, codelet_result,
+        gwt_broadcast_text, introspection_text, code_templates_hint, _suppressed_sections)
+    brief = _preflight_insights_prompt_workspace(brief, result, next_task, compressed_episodes)
+    brief = _preflight_pruning_obligations_directives(brief, result, next_task)
+
+    result["context_brief"] = brief
     result["timings"]["context"] = round(time.monotonic() - t10, 3)
 
-    # === SAVE ATTENTION STATE ===
+
+def run_preflight(dry_run=False):
+    """Run all pre-execution checks in a single process.
+
+    Returns a dict with all results needed by cron_autonomous.sh.
+    """
+    log(f"All modules imported in {_import_time:.2f}s (single process)")
+    t0 = time.monotonic()
+    result = _make_preflight_result()
+
+    codelet_result = _preflight_attention(result)
+    sel = _preflight_select_task(result, codelet_result, t0)
+    if sel is None:
+        return result
+    next_task, task_section, best_salience = sel
+    if dry_run:
+        result["timings"]["total"] = round(time.monotonic() - t0, 3)
+        return result
+
+    try:
+        attention.submit(f"CURRENT TASK: {next_task}", source="heartbeat",
+                         importance=0.9, relevance=0.8)
+    except Exception:
+        pass
+
+    _preflight_load_sizing(result, next_task, task_section)
+    procs_for_injection, code_templates_hint = _preflight_procedural(result, next_task)
+    _preflight_reasoning_chain(result, next_task, task_section, best_salience)
+    dyn_conf = _preflight_confidence_world_model(result, next_task, task_section)
+    dyn_conf = _preflight_confidence_tier(result, dyn_conf, next_task, t0)
+    if dyn_conf is None:
+        return result
+
+    gwt_broadcast_text, retrieval_tier_info, _rt = _preflight_gwt_retrieval_gate(result, next_task)
+    similar_episodes, failure_episodes = _preflight_episodic(result, next_task, _rt)
+    knowledge_hints, brain_goals, brain_context, brain_working_memory, _ = \
+        _preflight_brain_bridge(result, next_task, _rt, retrieval_tier_info)
+    introspection_text, synaptic_associations, failure_avoidance = \
+        _preflight_introspection_synaptic(result, next_task)
+    _preflight_routing(result, next_task)
+
+    compressed_episodes = _preflight_compress_episodes(similar_episodes, failure_episodes)
+    _preflight_assemble_context(
+        result, next_task, similar_episodes, failure_episodes, knowledge_hints,
+        brain_goals, brain_context, brain_working_memory, failure_avoidance,
+        procs_for_injection, synaptic_associations, codelet_result, gwt_broadcast_text,
+        introspection_text, code_templates_hint, compressed_episodes)
+
     try:
         attention.save()
     except Exception:
         pass
-
     result["timings"]["total"] = round(time.monotonic() - t0, 3)
     log(f"Pre-flight complete in {result['timings']['total']:.2f}s")
     return result
