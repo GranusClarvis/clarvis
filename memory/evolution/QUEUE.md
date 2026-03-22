@@ -21,13 +21,15 @@ Presentable Clarvis by 2026-03-31:
 - [~] [SEMANTIC_CROSS_COLLECTION_BRIDGES] Strengthen weak cross-collection semantic links. Current semantic_cross_collection=0.62 (target >0.75). _(2026-03-19: Added 13 bridge memories across 3 weakest pairs. Phi full computation times out at 120s due to 99k graph edges + 720 ONNX queries. Pair scores: proc↔learn=0.600, ctx↔goals=0.644, ep↔infra=0.555. Need graph compaction or parallel queries to verify full Phi. Blocked on compute time. Checklist B8.)_
 
 ### Milestone C — Repo / Open-Source Readiness (by 2026-03-26)
+- [x] [GOAL_SET_COMPACTION] Compact `brain.get_goals()` output into a curated active-goals set for weekly reviews and autonomous planning. Archive or demote stale bridge/generated goal artifacts so the meaningful goals are prominent. _(Done 2026-03-22: 65→13 goals. Removed 52 stale items: bridge artifacts, cross-domain connections, day summaries, meta-cognition logs, procedures, reasoning chains, preferences, and infrastructure facts misclassified as goals.)_
+- [x] [RETRIEVAL_PRECISION_NOISE_PRUNE] Prune duplicate/noise memories that are wasting top result slots and degrading retrieval_precision. Include a before/after measurement. _(Done 2026-03-22: 2576→2208 memories. Removed 368 items: 52 stale goals, 220 near-duplicates dist<0.03, 148 noise patterns (META-GRADIENT, GWT broadcasts, self-representation updates). Goals: 65→13 curated.)_
+- [ ] [DELIVERY_CRITICAL_PATH_BURNDOWN] Build a concrete burndown checklist across Milestones C/D/E with owner files, validation commands, and blocker status so the 2026-03-31 push stays execution-focused.
 - [ ] [C1_REMOVE_HARDCODED_SECRETS] Remove hardcoded secrets from tracked files. Audit all files flagged in `OPEN_SOURCE_READINESS_AUDIT.md`, replace with env/config references, and verify no live credentials remain in repo text. _(Checklist C1 — release blocker.)_
 - [ ] [C2_PURGE_CREDENTIALS_FROM_CHROMADB] Purge embedded credentials from ChromaDB/community summary artifacts and re-embed clean replacements. Document exact scrub/rebuild procedure. _(Checklist C2 — release blocker.)_
 - [ ] [C3_VERIFY_GITIGNORE_AND_TRACKED_DATA] Verify `data/` and `monitoring/` ignore rules by checking tracked files, untracking anything that should not be versioned, and documenting safe boundaries. _(Checklist C3.)_
 - [ ] [C5_CONSOLIDATE_TESTS] Consolidate split tests under `tests/` (from `tests/`, `scripts/tests/`, `clarvis/tests/`) with minimal breakage. _(Checklist C5.)_
 - [ ] [C6_ADD_ROOT_README] Add a strong root `README.md` explaining what Clarvis is, architecture at a glance, quick start, repo boundaries, and current status. _(Checklist C6 — critical path.)_
-- [ ] [C8_ADD_CONTRIBUTING] Add `CONTRIBUTING.md` with setup, coding standards, tests, and PR expectations. _(Checklist C8.)_
-- [x] [C9_BASIC_CI_WORKFLOW] Add basic GitHub Actions CI for lint + test on the main repo. Keep it minimal and reliable. _(Checklist C9. Done 2026-03-22: added ruff lint job + test job to `.github/workflows/ci.yml`, ruff config in `pyproject.toml`.)_
+- [x] [C8_ADD_CONTRIBUTING] Add `CONTRIBUTING.md` with setup, coding standards, tests, and PR expectations. _(Checklist C8. Done 2026-03-22.)_
 - [ ] [C11_CLARVIS_DB_EXTRACTION_PLAN] Extract or isolate `clarvis-db` boundary into a separate repo/package plan with scrubbed public-facing structure, LICENSE, and CI requirements documented. _(Checklist C11 — nice-to-have but important repo-boundary work.)_
 
 ### Milestone D — Public Surface (by 2026-03-29)
@@ -87,4 +89,5 @@ Presentable Clarvis by 2026-03-31:
 _Design: `docs/ADAPTIVE_RAG_PLAN.md` — 4-phase rollout (GATE → EVAL → RETRY → FEEDBACK). Each phase independently useful. Demoted: not needed for 2026-03-31 delivery._
 
 ### Research Sessions
+- [x] [RESEARCH_LATE_INTERACTION_TOKEN_PRUNING] Research late-interaction token pruning for retrieval optimization. _(2026-03-22)_
 _(Completed items archived.)_

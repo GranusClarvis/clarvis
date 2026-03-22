@@ -1419,3 +1419,6 @@ _Last archived: 2026-03-17_
 - [x] [A8_MERGE_ADR_DOCUMENTATION] Merge ADR-0001 and ADR-0002 from fork into the main repo docs. _(Already merged in commit 66cd7ea, verified identical to fork. 2026-03-22.)_
 - [x] [C4_DELETE_DEPRECATED_SCRIPTS] Delete `scripts/deprecated/` after confirming nothing still imports or references it. _(Already empty — only __pycache__ remained. Dir removed. 2026-03-22.)_
 - [x] [C7_ADD_LICENSE_FILE] Add standalone `LICENSE` file at repo root matching the intended license. _(MIT LICENSE added at repo root. 2026-03-22.)_
+
+## Archived 2026-03-22
+- [x] [C9_BASIC_CI_WORKFLOW] Add basic GitHub Actions CI for lint + test on the main repo. Keep it minimal and reliable. _(Checklist C9. Done 2026-03-22: added ruff lint job + test job to `.github/workflows/ci.yml`, ruff config in `pyproject.toml`.)_

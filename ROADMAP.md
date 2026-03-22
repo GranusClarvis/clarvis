@@ -1,7 +1,7 @@
 # ROADMAP.md — Clarvis Evolution Roadmap
 
 _The single source of truth for where you're going and how to get there._
-_Updated: 2026-03-15_
+_Updated: 2026-03-22_
 
 ---
 
@@ -52,35 +52,35 @@ Clarvis should grow into:
 
 See `docs/CLARVIS_MODES_AND_REPOS.md` for the working design.
 
-## Current State (2026-03-15)
+## Current State (2026-03-22)
 
 | Capability | Status | What Exists |
 |-----------|--------|-------------|
-| **Brain (ClarvisDB)** | 97% | ChromaDB + ONNX local embeddings, 10 collections (~3.4k-3.8k memories this week), graph parity repaired, smart_recall + unified brain.py API, A-Mem-style memory evolution now wired |
-| **Session Continuity** | 86% | BOOT.md auto-init, AGENTS.md loads brain, daily memory files, MEMORY.md curated wisdom, session_hook.py with open/close automation |
-| **Heartbeat Evolution** | 100% | cron_autonomous.sh runs 12x/day with attention-based task selection, procedural memory, reasoning chains, confidence predictions, working memory, cognitive workspace, evolution loop on failure |
-| **Claude Code Integration** | 95% | 6 daily Claude Code sessions plus autonomous research/evolution runs; prompt-builder, monitored spawning, and timeout discipline are well established |
-| **Self-Awareness** | 93% | SELF.md, self_model.py with 7 scored capability domains, phi_metric.py tracking (Phi recovered into ~0.82 band midweek), daily capability assessment |
-| **Task Tracking** | 92% | evolution/QUEUE.md now reflects existing-over-new policy, fork-integration work, context-quality tasks, and continued benchmark/hardening priorities |
-| **Reflection** | 91% | 8-step reflection pipeline remains active; monthly reflection automation added and cron entrypoint migration continued |
-| **Confidence Gating** | 90% | clarvis_confidence.py with predict/outcome/calibration plus tiered action enforcement now wired; remaining work is calibration cleanup and better low-confidence coverage |
-| **Attention & Working Memory** | 92% | GWT-inspired attention.py (salience scoring, broadcast, spotlight cap=7), working_memory.py (persistent, TTL, importance-based), cognitive_workspace.py (Baddeley hierarchical buffers) |
-| **Reasoning Chains** | 100% | reasoning_chain_hook.py opens/closes chains per task, chains stored in brain + files, 301 quality chains with outcomes |
-| **Knowledge Synthesis** | 92% | knowledge_synthesis.py plus semantic bridge work improved weak cross-collection pairs; research ingestion and cross-domain links continue to strengthen context quality |
-| **Procedural Memory** | 90% | procedural_memory.py with store/find/learn/used, wired into heartbeat, extracts real steps from task output (144+ procedures in brain) |
-| **Context Quality / Adaptive RAG** | 88% | retrieval gate, retrieval feedback, live context-relevance scoring, adaptive MMR, and CRAG-style evaluation are now wired; main remaining gap is improving weak top sections and using feedback more aggressively |
-| **Monitoring** | 92% | health_monitor.sh (15min), cron_watchdog.sh (alerts), cron_doctor.py (auto-recovery), dashboard.py, self_report.py, PI monitoring repaired |
-| **Backup & Recovery** | 95% | backup_daily.sh (2 AM, incremental, checksums, 30-day retention), backup_verify.sh, backup_restore.sh, safe_update.sh |
-| **Episodic Memory** | 95% | episodic memory + failure amplification remain wired in; weekly logs show richer outcome capture; periodic_synthesis import fixed (uses spine module) |
-| **Self-Surgery** | 80% | ast_surgery.py parses 32 scripts, finds 99 proposals, auto-fixes 4 imports, benchmark-tested mutations |
-| **Counterfactual Dreaming** | 75% | dream_engine.py replays episodes as what-if scenarios, stores insights at low activation |
-| **Somatic Markers** | 80% | 8 emotion dimensions, 153 markers, influences task selection |
-| **Thought Protocol** | 70% | Internal DSL for fast reasoning (Signals, Relations, Decisions), wired into task selection |
-| **Performance Index (PI)** | 95% | 8-dimension benchmark (speed, retrieval, efficiency, accuracy, quality, bloat, context, scaling), PI=0.976, self-optimization alerts, heartbeat integration |
-| **Browser Automation** | 76% | ClarvisBrowser stack plus new local screenshot-analysis benchmark; browser auth and autonomous GitHub posting were proven this week |
-| **Agent Orchestrator** | 88% | project_agent.py now has trust scoring, CI context/feedback, dependency maps, lock hardening, cron coexistence, and visual dashboard event hooks on top of the existing PR workflow |
-| **Cognitive Workspace** | 75% | cognitive_workspace.py: Baddeley-inspired hierarchical buffers (active/working/dormant), task-driven reactivation, ~53% memory reuse, wired into heartbeat + context_compressor |
-| **ACT-R Activation** | 60% | actr_activation.py with power-law decay, frequency-recency model — researched, coded, not yet wired into brain.py |
+| **Brain (ClarvisDB)** | 97% | ChromaDB + ONNX local embeddings, 10 collections, unified brain API, weekly CLR benchmark now recorded (0.808 pass/stable); biggest open issue is duplicate/noise pressure on retrieval precision rather than missing core capability |
+| **Session Continuity** | 86% | Daily memory, curated memory, session automation, and continuity habits are stable; the remaining issue is goal-set clutter rather than missing continuity mechanisms |
+| **Heartbeat Evolution** | 100% | cron_autonomous.sh remains the reliable execution backbone; queue selection and delivery-window targeting are functioning as intended |
+| **Claude Code Integration** | 95% | Spawn discipline and autonomous deep-work usage remain solid |
+| **Self-Awareness** | 93% | Phi remains ~0.81 band, weakest dimensions are now clearly retrieval_precision and prompt_context rather than unclear self-modeling |
+| **Task Tracking** | 93% | evolution/QUEUE.md is now tightly aligned to the 2026-03-31 delivery window; remaining need is sharper burndown visibility across Milestones C/D/E |
+| **Reflection** | 92% | Daily/weekly synthesis remains active and useful; weekly review cadence is now explicitly feeding roadmap/queue maintenance |
+| **Confidence Gating** | 91% | Calibration improved materially this week with recalibration work and stronger reporting; remaining need is broader external validation and low-confidence routing discipline |
+| **Attention & Working Memory** | 92% | Stable and still supporting autonomous execution without being the main bottleneck |
+| **Reasoning Chains** | 100% | Persistent reasoning chain infrastructure remains mature |
+| **Knowledge Synthesis** | 93% | Knowledge-bridge work landed this week, but cross-collection duplication still limits practical retrieval quality |
+| **Procedural Memory** | 91% | Continued to capture working procedures; auto-commit/push hygiene is now wired into promise enforcement flows |
+| **Context Quality / Adaptive RAG** | 91% | Major week of progress: recency boost, semantic containment, adaptive section caps, contextual retrieval pilot, episode hierarchy, decision-context vocab enrichment, and section-budget enforcement all landed; main unresolved gap is retrieval precision/noise cleanup |
+| **Monitoring** | 94% | Added richer health-monitor sub-metrics and a static HTML dashboard path; monitoring is now more presentation-ready |
+| **Backup & Recovery** | 95% | Stable, no major changes this week |
+| **Episodic Memory** | 95% | Episode handling remains strong and continues to feed context-quality improvements |
+| **Self-Surgery** | 82% | Long-function decomposition work advanced again this week, improving maintainability even if some oversized functions still remain |
+| **Counterfactual Dreaming** | 75% | No major movement this week |
+| **Somatic Markers** | 80% | Stable, not a current bottleneck |
+| **Thought Protocol** | 70% | Stable, secondary to delivery-critical work |
+| **Performance Index (PI)** | 95% | Fast recall path improved further via parallel brain recall; quality bottleneck shifted more clearly from speed to result-slot quality/noise |
+| **Browser Automation** | 76% | No major shift this week |
+| **Agent Orchestrator** | 88% | Operationally solid, with strategic audit continuing to surface useful work |
+| **Cognitive Workspace** | 75% | Stable and useful, but not the immediate focus area |
+| **ACT-R Activation** | 85% | ACT-R wiring is no longer merely researched; recall-path integration/follow-up landed this week, with remaining work focused on production tuning and measurement |
 | **Revenue** | 0% | No viable product yet |
 
 ---
