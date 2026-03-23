@@ -111,28 +111,8 @@ def save_state(state: Dict):
     os.replace(tmp, STATE_FILE)
 
 
-def check_gate() -> Tuple[str, str, List[str]]:
-    """Run all gate checks.
-
-    Returns:
-        (decision, reason, changes)
-        decision: "wake" or "skip"
-    """
-    # Mode gating: passive mode blocks autonomous execution
-    try:
-        from clarvis.runtime.mode import mode_policies
-        policies = mode_policies()
-        if not policies.get("allow_autonomous_execution", True):
-            return "skip", f"Mode '{policies['mode']}' blocks autonomous execution", ["mode_passive"]
-    except ImportError:
-        pass  # Mode system not installed — allow all
-
-    state = load_state()
-    changes: List[str] = []
-    now = time.time()
-    now_utc = datetime.now(timezone.utc)
-
-    # Force-wake conditions
+def _check_force_wake(state, now, now_utc):
+    """Check force-wake conditions. Returns (decision, reason, changes) or None."""
     if not state:
         return "wake", "First run — no previous state", ["first_run"]
 
@@ -150,9 +130,12 @@ def check_gate() -> Tuple[str, str, List[str]]:
     if consecutive_skips >= MAX_CONSECUTIVE_SKIPS:
         return "wake", f"Max consecutive skips reached ({consecutive_skips})", ["max_skips"]
 
-    # File change checks
-    prev_files = state.get("file_fingerprints", {})
-    prev_dirs = state.get("dir_fingerprints", {})
+    return None
+
+
+def _detect_file_changes(prev_files, prev_dirs):
+    """Detect changes in watched files, directories, today's memory, and cron runs."""
+    changes: List[str] = []
 
     for filepath in WATCHED_FILES:
         current = _file_fingerprint(filepath)
@@ -193,10 +176,42 @@ def check_gate() -> Tuple[str, str, List[str]]:
         if cron_fp["latest_mtime"] != prev_cron["latest_mtime"]:
             changes.append("cron_completed")
 
+    return changes
+
+
+def check_gate() -> Tuple[str, str, List[str]]:
+    """Run all gate checks.
+
+    Returns:
+        (decision, reason, changes)
+        decision: "wake" or "skip"
+    """
+    # Mode gating: passive mode blocks autonomous execution
+    try:
+        from clarvis.runtime.mode import mode_policies
+        policies = mode_policies()
+        if not policies.get("allow_autonomous_execution", True):
+            return "skip", f"Mode '{policies['mode']}' blocks autonomous execution", ["mode_passive"]
+    except ImportError:
+        pass  # Mode system not installed — allow all
+
+    state = load_state()
+    now = time.time()
+    now_utc = datetime.now(timezone.utc)
+
+    force = _check_force_wake(state, now, now_utc)
+    if force:
+        return force
+
+    consecutive_skips = state.get("consecutive_skips", 0)
+    changes = _detect_file_changes(
+        state.get("file_fingerprints", {}),
+        state.get("dir_fingerprints", {}),
+    )
+
     if changes:
         return "wake", f"Changes detected: {', '.join(changes[:5])}", changes
-    else:
-        return "skip", f"No changes (skip #{consecutive_skips + 1}/{MAX_CONSECUTIVE_SKIPS})", changes
+    return "skip", f"No changes (skip #{consecutive_skips + 1}/{MAX_CONSECUTIVE_SKIPS})", changes
 
 
 def run_gate(verbose: bool = False) -> Tuple[str, dict]:

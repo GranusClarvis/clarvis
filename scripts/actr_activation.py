@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# STATUS: production-wired via clarvis/brain/hooks.py import
+# (Misclassified as "research prototype with zero callers" in SPINE_USAGE_AUDIT.md §3.2)
 """
 ACT-R Activation Scoring — combines semantic distance with human-like memory activation.
 

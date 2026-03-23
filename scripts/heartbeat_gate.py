@@ -148,6 +148,81 @@ def save_state(state: Dict):
     os.replace(tmp, STATE_FILE)
 
 
+def _check_force_wake(state, now, now_utc):
+    """Check force-wake conditions. Returns (decision, reason, changes) or None."""
+    if not state:
+        return "wake", "First run — no previous state", ["first_run"]
+
+    last_check = state.get("last_check_time", 0)
+    if now - last_check > 4 * 3600:
+        return "wake", f"Gap since last check: {(now - last_check) / 3600:.1f}h", ["long_gap"]
+
+    if FORCE_WAKE_AFTER_MIDNIGHT:
+        last_day = state.get("last_check_day", "")
+        today = now_utc.strftime("%Y-%m-%d")
+        if last_day and last_day != today:
+            return "wake", f"New day: {today} (was {last_day})", ["midnight_rollover"]
+
+    consecutive_skips = state.get("consecutive_skips", 0)
+    if consecutive_skips >= MAX_CONSECUTIVE_SKIPS:
+        return "wake", f"Max consecutive skips reached ({consecutive_skips})", ["max_skips"]
+
+    return None
+
+
+def _detect_file_changes(prev_files, prev_dirs):
+    """Detect changes in watched files, directories, today's memory, and cron runs."""
+    changes = []
+
+    for filepath in WATCHED_FILES:
+        current = _file_fingerprint(filepath)
+        previous = prev_files.get(filepath)
+        if current is None and previous is not None:
+            changes.append(f"deleted:{os.path.basename(filepath)}")
+            debug(f"File deleted: {filepath}")
+        elif current is not None and previous is None:
+            changes.append(f"new:{os.path.basename(filepath)}")
+            debug(f"New file: {filepath}")
+        elif current and previous:
+            if (current["mtime"] != previous["mtime"] or
+                current["size"] != previous["size"] or
+                current["head_hash"] != previous["head_hash"]):
+                changes.append(f"modified:{os.path.basename(filepath)}")
+                debug(f"Modified: {filepath} (mtime:{previous['mtime']}->{current['mtime']}, "
+                      f"size:{previous['size']}->{current['size']})")
+
+    for dirpath in WATCHED_DIRS:
+        current = _dir_fingerprint(dirpath)
+        previous = prev_dirs.get(dirpath)
+        if current and previous:
+            if (current["latest_mtime"] != previous["latest_mtime"] or
+                current["file_count"] != previous["file_count"]):
+                dirname = os.path.basename(dirpath)
+                changes.append(f"dir_changed:{dirname}")
+                debug(f"Dir changed: {dirpath} (files:{previous['file_count']}->{current['file_count']})")
+        elif current and not previous:
+            changes.append(f"dir_new:{os.path.basename(dirpath)}")
+
+    today_mem = _today_memory_file()
+    current_mem = _file_fingerprint(today_mem)
+    prev_mem = prev_files.get("today_memory")
+    if current_mem and prev_mem:
+        if (current_mem["mtime"] != prev_mem["mtime"] or
+            current_mem["size"] != prev_mem["size"]):
+            changes.append("modified:today_memory")
+    elif current_mem and not prev_mem:
+        changes.append("new:today_memory")
+
+    cron_fp = _cron_runs_fingerprint()
+    prev_cron = prev_dirs.get("cron_runs")
+    if cron_fp and prev_cron:
+        if cron_fp["latest_mtime"] != prev_cron["latest_mtime"]:
+            changes.append("cron_completed")
+            debug("Cron run completed since last check")
+
+    return changes
+
+
 def check_gate() -> Tuple[str, str, List[str]]:
     """Run all gate checks.
 
@@ -167,103 +242,22 @@ def check_gate() -> Tuple[str, str, List[str]]:
         pass  # Mode system not installed — allow all
 
     state = load_state()
-    changes = []
     now = time.time()
     now_utc = datetime.now(timezone.utc)
 
-    # === FORCE WAKE CONDITIONS ===
+    force = _check_force_wake(state, now, now_utc)
+    if force:
+        return force
 
-    # 1. First run (no state)
-    if not state:
-        return "wake", "First run — no previous state", ["first_run"]
-
-    # 2. State too old (something went wrong, gap > 4 hours)
-    last_check = state.get("last_check_time", 0)
-    if now - last_check > 4 * 3600:
-        return "wake", f"Gap since last check: {(now - last_check) / 3600:.1f}h", ["long_gap"]
-
-    # 3. Midnight rollover — first heartbeat of new day
-    if FORCE_WAKE_AFTER_MIDNIGHT:
-        last_day = state.get("last_check_day", "")
-        today = now_utc.strftime("%Y-%m-%d")
-        if last_day and last_day != today:
-            return "wake", f"New day: {today} (was {last_day})", ["midnight_rollover"]
-
-    # 4. Maximum consecutive skips reached
     consecutive_skips = state.get("consecutive_skips", 0)
-    if consecutive_skips >= MAX_CONSECUTIVE_SKIPS:
-        return "wake", f"Max consecutive skips reached ({consecutive_skips})", ["max_skips"]
-
-    # === FILE CHANGE CHECKS ===
-
-    prev_files = state.get("file_fingerprints", {})
-    prev_dirs = state.get("dir_fingerprints", {})
-
-    # 5. Check watched files
-    for filepath in WATCHED_FILES:
-        current = _file_fingerprint(filepath)
-        previous = prev_files.get(filepath)
-
-        if current is None and previous is not None:
-            # File was deleted
-            changes.append(f"deleted:{os.path.basename(filepath)}")
-            debug(f"File deleted: {filepath}")
-        elif current is not None and previous is None:
-            # File is new (didn't exist before)
-            changes.append(f"new:{os.path.basename(filepath)}")
-            debug(f"New file: {filepath}")
-        elif current and previous:
-            # Compare fingerprints
-            if (current["mtime"] != previous["mtime"] or
-                current["size"] != previous["size"] or
-                current["head_hash"] != previous["head_hash"]):
-                changes.append(f"modified:{os.path.basename(filepath)}")
-                debug(f"Modified: {filepath} (mtime:{previous['mtime']}->{current['mtime']}, "
-                      f"size:{previous['size']}->{current['size']})")
-
-    # 6. Check watched directories
-    for dirpath in WATCHED_DIRS:
-        current = _dir_fingerprint(dirpath)
-        previous = prev_dirs.get(dirpath)
-
-        if current and previous:
-            if (current["latest_mtime"] != previous["latest_mtime"] or
-                current["file_count"] != previous["file_count"]):
-                dirname = os.path.basename(dirpath)
-                changes.append(f"dir_changed:{dirname}")
-                debug(f"Dir changed: {dirpath} (files:{previous['file_count']}->{current['file_count']})")
-        elif current and not previous:
-            changes.append(f"dir_new:{os.path.basename(dirpath)}")
-
-    # 7. Check today's memory file (may not exist yet)
-    today_mem = _today_memory_file()
-    current_mem = _file_fingerprint(today_mem)
-    prev_mem = prev_files.get("today_memory")
-    if current_mem and prev_mem:
-        if (current_mem["mtime"] != prev_mem["mtime"] or
-            current_mem["size"] != prev_mem["size"]):
-            changes.append("modified:today_memory")
-    elif current_mem and not prev_mem:
-        changes.append("new:today_memory")
-
-    # 8. Check cron runs
-    cron_fp = _cron_runs_fingerprint()
-    prev_cron = prev_dirs.get("cron_runs")
-    if cron_fp and prev_cron:
-        if cron_fp["latest_mtime"] != prev_cron["latest_mtime"]:
-            changes.append("cron_completed")
-            debug("Cron run completed since last check")
-
-    # === DECISION ===
+    changes = _detect_file_changes(
+        state.get("file_fingerprints", {}),
+        state.get("dir_fingerprints", {}),
+    )
 
     if changes:
-        reason = f"Changes detected: {', '.join(changes[:5])}"
-        decision = "wake"
-    else:
-        reason = f"No changes (skip #{consecutive_skips + 1}/{MAX_CONSECUTIVE_SKIPS})"
-        decision = "skip"
-
-    return decision, reason, changes
+        return "wake", f"Changes detected: {', '.join(changes[:5])}", changes
+    return "skip", f"No changes (skip #{consecutive_skips + 1}/{MAX_CONSECUTIVE_SKIPS})", changes
 
 
 def run_gate() -> int:

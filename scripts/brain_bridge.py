@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# STATUS: production-wired via heartbeat_preflight + heartbeat_postflight (core pipeline)
+# (Misclassified as "weakly wired" in SPINE_USAGE_AUDIT.md §3.3)
 """
 Brain Bridge — Connects brain.py directly to the subconscious (heartbeat loop).
 

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# STATUS: production-wired via heartbeat_preflight + heartbeat_postflight
+# (Misclassified as "research prototype with zero callers" in SPINE_USAGE_AUDIT.md §3.2)
 """
 GWT Workspace Broadcast Bus — Global Workspace Theory (GWT-3) implementation.
 

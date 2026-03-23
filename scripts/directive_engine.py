@@ -271,7 +271,7 @@ class DirectiveClassifier:
                 reasons.append(f"duration_detected: {duration_detected}")
                 break
 
-        return {
+        result = {
             "scope": scope,
             "confidence": round(confidence, 2),
             "literalness": round(literalness, 2),
@@ -281,6 +281,85 @@ class DirectiveClassifier:
             "duration_detected": duration_detected,
             "classification_reasons": reasons[:10],  # Cap for storage
         }
+
+        # LLM fallback for ambiguous classifications (confidence < 0.5)
+        if result["confidence"] < 0.5 and os.environ.get("DIRECTIVE_LLM_CLASSIFY") == "true":
+            llm_result = _llm_classify_fallback(text, result)
+            if llm_result:
+                result.update(llm_result)
+                result["classification_reasons"].append("llm_fallback_applied")
+
+        return result
+
+
+def _llm_classify_fallback(text, rule_result):
+    """Use cheapest LLM via OpenRouter to refine ambiguous directive classification.
+
+    Only called when rule-based confidence < 0.5 and DIRECTIVE_LLM_CLASSIFY=true.
+    Returns dict with updated fields, or None on failure.
+    """
+    try:
+        import requests
+
+        api_key = os.environ.get("OPENROUTER_API_KEY")
+        if not api_key:
+            auth_file = "/home/agent/.openclaw/agents/main/agent/auth-profiles.json"
+            try:
+                with open(auth_file) as f:
+                    auth = json.load(f)
+                api_key = auth.get("profiles", {}).get("openrouter:default", {}).get("key")
+            except (FileNotFoundError, json.JSONDecodeError, KeyError):
+                return None
+        if not api_key:
+            return None
+
+        prompt = (
+            "Classify this instruction/directive. Respond with ONLY valid JSON, no markdown.\n"
+            f"Instruction: \"{text}\"\n\n"
+            f"Rule-based result: scope={rule_result['scope']}, confidence={rule_result['confidence']}\n\n"
+            "Classify into:\n"
+            "- scope: \"standing\" (permanent rule), \"window\" (temporary/time-bound), or \"one_shot\" (do once)\n"
+            "- confidence: 0.0-1.0 (how certain is this classification)\n"
+            "- literalness: 0.0-1.0 (how literally should this be followed vs interpreted)\n"
+            "- emotional_origin: true/false (is this driven by emotion/frustration)\n\n"
+            "JSON output:"
+        )
+
+        resp = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={
+                "model": "minimax/minimax-m2.5",
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 150,
+                "temperature": 0.0,
+            },
+            timeout=10,
+        )
+        resp.raise_for_status()
+
+        content = resp.json()["choices"][0]["message"]["content"].strip()
+        # Strip markdown fences if present
+        if content.startswith("```"):
+            content = content.split("\n", 1)[1] if "\n" in content else content[3:]
+            if content.endswith("```"):
+                content = content[:-3]
+        parsed = json.loads(content)
+
+        updates = {}
+        if "scope" in parsed and parsed["scope"] in ("standing", "window", "one_shot"):
+            updates["scope"] = parsed["scope"]
+        if "confidence" in parsed and isinstance(parsed["confidence"], (int, float)):
+            updates["confidence"] = round(max(0.0, min(1.0, float(parsed["confidence"]))), 2)
+        if "literalness" in parsed and isinstance(parsed["literalness"], (int, float)):
+            updates["literalness"] = round(max(0.0, min(1.0, float(parsed["literalness"]))), 2)
+        if "emotional_origin" in parsed and isinstance(parsed["emotional_origin"], bool):
+            updates["emotional_origin"] = parsed["emotional_origin"]
+
+        return updates if updates else None
+
+    except Exception:
+        return None
 
 
 # ── DIRECTIVE ENGINE ───────────────────────────────────────────────────

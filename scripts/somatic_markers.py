@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# STATUS: production-wired via heartbeat_preflight (try/except import)
+# (Misclassified as "research prototype with zero callers" in SPINE_USAGE_AUDIT.md §3.2)
 """
 Somatic Markers — Emotional valence on memories for decision biasing.
 

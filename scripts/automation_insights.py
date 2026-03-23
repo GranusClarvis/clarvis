@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# STATUS: production-wired via heartbeat_preflight
+# (Misclassified as "research prototype with zero callers" in SPINE_USAGE_AUDIT.md §3.2)
 """
 Automation Insights — Pattern analysis across episodes to deepen automation.
 

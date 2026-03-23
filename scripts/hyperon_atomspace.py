@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# STATUS: production-wired via heartbeat_postflight
+# (Misclassified as "research prototype with zero callers" in SPINE_USAGE_AUDIT.md §3.2)
 """
 OpenCog Hyperon AtomSpace — Typed Hypergraph Knowledge Representation
 

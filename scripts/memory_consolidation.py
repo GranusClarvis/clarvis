@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# BRIDGE: Thin re-export wrapper for legacy sys.path imports.
+# Safe to delete ONLY after all callers migrate to: from clarvis.memory.memory_consolidation import ...
+# Known callers: brain.py CLI, cron_reflection.sh, brain_hygiene.py
 """Memory Consolidation — thin wrapper. Implementation in clarvis/memory/memory_consolidation.py."""
 import sys
 import os

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# STATUS: production-wired via heartbeat_preflight + cron_autonomous.sh
+# (Misclassified as "research prototype with zero callers" in SPINE_USAGE_AUDIT.md §3.2)
 """Cognitive Load Monitor — homeostatic regulation for Clarvis.
 
 Tracks system health across 4 dimensions:

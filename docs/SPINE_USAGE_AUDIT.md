@@ -8,6 +8,16 @@
 
 ---
 
+> **⚠ ERRATA (2026-03-23):** This audit's deletion recommendations in §3.1 and §3.2 are
+> **dangerously incorrect**. All 8 "thin wrappers with zero callers" have active legacy callers
+> (many in the heartbeat pipeline). 8 of 13 "research prototypes" are imported by production scripts.
+> Following §3.1/§3.2 blindly would break heartbeat, cron reflection, watchdog, and autonomous execution.
+> **See `docs/SPINE_CLEANUP_PLAN.md` for the verified second-pass analysis and safe phased cleanup plan.**
+> The structural classification (subsystem map, core/live ratings) is largely correct — the errors
+> are in caller analysis (missed `import` statements in intermediate scripts like heartbeat_preflight.py).
+
+---
+
 ## Executive Summary
 
 Clarvis has **77 spine modules** (clarvis/) and **139 scripts** (scripts/). The spine is well-structured with clean module boundaries. However, scripts/ contains significant bloat: **~8,600 lines of genuinely dead code** (no callers, no cron, no CLI), **8 pure re-export wrappers** that serve no purpose since the spine migration, and **~10 research/cognitive-modeling scripts** that were never wired into production.

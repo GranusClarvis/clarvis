@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# STATUS: production-wired via session_hook.py → daily cron
+# (Misclassified as "research prototype with zero callers" in SPINE_USAGE_AUDIT.md §3.2)
 """
 Theory of Mind — User modeling and intent prediction.
 

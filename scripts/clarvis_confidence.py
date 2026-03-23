@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# BRIDGE: Thin re-export wrapper for legacy sys.path imports.
+# Safe to delete ONLY after all callers migrate to: from clarvis.cognition.confidence import ...
+# Known callers: heartbeat_preflight, heartbeat_postflight, self_model, evolution_preflight
 """Clarvis Confidence Tracking — thin wrapper. Implementation in clarvis/cognition/confidence.py."""
 import sys
 import os

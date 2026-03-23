@@ -222,6 +222,243 @@ def _spotlight_alignment(task_text, theme_words, spotlight_texts):
     return round(min(1.0, 0.6 * overlap_score + 0.4 * activation_score), 4)
 
 
+def _fetch_task_context():
+    """Fetch brain context and recent activity for scoring."""
+    try:
+        context = brain.get_context()
+    except Exception:
+        context = ""
+
+    try:
+        if smart_recall is not None:
+            recent = smart_recall("recent activity and current work", n=10)
+        else:
+            recent = brain.recall_recent(days=1, n=10)
+        recent_text = " ".join([r["document"] for r in recent])
+    except Exception:
+        recent_text = ""
+
+    try:
+        from retrieval_quality import tracker
+        if context and context != "idle":
+            tracker.rate_last("smart_recall", useful=True, reason="task_selector: has active context")
+        if recent_text and len(recent_text) > 50:
+            tracker.rate_last("smart_recall", useful=True, reason="task_selector: recent memories found")
+        elif recent_text:
+            tracker.rate_last("smart_recall", useful=False, reason="task_selector: sparse recent text")
+    except Exception:
+        pass
+
+    return context, recent_text
+
+
+def _fetch_failure_lessons():
+    """Pre-fetch failure lessons from brain (once, not per-task)."""
+    try:
+        raw = brain.recall(
+            "failure failed avoid error crash timeout",
+            collections=["clarvis-learnings"], n=20, min_importance=0.5
+        )
+        return [
+            r["document"].lower() for r in raw
+            if r.get("distance", 1.0) < 0.8
+            and any(kw in r.get("document", "").lower()
+                    for kw in ("failure", "failed", "avoid"))
+        ]
+    except Exception:
+        return []
+
+
+def _is_cr_boost_active():
+    """Check if context-relevance boost should be active (metric below threshold)."""
+    try:
+        with open(PERF_METRICS_FILE) as f:
+            perf = json.load(f)
+        cr_value = perf.get("metrics", {}).get("context_relevance")
+        return cr_value is not None and cr_value < CONTEXT_RELEVANCE_THRESHOLD
+    except (FileNotFoundError, json.JSONDecodeError, KeyError):
+        return False
+
+
+def _keyword_boost(text_lower, keywords, cap):
+    """Accumulate keyword matches up to a cap."""
+    boost = 0.0
+    for kw in keywords:
+        if kw in text_lower:
+            boost = min(cap, boost + 0.1)
+    return boost
+
+
+def _compute_relevance(text_lower, context, recent_text):
+    """Compute context and recent-activity relevance for a task."""
+    context_words = set(context.lower().split()) if context else set()
+    task_words = set(text_lower.split())
+    if task_words:
+        context_relevance = min(1.0, len(context_words & task_words) / len(task_words) * 2)
+    else:
+        context_relevance = 0.0
+
+    recent_words = set(recent_text.lower().split()) if recent_text else set()
+    if task_words:
+        recent_relevance = min(1.0, len(recent_words & task_words) / len(task_words) * 1.5)
+    else:
+        recent_relevance = 0.0
+
+    combined = max(context_relevance, recent_relevance * 0.8, 0.3)
+    return context_relevance, recent_relevance, combined
+
+
+def _compute_task_boosts(text, text_lower, theme_words, spotlight_texts,
+                         failure_docs, recent_completed, cr_boost_active, codelet_result):
+    """Compute all boost/penalty factors for a task. Returns dict of factors."""
+    agi_boost = _keyword_boost(text_lower, AGI_KEYWORDS, 0.3)
+    integration_boost = _keyword_boost(text_lower, INTEGRATION_KEYWORDS, 0.2)
+    architectural_boost = _keyword_boost(text_lower, ARCHITECTURAL_KEYWORDS, 0.2)
+    spotlight_align = _spotlight_alignment(text, theme_words, spotlight_texts)
+
+    somatic_bias = 0.0
+    somatic_signal = "neutral"
+    if somatic is not None:
+        try:
+            bias_result = somatic.get_bias(text)
+            somatic_bias = bias_result.get("bias_score", 0.0)
+            somatic_signal = bias_result.get("signal", "neutral")
+        except Exception:
+            pass
+
+    codelet_bias = 0.0
+    if codelet_result:
+        try:
+            competition = get_codelet_competition()
+            codelet_bias = competition.bias_for_task(text)
+        except Exception:
+            pass
+
+    failure_penalty = 0.0
+    if failure_docs:
+        task_keywords = {w for w in text_lower.split() if len(w) > 4}
+        for fdoc in failure_docs:
+            if any(kw in fdoc for kw in task_keywords):
+                failure_penalty = min(0.15, failure_penalty + 0.05)
+
+    novelty = _compute_novelty(text, recent_completed)
+    improve_bias = _improve_existing_bias(text)
+
+    cr_boost = 0.0
+    if cr_boost_active:
+        cr_boost = _keyword_boost(text_lower, CONTEXT_IMPROVEMENT_KEYWORDS, 0.35)
+
+    total_boost = agi_boost + integration_boost + architectural_boost - failure_penalty + improve_bias + cr_boost
+
+    return {
+        "agi_boost": agi_boost, "integration_boost": integration_boost,
+        "architectural_boost": architectural_boost, "spotlight_align": spotlight_align,
+        "somatic_bias": somatic_bias, "somatic_signal": somatic_signal,
+        "codelet_bias": codelet_bias, "failure_penalty": failure_penalty,
+        "novelty": novelty, "improve_bias": improve_bias, "total_boost": total_boost,
+    }
+
+
+def _score_single_task(task, context, recent_text, theme_words, spotlight_texts,
+                       recent_completed, failure_docs, cr_boost_active, codelet_result):
+    """Score a single task on all 9 factors. Returns scored dict."""
+    text = task["text"]
+    section = task["section"]
+    text_lower = text.lower()
+
+    section_importance = {"P0": 0.9, "P1": 0.6, "P2": 0.3}.get(section, 0.3)
+    ctx_rel, rec_rel, relevance = _compute_relevance(text_lower, context, recent_text)
+    b = _compute_task_boosts(text, text_lower, theme_words, spotlight_texts,
+                             failure_docs, recent_completed, cr_boost_active, codelet_result)
+
+    effective_relevance = min(1.0, relevance + b["spotlight_align"] * 0.15)
+    item = attention.submit(
+        content=f"TASK: {text[:120]}",
+        source="evolution_queue",
+        importance=section_importance,
+        relevance=effective_relevance,
+        boost=b["total_boost"],
+    )
+
+    salience = item.salience()
+    somatic_component = max(0.0, min(1.0, 0.5 + b["somatic_bias"]))
+    codelet_component = max(0.0, min(1.0, 0.5 + b["codelet_bias"]))
+    base_final = (0.70 * salience + 0.10 * b["spotlight_align"]
+                  + 0.10 * somatic_component + 0.10 * codelet_component)
+    final_score = base_final * (1.0 + 0.3 * b["novelty"])
+
+    return {
+        "text": text,
+        "section": section,
+        "line_num": task["line_num"],
+        "salience": round(final_score, 4),
+        "details": {
+            "section_importance": section_importance,
+            "context_relevance": round(ctx_rel, 3),
+            "recent_relevance": round(rec_rel, 3),
+            "agi_boost": round(b["agi_boost"], 3),
+            "integration_boost": round(b["integration_boost"], 3),
+            "architectural_boost": round(b["architectural_boost"], 3),
+            "combined_relevance": round(relevance, 3),
+            "spotlight_alignment": round(b["spotlight_align"], 3),
+            "somatic_bias": round(b["somatic_bias"], 4),
+            "somatic_signal": b["somatic_signal"],
+            "codelet_bias": round(b["codelet_bias"], 4),
+            "failure_penalty": round(b["failure_penalty"], 3),
+            "improve_bias": round(b["improve_bias"], 3),
+            "novelty": round(b["novelty"], 4),
+            "base_salience": round(salience, 4),
+        }
+    }
+
+
+def _apply_delivery_lock(scored):
+    """Penalize non-delivery tasks when delivery lock is active."""
+    if not os.path.exists(DELIVERY_LOCK_FILE):
+        return
+    dlv_keywords = {"dlv", "delivery", "cleanup", "consolidat", "wire", "wiring",
+                    "test", "context", "website", "open-source", "readiness",
+                    "presentation", "repo", "bug", "fix"}
+    for item in scored:
+        t = item["text"].lower()
+        if not any(kw in t for kw in dlv_keywords):
+            item["salience"] = round(item["salience"] * 0.3, 4)
+            item["details"]["delivery_lock_penalty"] = True
+
+
+def _enforce_p0_floor(scored, floor_rank=3):
+    """Guarantee P0 tasks rank in top-N to protect deadline commitments."""
+    p0_below = [i for i, s in enumerate(scored) if s["section"] == "P0" and i >= floor_rank]
+    if not p0_below:
+        return
+    non_p0_top = [i for i in range(floor_rank) if i < len(scored) and scored[i]["section"] != "P0"]
+    for p0_idx in p0_below:
+        if not non_p0_top:
+            break
+        swap_idx = non_p0_top.pop()
+        scored[swap_idx], scored[p0_idx] = scored[p0_idx], scored[swap_idx]
+        scored[swap_idx]["details"]["p0_floor_promoted"] = True
+
+
+def _apply_world_model_reranking(scored):
+    """Re-rank top candidates using world model predicted success probability."""
+    if _wm is None or len(scored) <= 1:
+        return
+    try:
+        for item in scored[:min(5, len(scored))]:
+            prediction = _wm.predict(item["text"])
+            if prediction:
+                p_success = prediction.get("p_success", 0.5)
+                curiosity = prediction.get("curiosity", 0.0)
+                wm_signal = p_success * 0.7 + curiosity * 0.3
+                item["salience"] = round(0.85 * item["salience"] + 0.15 * wm_signal, 4)
+                item["details"]["wm_p_success"] = round(p_success, 3)
+                item["details"]["wm_curiosity"] = round(curiosity, 3)
+    except Exception:
+        pass
+    scored.sort(key=lambda x: x["salience"], reverse=True)
+
+
 def score_tasks(tasks, codelet_result=None):
     """Score each task using attention-based salience + brain context + spotlight alignment.
 
@@ -238,64 +475,13 @@ def score_tasks(tasks, codelet_result=None):
 
     Final: 70% salience + 10% spotlight + 10% somatic + 10% codelet
     """
-    try:
-        context = brain.get_context()
-    except Exception:
-        context = ""
-
-    try:
-        if smart_recall is not None:
-            recent = smart_recall("recent activity and current work", n=10)
-        else:
-            recent = brain.recall_recent(days=1, n=10)
-        recent_text = " ".join([r["document"] for r in recent])
-    except Exception:
-        recent_text = ""
-
+    context, recent_text = _fetch_task_context()
     theme_words, spotlight_texts = _get_spotlight_themes()
-
-    # Load recent completed tasks for novelty scoring
     recent_completed = _get_recent_completed_tasks(n=15)
+    failure_docs = _fetch_failure_lessons()
+    cr_boost_active = _is_cr_boost_active()
 
-    try:
-        from retrieval_quality import tracker
-        if context and context != "idle":
-            tracker.rate_last("smart_recall", useful=True, reason="task_selector: has active context")
-        if recent_text and len(recent_text) > 50:
-            tracker.rate_last("smart_recall", useful=True, reason="task_selector: recent memories found")
-        elif recent_text:
-            tracker.rate_last("smart_recall", useful=False, reason="task_selector: sparse recent text")
-    except Exception:
-        pass
-
-    # Pre-fetch failure lessons once (was per-task, causing ~100s overhead)
-    _failure_docs = []
-    try:
-        _failure_raw = brain.recall(
-            "failure failed avoid error crash timeout",
-            collections=["clarvis-learnings"], n=20, min_importance=0.5
-        )
-        _failure_docs = [
-            r["document"].lower() for r in _failure_raw
-            if r.get("distance", 1.0) < 0.8
-            and any(kw in r.get("document", "").lower()
-                    for kw in ("failure", "failed", "avoid"))
-        ]
-    except Exception:
-        pass
-
-    # Context-improvement priority boost when context_relevance metric is low
-    _cr_boost_active = False
-    try:
-        with open(PERF_METRICS_FILE) as _pf:
-            _perf = json.load(_pf)
-        _cr_value = _perf.get("metrics", {}).get("context_relevance")
-        if _cr_value is not None and _cr_value < CONTEXT_RELEVANCE_THRESHOLD:
-            _cr_boost_active = True
-    except (FileNotFoundError, json.JSONDecodeError, KeyError):
-        pass
-
-    # Mode compliance filter: skip tasks not allowed in current operating mode
+    # Mode compliance filter
     _current_mode = None
     try:
         from clarvis.runtime.mode import get_mode, is_task_allowed_for_mode
@@ -304,192 +490,27 @@ def score_tasks(tasks, codelet_result=None):
         pass
 
     scored = []
-
     for task in tasks:
-        text = task["text"]
-        section = task["section"]
-        text_lower = text.lower()
-
         # Mode gate: skip tasks disallowed by current operating mode
         if _current_mode and _current_mode != "ge":
             try:
-                allowed, _mode_reason = is_task_allowed_for_mode(text, _current_mode)
+                allowed, _ = is_task_allowed_for_mode(task["text"], _current_mode)
                 if not allowed:
                     continue
             except Exception:
                 pass
 
-        section_importance = {"P0": 0.9, "P1": 0.6, "P2": 0.3}.get(section, 0.3)
-
-        context_words = set(context.lower().split()) if context else set()
-        task_words = set(text_lower.split())
-        if task_words:
-            context_overlap = len(context_words & task_words) / len(task_words)
-            context_relevance = min(1.0, context_overlap * 2)
-        else:
-            context_relevance = 0.0
-
-        recent_words = set(recent_text.lower().split()) if recent_text else set()
-        if task_words:
-            recent_overlap = len(recent_words & task_words) / len(task_words)
-            recent_relevance = min(1.0, recent_overlap * 1.5)
-        else:
-            recent_relevance = 0.0
-
-        relevance = max(context_relevance, recent_relevance * 0.8, 0.3)
-
-        agi_boost = 0.0
-        for kw in AGI_KEYWORDS:
-            if kw in text_lower:
-                agi_boost = min(0.3, agi_boost + 0.1)
-
-        integration_boost = 0.0
-        for kw in INTEGRATION_KEYWORDS:
-            if kw in text_lower:
-                integration_boost = min(0.2, integration_boost + 0.1)
-
-        architectural_boost = 0.0
-        for kw in ARCHITECTURAL_KEYWORDS:
-            if kw in text_lower:
-                architectural_boost = min(0.2, architectural_boost + 0.1)
-
-        spotlight_align = _spotlight_alignment(text, theme_words, spotlight_texts)
-
-        somatic_bias = 0.0
-        somatic_signal = "neutral"
-        if somatic is not None:
-            try:
-                bias_result = somatic.get_bias(text)
-                somatic_bias = bias_result.get("bias_score", 0.0)
-                somatic_signal = bias_result.get("signal", "neutral")
-            except Exception:
-                pass
-
-        codelet_bias = 0.0
-        if codelet_result:
-            try:
-                competition = get_codelet_competition()
-                codelet_bias = competition.bias_for_task(text)
-            except Exception:
-                pass
-
-        # Failure penalty via pre-fetched docs (string match, no per-task brain call)
-        failure_penalty = 0.0
-        if _failure_docs:
-            task_keywords = {w for w in text_lower.split() if len(w) > 4}
-            for fdoc in _failure_docs:
-                if any(kw in fdoc for kw in task_keywords):
-                    failure_penalty = min(0.15, failure_penalty + 0.05)
-
-        # Novelty: boost tasks that differ from recent completed work
-        novelty = _compute_novelty(text, recent_completed)
-
-        # Improve-existing-over-new policy bias
-        improve_bias = _improve_existing_bias(text)
-
-        # Context-improvement boost when context_relevance < threshold
-        cr_boost = 0.0
-        if _cr_boost_active:
-            for kw in CONTEXT_IMPROVEMENT_KEYWORDS:
-                if kw in text_lower:
-                    cr_boost = min(0.35, cr_boost + 0.1)
-
-        total_boost = agi_boost + integration_boost + architectural_boost - failure_penalty + improve_bias + cr_boost
-
-        effective_relevance = min(1.0, relevance + spotlight_align * 0.15)
-        item = attention.submit(
-            content=f"TASK: {text[:120]}",
-            source="evolution_queue",
-            importance=section_importance,
-            relevance=effective_relevance,
-            boost=total_boost,
+        result = _score_single_task(
+            task, context, recent_text, theme_words, spotlight_texts,
+            recent_completed, failure_docs, cr_boost_active, codelet_result,
         )
+        if result:
+            scored.append(result)
 
-        salience = item.salience()
-
-        somatic_component = max(0.0, min(1.0, 0.5 + somatic_bias))
-        codelet_component = max(0.0, min(1.0, 0.5 + codelet_bias))
-        base_final = (0.70 * salience + 0.10 * spotlight_align
-                      + 0.10 * somatic_component + 0.10 * codelet_component)
-
-        # Novelty boost: prevent "more of the same" trap
-        # final_score = base_score * (1 + 0.3 * novelty)
-        final_score = base_final * (1.0 + 0.3 * novelty)
-
-        scored.append({
-            "text": text,
-            "section": section,
-            "line_num": task["line_num"],
-            "salience": round(final_score, 4),
-            "details": {
-                "section_importance": section_importance,
-                "context_relevance": round(context_relevance, 3),
-                "recent_relevance": round(recent_relevance, 3),
-                "agi_boost": round(agi_boost, 3),
-                "integration_boost": round(integration_boost, 3),
-                "architectural_boost": round(architectural_boost, 3),
-                "combined_relevance": round(relevance, 3),
-                "spotlight_alignment": round(spotlight_align, 3),
-                "somatic_bias": round(somatic_bias, 4),
-                "somatic_signal": somatic_signal,
-                "codelet_bias": round(codelet_bias, 4),
-                "failure_penalty": round(failure_penalty, 3),
-                "improve_bias": round(improve_bias, 3),
-                "novelty": round(novelty, 4),
-                "base_salience": round(salience, 4),
-            }
-        })
-
-    # Delivery lock: penalize non-delivery tasks when lock is active
-    _delivery_locked = os.path.exists(DELIVERY_LOCK_FILE)
-    if _delivery_locked:
-        _DLV_KEYWORDS = {"dlv", "delivery", "cleanup", "consolidat", "wire", "wiring",
-                         "test", "context", "website", "open-source", "readiness",
-                         "presentation", "repo", "bug", "fix"}
-        for item in scored:
-            t = item["text"].lower()
-            is_delivery = any(kw in t for kw in _DLV_KEYWORDS)
-            if not is_delivery:
-                item["salience"] = round(item["salience"] * 0.3, 4)
-                item["details"]["delivery_lock_penalty"] = True
-
+    _apply_delivery_lock(scored)
     scored.sort(key=lambda x: x["salience"], reverse=True)
-
-    # P0 priority floor: guarantee P0 tasks always rank in top-3.
-    # Without this, well-aligned P1/P2 tasks can outrank P0 delivery items,
-    # undermining deadline commitments.
-    _P0_FLOOR_RANK = 3
-    p0_in_top = sum(1 for s in scored[:_P0_FLOOR_RANK] if s["section"] == "P0")
-    p0_below = [i for i, s in enumerate(scored) if s["section"] == "P0" and i >= _P0_FLOOR_RANK]
-    if p0_below:
-        # Find non-P0 items in top-3 that can be displaced
-        non_p0_top = [i for i in range(_P0_FLOOR_RANK) if i < len(scored) and scored[i]["section"] != "P0"]
-        for p0_idx in p0_below:
-            if not non_p0_top:
-                break
-            swap_idx = non_p0_top.pop()  # displace lowest non-P0 in top-3
-            scored[swap_idx], scored[p0_idx] = scored[p0_idx], scored[swap_idx]
-            scored[swap_idx]["details"]["p0_floor_promoted"] = True
-
-    # World model re-ranking: adjust scores by predicted success probability
-    if _wm is not None and len(scored) > 1:
-        try:
-            top_candidates = scored[:min(5, len(scored))]
-            for item in top_candidates:
-                prediction = _wm.predict(item["text"])
-                if prediction:
-                    p_success = prediction.get("p_success", 0.5)
-                    curiosity = prediction.get("curiosity", 0.0)
-                    # Blend: 85% original salience + 15% world model signal
-                    wm_signal = p_success * 0.7 + curiosity * 0.3
-                    item["salience"] = round(
-                        0.85 * item["salience"] + 0.15 * wm_signal, 4
-                    )
-                    item["details"]["wm_p_success"] = round(p_success, 3)
-                    item["details"]["wm_curiosity"] = round(curiosity, 3)
-        except Exception:
-            pass  # World model failure is non-fatal
-        scored.sort(key=lambda x: x["salience"], reverse=True)
+    _enforce_p0_floor(scored)
+    _apply_world_model_reranking(scored)
 
     if thought_proto and scored:
         try:
