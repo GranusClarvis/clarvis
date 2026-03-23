@@ -71,7 +71,10 @@ __pycache__/
 # --- Docker ---
 .docker/
 docker-compose.override.yml
+
+# --- Runtime data (never version) ---
 data/
+monitoring/
 
 # --- Agent worktrees (managed by agent_lifecycle.py) ---
 .claude/worktrees/

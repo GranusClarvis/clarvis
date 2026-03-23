@@ -21,13 +21,12 @@ Presentable Clarvis by 2026-03-31:
 - [~] [SEMANTIC_CROSS_COLLECTION_BRIDGES] Strengthen weak cross-collection semantic links. Current semantic_cross_collection=0.62 (target >0.75). _(2026-03-19: Added 13 bridge memories across 3 weakest pairs. Phi full computation times out at 120s due to 99k graph edges + 720 ONNX queries. Pair scores: proc↔learn=0.600, ctx↔goals=0.644, ep↔infra=0.555. Need graph compaction or parallel queries to verify full Phi. Blocked on compute time. Checklist B8.)_
 
 ### Milestone C — Repo / Open-Source Readiness (by 2026-03-26)
-- [ ] [C3_VERIFY_GITIGNORE_AND_TRACKED_DATA] Verify `data/` and `monitoring/` ignore rules by checking tracked files, untracking anything that should not be versioned, and documenting safe boundaries. _(Checklist C3.)_
-- [ ] [C5_CONSOLIDATE_TESTS] Consolidate split tests under `tests/` (from `tests/`, `scripts/tests/`, `clarvis/tests/`) with minimal breakage. _(Checklist C5.)_
-- [x] [C6_ADD_ROOT_README] Add a strong root `README.md` explaining what Clarvis is, architecture at a glance, quick start, repo boundaries, and current status. _(Checklist C6 — critical path. Done 2026-03-23: README enhanced with Current Status table and Repo Boundaries section.)_
+- [x] [C3_VERIFY_GITIGNORE_AND_TRACKED_DATA] Added `monitoring/` to .gitignore, untracked `data/golden_qa.json` + 3 monitoring files. Verified: 0 tracked files in data/ or monitoring/, 0 .pyc tracked. _(Done 2026-03-23.)_
+- [x] [C5_CONSOLIDATE_TESTS] Consolidated 3 test dirs into `tests/` (tests/clarvis/ + tests/scripts/ + root tests/). Updated pyproject.toml testpaths. 1798 tests collect, 85/86 pass (1 pre-existing). _(Done 2026-03-23.)_
 - [ ] [C11_CLARVIS_DB_EXTRACTION_PLAN] Extract or isolate `clarvis-db` boundary into a separate repo/package plan with scrubbed public-facing structure, LICENSE, and CI requirements documented. _(Checklist C11 — nice-to-have but important repo-boundary work.)_
 
 ### Milestone D — Public Surface (by 2026-03-29)
-- [ ] [D1_WEBSITE_V0_SCAFFOLD] Build website v0 scaffold from `docs/WEBSITE_V0_INFORMATION_ARCH.md`. Prioritize static, fast, minimally styled public presence over polish. _(Checklist D1 — critical path.)_
+- [x] [D1_WEBSITE_V0_SCAFFOLD] Built 5-page static website (index, architecture, repos, benchmarks, roadmap) + Starlette server + shared CSS. All routes 200. Polls /api/public/status (stub until D2). _(Done 2026-03-23.)_
 - [ ] [D2_PUBLIC_STATUS_ENDPOINT] Implement `/api/status` or equivalent public feed endpoint with the documented data contract. _(Checklist D2.)_
 - [ ] [D3_CLR_ON_WEBSITE] Surface CLR score on website v0 once endpoint/scaffold exists. _(Checklist D3.)_
 - [ ] [D4_ARCHITECTURE_PAGE] Publish sanitized architecture page derived from SELF.md/ROADMAP.md without private/internal details. _(Checklist D4.)_

@@ -4,36 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Repos &amp; Boundaries — Clarvis</title>
+<link rel="stylesheet" href="/static/style.css">
 <style>
-  :root {
-    --bg: #0d1117;
-    --surface: #161b22;
-    --border: #30363d;
-    --text: #c9d1d9;
-    --text-muted: #8b949e;
-    --accent: #58a6ff;
-    --green: #3fb950;
-    --yellow: #d29922;
-  }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    line-height: 1.6;
-    padding: 2rem 1rem;
-    max-width: 800px;
-    margin: 0 auto;
-  }
-  a { color: var(--accent); text-decoration: none; }
-  a:hover { text-decoration: underline; }
-
-  nav { margin-bottom: 2rem; font-size: 0.875rem; color: var(--text-muted); }
-  nav a { margin-right: 1rem; }
-
-  h1 { font-size: 1.75rem; margin-bottom: 0.5rem; }
-  .subtitle { color: var(--text-muted); margin-bottom: 2rem; font-size: 0.95rem; }
-
   .repo-card {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -49,27 +21,6 @@
     flex-wrap: wrap;
   }
   .repo-name { font-size: 1.25rem; font-weight: 600; }
-  .badge {
-    font-size: 0.75rem;
-    padding: 0.15rem 0.5rem;
-    border-radius: 999px;
-    font-weight: 500;
-  }
-  .badge-stabilizing {
-    background: rgba(210, 153, 34, 0.15);
-    color: var(--yellow);
-    border: 1px solid rgba(210, 153, 34, 0.4);
-  }
-  .badge-internal {
-    background: rgba(139, 148, 158, 0.15);
-    color: var(--text-muted);
-    border: 1px solid rgba(139, 148, 158, 0.4);
-  }
-  .badge-public {
-    background: rgba(63, 185, 80, 0.15);
-    color: var(--green);
-    border: 1px solid rgba(63, 185, 80, 0.4);
-  }
   .repo-desc { color: var(--text-muted); margin-bottom: 1rem; }
   .repo-details { font-size: 0.875rem; }
   .repo-details dt {
@@ -78,7 +29,6 @@
     margin-top: 0.5rem;
   }
   .repo-details dd { margin-left: 0; }
-
   .boundary-section {
     margin-top: 2.5rem;
     padding-top: 1.5rem;
@@ -86,7 +36,6 @@
   }
   .boundary-section h2 { font-size: 1.25rem; margin-bottom: 0.75rem; }
   .boundary-section p { color: var(--text-muted); margin-bottom: 1rem; font-size: 0.9rem; }
-
   .policy-list {
     list-style: none;
     font-size: 0.875rem;

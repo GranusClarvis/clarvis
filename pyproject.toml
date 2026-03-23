@@ -33,8 +33,8 @@ select = ["E9", "F63", "F7", "F82"]
 ignore = []
 
 [tool.pytest.ini_options]
-testpaths = ["clarvis/tests", "packages"]
-norecursedirs = ["scripts", "data", "memory", "monitoring", "skills", "docs", ".git"]
+testpaths = ["tests", "packages"]
+norecursedirs = ["data", "memory", "monitoring", "skills", "docs", ".git"]
 markers = [
     "slow: marks tests that need ChromaDB (deselect with '-m \"not slow\"')",
 ]

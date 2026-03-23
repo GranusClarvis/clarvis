@@ -1439,3 +1439,6 @@ _Last archived: 2026-03-17_
 
 ## Archived 2026-03-22
 - [x] [E4_WEBSITE_V0_LIVE] Confirm website v0 is live and publicly accessible. _(Checklist E4. Blocked on D1+D6: no scaffold or deployment exists yet. Only `website/static/repos.html` exists. 2026-03-22.)_ (2026-03-22 23:03 UTC)
+
+## Archived 2026-03-23
+- [x] [C6_ADD_ROOT_README] Add a strong root `README.md` explaining what Clarvis is, architecture at a glance, quick start, repo boundaries, and current status. _(Checklist C6 — critical path. Done 2026-03-23: README enhanced with Current Status table and Repo Boundaries section.)_

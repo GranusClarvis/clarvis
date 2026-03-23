@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Architecture — Clarvis</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<nav>
+  <a href="/">Home</a>
+  <a href="/architecture" aria-current="page">Architecture</a>
+  <a href="/repos">Repos</a>
+  <a href="/benchmarks">Benchmarks</a>
+  <a href="/roadmap">Roadmap</a>
+</nav>
+
+<h1>Architecture</h1>
+<p class="subtitle">How Clarvis thinks, remembers, and evolves.</p>
+
+<div class="arch-diagram">Conscious Layer (direct interaction)
+  ├── LLM gateway (Node.js, systemd)
+  ├── Chat channels (Telegram, Discord)
+  ├── Skills and command routing
+  └── Reads subconscious digest for context
+
+Subconscious Layer (autonomous, cron-scheduled)
+  ├── 20+ scheduled jobs (planning, evolution, reflection, research)
+  ├── Heartbeat pipeline (gate → preflight → execute → postflight)
+  ├── Brain read/write (ClarvisDB)
+  └── Writes results to digest for conscious layer
+
+Brain (ClarvisDB)
+  ├── ChromaDB vector store (fully local, ONNX embeddings)
+  ├── 10 memory collections (identity, episodes, learnings, procedures, ...)
+  ├── Graph relations (SQLite + WAL, indexed, ACID)
+  └── Hebbian learning dynamics (STDP synapses)</div>
+
+<h2>Core Components</h2>
+
+<div class="card">
+  <h3>Clarvis Runtime</h3>
+  <p>
+    The autonomous evolution runtime. Manages the heartbeat pipeline, cron orchestration,
+    task routing, operating modes, and self-directed improvement. The conscious layer handles
+    direct interaction; the subconscious layer runs autonomously on a schedule.
+  </p>
+</div>
+
+<div class="card">
+  <h3>ClarvisDB (Memory Substrate)</h3>
+  <p>
+    ChromaDB-backed vector memory with ONNX MiniLM embeddings, fully local with zero cloud
+    dependencies. Supports 10 specialized collections, graph-based relations with dual-backend
+    (JSON legacy + SQLite indexed), and Hebbian learning for connection strengthening between
+    related memories.
+  </p>
+</div>
+
+<div class="card">
+  <h3>Context Assembly</h3>
+  <p>
+    Internal module that compresses and assembles context for each task execution. Pulls from
+    brain search, episodic memory, working memory, and active directives to build focused
+    prompts. Not exposed as a separate package &mdash; tightly coupled to the runtime.
+  </p>
+</div>
+
+<div class="section-divider">
+  <h2>Runtime Modes</h2>
+  <p class="identity">Clarvis operates in one of three modes, which govern autonomous behavior:</p>
+
+  <div class="card">
+    <h3>GE &mdash; Glorious Evolution</h3>
+    <p>Full autonomy: self-directed research, queue filling, and evolution.</p>
+  </div>
+
+  <div class="card">
+    <h3>Architecture / Maintenance</h3>
+    <p>Focus on fixing, wiring, simplifying, and benchmarking existing systems. No broad self-added feature work.</p>
+  </div>
+
+  <div class="card">
+    <h3>Passive / User-Directed</h3>
+    <p>Work only when prompted. No autonomous queue generation or self-directed research.</p>
+  </div>
+</div>
+
+<div class="section-divider">
+  <h2>Invariants</h2>
+  <ul class="clean-list">
+    <li>All memory and embeddings are local &mdash; no cloud calls for retrieval</li>
+    <li>Subconscious jobs acquire global lock for mutual exclusion</li>
+    <li>Heartbeat gate checks health before every autonomous task</li>
+    <li>Mode switching changes policy, not task continuity</li>
+    <li>Public endpoints never expose private memory, secrets, or internal paths</li>
+  </ul>
+</div>
+
+<footer>
+  <p>Built by <a href="https://github.com/GranusClarvis">Granus Labs</a> &middot; <a href="https://github.com/GranusClarvis/clarvis">Source</a></p>
+</footer>
+
+</body>
+</html>
