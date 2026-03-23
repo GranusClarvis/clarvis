@@ -31,18 +31,15 @@ Presentable Clarvis by 2026-03-31:
 ## P1 — This Week
 
 - [ ] [LLM_BRAIN_REVIEW 2026-03-23] [LLM_BRAIN_REVIEW] Audit clarvis-identity collection — it appears to contain mostly creator/origin info. Enrich it with operational identity: what Clarvis IS (architecture), what it DOES (capabilities), and how it WORKS (key subsystems). — clarvis-identity surfaced 'who created Clarvis' for an architecture query, suggesting the collection is too narrow. Identity should encompass architectural self-knowledge, not just origin story.
-- [x] [DECOMPOSE_LONG_FUNCTIONS] Decompose oversized functions still above target length: `clarvis/heartbeat/gate.py:check_gate`, `clarvis/orch/task_selector.py:score_tasks`, `scripts/heartbeat_gate.py:check_gate`. Target: all functions ≤80 lines. _(Done 2026-03-23: score_tasks 282→66 lines (extracted 7 helpers), both check_gate functions decomposed into _check_force_wake + _detect_file_changes. All functions now ≤66 lines. Syntax + import + runtime verified.)_
-- [x] [DIRECTIVE_LLM_CLASSIFIER_UPGRADE] Add optional LLM-based classification fallback for ambiguous directives where rule-based classifier confidence < 0.5. Use task_router to pick cheapest model. Gate behind env var `DIRECTIVE_LLM_CLASSIFY=true`. _(Done 2026-03-23: Added `_llm_classify_fallback()` to directive_engine.py. Uses minimax-m2.5 via OpenRouter. Gated by env var, degrades gracefully on API failure. Tested: high-conf directives skip LLM, low-conf triggers fallback attempt.)_
 
 ### Repo / Spine Audit
-- [x] [SPINE_AUDIT_ERRATA_AND_LABELING] Apply Phase 0 of `docs/SPINE_CLEANUP_PLAN.md`: add status/header comments to bridge wrappers and confirmed-dead scripts, and add an errata note linking `SPINE_USAGE_AUDIT.md` to `SPINE_CLEANUP_PLAN.md` so nobody follows the over-aggressive deletion claims blindly. _(Done 2026-03-23: 8 bridge wrappers labeled with BRIDGE + known callers, 8 research scripts labeled with STATUS: production-wired, errata banner added to SPINE_USAGE_AUDIT.md linking to SPINE_CLEANUP_PLAN.md.)_
 - [ ] [LEGACY_IMPORT_MIGRATION_PHASE1] Execute Phase 2 starting with the highest-risk/high-value migration: replace legacy wrapper imports inside `heartbeat_preflight.py` and `heartbeat_postflight.py` with direct `clarvis.*` imports where equivalent spine modules are confirmed. Do this incrementally with rollback-ready commits.
-- [ ] [DO_NOT_TOUCH_REGISTRY] Materialize the `Do Not Touch Yet` section from `docs/SPINE_CLEANUP_PLAN.md` into a maintained registry/document for cleanup safety. This should list heartbeat runtime, bridge wrappers, context engine, brain wrappers, cron shells, and other high-risk modules that must not be casually moved/removed.
-- [ ] [OPEN_SOURCE_STRUCTURE_PHASED_PLAN] Convert Phases 0-4 from `docs/SPINE_CLEANUP_PLAN.md` into an execution checklist with preconditions, validation checks, rollback notes, and day-by-day ordering through the open-source window.
+- [x] [DO_NOT_TOUCH_REGISTRY] Created `docs/DO_NOT_TOUCH_REGISTRY.md` — 7 categories covering heartbeat runtime, bridge wrappers, context engine, brain wrappers, misclassified research scripts, cron infrastructure, and other protected modules. Includes verification quick-reference. _(2026-03-23)_
+- [x] [OPEN_SOURCE_STRUCTURE_PHASED_PLAN] Created `docs/OPEN_SOURCE_EXECUTION_CHECKLIST.md` — Phase 0-4 converted to day-by-day execution checklist with preconditions, validation checks, rollback notes, and pre-launch checklist. _(2026-03-23)_
 
 ### Website / Public Presence
 - [ ] [CLARVIS_STYLEGUIDE_V1] Define Clarvis visual identity for public-facing surfaces. Deliver a compact styleguide covering color system, typography, spacing scale, panel/card language, buttons/links, motion principles, icon/diagram treatment, and copy tone. Goal: reusable design language for website, dashboards, docs, and future tools — unmistakably Clarvis, not generic SaaS chrome.
-- [ ] [WEBSITE_REFINEMENT_PASS] Refine website v0 into a stronger front-facing presentation of Clarvis. Improve visual hierarchy, polish spacing/layout, add cleaner animations, and align all pages to `CLARVIS_STYLEGUIDE_V1`. Goal: feel deliberate, distinctive, and worth starring — not merely functional.
+- [x] [WEBSITE_REFINEMENT_PASS] Refined website CSS and homepage: gradient hero, feature grid, entrance animations, hover effects, stronger type scale, distinctive spacing system, polished card design, live-dot pulse indicator. Repos page cleaned up (inline styles → shared CSS). _(2026-03-23)_
 - [ ] [WEBSITE_POSITIONING_AND_COPY] Rewrite homepage and key public pages for interest and conversion: what Clarvis is, why it matters, what makes it different, current capabilities, architecture highlights, and why someone should care / follow / star the repo. Goal: market Clarvis as a compelling evolving agent, not just document it.
 
 ### Benchmarking / CLR v2
@@ -85,5 +82,4 @@ Presentable Clarvis by 2026-03-31:
 _Design: `docs/ADAPTIVE_RAG_PLAN.md` — 4-phase rollout (GATE → EVAL → RETRY → FEEDBACK). Each phase independently useful. Demoted: not needed for 2026-03-31 delivery._
 
 ### Research Sessions
-- [x] [RESEARCH_ATTENTION_SCHEMA_CONSCIOUSNESS_ARCHITECTURES] Investigate Attention Schema Theory as a machine-consciousness architecture. _(2026-03-23)_
 _(Completed items archived.)_

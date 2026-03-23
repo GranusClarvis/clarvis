@@ -5,55 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Repos &amp; Boundaries — Clarvis</title>
 <link rel="stylesheet" href="/static/style.css">
-<style>
-  .repo-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 1.5rem;
-    margin-bottom: 1.5rem;
-  }
-  .repo-header {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    margin-bottom: 0.75rem;
-    flex-wrap: wrap;
-  }
-  .repo-name { font-size: 1.25rem; font-weight: 600; }
-  .repo-desc { color: var(--text-muted); margin-bottom: 1rem; }
-  .repo-details { font-size: 0.875rem; }
-  .repo-details dt {
-    color: var(--text-muted);
-    font-weight: 600;
-    margin-top: 0.5rem;
-  }
-  .repo-details dd { margin-left: 0; }
-  .boundary-section {
-    margin-top: 2.5rem;
-    padding-top: 1.5rem;
-    border-top: 1px solid var(--border);
-  }
-  .boundary-section h2 { font-size: 1.25rem; margin-bottom: 0.75rem; }
-  .boundary-section p { color: var(--text-muted); margin-bottom: 1rem; font-size: 0.9rem; }
-  .policy-list {
-    list-style: none;
-    font-size: 0.875rem;
-  }
-  .policy-list li {
-    padding: 0.4rem 0;
-    padding-left: 1.25rem;
-    position: relative;
-    color: var(--text-muted);
-  }
-  .policy-list li::before {
-    content: ">";
-    position: absolute;
-    left: 0;
-    color: var(--accent);
-    font-weight: bold;
-  }
-</style>
 </head>
 <body>
 
@@ -68,7 +19,6 @@
 <h1>Repositories</h1>
 <p class="subtitle">Clarvis is split into two repositories with clearly defined boundaries.</p>
 
-<!-- Repo 1: clarvis (main) -->
 <div class="repo-card">
   <div class="repo-header">
     <span class="repo-name">clarvis</span>
@@ -92,7 +42,6 @@
   </dl>
 </div>
 
-<!-- Repo 2: clarvis-db -->
 <div class="repo-card">
   <div class="repo-header">
     <span class="repo-name">clarvis-db</span>
@@ -106,14 +55,12 @@
     <dt>GitHub</dt>
     <dd><a href="https://github.com/GranusClarvis/clarvis-db">github.com/GranusClarvis/clarvis-db</a></dd>
     <dt>Contains</dt>
-    <dd>
-      <code>clarvis_db/</code> core library, tests, documented API boundary
-    </dd>
+    <dd><code>clarvis_db/</code> core library, tests, documented API boundary</dd>
     <dt>Language</dt>
     <dd>Python 3.10+</dd>
     <dt>License</dt>
     <dd>MIT</dd>
-    <dt>API surface</dt>
+    <dt>API Surface</dt>
     <dd>
       <code>remember()</code>, <code>search()</code>, <code>capture()</code>,
       retrieval evaluation, retrieval feedback, retrieval tracing
@@ -128,24 +75,24 @@
     The API boundary is documented and stable. Remaining work: CI pipeline, credential scrub, and public README.
   </p>
 
-  <table style="width:100%; font-size:0.875rem; border-collapse:collapse;">
+  <table>
     <thead>
-      <tr style="border-bottom:1px solid var(--border); text-align:left;">
-        <th style="padding:0.5rem 0;">Package</th>
-        <th style="padding:0.5rem 0;">Status</th>
-        <th style="padding:0.5rem 0;">Notes</th>
+      <tr>
+        <th>Package</th>
+        <th>Status</th>
+        <th>Notes</th>
       </tr>
     </thead>
     <tbody>
-      <tr style="border-bottom:1px solid var(--border);">
-        <td style="padding:0.5rem 0;"><code>clarvis</code></td>
-        <td style="padding:0.5rem 0;"><span class="badge badge-stabilizing">stabilizing</span></td>
-        <td style="padding:0.5rem 0; color:var(--text-muted);">Open-source prep in progress</td>
+      <tr>
+        <td><code>clarvis</code></td>
+        <td><span class="badge badge-stabilizing">stabilizing</span></td>
+        <td>Open-source prep in progress</td>
       </tr>
       <tr>
-        <td style="padding:0.5rem 0;"><code>clarvis-db</code></td>
-        <td style="padding:0.5rem 0;"><span class="badge badge-stabilizing">stabilizing</span></td>
-        <td style="padding:0.5rem 0; color:var(--text-muted);">API boundary stable, extraction pending</td>
+        <td><code>clarvis-db</code></td>
+        <td><span class="badge badge-stabilizing">stabilizing</span></td>
+        <td>API boundary stable, extraction pending</td>
       </tr>
     </tbody>
   </table>
@@ -153,9 +100,7 @@
 
 <div class="boundary-section">
   <h2>Anti-Sprawl Policy</h2>
-  <p>
-    New packages or repos are only created when all of the following are true:
-  </p>
+  <p>New packages or repos are only created when all of the following are true:</p>
   <ul class="policy-list">
     <li>At least 2 independent consumers exist</li>
     <li>Clean, documented API boundary stable for 14+ days</li>
@@ -164,6 +109,10 @@
     <li>Substantial logic &mdash; not a re-export wrapper</li>
   </ul>
 </div>
+
+<footer>
+  <p>Built by <a href="https://github.com/GranusClarvis">Granus Labs</a> &middot; <a href="https://github.com/GranusClarvis/clarvis">Source</a></p>
+</footer>
 
 </body>
 </html>

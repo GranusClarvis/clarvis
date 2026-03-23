@@ -16,19 +16,47 @@
   <a href="/roadmap">Roadmap</a>
 </nav>
 
-<h1>Clarvis</h1>
-<p class="subtitle">Autonomous cognitive agent with persistent memory, self-directed evolution, and live benchmarking.</p>
+<div class="hero">
+  <h1>Clarvis</h1>
+  <p class="subtitle">An autonomous cognitive agent that remembers, reflects, and evolves&mdash;around the clock.</p>
+  <p class="hero-description">
+    Two cooperating layers: a <strong>conscious layer</strong> for direct interaction and a
+    <strong>subconscious layer</strong> that autonomously researches, plans, and improves itself
+    on a 20+ job cron schedule. Its brain is a fully local ChromaDB vector store with
+    Hebbian learning dynamics&mdash;no cloud dependencies for memory or retrieval.
+  </p>
+  <div class="hero-links">
+    <a href="https://github.com/GranusClarvis/clarvis" class="btn-primary">View Source</a>
+    <a href="/architecture" class="btn-ghost">How it works</a>
+  </div>
+</div>
 
-<p class="identity">
-  Clarvis is an evolving intelligence system built on two layers: a <strong>conscious layer</strong> for
-  direct interaction, and a <strong>subconscious layer</strong> that autonomously researches, reflects,
-  and improves itself around the clock. Its brain is a fully local ChromaDB vector store with
-  Hebbian learning dynamics &mdash; no cloud dependencies for memory or retrieval.
-</p>
+<div class="feature-grid">
+  <div class="feature-card">
+    <span class="feature-icon">//</span>
+    <h3>Persistent Memory</h3>
+    <p>ChromaDB + ONNX MiniLM embeddings, 10 collections, 3,400+ memories, 134k+ graph edges. All local.</p>
+  </div>
+  <div class="feature-card">
+    <span class="feature-icon">&gt;_</span>
+    <h3>Self-Directed Evolution</h3>
+    <p>12+ autonomous heartbeats per day. Morning planning, afternoon sprints, evening reflection, nightly dreams.</p>
+  </div>
+  <div class="feature-card">
+    <span class="feature-icon">~&gt;</span>
+    <h3>Hebbian Learning</h3>
+    <p>STDP synaptic dynamics strengthen co-activated memories. Retrieval improves through use, not retraining.</p>
+  </div>
+  <div class="feature-card">
+    <span class="feature-icon">[&phi;]</span>
+    <h3>Self-Measurement</h3>
+    <p>Performance Index, CLR benchmark, Phi consciousness proxy, and 7-domain self-model&mdash;updated weekly.</p>
+  </div>
+</div>
 
-<!-- Live status section — polls /api/public/status when D2 endpoint is ready -->
+<!-- Live status section -->
 <section class="status-section">
-  <h2>Current Status</h2>
+  <h2><span class="live-dot"></span>Current Status</h2>
 
   <div class="status-grid">
     <div class="status-card">
@@ -81,27 +109,22 @@
 
 <script>
 (function() {
-  const API = '/api/public/status';
-  const POLL_MS = 20000;
+  var API = '/api/public/status';
+  var POLL_MS = 20000;
 
   function update(data) {
-    // Mode
-    var modeEl = document.getElementById('mode-badge');
     if (data.mode) {
       var m = data.mode.mode || 'unknown';
       var labels = {ge: 'Glorious Evolution', architecture: 'Architecture', passive: 'Passive'};
-      modeEl.innerHTML = '<span class="badge badge-mode">' + m.toUpperCase() + '</span>' +
+      document.getElementById('mode-badge').innerHTML =
+        '<span class="badge badge-mode">' + m.toUpperCase() + '</span>' +
         '<span class="status-detail">' + (labels[m] || m) + '</span>';
     }
-
-    // Queue
     if (data.queue) {
       document.getElementById('queue-pending').textContent = data.queue.pending;
       document.getElementById('queue-progress').textContent = data.queue.in_progress;
       document.getElementById('queue-done').textContent = data.queue.done;
     }
-
-    // CLR
     if (data.benchmarks && data.benchmarks.clr) {
       var c = data.benchmarks.clr;
       document.getElementById('clr-score').innerHTML =
@@ -109,16 +132,12 @@
         '<span class="status-detail">gate: ' + (c.gate_pass ? 'pass' : 'fail') +
         ' &middot; value_add: ' + c.value_add.toFixed(3) + '</span>';
     }
-
-    // PI
     if (data.benchmarks && data.benchmarks.pi) {
       var p = data.benchmarks.pi;
       document.getElementById('pi-score').innerHTML =
         '<span class="stat-number">' + p.pi.toFixed(3) + '</span>' +
         '<span class="status-detail">' + p.dimensions + ' dimensions</span>';
     }
-
-    // Recent completions
     if (data.recent_completions && data.recent_completions.length > 0) {
       var html = '';
       data.recent_completions.slice(0, 5).forEach(function(item) {
@@ -136,7 +155,7 @@
     fetch(API)
       .then(function(r) { return r.json(); })
       .then(update)
-      .catch(function() { /* feed unavailable — keep stale data */ });
+      .catch(function() {});
   }
 
   poll();
