@@ -1704,6 +1704,50 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
             _pf_errors.append("memory_evolution")
     timings["memory_evolution"] = round(time.monotonic() - t749, 3)
 
+    # === 7.495 ACTION-ACCURACY REGRESSION GUARD ===
+    # Compute trailing-20 action accuracy; if <0.95, push P1 diagnostic task.
+    t7495 = time.monotonic()
+    try:
+        if EpisodicMemory:
+            _em_aa = EpisodicMemory()
+            _recent_eps = _em_aa.episodes[-20:] if len(_em_aa.episodes) >= 20 else _em_aa.episodes
+            if len(_recent_eps) >= 10:  # need at least 10 episodes for signal
+                # Action accuracy = successes / (total - timeouts - soft_failures)
+                _aa_successes = sum(1 for e in _recent_eps if e.get("outcome") == "success")
+                _aa_soft = sum(1 for e in _recent_eps if e.get("outcome") == "soft_failure")
+                _aa_timeouts = sum(1 for e in _recent_eps if e.get("outcome") == "timeout")
+                _aa_denom = len(_recent_eps) - _aa_soft - _aa_timeouts
+                if _aa_denom > 0:
+                    _aa_score = round(_aa_successes / _aa_denom, 3)
+                    log(f"ACTION ACCURACY: trailing-{len(_recent_eps)} = {_aa_score:.3f} "
+                        f"({_aa_successes}/{_aa_denom} excl {_aa_soft} soft_fail, {_aa_timeouts} timeout)")
+                    if _aa_score < 0.95:
+                        # Collect failing action IDs for diagnostics
+                        _failing_ids = [
+                            e.get("id", e.get("task", "?")[:40])
+                            for e in _recent_eps
+                            if e.get("outcome") == "failure"
+                        ]
+                        _failing_str = ", ".join(_failing_ids[:5])
+                        _diag_task = (
+                            f"[ACTION_ACCURACY_DIAGNOSTIC] Action accuracy dropped to {_aa_score:.3f} "
+                            f"(threshold: 0.95). Failing episodes: {_failing_str}. "
+                            f"Investigate root causes and fix."
+                        )
+                        try:
+                            from queue_writer import add_task
+                            added = add_task(_diag_task, priority="P1",
+                                             source="action_accuracy_guard")
+                            if added:
+                                log(f"ACTION ACCURACY GUARD: pushed P1 diagnostic (score={_aa_score})")
+                        except Exception as e2:
+                            log(f"ACTION ACCURACY GUARD: queue push failed: {e2}")
+                else:
+                    log(f"ACTION ACCURACY: insufficient non-timeout/non-soft episodes in trailing-{len(_recent_eps)}")
+    except Exception as e:
+        log(f"Action accuracy guard failed (non-fatal): {e}")
+    timings["action_accuracy_guard"] = round(time.monotonic() - t7495, 3)
+
     # === 7.5 COST TRACKING ===
     t75 = time.monotonic()
     if cost_tracker:

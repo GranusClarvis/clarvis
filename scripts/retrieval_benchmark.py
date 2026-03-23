@@ -54,6 +54,7 @@ BENCHMARK_PAIRS = [
         "expected_substrings": ["patrick", "inverse", "granus"],
         "expected_collections": [IDENTITY],
         "category": "identity",
+        "gold_evidence": "Clarvis was created by Patrick (known as Inverse/GranusClarvis). Patrick is the sole creator and operator of the Clarvis cognitive agent system.",
     },
     {
         "id": "B02",
@@ -61,6 +62,7 @@ BENCHMARK_PAIRS = [
         "expected_substrings": ["capability", "git", "web search", "code"],
         "expected_collections": [IDENTITY],
         "category": "identity",
+        "gold_evidence": "Clarvis capabilities include: code generation and review, git operations, web search and browsing, memory storage and retrieval via ClarvisDB, autonomous task execution, research ingestion, and self-reflection.",
     },
     # --- Goals ---
     {
@@ -69,6 +71,7 @@ BENCHMARK_PAIRS = [
         "expected_substrings": ["goal", "clarvisdb", "agi", "consciousness", "north star"],
         "expected_collections": [GOALS],
         "category": "goals",
+        "gold_evidence": "North star goal: evolve toward AGI-like consciousness. Current goals include ClarvisDB brain improvement, performance tracking, agent orchestration, and autonomous self-improvement.",
     },
     {
         "id": "B04",
@@ -76,6 +79,7 @@ BENCHMARK_PAIRS = [
         "expected_substrings": ["session continuity"],
         "expected_collections": [GOALS],
         "category": "goals",
+        "gold_evidence": "Session continuity goal: maintain coherent identity and memory across conversation sessions. Progress tracked via episodic memory persistence and working memory carryover.",
     },
     {
         "id": "B05",
@@ -83,6 +87,7 @@ BENCHMARK_PAIRS = [
         "expected_substrings": ["agi", "consciousness"],
         "expected_collections": [GOALS, LEARNINGS, MEMORIES],
         "category": "goals",
+        "gold_evidence": "AGI and consciousness progress: Phi (IIT) metric implemented, GWT attention mechanism active, episodic memory with causal links, self-model with 7 capability domains, meta-cognitive reflection pipeline.",
     },
     # --- Infrastructure ---
     {
@@ -91,6 +96,7 @@ BENCHMARK_PAIRS = [
         "expected_substrings": ["127.0.0.1", "18789", "gateway"],
         "expected_collections": [INFRASTRUCTURE],
         "category": "infrastructure",
+        "gold_evidence": "OpenClaw gateway runs on 127.0.0.1:18789. Managed via systemd (systemctl --user). MiniMax M2.5 model for conscious layer chat.",
     },
     {
         "id": "B07",
@@ -98,6 +104,7 @@ BENCHMARK_PAIRS = [
         "expected_substrings": ["brain.py", "chromadb", "clarvisdb"],
         "expected_collections": [INFRASTRUCTURE, LEARNINGS],
         "category": "infrastructure",
+        "gold_evidence": "ClarvisDB: ChromaDB + ONNX MiniLM embeddings, fully local. 10 collections. API through clarvis.brain spine module (CLI: python3 -m clarvis brain; legacy: scripts/brain.py). Graph supports dual backends: JSON + SQLite+WAL.",
     },
     {
         "id": "B08",
@@ -105,6 +112,7 @@ BENCHMARK_PAIRS = [
         "expected_substrings": ["security", "permission", "grouppolicy", "credential"],
         "expected_collections": [LEARNINGS, INFRASTRUCTURE],
         "category": "infrastructure",
+        "gold_evidence": "Security policy: credentials stored in auth.json, never committed. Permission boundaries enforced. GroupPolicy-like security model. Claude Code spawned with --dangerously-skip-permissions for cron automation.",
     },
     # --- Learnings & knowledge ---
     {
@@ -113,6 +121,7 @@ BENCHMARK_PAIRS = [
         "expected_substrings": ["attention", "spotlight", "gwt", "salience", "global workspace"],
         "expected_collections": [LEARNINGS, MEMORIES],
         "category": "knowledge",
+        "gold_evidence": "Attention mechanism implements Global Workspace Theory (GWT). Codelets submit items with importance/relevance scores. Spotlight selects top items for broadcast. Implements salience-based filtering for heartbeat task selection.",
     },
     {
         "id": "B10",
@@ -120,6 +129,7 @@ BENCHMARK_PAIRS = [
         "expected_substrings": ["brain.search", "memory_search", "clarvisdb"],
         "expected_collections": [LEARNINGS],
         "category": "knowledge",
+        "gold_evidence": "Learned: use brain.search (ClarvisDB) instead of deprecated memory_search. brain.search queries all collections, returns structured results with distances. memory_search was the old interface before ClarvisDB consolidation.",
     },
     {
         "id": "B11",
@@ -127,6 +137,7 @@ BENCHMARK_PAIRS = [
         "expected_substrings": ["autonomy", "act first", "ask first"],
         "expected_collections": [LEARNINGS],
         "category": "knowledge",
+        "gold_evidence": "Autonomy framework: act first on reversible, low-risk tasks. Ask first on irreversible, high-risk, or ambiguous tasks. Bias toward action for cron/heartbeat tasks. Always ask for git push, destructive ops, external communications.",
     },
     {
         "id": "B12",
@@ -134,6 +145,7 @@ BENCHMARK_PAIRS = [
         "expected_substrings": ["phi", "consciousness", "iit", "metric"],
         "expected_collections": [LEARNINGS, MEMORIES],
         "category": "knowledge",
+        "gold_evidence": "Phi metric based on IIT (Integrated Information Theory). Computed via phi_metric.py. Measures information integration across brain collections and graph connectivity. Higher phi = more integrated consciousness proxy.",
     },
     {
         "id": "B13",
@@ -141,6 +153,7 @@ BENCHMARK_PAIRS = [
         "expected_substrings": ["clarvisdb", "integrate", "wire", "built but didn't"],
         "expected_collections": [LEARNINGS],
         "category": "knowledge",
+        "gold_evidence": "Key lesson: we built ClarvisDB but didn't wire it into enough consumers. Integration requires connecting brain.search/recall into preflight context, postflight storage, and cron scripts. Integration debt = capability that exists but isn't used.",
     },
     # --- Procedures ---
     {
@@ -149,6 +162,7 @@ BENCHMARK_PAIRS = [
         "expected_substrings": ["cron_autonomous", "fix"],
         "expected_collections": [PROCEDURES, LEARNINGS],
         "category": "procedures",
+        "gold_evidence": "Fixing cron_autonomous: check lockfile /tmp/clarvis_claude_global.lock for stale locks. Verify cron_env.sh sources correctly. Check Claude Code binary path. Review exit codes in /tmp/clarvis_heartbeat_*.log.",
     },
     {
         "id": "B15",
@@ -156,6 +170,7 @@ BENCHMARK_PAIRS = [
         "expected_substrings": ["reasoning chain", "outcome"],
         "expected_collections": [PROCEDURES, LEARNINGS],
         "category": "procedures",
+        "gold_evidence": "Reasoning chain outcome procedure: reasoning_chain_hook.py close_chain() records outcome (success/failure) and confidence. Chain stored in data/reasoning_chains/. Postflight §2 calls close_chain with task status and output evidence.",
     },
     # --- Preferences ---
     {
@@ -164,6 +179,7 @@ BENCHMARK_PAIRS = [
         "expected_substrings": ["direct", "no fluff", "communication"],
         "expected_collections": [PREFERENCES, MEMORIES],
         "category": "preferences",
+        "gold_evidence": "Communication preferences: direct, no fluff, concise. Lead with the answer. Skip preamble and unnecessary transitions. Prefer short sentences. Only add comments where logic isn't self-evident.",
     },
     {
         "id": "B17",
@@ -171,6 +187,7 @@ BENCHMARK_PAIRS = [
         "expected_substrings": ["cet", "timezone"],
         "expected_collections": [PREFERENCES],
         "category": "preferences",
+        "gold_evidence": "Timezone: CET (Central European Time). All cron schedules in CET. Patrick is in CET timezone.",
     },
     # --- Context & episodic ---
     {
@@ -179,6 +196,7 @@ BENCHMARK_PAIRS = [
         "expected_substrings": ["heartbeat", "brain healthy", "verified"],
         "expected_collections": [CONTEXT, MEMORIES],
         "category": "context",
+        "gold_evidence": "Last heartbeat: brain healthy, task executed successfully, episode recorded, verified session continuity. Brain health check passed with expected memory count.",
     },
     # --- Autonomous learning ---
     {
@@ -187,6 +205,7 @@ BENCHMARK_PAIRS = [
         "expected_substrings": ["success rate", "sessions"],
         "expected_collections": [LEARNINGS, MEMORIES],
         "category": "meta",
+        "gold_evidence": "Success rate across sessions tracked via episodic memory. Action accuracy computed as successes/(total - timeouts - soft_failures). Current trailing-20 action accuracy monitored by postflight regression guard.",
     },
     {
         "id": "B20",
@@ -194,6 +213,7 @@ BENCHMARK_PAIRS = [
         "expected_substrings": ["theme", "recurring", "session"],
         "expected_collections": [LEARNINGS, MEMORIES],
         "category": "meta",
+        "gold_evidence": "Recurring session themes: brain maintenance, cron reliability, memory quality improvement, code quality gates, performance benchmarking, autonomous evolution. Themes synthesized via periodic episodic synthesis.",
     },
 ]
 
@@ -245,7 +265,27 @@ def _usefulness_score(result: dict, query: str) -> float:
         return round(1.0 / (1.0 + d), 4)
 
 
-def run_benchmark(use_smart=True, k=3) -> dict:
+def _oracle_recall(query: str, pair: dict, n: int = 3) -> list:
+    """Synthesize perfect retrieval results from gold_evidence.
+
+    Returns a list of fake results that perfectly match the benchmark pair,
+    simulating ideal retrieval. Used in oracle mode to isolate reasoning
+    failures from retrieval failures.
+    """
+    gold = pair.get("gold_evidence", "")
+    if not gold:
+        return []  # no gold evidence → empty (treated as retrieval miss)
+    collections = pair.get("expected_collections", ["clarvis-memories"])
+    return [{
+        "document": gold,
+        "id": f"oracle_{pair['id']}",
+        "collection": collections[0] if collections else "oracle",
+        "distance": 0.0,
+        "metadata": {"source": "oracle", "benchmark_id": pair["id"]},
+    }]
+
+
+def run_benchmark(use_smart=True, k=3, oracle=False) -> dict:
     """
     Run all 20 benchmark queries. Measure precision@k, recall, P@1, and MRR.
 
@@ -254,10 +294,21 @@ def run_benchmark(use_smart=True, k=3) -> dict:
     P@1 = 1 if first result is a hit, else 0
     MRR = 1/rank of first hit (0 if no hit)
 
+    Args:
+        use_smart: Use smart_recall if available (ignored in oracle mode).
+        k: Number of results to evaluate.
+        oracle: If True, bypass retrieval and inject gold_evidence as results.
+            This establishes a ceiling score — any failures in oracle mode are
+            reasoning/reading failures, not retrieval failures. Comparing
+            oracle vs normal mode isolates the retrieval contribution.
+
     Returns dict with per-query and aggregate metrics.
     """
-    recall_fn = smart_recall if (use_smart and smart_recall) else brain.recall
-    method_name = "smart_recall" if (use_smart and smart_recall) else "brain.recall"
+    if oracle:
+        method_name = "oracle"
+    else:
+        recall_fn = smart_recall if (use_smart and smart_recall) else brain.recall
+        method_name = "smart_recall" if (use_smart and smart_recall) else "brain.recall"
 
     query_results = []
     total_precision = 0.0
@@ -275,7 +326,10 @@ def run_benchmark(use_smart=True, k=3) -> dict:
         bid = pair["id"]
         category = pair["category"]
 
-        results = recall_fn(query, n=k, caller="benchmark")
+        if oracle:
+            results = _oracle_recall(query, pair, n=k)
+        else:
+            results = recall_fn(query, n=k, caller="benchmark")
 
         # Score each result
         hits_in_k = 0
@@ -379,6 +433,7 @@ def run_benchmark(use_smart=True, k=3) -> dict:
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "method": method_name,
         "k": k,
+        "oracle_mode": oracle,
         "num_queries": n,
         "avg_precision_at_k": avg_precision,
         "avg_precision_at_1": avg_precision1,
@@ -397,6 +452,58 @@ def run_benchmark(use_smart=True, k=3) -> dict:
     }
 
     return report
+
+
+def run_oracle_comparison(use_smart=True, k=3) -> dict:
+    """Run both normal and oracle benchmarks, compute retrieval gap.
+
+    The retrieval gap = oracle_score - normal_score. A large gap means
+    retrieval is the bottleneck. A small gap means the gold evidence
+    itself doesn't improve scores (queries may be hard to answer even
+    with perfect evidence).
+
+    Returns dict with normal, oracle, and gap analysis.
+    """
+    normal = run_benchmark(use_smart=use_smart, k=k, oracle=False)
+    oracle = run_benchmark(use_smart=use_smart, k=k, oracle=True)
+
+    gap = {
+        "precision_at_k_gap": round(oracle["avg_precision_at_k"] - normal["avg_precision_at_k"], 4),
+        "precision_at_1_gap": round(oracle["avg_precision_at_1"] - normal["avg_precision_at_1"], 4),
+        "recall_gap": round(oracle["avg_recall"] - normal["avg_recall"], 4),
+        "mrr_gap": round(oracle["mrr"] - normal["mrr"], 4),
+    }
+
+    # Per-category gap
+    category_gap = {}
+    for cat in oracle["by_category"]:
+        o = oracle["by_category"][cat]
+        n = normal["by_category"].get(cat, {})
+        category_gap[cat] = {
+            "recall_gap": round(o.get("avg_recall", 0) - n.get("avg_recall", 0), 3),
+            "mrr_gap": round(o.get("mrr", 0) - n.get("mrr", 0), 3),
+        }
+
+    # Queries that fail in normal mode but pass in oracle → pure retrieval failures
+    normal_fail_ids = {f["id"] for f in normal["failures"]}
+    oracle_fail_ids = {f["id"] for f in oracle["failures"]}
+    retrieval_failures = sorted(normal_fail_ids - oracle_fail_ids)
+    # Queries that fail in both → evidence/gold quality issues
+    shared_failures = sorted(normal_fail_ids & oracle_fail_ids)
+
+    return {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "normal": normal,
+        "oracle": oracle,
+        "gap": gap,
+        "category_gap": category_gap,
+        "retrieval_failures": retrieval_failures,
+        "shared_failures": shared_failures,
+        "diagnosis": (
+            f"{len(retrieval_failures)} pure retrieval failures, "
+            f"{len(shared_failures)} evidence-quality failures"
+        ),
+    }
 
 
 def save_report(report: dict):

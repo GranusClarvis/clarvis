@@ -165,6 +165,43 @@ def golden_qa(verbose: bool = typer.Option(False, "--verbose", "-v", help="Show 
     print(f"\n  Results saved to {rb.LATEST_FILE}")
 
 
+@app.command(name="golden-qa-oracle")
+def golden_qa_oracle():
+    """Run oracle comparison: normal vs gold-evidence retrieval.
+
+    Isolates retrieval failures from reasoning/evidence-quality failures.
+    Oracle mode injects gold evidence directly, bypassing actual retrieval.
+    """
+    rb = _get_retrieval_benchmark()
+    comparison = rb.run_oracle_comparison(use_smart=True, k=3)
+
+    normal = comparison["normal"]
+    oracle = comparison["oracle"]
+    gap = comparison["gap"]
+
+    print("=== Oracle Retrieval Comparison ===\n")
+    print(f"  {'Metric':<20} {'Normal':>8} {'Oracle':>8} {'Gap':>8}")
+    print(f"  {'─' * 48}")
+    print(f"  {'P@3':<20} {normal['avg_precision_at_k']:>8.3f} {oracle['avg_precision_at_k']:>8.3f} {gap['precision_at_k_gap']:>+8.3f}")
+    print(f"  {'P@1':<20} {normal['avg_precision_at_1']:>8.3f} {oracle['avg_precision_at_1']:>8.3f} {gap['precision_at_1_gap']:>+8.3f}")
+    print(f"  {'Recall':<20} {normal['avg_recall']:>8.3f} {oracle['avg_recall']:>8.3f} {gap['recall_gap']:>+8.3f}")
+    print(f"  {'MRR':<20} {normal['mrr']:>8.3f} {oracle['mrr']:>8.3f} {gap['mrr_gap']:>+8.3f}")
+
+    cat_gap = comparison.get("category_gap", {})
+    if cat_gap:
+        print(f"\n  Category gaps (recall / MRR):")
+        for cat, g in sorted(cat_gap.items()):
+            print(f"    {cat:<20} {g['recall_gap']:>+.3f} / {g['mrr_gap']:>+.3f}")
+
+    rf = comparison["retrieval_failures"]
+    sf = comparison["shared_failures"]
+    print(f"\n  Diagnosis: {comparison['diagnosis']}")
+    if rf:
+        print(f"  Pure retrieval failures: {', '.join(rf)}")
+    if sf:
+        print(f"  Evidence-quality failures: {', '.join(sf)}")
+
+
 @app.command(name="trajectory-check")
 def trajectory_check(
     hours: int = typer.Option(24, "--hours", "-H", help="Hours of history to evaluate"),
@@ -258,3 +295,26 @@ def golden_qa_trend(days: int = typer.Argument(30, help="Number of days to show"
     """Show golden QA retrieval benchmark trend."""
     rb = _get_retrieval_benchmark()
     rb.show_trend(days)
+
+
+@app.command(name="membench")
+def membench(
+    quadrant: str = typer.Option(None, "--quadrant", "-q",
+                                 help="Specific quadrant to evaluate"),
+    oracle: bool = typer.Option(False, "--oracle",
+                                help="Use gold evidence (bypass retrieval)"),
+    save: bool = typer.Option(True, "--save/--no-save",
+                              help="Save results to data/benchmarks/"),
+):
+    """Run MemBench four-quadrant memory evaluation.
+
+    Quadrants: participation-factual, participation-reflective,
+    observation-factual, observation-reflective.
+    """
+    from clarvis.metrics.membench import run_membench, save_report, format_report
+    report = run_membench(quadrant=quadrant, oracle=oracle)
+    print(format_report(report))
+    if save:
+        save_report(report)
+        from clarvis.metrics.membench import MEMBENCH_FILE
+        print(f"  Results saved to {MEMBENCH_FILE}")
