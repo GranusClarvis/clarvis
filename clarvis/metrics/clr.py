@@ -1,9 +1,15 @@
 """
-CLR (Clarvis Rating) — Composite Agent Intelligence Score.
+CLR-Internal (Clarvis Rating) — Composite Architecture Health Score.
 
-CLR measures the value that Clarvis's cognitive architecture adds on top of
-a bare Claude Code agent. It combines 7 dimensions into a single 0-1 score:
+CLR-Internal measures the value that Clarvis's cognitive architecture adds
+on top of a bare Claude Code agent. It combines 7 dimensions into a single
+0-1 score for internal health monitoring and regression detection.
 
+NOTE: This is the INTERNAL operational metric. For external task-based
+evaluation (LongMemEval, MemBench, BEAM), use CLR-Benchmark
+(clarvis.metrics.clr_benchmark).
+
+Dimensions:
   1. Memory Quality          (w=0.18) — recall accuracy, retrieval precision, hit rate
   2. Retrieval Precision     (w=0.17) — context relevance, noise ratio, eval verdict
   3. Prompt/Context          (w=0.18) — brief quality, context_relevance score, compression
@@ -798,7 +804,7 @@ def record_clr(result):
 def format_clr(result):
     """Format CLR benchmark results as a string."""
     lines = []
-    lines.append("=== CLR Benchmark — Clarvis Rating ===")
+    lines.append("=== CLR-Internal — Clarvis Architecture Health ===")
     lines.append(f"Timestamp: {result['timestamp']}")
     lines.append(f"Commit:    {result.get('commit_sha', 'unknown')}")
     lines.append(f"Schema:    {result.get('schema_version', CLR_SCHEMA_VERSION)}")

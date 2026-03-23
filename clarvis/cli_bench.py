@@ -318,3 +318,42 @@ def membench(
         save_report(report)
         from clarvis.metrics.membench import MEMBENCH_FILE
         print(f"  Results saved to {MEMBENCH_FILE}")
+
+
+@app.command(name="longmemeval")
+def longmemeval(
+    ability: str = typer.Option(None, "--ability", "-a",
+                                help="Specific ability: IE, MR, KU, TR, ABS"),
+    oracle: bool = typer.Option(False, "--oracle",
+                                help="Use gold evidence (bypass retrieval)"),
+    k: int = typer.Option(5, "--k", help="Number of retrieval results"),
+    save: bool = typer.Option(True, "--save/--no-save",
+                              help="Save results to data/benchmarks/"),
+):
+    """Run LongMemEval five-ability memory evaluation.
+
+    Abilities: IE (Information Extraction), MR (Multi-Session Reasoning),
+    KU (Knowledge Update), TR (Temporal Reasoning), ABS (Abstention).
+    """
+    from clarvis.metrics.longmemeval import run_longmemeval, save_report, format_report
+    report = run_longmemeval(ability=ability, k=k, oracle=oracle)
+    print(format_report(report))
+    if save:
+        save_report(report)
+        from clarvis.metrics.longmemeval import LONGMEMEVAL_FILE
+        print(f"  Results saved to {LONGMEMEVAL_FILE}")
+
+
+@app.command(name="longmemeval-oracle")
+def longmemeval_oracle(
+    ability: str = typer.Option(None, "--ability", "-a",
+                                help="Specific ability: IE, MR, KU, TR, ABS"),
+    k: int = typer.Option(5, "--k", help="Number of retrieval results"),
+):
+    """Run LongMemEval oracle comparison: normal vs gold-evidence retrieval.
+
+    Isolates retrieval failures from reasoning failures per ability.
+    """
+    from clarvis.metrics.longmemeval import run_oracle_comparison, format_oracle_comparison
+    comparison = run_oracle_comparison(ability=ability, k=k)
+    print(format_oracle_comparison(comparison))

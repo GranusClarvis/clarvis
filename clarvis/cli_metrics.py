@@ -42,7 +42,11 @@ def clr_cmd(
     quick: bool = typer.Option(False, "--quick", "-q", help="Skip slow assessments"),
     record: bool = typer.Option(False, "--record", "-r", help="Record result to history"),
 ):
-    """Compute CLR (Clarvis Rating) — composite agent intelligence score."""
+    """Compute CLR-Internal — Clarvis architecture health composite score.
+
+    This is the internal operational metric (7 dimensions). For external
+    task-based evaluation, use 'clarvis metrics clr-benchmark'.
+    """
     from clarvis.metrics.clr import compute_clr, record_clr, format_clr
 
     result = compute_clr(quick=quick)
@@ -76,6 +80,27 @@ def clr_trend_cmd(days: int = typer.Argument(14, help="Number of days to show"))
         delta = clr_values[-1] - clr_values[0]
         direction = "improving" if delta > 0.01 else "declining" if delta < -0.01 else "stable"
         print(f"  Trend: {direction} ({'+' if delta >= 0 else ''}{delta:.3f})")
+
+
+@app.command("clr-benchmark")
+def clr_benchmark_cmd(
+    oracle: bool = typer.Option(False, "--oracle", help="Use oracle retrieval mode"),
+    save: bool = typer.Option(True, "--save/--no-save", help="Save results"),
+):
+    """Compute CLR-Benchmark — external task-based memory evaluation.
+
+    Runs LongMemEval + MemBench adapters, produces unified ability scores,
+    stage diagnostics, and failure attribution. For internal health metrics,
+    use 'clarvis metrics clr'.
+    """
+    from clarvis.metrics.clr_benchmark import compute_clr_benchmark, save_report, format_report
+
+    report = compute_clr_benchmark(oracle=oracle)
+    print(format_report(report))
+    if save:
+        save_report(report)
+        from clarvis.metrics.clr_benchmark import CLR_BENCH_FILE
+        print(f"  Results saved to {CLR_BENCH_FILE}")
 
 
 @app.command("memory-audit")

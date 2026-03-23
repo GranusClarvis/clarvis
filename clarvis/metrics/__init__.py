@@ -6,6 +6,10 @@ Canonical spine modules:
   - clarvis.metrics.self_model      — 7-domain capability assessment
   - clarvis.metrics.code_validation — Deterministic pre-LLM code validation (PyCapsule)
   - clarvis.metrics.quality         — Multi-dimensional quality scoring
+  - clarvis.metrics.clr             — CLR-Internal: architecture health composite
+  - clarvis.metrics.clr_benchmark   — CLR-Benchmark: external task evaluation
+  - clarvis.metrics.longmemeval     — LongMemEval adapter (5 abilities)
+  - clarvis.metrics.membench        — MemBench adapter (4 quadrants)
 """
 
 from .phi import compute_phi
