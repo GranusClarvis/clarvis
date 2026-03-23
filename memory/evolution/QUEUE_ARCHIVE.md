@@ -1459,3 +1459,6 @@ _Last archived: 2026-03-17_
 - [x] [D3_CLR_ON_WEBSITE] Surface CLR score on website v0 once endpoint/scaffold exists. _(2026-03-23: Frontend polls `/api/public/status` every 20s. CLR=0.793, PI=1.0, queue stats, and completions all render live.)_
 - [x] [D6_DOMAIN_AND_DEPLOYMENT] Deploy website v0 to an IP/domain-accessible target with simple, reproducible deployment notes. _(2026-03-23: Deployed via systemd `clarvis-website.service` on 0.0.0.0:18801, enabled on boot. Accessible at http://192.168.1.124:18801.)_
 - [x] [RESEARCH_PHI_COMPUTATION] Survey Phi computation limits, formal structure, and approximation quality in IIT. _(2026-03-23: Reviewed Kleiner & Hoel on generalized mathematical structure of IIT, PyPhi as the reference implementation, and Mediano et al. on heuristic/approximation quality. Key finding: exact Φ remains combinatorially intractable; current proxies can correlate well on small systems but are not yet trustworthy replacements for exact Φ at larger scales.)_
+
+## Archived 2026-03-23
+- [x] [E5_README_MATCHES_REALITY] Final pass: ensure README accurately describes current architecture, commands, and repo structure. _(Done 2026-03-23: fixed website status, brain stats, CLI commands, project structure, testing paths, contributing link.)_
