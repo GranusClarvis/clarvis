@@ -23,15 +23,12 @@ Presentable Clarvis by 2026-03-31:
 ### Milestone C — Repo / Open-Source Readiness (by 2026-03-26)
 
 ### Milestone D — Public Surface (by 2026-03-29)
-- [x] [D2_PUBLIC_STATUS_ENDPOINT] Implement `/api/status` or equivalent public feed endpoint with the documented data contract. _(2026-03-23: Live at `/api/public/status` on port 18801. Serves real CLR, PI, queue counts, and recent completions from data files.)_
-- [x] [D3_CLR_ON_WEBSITE] Surface CLR score on website v0 once endpoint/scaffold exists. _(2026-03-23: Frontend polls `/api/public/status` every 20s. CLR=0.793, PI=1.0, queue stats, and completions all render live.)_
 - [ ] [D4_ARCHITECTURE_PAGE] Publish sanitized architecture page derived from SELF.md/ROADMAP.md without private/internal details. _(Checklist D4.)_
-- [x] [D6_DOMAIN_AND_DEPLOYMENT] Deploy website v0 to an IP/domain-accessible target with simple, reproducible deployment notes. _(2026-03-23: Deployed via systemd `clarvis-website.service` on 0.0.0.0:18801, enabled on boot. Accessible at http://192.168.1.124:18801.)_
 
 ### Milestone E — Final Validation (by 2026-03-31)
 - [ ] [E2_SECRET_SCAN_PASS] Run secret scan and verify the repo is clean after C1-C2. _(Checklist E2.)_
 - [ ] [E3_FRESH_CLONE_SETUP] Validate fresh clone + setup from scratch and write down the exact bootstrap path. _(Checklist E3 — critical path.)_
-- [ ] [E5_README_MATCHES_REALITY] Final pass: ensure README accurately describes current architecture, commands, and repo structure. _(Checklist E5.)_
+- [x] [E5_README_MATCHES_REALITY] Final pass: ensure README accurately describes current architecture, commands, and repo structure. _(Done 2026-03-23: fixed website status, brain stats, CLI commands, project structure, testing paths, contributing link.)_
 - [ ] [E6_PUBLIC_ROADMAP_SANITIZE] Update `ROADMAP.md` for public visibility; remove internal-only details, IDs, and operational specifics. _(Checklist E6.)_
 
 ---
@@ -42,6 +39,15 @@ Presentable Clarvis by 2026-03-31:
 - [ ] [OBLIGATION_TRACKER 2026-03-23] [OBLIGATION_ESCALATION_ob_20260321_112950_0] Obligation violated 16x: Git hygiene: commit and push useful work. repeated violations
 - [ ] [DECOMPOSE_LONG_FUNCTIONS] Decompose oversized functions still above target length: `clarvis/heartbeat/gate.py:check_gate`, `clarvis/orch/task_selector.py:score_tasks`, `scripts/heartbeat_gate.py:check_gate`. Target: all functions ≤80 lines.
 - [ ] [DIRECTIVE_LLM_CLASSIFIER_UPGRADE] Add optional LLM-based classification fallback for ambiguous directives where rule-based classifier confidence < 0.5. Use task_router to pick cheapest model. Gate behind env var `DIRECTIVE_LLM_CLASSIFY=true`.
+
+### Repo / Spine Audit
+- [ ] [SPINE_USAGE_AUDIT] Perform a careful subsystem audit of Clarvis `scripts/` and spine modules before any major cleanup/open-source restructuring. For each significant feature/module, classify as: (1) core live, (2) partially wired, (3) good idea but not properly integrated yet, (4) experimental/research, or (5) retire/archive. Require evidence for each classification: current call sites, cron/hooks/runtime entrypoints, docs references, recent usage signals, and measurable value over plain OpenClaw. Output must include explicit recommendations per module: keep as-is, promote into spine, wire properly, wrap as adapter, move to `experimental/`, archive, or remove — with deletion-risk notes so useful systems are not broken by cleanup.
+
+### Website / Public Presence
+- [ ] [CLARVIS_STYLEGUIDE_V1] Define Clarvis visual identity for public-facing surfaces. Deliver a compact styleguide covering color system, typography, spacing scale, panel/card language, buttons/links, motion principles, icon/diagram treatment, and copy tone. Goal: reusable design language for website, dashboards, docs, and future tools — unmistakably Clarvis, not generic SaaS chrome.
+- [ ] [WEBSITE_REFINEMENT_PASS] Refine website v0 into a stronger front-facing presentation of Clarvis. Improve visual hierarchy, polish spacing/layout, add cleaner animations, and align all pages to `CLARVIS_STYLEGUIDE_V1`. Goal: feel deliberate, distinctive, and worth starring — not merely functional.
+- [ ] [WEBSITE_POSITIONING_AND_COPY] Rewrite homepage and key public pages for interest and conversion: what Clarvis is, why it matters, what makes it different, current capabilities, architecture highlights, and why someone should care / follow / star the repo. Goal: market Clarvis as a compelling evolving agent, not just document it.
+- [ ] [WEBSITE_PROOF_AND_DEMOS] Add stronger proof signals to the public site: benchmark snippets, live status blocks, architecture diagrams, notable capabilities, and selected concrete examples/screenshots. Goal: visitors should leave with evidence, not just claims.
 
 ### Benchmarking / CLR v2
 - [ ] [LONGMEMEVAL_ADAPTER_AND_BASELINE_RUN] Build a `clarvis bench longmemeval` adapter that can run Clarvis memory pipelines on LongMemEval-S first, with support for full-history and oracle-retrieval modes. Output per-ability scores (IE, MR, KU, TR, ABS), retrieval diagnostics, and a baseline comparison against raw long-context prompting.
@@ -79,4 +85,3 @@ _Design: `docs/ADAPTIVE_RAG_PLAN.md` — 4-phase rollout (GATE → EVAL → RETR
 
 ### Research Sessions
 _(Completed items archived.)_
-- [x] [RESEARCH_PHI_COMPUTATION] Survey Phi computation limits, formal structure, and approximation quality in IIT. _(2026-03-23: Reviewed Kleiner & Hoel on generalized mathematical structure of IIT, PyPhi as the reference implementation, and Mediano et al. on heuristic/approximation quality. Key finding: exact Φ remains combinatorially intractable; current proxies can correlate well on small systems but are not yet trustworthy replacements for exact Φ at larger scales.)_

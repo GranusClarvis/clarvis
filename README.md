@@ -53,6 +53,13 @@ python3 -m clarvis heartbeat run          # Full preflight + task selection
 python3 -m clarvis bench run              # Full performance benchmark
 python3 -m clarvis bench clr              # CLR benchmark
 python3 -m clarvis bench trajectory       # Trajectory evaluation
+
+# Other CLI commands
+python3 -m clarvis cognition              # Context relevance, attention weights
+python3 -m clarvis cost                   # Cost tracking and budget monitoring
+python3 -m clarvis cron                   # Cron job inspection and execution
+python3 -m clarvis metrics                # Self-model, phi, performance index
+python3 -m clarvis queue                  # Evolution queue management
 ```
 
 ### Python API
@@ -115,7 +122,7 @@ flowchart TB
 ## Core Components
 
 ### ClarvisDB Brain
-Hybrid vector-graph memory system. ChromaDB for semantic search + relationship graph for structured knowledge. 10 specialized collections, ONNX MiniLM embeddings, fully local. No external API calls.
+Hybrid vector-graph memory system. ChromaDB for semantic search + relationship graph for structured knowledge. 10 specialized collections (~2200 memories, ~105k graph edges), ONNX MiniLM embeddings, fully local. No external API calls.
 
 ### Heartbeat Pipeline
 The core action cycle: **gate** (should we wake?) → **preflight** (score attention, select task, build context) → **execute** (code agent runs the task) → **postflight** (encode episode, update metrics, store learnings).
@@ -148,11 +155,14 @@ clarvis/                     # Core Python package (spine)
 ├── runtime/                 # Operating mode control-plane
 ├── orch/                    # Task routing and selection
 ├── adapters/                # Host extraction boundary (adapter pattern)
+├── learning/                # Meta-learning module
+├── compat/                  # Host compatibility contracts
 └── cli.py                   # Unified CLI: python3 -m clarvis <cmd>
 
-scripts/                     # Operational scripts (cron, heartbeat, cognitive)
+scripts/                     # Operational scripts (~140 Python/Bash: cron, heartbeat, cognitive)
 packages/                    # Installable packages (clarvis-db, clarvis-cost, clarvis-reasoning)
 tests/                       # Smoke, integration, and unit tests
+website/                     # Public website (Starlette server + static HTML)
 docs/                        # Architecture, runbook, gap audit
 ```
 
@@ -206,9 +216,6 @@ Each execution cycle produces an **episode** — a structured record of what was
 # Run all tests
 python3 -m pytest
 
-# Spine module tests
-python3 -m pytest clarvis/tests/ -v
-
 # Package tests (clarvis-db)
 python3 -m pytest packages/clarvis-db/tests/ -v
 
@@ -226,12 +233,12 @@ Clarvis is in **Phase 3 — Autonomy Expansion**, targeting open-source readines
 
 | Area | Status | Notes |
 |------|--------|-------|
-| Brain (ClarvisDB) | Stable | 10 collections, ~3400 memories, weekly CLR benchmark scoring 0.81 |
+| Brain (ClarvisDB) | Stable | 10 collections, ~2200 memories, weekly CLR benchmark scoring ~0.79 |
 | Heartbeat Pipeline | Stable | 12x/day autonomous execution via cron |
 | Agent Orchestrator | Active | Multi-project delegation with isolated workspaces |
 | Self-Model & Metrics | Stable | 8-dimension performance index, trajectory evaluation |
 | Context Quality | Improving | Adaptive RAG, recency boost, semantic containment |
-| Website | Planned | Public presence in progress |
+| Website | Active | Static site with live status API, served via Starlette |
 
 See [`ROADMAP.md`](ROADMAP.md) for the full evolution plan.
 
@@ -276,14 +283,9 @@ See [`docs/OPEN_SOURCE_GAP_AUDIT.md`](docs/OPEN_SOURCE_GAP_AUDIT.md) for a detai
 
 ## Contributing
 
-Contributions are welcome. To get started:
+Contributions are welcome. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for guidelines.
 
-1. Fork the repo and create a feature branch
-2. Install in development mode: `pip install -e ".[brain]"`
-3. Run tests: `python3 -m pytest`
-4. Open a PR against `main`
-
-Please keep changes focused — one feature or fix per PR.
+Quick start: fork, `pip install -e ".[brain]"`, run `python3 -m pytest`, open a PR against `main`.
 
 ---
 

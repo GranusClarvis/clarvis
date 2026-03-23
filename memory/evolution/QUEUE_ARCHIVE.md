@@ -1453,3 +1453,9 @@ _Last archived: 2026-03-17_
 
 ## Archived 2026-03-23
 - [x] [C11_CLARVIS_DB_EXTRACTION_PLAN] Extract or isolate `clarvis-db` boundary into a separate repo/package plan with scrubbed public-facing structure, LICENSE, and CI requirements documented. _(Done 2026-03-23: `docs/CLARVISDB_EXTRACTION_PLAN.md` — scrubbed structure, 16-step extraction checklist, CI workflows, LICENSE added to package, gate status updated. Blocked on Gate 1.)_
+
+## Archived 2026-03-23
+- [x] [D2_PUBLIC_STATUS_ENDPOINT] Implement `/api/status` or equivalent public feed endpoint with the documented data contract. _(2026-03-23: Live at `/api/public/status` on port 18801. Serves real CLR, PI, queue counts, and recent completions from data files.)_
+- [x] [D3_CLR_ON_WEBSITE] Surface CLR score on website v0 once endpoint/scaffold exists. _(2026-03-23: Frontend polls `/api/public/status` every 20s. CLR=0.793, PI=1.0, queue stats, and completions all render live.)_
+- [x] [D6_DOMAIN_AND_DEPLOYMENT] Deploy website v0 to an IP/domain-accessible target with simple, reproducible deployment notes. _(2026-03-23: Deployed via systemd `clarvis-website.service` on 0.0.0.0:18801, enabled on boot. Accessible at http://192.168.1.124:18801.)_
+- [x] [RESEARCH_PHI_COMPUTATION] Survey Phi computation limits, formal structure, and approximation quality in IIT. _(2026-03-23: Reviewed Kleiner & Hoel on generalized mathematical structure of IIT, PyPhi as the reference implementation, and Mediano et al. on heuristic/approximation quality. Key finding: exact Φ remains combinatorially intractable; current proxies can correlate well on small systems but are not yet trustworthy replacements for exact Φ at larger scales.)_
