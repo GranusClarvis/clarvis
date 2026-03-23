@@ -1462,3 +1462,7 @@ _Last archived: 2026-03-17_
 
 ## Archived 2026-03-23
 - [x] [E5_README_MATCHES_REALITY] Final pass: ensure README accurately describes current architecture, commands, and repo structure. _(Done 2026-03-23: fixed website status, brain stats, CLI commands, project structure, testing paths, contributing link.)_
+
+## Archived 2026-03-23
+- [x] [D4_ARCHITECTURE_PAGE] Publish sanitized architecture page derived from SELF.md/ROADMAP.md without private/internal details. _(Done 2026-03-23: Full rewrite with dual-layer diagram, heartbeat pipeline, brain stats, spine architecture, cognitive systems, cron schedule, metrics, tech stack. No private details. Serving on :18801.)_
+- [x] [SPINE_USAGE_AUDIT] Perform a careful subsystem audit of Clarvis `scripts/` and spine modules before any major cleanup/open-source restructuring. _(Done 2026-03-23: Full audit in docs/SPINE_USAGE_AUDIT.md — 77 spine modules, 139 scripts classified. 8 dead wrappers, 13 research orphans, 6 weakly-wired. Uncertainty register resolved with caller evidence. 6-phase cleanup plan. ~12k lines retirable.)_

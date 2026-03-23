@@ -23,7 +23,6 @@ Presentable Clarvis by 2026-03-31:
 ### Milestone C — Repo / Open-Source Readiness (by 2026-03-26)
 
 ### Milestone D — Public Surface (by 2026-03-29)
-- [x] [D4_ARCHITECTURE_PAGE] Publish sanitized architecture page derived from SELF.md/ROADMAP.md without private/internal details. _(Done 2026-03-23: Full rewrite with dual-layer diagram, heartbeat pipeline, brain stats, spine architecture, cognitive systems, cron schedule, metrics, tech stack. No private details. Serving on :18801.)_
 
 ### Milestone E — Final Validation (by 2026-03-31)
 - [ ] [E2_SECRET_SCAN_PASS] Run secret scan and verify the repo is clean after C1-C2. _(Checklist E2.)_
@@ -40,7 +39,6 @@ Presentable Clarvis by 2026-03-31:
 - [ ] [DIRECTIVE_LLM_CLASSIFIER_UPGRADE] Add optional LLM-based classification fallback for ambiguous directives where rule-based classifier confidence < 0.5. Use task_router to pick cheapest model. Gate behind env var `DIRECTIVE_LLM_CLASSIFY=true`.
 
 ### Repo / Spine Audit
-- [x] [SPINE_USAGE_AUDIT] Perform a careful subsystem audit of Clarvis `scripts/` and spine modules before any major cleanup/open-source restructuring. _(Done 2026-03-23: Full audit in docs/SPINE_USAGE_AUDIT.md — 77 spine modules, 139 scripts classified. 8 dead wrappers, 13 research orphans, 6 weakly-wired. Uncertainty register resolved with caller evidence. 6-phase cleanup plan. ~12k lines retirable.)_
 
 ### Website / Public Presence
 - [ ] [CLARVIS_STYLEGUIDE_V1] Define Clarvis visual identity for public-facing surfaces. Deliver a compact styleguide covering color system, typography, spacing scale, panel/card language, buttons/links, motion principles, icon/diagram treatment, and copy tone. Goal: reusable design language for website, dashboards, docs, and future tools — unmistakably Clarvis, not generic SaaS chrome.
