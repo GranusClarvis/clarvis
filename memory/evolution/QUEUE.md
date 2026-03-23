@@ -25,24 +25,21 @@ Presentable Clarvis by 2026-03-31:
 ### Milestone D — Public Surface (by 2026-03-29)
 
 ### Milestone E — Final Validation (by 2026-03-31)
-- [x] [E2_SECRET_SCAN_PASS] Secret scan complete (2026-03-23). detect-secrets v1.5.0 found 0 real secrets (2 false positives: placeholder API key examples in docs/composio_technical_reference.md). Manual regex scan for sk-or-v1-, sk-ant-, passwords, telegram tokens — all clean. Git history check for leaked keys — clean (only regex patterns for redaction). _(Checklist E2.)_
-- [x] [E3_FRESH_CLONE_SETUP] Fresh clone validated (2026-03-23). Fixed README install order (sub-packages must be installed before root). Bootstrap: `pip install -e packages/clarvis-{cost,reasoning,db}` then `pip install -e ".[brain]"`. All 3 validation commands pass (brain stats, brain health, 25/25 tests). Known limitation: hardcoded `/home/agent/.openclaw/workspace/` paths in constants.py — portable use requires `CLARVIS_WORKSPACE` env var (not yet fully wired). _(Checklist E3.)_
-- [ ] [E6_PUBLIC_ROADMAP_SANITIZE] Update `ROADMAP.md` for public visibility; remove internal-only details, IDs, and operational specifics. _(Checklist E6.)_
+- [x] [E6_PUBLIC_ROADMAP_SANITIZE] Update `ROADMAP.md` for public visibility; remove internal-only details, IDs, and operational specifics. _(Done 2026-03-23: removed script names, file paths, cron times, PR numbers, internal tool names, specific metric values, email refs, operational infrastructure details.)_
 
 ---
 
 ## P1 — This Week
 
 - [ ] [LLM_BRAIN_REVIEW 2026-03-23] [LLM_BRAIN_REVIEW] Audit clarvis-identity collection — it appears to contain mostly creator/origin info. Enrich it with operational identity: what Clarvis IS (architecture), what it DOES (capabilities), and how it WORKS (key subsystems). — clarvis-identity surfaced 'who created Clarvis' for an architecture query, suggesting the collection is too narrow. Identity should encompass architectural self-knowledge, not just origin story.
-- [ ] [OBLIGATION_TRACKER 2026-03-23] [OBLIGATION_ESCALATION_ob_20260321_112950_0] Obligation violated 16x: Git hygiene: commit and push useful work. repeated violations
+- [x] [OBLIGATION_TRACKER 2026-03-23] [OBLIGATION_ESCALATION_ob_20260321_112950_0] Obligation violated 16x: Git hygiene: commit and push useful work. _(Resolved 2026-03-23: committed consolidation plan + roadmap sanitization + queue updates.)_
 - [ ] [DECOMPOSE_LONG_FUNCTIONS] Decompose oversized functions still above target length: `clarvis/heartbeat/gate.py:check_gate`, `clarvis/orch/task_selector.py:score_tasks`, `scripts/heartbeat_gate.py:check_gate`. Target: all functions ≤80 lines.
 - [ ] [DIRECTIVE_LLM_CLASSIFIER_UPGRADE] Add optional LLM-based classification fallback for ambiguous directives where rule-based classifier confidence < 0.5. Use task_router to pick cheapest model. Gate behind env var `DIRECTIVE_LLM_CLASSIFY=true`.
 
 ### Repo / Spine Audit
 - [ ] [SPINE_AUDIT_ERRATA_AND_LABELING] Apply Phase 0 of `docs/SPINE_CLEANUP_PLAN.md`: add status/header comments to bridge wrappers and confirmed-dead scripts, and add an errata note linking `SPINE_USAGE_AUDIT.md` to `SPINE_CLEANUP_PLAN.md` so nobody follows the over-aggressive deletion claims blindly.
-- [x] [SPINE_SAFE_DEAD_CODE_PRUNE] Phase 1 dead code removal complete (2026-03-23). Deleted 4 scripts + 1 test (1,755 lines): universal_web_agent.py, public_feed.py, retrieval_quality_report.py, generate_dashboard.py, test_universal_web_agent.py. **Caught error in plan:** prompt_optimizer.py is NOT dead (heartbeat pre/postflight import it). prediction_review.py also NOT dead (evolution_preflight imports it). gate_check.sh also NOT dead. Validation: brain health=healthy, 25/25 tests pass.
 - [ ] [LEGACY_IMPORT_MIGRATION_PHASE1] Execute Phase 2 starting with the highest-risk/high-value migration: replace legacy wrapper imports inside `heartbeat_preflight.py` and `heartbeat_postflight.py` with direct `clarvis.*` imports where equivalent spine modules are confirmed. Do this incrementally with rollback-ready commits.
-- [ ] [CONTEXT_ENGINE_DIFF_AND_CONSOLIDATION_PLAN] Perform the function-by-function diff required by Phase 3: compare `scripts/context_compressor.py` against `clarvis/context/assembly.py` + `clarvis/context/compressor.py`, identify true runtime authority, unique functions, and safe migration order. No deletion yet — produce a merge/consolidation plan first.
+- [x] [CONTEXT_ENGINE_DIFF_AND_CONSOLIDATION_PLAN] Perform the function-by-function diff required by Phase 3: compare `scripts/context_compressor.py` against `clarvis/context/assembly.py` + `clarvis/context/compressor.py`, identify true runtime authority, unique functions, and safe migration order. _(Done 2026-03-23: full 24-function diff, 34-function assembly inventory, 8 active callers mapped, 5-wave migration plan in `docs/CONTEXT_ENGINE_CONSOLIDATION_PLAN.md`.)_
 - [ ] [DO_NOT_TOUCH_REGISTRY] Materialize the `Do Not Touch Yet` section from `docs/SPINE_CLEANUP_PLAN.md` into a maintained registry/document for cleanup safety. This should list heartbeat runtime, bridge wrappers, context engine, brain wrappers, cron shells, and other high-risk modules that must not be casually moved/removed.
 - [ ] [OPEN_SOURCE_STRUCTURE_PHASED_PLAN] Convert Phases 0-4 from `docs/SPINE_CLEANUP_PLAN.md` into an execution checklist with preconditions, validation checks, rollback notes, and day-by-day ordering through the open-source window.
 
