@@ -17,19 +17,19 @@ Clarvis is a cognitive agent system that operates autonomously on a dedicated ho
 git clone https://github.com/GranusClarvis/clarvis.git
 cd clarvis
 
-# Install core package (editable)
-pip install -e .
-
-# Install with brain (vector memory) support
-pip install -e ".[brain]"
-
-# Install sub-packages
-pip install -e packages/clarvis-db
+# Install sub-packages first (not on PyPI, must be installed before root package)
 pip install -e packages/clarvis-cost
 pip install -e packages/clarvis-reasoning
+pip install -e packages/clarvis-db
+
+# Install main package with brain (vector memory) support
+pip install -e ".[brain]"
+
+# Verify installation
+python3 -m clarvis brain health
 ```
 
-**Requirements:** Python 3.10+, pip. Brain features need `chromadb` and `onnxruntime` (installed automatically with `.[brain]`).
+**Requirements:** Python 3.10+, pip. Brain features need `chromadb` and `onnxruntime` (installed automatically with `.[brain]`). On a fresh clone, the brain starts empty — memories accumulate through operation.
 
 ---
 

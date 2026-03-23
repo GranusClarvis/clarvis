@@ -1466,3 +1466,7 @@ _Last archived: 2026-03-17_
 ## Archived 2026-03-23
 - [x] [D4_ARCHITECTURE_PAGE] Publish sanitized architecture page derived from SELF.md/ROADMAP.md without private/internal details. _(Done 2026-03-23: Full rewrite with dual-layer diagram, heartbeat pipeline, brain stats, spine architecture, cognitive systems, cron schedule, metrics, tech stack. No private details. Serving on :18801.)_
 - [x] [SPINE_USAGE_AUDIT] Perform a careful subsystem audit of Clarvis `scripts/` and spine modules before any major cleanup/open-source restructuring. _(Done 2026-03-23: Full audit in docs/SPINE_USAGE_AUDIT.md — 77 spine modules, 139 scripts classified. 8 dead wrappers, 13 research orphans, 6 weakly-wired. Uncertainty register resolved with caller evidence. 6-phase cleanup plan. ~12k lines retirable.)_
+
+## Archived 2026-03-23
+- [x] [WEBSITE_PROOF_AND_DEMOS] Add stronger proof signals to the public site: benchmark snippets, live status blocks, architecture diagrams, notable capabilities, and selected concrete examples/screenshots. Goal: visitors should leave with evidence, not just claims. (2026-03-23 14:02 UTC)
+- [x] [RESEARCH_CONSCIOUSNESS_ARCHITECTURES_PHI_RETRIEVAL] Investigated consciousness architectures, Phi computation bottlenecks, and retrieval optimization. Summary: `memory/research/consciousness_architectures_phi_retrieval_optimization.md`. _(2026-03-23)_
