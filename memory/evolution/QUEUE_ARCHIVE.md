@@ -1436,3 +1436,6 @@ _Last archived: 2026-03-17_
 
 ## Archived 2026-03-22
 - [x] [D5_REPOS_PAGE] Add repos/boundaries page showing main repo, extracted pieces, and status. _(Checklist D5. Done 2026-03-22: `website/static/repos.html` — static page with 2 repos, extraction status, anti-sprawl policy.)_
+
+## Archived 2026-03-22
+- [x] [E4_WEBSITE_V0_LIVE] Confirm website v0 is live and publicly accessible. _(Checklist E4. Blocked on D1+D6: no scaffold or deployment exists yet. Only `website/static/repos.html` exists. 2026-03-22.)_ (2026-03-22 23:03 UTC)

@@ -9,7 +9,7 @@ _Target: 2026-03-31. Updated: 2026-03-22._
 | 1 | **C1: Remove hardcoded secrets** | C | DONE | — | `git grep '8076973521\|REDACTED_CHAT_ID\|REDACTED_GROUP_ID' -- ':!.env'` returns nothing |
 | 2 | **C2: Purge ChromaDB credentials** | C | DONE | — | `python3 -c "from clarvis.brain import search; r=search('telegram bot token password'); print(r)"` returns no creds |
 | 3 | **C3: Verify gitignore / tracked data** | C | TODO | — | `git ls-files data/ monitoring/` returns empty |
-| 4 | **C6: Root README** | C | TODO | — | `README.md` exists, covers: what/why/arch/quickstart/status |
+| 4 | **C6: Root README** | C | DONE | — | `README.md` exists, covers: what/why/arch/quickstart/status/repo-boundaries |
 | 5 | **D1: Website v0 scaffold** | D | TODO | — | `npm run build` succeeds, index page loads |
 | 6 | **D6: Domain + deployment** | D | TODO | D1 | Site reachable at public URL |
 | 7 | **E2: Secret scan pass** | E | TODO | C1+C2 | `tests/test_open_source_smoke.py` passes |

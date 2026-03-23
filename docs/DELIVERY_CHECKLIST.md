@@ -52,7 +52,7 @@ Core architecture and APIs should be stable. No breaking changes after this mile
 | C3 | Verify data/monitoring in .gitignore | **TODO** | Already in .gitignore but need `git ls-files` verification they're not tracked. |
 | C4 | Delete `scripts/deprecated/` | **TODO** | Dead code directory. |
 | C5 | Consolidate tests to `tests/` | **TODO** | Currently split across `tests/`, `scripts/tests/`, `clarvis/tests/`. |
-| C6 | Add README.md at repo root | **TODO** | Critical for first impression. |
+| C6 | Add README.md at repo root | **DONE** | Enhanced with current status + repo boundaries. |
 | C7 | Add LICENSE file at repo root | **TODO** | MIT in pyproject.toml but no standalone file. |
 | C8 | Add CONTRIBUTING.md | **TODO** | Standard open-source requirement. |
 | C9 | Basic CI workflow (lint + test) | **TODO** | No GitHub Actions exist. |

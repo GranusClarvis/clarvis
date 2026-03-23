@@ -220,6 +220,38 @@ CI runs automatically on push and PR to `main` via GitHub Actions.
 
 ---
 
+## Current Status
+
+Clarvis is in **Phase 3 — Autonomy Expansion**, targeting open-source readiness by end of March 2026.
+
+| Area | Status | Notes |
+|------|--------|-------|
+| Brain (ClarvisDB) | Stable | 10 collections, ~3400 memories, weekly CLR benchmark scoring 0.81 |
+| Heartbeat Pipeline | Stable | 12x/day autonomous execution via cron |
+| Agent Orchestrator | Active | Multi-project delegation with isolated workspaces |
+| Self-Model & Metrics | Stable | 8-dimension performance index, trajectory evaluation |
+| Context Quality | Improving | Adaptive RAG, recency boost, semantic containment |
+| Website | Planned | Public presence in progress |
+
+See [`ROADMAP.md`](ROADMAP.md) for the full evolution plan.
+
+---
+
+## Repo Boundaries
+
+Clarvis follows a **main-harness + selective-extraction** strategy:
+
+- **`clarvis/`** (this repo) — the operational center: runtime, orchestration, memory, cron, identity, and public surface
+- **`packages/clarvis-db`** — standalone vector-memory library (strongest extraction candidate for a separate public repo)
+- **`packages/clarvis-cost`** — cost tracking and budget alerting
+- **`packages/clarvis-reasoning`** — meta-cognitive reasoning quality assessment
+
+Each package has its own `pyproject.toml` and can be installed independently. The main `clarvis` spine module imports from them but they have no upward dependencies.
+
+See [`docs/CLARVIS_MODES_AND_REPOS.md`](docs/CLARVIS_MODES_AND_REPOS.md) for the extraction strategy.
+
+---
+
 ## Known Limitations
 
 - **Single-host design** — built for a dedicated server with systemd, not containerized
@@ -261,4 +293,4 @@ MIT — see [pyproject.toml](pyproject.toml) for details.
 
 ---
 
-*Last updated: 2026-03-18*
+*Last updated: 2026-03-23*
