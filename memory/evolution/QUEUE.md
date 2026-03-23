@@ -21,16 +21,12 @@ Presentable Clarvis by 2026-03-31:
 - [~] [SEMANTIC_CROSS_COLLECTION_BRIDGES] Strengthen weak cross-collection semantic links. Current semantic_cross_collection=0.62 (target >0.75). _(2026-03-19: Added 13 bridge memories across 3 weakest pairs. Phi full computation times out at 120s due to 99k graph edges + 720 ONNX queries. Pair scores: proc↔learn=0.600, ctx↔goals=0.644, ep↔infra=0.555. Need graph compaction or parallel queries to verify full Phi. Blocked on compute time. Checklist B8.)_
 
 ### Milestone C — Repo / Open-Source Readiness (by 2026-03-26)
-- [x] [C3_VERIFY_GITIGNORE_AND_TRACKED_DATA] Added `monitoring/` to .gitignore, untracked `data/golden_qa.json` + 3 monitoring files. Verified: 0 tracked files in data/ or monitoring/, 0 .pyc tracked. _(Done 2026-03-23.)_
-- [x] [C5_CONSOLIDATE_TESTS] Consolidated 3 test dirs into `tests/` (tests/clarvis/ + tests/scripts/ + root tests/). Updated pyproject.toml testpaths. 1798 tests collect, 85/86 pass (1 pre-existing). _(Done 2026-03-23.)_
-- [ ] [C11_CLARVIS_DB_EXTRACTION_PLAN] Extract or isolate `clarvis-db` boundary into a separate repo/package plan with scrubbed public-facing structure, LICENSE, and CI requirements documented. _(Checklist C11 — nice-to-have but important repo-boundary work.)_
 
 ### Milestone D — Public Surface (by 2026-03-29)
-- [x] [D1_WEBSITE_V0_SCAFFOLD] Built 5-page static website (index, architecture, repos, benchmarks, roadmap) + Starlette server + shared CSS. All routes 200. Polls /api/public/status (stub until D2). _(Done 2026-03-23.)_
-- [ ] [D2_PUBLIC_STATUS_ENDPOINT] Implement `/api/status` or equivalent public feed endpoint with the documented data contract. _(Checklist D2.)_
-- [ ] [D3_CLR_ON_WEBSITE] Surface CLR score on website v0 once endpoint/scaffold exists. _(Checklist D3.)_
+- [x] [D2_PUBLIC_STATUS_ENDPOINT] Implement `/api/status` or equivalent public feed endpoint with the documented data contract. _(2026-03-23: Live at `/api/public/status` on port 18801. Serves real CLR, PI, queue counts, and recent completions from data files.)_
+- [x] [D3_CLR_ON_WEBSITE] Surface CLR score on website v0 once endpoint/scaffold exists. _(2026-03-23: Frontend polls `/api/public/status` every 20s. CLR=0.793, PI=1.0, queue stats, and completions all render live.)_
 - [ ] [D4_ARCHITECTURE_PAGE] Publish sanitized architecture page derived from SELF.md/ROADMAP.md without private/internal details. _(Checklist D4.)_
-- [ ] [D6_DOMAIN_AND_DEPLOYMENT] Deploy website v0 to an IP/domain-accessible target with simple, reproducible deployment notes. _(Checklist D6.)_
+- [x] [D6_DOMAIN_AND_DEPLOYMENT] Deploy website v0 to an IP/domain-accessible target with simple, reproducible deployment notes. _(2026-03-23: Deployed via systemd `clarvis-website.service` on 0.0.0.0:18801, enabled on boot. Accessible at http://192.168.1.124:18801.)_
 
 ### Milestone E — Final Validation (by 2026-03-31)
 - [ ] [E2_SECRET_SCAN_PASS] Run secret scan and verify the repo is clean after C1-C2. _(Checklist E2.)_
@@ -42,6 +38,7 @@ Presentable Clarvis by 2026-03-31:
 
 ## P1 — This Week
 
+- [ ] [LLM_BRAIN_REVIEW 2026-03-23] [LLM_BRAIN_REVIEW] Audit clarvis-identity collection — it appears to contain mostly creator/origin info. Enrich it with operational identity: what Clarvis IS (architecture), what it DOES (capabilities), and how it WORKS (key subsystems). — clarvis-identity surfaced 'who created Clarvis' for an architecture query, suggesting the collection is too narrow. Identity should encompass architectural self-knowledge, not just origin story.
 - [ ] [OBLIGATION_TRACKER 2026-03-23] [OBLIGATION_ESCALATION_ob_20260321_112950_0] Obligation violated 16x: Git hygiene: commit and push useful work. repeated violations
 - [ ] [DECOMPOSE_LONG_FUNCTIONS] Decompose oversized functions still above target length: `clarvis/heartbeat/gate.py:check_gate`, `clarvis/orch/task_selector.py:score_tasks`, `scripts/heartbeat_gate.py:check_gate`. Target: all functions ≤80 lines.
 - [ ] [DIRECTIVE_LLM_CLASSIFIER_UPGRADE] Add optional LLM-based classification fallback for ambiguous directives where rule-based classifier confidence < 0.5. Use task_router to pick cheapest model. Gate behind env var `DIRECTIVE_LLM_CLASSIFY=true`.
@@ -82,3 +79,4 @@ _Design: `docs/ADAPTIVE_RAG_PLAN.md` — 4-phase rollout (GATE → EVAL → RETR
 
 ### Research Sessions
 _(Completed items archived.)_
+- [x] [RESEARCH_PHI_COMPUTATION] Survey Phi computation limits, formal structure, and approximation quality in IIT. _(2026-03-23: Reviewed Kleiner & Hoel on generalized mathematical structure of IIT, PyPhi as the reference implementation, and Mediano et al. on heuristic/approximation quality. Key finding: exact Φ remains combinatorially intractable; current proxies can correlate well on small systems but are not yet trustworthy replacements for exact Φ at larger scales.)_

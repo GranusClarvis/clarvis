@@ -3,6 +3,9 @@
 _Completed items archived from QUEUE.md to reduce token footprint._
 _Last archived: 2026-03-17_
 
+### Archived 2026-03-23
+- [x] [C11_CLARVIS_DB_EXTRACTION_PLAN] (2026-03-23) Created `docs/CLARVISDB_EXTRACTION_PLAN.md` — scrubbed public-facing repo structure, MIT LICENSE added to package, CI workflows (test matrix + PyPI publish) documented, 16-step extraction checklist, dependency analysis, gate status updated (blocked on Gate 1: no second consumer).
+
 ### Archived 2026-03-17 (Queue Prune)
 - [x] [RESEARCH_NEW_CONSCIOUSNESS_ARCHITECTURES] (2026-03-17) Researched current consciousness architectures across GNWT, IIT, and active-inference synthesis literature; wrote summary to `memory/research/consciousness-architectures-2026-03-17.md`.
 - [x] [CHROMADB_SINGLETON] (AGI-Readiness) Factory pattern in `clarvis/brain/factory.py`, ClarvisBrain+LiteBrain wired, test fixtures converted. 87 tests pass.
@@ -1442,3 +1445,11 @@ _Last archived: 2026-03-17_
 
 ## Archived 2026-03-23
 - [x] [C6_ADD_ROOT_README] Add a strong root `README.md` explaining what Clarvis is, architecture at a glance, quick start, repo boundaries, and current status. _(Checklist C6 — critical path. Done 2026-03-23: README enhanced with Current Status table and Repo Boundaries section.)_
+
+## Archived 2026-03-23
+- [x] [C3_VERIFY_GITIGNORE_AND_TRACKED_DATA] Added `monitoring/` to .gitignore, untracked `data/golden_qa.json` + 3 monitoring files. Verified: 0 tracked files in data/ or monitoring/, 0 .pyc tracked. _(Done 2026-03-23.)_
+- [x] [C5_CONSOLIDATE_TESTS] Consolidated 3 test dirs into `tests/` (tests/clarvis/ + tests/scripts/ + root tests/). Updated pyproject.toml testpaths. 1798 tests collect, 85/86 pass (1 pre-existing). _(Done 2026-03-23.)_
+- [x] [D1_WEBSITE_V0_SCAFFOLD] Built 5-page static website (index, architecture, repos, benchmarks, roadmap) + Starlette server + shared CSS. All routes 200. Polls /api/public/status (stub until D2). _(Done 2026-03-23.)_
+
+## Archived 2026-03-23
+- [x] [C11_CLARVIS_DB_EXTRACTION_PLAN] Extract or isolate `clarvis-db` boundary into a separate repo/package plan with scrubbed public-facing structure, LICENSE, and CI requirements documented. _(Done 2026-03-23: `docs/CLARVISDB_EXTRACTION_PLAN.md` — scrubbed structure, 16-step extraction checklist, CI workflows, LICENSE added to package, gate status updated. Blocked on Gate 1.)_
