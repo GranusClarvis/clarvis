@@ -361,13 +361,35 @@ class EpisodicMemory:
         recent = self.episodes[-20:-1]  # last 20 episodes excluding new one
         self._auto_link_against(new_episode, recent)
 
+    # Valid failure types for structured categorization
+    FAILURE_TYPES = {
+        "timeout":  "Task exceeded time limit (exit 124 or similar)",
+        "memory":   "ChromaDB/embedding/brain subsystem failure",
+        "planning": "Task selection, queue, routing, preflight failure",
+        "system":   "OS, network, permissions, disk, import errors",
+        "action":   "Code bug, assertion, logic error (default)",
+        "partial-success": "Task partially completed but did not fully succeed",
+    }
+
     def encode(self, task_text, section, salience, outcome,
-               duration_s=0, error_msg=None, steps_taken=None):
-        """Encode a new episode from a heartbeat task."""
+               duration_s=0, error_msg=None, steps_taken=None,
+               failure_type=None):
+        """Encode a new episode from a heartbeat task.
+
+        Args:
+            failure_type: Optional structured failure category. One of:
+                timeout, memory, planning, system, action, partial-success.
+                Only meaningful when outcome != 'success'.
+        """
         now = datetime.now(timezone.utc)
 
         # Calculate emotional valence
         valence = self._compute_valence(outcome, salience, duration_s, error_msg)
+
+        # Validate and normalize failure_type
+        ft = None
+        if outcome != "success" and failure_type:
+            ft = failure_type if failure_type in self.FAILURE_TYPES else "action"
 
         episode = {
             "id": f"ep_{now.strftime('%Y%m%d_%H%M%S')}",
@@ -376,6 +398,7 @@ class EpisodicMemory:
             "section": section,
             "salience": float(salience),
             "outcome": outcome,  # "success" | "failure" | "timeout"
+            "failure_type": ft,  # structured failure category (None for success)
             "valence": valence,
             "duration_s": duration_s,
             "error": error_msg[:200] if error_msg else None,
@@ -568,6 +591,13 @@ class EpisodicMemory:
         for ep in self.episodes:
             outcomes[ep["outcome"]] = outcomes.get(ep["outcome"], 0) + 1
 
+        # Failure type distribution (first-class field + legacy tag fallback)
+        failure_types = {}
+        for ep in self.episodes:
+            ft = self._get_failure_type(ep)
+            if ft:
+                failure_types[ft] = failure_types.get(ft, 0) + 1
+
         activations = [e.get("activation", 0.0) for e in self.episodes]
         avg_valence = sum(e["valence"] for e in self.episodes) / len(self.episodes)
         avg_activation = sum(activations) / len(activations)
@@ -579,6 +609,7 @@ class EpisodicMemory:
         return {
             "total": len(self.episodes),
             "outcomes": outcomes,
+            "failure_types": failure_types,
             "avg_valence": round(avg_valence, 3),
             "avg_activation": round(avg_activation, 3),
             "activation_min": round(min(activations), 3),
@@ -589,6 +620,28 @@ class EpisodicMemory:
             "oldest": self.episodes[0]["timestamp"][:10],
             "newest": self.episodes[-1]["timestamp"][:10]
         }
+
+    @staticmethod
+    def _get_failure_type(episode):
+        """Extract failure type from episode (first-class field or legacy tag).
+
+        Returns failure_type string or None for successful episodes.
+        """
+        # First-class field (new episodes)
+        ft = episode.get("failure_type")
+        if ft:
+            return ft
+        # Legacy: extract from tags list (e.g. "error_type:timeout")
+        for tag in episode.get("tags", []):
+            if isinstance(tag, str) and tag.startswith("error_type:"):
+                return tag.split(":", 1)[1]
+        # Infer from outcome for old episodes without tags
+        outcome = episode.get("outcome", "")
+        if outcome == "timeout":
+            return "timeout"
+        if outcome in ("failure", "soft_failure"):
+            return "action"  # default for untagged failures
+        return None
 
     def _compute_valence(self, outcome, salience, duration_s, error_msg):
         """Compute emotional valence of an episode.
@@ -910,8 +963,8 @@ episodic = EpisodicMemory()
 # CLI interface
 def main():
     if len(sys.argv) < 2:
-        print("Usage: episodic_memory.py <encode|recall|failures|stats|synthesize"
-              "|link|causes|effects|chain|roots|causal-stats|backfill>")
+        print("Usage: episodic_memory.py <encode|recall|failures|stats|failure-types"
+              "|synthesize|link|causes|effects|chain|roots|causal-stats|backfill>")
         sys.exit(1)
 
     cmd = sys.argv[1]
@@ -947,6 +1000,22 @@ def main():
     elif cmd == "stats":
         stats = episodic.get_stats()
         print(json.dumps(stats, indent=2))
+
+    elif cmd == "failure-types":
+        stats = episodic.get_stats()
+        ft = stats.get("failure_types", {})
+        if not ft:
+            print("No failure types recorded.")
+        else:
+            print("Failure type distribution:")
+            total_failures = sum(ft.values())
+            for ftype, count in sorted(ft.items(), key=lambda x: x[1], reverse=True):
+                pct = count / total_failures * 100
+                bar = "█" * int(pct / 5)
+                print(f"  {ftype:16s}  {count:3d}  ({pct:4.1f}%)  {bar}")
+            print(f"\nTotal failures: {total_failures}")
+            weakest = max(ft, key=ft.get)
+            print(f"Weakest mode: {weakest} ({ft[weakest]} episodes)")
 
     elif cmd == "synthesize":
         result = episodic.synthesize()

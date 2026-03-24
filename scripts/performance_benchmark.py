@@ -338,6 +338,11 @@ def benchmark_episodes():
         non_timeout = max(real_total - timeouts, 1)
         action_accuracy = round(successes / non_timeout, 3)
 
+        # Failure type distribution from structured taxonomy
+        failure_types = stats.get("failure_types", {})
+        # Identify weakest failure mode (highest count)
+        weakest_failure = max(failure_types, key=failure_types.get) if failure_types else None
+
         return {
             "total_episodes": total,
             "real_episodes": real_total,
@@ -345,6 +350,8 @@ def benchmark_episodes():
             "success_rate": success_rate,
             "action_accuracy": action_accuracy,
             "outcomes": outcomes,
+            "failure_types": failure_types,
+            "weakest_failure_mode": weakest_failure,
             "avg_valence": stats.get("avg_valence", 0.0),
             "strong_memories": stats.get("strong_memories", 0),
             "forgotten_memories": stats.get("forgotten_memories", 0),
@@ -871,6 +878,8 @@ def run_full_benchmark():
         "heartbeat_overhead_s": efficiency.get("heartbeat_overhead_s"),
         "episode_success_rate": episodes["success_rate"],
         "action_accuracy":      episodes.get("action_accuracy", 0.0),
+        "failure_types":        episodes.get("failure_types", {}),
+        "weakest_failure_mode": episodes.get("weakest_failure_mode"),
         "phi":                  phi["phi"],
         "context_relevance":    context.get("context_relevance", 0.0),
         "graph_density":        brain_stats["graph_density"],

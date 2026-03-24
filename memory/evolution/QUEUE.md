@@ -34,7 +34,6 @@ Presentable Clarvis by 2026-03-31:
 
 
 ### Repo / Spine Audit
-- [x] [LEGACY_IMPORT_MIGRATION_PHASE1] Migrated 4 legacy imports in heartbeat_preflight.py and heartbeat_postflight.py to spine: attention→clarvis.cognition.attention, clarvis_confidence→clarvis.cognition.confidence, episodic_memory→clarvis.memory.episodic_memory, procedural_memory→clarvis.memory.procedural_memory. Updated bridge wrapper comments. (2026-03-24)
 
 ### Website / Public Presence
 
@@ -42,6 +41,12 @@ Presentable Clarvis by 2026-03-31:
 
 ### NEW ITEMS (added 2026-03-23 evolution analysis)
 - [ ] [BRIER_CALIBRATION_OVERHAUL] Audit `clarvis_confidence.py` prediction-outcome loop: review bucket distributions, prune stale/low-signal predictions, recalibrate bin edges, and add a post-recalibration Brier check to `performance_benchmark.py`. Current brier capability=0.06 is the worst dimension. Target: brier ≥ 0.30 within 2 weeks.
+
+### NEW ITEMS (added 2026-03-24 evolution analysis)
+- [ ] [CI_TEST_COVERAGE_EXPANSION] Expand CI workflow (`.github/workflows/ci.yml`) to also run `tests/` root-level test files (`test_contextual_enrich.py`, `test_clr_stability_gate.py`, `test_research_lesson_store.py`, `test_performance_gate_trajectory.py`) — currently only `tests/test_open_source_smoke.py` is executed. Non-Python task (YAML).
+- [x] [PARALLEL_BRAIN_QUERIES] Implement parallel collection queries in `clarvis/brain/` search path using `concurrent.futures.ThreadPoolExecutor`. _(2026-03-24: Done. Pre-warmed `_recall_executor` (6 daemon threads) replaces per-call ThreadPoolExecutor. Auto-parallel for 4+ collections (default 9). Query time: 280ms→46ms with cached embedding (6x speedup). Total wall time dominated by ONNX embedding (226ms). Env var CLARVIS_PARALLEL_RECALL=0 to force sequential.)_
+- [ ] [SEMANTIC_CROSS_COLLECTION_UNBLOCK] Unblock SEMANTIC_CROSS_COLLECTION_BRIDGES (stuck since 2026-03-19): profile Phi computation timeout, identify which of the 99k graph edges + 720 ONNX queries dominate wall time, and implement either sampling-based Phi estimation or collection-pair parallel evaluation. Current semantic_cross_collection=0.57 (target >0.75).
+- [x] [EPISODE_FAILURE_TAXONOMY] Add structured failure categorization to `episodic_memory.py`: tag failed episodes with failure type (timeout, LLM-error, script-error, data-error, partial-success) and surface failure-type distribution in `performance_benchmark.py` PI report. _(2026-03-24: Done. Added `failure_type` first-class field to encode(), `_get_failure_type()` with legacy tag fallback, `failure_types` in get_stats()/benchmark_episodes(), `failure-types` CLI, weakest_failure_mode in PI report. Categories: timeout/memory/planning/system/action/partial-success.)_
 
 ---
 

@@ -155,6 +155,11 @@ def contextual_enrich(results):
 # Daemon threads die with the process — no need for explicit shutdown.
 _observer_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="brain-obs")
 
+# Pre-warmed executor for parallel collection queries.
+# Avoids thread pool creation overhead on every recall() call.
+# 6 workers covers DEFAULT_COLLECTIONS (6 collections); ALL_COLLECTIONS (10) reuses them.
+_recall_executor = ThreadPoolExecutor(max_workers=6, thread_name_prefix="brain-recall")
+
 
 def _is_bridge_memory(result: dict) -> bool:
     """Check if a recall result is a synthetic bridge/boost memory."""
@@ -355,22 +360,30 @@ class SearchMixin:
                     items.append(result_item)
             return items
 
-        # Query collections — sequential by default, parallel if CLARVIS_PARALLEL_RECALL=1
-        # Benchmarked 2026-03-20: sequential ~0.28s vs parallel ~0.41s (thread overhead
-        # dominates when per-collection queries are <30ms). Enable parallel for slow
-        # backends or high collection counts.
+        # Query collections — parallel by default when 4+ collections (uses pre-warmed
+        # executor to avoid thread creation overhead). Sequential for few collections
+        # or when CLARVIS_PARALLEL_RECALL=0 forces it off.
+        # Previous benchmark (2026-03-20): new-executor-per-call was slower (0.41s vs 0.28s).
+        # Pre-warmed executor eliminates that overhead.
         import os as _os
-        _parallel = _os.environ.get("CLARVIS_PARALLEL_RECALL", "0") == "1"
+        _parallel_env = _os.environ.get("CLARVIS_PARALLEL_RECALL")
+        # Auto-parallel for 4+ collections, explicit override via env var
+        if _parallel_env == "0":
+            _use_parallel = False
+        elif _parallel_env == "1":
+            _use_parallel = len(valid_collections) > 1
+        else:
+            _use_parallel = len(valid_collections) >= 4
 
-        if _parallel and len(valid_collections) > 1:
-            from concurrent.futures import ThreadPoolExecutor as _TPE, as_completed
-            with _TPE(max_workers=min(len(valid_collections), 10)) as executor:
-                futures = {executor.submit(_query_collection, c): c for c in valid_collections}
-                for future in as_completed(futures):
-                    try:
-                        all_results.extend(future.result())
-                    except Exception:
-                        pass
+        if _use_parallel:
+            from concurrent.futures import as_completed
+            futures = {_recall_executor.submit(_query_collection, c): c
+                       for c in valid_collections}
+            for future in as_completed(futures):
+                try:
+                    all_results.extend(future.result())
+                except Exception:
+                    pass
         else:
             for c in valid_collections:
                 try:
