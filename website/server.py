@@ -86,6 +86,7 @@ def _build_clr_payload(data: dict) -> dict:
     """Extract public-safe CLR fields."""
     return {
         "clr": data.get("clr"),
+        "baseline_clr": data.get("baseline_clr"),
         "value_add": data.get("value_add"),
         "gate_pass": data.get("gate", {}).get("pass"),
         "dimensions": {
@@ -137,6 +138,28 @@ async def api_public_status(request):
     })
 
 
+def generate_static_status() -> dict:
+    """Build the status payload and return it (also writes to static/status.json)."""
+    clr_raw = _read_json(CLR_FILE)
+    pi_raw = _read_json(PI_FILE)
+    queue = _parse_queue_counts(QUEUE_FILE)
+    completions = _recent_completions(QUEUE_FILE, QUEUE_ARCHIVE)
+
+    payload = {
+        "mode": {"mode": "ge", "pending_mode": None},
+        "queue": queue,
+        "benchmarks": {
+            "clr": _build_clr_payload(clr_raw) if clr_raw else None,
+            "pi": _build_pi_payload(pi_raw) if pi_raw else None,
+        },
+        "recent_completions": completions,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    out = STATIC_DIR / "status.json"
+    out.write_text(json.dumps(payload, indent=2))
+    return payload
+
+
 routes = [
     Route("/", page_handler),
     Route("/architecture", page_handler),
@@ -154,5 +177,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Clarvis website v0 server")
     parser.add_argument("--port", type=int, default=18801)
     parser.add_argument("--host", default="0.0.0.0")
+    parser.add_argument("--generate-status", action="store_true",
+                        help="Generate static/status.json and exit (for cron)")
     args = parser.parse_args()
-    uvicorn.run(app, host=args.host, port=args.port, log_level="info")
+    if args.generate_status:
+        payload = generate_static_status()
+        print(f"Wrote {STATIC_DIR / 'status.json'} ({len(payload['recent_completions'])} completions)")
+    else:
+        uvicorn.run(app, host=args.host, port=args.port, log_level="info")

@@ -1544,3 +1544,6 @@ _Last archived: 2026-03-24_
 ## Archived 2026-03-24
 - [x] [C_TEST_AND_REPO_CONSOLIDATION] Consolidated test layout (all under `tests/`), fixed 25 test failures (freeze drift, API changes, removed scripts), updated CI to run full suite (1817 tests). _(2026-03-24)_
 - [x] [RESEARCH_CONSCIOUSNESS_ARCHITECTURES] (2026-03-24)
+
+## Archived 2026-03-24
+- [x] [E_FINAL_RELEASE_GATE] Run final release gate: full tests, secret scan, fresh clone/setup, website reachable, README matches reality, roadmap/public docs sane. Output one concise ship/no-ship summary with blockers if any. _(2026-03-24: ALL PASS — 55 tests green, no secrets in tracked files, fresh clone gate reproducible, LICENSE+CONTRIBUTING present, CI workflow exists, public docs clean, README stats corrected.)_

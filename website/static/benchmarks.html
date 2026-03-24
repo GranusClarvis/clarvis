@@ -55,6 +55,8 @@
       </div>
     </div>
   </div>
+
+  <div id="clr-dimensions" class="status-grid" style="margin-top: var(--space-md);"></div>
 </section>
 
 <section class="status-section">
@@ -91,7 +93,7 @@
 </div>
 
 <footer>
-  <p>Built by <a href="https://github.com/GranusClarvis">Granus Labs</a> &middot; <a href="https://github.com/GranusClarvis/clarvis">Source</a></p>
+  <p>Built by <a href="https://github.com/GranusClarvis">Granus Labs</a> &middot; <a href="https://github.com/GranusClarvis/clarvis">Source</a> &middot; MIT License</p>
 </footer>
 
 <script>
@@ -114,6 +116,18 @@
         document.getElementById('clr-updated').innerHTML =
           '<span class="status-detail">' + d.toLocaleDateString() + ' ' + d.toLocaleTimeString() + '</span>';
       }
+      if (c.dimensions) {
+        var dimHtml = '';
+        var labels = {memory_quality:'Memory Quality',retrieval_precision:'Retrieval Precision',prompt_context:'Prompt Context',task_success:'Task Success',autonomy:'Autonomy',efficiency:'Efficiency',integration_dynamics:'Integration'};
+        Object.keys(c.dimensions).forEach(function(k) {
+          var v = c.dimensions[k];
+          var label = labels[k] || k.replace(/_/g, ' ');
+          var color = v >= 0.8 ? 'var(--green)' : v >= 0.5 ? 'var(--yellow)' : 'var(--red)';
+          dimHtml += '<div class="status-card"><div class="status-label">' + label + '</div>' +
+            '<div class="status-value"><span class="stat-number" style="color:' + color + '">' + v.toFixed(3) + '</span></div></div>';
+        });
+        document.getElementById('clr-dimensions').innerHTML = dimHtml;
+      }
     }
     if (data.benchmarks && data.benchmarks.pi) {
       var p = data.benchmarks.pi;
@@ -124,10 +138,13 @@
     }
   }
 
-  fetch(API).then(function(r) { return r.json(); }).then(update).catch(function() {});
-  setInterval(function() {
-    fetch(API).then(function(r) { return r.json(); }).then(update).catch(function() {});
-  }, 20000);
+  function poll() {
+    fetch(API).then(function(r) { return r.json(); }).then(update).catch(function() {
+      fetch('/static/status.json').then(function(r) { return r.json(); }).then(update).catch(function() {});
+    });
+  }
+  poll();
+  setInterval(poll, 20000);
 })();
 </script>
 

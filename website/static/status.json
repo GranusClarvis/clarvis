@@ -1,0 +1,57 @@
+{
+  "mode": {
+    "mode": "ge",
+    "pending_mode": null
+  },
+  "queue": {
+    "pending": 8,
+    "in_progress": 5,
+    "done": 0
+  },
+  "benchmarks": {
+    "clr": {
+      "clr": 0.784,
+      "baseline_clr": 0.19,
+      "value_add": 0.594,
+      "gate_pass": true,
+      "dimensions": {
+        "memory_quality": 0.851,
+        "retrieval_precision": 0.667,
+        "prompt_context": 0.7,
+        "task_success": 0.783,
+        "autonomy": 0.832,
+        "efficiency": 0.982,
+        "integration_dynamics": 0.836
+      },
+      "timestamp": "2026-03-24T05:45:10.030821+00:00"
+    },
+    "pi": {
+      "pi": 1.0,
+      "dimensions": 14,
+      "timestamp": "2026-03-24T05:45:01.778990+00:00"
+    }
+  },
+  "recent_completions": [
+    {
+      "tag": "A5_A7_RUNTIME_MODE_AND_CLI_FINISH",
+      "status": "success"
+    },
+    {
+      "tag": "TEMPORAL_RETRIEVAL_FIX",
+      "status": "success"
+    },
+    {
+      "tag": "P0_BACKFILL_CREATED_EPOCH_SENTINEL_FIX",
+      "status": "success"
+    },
+    {
+      "tag": "C11_CLARVIS_DB_EXTRACTION_PLAN",
+      "status": "success"
+    },
+    {
+      "tag": "RESEARCH_NEW_CONSCIOUSNESS_ARCHITECTURES",
+      "status": "success"
+    }
+  ],
+  "updated_at": "2026-03-24T22:02:49.430100+00:00"
+}

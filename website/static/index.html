@@ -255,7 +255,13 @@
     fetch(API)
       .then(function(r) { return r.json(); })
       .then(update)
-      .catch(function() {});
+      .catch(function() {
+        // Fallback: try static JSON if API is unavailable
+        fetch('/static/status.json')
+          .then(function(r) { return r.json(); })
+          .then(update)
+          .catch(function() {});
+      });
   }
 
   poll();

@@ -593,6 +593,21 @@ footer a:hover { color: var(--accent); }
 .status-grid > *:nth-child(4),
 .feature-grid > *:nth-child(4) { animation-delay: 325ms; }
 
+/* ─── Mobile adjustments ─── */
+
+@media (max-width: 600px) {
+  body { padding: var(--space-lg) var(--space-sm); }
+  .hero h1 { font-size: 2rem; }
+  .hero .subtitle { font-size: 1rem; }
+  .hero-links { flex-direction: column; gap: var(--space-sm); }
+  .hero-links a { text-align: center; }
+  nav { flex-wrap: wrap; gap: 0; }
+  nav a { padding: var(--space-xs) var(--space-xs); font-size: 0.75rem; }
+  .arch-diagram { font-size: 0.625rem; padding: var(--space-md); }
+  h1 { font-size: 1.5rem; }
+  .repo-card { padding: var(--space-lg); }
+}
+
 /* ─── Scrollbar ─── */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
