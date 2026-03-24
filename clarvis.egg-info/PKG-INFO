@@ -1,0 +1,13 @@
+Metadata-Version: 2.4
+Name: clarvis
+Version: 0.1.0
+Summary: Clarvis — dual-layer cognitive agent system
+License-Expression: MIT
+Requires-Python: >=3.10
+License-File: LICENSE
+Requires-Dist: clarvis-cost
+Requires-Dist: clarvis-reasoning
+Provides-Extra: brain
+Requires-Dist: chromadb>=0.4.0; extra == "brain"
+Requires-Dist: onnxruntime>=1.15.0; extra == "brain"
+Dynamic: license-file

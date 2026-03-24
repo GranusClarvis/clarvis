@@ -181,9 +181,9 @@ def test_clr_schema_version_stable():
     assert CLR_SCHEMA_VERSION == "1.0"
 
 
-def test_clr_dimensions_are_six():
+def test_clr_dimensions_are_seven():
     from clarvis.metrics.clr import WEIGHTS
-    assert len(WEIGHTS) == 6
+    assert len(WEIGHTS) == 7
 
 
 def test_clr_weights_sum_to_one():

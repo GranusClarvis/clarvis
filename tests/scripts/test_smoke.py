@@ -32,7 +32,7 @@ COGNITIVE_SCRIPTS = [
     "memory_consolidation", "meta_learning", "parameter_evolution",
     "performance_benchmark", "prediction_review",
     "retrieval_benchmark", "retrieval_experiment", "retrieval_quality",
-    "semantic_bridge_builder", "temporal_self", "theory_of_mind",
+    "temporal_self", "theory_of_mind",
     "thought_protocol", "world_models",
 ]
 

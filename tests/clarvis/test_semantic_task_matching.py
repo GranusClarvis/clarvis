@@ -74,37 +74,37 @@ QUEUE_NO_PENDING = """\
 
 
 # === _parse_queue_tasks tests ===
+# Returns 5-tuples: (weight, core, full_text, milestone, status)
 
 class TestParseQueueTasks:
     def test_extracts_pending_tasks(self):
         results = _parse_queue_tasks(SAMPLE_QUEUE)
-        texts = [core for _, core, _ in results]
+        texts = [core for _, core, *_ in results]
         assert any("brain health" in t.lower() for t in texts)
         assert any("graph compaction" in t.lower() for t in texts)
 
     def test_skips_completed_tasks(self):
         results = _parse_queue_tasks(SAMPLE_QUEUE)
-        full_texts = [full for _, _, full in results]
+        full_texts = [r[2] for r in results]
         assert not any("migrate graph backend" in t for t in full_texts)
 
     def test_p0_priority_weight(self):
         results = _parse_queue_tasks(SAMPLE_QUEUE)
-        # First two tasks are under P0
-        p0_tasks = [(w, c) for w, c, _ in results if w == 1.0]
+        p0_tasks = [(w, c) for w, c, *_ in results if w == 1.0]
         assert len(p0_tasks) >= 2
         cores = [c.lower() for _, c in p0_tasks]
         assert any("brain health" in c for c in cores)
 
     def test_p1_priority_weight(self):
         results = _parse_queue_tasks(SAMPLE_QUEUE)
-        p1_tasks = [(w, c) for w, c, _ in results if w == 0.7]
+        p1_tasks = [(w, c) for w, c, *_ in results if w == 0.7]
         assert len(p1_tasks) >= 2
         cores = [c.lower() for _, c in p1_tasks]
         assert any("cost tracker" in c for c in cores)
 
     def test_p2_priority_weight(self):
         results = _parse_queue_tasks(SAMPLE_QUEUE)
-        p2_tasks = [(w, c) for w, c, _ in results if w == 0.4]
+        p2_tasks = [(w, c) for w, c, *_ in results if w == 0.4]
         assert len(p2_tasks) >= 2
         cores = [c.lower() for _, c in p2_tasks]
         assert any("deprecated" in c for c in cores)
@@ -112,14 +112,19 @@ class TestParseQueueTasks:
     def test_pillar_defaults_to_p1(self):
         results = _parse_queue_tasks(SAMPLE_QUEUE)
         # Tasks under "Pillar 1" (without explicit P tag) get P1 weight (0.7)
-        cores = [c.lower() for w, c, _ in results if w == 0.7]
+        cores = [c.lower() for w, c, *_ in results if w == 0.7]
         assert any("episodic memory" in c for c in cores)
 
     def test_empty_queue(self):
         assert _parse_queue_tasks(QUEUE_EMPTY) == []
 
     def test_no_pending_tasks(self):
-        assert _parse_queue_tasks(QUEUE_NO_PENDING) == []
+        # [~] tasks are now parsed as in-progress, so only [x] are fully excluded
+        results = _parse_queue_tasks(QUEUE_NO_PENDING)
+        # Only the [~] task should remain (in-progress), [x] tasks are excluded
+        assert all(r[4] != "done" for r in results)
+        pending = [r for r in results if r[4] == "pending"]
+        assert len(pending) == 0
 
     def test_empty_string(self):
         assert _parse_queue_tasks("") == []
@@ -129,7 +134,7 @@ class TestParseQueueTasks:
         content = "## P0\n- [ ] Fix the timeout issue (targets brain speed)"
         results = _parse_queue_tasks(content)
         assert len(results) == 1
-        _, core, _ = results[0]
+        _, core, *_ = results[0]
         assert "targets" not in core
         assert "Fix the timeout issue" in core
 
@@ -137,7 +142,7 @@ class TestParseQueueTasks:
         """When core is too short (<15 chars), use task_text[:100]."""
         content = "## P0\n- [ ] Fix it — a very important but tersely named task"
         results = _parse_queue_tasks(content)
-        _, core, _ = results[0]
+        _, core, *_ = results[0]
         assert len(core) >= 15
 
     def test_nested_priority_headers(self):
@@ -154,7 +159,7 @@ class TestParseQueueTasks:
 - [ ] Add cron job for agent health checks
 """
         results = _parse_queue_tasks(content)
-        weights = {core: w for w, core, _ in results}
+        weights = {core: w for w, core, *_ in results}
         scoreboard = [v for k, v in weights.items() if "scoreboard" in k.lower()]
         cron = [v for k, v in weights.items() if "cron" in k.lower()]
         assert scoreboard[0] == 1.0  # P0
@@ -181,15 +186,12 @@ class TestCosineSimilarity:
 
 
 # === _semantic_rank tests ===
+# _semantic_rank now expects 5-tuples and returns (score, formatted_string) pairs
 
 class TestSemanticRank:
     @staticmethod
     def _mock_embed_fn(texts):
-        """Deterministic mock embeddings based on keyword presence.
-
-        Generates 6D vectors for enough differentiation to avoid
-        the >0.9 near-duplicate filter while preserving semantic direction.
-        """
+        """Deterministic mock embeddings based on keyword presence."""
         result = []
         for i, text in enumerate(texts):
             t = text.lower()
@@ -206,37 +208,36 @@ class TestSemanticRank:
 
     def test_ranks_by_semantic_similarity(self):
         parsed = [
-            (1.0, "Fix brain health check", "Fix brain health check timeout issue"),
-            (1.0, "Optimize graph compaction", "Optimize graph compaction for large datasets"),
-            (0.7, "Refactor cost tracker", "Refactor cost tracker to use real API data"),
+            (1.0, "Fix brain health check", "Fix brain health check timeout issue", "P0", "pending"),
+            (1.0, "Optimize graph compaction", "Optimize graph compaction for large datasets", "P0", "pending"),
+            (0.7, "Refactor cost tracker", "Refactor cost tracker to use real API data", "P1", "pending"),
         ]
         scored = _semantic_rank("brain memory retrieval optimization", parsed, self._mock_embed_fn)
-        # Brain-related task should rank first (enriched text starts with core)
-        assert scored[0][1].startswith("Fix brain health check")
+        # Brain-related task should rank first
+        assert "brain health" in scored[0][1].lower()
 
     def test_priority_weighting(self):
         """Higher priority tasks should score higher when similarity is equal."""
         parsed = [
-            (1.0, "P0: graph compaction fix", "P0: graph compaction fix for large datasets"),
-            (0.4, "P2: graph edge compaction", "P2: graph edge compaction for old datasets"),
+            (1.0, "P0: graph compaction fix", "P0: graph compaction fix for large datasets", "P0", "pending"),
+            (0.4, "P2: graph edge compaction", "P2: graph edge compaction for old datasets", "P2", "pending"),
         ]
         scored = _semantic_rank("database graph issues", parsed, self._mock_embed_fn)
-        # Both have similar embedding (graph keywords), but P0 has higher weight
         if len(scored) >= 2:
             assert scored[0][0] > scored[1][0]
 
     def test_skips_near_duplicates(self):
         """Tasks with >0.9 cosine sim to the query are excluded (same task)."""
         parsed = [
-            (1.0, "Brain memory retrieval", "Brain memory retrieval optimization"),
-            (0.7, "Graph compaction optimization", "Optimize graph compaction for large datasets"),
+            (1.0, "Brain memory retrieval", "Brain memory retrieval optimization", "P0", "pending"),
+            (0.7, "Graph compaction optimization", "Optimize graph compaction for large datasets", "P1", "pending"),
         ]
         scored = _semantic_rank(
             "Brain memory retrieval optimization", parsed, self._mock_embed_fn
         )
         # The near-duplicate should be filtered out
-        cores = [c for _, c in scored]
-        assert "Brain memory retrieval" not in cores
+        formatted = [c for _, c in scored]
+        assert not any("Brain memory retrieval" == c for c in formatted)
 
     def test_empty_parsed_tasks(self):
         assert _semantic_rank("some task", [], self._mock_embed_fn) == []
@@ -244,43 +245,39 @@ class TestSemanticRank:
     def test_low_similarity_filtered(self):
         """Tasks with very low combined score (<0.05) should be excluded."""
         parsed = [
-            (0.4, "Clean deprecated scripts", "Clean up deprecated scripts in scripts/ directory"),
+            (0.4, "Clean deprecated scripts", "Clean up deprecated scripts in scripts/ directory", "P2", "pending"),
         ]
-        # Query about something completely different
         scored = _semantic_rank("graph compaction optimization", parsed, self._mock_embed_fn)
-        # Low-priority + low-similarity should be filtered
-        # (0.4 priority * low cosine similarity < 0.05)
-        # The mock gives some baseline similarity so let's just check the list
         for score, _ in scored:
             assert score > 0.05
 
 
 # === _word_overlap_rank tests ===
+# _word_overlap_rank now expects 5-tuples and returns (score, formatted_string) pairs
 
 class TestWordOverlapRank:
     def test_basic_overlap(self):
         parsed = [
-            (1.0, "Fix brain health check", "Fix brain health check timeout issue"),
-            (1.0, "Optimize graph compaction", "Optimize graph compaction for large datasets"),
+            (1.0, "Fix brain health check", "Fix brain health check timeout issue", "P0", "pending"),
+            (1.0, "Optimize graph compaction", "Optimize graph compaction for large datasets", "P0", "pending"),
         ]
         scored = _word_overlap_rank("brain health optimization", parsed)
         assert len(scored) > 0
-        # Brain health task should rank first (more word overlap, enriched text starts with core)
-        assert scored[0][1].startswith("Fix brain health check")
+        # Brain health task should rank first
+        assert "brain health" in scored[0][1].lower()
 
     def test_skips_near_duplicates(self):
         """Jaccard > 0.6 should be filtered (too similar = same task)."""
         parsed = [
-            (1.0, "Fix brain health check", "Fix brain health check timeout"),
+            (1.0, "Fix brain health check", "Fix brain health check timeout", "P0", "pending"),
         ]
         scored = _word_overlap_rank("Fix brain health check timeout", parsed)
-        # Should be filtered as near-duplicate
         assert len(scored) == 0
 
     def test_priority_weighting(self):
         parsed = [
-            (1.0, "P0: fix brain issue", "fix brain issue in health monitor"),
-            (0.4, "P2: fix brain issue", "fix brain issue in deprecated module"),
+            (1.0, "P0: fix brain issue", "fix brain issue in health monitor", "P0", "pending"),
+            (0.4, "P2: fix brain issue", "fix brain issue in deprecated module", "P2", "pending"),
         ]
         scored = _word_overlap_rank("fix brain monitoring issue", parsed)
         if len(scored) >= 2:
@@ -288,14 +285,14 @@ class TestWordOverlapRank:
 
     def test_empty_task_words(self):
         parsed = [
-            (1.0, "Fix brain", "Fix brain health check"),
+            (1.0, "Fix brain", "Fix brain health check", "P0", "pending"),
         ]
         # Query with only short words (< 3 chars)
         assert _word_overlap_rank("do it", parsed) == []
 
     def test_empty_candidate_words(self):
         parsed = [
-            (1.0, "AB CD", "AB CD"),  # No words with 3+ chars
+            (1.0, "AB CD", "AB CD", "P0", "pending"),  # No words with 3+ chars
         ]
         scored = _word_overlap_rank("some real task description", parsed)
         assert len(scored) == 0
@@ -488,8 +485,6 @@ class TestFindRelatedTasks:
 - [ ] Improve vector database query latency
 - [ ] Clean up old log files
 """
-        # Model overlapping concepts: "brain/search" and "database/query" are
-        # different words but semantically adjacent (cross-loading on dims 0-1).
         def mock_embed(texts):
             result = []
             for i, t in enumerate(texts):

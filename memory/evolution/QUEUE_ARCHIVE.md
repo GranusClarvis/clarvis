@@ -1,7 +1,12 @@
 # Evolution Queue — Archive
 
 _Completed items archived from QUEUE.md to reduce token footprint._
-_Last archived: 2026-03-17_
+_Last archived: 2026-03-24_
+
+### Archived 2026-03-24 (P0 Audit)
+- [x] [A5_A7_RUNTIME_MODE_AND_CLI_FINISH] (2026-03-22) All complete: runtime mode control-plane (3 modes, policies, CLI), trajectory harness (5-component scorer, gate, heartbeat integration), CLI stable (9 subcommands via `python3 -m clarvis`).
+- [x] [TEMPORAL_RETRIEVAL_FIX] (2026-03-24) Implemented in commit `8cb486e`: `created_epoch` int metadata in both store.py files, ChromaDB native `where` filtering, 3x over-fetch, chronological fallback. Backfill script created. 25 tests pass.
+- [x] [P0_BACKFILL_CREATED_EPOCH_SENTINEL_FIX] (2026-03-24) Already fixed — code uses `is not None` check, not truthiness. `created_epoch=0` correctly treated as backfilled.
 
 ### Archived 2026-03-23
 - [x] [C11_CLARVIS_DB_EXTRACTION_PLAN] (2026-03-23) Created `docs/CLARVISDB_EXTRACTION_PLAN.md` — scrubbed public-facing repo structure, MIT LICENSE added to package, CI workflows (test matrix + PyPI publish) documented, 16-step extraction checklist, dependency analysis, gate status updated (blocked on Gate 1: no second consumer).
@@ -1530,3 +1535,12 @@ _Last archived: 2026-03-17_
 
 ## Archived 2026-03-24
 - [x] [EPISODE_FAILURE_TAXONOMY] Add structured failure categorization to `episodic_memory.py`: tag failed episodes with failure type (timeout, LLM-error, script-error, data-error, partial-success) and surface failure-type distribution in `performance_benchmark.py` PI report. _(2026-03-24: Done. Added `failure_type` first-class field to encode(), `_get_failure_type()` with legacy tag fallback, `failure_types` in get_stats()/benchmark_episodes(), `failure-types` CLI, weakest_failure_mode in PI report. Categories: timeout/memory/planning/system/action/partial-success.)_
+
+## Archived 2026-03-24
+- [x] [DELIVERY_STATUS_RECONCILE] _(Done 2026-03-24: reconciled checklist — C7/C8/C9/D3/E4 upgraded to DONE, summary counts updated, 25/31 items now done.)_
+- [x] [E3_FRESH_CLONE_AND_SETUP] _(Done 2026-03-24: created `scripts/gate_fresh_clone.sh`, validated 6-step setup in fresh venv — 55 tests pass, lint clean.)_
+- [x] [CI_TEST_COVERAGE_EXPANSION] _(Done 2026-03-24: added 4 root-level test files to CI, 25 tests all passing.)_
+
+## Archived 2026-03-24
+- [x] [C_TEST_AND_REPO_CONSOLIDATION] Consolidated test layout (all under `tests/`), fixed 25 test failures (freeze drift, API changes, removed scripts), updated CI to run full suite (1817 tests). _(2026-03-24)_
+- [x] [RESEARCH_CONSCIOUSNESS_ARCHITECTURES] (2026-03-24)

@@ -844,30 +844,42 @@ class TestWorkspaceDefined:
     set before any code that references it.
     """
 
-    def test_workspace_defined_in_postflight_constants(self):
-        """WORKSPACE must be assigned in the shared-constants block of run_postflight."""
+    def test_workspace_defined_in_postflight_ctx(self):
+        """WORKSPACE must be available via _build_postflight_ctx or run_postflight.
+
+        After decomposition, WORKSPACE flows through ctx["WORKSPACE"] set in
+        _build_postflight_ctx rather than as a direct local in run_postflight.
+        """
         import ast
         src_path = os.path.join(
             os.path.dirname(__file__), "..", "scripts", "heartbeat_postflight.py"
         )
         with open(src_path) as f:
-            tree = ast.parse(f.read())
-        # Find the run_postflight function
+            source = f.read()
+        tree = ast.parse(source)
+        # WORKSPACE must be assigned somewhere in the postflight module
+        # (either in _build_postflight_ctx or run_postflight)
+        found = False
         for node in ast.walk(tree):
-            if isinstance(node, ast.FunctionDef) and node.name == "run_postflight":
-                # Collect all Name targets assigned before line 1000 (well before §7.41)
-                assigned = set()
+            if isinstance(node, ast.FunctionDef) and node.name in (
+                "run_postflight", "_build_postflight_ctx"
+            ):
                 for child in ast.walk(node):
                     if isinstance(child, ast.Assign):
                         for target in child.targets:
-                            if isinstance(target, ast.Name):
-                                assigned.add(target.id)
-                assert "WORKSPACE" in assigned, (
-                    "WORKSPACE must be defined as a local constant in run_postflight "
-                    "(regression: POSTFLIGHT_TEST_CAPTURE_WORKSPACE_FIX)"
-                )
-                return
-        pytest.fail("run_postflight function not found in heartbeat_postflight.py")
+                            if isinstance(target, ast.Name) and target.id == "WORKSPACE":
+                                found = True
+                    # Also check dict subscript assignments like ctx["WORKSPACE"] = ...
+                    if isinstance(child, ast.Assign):
+                        for target in child.targets:
+                            if (isinstance(target, ast.Subscript)
+                                and isinstance(target.slice, ast.Constant)
+                                and target.slice.value == "WORKSPACE"):
+                                found = True
+        assert found, (
+            "WORKSPACE must be defined in _build_postflight_ctx or run_postflight "
+            "(regression: POSTFLIGHT_TEST_CAPTURE_WORKSPACE_FIX)"
+        )
 
     def test_workspace_used_in_path_construction(self):
         """os.path.join calls for test_results.json in §7.41 must use WORKSPACE."""

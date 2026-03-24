@@ -37,8 +37,8 @@ def backfill(dry_run=True):
         for i, mem_id in enumerate(results["ids"]):
             meta = results["metadatas"][i] if results.get("metadatas") else {}
 
-            # Skip if already has created_epoch
-            if meta.get("created_epoch"):
+            # Skip if already has created_epoch (including sentinel value 0)
+            if meta.get("created_epoch") is not None:
                 total_skipped += 1
                 continue
 

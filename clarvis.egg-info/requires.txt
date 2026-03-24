@@ -1,0 +1,6 @@
+clarvis-cost
+clarvis-reasoning
+
+[brain]
+chromadb>=0.4.0
+onnxruntime>=1.15.0

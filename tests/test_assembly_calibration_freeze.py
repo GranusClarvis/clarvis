@@ -143,8 +143,8 @@ def test_standard_tier_allocations_frozen():
         "decision_context": 140,   # +40 from merged metrics (2026-03-18)
         "spotlight": 80,
         "related_tasks": 60,
-        "completions": 40,
-        "episodes": 60,
+        "completions": 30,         # reduced 2026-03-24
+        "episodes": 80,            # increased 2026-03-24
         "reasoning_scaffold": 40,
     }
     assert std == expected, (
@@ -194,20 +194,33 @@ def test_protected_sections_never_suppressed():
         assert should_suppress_section(section, "any task text") is False
 
 
-def test_suppressed_sections_return_true_without_task():
-    """Default-suppressed sections are suppressed when no task context given."""
+def test_suppressed_sections_return_true_without_task(monkeypatch):
+    """Default-suppressed sections are suppressed when no task context given.
+
+    Uses monkeypatch to ensure _compute_dynamic_suppress returns the static
+    constants, since earlier tests may load context_relevance data that changes
+    the dynamic computation.
+    """
+    import clarvis.context.assembly as asm
     from clarvis.context.assembly import (
         should_suppress_section, DYCP_DEFAULT_SUPPRESS, HARD_SUPPRESS
     )
+    monkeypatch.setattr(asm, "_compute_dynamic_suppress",
+                        lambda: (HARD_SUPPRESS, DYCP_DEFAULT_SUPPRESS))
     for section in DYCP_DEFAULT_SUPPRESS:
         assert should_suppress_section(section, "") is True
     for section in HARD_SUPPRESS:
         assert should_suppress_section(section, "") is True
 
 
-def test_hard_suppress_ignores_task_containment():
+def test_hard_suppress_ignores_task_containment(monkeypatch):
     """Hard-suppressed sections are always suppressed, even with matching task."""
-    from clarvis.context.assembly import should_suppress_section, HARD_SUPPRESS
+    import clarvis.context.assembly as asm
+    from clarvis.context.assembly import (
+        should_suppress_section, HARD_SUPPRESS, DYCP_DEFAULT_SUPPRESS
+    )
+    monkeypatch.setattr(asm, "_compute_dynamic_suppress",
+                        lambda: (HARD_SUPPRESS, DYCP_DEFAULT_SUPPRESS))
     # Use a task that contains the section name words — should still suppress
     for section in HARD_SUPPRESS:
         task = f"fix the {section.replace('_', ' ')} system completely"

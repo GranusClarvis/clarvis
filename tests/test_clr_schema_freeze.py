@@ -9,12 +9,13 @@ def test_clr_schema_version_frozen():
 
 def test_clr_weights_frozen_and_sum_to_one():
     expected = {
-        "memory_quality": 0.20,
-        "retrieval_precision": 0.20,
-        "prompt_context": 0.15,
-        "task_success": 0.20,
-        "autonomy": 0.15,
-        "efficiency": 0.10,
+        "memory_quality": 0.18,
+        "retrieval_precision": 0.17,
+        "prompt_context": 0.18,
+        "task_success": 0.18,
+        "autonomy": 0.11,
+        "efficiency": 0.06,
+        "integration_dynamics": 0.12,
     }
     assert clr.WEIGHTS == expected
     valid, total = clr.validate_weights()
