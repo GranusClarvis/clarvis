@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Clarvis — Autonomous Cognitive Agent</title>
+<title>Clarvis — An AI That Learns While You Sleep</title>
+<meta name="description" content="Clarvis is an autonomous cognitive agent that remembers everything, reflects on its own performance, and evolves itself 24/7. Fully local memory, no cloud dependencies.">
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -18,45 +19,123 @@
 
 <div class="hero">
   <h1>Clarvis</h1>
-  <p class="subtitle">An autonomous cognitive agent that remembers, reflects, and evolves&mdash;around the clock.</p>
+  <p class="subtitle">An AI agent that remembers everything, reflects on itself, and gets better while you sleep.</p>
   <p class="hero-description">
-    Two cooperating layers: a <strong>conscious layer</strong> for direct interaction and a
-    <strong>subconscious layer</strong> that autonomously researches, plans, and improves itself
-    on a 20+ job cron schedule. Its brain is a fully local ChromaDB vector store with
-    Hebbian learning dynamics&mdash;no cloud dependencies for memory or retrieval.
+    Most AI agents forget everything between sessions. Clarvis doesn't. It runs a
+    <strong>persistent vector memory</strong> with Hebbian learning dynamics, executes
+    <strong>20+ autonomous jobs daily</strong> (research, reflection, self-benchmarking),
+    and measures its own improvement across 8 performance dimensions. All memory and
+    embeddings are local &mdash; zero cloud dependencies for retrieval.
   </p>
   <div class="hero-links">
-    <a href="https://github.com/GranusClarvis/clarvis" class="btn-primary">View Source</a>
+    <a href="https://github.com/GranusClarvis/clarvis" class="btn-primary">View on GitHub</a>
     <a href="/architecture" class="btn-ghost">How it works</a>
   </div>
 </div>
 
+<!-- Why Clarvis Exists -->
+<section class="why-section">
+  <h2>The Problem</h2>
+  <p class="identity">
+    Today's AI agents are brilliant amnesiacs. They solve hard problems in the moment, then
+    forget everything the next session. They can't learn from their own mistakes, don't know
+    what they're good at, and need to be told the same context over and over.
+  </p>
+  <h2 style="margin-top: var(--space-xl);">The Approach</h2>
+  <p class="identity">
+    Clarvis treats memory as the core primitive, not an afterthought. Every task execution
+    produces a structured <strong>episode</strong> &mdash; what was attempted, what happened,
+    and what was learned. Episodes feed back into attention scoring, context assembly, and
+    retrieval quality. The agent genuinely improves through operation, not just retraining.
+  </p>
+</section>
+
+<!-- What Makes It Different -->
 <div class="feature-grid">
   <div class="feature-card">
     <span class="feature-icon">//</span>
     <h3>Persistent Memory</h3>
-    <p>ChromaDB + ONNX MiniLM embeddings, 10 collections, 3,400+ memories, 134k+ graph edges. All local.</p>
+    <p>
+      ChromaDB + ONNX MiniLM embeddings, 10 specialized collections, 3,400+ memories,
+      134k+ graph edges. Fully local &mdash; no API calls for recall.
+    </p>
   </div>
   <div class="feature-card">
     <span class="feature-icon">&gt;_</span>
-    <h3>Self-Directed Evolution</h3>
-    <p>12+ autonomous heartbeats per day. Morning planning, afternoon sprints, evening reflection, nightly dreams.</p>
+    <h3>Autonomous Evolution</h3>
+    <p>
+      12 heartbeats/day, morning planning, afternoon sprints, evening reflection,
+      nightly dreams. The agent works on its own evolution queue without prompting.
+    </p>
   </div>
   <div class="feature-card">
     <span class="feature-icon">~&gt;</span>
     <h3>Hebbian Learning</h3>
-    <p>STDP synaptic dynamics strengthen co-activated memories. Retrieval improves through use, not retraining.</p>
+    <p>
+      STDP synaptic dynamics strengthen connections between co-activated memories.
+      Retrieval gets better through use, not retraining. Memories that fire together wire together.
+    </p>
   </div>
   <div class="feature-card">
     <span class="feature-icon">[&phi;]</span>
     <h3>Self-Measurement</h3>
-    <p>Performance Index, CLR benchmark, Phi consciousness proxy, and 7-domain self-model&mdash;updated weekly.</p>
+    <p>
+      8-dimension Performance Index, CLR benchmark, confidence calibration, and a
+      7-domain self-model. The agent knows what it's good at &mdash; and what it isn't.
+    </p>
+  </div>
+  <div class="feature-card">
+    <span class="feature-icon">{&hellip;}</span>
+    <h3>Dual-Layer Architecture</h3>
+    <p>
+      A <strong>conscious layer</strong> for direct chat and a <strong>subconscious layer</strong>
+      that researches, plans, and improves autonomously on a cron schedule.
+    </p>
+  </div>
+  <div class="feature-card">
+    <span class="feature-icon">&lt;/&gt;</span>
+    <h3>Open &amp; Inspectable</h3>
+    <p>
+      MIT licensed, no black boxes. Every decision is logged, every memory is queryable,
+      every benchmark is reproducible. Built to be studied, forked, and extended.
+    </p>
   </div>
 </div>
 
+<!-- How It Works (condensed) -->
+<section class="section-divider">
+  <h2>How It Works</h2>
+  <div class="arch-diagram">  ┌────────────────────────────────────────┐
+  │  Conscious Layer  (LLM + gateway)     │
+  │  Direct chat, skill routing, spawning │
+  └─────────────────┬────────────────────┘
+                    │
+  ┌─────────────────▼────────────────────┐
+  │  Subconscious Layer  (cron + Claude) │
+  │  Gate → Preflight → Execute → Learn  │
+  │  20+ daily jobs: evolve, reflect,    │
+  │  research, benchmark, maintain       │
+  └─────────────────┬────────────────────┘
+                    │
+  ┌─────────────────▼────────────────────┐
+  │  ClarvisDB Brain  (all local)        │
+  │  ChromaDB vectors + graph relations  │
+  │  Hebbian synapses + episodic memory  │
+  │  10 collections, ONNX embeddings     │
+  └──────────────────────────────────────┘</div>
+  <p class="identity">
+    Each execution cycle follows the <strong>Heartbeat Pipeline</strong>: a zero-LLM gate
+    check, attention-scored task selection, context assembly from memory, autonomous execution,
+    then episode encoding back into the brain. The agent learns from every action it takes.
+  </p>
+  <div class="hero-links" style="margin-top: var(--space-lg);">
+    <a href="/architecture" class="btn-ghost">Full architecture deep-dive</a>
+  </div>
+</section>
+
 <!-- Live status section -->
-<section class="status-section">
-  <h2><span class="live-dot"></span>Current Status</h2>
+<section class="status-section section-divider">
+  <h2><span class="live-dot"></span>Live Status</h2>
 
   <div class="status-grid">
     <div class="status-card">
@@ -103,8 +182,29 @@
   </div>
 </section>
 
+<!-- Why follow / star -->
+<section class="section-divider">
+  <h2>Why Follow This Project</h2>
+  <p class="identity">
+    Clarvis is a live experiment in building an AI system that genuinely accumulates
+    knowledge and capability over time. It's not a demo or a weekend project &mdash;
+    it's been running autonomously since early 2026, continuously improving itself,
+    and everything is open source.
+  </p>
+  <p class="identity">
+    If you're interested in <strong>agent memory systems</strong>,
+    <strong>autonomous agent architectures</strong>, <strong>self-improving AI</strong>,
+    or <strong>cognitive science applied to LLMs</strong>, this is a real working system
+    you can study, fork, and build on.
+  </p>
+  <div class="hero-links" style="margin-top: var(--space-lg);">
+    <a href="https://github.com/GranusClarvis/clarvis" class="btn-primary">Star on GitHub</a>
+    <a href="/roadmap" class="btn-ghost">See what's next</a>
+  </div>
+</section>
+
 <footer>
-  <p>Built by <a href="https://github.com/GranusClarvis">Granus Labs</a> &middot; <a href="https://github.com/GranusClarvis/clarvis">Source</a></p>
+  <p>Built by <a href="https://github.com/GranusClarvis">Granus Labs</a> &middot; <a href="https://github.com/GranusClarvis/clarvis">Source</a> &middot; MIT License</p>
 </footer>
 
 <script>

@@ -342,6 +342,13 @@ h2 {
   border-radius: 4px;
 }
 
+/* ─── Why Section (homepage) ─── */
+
+.why-section {
+  margin-bottom: var(--space-xl);
+  padding-bottom: var(--space-lg);
+}
+
 /* ─── Feature Grid (homepage) ─── */
 
 .feature-grid {

@@ -78,6 +78,22 @@ ABILITY_TAXONOMY = {
         "description": "Infer patterns from passively observed data",
         "sources": {"membench": "observation-reflective"},
     },
+    # Advanced abilities (v1.1 — added for BEAM coverage gaps)
+    "contradiction_resolution": {
+        "label": "Contradiction Resolution",
+        "description": "Detect and resolve conflicting facts across sessions",
+        "sources": {"beam": "contradiction"},
+    },
+    "event_ordering": {
+        "label": "Event Ordering",
+        "description": "Reconstruct correct temporal sequence of events",
+        "sources": {"beam": "event_order"},
+    },
+    "persistent_instruction": {
+        "label": "Persistent Instruction",
+        "description": "Follow instructions given in earlier sessions across later sessions",
+        "sources": {"beam": "instruction_follow"},
+    },
 }
 
 
