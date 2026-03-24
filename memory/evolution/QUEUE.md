@@ -30,6 +30,7 @@ Presentable Clarvis by 2026-03-31:
 
 ## P1 — This Week
 
+- [ ] [LLM_BRAIN_REVIEW 2026-03-24] [LLM_BRAIN_REVIEW] Investigate why temporal/recency queries return only 3 results with poor relevance. Episodes should have timestamps that enable recency-boosted retrieval for 'recent' or 'last N hours' queries. — Temporal awareness is a known gap flagged in prior planning. An agent that can't answer 'what happened recently' has a significant operational blind spot.
 - [ ] [DECOMPOSE_LONG_FUNCTIONS] Decompose oversized functions: `clarvis/metrics/membench.py:run_membench` (137 lines), `scripts/heartbeat_postflight.py:_brain_store` (89 lines), `scripts/heartbeat_postflight.py:run_postflight` (1444 lines), `scripts/retrieval_benchmark.py:run_benchmark` (167 lines). Target: all functions ≤80 lines.
 
 - [ ] [LLM_BRAIN_REVIEW 2026-03-23] [LLM_BRAIN_REVIEW] Audit clarvis-identity collection — it appears to contain mostly creator/origin info. Enrich it with operational identity: what Clarvis IS (architecture), what it DOES (capabilities), and how it WORKS (key subsystems). — clarvis-identity surfaced 'who created Clarvis' for an architecture query, suggesting the collection is too narrow. Identity should encompass architectural self-knowledge, not just origin story.
@@ -38,16 +39,13 @@ Presentable Clarvis by 2026-03-31:
 - [ ] [LEGACY_IMPORT_MIGRATION_PHASE1] Execute Phase 2 starting with the highest-risk/high-value migration: replace legacy wrapper imports inside `heartbeat_preflight.py` and `heartbeat_postflight.py` with direct `clarvis.*` imports where equivalent spine modules are confirmed. Do this incrementally with rollback-ready commits.
 
 ### Website / Public Presence
-- [ ] [CLARVIS_STYLEGUIDE_V1] Define Clarvis visual identity for public-facing surfaces. Deliver a compact styleguide covering color system, typography, spacing scale, panel/card language, buttons/links, motion principles, icon/diagram treatment, and copy tone. Goal: reusable design language for website, dashboards, docs, and future tools — unmistakably Clarvis, not generic SaaS chrome.
+- [x] [CLARVIS_STYLEGUIDE_V1] _(2026-03-24: Delivered `docs/STYLEGUIDE.md` — 10 sections covering color system, typography scale, spacing tokens, card/panel language, buttons/links, motion principles, icon/diagram treatment, badges, layout, and copy tone. Codifies existing `style.css` design system into reusable reference.)_
 
 ### Benchmarking / CLR v2
-- [x] [BEAM_SUBSET_ADAPTER_AND_ABILITY_GAP_AUDIT] Build a BEAM subset adapter (not full 10M first) and produce a gap audit showing which BEAM abilities CLR currently does not measure well. _(2026-03-24: Delivered `clarvis/metrics/beam.py` — 25 tasks across 5 gap abilities (CR/EO/PI/SUM/XD), wired into clr_benchmark.py with `run_beam=True`, gap audit via `python3 -m clarvis.metrics.beam audit`. Taxonomy expanded to 13 abilities.)_
-- [x] [CLR_EVIDENCE_ATTRIBUTION_SCORING] Add evidence-support scoring: whether answers are backed by retrieved or gold evidence, and whether cited/supporting spans actually contain the needed facts. _(2026-03-24: Delivered `clarvis/metrics/evidence_scoring.py` — 3 scoring dimensions (support, span_coverage, attribution), works across LongMemEval/MemBench/BEAM, cached + live modes. CLI: `python3 -m clarvis.metrics.evidence_scoring [--live] [--json]`)_
-- [x] [CLR_LENGTH_DOMAIN_ROBUSTNESS_REPORTS] Add report generation for score vs context length, score vs domain, and degradation curves across retrieval mode / memory mode. _(2026-03-24: Delivered `clarvis/metrics/clr_reports.py` — 3 reports: length buckets, domain breakdown, oracle-vs-normal degradation curves by ability/difficulty/domain/temporal. CLI: `python3 -m clarvis.metrics.clr_reports [length|domain|degrade|all] [--json]`)_
 
 ### NEW ITEMS (added 2026-03-23 evolution analysis)
 - [ ] [BRIER_CALIBRATION_OVERHAUL] Audit `clarvis_confidence.py` prediction-outcome loop: review bucket distributions, prune stale/low-signal predictions, recalibrate bin edges, and add a post-recalibration Brier check to `performance_benchmark.py`. Current brier capability=0.06 is the worst dimension. Target: brier ≥ 0.30 within 2 weeks.
-- [ ] [GIT_AUTOCOMMIT_CRON_HOOK] Add a lightweight post-task git commit hook to `cron_autonomous.sh` and `cron_implementation_sprint.sh`: if working tree is dirty after Claude Code returns, stage changed workspace files (excluding secrets/data) and commit with a standardized message. Addresses the 16x git-hygiene obligation violation without requiring manual intervention.
+- [x] [GIT_AUTOCOMMIT_CRON_HOOK] _(2026-03-24: `cron_autonomous.sh` already had git hygiene auto-fix since obligation_tracker.py was added. Added same hook to `cron_implementation_sprint.sh`. Both now call `obligation_tracker.py auto-fix` post-task — commits+pushes if dirty >60min, excludes secrets/large binaries.)_
 
 ---
 

@@ -184,5 +184,14 @@ except Exception as e:
 " >> "$LOGFILE" 2>&1
 
 rm -f "$TASK_OUTPUT_FILE" "$PREFLIGHT_FILE"
+
+# === GIT HYGIENE AUTO-FIX (obligation enforcement) ===
+# Auto-commit+push if dirty tree >60min and changes are safe (no secrets, no large binaries)
+GIT_AUTOFIX=$(python3 "$SCRIPTS/obligation_tracker.py" auto-fix 2>> "$LOGFILE")
+GIT_AUTOFIX_ACTION=$(echo "$GIT_AUTOFIX" | head -1)
+if echo "$GIT_AUTOFIX_ACTION" | grep -qE "committed|pushed"; then
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] GIT-HYGIENE: $GIT_AUTOFIX_ACTION — $(echo "$GIT_AUTOFIX" | tail -1)" >> "$LOGFILE"
+fi
+
 emit_dashboard_event task_completed --task-name "Implementation Sprint" --section cron_implementation --status "$([ ${TASK_EXIT:-1} -eq 0 ] && echo success || echo failed)" --duration-s "${TASK_DURATION:-0}"
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Implementation Sprint complete (${TASK_DURATION}s) ===" >> "$LOGFILE"
