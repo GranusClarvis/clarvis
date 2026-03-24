@@ -122,7 +122,7 @@ flowchart TB
 ## Core Components
 
 ### ClarvisDB Brain
-Hybrid vector-graph memory system. ChromaDB for semantic search + relationship graph for structured knowledge. 10 specialized collections (~2200 memories, ~105k graph edges), ONNX MiniLM embeddings, fully local. No external API calls.
+Hybrid vector-graph memory system. ChromaDB for semantic search + relationship graph for structured knowledge. 10 specialized collections (~2400 memories, ~74k graph edges), ONNX MiniLM embeddings, fully local. No external API calls.
 
 ### Heartbeat Pipeline
 The core action cycle: **gate** (should we wake?) → **preflight** (score attention, select task, build context) → **execute** (code agent runs the task) → **postflight** (encode episode, update metrics, store learnings).
@@ -233,7 +233,7 @@ Clarvis is in **Phase 3 — Autonomy Expansion**, targeting open-source readines
 
 | Area | Status | Notes |
 |------|--------|-------|
-| Brain (ClarvisDB) | Stable | 10 collections, ~2200 memories, weekly CLR benchmark scoring ~0.79 |
+| Brain (ClarvisDB) | Stable | 10 collections, ~2400 memories, weekly CLR benchmark scoring ~0.79 |
 | Heartbeat Pipeline | Stable | 12x/day autonomous execution via cron |
 | Agent Orchestrator | Active | Multi-project delegation with isolated workspaces |
 | Self-Model & Metrics | Stable | 8-dimension performance index, trajectory evaluation |

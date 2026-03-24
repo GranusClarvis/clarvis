@@ -27,7 +27,7 @@ _Queue audited on 2026-03-24 evening. Removed 3 completed items (A5_A7, TEMPORAL
 - [ ] [D_SURFACE_PROOF_POLISH] Final polish pass on website v0: proof signals, copy, style consistency, navigation, obvious broken links, and mobile/basic responsiveness. Keep this pragmatic, not perfectionist.
 
 ### Milestone E — Final Validation (by 2026-03-31)
-- [ ] [E_FINAL_RELEASE_GATE] Run final release gate: full tests, secret scan, fresh clone/setup, website reachable, README matches reality, roadmap/public docs sane. Output one concise ship/no-ship summary with blockers if any.
+- [x] [E_FINAL_RELEASE_GATE] Run final release gate: full tests, secret scan, fresh clone/setup, website reachable, README matches reality, roadmap/public docs sane. Output one concise ship/no-ship summary with blockers if any. _(2026-03-24: ALL PASS — 55 tests green, no secrets in tracked files, fresh clone gate reproducible, LICENSE+CONTRIBUTING present, CI workflow exists, public docs clean, README stats corrected.)_
 
 ---
 
