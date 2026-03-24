@@ -123,10 +123,12 @@ class VectorStore:
         if memory_id is None:
             memory_id = f"{collection}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S_%f')}"
 
+        now_utc = datetime.now(timezone.utc)
         metadata = {
             "text": text,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "last_accessed": datetime.now(timezone.utc).isoformat(),
+            "created_at": now_utc.isoformat(),
+            "created_epoch": int(now_utc.timestamp()),
+            "last_accessed": now_utc.isoformat(),
             "access_count": 0,
             "importance": importance,
             "source": source,

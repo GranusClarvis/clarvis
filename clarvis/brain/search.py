@@ -249,6 +249,10 @@ class SearchMixin:
         if recency_weight == 0.0 and auto_recency > 0.0:
             recency_weight = auto_recency
 
+        # Temporal queries benefit from more results (timeline, not single answer)
+        if since_days is not None and n <= 5:
+            n = 15
+
         # Result-level cache (30s TTL) — avoids repeated ChromaDB queries
         cache_key = (query, tuple(sorted(collections)), n, min_importance, since_days, attention_boost, recency_weight)
         now_cache = time.monotonic()
@@ -258,9 +262,12 @@ class SearchMixin:
 
         all_results = []
         cutoff_date = None
+        cutoff_epoch = None
         if since_days:
             from datetime import timedelta
-            cutoff_date = (datetime.now(timezone.utc) - timedelta(days=since_days)).isoformat()
+            cutoff_dt = datetime.now(timezone.utc) - timedelta(days=since_days)
+            cutoff_date = cutoff_dt.isoformat()
+            cutoff_epoch = int(cutoff_dt.timestamp())
 
         # Pre-compute embedding once
         query_embedding = None
@@ -290,10 +297,31 @@ class SearchMixin:
         def _query_collection(col_name):
             """Query a single collection — designed for parallel execution."""
             col = self.collections[col_name]
-            if query_embedding is not None:
-                results = col.query(query_embeddings=[query_embedding], n_results=n)
-            else:
-                results = col.query(query_texts=[query], n_results=n)
+            # Over-fetch 3x when temporal filtering active (compensates for
+            # post-query filtering losses on memories missing created_epoch)
+            fetch_n = n * 3 if cutoff_epoch else n
+
+            # Build ChromaDB where clause for DB-level temporal filtering
+            where_clause = None
+            if cutoff_epoch:
+                where_clause = {"created_epoch": {"$gte": cutoff_epoch}}
+
+            try:
+                if query_embedding is not None:
+                    results = col.query(
+                        query_embeddings=[query_embedding], n_results=fetch_n,
+                        where=where_clause)
+                else:
+                    results = col.query(
+                        query_texts=[query], n_results=fetch_n,
+                        where=where_clause)
+            except Exception:
+                # Fallback without where clause (e.g. no memories have created_epoch yet)
+                if query_embedding is not None:
+                    results = col.query(
+                        query_embeddings=[query_embedding], n_results=fetch_n)
+                else:
+                    results = col.query(query_texts=[query], n_results=fetch_n)
 
             items = []
             if results["documents"] and results["documents"][0]:
@@ -304,7 +332,8 @@ class SearchMixin:
                         if meta.get("importance", 0) < min_importance:
                             continue
 
-                    if cutoff_date and meta.get("created_at"):
+                    # Fallback post-query filter for memories without created_epoch
+                    if cutoff_date and not meta.get("created_epoch") and meta.get("created_at"):
                         if meta["created_at"] < cutoff_date:
                             continue
 
@@ -348,6 +377,40 @@ class SearchMixin:
                     all_results.extend(_query_collection(c))
                 except Exception:
                     pass
+
+        # --- Chronological fallback for pure temporal queries ---
+        # If temporal intent is strong but semantic search yielded few results,
+        # supplement with reverse-chronological retrieval via col.get().
+        _temporal_target = n * len(valid_collections)
+        if cutoff_epoch and recency_weight >= 0.5 and len(all_results) < _temporal_target:
+            existing_ids = {r.get("id") for r in all_results}
+            for col_name in valid_collections:
+                col = self.collections[col_name]
+                try:
+                    chrono = col.get(
+                        where={"created_epoch": {"$gte": cutoff_epoch}},
+                        limit=n * 3,
+                        include=["documents", "metadatas"],
+                    )
+                except Exception:
+                    continue
+                if not chrono.get("ids"):
+                    continue
+                for i, mid in enumerate(chrono["ids"]):
+                    if mid in existing_ids:
+                        continue
+                    existing_ids.add(mid)
+                    meta = chrono["metadatas"][i] if chrono.get("metadatas") else {}
+                    doc = chrono["documents"][i] if chrono.get("documents") else ""
+                    all_results.append({
+                        "document": doc,
+                        "metadata": meta,
+                        "collection": col_name,
+                        "id": mid,
+                        "distance": None,  # no semantic distance for chrono results
+                        "related": [],
+                        "_chrono_fallback": True,
+                    })
 
         # --- Hook: attention boost ---
         if attention_boost:

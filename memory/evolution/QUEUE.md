@@ -30,22 +30,19 @@ Presentable Clarvis by 2026-03-31:
 
 ## P1 — This Week
 
-- [ ] [LLM_BRAIN_REVIEW 2026-03-24] [LLM_BRAIN_REVIEW] Investigate why temporal/recency queries return only 3 results with poor relevance. Episodes should have timestamps that enable recency-boosted retrieval for 'recent' or 'last N hours' queries. — Temporal awareness is a known gap flagged in prior planning. An agent that can't answer 'what happened recently' has a significant operational blind spot.
 - [ ] [DECOMPOSE_LONG_FUNCTIONS] Decompose oversized functions: `clarvis/metrics/membench.py:run_membench` (137 lines), `scripts/heartbeat_postflight.py:_brain_store` (89 lines), `scripts/heartbeat_postflight.py:run_postflight` (1444 lines), `scripts/retrieval_benchmark.py:run_benchmark` (167 lines). Target: all functions ≤80 lines.
 
-- [ ] [LLM_BRAIN_REVIEW 2026-03-23] [LLM_BRAIN_REVIEW] Audit clarvis-identity collection — it appears to contain mostly creator/origin info. Enrich it with operational identity: what Clarvis IS (architecture), what it DOES (capabilities), and how it WORKS (key subsystems). — clarvis-identity surfaced 'who created Clarvis' for an architecture query, suggesting the collection is too narrow. Identity should encompass architectural self-knowledge, not just origin story.
+- [x] [LLM_BRAIN_REVIEW 2026-03-23] [LLM_BRAIN_REVIEW] Audit clarvis-identity collection — enriched with 5 operational identity entries (architecture, capabilities, subsystems, identity/purpose, tech stack). Pruned 59 low-importance meta-cognition task logs. Collection: 176→147 entries. Architecture queries now return rich operational info as top result. _(Done 2026-03-24.)_
 
 ### Repo / Spine Audit
 - [ ] [LEGACY_IMPORT_MIGRATION_PHASE1] Execute Phase 2 starting with the highest-risk/high-value migration: replace legacy wrapper imports inside `heartbeat_preflight.py` and `heartbeat_postflight.py` with direct `clarvis.*` imports where equivalent spine modules are confirmed. Do this incrementally with rollback-ready commits.
 
 ### Website / Public Presence
-- [x] [CLARVIS_STYLEGUIDE_V1] _(2026-03-24: Delivered `docs/STYLEGUIDE.md` — 10 sections covering color system, typography scale, spacing tokens, card/panel language, buttons/links, motion principles, icon/diagram treatment, badges, layout, and copy tone. Codifies existing `style.css` design system into reusable reference.)_
 
 ### Benchmarking / CLR v2
 
 ### NEW ITEMS (added 2026-03-23 evolution analysis)
 - [ ] [BRIER_CALIBRATION_OVERHAUL] Audit `clarvis_confidence.py` prediction-outcome loop: review bucket distributions, prune stale/low-signal predictions, recalibrate bin edges, and add a post-recalibration Brier check to `performance_benchmark.py`. Current brier capability=0.06 is the worst dimension. Target: brier ≥ 0.30 within 2 weeks.
-- [x] [GIT_AUTOCOMMIT_CRON_HOOK] _(2026-03-24: `cron_autonomous.sh` already had git hygiene auto-fix since obligation_tracker.py was added. Added same hook to `cron_implementation_sprint.sh`. Both now call `obligation_tracker.py auto-fix` post-task — commits+pushes if dirty >60min, excludes secrets/large binaries.)_
 
 ---
 
