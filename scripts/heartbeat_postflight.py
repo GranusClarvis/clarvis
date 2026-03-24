@@ -830,9 +830,8 @@ def _pf_prompt_predict_cognitive(ctx, _pf_errors):
     t595 = time.monotonic()
     if WorkspaceBroadcast:
         try:
-            from attention import attention as attn_module
             outcome_importance = 0.85 if task_status == "success" else 0.95
-            attn_module.submit(
+            attention.submit(
                 f"OUTCOME [{task_status}]: {task[:100]} (exit={exit_code}, {task_duration}s)",
                 source="gwt_outcome", importance=outcome_importance, relevance=0.9)
             log("GWT: outcome codelet submitted for next broadcast cycle")

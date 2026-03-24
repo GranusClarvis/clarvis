@@ -22,9 +22,6 @@ _Queue audited on 2026-03-24 evening. Removed 3 completed items (A5_A7, TEMPORAL
 - [ ] [C_OPEN_SOURCE_READINESS_SWEEP] Run one authoritative open-source readiness sweep: verify hardcoded secrets are truly removed, verify tracked-data/.gitignore state, confirm root LICENSE + CONTRIBUTING + CI status, and close remaining release blockers. _Output: checklist updated + any residual blockers listed explicitly._
 
 ### Milestone D — Public Surface (by 2026-03-29)
-- [x] [D2_PUBLIC_STATUS_ENDPOINT] Wire the real public status endpoint and ensure website surfaces live or periodically generated status data cleanly. _(Done 2026-03-24: Fixed missing baseline_clr in API, added static/status.json generation + fallback, CLR dimension breakdown on benchmarks page.)_
-- [x] [D4_PUBLIC_ARCHITECTURE_AND_ROADMAP_SANITIZE] Finish the sanitized architecture/public roadmap pass so the public site explains Clarvis clearly without leaking internal-only details. _(Done 2026-03-24: Verified no secrets/paths/credentials in public pages. Fixed cron count accuracy 50→30. All pages clean.)_
-- [x] [D_SURFACE_PROOF_POLISH] Final polish pass on website v0: proof signals, copy, style consistency, navigation, obvious broken links, and mobile/basic responsiveness. _(Done 2026-03-24: Consistent footers with MIT License, mobile breakpoints for hero/nav/diagrams, CLR dimension breakdown, all routes 200, all HTML valid. Note: clarvis/clarvis-db repos 404 — expected pre-open-source.)_
 
 ### Milestone E — Final Validation (by 2026-03-31)
 
@@ -33,7 +30,7 @@ _Queue audited on 2026-03-24 evening. Removed 3 completed items (A5_A7, TEMPORAL
 ## P1 — This Week
 
 ### Demoted from P0 (2026-03-24 audit)
-- [ ] [P1_HEARTBEAT_POSTFLIGHT_IMPORT_CLEANUP] Remove the legacy `from attention import attention as attn_module` at line 833 in `scripts/heartbeat_postflight.py`. _Functional via bridge wrapper — not release-blocking, but is tech debt. Also in session_hook.py:18, task_selector.py:33._
+- [x] [P1_HEARTBEAT_POSTFLIGHT_IMPORT_CLEANUP] Remove the legacy `from attention import attention as attn_module` at line 833 in `scripts/heartbeat_postflight.py`. _Also fixed session_hook.py:18, task_selector.py:33. All three now use `from clarvis.cognition.attention import attention`. Done 2026-03-24._
 - [~] [SEMANTIC_CROSS_COLLECTION_BRIDGES] Strengthen weak cross-collection semantic links. _(All metric targets met. Blocked on Phi verification compute time. Not a release blocker.)_
 
 ### Code Quality

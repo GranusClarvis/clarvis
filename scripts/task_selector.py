@@ -30,7 +30,7 @@ from clarvis.orch.task_selector import (  # noqa: E402
     _check_quality_gate, _is_repair_task,
 )
 
-from attention import attention  # noqa: E402
+from clarvis.cognition.attention import attention  # noqa: E402
 
 
 def select_best_task():

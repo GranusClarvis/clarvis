@@ -15,7 +15,7 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from brain import brain
-from attention import attention
+from clarvis.cognition.attention import attention
 
 DATA_DIR = Path("/home/agent/.openclaw/workspace/data")
 SESSION_STATE_FILE = DATA_DIR / "session_state.json"
