@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # BRIDGE: Thin re-export wrapper for legacy sys.path imports.
 # Safe to delete ONLY after all callers migrate to: from clarvis.memory.procedural_memory import ...
-# Known callers: heartbeat_preflight, heartbeat_postflight, tool_maker, context_compressor
+# Known callers: tool_maker, context_compressor (heartbeat_preflight/postflight migrated 2026-03-24)
 """Procedural Memory — thin wrapper. Implementation in clarvis/memory/procedural_memory.py."""
 import sys
 import os

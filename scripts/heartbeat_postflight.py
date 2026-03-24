@@ -40,10 +40,10 @@ except ImportError:
 # === SINGLE IMPORT BLOCK ===
 start_import = time.monotonic()
 
-from attention import attention, get_attention_schema
+from clarvis.cognition.attention import attention, get_attention_schema
 
 try:
-    from clarvis_confidence import outcome as conf_outcome, auto_resolve as conf_auto_resolve
+    from clarvis.cognition.confidence import outcome as conf_outcome, auto_resolve as conf_auto_resolve
 except ImportError:
     conf_outcome = None
     conf_auto_resolve = None
@@ -59,13 +59,13 @@ except ImportError:
     close_chain = None
 
 try:
-    from procedural_memory import record_use, learn_from_task
+    from clarvis.memory.procedural_memory import record_use, learn_from_task
 except ImportError:
     record_use = None
     learn_from_task = None
 
 try:
-    from episodic_memory import EpisodicMemory
+    from clarvis.memory.episodic_memory import EpisodicMemory
 except ImportError:
     EpisodicMemory = None
 

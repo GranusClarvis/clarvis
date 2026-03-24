@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # BRIDGE: Thin re-export wrapper for legacy sys.path imports.
 # Safe to delete ONLY after all callers migrate to: from clarvis.cognition.attention import ...
-# Known callers: heartbeat_preflight, heartbeat_postflight, cron_watchdog.sh, 15+ scripts
+# Known callers: cron_watchdog.sh, 15+ scripts (heartbeat_preflight/postflight migrated 2026-03-24)
 """Attention Mechanism — thin wrapper. Implementation in clarvis/cognition/attention.py."""
 import sys
 import os

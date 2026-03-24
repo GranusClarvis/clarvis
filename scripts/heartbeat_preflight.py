@@ -27,7 +27,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 # === SINGLE IMPORT BLOCK (one-time cost) ===
 start_import = time.monotonic()
 
-from attention import attention, get_codelet_competition, get_attention_schema
+from clarvis.cognition.attention import attention, get_codelet_competition, get_attention_schema
 
 try:
     from clarvis.orch.task_selector import parse_tasks, score_tasks
@@ -43,7 +43,7 @@ except ImportError:
     log_sizing = None
 
 try:
-    from procedural_memory import find_procedure, find_code_templates, format_code_templates
+    from clarvis.memory.procedural_memory import find_procedure, find_code_templates, format_code_templates
 except ImportError:
     find_procedure = None
     find_code_templates = None
@@ -55,13 +55,13 @@ except ImportError:
     open_chain = None
 
 try:
-    from clarvis_confidence import predict as conf_predict, dynamic_confidence
+    from clarvis.cognition.confidence import predict as conf_predict, dynamic_confidence
 except ImportError:
     conf_predict = None
     dynamic_confidence = None
 
 try:
-    from episodic_memory import EpisodicMemory
+    from clarvis.memory.episodic_memory import EpisodicMemory
 except ImportError:
     EpisodicMemory = None
 

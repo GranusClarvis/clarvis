@@ -32,10 +32,9 @@ Presentable Clarvis by 2026-03-31:
 
 - [ ] [DECOMPOSE_LONG_FUNCTIONS] Decompose oversized functions: `clarvis/metrics/membench.py:run_membench` (137 lines), `scripts/heartbeat_postflight.py:_brain_store` (89 lines), `scripts/heartbeat_postflight.py:run_postflight` (1444 lines), `scripts/retrieval_benchmark.py:run_benchmark` (167 lines). Target: all functions ≤80 lines.
 
-- [x] [LLM_BRAIN_REVIEW 2026-03-23] [LLM_BRAIN_REVIEW] Audit clarvis-identity collection — enriched with 5 operational identity entries (architecture, capabilities, subsystems, identity/purpose, tech stack). Pruned 59 low-importance meta-cognition task logs. Collection: 176→147 entries. Architecture queries now return rich operational info as top result. _(Done 2026-03-24.)_
 
 ### Repo / Spine Audit
-- [ ] [LEGACY_IMPORT_MIGRATION_PHASE1] Execute Phase 2 starting with the highest-risk/high-value migration: replace legacy wrapper imports inside `heartbeat_preflight.py` and `heartbeat_postflight.py` with direct `clarvis.*` imports where equivalent spine modules are confirmed. Do this incrementally with rollback-ready commits.
+- [x] [LEGACY_IMPORT_MIGRATION_PHASE1] Migrated 4 legacy imports in heartbeat_preflight.py and heartbeat_postflight.py to spine: attention→clarvis.cognition.attention, clarvis_confidence→clarvis.cognition.confidence, episodic_memory→clarvis.memory.episodic_memory, procedural_memory→clarvis.memory.procedural_memory. Updated bridge wrapper comments. (2026-03-24)
 
 ### Website / Public Presence
 
