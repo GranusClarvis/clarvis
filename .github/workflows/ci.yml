@@ -61,3 +61,14 @@ jobs:
         run: python3 -m pytest tests/test_open_source_smoke.py -v
         env:
           CLARVIS_WORKSPACE: ${{ github.workspace }}
+
+      - name: Run root-level unit tests
+        run: |
+          python3 -m pytest \
+            tests/test_contextual_enrich.py \
+            tests/test_clr_stability_gate.py \
+            tests/test_research_lesson_store.py \
+            tests/test_performance_gate_trajectory.py \
+            -v
+        env:
+          CLARVIS_WORKSPACE: ${{ github.workspace }}

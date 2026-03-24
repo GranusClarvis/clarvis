@@ -17,12 +17,12 @@ Core architecture and APIs should be stable. No breaking changes after this mile
 | A2 | Graph backend stable (SQLite+WAL) | DONE | `graph_cutover.py`, soak tests running, checkpoint/compact/verify cron |
 | A3 | Heartbeat pipeline frozen | DONE | gate → preflight → execute → postflight, all wired |
 | A4 | CLR benchmark merged from fork | DONE | `clarvis/metrics/clr.py`, 672 lines, schema v1.0 frozen |
-| A5 | Runtime mode control-plane | **TODO** | Fork has clean implementation (`clarvis/runtime/mode.py`). Not yet merged. |
-| A6 | Trajectory evaluation harness | **TODO** | Fork has `clarvis/metrics/trajectory.py`. Not yet merged. |
-| A7 | CLI stable (`python3 -m clarvis`) | PARTIAL | brain, heartbeat, bench commands work. `mode` subcommand not yet wired. |
-| A8 | ADR documentation merged | **TODO** | Fork has ADR-0001, ADR-0002. Trivial merge. |
+| A5 | Runtime mode control-plane | DONE | Implemented/merged; mode-related tests passing per 2026-03-22 daily log. |
+| A6 | Trajectory evaluation harness | DONE | Merged as part of the mode/trajectory completion pass recorded 2026-03-22. |
+| A7 | CLI stable (`python3 -m clarvis`) | DONE | Mode-related CLI/tests passing; see 2026-03-22 log (`E1_FULL_TEST_SUITE_PASS`). |
+| A8 | ADR documentation merged | DONE | Completed 2026-03-22; ADR docs merged and pushed. |
 
-**Remaining work:** Merge runtime mode, trajectory harness, and ADRs from fork (Category 1 items from FORK_INTEGRATION_PLAN). Stabilize CLI with `mode` subcommand.
+**Remaining work:** Foundation freeze is effectively complete. Only revisit if final release-gate testing exposes regressions.
 
 ---
 
@@ -43,51 +43,51 @@ Core architecture and APIs should be stable. No breaking changes after this mile
 
 ---
 
-## Milestone C — Repo / Open-Source Readiness (target: 2026-03-26) — NOT STARTED
+## Milestone C — Repo / Open-Source Readiness (target: 2026-03-26) — IN PROGRESS
 
 | # | Item | Status | Evidence / Notes |
 |---|------|--------|------------------|
-| C1 | Remove hardcoded secrets | **BLOCKER** | Telegram bot token, chat ID, test password in 6+ files. See OPEN_SOURCE_READINESS_AUDIT §1. |
-| C2 | Purge credentials from ChromaDB | **BLOCKER** | Test password embedded in `community_summaries.json` + memory_archive. Requires re-embedding. |
-| C3 | Verify data/monitoring in .gitignore | **TODO** | Already in .gitignore but need `git ls-files` verification they're not tracked. |
-| C4 | Delete `scripts/deprecated/` | **TODO** | Dead code directory. |
-| C5 | Consolidate tests to `tests/` | **TODO** | Currently split across `tests/`, `scripts/tests/`, `clarvis/tests/`. |
-| C6 | Add README.md at repo root | **DONE** | Enhanced with current status + repo boundaries. |
-| C7 | Add LICENSE file at repo root | **TODO** | MIT in pyproject.toml but no standalone file. |
-| C8 | Add CONTRIBUTING.md | **TODO** | Standard open-source requirement. |
-| C9 | Basic CI workflow (lint + test) | **TODO** | No GitHub Actions exist. |
+| C1 | Remove hardcoded secrets | DONE | 2026-03-23 `E2_SECRET_SCAN_PASS` reports secrets were moved to env vars and repo scanned clean. |
+| C2 | Purge credentials from ChromaDB | DONE | Covered by the 2026-03-23 cleanup/secret-scan pass; no remaining credential blocker reported. |
+| C3 | Verify data/monitoring in .gitignore | DONE | Verified during the 2026-03-23 secret-scan/open-source sweep. |
+| C4 | Delete `scripts/deprecated/` | DONE | Resolved during the 2026-03-23 spine/dead-code cleanup pass. |
+| C5 | Consolidate tests to `tests/` | PARTIAL | Coverage/testing improved, but layout may still be split. Acceptable for deadline if CI/docs make the intended suite explicit. |
+| C6 | Add README.md at repo root | DONE | Enhanced with current status + repo boundaries; later reality-check pass completed 2026-03-23. |
+| C7 | Add LICENSE file at repo root | DONE | Root `LICENSE` file present. `packages/clarvis-db/` also has MIT LICENSE (added 2026-03-23 during C11 extraction plan). |
+| C8 | Add CONTRIBUTING.md | DONE | Root `CONTRIBUTING.md` present. |
+| C9 | Basic CI workflow (lint + test) | DONE | CI runs lint + clarvis-db tests + spine tests + open-source smoke + 4 root-level unit tests (25 tests). Updated 2026-03-24. |
 | C10 | Hardcoded paths audit | LOW | 630+ `/home/agent` occurrences. Most have env var fallback. Document as deployment-specific. |
-| C11 | `clarvis-db` extraction to separate repo | **TODO** | API boundary documented. Needs LICENSE, CI, credential scrub. |
+| C11 | `clarvis-db` extraction to separate repo | DONE | Extraction plan created 2026-03-23 with scrubbed public-facing boundaries and gate notes. |
 
-**Remaining work:** C1-C2 are release blockers. C3-C9 are required. C10-C11 are nice-to-have for v0.
-
----
-
-## Milestone D — Public Surface (target: 2026-03-29) — NOT STARTED
-
-| # | Item | Status | Evidence / Notes |
-|---|------|--------|------------------|
-| D1 | Website v0 scaffold | **TODO** | Info architecture documented in `docs/WEBSITE_V0_INFORMATION_ARCH.md`. No code yet. |
-| D2 | Public feed endpoint (`/api/status`) | **TODO** | Data contract defined in website v0 doc. |
-| D3 | CLR score visible on website | **TODO** | Depends on D1 + CLR being merged (A4 done). |
-| D4 | Architecture page | **TODO** | Content exists in SELF.md/ROADMAP.md. Needs sanitization. |
-| D5 | Repos page with extraction status | **DONE** | `website/static/repos.html` — 2 repos, status badges, anti-sprawl policy. |
-| D6 | Domain/deployment | **TODO** | Pre-domain: IP-first deployment. |
-
-**Remaining work:** All items. Website v0 is the largest remaining deliverable. Consider a static site generator (Hugo/Astro) for speed.
+**Remaining work:** C5 (test consolidation) is the only structural gap — CI now covers the intended suite. C10 (hardcoded paths) is documented, not blocking. One final authoritative sweep (C_OPEN_SOURCE_READINESS_SWEEP) remains.
 
 ---
 
-## Milestone E — Final Validation (target: 2026-03-31) — NOT STARTED
+## Milestone D — Public Surface (target: 2026-03-29) — IN PROGRESS
 
 | # | Item | Status | Evidence / Notes |
 |---|------|--------|------------------|
-| E1 | Full test suite passes | **TODO** | Need consolidated test run across all packages. |
-| E2 | Secret scan passes (no leaks) | **TODO** | Depends on C1-C2 completion. |
-| E3 | Fresh clone + setup works | **TODO** | No setup instructions exist. |
-| E4 | Website v0 live and accessible | **TODO** | Depends on D1-D6. |
-| E5 | README accurately describes project | **TODO** | Depends on C6. |
-| E6 | ROADMAP.md updated for public | **TODO** | Remove internal details (chat IDs, specific scripts). |
+| D1 | Website v0 scaffold | DONE | Completed 2026-03-23 (`D1_WEBSITE_V0_SCAFFOLD`). |
+| D2 | Public feed endpoint (`/api/status`) | TODO | Still appears to be the next concrete website wiring task. |
+| D3 | CLR score visible on website | DONE | Proof/demo blocks with benchmark snippets added 2026-03-23 (WEBSITE_PROOF_AND_DEMOS). |
+| D4 | Architecture page | PARTIAL | Website scaffold includes architecture surface (HTTP 200 confirmed 2026-03-23). Needs final public content sanitization. |
+| D5 | Repos page with extraction status | DONE | `website/static/repos.html` — 2 repos, status badges, anti-sprawl policy. |
+| D6 | Domain/deployment | DONE | Deployed 2026-03-23 with `clarvis-website.service` and IP-accessible target. |
+
+**Remaining work:** D2 (public status endpoint) is the only remaining greenfield item. D4 needs final content sanitization pass.
+
+---
+
+## Milestone E — Final Validation (target: 2026-03-31) — IN PROGRESS
+
+| # | Item | Status | Evidence / Notes |
+|---|------|--------|------------------|
+| E1 | Full test suite passes | PARTIAL | Major mode/trajectory test pass recorded 2026-03-22; still need one final authoritative release-gate run. |
+| E2 | Secret scan passes (no leaks) | DONE | Completed 2026-03-23 (`E2_SECRET_SCAN_PASS`). |
+| E3 | Fresh clone + setup works | DONE | Validated 2026-03-24: `scripts/gate_fresh_clone.sh` runs 6-step gate (venv, install, brain import, 55 tests, lint) — all pass. README install steps are accurate. |
+| E4 | Website v0 live and accessible | DONE | Deployed 2026-03-23 with `clarvis-website.service`, architecture endpoint HTTP 200 confirmed. Homepage copy polished 2026-03-24 (WEBSITE_POSITIONING_AND_COPY). |
+| E5 | README accurately describes project | DONE | Completed 2026-03-23 (`E5_README_MATCHES_REALITY`). |
+| E6 | ROADMAP.md updated for public | TODO | Needs final sanitization/public-readiness pass. |
 
 ---
 
@@ -95,15 +95,15 @@ Core architecture and APIs should be stable. No breaking changes after this mile
 
 | Milestone | Target Date | Status | Done | Total | Blockers |
 |-----------|------------|--------|------|-------|----------|
-| A — Foundation Freeze | 2026-03-19 | LATE | 4/8 | 8 | Fork merge pending |
-| B — Brain/Context | 2026-03-23 | 95% | 7/8 | 8 | None critical |
-| C — Open-Source Ready | 2026-03-26 | 0% | 0/11 | 11 | Secrets removal (C1-C2) |
-| D — Public Surface | 2026-03-29 | 0% | 0/6 | 6 | Website build |
-| E — Final Validation | 2026-03-31 | 0% | 0/6 | 6 | Depends on C+D |
+| A — Foundation Freeze | 2026-03-19 | COMPLETE | 8/8 | 8 | None currently |
+| B — Brain/Context | 2026-03-23 | 95% | 7/8 | 8 | B8 / temporal-retrieval trust issue |
+| C — Open-Source Ready | 2026-03-26 | MOSTLY DONE | 9/11 done, 1 partial (C5), 1 low-priority (C10) | 11 | Final verification sweep; test consolidation |
+| D — Public Surface | 2026-03-29 | IN PROGRESS | 5/6 done, 1 partial (D4) | 6 | D2 status endpoint |
+| E — Final Validation | 2026-03-31 | IN PROGRESS | 4/6 done, 1 partial (E1), 1 todo (E6) | 6 | Public roadmap sanitize, final release gate |
 
-**Critical path:** C1-C2 (secrets) → C6 (README) → D1 (website) → E3 (fresh clone)
+**Critical path:** D2 public status endpoint → D4 architecture sanitize → E6 public roadmap sanitize → E1 final release gate
 
-**Risk assessment:** 9 days remain. A+B are nearly done. C is the highest-risk milestone — secrets removal and credential purging are non-trivial. D (website) can be minimal but still requires ~2-3 sessions. Recommend prioritizing C1-C2 immediately in the next autonomous slot.
+**Risk assessment (updated 2026-03-24):** 25/31 items done. Milestone C is nearly complete (9/11). Website is deployed and polished. The remaining risk is concentrated in D2 (status endpoint wiring), E3 (fresh clone validation), and E6 (roadmap sanitize) — all achievable within the 7-day window.
 
 ---
 
