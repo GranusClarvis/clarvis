@@ -285,130 +285,69 @@ def _oracle_recall(query: str, pair: dict, n: int = 3) -> list:
     }]
 
 
-def run_benchmark(use_smart=True, k=3, oracle=False) -> dict:
-    """
-    Run all 20 benchmark queries. Measure precision@k, recall, P@1, and MRR.
-
-    precision@k = (# of hits in top-k results) / k
-    recall = 1 if at least one hit in top-k, else 0
-    P@1 = 1 if first result is a hit, else 0
-    MRR = 1/rank of first hit (0 if no hit)
-
-    Args:
-        use_smart: Use smart_recall if available (ignored in oracle mode).
-        k: Number of results to evaluate.
-        oracle: If True, bypass retrieval and inject gold_evidence as results.
-            This establishes a ceiling score — any failures in oracle mode are
-            reasoning/reading failures, not retrieval failures. Comparing
-            oracle vs normal mode isolates the retrieval contribution.
-
-    Returns dict with per-query and aggregate metrics.
-    """
+def _evaluate_pair(pair: dict, recall_fn, k: int, oracle: bool) -> dict:
+    """Evaluate a single benchmark pair and return scored result."""
+    query = pair["query"]
     if oracle:
-        method_name = "oracle"
+        results = _oracle_recall(query, pair, n=k)
     else:
-        recall_fn = smart_recall if (use_smart and smart_recall) else brain.recall
-        method_name = "smart_recall" if (use_smart and smart_recall) else "brain.recall"
+        results = recall_fn(query, n=k, caller="benchmark")
 
-    query_results = []
-    total_precision = 0.0
-    total_precision1 = 0.0
-    total_recall = 0
-    total_mrr = 0.0
-    total_synthetic = 0
-    total_results_seen = 0
-    total_canonical_hits = 0
-    total_usefulness = 0.0
-    category_stats = {}
-
-    for pair in BENCHMARK_PAIRS:
-        query = pair["query"]
-        bid = pair["id"]
-        category = pair["category"]
-
-        if oracle:
-            results = _oracle_recall(query, pair, n=k)
-        else:
-            results = recall_fn(query, n=k, caller="benchmark")
-
-        # Score each result
-        hits_in_k = 0
-        first_hit_rank = 0
-        query_synthetic = 0
-        query_usefulness = 0.0
-        result_details = []
-        for i, r in enumerate(results[:k]):
-            is_hit = check_hit(r, pair)
-            synthetic = is_synthetic(r)
-            useful = _usefulness_score(r, query)
-            if is_hit:
-                hits_in_k += 1
-                if first_hit_rank == 0:
-                    first_hit_rank = i + 1
-                if not synthetic:
-                    total_canonical_hits += 1
-            if synthetic:
-                query_synthetic += 1
-                total_synthetic += 1
-            query_usefulness += useful
-            total_results_seen += 1
-            result_details.append({
-                "rank": i + 1,
-                "hit": is_hit,
-                "synthetic": synthetic,
-                "usefulness": round(useful, 4),
-                "collection": r.get("collection"),
-                "distance": round(r.get("distance", 999), 4),
-                "text_preview": r.get("document", "")[:80],
-            })
-
-        n_results = len(results[:k])
-        precision_at_k = hits_in_k / k if k > 0 else 0
-        precision_at_1 = 1.0 if first_hit_rank == 1 else 0.0
-        recall_hit = 1 if hits_in_k > 0 else 0
-        rr = 1.0 / first_hit_rank if first_hit_rank > 0 else 0.0
-        avg_useful = query_usefulness / n_results if n_results > 0 else 0.0
-        total_usefulness += avg_useful
-
-        total_precision += precision_at_k
-        total_precision1 += precision_at_1
-        total_recall += recall_hit
-        total_mrr += rr
-
-        # Category tracking
-        if category not in category_stats:
-            category_stats[category] = {
-                "precision_sum": 0.0, "precision1_sum": 0.0,
-                "recall_sum": 0, "mrr_sum": 0.0, "count": 0,
-            }
-        category_stats[category]["precision_sum"] += precision_at_k
-        category_stats[category]["precision1_sum"] += precision_at_1
-        category_stats[category]["recall_sum"] += recall_hit
-        category_stats[category]["mrr_sum"] += rr
-        category_stats[category]["count"] += 1
-
-        query_results.append({
-            "id": bid,
-            "query": query,
-            "category": category,
-            "precision_at_k": round(precision_at_k, 3),
-            "precision_at_1": precision_at_1,
-            "recall": recall_hit,
-            "reciprocal_rank": round(rr, 4),
-            "hits_in_k": hits_in_k,
-            "first_hit_rank": first_hit_rank,
-            "synthetic_count": query_synthetic,
-            "avg_usefulness": round(avg_useful, 4),
-            "results": result_details,
+    hits_in_k = 0
+    first_hit_rank = 0
+    query_synthetic = 0
+    query_usefulness = 0.0
+    canonical_hits = 0
+    result_details = []
+    for i, r in enumerate(results[:k]):
+        is_hit = check_hit(r, pair)
+        synthetic = is_synthetic(r)
+        useful = _usefulness_score(r, query)
+        if is_hit:
+            hits_in_k += 1
+            if first_hit_rank == 0:
+                first_hit_rank = i + 1
+            if not synthetic:
+                canonical_hits += 1
+        if synthetic:
+            query_synthetic += 1
+        query_usefulness += useful
+        result_details.append({
+            "rank": i + 1, "hit": is_hit, "synthetic": synthetic,
+            "usefulness": round(useful, 4), "collection": r.get("collection"),
+            "distance": round(r.get("distance", 999), 4),
+            "text_preview": r.get("document", "")[:80],
         })
 
-    n = len(BENCHMARK_PAIRS)
-    avg_precision = round(total_precision / n, 4) if n > 0 else 0
-    avg_precision1 = round(total_precision1 / n, 4) if n > 0 else 0
-    avg_recall = round(total_recall / n, 4) if n > 0 else 0
-    mrr = round(total_mrr / n, 4) if n > 0 else 0
+    n_results = len(results[:k])
+    precision_at_k = hits_in_k / k if k > 0 else 0
+    precision_at_1 = 1.0 if first_hit_rank == 1 else 0.0
+    recall_hit = 1 if hits_in_k > 0 else 0
+    rr = 1.0 / first_hit_rank if first_hit_rank > 0 else 0.0
+    avg_useful = query_usefulness / n_results if n_results > 0 else 0.0
 
-    # Per-category aggregates
+    return {
+        "id": pair["id"], "query": query, "category": pair["category"],
+        "precision_at_k": round(precision_at_k, 3), "precision_at_1": precision_at_1,
+        "recall": recall_hit, "reciprocal_rank": round(rr, 4),
+        "hits_in_k": hits_in_k, "first_hit_rank": first_hit_rank,
+        "synthetic_count": query_synthetic, "canonical_hits": canonical_hits,
+        "n_results": n_results, "avg_usefulness": round(avg_useful, 4),
+        "results": result_details,
+    }
+
+
+def _aggregate_benchmark(query_results: list, category_stats: dict, n: int) -> dict:
+    """Aggregate per-query results into a summary report body."""
+    total_precision = sum(q["precision_at_k"] for q in query_results)
+    total_precision1 = sum(q["precision_at_1"] for q in query_results)
+    total_recall = sum(q["recall"] for q in query_results)
+    total_mrr = sum(q["reciprocal_rank"] for q in query_results)
+    total_synthetic = sum(q["synthetic_count"] for q in query_results)
+    total_results_seen = sum(q["n_results"] for q in query_results)
+    total_canonical_hits = sum(q["canonical_hits"] for q in query_results)
+    total_usefulness = sum(q["avg_usefulness"] for q in query_results)
+
     category_report = {}
     for cat, stats in category_stats.items():
         c = stats["count"]
@@ -420,38 +359,77 @@ def run_benchmark(use_smart=True, k=3, oracle=False) -> dict:
             "mrr": round(stats["mrr_sum"] / c, 3) if c > 0 else 0,
         }
 
-    # Contamination and quality metrics
     contamination_rate = round(total_synthetic / total_results_seen, 4) if total_results_seen > 0 else 0.0
     total_hits_all = sum(q["hits_in_k"] for q in query_results)
     canonical_hit_rate = round(total_canonical_hits / total_hits_all, 4) if total_hits_all > 0 else 0.0
-    avg_usefulness = round(total_usefulness / n, 4) if n > 0 else 0.0
-
-    # Failed queries (recall=0, i.e. no hit in top-k)
     failures = [q for q in query_results if q["recall"] == 0]
 
-    report = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "method": method_name,
-        "k": k,
-        "oracle_mode": oracle,
-        "num_queries": n,
-        "avg_precision_at_k": avg_precision,
-        "avg_precision_at_1": avg_precision1,
-        "avg_recall": avg_recall,
-        "mrr": mrr,
+    return {
+        "avg_precision_at_k": round(total_precision / n, 4) if n > 0 else 0,
+        "avg_precision_at_1": round(total_precision1 / n, 4) if n > 0 else 0,
+        "avg_recall": round(total_recall / n, 4) if n > 0 else 0,
+        "mrr": round(total_mrr / n, 4) if n > 0 else 0,
         "contamination_rate": contamination_rate,
         "canonical_hit_rate": canonical_hit_rate,
-        "avg_usefulness": avg_usefulness,
-        "total_hits": total_recall,
-        "total_misses": n - total_recall,
+        "avg_usefulness": round(total_usefulness / n, 4) if n > 0 else 0.0,
+        "total_hits": sum(1 for q in query_results if q["recall"]),
+        "total_misses": sum(1 for q in query_results if not q["recall"]),
         "total_synthetic": total_synthetic,
         "total_results": total_results_seen,
         "by_category": category_report,
         "failures": [{"id": f["id"], "query": f["query"], "category": f["category"]} for f in failures],
-        "details": query_results,
     }
 
-    return report
+
+def run_benchmark(use_smart=True, k=3, oracle=False) -> dict:
+    """Run all 20 benchmark queries. Measure precision@k, recall, P@1, and MRR.
+
+    Args:
+        use_smart: Use smart_recall if available (ignored in oracle mode).
+        k: Number of results to evaluate.
+        oracle: If True, bypass retrieval and inject gold_evidence as results.
+
+    Returns dict with per-query and aggregate metrics.
+    """
+    if oracle:
+        method_name = "oracle"
+        recall_fn = None
+    else:
+        recall_fn = smart_recall if (use_smart and smart_recall) else brain.recall
+        method_name = "smart_recall" if (use_smart and smart_recall) else "brain.recall"
+
+    query_results = []
+    category_stats = {}
+
+    for pair in BENCHMARK_PAIRS:
+        qr = _evaluate_pair(pair, recall_fn, k, oracle)
+        query_results.append(qr)
+
+        cat = pair["category"]
+        if cat not in category_stats:
+            category_stats[cat] = {
+                "precision_sum": 0.0, "precision1_sum": 0.0,
+                "recall_sum": 0, "mrr_sum": 0.0, "count": 0,
+            }
+        category_stats[cat]["precision_sum"] += qr["precision_at_k"]
+        category_stats[cat]["precision1_sum"] += qr["precision_at_1"]
+        category_stats[cat]["recall_sum"] += qr["recall"]
+        category_stats[cat]["mrr_sum"] += qr["reciprocal_rank"]
+        category_stats[cat]["count"] += 1
+
+    n = len(BENCHMARK_PAIRS)
+    agg = _aggregate_benchmark(query_results, category_stats, n)
+
+    # Strip internal fields from query_results before including in report
+    for qr in query_results:
+        qr.pop("canonical_hits", None)
+        qr.pop("n_results", None)
+
+    return {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "method": method_name, "k": k, "oracle_mode": oracle,
+        "num_queries": n, **agg, "details": query_results,
+    }
 
 
 def run_oracle_comparison(use_smart=True, k=3) -> dict:

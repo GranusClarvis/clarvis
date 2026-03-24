@@ -267,6 +267,75 @@ def _recall_for_task(task: dict, brain_recall, k: int = 3, oracle: bool = False)
     return brain_recall(task["query"], n=k, caller="membench")
 
 
+def _evaluate_task(task: dict, brain_recall, k: int, oracle: bool, qr: dict) -> dict:
+    """Evaluate a single MemBench task and update quadrant accumulator."""
+    th = task.get("temporal_hint", "mid")
+    if th == "early":
+        qr["early_total"] += 1
+    elif th == "recent":
+        qr["recent_total"] += 1
+    else:
+        qr["mid_total"] += 1
+
+    t0 = time.monotonic()
+    results = _recall_for_task(task, brain_recall, k=k, oracle=oracle)
+    latency_ms = round((time.monotonic() - t0) * 1000, 1)
+
+    hit, first_hit = False, False
+    for i, r in enumerate(results[:k]):
+        if _check_hit(r, task):
+            hit = True
+            if i == 0:
+                first_hit = True
+            break
+
+    if hit:
+        qr["hits"] += 1
+        if th == "early":
+            qr["early_hits"] += 1
+        elif th == "recent":
+            qr["recent_hits"] += 1
+        else:
+            qr["mid_hits"] += 1
+    if first_hit:
+        qr["first_hits"] += 1
+
+    detail = {
+        "id": task["id"], "quadrant": task["quadrant"], "query": task["query"],
+        "hit": hit, "first_hit": first_hit, "latency_ms": latency_ms,
+        "temporal_hint": th, "n_results": len(results[:k]),
+    }
+    qr["details"].append(detail)
+    return detail
+
+
+def _compute_quadrant_scores(quadrant_results: dict) -> dict:
+    """Compute per-quadrant metrics from accumulated results."""
+    quadrant_scores = {}
+    for q, qr in quadrant_results.items():
+        total = qr["total"]
+        effectiveness = round(qr["hits"] / total, 3) if total > 0 else 0.0
+        recall = round(qr["first_hits"] / total, 3) if total > 0 else 0.0
+        capacity = round(qr["hits"] / total, 3) if total > 0 else 0.0
+
+        early_rate = (qr["early_hits"] / qr["early_total"]) if qr["early_total"] > 0 else None
+        recent_rate = (qr["recent_hits"] / qr["recent_total"]) if qr["recent_total"] > 0 else None
+        if early_rate is not None and recent_rate is not None and recent_rate > 0:
+            temporal_efficiency = round(early_rate / recent_rate, 3)
+        else:
+            temporal_efficiency = None
+
+        quadrant_scores[q] = {
+            "total": total, "hits": qr["hits"],
+            "effectiveness": effectiveness, "recall": recall,
+            "capacity": capacity, "temporal_efficiency": temporal_efficiency,
+            "early_rate": round(early_rate, 3) if early_rate is not None else None,
+            "recent_rate": round(recent_rate, 3) if recent_rate is not None else None,
+            "failures": [d["id"] for d in qr["details"] if not d["hit"]],
+        }
+    return quadrant_scores
+
+
 def run_membench(
     quadrant: str | None = None,
     k: int = 3,
@@ -290,7 +359,6 @@ def run_membench(
             raise ValueError(f"Unknown quadrant '{quadrant}'. Valid: {QUADRANTS}")
         tasks = [t for t in tasks if t["quadrant"] == quadrant]
 
-    # Per-quadrant accumulators
     quadrant_results: dict[str, dict] = {}
     all_details = []
 
@@ -304,106 +372,24 @@ def run_membench(
                 "recent_hits": 0, "recent_total": 0,
                 "details": [],
             }
-        qr = quadrant_results[q]
-        qr["total"] += 1
-
-        # Track temporal bucket
-        th = task.get("temporal_hint", "mid")
-        if th == "early":
-            qr["early_total"] += 1
-        elif th == "recent":
-            qr["recent_total"] += 1
-        else:
-            qr["mid_total"] += 1
-
-        t0 = time.monotonic()
-        results = _recall_for_task(task, brain.recall, k=k, oracle=oracle)
-        latency_ms = round((time.monotonic() - t0) * 1000, 1)
-
-        # Score
-        hit = False
-        first_hit = False
-        for i, r in enumerate(results[:k]):
-            if _check_hit(r, task):
-                hit = True
-                if i == 0:
-                    first_hit = True
-                break
-
-        if hit:
-            qr["hits"] += 1
-            if th == "early":
-                qr["early_hits"] += 1
-            elif th == "recent":
-                qr["recent_hits"] += 1
-            else:
-                qr["mid_hits"] += 1
-        if first_hit:
-            qr["first_hits"] += 1
-
-        detail = {
-            "id": task["id"],
-            "quadrant": q,
-            "query": task["query"],
-            "hit": hit,
-            "first_hit": first_hit,
-            "latency_ms": latency_ms,
-            "temporal_hint": th,
-            "n_results": len(results[:k]),
-        }
-        qr["details"].append(detail)
+        quadrant_results[q]["total"] += 1
+        detail = _evaluate_task(task, brain.recall, k, oracle, quadrant_results[q])
         all_details.append(detail)
 
-    # Compute per-quadrant metrics
-    quadrant_scores = {}
-    for q, qr in quadrant_results.items():
-        total = qr["total"]
-        effectiveness = round(qr["hits"] / total, 3) if total > 0 else 0.0
-        recall = round(qr["first_hits"] / total, 3) if total > 0 else 0.0
+    quadrant_scores = _compute_quadrant_scores(quadrant_results)
 
-        # Capacity: how many distinct facts retrievable (hits/total as proxy)
-        capacity = round(qr["hits"] / total, 3) if total > 0 else 0.0
-
-        # Temporal efficiency: compare early vs recent hit rates
-        early_rate = (qr["early_hits"] / qr["early_total"]) if qr["early_total"] > 0 else None
-        recent_rate = (qr["recent_hits"] / qr["recent_total"]) if qr["recent_total"] > 0 else None
-        # Temporal efficiency = 1.0 means no degradation; < 1.0 means early memories degrade
-        if early_rate is not None and recent_rate is not None and recent_rate > 0:
-            temporal_efficiency = round(early_rate / recent_rate, 3)
-        else:
-            temporal_efficiency = None
-
-        quadrant_scores[q] = {
-            "total": total,
-            "hits": qr["hits"],
-            "effectiveness": effectiveness,
-            "recall": recall,
-            "capacity": capacity,
-            "temporal_efficiency": temporal_efficiency,
-            "early_rate": round(early_rate, 3) if early_rate is not None else None,
-            "recent_rate": round(recent_rate, 3) if recent_rate is not None else None,
-            "failures": [d["id"] for d in qr["details"] if not d["hit"]],
-        }
-
-    # Aggregate
     total_tasks = len(all_details)
     total_hits = sum(qs["hits"] for qs in quadrant_scores.values())
     total_first_hits = sum(qr["first_hits"] for qr in quadrant_results.values())
 
-    report = {
+    return {
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "oracle_mode": oracle,
-        "k": k,
-        "quadrant_filter": quadrant,
-        "total_tasks": total_tasks,
-        "total_hits": total_hits,
+        "oracle_mode": oracle, "k": k, "quadrant_filter": quadrant,
+        "total_tasks": total_tasks, "total_hits": total_hits,
         "aggregate_effectiveness": round(total_hits / total_tasks, 3) if total_tasks > 0 else 0.0,
         "aggregate_recall": round(total_first_hits / total_tasks, 3) if total_tasks > 0 else 0.0,
-        "by_quadrant": quadrant_scores,
-        "details": all_details,
+        "by_quadrant": quadrant_scores, "details": all_details,
     }
-
-    return report
 
 
 def save_report(report: dict):

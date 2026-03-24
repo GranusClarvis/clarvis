@@ -1521,3 +1521,12 @@ _Last archived: 2026-03-17_
 
 ## Archived 2026-03-24
 - [x] [LLM_BRAIN_REVIEW 2026-03-23] [LLM_BRAIN_REVIEW] Audit clarvis-identity collection — enriched with 5 operational identity entries (architecture, capabilities, subsystems, identity/purpose, tech stack). Pruned 59 low-importance meta-cognition task logs. Collection: 176→147 entries. Architecture queries now return rich operational info as top result. _(Done 2026-03-24.)_
+
+## Archived 2026-03-24
+- [x] [LEGACY_IMPORT_MIGRATION_PHASE1] Migrated 4 legacy imports in heartbeat_preflight.py and heartbeat_postflight.py to spine: attention→clarvis.cognition.attention, clarvis_confidence→clarvis.cognition.confidence, episodic_memory→clarvis.memory.episodic_memory, procedural_memory→clarvis.memory.procedural_memory. Updated bridge wrapper comments. (2026-03-24)
+
+## Archived 2026-03-24
+- [x] [ACTION_ACCURACY_AUDIT] Audit action accuracy tracking in `performance_benchmark.py` and episodic memory: verify how action_accuracy=0.980 is computed, ensure failed/partial episodes correctly penalize the score, and add a regression test in `tests/` that asserts action accuracy degrades when intentionally bad episodes are injected. Targets weakest-flagged metric. (2026-03-24 14:22 UTC)
+
+## Archived 2026-03-24
+- [x] [EPISODE_FAILURE_TAXONOMY] Add structured failure categorization to `episodic_memory.py`: tag failed episodes with failure type (timeout, LLM-error, script-error, data-error, partial-success) and surface failure-type distribution in `performance_benchmark.py` PI report. _(2026-03-24: Done. Added `failure_type` first-class field to encode(), `_get_failure_type()` with legacy tag fallback, `failure_types` in get_stats()/benchmark_episodes(), `failure-types` CLI, weakest_failure_mode in PI report. Categories: timeout/memory/planning/system/action/partial-success.)_
