@@ -87,12 +87,22 @@ ABILITY_TAXONOMY = {
     "event_ordering": {
         "label": "Event Ordering",
         "description": "Reconstruct correct temporal sequence of events",
-        "sources": {"beam": "event_order"},
+        "sources": {"beam": "EO"},
     },
     "persistent_instruction": {
         "label": "Persistent Instruction",
         "description": "Follow instructions given in earlier sessions across later sessions",
-        "sources": {"beam": "instruction_follow"},
+        "sources": {"beam": "PI"},
+    },
+    "summarization": {
+        "label": "Summarization",
+        "description": "Accurately compress multi-source information into concise summaries",
+        "sources": {"beam": "SUM"},
+    },
+    "cross_domain_robustness": {
+        "label": "Cross-Domain Robustness",
+        "description": "Retrieve and link facts across different knowledge domains",
+        "sources": {"beam": "XD"},
     },
 }
 
@@ -154,9 +164,34 @@ def _map_longmemeval_to_abilities(lme_report: dict) -> dict[str, dict]:
     return mapped
 
 
+def _map_beam_to_abilities(beam_report: dict) -> dict[str, dict]:
+    """Map BEAM subset ability scores to unified abilities."""
+    mapped = {}
+    ability_map = {
+        "CR": "contradiction_resolution",
+        "EO": "event_ordering",
+        "PI": "persistent_instruction",
+        "SUM": "summarization",
+        "XD": "cross_domain_robustness",
+    }
+    for beam_key, ability_key in ability_map.items():
+        data = beam_report.get("by_ability", {}).get(beam_key)
+        if data:
+            mapped[ability_key] = {
+                "source": "beam",
+                "source_key": beam_key,
+                "effectiveness": data.get("effectiveness", 0.0),
+                "precision_at_1": data.get("precision_at_1", 0.0),
+                "n": data.get("total", 0),
+                "failures": data.get("failures", []),
+            }
+    return mapped
+
+
 def compute_clr_benchmark(
     run_longmemeval: bool = True,
     run_membench: bool = True,
+    run_beam: bool = False,
     oracle: bool = False,
 ) -> dict:
     """Compute CLR-Benchmark by running available adapters and aggregating.
@@ -164,6 +199,7 @@ def compute_clr_benchmark(
     Args:
         run_longmemeval: Include LongMemEval adapter.
         run_membench: Include MemBench adapter.
+        run_beam: Include BEAM subset adapter.
         oracle: Use oracle retrieval mode.
 
     Returns:
@@ -205,6 +241,22 @@ def compute_clr_benchmark(
                 all_ability_scores.setdefault(ability_key, []).append(scores)
         except Exception as e:
             adapter_reports["membench"] = {"error": str(e)}
+
+    # Run BEAM subset
+    if run_beam:
+        try:
+            from clarvis.metrics.beam import run_beam as _run_beam
+            beam = _run_beam(oracle=oracle)
+            adapter_reports["beam"] = {
+                "effectiveness": beam["aggregate_effectiveness"],
+                "precision_at_1": beam["aggregate_precision_at_1"],
+                "total_tasks": beam["total_tasks"],
+                "total_hits": beam["total_hits"],
+            }
+            for ability_key, scores in _map_beam_to_abilities(beam).items():
+                all_ability_scores.setdefault(ability_key, []).append(scores)
+        except Exception as e:
+            adapter_reports["beam"] = {"error": str(e)}
 
     # Merge abilities — when multiple sources cover the same ability, average
     unified_abilities = {}

@@ -10,6 +10,9 @@ Canonical spine modules:
   - clarvis.metrics.clr_benchmark   — CLR-Benchmark: external task evaluation
   - clarvis.metrics.longmemeval     — LongMemEval adapter (5 abilities)
   - clarvis.metrics.membench        — MemBench adapter (4 quadrants)
+  - clarvis.metrics.clr_reports     — CLR robustness reports (length, domain, degradation)
+  - clarvis.metrics.beam            — BEAM subset adapter (5 extended abilities)
+  - clarvis.metrics.evidence_scoring — Evidence attribution scoring (cross-adapter)
 """
 
 from .phi import compute_phi
