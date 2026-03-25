@@ -31,7 +31,6 @@ _Queue audited on 2026-03-24 evening. Removed 3 completed items (A5_A7, TEMPORAL
 ### Demoted from P0 (2026-03-24 audit)
 
 ### Code Quality
-- [x] [DECOMPOSE_LONG_FUNCTIONS] All four functions already ≤80 lines from prior decomposition work: `run_membench` (54L), `_brain_store` (52L), `run_postflight` (46L), `run_benchmark` (49L). (2026-03-25)
 
 ### Phi / Benchmarking
 
@@ -45,7 +44,6 @@ _Queue audited on 2026-03-24 evening. Removed 3 completed items (A5_A7, TEMPORAL
 - [~] [CRON_CANONICAL_ENTRYPOINTS] Migrate cron paths from direct `python3 scripts/X.py` to `python3 -m clarvis ...`. _(3 done. Next: context_compressor gc.)_
 
 ### Code Quality
-- [x] [HEARTBEAT_POSTFLIGHT_DECOMPOSITION] `run_postflight()` is 46 lines, decomposed into ~15 named sub-functions. (2026-03-25)
 
 ### Agent Orchestrator
 - Pillar 2 Phase 5 — Visual Ops Dashboard _(PixiJS-based ops visualization. Design in `docs/CLAW_EMPIRE_VISUALS_NOTES_2026-03-06.md`.)_
@@ -58,5 +56,13 @@ _Queue audited on 2026-03-24 evening. Removed 3 completed items (A5_A7, TEMPORAL
 _Design: `docs/ADAPTIVE_RAG_PLAN.md` — 4-phase rollout (GATE → EVAL → RETRY → FEEDBACK). Each phase independently useful. Demoted: not needed for 2026-03-31 delivery._
 
 ### Research Sessions
-- [x] [RESEARCH_PHI_COMPUTATION] Surveyed IIT/PyPhi literature on exact Phi computation, approximations, and multi-valued extensions. (2026-03-25)
 _(Completed items archived.)_
+
+---
+
+## NEW ITEMS
+
+- [ ] [ACTION_ACCURACY_CONFIDENCE_GATE] Wire confidence predictions into heartbeat task_selector — skip tasks with LOW/UNKNOWN confidence unless forced. Currently confidence is computed but not enforced, allowing low-confidence actions that degrade Action Accuracy (weakest metric at 0.981). Touch: `heartbeat_preflight.py` task selection, `clarvis_confidence.py` thresholds.
+- [ ] [CRON_ERROR_AGGREGATOR] Build `scripts/cron_error_aggregator.sh` (Bash) — scan all `memory/cron/*.log` and `monitoring/*.log` for ERROR/FATAL/traceback lines, deduplicate by signature, write daily summary to `monitoring/cron_errors_daily.md`. Wire into `cron_report_morning.sh`. Currently cron failures are scattered across individual logs with no aggregation.
+- [ ] [DIAGNOSE_BRAIN_EDGE_REGRESSION] Investigate 10.3% graph edge drop (88211→79152) and memory count below 3000 threshold flagged repeatedly in alerts.log. Determine if caused by graph compaction/hygiene over-pruning or data loss. Fix root cause and restore healthy baseline. Touch: `graph_compaction.py`, `brain_hygiene.py`, `goal_hygiene.py`.
+- [x] [PACKAGE_TEST_COVERAGE] Add unit tests for `clarvis-cost` (log/log_real/budget parsing) and `clarvis-reasoning` (quality assessment, Brier score). _(Done 2026-03-25: 72 tests for clarvis-cost (94% coverage), 40 tests for clarvis-reasoning (96% coverage). Covers core, optimizer, CLI, import_router_decisions, Brier score, session evaluation, diagnose_sessions.)_
