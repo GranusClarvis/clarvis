@@ -19,7 +19,7 @@ Presentable Clarvis by 2026-03-31:
 _Queue audited on 2026-03-24 evening. Removed 3 completed items (A5_A7, TEMPORAL_RETRIEVAL_FIX, BACKFILL_SENTINEL_FIX). Demoted 2 items (postflight import cleanup, semantic bridges) to P1 — functional via bridges, not release-blocking. 7 items remain on the critical path._
 
 ### Milestone C — Repo / Open-Source Readiness (by 2026-03-26)
-- [ ] [C_OPEN_SOURCE_READINESS_SWEEP] Run one authoritative open-source readiness sweep: verify hardcoded secrets are truly removed, verify tracked-data/.gitignore state, confirm root LICENSE + CONTRIBUTING + CI status, and close remaining release blockers. _Output: checklist updated + any residual blockers listed explicitly._
+- [x] [C_OPEN_SOURCE_READINESS_SWEEP] _(2026-03-25: Sweep complete. Removed chat ID from longmemeval.py, email from beam.py. LICENSE/CONTRIBUTING/CI all present. .gitignore solid. data/ + monitoring/ untracked. 30/30 smoke tests pass. Burndown C1+C3 updated.)_
 
 ### Milestone D — Public Surface (by 2026-03-29)
 
@@ -30,7 +30,6 @@ _Queue audited on 2026-03-24 evening. Removed 3 completed items (A5_A7, TEMPORAL
 ## P1 — This Week
 
 ### Demoted from P0 (2026-03-24 audit)
-- [x] [P1_HEARTBEAT_POSTFLIGHT_IMPORT_CLEANUP] Remove the legacy `from attention import attention as attn_module` at line 833 in `scripts/heartbeat_postflight.py`. _Also fixed session_hook.py:18, task_selector.py:33. All three now use `from clarvis.cognition.attention import attention`. Done 2026-03-24._
 - [~] [SEMANTIC_CROSS_COLLECTION_BRIDGES] Strengthen weak cross-collection semantic links. _(All metric targets met. Blocked on Phi verification compute time. Not a release blocker.)_
 
 ### Code Quality

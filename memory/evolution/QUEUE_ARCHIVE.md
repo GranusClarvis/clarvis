@@ -1552,3 +1552,6 @@ _Last archived: 2026-03-24_
 - [x] [D2_PUBLIC_STATUS_ENDPOINT] Wire the real public status endpoint and ensure website surfaces live or periodically generated status data cleanly. _(Done 2026-03-24: Fixed missing baseline_clr in API, added static/status.json generation + fallback, CLR dimension breakdown on benchmarks page.)_
 - [x] [D4_PUBLIC_ARCHITECTURE_AND_ROADMAP_SANITIZE] Finish the sanitized architecture/public roadmap pass so the public site explains Clarvis clearly without leaking internal-only details. _(Done 2026-03-24: Verified no secrets/paths/credentials in public pages. Fixed cron count accuracy 50→30. All pages clean.)_
 - [x] [D_SURFACE_PROOF_POLISH] Final polish pass on website v0: proof signals, copy, style consistency, navigation, obvious broken links, and mobile/basic responsiveness. _(Done 2026-03-24: Consistent footers with MIT License, mobile breakpoints for hero/nav/diagrams, CLR dimension breakdown, all routes 200, all HTML valid. Note: clarvis/clarvis-db repos 404 — expected pre-open-source.)_
+
+## Archived 2026-03-24
+- [x] [P1_HEARTBEAT_POSTFLIGHT_IMPORT_CLEANUP] Remove the legacy `from attention import attention as attn_module` at line 833 in `scripts/heartbeat_postflight.py`. _Also fixed session_hook.py:18, task_selector.py:33. All three now use `from clarvis.cognition.attention import attention`. Done 2026-03-24._

@@ -6,9 +6,9 @@ _Target: 2026-03-31. Updated: 2026-03-22._
 
 | # | Task | Milestone | Status | Blocker | Validation |
 |---|------|-----------|--------|---------|------------|
-| 1 | **C1: Remove hardcoded secrets** | C | DONE | — | `git grep '8076973521\|REDACTED_CHAT_ID\|REDACTED_GROUP_ID' -- ':!.env'` returns nothing |
+| 1 | **C1: Remove hardcoded secrets** | C | DONE | — | `git grep '8076973521\|REDACTED_CHAT_ID\|REDACTED_GROUP_ID\|clarvis420@gmail' -- ':!.env' ':!memory/' ':!CLAUDE.md' ':!.claude/'` returns nothing (re-verified 2026-03-25) |
 | 2 | **C2: Purge ChromaDB credentials** | C | DONE | — | `python3 -c "from clarvis.brain import search; r=search('telegram bot token password'); print(r)"` returns no creds |
-| 3 | **C3: Verify gitignore / tracked data** | C | TODO | — | `git ls-files data/ monitoring/` returns empty |
+| 3 | **C3: Verify gitignore / tracked data** | C | DONE | — | `git ls-files data/ monitoring/` returns empty (verified 2026-03-25) |
 | 4 | **C6: Root README** | C | DONE | — | `README.md` exists, covers: what/why/arch/quickstart/status/repo-boundaries |
 | 5 | **D1: Website v0 scaffold** | D | TODO | — | `npm run build` succeeds, index page loads |
 | 6 | **D6: Domain + deployment** | D | TODO | D1 | Site reachable at public URL |
