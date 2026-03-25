@@ -1565,3 +1565,14 @@ _Last archived: 2026-03-24_
 
 ## Archived 2026-03-25
 - [x] [BRIER_CALIBRATION_OVERHAUL] **Done 2026-03-25**: Root cause was missing `confidence_calibration.json` → Brier defaulted to 1.0. Fix: (1) added `confidence_brier` to TARGETS (weight=0.05, target≤0.10, critical≤0.50), (2) rewired `benchmark_intelligence()` to compute Brier live + write snapshot, (3) flattened into metrics dict for PI, (4) added post-recalibration Brier check in full benchmark. Actual Brier=0.0735 → capability=1.0 (was 0.06).
+
+## Archived 2026-03-25
+- [x] [DECOMPOSE_LONG_FUNCTIONS] All four functions already ≤80 lines from prior decomposition work: `run_membench` (54L), `_brain_store` (52L), `run_postflight` (46L), `run_benchmark` (49L). (2026-03-25)
+- [x] [HEARTBEAT_POSTFLIGHT_DECOMPOSITION] `run_postflight()` is 46 lines, decomposed into ~15 named sub-functions. (2026-03-25)
+- [x] [RESEARCH_PHI_COMPUTATION] Surveyed IIT/PyPhi literature on exact Phi computation, approximations, and multi-valued extensions. (2026-03-25)
+
+## Archived 2026-03-25
+- [x] [PACKAGE_TEST_COVERAGE] Add unit tests for `clarvis-cost` (log/log_real/budget parsing) and `clarvis-reasoning` (quality assessment, Brier score). _(Done 2026-03-25: 72 tests for clarvis-cost (94% coverage), 40 tests for clarvis-reasoning (96% coverage). Covers core, optimizer, CLI, import_router_decisions, Brier score, session evaluation, diagnose_sessions.)_
+
+## Archived 2026-03-25
+- [x] [RESEARCH_IIT_CONSCIOUSNESS_ARCHITECTURES] Investigate consciousness architectures via Integrated Information Theory (IIT), Phi computation, and AI implications. _(2026-03-25)_
