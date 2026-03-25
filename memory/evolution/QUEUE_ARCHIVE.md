@@ -1558,3 +1558,7 @@ _Last archived: 2026-03-24_
 
 ## Archived 2026-03-25
 - [x] [C_OPEN_SOURCE_READINESS_SWEEP] _(2026-03-25: Sweep complete. Removed chat ID from longmemeval.py, email from beam.py. LICENSE/CONTRIBUTING/CI all present. .gitignore solid. data/ + monitoring/ untracked. 30/30 smoke tests pass. Burndown C1+C3 updated.)_
+
+## Archived 2026-03-25
+- [x] [SEMANTIC_CROSS_COLLECTION_BRIDGES] _(2026-03-25) Unblocked — Phi compute now runs in 0.3s. Phi=0.7959, semantic_cross=0.5564. Score target >0.75 remains aspirational but compute is no longer a blocker.)_
+- [x] [SEMANTIC_CROSS_COLLECTION_UNBLOCK] _(2026-03-25) Replaced 720 ONNX queries with numpy L2 on stored embeddings. 101s→0.3s (340x). Phi=0.7959, semantic_cross=0.5564. SEMANTIC_CROSS_COLLECTION_BRIDGES unblocked._

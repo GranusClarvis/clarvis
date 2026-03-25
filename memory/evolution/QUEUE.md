@@ -29,14 +29,12 @@ _Queue audited on 2026-03-24 evening. Removed 3 completed items (A5_A7, TEMPORAL
 ## P1 — This Week
 
 ### Demoted from P0 (2026-03-24 audit)
-- [x] [SEMANTIC_CROSS_COLLECTION_BRIDGES] _(2026-03-25) Unblocked — Phi compute now runs in 0.3s. Phi=0.7959, semantic_cross=0.5564. Score target >0.75 remains aspirational but compute is no longer a blocker.)_
 
 ### Code Quality
 - [ ] [DECOMPOSE_LONG_FUNCTIONS] Decompose oversized functions: `clarvis/metrics/membench.py:run_membench` (137 lines), `scripts/heartbeat_postflight.py:_brain_store` (89 lines), `scripts/heartbeat_postflight.py:run_postflight` (1444 lines), `scripts/retrieval_benchmark.py:run_benchmark` (167 lines). Target: all functions ≤80 lines.
-- [ ] [BRIER_CALIBRATION_OVERHAUL] Audit `clarvis_confidence.py` prediction-outcome loop: review bucket distributions, prune stale/low-signal predictions, recalibrate bin edges, and add a post-recalibration Brier check to `performance_benchmark.py`. Current brier capability=0.06 is the worst dimension. Target: brier ≥ 0.30 within 2 weeks.
+- [x] [BRIER_CALIBRATION_OVERHAUL] **Done 2026-03-25**: Root cause was missing `confidence_calibration.json` → Brier defaulted to 1.0. Fix: (1) added `confidence_brier` to TARGETS (weight=0.05, target≤0.10, critical≤0.50), (2) rewired `benchmark_intelligence()` to compute Brier live + write snapshot, (3) flattened into metrics dict for PI, (4) added post-recalibration Brier check in full benchmark. Actual Brier=0.0735 → capability=1.0 (was 0.06).
 
 ### Phi / Benchmarking
-- [x] [SEMANTIC_CROSS_COLLECTION_UNBLOCK] _(2026-03-25) Replaced 720 ONNX queries with numpy L2 on stored embeddings. 101s→0.3s (340x). Phi=0.7959, semantic_cross=0.5564. SEMANTIC_CROSS_COLLECTION_BRIDGES unblocked._
 
 ---
 

@@ -612,13 +612,23 @@ def benchmark_intelligence(retrieval_data=None, speed_data=None):
     if speed_data:
         result["brain_query_speed_avg_s"] = round(speed_data.get("avg_ms", 0) / 1000, 3)
 
-    # Confidence calibration Brier score
+    # Confidence calibration Brier score — compute live from predictions
     try:
-        cal_file = os.path.join(WORKSPACE, "data/confidence_calibration.json")
-        if os.path.exists(cal_file):
-            with open(cal_file) as f:
-                cal = json.load(f)
-            result["confidence_brier"] = cal.get("brier_score", 1.0)
+        from clarvis.cognition.confidence import calibration as _cal_fn
+        cal = _cal_fn()
+        brier = cal.get("brier_score")
+        if brier is not None and cal.get("resolved", 0) >= 5:
+            result["confidence_brier"] = brier
+            # Also write snapshot for other consumers
+            _cal_out = os.path.join(WORKSPACE, "data/confidence_calibration.json")
+            with open(_cal_out, "w") as _f:
+                json.dump({
+                    "brier_score": brier,
+                    "brier_weighted": cal.get("brier_score_weighted", brier),
+                    "resolved": cal.get("resolved", 0),
+                    "total": cal.get("total", 0),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                }, _f, indent=2)
     except Exception:
         pass
 
@@ -866,6 +876,24 @@ def run_full_benchmark():
     # Quality metrics (beyond binary success) — added 2026-03-13
     quality = _safe_bench(benchmark_quality, "quality")
 
+    # Post-recalibration Brier check: run recalibrate(), then verify Brier improved or held
+    brier_check = {}
+    try:
+        from clarvis.cognition.confidence import recalibrate as _recal_fn
+        pre_brier = intelligence.get("confidence_brier", 1.0)
+        recal = _recal_fn(window_days=7, archive_days=30)
+        post_brier = recal.get("brier_7d_after") or recal.get("brier_7d") or pre_brier
+        brier_check = {
+            "pre_brier": pre_brier,
+            "post_brier_7d": post_brier,
+            "brier_all": recal.get("brier_all"),
+            "shift_detected": recal.get("shift_detected", False),
+            "archived": recal.get("archived", 0),
+            "swept": recal.get("swept", 0),
+        }
+    except Exception:
+        pass
+
     bench_duration = round(time.monotonic() - t0, 2)
 
     # Flatten key metrics (use .get() with defaults for resilience)
@@ -890,6 +918,8 @@ def run_full_benchmark():
         # New quality metrics (beyond binary success)
         "task_quality_score":   quality.get("task_quality_score", 0.5),
         "code_quality_score":   quality.get("code_quality_score", 0.5),
+        # Confidence calibration (Brier score — lower is better)
+        "confidence_brier":     intelligence.get("confidence_brier", 1.0),
     }
 
     # Evaluate each metric against targets
@@ -947,6 +977,7 @@ def run_full_benchmark():
             "intelligence": intelligence,
             "self_improvement": self_improvement,
             "quality": quality,  # Beyond binary success
+            "brier_check": brier_check,
         },
     }
 

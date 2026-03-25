@@ -43,6 +43,8 @@ TARGETS = {
     "brief_compression":    {"target": 0.55,  "direction": "higher",  "label": "Brief Compression Ratio", "weight": 0.02, "critical": 0.20},
     # Dimension 8: Load Scaling
     "load_degradation_pct": {"target": 15.0,  "direction": "lower",   "label": "Load Degradation (%)",    "weight": 0.02, "critical": 60.0},
+    # Dimension 9: Confidence Calibration (Brier score — 0=perfect, 1=worst)
+    "confidence_brier":     {"target": 0.10,  "direction": "lower",   "label": "Brier Score (Calibration)", "weight": 0.05, "critical": 0.50},
 }
 
 
