@@ -15,7 +15,6 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "clarvis"))
 sys.path.insert(0, os.path.dirname(__file__))
 
-from datetime import datetime, timezone
 
 
 def backfill(dry_run=True):

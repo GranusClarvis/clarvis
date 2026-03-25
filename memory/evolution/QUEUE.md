@@ -24,9 +24,13 @@ _Queue audited on 2026-03-24 evening. Removed 3 completed items (A5_A7, TEMPORAL
 
 ### Milestone E — Final Validation (by 2026-03-31)
 
+- [ ] [P0_BUGFIX_EPISODIC_MEMORY_WRAPPER] Fix `scripts/episodic_memory.py`: restore `main` import from `clarvis.memory.episodic_memory` or direct module entrypoint. Current wrapper calls `main()` without importing it, so direct script execution crashes with `NameError`.
+
 ---
 
 ## P1 — This Week
+
+- [ ] [DECOMPOSE_LONG_FUNCTIONS] Decompose oversized functions: `scripts/daily_brain_eval.py:_run_retrieval_probe` (92 lines), `scripts/daily_brain_eval.py:_assess_quality` (89 lines), `scripts/daily_brain_eval.py:run_full_eval` (96 lines), `scripts/llm_brain_review.py:build_review_prompt` (119 lines). Target: all functions ≤80 lines.
 
 ### Demoted from P0 (2026-03-24 audit)
 
@@ -34,6 +38,7 @@ _Queue audited on 2026-03-24 evening. Removed 3 completed items (A5_A7, TEMPORAL
 
 ### Phi / Benchmarking
 
+- [ ] [REASONING_FAILURE 2026-03-25] Investigate failure: '[SEMANTIC_CROSS_COLLECTION_BOOST] Boost semantic_cross_collection score (0.588 —' failed with exit 1. Check logs and fix root cause.
 ---
 
 ## P2 — When Idle (Demoted 2026-03-17)
