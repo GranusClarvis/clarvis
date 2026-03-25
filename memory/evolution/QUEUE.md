@@ -31,8 +31,7 @@ _Queue audited on 2026-03-24 evening. Removed 3 completed items (A5_A7, TEMPORAL
 ### Demoted from P0 (2026-03-24 audit)
 
 ### Code Quality
-- [ ] [DECOMPOSE_LONG_FUNCTIONS] Decompose oversized functions: `clarvis/metrics/membench.py:run_membench` (137 lines), `scripts/heartbeat_postflight.py:_brain_store` (89 lines), `scripts/heartbeat_postflight.py:run_postflight` (1444 lines), `scripts/retrieval_benchmark.py:run_benchmark` (167 lines). Target: all functions ≤80 lines.
-- [x] [BRIER_CALIBRATION_OVERHAUL] **Done 2026-03-25**: Root cause was missing `confidence_calibration.json` → Brier defaulted to 1.0. Fix: (1) added `confidence_brier` to TARGETS (weight=0.05, target≤0.10, critical≤0.50), (2) rewired `benchmark_intelligence()` to compute Brier live + write snapshot, (3) flattened into metrics dict for PI, (4) added post-recalibration Brier check in full benchmark. Actual Brier=0.0735 → capability=1.0 (was 0.06).
+- [x] [DECOMPOSE_LONG_FUNCTIONS] All four functions already ≤80 lines from prior decomposition work: `run_membench` (54L), `_brain_store` (52L), `run_postflight` (46L), `run_benchmark` (49L). (2026-03-25)
 
 ### Phi / Benchmarking
 
@@ -46,7 +45,7 @@ _Queue audited on 2026-03-24 evening. Removed 3 completed items (A5_A7, TEMPORAL
 - [~] [CRON_CANONICAL_ENTRYPOINTS] Migrate cron paths from direct `python3 scripts/X.py` to `python3 -m clarvis ...`. _(3 done. Next: context_compressor gc.)_
 
 ### Code Quality
-- [~] [HEARTBEAT_POSTFLIGHT_DECOMPOSITION] Decompose `run_postflight()` (1457 lines) into 10-15 named sub-functions. Improves `reasonable_function_length` metric.
+- [x] [HEARTBEAT_POSTFLIGHT_DECOMPOSITION] `run_postflight()` is 46 lines, decomposed into ~15 named sub-functions. (2026-03-25)
 
 ### Agent Orchestrator
 - Pillar 2 Phase 5 — Visual Ops Dashboard _(PixiJS-based ops visualization. Design in `docs/CLAW_EMPIRE_VISUALS_NOTES_2026-03-06.md`.)_
@@ -59,4 +58,5 @@ _Queue audited on 2026-03-24 evening. Removed 3 completed items (A5_A7, TEMPORAL
 _Design: `docs/ADAPTIVE_RAG_PLAN.md` — 4-phase rollout (GATE → EVAL → RETRY → FEEDBACK). Each phase independently useful. Demoted: not needed for 2026-03-31 delivery._
 
 ### Research Sessions
+- [x] [RESEARCH_PHI_COMPUTATION] Surveyed IIT/PyPhi literature on exact Phi computation, approximations, and multi-valued extensions. (2026-03-25)
 _(Completed items archived.)_

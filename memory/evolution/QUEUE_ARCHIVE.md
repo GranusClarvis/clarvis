@@ -1562,3 +1562,6 @@ _Last archived: 2026-03-24_
 ## Archived 2026-03-25
 - [x] [SEMANTIC_CROSS_COLLECTION_BRIDGES] _(2026-03-25) Unblocked — Phi compute now runs in 0.3s. Phi=0.7959, semantic_cross=0.5564. Score target >0.75 remains aspirational but compute is no longer a blocker.)_
 - [x] [SEMANTIC_CROSS_COLLECTION_UNBLOCK] _(2026-03-25) Replaced 720 ONNX queries with numpy L2 on stored embeddings. 101s→0.3s (340x). Phi=0.7959, semantic_cross=0.5564. SEMANTIC_CROSS_COLLECTION_BRIDGES unblocked._
+
+## Archived 2026-03-25
+- [x] [BRIER_CALIBRATION_OVERHAUL] **Done 2026-03-25**: Root cause was missing `confidence_calibration.json` → Brier defaulted to 1.0. Fix: (1) added `confidence_brier` to TARGETS (weight=0.05, target≤0.10, critical≤0.50), (2) rewired `benchmark_intelligence()` to compute Brier live + write snapshot, (3) flattened into metrics dict for PI, (4) added post-recalibration Brier check in full benchmark. Actual Brier=0.0735 → capability=1.0 (was 0.06).
