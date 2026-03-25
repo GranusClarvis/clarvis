@@ -1555,3 +1555,6 @@ _Last archived: 2026-03-24_
 
 ## Archived 2026-03-24
 - [x] [P1_HEARTBEAT_POSTFLIGHT_IMPORT_CLEANUP] Remove the legacy `from attention import attention as attn_module` at line 833 in `scripts/heartbeat_postflight.py`. _Also fixed session_hook.py:18, task_selector.py:33. All three now use `from clarvis.cognition.attention import attention`. Done 2026-03-24._
+
+## Archived 2026-03-25
+- [x] [C_OPEN_SOURCE_READINESS_SWEEP] _(2026-03-25: Sweep complete. Removed chat ID from longmemeval.py, email from beam.py. LICENSE/CONTRIBUTING/CI all present. .gitignore solid. data/ + monitoring/ untracked. 30/30 smoke tests pass. Burndown C1+C3 updated.)_

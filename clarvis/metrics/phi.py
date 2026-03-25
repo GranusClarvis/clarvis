@@ -18,6 +18,8 @@ import os
 from collections import defaultdict
 from datetime import datetime, timezone
 
+import numpy as np
+
 try:
     from clarvis.brain import get_brain as _spine_get_brain, ALL_COLLECTIONS
 except ImportError:
@@ -159,25 +161,33 @@ def cross_collection_integration(nodes, edge_list):
 def semantic_cross_collection(brain):
     """Measure 3: Semantic overlap across collection boundaries.
 
-    Stratified sample (up to 12 docs) from each collection, queries bidirectionally.
-    Score = average across all collection pairs of (avg best-match similarity).
+    Fetches pre-stored embeddings from ChromaDB and computes cosine similarity
+    directly with numpy — no ONNX inference needed.
+
+    Stratified sample (up to 12 docs) from each collection, bidirectional
+    best-match similarity. Score = average across all collection pairs.
     """
     active_collections = []
-    col_samples = {}
+    col_all_embs = {}     # col_name -> np.array of ALL embeddings (for target search)
+    col_query_embs = {}   # col_name -> np.array of sampled embeddings (for queries)
 
     for col_name, col in brain.collections.items():
         count = col.count()
         if count > 0:
             active_collections.append(col_name)
-            all_results = col.get(include=["documents"])
-            all_docs = all_results.get("documents", [])
-            sample_size = min(12, len(all_docs))
-            if sample_size >= len(all_docs):
-                col_samples[col_name] = all_docs
+            results = col.get(include=["embeddings"])
+            all_embs = results.get("embeddings")
+            if all_embs is None or len(all_embs) == 0:
+                continue
+            all_arr = np.array(all_embs, dtype=np.float32)
+            col_all_embs[col_name] = all_arr
+            sample_size = min(12, len(all_embs))
+            if sample_size >= len(all_embs):
+                col_query_embs[col_name] = all_arr
             else:
-                step = len(all_docs) / sample_size
+                step = len(all_embs) / sample_size
                 indices = [int(i * step) for i in range(sample_size)]
-                col_samples[col_name] = [all_docs[i] for i in indices]
+                col_query_embs[col_name] = all_arr[indices]
 
     if len(active_collections) < 2:
         return 0.0, {}
@@ -187,39 +197,38 @@ def semantic_cross_collection(brain):
 
     for i, c1 in enumerate(active_collections):
         for c2 in active_collections[i + 1:]:
-            if not col_samples.get(c1) or not col_samples.get(c2):
+            q1 = col_query_embs.get(c1)
+            q2 = col_query_embs.get(c2)
+            all1 = col_all_embs.get(c1)
+            all2 = col_all_embs.get(c2)
+            if q1 is None or q2 is None or all1 is None or all2 is None:
                 continue
 
-            col1_obj = brain.collections[c1]
-            col2_obj = brain.collections[c2]
-            similarities = []
+            # Use up to 8 query samples per direction (matching old behavior)
+            # But search against ALL embeddings in target collection
+            e1 = q1[:8]   # query samples from c1
+            e2 = q2[:8]   # query samples from c2
 
-            for doc in col_samples[c1][:8]:
-                try:
-                    results = col2_obj.query(
-                        query_texts=[doc], n_results=1, include=["distances"]
-                    )
-                    if results["distances"] and results["distances"][0]:
-                        dist = results["distances"][0][0]
-                        sim = max(0, 1.0 - dist / 2.0)
-                        similarities.append(sim)
-                except Exception:
-                    pass
+            # c1 queries -> search full c2
+            e1_sq = (e1 ** 2).sum(axis=1, keepdims=True)
+            a2_sq = (all2 ** 2).sum(axis=1, keepdims=True)
+            dist_sq_1to2 = e1_sq + a2_sq.T - 2.0 * (e1 @ all2.T)
+            dist_1to2 = np.sqrt(np.maximum(0.0, dist_sq_1to2))
+            best_dist_c1_to_c2 = dist_1to2.min(axis=1)
 
-            for doc in col_samples[c2][:8]:
-                try:
-                    results = col1_obj.query(
-                        query_texts=[doc], n_results=1, include=["distances"]
-                    )
-                    if results["distances"] and results["distances"][0]:
-                        dist = results["distances"][0][0]
-                        sim = max(0, 1.0 - dist / 2.0)
-                        similarities.append(sim)
-                except Exception:
-                    pass
+            # c2 queries -> search full c1
+            e2_sq = (e2 ** 2).sum(axis=1, keepdims=True)
+            a1_sq = (all1 ** 2).sum(axis=1, keepdims=True)
+            dist_sq_2to1 = e2_sq + a1_sq.T - 2.0 * (e2 @ all1.T)
+            dist_2to1 = np.sqrt(np.maximum(0.0, dist_sq_2to1))
+            best_dist_c2_to_c1 = dist_2to1.min(axis=1)
 
-            if similarities:
-                avg_sim = sum(similarities) / len(similarities)
+            # Convert L2 distance to similarity: sim = max(0, 1 - dist/2)
+            all_dists = np.concatenate([best_dist_c1_to_c2, best_dist_c2_to_c1])
+            all_sims = np.maximum(0.0, 1.0 - all_dists / 2.0)
+
+            if len(all_sims) > 0:
+                avg_sim = float(all_sims.mean())
                 pair_scores.append(avg_sim)
                 pair_details[f"{c1} <-> {c2}"] = round(avg_sim, 4)
 
