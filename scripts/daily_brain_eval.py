@@ -87,53 +87,55 @@ def _ensure_dirs():
     os.makedirs(EVAL_DIR, exist_ok=True)
 
 
-def _run_retrieval_probe():
-    """Run judged retrieval probe. Returns per-query results and summary."""
-    from clarvis.brain import brain
+def _extract_hit_texts(hits, max_len=300):
+    """Extract text snippets from brain recall hits."""
+    texts = []
+    for h in hits[:3]:
+        if isinstance(h, str):
+            doc = h
+        elif isinstance(h, dict):
+            doc = h.get("document", h.get("text", str(h)))
+        else:
+            doc = str(h)
+        texts.append(doc[:max_len])
+    return texts
 
-    results = []
-    for item in JUDGED_QUERIES:
-        t0 = time.time()
-        try:
-            hits = brain.recall(item["q"], n=5)
-            elapsed = time.time() - t0
 
-            # Extract text from results
-            top_texts = []
-            for h in hits[:3]:
-                if isinstance(h, str):
-                    doc = h
-                elif isinstance(h, dict):
-                    doc = h.get("document", h.get("text", str(h)))
-                else:
-                    doc = str(h)
-                top_texts.append(doc[:300])
+def _probe_single_query(brain, item):
+    """Run a single retrieval probe query. Returns result dict."""
+    t0 = time.time()
+    try:
+        hits = brain.recall(item["q"], n=5)
+        elapsed = time.time() - t0
+        top_texts = _extract_hit_texts(hits)
 
-            # Judge: any expected keyword in any top-3 result?
-            combined = " ".join(top_texts).lower()
-            useful = any(kw in combined for kw in item["expect"])
+        # Judge: any expected keyword in any top-3 result?
+        combined = " ".join(top_texts).lower()
+        useful = any(kw in combined for kw in item["expect"])
 
-            results.append({
-                "query": item["q"],
-                "domain": item["domain"],
-                "category": item["cat"],
-                "speed_ms": round(elapsed * 1000),
-                "n_results": len(hits),
-                "useful": useful,
-                "top_snippets": [t[:150] for t in top_texts],
-            })
-        except Exception as e:
-            results.append({
-                "query": item["q"],
-                "domain": item["domain"],
-                "category": item["cat"],
-                "speed_ms": 0,
-                "n_results": 0,
-                "useful": False,
-                "error": str(e),
-            })
+        return {
+            "query": item["q"],
+            "domain": item["domain"],
+            "category": item["cat"],
+            "speed_ms": round(elapsed * 1000),
+            "n_results": len(hits),
+            "useful": useful,
+            "top_snippets": [t[:150] for t in top_texts],
+        }
+    except Exception as e:
+        return {
+            "query": item["q"],
+            "domain": item["domain"],
+            "category": item["cat"],
+            "speed_ms": 0,
+            "n_results": 0,
+            "useful": False,
+            "error": str(e),
+        }
 
-    # Aggregate
+
+def _aggregate_probe_results(results):
+    """Aggregate per-query results into summary with category breakdown."""
     speeds = [r["speed_ms"] for r in results if r["speed_ms"] > 0]
     useful_count = sum(1 for r in results if r["useful"])
     total = len(results)
@@ -159,13 +161,12 @@ def _run_retrieval_probe():
             "useful": data["useful"],
         }
 
-    # Failure details
     failures = [
         {"query": r["query"], "domain": r["domain"], "top_snippets": r.get("top_snippets", [])}
         for r in results if not r["useful"]
     ]
 
-    summary = {
+    return {
         "total_queries": total,
         "useful_count": useful_count,
         "useful_rate": round(useful_count / total, 3) if total else 0,
@@ -178,6 +179,13 @@ def _run_retrieval_probe():
         "failures": failures,
     }
 
+
+def _run_retrieval_probe():
+    """Run judged retrieval probe. Returns per-query results and summary."""
+    from clarvis.brain import brain
+
+    results = [_probe_single_query(brain, item) for item in JUDGED_QUERIES]
+    summary = _aggregate_probe_results(results)
     return results, summary
 
 
@@ -245,28 +253,20 @@ def _read_metric_trends():
     return trends
 
 
-def _assess_quality(retrieval_summary, trends):
-    """Produce qualitative assessment with actionable findings.
-
-    DESIGN NOTE: We deliberately do NOT recommend chasing speed at the
-    expense of quality. A 600ms query returning useful results is fine.
-    Only flag speed if it's >10s (causing real UX or timeout problems).
-    """
-    findings = []
-    score_components = {}
-
-    # 1. Retrieval usefulness (primary signal, weight 0.50)
-    useful_rate = retrieval_summary["useful_rate"]
+def _score_usefulness(useful_rate):
+    """Score retrieval usefulness (weight 0.50). Returns (finding, component)."""
     if useful_rate >= 0.85:
-        findings.append(f"Retrieval usefulness is strong ({useful_rate:.0%}).")
+        finding = f"Retrieval usefulness is strong ({useful_rate:.0%})."
     elif useful_rate >= 0.70:
-        findings.append(f"Retrieval usefulness is acceptable ({useful_rate:.0%}) but has room to improve.")
+        finding = f"Retrieval usefulness is acceptable ({useful_rate:.0%}) but has room to improve."
     else:
-        findings.append(f"CONCERN: Retrieval usefulness is below target ({useful_rate:.0%}, target ≥70%).")
-    score_components["usefulness"] = {"score": min(1.0, useful_rate / 0.85), "weight": 0.50}
+        finding = f"CONCERN: Retrieval usefulness is below target ({useful_rate:.0%}, target ≥70%)."
+    return finding, {"score": min(1.0, useful_rate / 0.85), "weight": 0.50}
 
-    # 2. Failure analysis (weight 0.20)
-    failures = retrieval_summary["failures"]
+
+def _score_failures(failures):
+    """Score failure rate (weight 0.20). Returns (findings, component)."""
+    findings = []
     if failures:
         weak_domains = {}
         for f in failures:
@@ -274,12 +274,15 @@ def _assess_quality(retrieval_summary, trends):
             weak_domains[d] = weak_domains.get(d, 0) + 1
         worst = max(weak_domains, key=weak_domains.get)
         findings.append(f"Weakest domain: {worst} ({weak_domains[worst]} misses). Consider adding/updating memories in this collection.")
-        failure_score = max(0.0, 1.0 - len(failures) / len(JUDGED_QUERIES))
+        score = max(0.0, 1.0 - len(failures) / len(JUDGED_QUERIES))
     else:
-        failure_score = 1.0
-    score_components["failure_rate"] = {"score": failure_score, "weight": 0.20}
+        score = 1.0
+    return findings, {"score": score, "weight": 0.20}
 
-    # 3. Metric trends (weight 0.20)
+
+def _score_trends(trends):
+    """Score metric trends (weight 0.20). Returns (findings, component)."""
+    findings = []
     clr = trends.get("clr", {})
     phi = trends.get("phi", {})
     if clr:
@@ -291,42 +294,74 @@ def _assess_quality(retrieval_summary, trends):
         if phi.get("trend") == "down":
             findings.append(f"Phi trending down (current={phi['current']:.3f}). Cross-collection integration may be weakening.")
 
-    trend_score = 1.0
+    score = 1.0
     if clr.get("trend") == "down":
-        trend_score -= 0.3
+        score -= 0.3
     if phi.get("trend") == "down":
-        trend_score -= 0.2
-    score_components["trends"] = {"score": max(0.0, trend_score), "weight": 0.20}
+        score -= 0.2
+    return findings, {"score": max(0.0, score), "weight": 0.20}
 
-    # 4. Speed assessment (weight 0.10) — only penalize if truly problematic
-    # QUALITY OVER SPEED: sub-10s latency is acceptable. Don't chase 1s/query
-    # if slower retrieval is materially better.
-    avg_ms = retrieval_summary["avg_speed_ms"]
+
+def _score_speed(avg_ms):
+    """Score speed (weight 0.10). Only penalize >10s. Returns (finding, component)."""
     if avg_ms > 10000:
-        findings.append(f"SPEED CONCERN: avg query latency {avg_ms}ms exceeds 10s threshold. This may cause timeouts.")
-        speed_score = max(0.0, 1.0 - (avg_ms - 10000) / 20000)
+        finding = f"SPEED CONCERN: avg query latency {avg_ms}ms exceeds 10s threshold. This may cause timeouts."
+        score = max(0.0, 1.0 - (avg_ms - 10000) / 20000)
     elif avg_ms > 5000:
-        findings.append(f"Query latency elevated ({avg_ms}ms avg) but within acceptable range. Quality is primary.")
-        speed_score = 0.8
+        finding = f"Query latency elevated ({avg_ms}ms avg) but within acceptable range. Quality is primary."
+        score = 0.8
     else:
-        speed_score = 1.0
-    score_components["speed"] = {"score": speed_score, "weight": 0.10}
+        finding = None
+        score = 1.0
+    return finding, {"score": score, "weight": 0.10}
 
-    # Composite quality score
-    total_score = sum(c["score"] * c["weight"] for c in score_components.values())
 
-    # Actionable recommendations
+def _build_recommendations(useful_rate, failures, trends):
+    """Build actionable recommendations from assessment results."""
     recommendations = []
     if useful_rate < 0.85:
-        # Identify specific missing knowledge areas
         for f in failures:
             if not f.get("top_snippets"):
                 recommendations.append(f"Add memories for: '{f['query']}' (empty results)")
             else:
                 recommendations.append(f"Improve retrieval for: '{f['query']}' (results exist but off-topic)")
 
+    clr = trends.get("clr", {})
     if clr and clr.get("current", 0) < 0.80:
         recommendations.append("CLR below 0.80 — review dimension subscores for specific weaknesses.")
+    return recommendations
+
+
+def _assess_quality(retrieval_summary, trends):
+    """Produce qualitative assessment with actionable findings.
+
+    DESIGN NOTE: We deliberately do NOT recommend chasing speed at the
+    expense of quality. A 600ms query returning useful results is fine.
+    Only flag speed if it's >10s (causing real UX or timeout problems).
+    """
+    findings = []
+    score_components = {}
+
+    useful_rate = retrieval_summary["useful_rate"]
+    finding, comp = _score_usefulness(useful_rate)
+    findings.append(finding)
+    score_components["usefulness"] = comp
+
+    fail_findings, comp = _score_failures(retrieval_summary["failures"])
+    findings.extend(fail_findings)
+    score_components["failure_rate"] = comp
+
+    trend_findings, comp = _score_trends(trends)
+    findings.extend(trend_findings)
+    score_components["trends"] = comp
+
+    speed_finding, comp = _score_speed(retrieval_summary["avg_speed_ms"])
+    if speed_finding:
+        findings.append(speed_finding)
+    score_components["speed"] = comp
+
+    total_score = sum(c["score"] * c["weight"] for c in score_components.values())
+    recommendations = _build_recommendations(useful_rate, retrieval_summary["failures"], trends)
 
     return {
         "quality_score": round(total_score, 3),
@@ -334,6 +369,55 @@ def _assess_quality(retrieval_summary, trends):
         "findings": findings,
         "recommendations": recommendations,
     }
+
+
+def _print_eval_report(probe_summary, trends, assessment):
+    """Print the evaluation report to stdout."""
+    # Findings
+    print("Findings:")
+    for f in assessment["findings"]:
+        print(f"  - {f}")
+    print()
+
+    if assessment["recommendations"]:
+        print("Recommendations:")
+        for r in assessment["recommendations"]:
+            print(f"  → {r}")
+        print()
+
+    # Per-category breakdown
+    print("Category Breakdown:")
+    for cat, data in probe_summary["categories"].items():
+        status = "OK" if data["useful_rate"] >= 0.80 else "WEAK" if data["useful_rate"] >= 0.50 else "FAIL"
+        print(f"  [{status}] {cat:15s}: {data['useful']}/{data['total']} useful, "
+              f"avg {data['avg_speed_ms']}ms")
+    print()
+
+    # Failures detail
+    if probe_summary["failures"]:
+        print("Failure Details:")
+        for f in probe_summary["failures"]:
+            print(f"  MISS: {f['query']} ({f['domain']})")
+            for i, s in enumerate(f.get("top_snippets", [])[:2]):
+                print(f"    got-{i+1}: {s[:100]}")
+        print()
+
+
+def _save_eval_result(result, assessment, probe_summary, trends):
+    """Save evaluation result to latest.json and append to history."""
+    with open(LATEST_FILE, "w") as f:
+        json.dump(result, f, indent=2)
+
+    history_entry = {
+        "timestamp": result["timestamp"],
+        "quality_score": assessment["quality_score"],
+        "useful_rate": probe_summary["useful_rate"],
+        "avg_speed_ms": probe_summary["avg_speed_ms"],
+        "clr": trends.get("clr", {}).get("current"),
+        "phi": trends.get("phi", {}).get("current"),
+        "n_failures": len(probe_summary["failures"]),
+    }
+    _append_history(history_entry)
 
 
 def run_full_eval():
@@ -370,39 +454,9 @@ def run_full_eval():
     print(f"  Quality Score: {assessment['quality_score']:.3f}")
     print()
 
-    # Findings
-    print("Findings:")
-    for f in assessment["findings"]:
-        print(f"  - {f}")
-    print()
-
-    # Recommendations
-    if assessment["recommendations"]:
-        print("Recommendations:")
-        for r in assessment["recommendations"]:
-            print(f"  → {r}")
-        print()
-
-    # Per-category breakdown
-    print("Category Breakdown:")
-    for cat, data in probe_summary["categories"].items():
-        status = "OK" if data["useful_rate"] >= 0.80 else "WEAK" if data["useful_rate"] >= 0.50 else "FAIL"
-        print(f"  [{status}] {cat:15s}: {data['useful']}/{data['total']} useful, "
-              f"avg {data['avg_speed_ms']}ms")
-    print()
-
-    # Failures detail
-    if probe_summary["failures"]:
-        print("Failure Details:")
-        for f in probe_summary["failures"]:
-            print(f"  MISS: {f['query']} ({f['domain']})")
-            for i, s in enumerate(f.get("top_snippets", [])[:2]):
-                print(f"    got-{i+1}: {s[:100]}")
-        print()
+    _print_eval_report(probe_summary, trends, assessment)
 
     elapsed = time.time() - t0
-
-    # Build result
     result = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "elapsed_s": round(elapsed, 1),
@@ -411,21 +465,7 @@ def run_full_eval():
         "assessment": assessment,
     }
 
-    # Save
-    with open(LATEST_FILE, "w") as f:
-        json.dump(result, f, indent=2)
-
-    # Append to history
-    history_entry = {
-        "timestamp": result["timestamp"],
-        "quality_score": assessment["quality_score"],
-        "useful_rate": probe_summary["useful_rate"],
-        "avg_speed_ms": probe_summary["avg_speed_ms"],
-        "clr": trends.get("clr", {}).get("current"),
-        "phi": trends.get("phi", {}).get("current"),
-        "n_failures": len(probe_summary["failures"]),
-    }
-    _append_history(history_entry)
+    _save_eval_result(result, assessment, probe_summary, trends)
 
     print(f"Evaluation complete in {elapsed:.1f}s")
     print(f"Quality Score: {assessment['quality_score']:.3f}")

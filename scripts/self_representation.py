@@ -125,6 +125,202 @@ def _save_state(state):
     HISTORY_FILE.write_text("\n".join(json.dumps(h) for h in history) + "\n")
 
 
+def _encode_competence():
+    """Compute competence dimension from recent task success rate."""
+    try:
+        from episodic_memory import EpisodicMemory
+        em = EpisodicMemory()
+        recent = em.episodes[-20:] if em.episodes else []
+        if recent:
+            successes = sum(1 for ep in recent if ep.get("outcome") == "success")
+            return successes / len(recent), f"{successes}/{len(recent)} recent success"
+        return 0.5, "no episodes (default)"
+    except Exception as e:
+        return 0.5, f"error: {e}"
+
+
+def _encode_knowledge_density():
+    """Compute knowledge density from brain stats."""
+    try:
+        from brain import brain
+        stats = brain.stats()
+        collections = stats.get("collections", {})
+        total = stats.get("total_memories", 0)
+        active_collections = sum(1 for v in collections.values() if v > 0)
+        return min(1.0, total / 1000.0), f"{total} memories across {active_collections} collections"
+    except Exception as e:
+        return 0.3, f"error: {e}"
+
+
+def _encode_procedural_fluency():
+    """Compute procedural fluency from procedure count and success rate."""
+    try:
+        proc_file = Path("/home/agent/.openclaw/workspace/data/procedural_memory.json")
+        if proc_file.exists():
+            procs = json.loads(proc_file.read_text())
+            if isinstance(procs, list) and procs:
+                total_uses = sum(p.get("use_count", 0) for p in procs)
+                total_success = sum(p.get("success_count", 0) for p in procs)
+                rate = total_success / max(1, total_uses)
+                count_score = min(1.0, len(procs) / 20.0)
+                return 0.4 * count_score + 0.6 * rate, f"{len(procs)} procedures, {rate:.0%} success"
+            return 0.2, "no procedures yet"
+        return 0.1, "no procedural memory file"
+    except Exception as e:
+        return 0.2, f"error: {e}"
+
+
+def _encode_episodic_richness():
+    """Compute episodic richness from episode count and domain diversity."""
+    try:
+        from episodic_memory import EpisodicMemory
+        em = EpisodicMemory()
+        n_episodes = len(em.episodes)
+        domains = set()
+        for ep in em.episodes[-50:]:
+            task = ep.get("task", "").lower()
+            for kw in ["memory", "code", "fix", "wire", "research", "cron", "test", "phi"]:
+                if kw in task:
+                    domains.add(kw)
+        count_score = min(1.0, n_episodes / 100.0)
+        diversity_score = min(1.0, len(domains) / 5.0)
+        return 0.5 * count_score + 0.5 * diversity_score, f"{n_episodes} episodes, {len(domains)} domains"
+    except Exception as e:
+        return 0.3, f"error: {e}"
+
+
+def _encode_integration():
+    """Compute integration dimension from Phi metric."""
+    try:
+        phi_file = Path("/home/agent/.openclaw/workspace/data/phi_history.json")
+        if phi_file.exists():
+            phi_data = json.loads(phi_file.read_text())
+            if isinstance(phi_data, list) and phi_data:
+                latest_phi = phi_data[-1].get("phi", 0.5)
+                return min(1.0, latest_phi), f"Phi={latest_phi:.3f}"
+            return 0.4, "phi history empty"
+        return 0.3, "no phi data"
+    except Exception as e:
+        return 0.3, f"error: {e}"
+
+
+def _encode_adaptability():
+    """Compute adaptability from meta-gradient adaptation trend."""
+    try:
+        adapt_file = Path("/home/agent/.openclaw/workspace/data/meta_gradient_rl/adaptation_history.jsonl")
+        if adapt_file.exists():
+            lines = [l.strip() for l in adapt_file.read_text().strip().split("\n") if l.strip()]
+            recent_adaptations = lines[-10:]
+            if recent_adaptations:
+                improvements = 0
+                for line in recent_adaptations:
+                    rec = json.loads(line)
+                    if rec.get("j_after", 0) > rec.get("j_before", 0):
+                        improvements += 1
+                return improvements / len(recent_adaptations), f"{improvements}/{len(recent_adaptations)} improving"
+            return 0.5, "no adaptation history"
+        return 0.5, "no meta-gradient data"
+    except Exception as e:
+        return 0.5, f"error: {e}"
+
+
+def _encode_prediction_accuracy():
+    """Compute prediction accuracy from calibration data."""
+    try:
+        cal_file = Path("/home/agent/.openclaw/workspace/data/calibration/predictions.jsonl")
+        if cal_file.exists():
+            lines = [l.strip() for l in cal_file.read_text().strip().split("\n") if l.strip()]
+            recent = lines[-20:]
+            correct = 0
+            total = 0
+            for line in recent:
+                try:
+                    rec = json.loads(line)
+                    if rec.get("correct") is not None:
+                        total += 1
+                        if rec["correct"]:
+                            correct += 1
+                except json.JSONDecodeError:
+                    pass
+            if total > 0:
+                return correct / total, f"{correct}/{total} correct"
+            return 0.5, "no resolved predictions"
+        return 0.5, "no calibration data"
+    except Exception as e:
+        return 0.5, f"error: {e}"
+
+
+def _encode_cognitive_load():
+    """Compute cognitive load from tasks per hour (last 3 hours)."""
+    try:
+        from episodic_memory import EpisodicMemory
+        em = EpisodicMemory()
+        now = datetime.now(timezone.utc)
+        cutoff = now - timedelta(hours=3)
+        recent_eps = [
+            ep for ep in em.episodes
+            if ep.get("timestamp") and
+            datetime.fromisoformat(ep["timestamp"].replace("Z", "+00:00")) > cutoff
+        ]
+        tasks_per_hour = len(recent_eps) / 3.0
+        return min(1.0, tasks_per_hour / 10.0), f"{tasks_per_hour:.1f} tasks/hr"
+    except Exception as e:
+        return 0.3, f"error: {e}"
+
+
+def _encode_momentum():
+    """Compute momentum from success/failure streak direction."""
+    try:
+        from episodic_memory import EpisodicMemory
+        em = EpisodicMemory()
+        last_5 = em.episodes[-5:] if em.episodes else []
+        if last_5:
+            streak = 0
+            for ep in reversed(last_5):
+                if ep.get("outcome") == "success":
+                    streak += 1
+                else:
+                    streak -= 1
+            return (streak + 5) / 10.0, f"streak={streak:+d} (last 5)"
+        return 0.5, "no episodes"
+    except Exception as e:
+        return 0.5, f"error: {e}"
+
+
+def _encode_novelty_exposure():
+    """Compute novelty exposure from unique error patterns in recent tasks."""
+    try:
+        from episodic_memory import EpisodicMemory
+        em = EpisodicMemory()
+        recent = em.episodes[-20:] if em.episodes else []
+        error_set = set()
+        task_set = set()
+        for ep in recent:
+            if ep.get("error"):
+                error_set.add(ep["error"][:50])
+            task_set.add(ep.get("task", "")[:30])
+        error_novelty = min(1.0, len(error_set) / 5.0) if error_set else 0.0
+        task_novelty = min(1.0, len(task_set) / 10.0) if task_set else 0.0
+        return 0.5 * error_novelty + 0.5 * task_novelty, f"{len(error_set)} unique errors, {len(task_set)} unique tasks"
+    except Exception as e:
+        return 0.3, f"error: {e}"
+
+
+# Dimension encoders mapped by name for encode_self_state
+_DIMENSION_ENCODERS = [
+    ("competence", _encode_competence),
+    ("knowledge_density", _encode_knowledge_density),
+    ("procedural_fluency", _encode_procedural_fluency),
+    ("episodic_richness", _encode_episodic_richness),
+    ("integration", _encode_integration),
+    ("adaptability", _encode_adaptability),
+    ("prediction_accuracy", _encode_prediction_accuracy),
+    ("cognitive_load", _encode_cognitive_load),
+    ("momentum", _encode_momentum),
+    ("novelty_exposure", _encode_novelty_exposure),
+]
+
+
 def encode_self_state():
     """
     Encode the system's current state into a latent vector z ∈ [0,1]^D.
@@ -140,214 +336,8 @@ def encode_self_state():
     details = {}
     t0 = time.monotonic()
 
-    # --- 1. Competence: recent task success rate ---
-    try:
-        from episodic_memory import EpisodicMemory
-        em = EpisodicMemory()
-        recent = em.episodes[-20:] if em.episodes else []
-        if recent:
-            successes = sum(1 for ep in recent if ep.get("outcome") == "success")
-            z["competence"] = successes / len(recent)
-            details["competence"] = f"{successes}/{len(recent)} recent success"
-        else:
-            z["competence"] = 0.5
-            details["competence"] = "no episodes (default)"
-    except Exception as e:
-        z["competence"] = 0.5
-        details["competence"] = f"error: {e}"
-
-    # --- 2. Knowledge density: memories per collection, weighted ---
-    try:
-        from brain import brain
-        stats = brain.stats()
-        collections = stats.get("collections", {})
-        total = stats.get("total_memories", 0)
-        # Normalize: 1000+ memories = 1.0, scale linearly below
-        z["knowledge_density"] = min(1.0, total / 1000.0)
-        active_collections = sum(1 for v in collections.values() if v > 0)
-        details["knowledge_density"] = f"{total} memories across {active_collections} collections"
-    except Exception as e:
-        z["knowledge_density"] = 0.3
-        details["knowledge_density"] = f"error: {e}"
-
-    # --- 3. Procedural fluency: procedures found & their success rate ---
-    try:
-        proc_file = Path("/home/agent/.openclaw/workspace/data/procedural_memory.json")
-        if proc_file.exists():
-            procs = json.loads(proc_file.read_text())
-            if isinstance(procs, list) and procs:
-                total_uses = sum(p.get("use_count", 0) for p in procs)
-                total_success = sum(p.get("success_count", 0) for p in procs)
-                rate = total_success / max(1, total_uses)
-                # Blend: procedure count (up to 20) + success rate
-                count_score = min(1.0, len(procs) / 20.0)
-                z["procedural_fluency"] = 0.4 * count_score + 0.6 * rate
-                details["procedural_fluency"] = f"{len(procs)} procedures, {rate:.0%} success"
-            else:
-                z["procedural_fluency"] = 0.2
-                details["procedural_fluency"] = "no procedures yet"
-        else:
-            z["procedural_fluency"] = 0.1
-            details["procedural_fluency"] = "no procedural memory file"
-    except Exception as e:
-        z["procedural_fluency"] = 0.2
-        details["procedural_fluency"] = f"error: {e}"
-
-    # --- 4. Episodic richness: episode count + diversity of outcomes ---
-    try:
-        from episodic_memory import EpisodicMemory
-        em = EpisodicMemory()
-        n_episodes = len(em.episodes)
-        # Count unique domains/task-types
-        domains = set()
-        for ep in em.episodes[-50:]:
-            task = ep.get("task", "").lower()
-            for kw in ["memory", "code", "fix", "wire", "research", "cron", "test", "phi"]:
-                if kw in task:
-                    domains.add(kw)
-        count_score = min(1.0, n_episodes / 100.0)
-        diversity_score = min(1.0, len(domains) / 5.0)
-        z["episodic_richness"] = 0.5 * count_score + 0.5 * diversity_score
-        details["episodic_richness"] = f"{n_episodes} episodes, {len(domains)} domains"
-    except Exception as e:
-        z["episodic_richness"] = 0.3
-        details["episodic_richness"] = f"error: {e}"
-
-    # --- 5. Integration: Phi metric if available ---
-    try:
-        phi_file = Path("/home/agent/.openclaw/workspace/data/phi_history.json")
-        if phi_file.exists():
-            phi_data = json.loads(phi_file.read_text())
-            if isinstance(phi_data, list) and phi_data:
-                latest_phi = phi_data[-1].get("phi", 0.5)
-                z["integration"] = min(1.0, latest_phi)
-                details["integration"] = f"Phi={latest_phi:.3f}"
-            else:
-                z["integration"] = 0.4
-                details["integration"] = "phi history empty"
-        else:
-            z["integration"] = 0.3
-            details["integration"] = "no phi data"
-    except Exception as e:
-        z["integration"] = 0.3
-        details["integration"] = f"error: {e}"
-
-    # --- 6. Adaptability: meta-gradient adaptation trend ---
-    try:
-        adapt_file = Path("/home/agent/.openclaw/workspace/data/meta_gradient_rl/adaptation_history.jsonl")
-        if adapt_file.exists():
-            lines = [l.strip() for l in adapt_file.read_text().strip().split("\n") if l.strip()]
-            recent_adaptations = lines[-10:]
-            if recent_adaptations:
-                improvements = 0
-                for line in recent_adaptations:
-                    rec = json.loads(line)
-                    if rec.get("j_after", 0) > rec.get("j_before", 0):
-                        improvements += 1
-                z["adaptability"] = improvements / len(recent_adaptations)
-                details["adaptability"] = f"{improvements}/{len(recent_adaptations)} improving"
-            else:
-                z["adaptability"] = 0.5
-                details["adaptability"] = "no adaptation history"
-        else:
-            z["adaptability"] = 0.5
-            details["adaptability"] = "no meta-gradient data"
-    except Exception as e:
-        z["adaptability"] = 0.5
-        details["adaptability"] = f"error: {e}"
-
-    # --- 7. Prediction accuracy: calibration quality ---
-    try:
-        cal_file = Path("/home/agent/.openclaw/workspace/data/calibration/predictions.jsonl")
-        if cal_file.exists():
-            lines = [l.strip() for l in cal_file.read_text().strip().split("\n") if l.strip()]
-            # Recent 20 predictions
-            recent = lines[-20:]
-            correct = 0
-            total = 0
-            for line in recent:
-                try:
-                    rec = json.loads(line)
-                    if rec.get("correct") is not None:
-                        total += 1
-                        if rec["correct"]:
-                            correct += 1
-                except json.JSONDecodeError:
-                    pass
-            if total > 0:
-                z["prediction_accuracy"] = correct / total
-                details["prediction_accuracy"] = f"{correct}/{total} correct"
-            else:
-                z["prediction_accuracy"] = 0.5
-                details["prediction_accuracy"] = "no resolved predictions"
-        else:
-            z["prediction_accuracy"] = 0.5
-            details["prediction_accuracy"] = "no calibration data"
-    except Exception as e:
-        z["prediction_accuracy"] = 0.5
-        details["prediction_accuracy"] = f"error: {e}"
-
-    # --- 8. Cognitive load: tasks per hour (last 3 hours) ---
-    try:
-        from episodic_memory import EpisodicMemory
-        em = EpisodicMemory()
-        now = datetime.now(timezone.utc)
-        cutoff = now - timedelta(hours=3)
-        recent_eps = [
-            ep for ep in em.episodes
-            if ep.get("timestamp") and
-            datetime.fromisoformat(ep["timestamp"].replace("Z", "+00:00")) > cutoff
-        ]
-        tasks_per_hour = len(recent_eps) / 3.0
-        # Normalize: 5 tasks/hr = 0.5 (healthy), >10 = 1.0 (overloaded)
-        z["cognitive_load"] = min(1.0, tasks_per_hour / 10.0)
-        details["cognitive_load"] = f"{tasks_per_hour:.1f} tasks/hr"
-    except Exception as e:
-        z["cognitive_load"] = 0.3
-        details["cognitive_load"] = f"error: {e}"
-
-    # --- 9. Momentum: streak direction ---
-    try:
-        from episodic_memory import EpisodicMemory
-        em = EpisodicMemory()
-        last_5 = em.episodes[-5:] if em.episodes else []
-        if last_5:
-            streak = 0
-            for ep in reversed(last_5):
-                if ep.get("outcome") == "success":
-                    streak += 1
-                else:
-                    streak -= 1
-            # Normalize: -5 to +5 → 0 to 1
-            z["momentum"] = (streak + 5) / 10.0
-            details["momentum"] = f"streak={streak:+d} (last 5)"
-        else:
-            z["momentum"] = 0.5
-            details["momentum"] = "no episodes"
-    except Exception as e:
-        z["momentum"] = 0.5
-        details["momentum"] = f"error: {e}"
-
-    # --- 10. Novelty exposure: unique error patterns in recent tasks ---
-    try:
-        from episodic_memory import EpisodicMemory
-        em = EpisodicMemory()
-        recent = em.episodes[-20:] if em.episodes else []
-        error_set = set()
-        task_set = set()
-        for ep in recent:
-            if ep.get("error"):
-                # Normalize error to first 50 chars for dedup
-                error_set.add(ep["error"][:50])
-            task_set.add(ep.get("task", "")[:30])
-        # Higher novelty = more unique errors + more unique tasks
-        error_novelty = min(1.0, len(error_set) / 5.0) if error_set else 0.0
-        task_novelty = min(1.0, len(task_set) / 10.0) if task_set else 0.0
-        z["novelty_exposure"] = 0.5 * error_novelty + 0.5 * task_novelty
-        details["novelty_exposure"] = f"{len(error_set)} unique errors, {len(task_set)} unique tasks"
-    except Exception as e:
-        z["novelty_exposure"] = 0.3
-        details["novelty_exposure"] = f"error: {e}"
+    for dim_name, encoder_fn in _DIMENSION_ENCODERS:
+        z[dim_name], details[dim_name] = encoder_fn()
 
     elapsed = round(time.monotonic() - t0, 3)
 

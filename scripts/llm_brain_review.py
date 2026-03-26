@@ -197,55 +197,57 @@ def _load_metric_snapshot():
     return snapshot
 
 
-def build_review_prompt(probe_results, det_eval, history, metrics):
-    """Build the Claude Code review prompt with all context."""
-
-    # Format probe results
-    probe_section = []
+def _format_probe_section(probe_results):
+    """Format probe results into prompt section lines."""
+    lines = []
     for i, p in enumerate(probe_results, 1):
-        probe_section.append(f"### Probe {i}: {p['query']}")
-        probe_section.append(f"Intent: {p['intent']}")
-        probe_section.append(f"Domain: {p['domain']}")
-        probe_section.append(f"Speed: {p['speed_ms']}ms | Results: {p['n_results']}")
+        lines.append(f"### Probe {i}: {p['query']}")
+        lines.append(f"Intent: {p['intent']}")
+        lines.append(f"Domain: {p['domain']}")
+        lines.append(f"Speed: {p['speed_ms']}ms | Results: {p['n_results']}")
         if p.get("error"):
-            probe_section.append(f"ERROR: {p['error']}")
+            lines.append(f"ERROR: {p['error']}")
         for j, r in enumerate(p.get("top_results", []), 1):
             dist_str = f" (dist={r['distance']})" if r.get("distance") is not None else ""
-            probe_section.append(f"  Result {j} [{r['collection']}{dist_str}]:")
-            probe_section.append(f"    {r['text'][:300]}")
-        probe_section.append("")
+            lines.append(f"  Result {j} [{r['collection']}{dist_str}]:")
+            lines.append(f"    {r['text'][:300]}")
+        lines.append("")
+    return "\n".join(lines)
 
-    # Format deterministic eval summary
-    det_section = "No deterministic evaluation available."
-    if det_eval:
-        assessment = det_eval.get("assessment", {})
-        retrieval = det_eval.get("retrieval", {})
-        det_section = (
-            f"Quality Score: {assessment.get('quality_score', '?')}\n"
-            f"Useful Rate: {retrieval.get('useful_rate', '?')}\n"
-            f"Avg Speed: {retrieval.get('avg_speed_ms', '?')}ms\n"
-            f"Failures: {retrieval.get('failures', [])}\n"
-            f"Recommendations: {assessment.get('recommendations', [])}"
+
+def _format_det_eval_section(det_eval):
+    """Format deterministic evaluation summary."""
+    if not det_eval:
+        return "No deterministic evaluation available."
+    assessment = det_eval.get("assessment", {})
+    retrieval = det_eval.get("retrieval", {})
+    return (
+        f"Quality Score: {assessment.get('quality_score', '?')}\n"
+        f"Useful Rate: {retrieval.get('useful_rate', '?')}\n"
+        f"Avg Speed: {retrieval.get('avg_speed_ms', '?')}ms\n"
+        f"Failures: {retrieval.get('failures', [])}\n"
+        f"Recommendations: {assessment.get('recommendations', [])}"
+    )
+
+
+def _format_history_section(history):
+    """Format review history for prompt."""
+    if not history:
+        return "No prior LLM reviews."
+    lines = []
+    for h in history:
+        lines.append(
+            f"  {h.get('timestamp', '?')[:10]}: "
+            f"overall={h.get('overall_score', '?')}, "
+            f"retrieval_quality={h.get('retrieval_quality', '?')}, "
+            f"usefulness={h.get('usefulness', '?')}, "
+            f"improving={h.get('improving', '?')}"
         )
+    return "\n".join(lines)
 
-    # Format history
-    history_section = "No prior LLM reviews."
-    if history:
-        history_lines = []
-        for h in history:
-            history_lines.append(
-                f"  {h.get('timestamp', '?')[:10]}: "
-                f"overall={h.get('overall_score', '?')}, "
-                f"retrieval_quality={h.get('retrieval_quality', '?')}, "
-                f"usefulness={h.get('usefulness', '?')}, "
-                f"improving={h.get('improving', '?')}"
-            )
-        history_section = "\n".join(history_lines)
 
-    # Format metrics
-    metrics_section = ", ".join(f"{k}={v}" for k, v in metrics.items()) if metrics else "No metrics available."
-
-    prompt = f"""You are reviewing the brain (memory retrieval system) quality of Clarvis, a cognitive AI agent.
+# Prompt template — kept as a constant to separate structure from data
+_REVIEW_PROMPT_TEMPLATE = """You are reviewing the brain (memory retrieval system) quality of Clarvis, a cognitive AI agent.
 
 ## Your Task
 
@@ -257,7 +259,7 @@ A 2-second query returning the right memory is worth more than a 200ms query ret
 
 ## Probe Results
 
-{chr(10).join(probe_section)}
+{probe_section}
 
 ## Deterministic Evaluation (keyword-based)
 
@@ -315,7 +317,18 @@ You MUST respond with a JSON block (```json ... ```) containing exactly these fi
 
 Be honest and specific. Vague praise is not helpful. Point out concrete weaknesses with actionable fixes.
 """
-    return prompt
+
+
+def build_review_prompt(probe_results, det_eval, history, metrics):
+    """Build the Claude Code review prompt with all context."""
+    metrics_section = ", ".join(f"{k}={v}" for k, v in metrics.items()) if metrics else "No metrics available."
+
+    return _REVIEW_PROMPT_TEMPLATE.format(
+        probe_section=_format_probe_section(probe_results),
+        det_section=_format_det_eval_section(det_eval),
+        metrics_section=metrics_section,
+        history_section=_format_history_section(history),
+    )
 
 
 def prepare():
