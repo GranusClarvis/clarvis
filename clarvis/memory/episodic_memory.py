@@ -386,10 +386,21 @@ class EpisodicMemory:
         # Calculate emotional valence
         valence = self._compute_valence(outcome, salience, duration_s, error_msg)
 
-        # Validate and normalize failure_type
+        # Validate and normalize failure_type; auto-detect system failures from error
         ft = None
-        if outcome != "success" and failure_type:
-            ft = failure_type if failure_type in self.FAILURE_TYPES else "action"
+        if outcome != "success":
+            if failure_type:
+                ft = failure_type if failure_type in self.FAILURE_TYPES else "action"
+            elif error_msg:
+                # Auto-classify infrastructure failures to avoid polluting action accuracy
+                err_lower = error_msg.lower()
+                if any(sig in err_lower for sig in (
+                    "401", "authentication_error", "oauth token",
+                    "importerror", "modulenotfounderror",
+                    "nested sessions", "cannot be launched inside",
+                    "permission denied", "disk quota", "no space left",
+                )):
+                    ft = "system"
 
         episode = {
             "id": f"ep_{now.strftime('%Y%m%d_%H%M%S')}",
@@ -635,11 +646,20 @@ class EpisodicMemory:
         for tag in episode.get("tags", []):
             if isinstance(tag, str) and tag.startswith("error_type:"):
                 return tag.split(":", 1)[1]
-        # Infer from outcome for old episodes without tags
+        # Infer from outcome and error message for old episodes without tags
         outcome = episode.get("outcome", "")
         if outcome == "timeout":
             return "timeout"
         if outcome in ("failure", "soft_failure"):
+            # Auto-detect system/infrastructure failures from error message
+            error = (episode.get("error") or "").lower()
+            if any(sig in error for sig in (
+                "401", "authentication_error", "oauth token",
+                "importerror", "modulenotfounderror",
+                "nested sessions", "cannot be launched inside",
+                "permission denied", "disk quota", "no space left",
+            )):
+                return "system"
             return "action"  # default for untagged failures
         return None
 

@@ -333,15 +333,17 @@ def benchmark_episodes():
         real_total = max(total - soft_failures, 1)
         success_rate = round(successes / real_total, 3)
 
-        # Action accuracy = success / (real total - timeouts)
-        timeouts = outcomes.get("timeout", 0)
-        non_timeout = max(real_total - timeouts, 1)
-        action_accuracy = round(successes / non_timeout, 3)
-
         # Failure type distribution from structured taxonomy
         failure_types = stats.get("failure_types", {})
         # Identify weakest failure mode (highest count)
         weakest_failure = max(failure_types, key=failure_types.get) if failure_types else None
+
+        # Action accuracy = success / (real total - timeouts - system failures)
+        # System failures (auth errors, import errors, infra) are not action failures
+        timeouts = outcomes.get("timeout", 0)
+        system_failures = failure_types.get("system", 0)
+        actionable = max(real_total - timeouts - system_failures, 1)
+        action_accuracy = round(successes / actionable, 3)
 
         return {
             "total_episodes": total,

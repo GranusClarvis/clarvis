@@ -235,6 +235,10 @@ def _verify_task_executable(task_text):
 
 _MAX_CANDIDATES = 20  # Wider scan to avoid burning a slot on one oversized cluster
 
+# Confidence gate cache — dynamic_confidence() is global (not per-task), so compute once per heartbeat.
+_confidence_gate_cache = None  # will be (tier, score) or ("DISABLED", None)
+_FORCE_LOW_CONFIDENCE = os.environ.get("CLARVIS_FORCE_LOW_CONFIDENCE", "") == "1"
+
 
 def _try_auto_split(cand_task):
     """Attempt to auto-split an oversized task into subtasks. Returns parent tag if split, else None."""
@@ -266,7 +270,7 @@ def _try_auto_split(cand_task):
 
 
 def _check_candidate_gates(cand_task, cand_section):
-    """Run gates 1-4 on a candidate. Returns (pass, defer_reason or None, autosplit_tag or None)."""
+    """Run gates 1-5 on a candidate. Returns (pass, defer_reason or None, autosplit_tag or None)."""
     # Gate 1: Cognitive load
     if should_defer_task:
         try:
@@ -307,6 +311,29 @@ def _check_candidate_gates(cand_task, cand_section):
         pass
     except Exception as e:
         log(f"Mode gate check failed (non-fatal): {e}")
+
+    # Gate 5: Confidence gate — skip LOW/UNKNOWN unless forced
+    global _confidence_gate_cache
+    if _confidence_gate_cache is None:
+        if dynamic_confidence and not _FORCE_LOW_CONFIDENCE:
+            try:
+                _dyn_score = dynamic_confidence()
+                if _dyn_score >= 0.5:
+                    _confidence_gate_cache = ("PASS", _dyn_score)
+                elif _dyn_score >= 0.3:
+                    _confidence_gate_cache = ("LOW", _dyn_score)
+                else:
+                    _confidence_gate_cache = ("UNKNOWN", _dyn_score)
+            except Exception as e:
+                log(f"Confidence gate: dynamic_confidence() failed ({e}), allowing tasks")
+                _confidence_gate_cache = ("PASS", 0.7)
+        else:
+            _confidence_gate_cache = ("PASS", None)
+
+    gate_tier, gate_score = _confidence_gate_cache
+    if gate_tier in ("LOW", "UNKNOWN"):
+        log(f"CONFIDENCE_GATE: skipping task (tier={gate_tier}, score={gate_score:.2f}): {cand_task[:60]}")
+        return False, f"confidence_gate: tier={gate_tier} score={gate_score:.2f}", None
 
     return True, None, None
 
@@ -1214,6 +1241,32 @@ def _preflight_pruning_obligations_directives(context_brief, result, next_task):
     return context_brief
 
 
+def _preflight_auth_check(result):
+    """Quick API auth validation — catches expired tokens before they become episode failures.
+
+    Returns True if auth is OK (or check is skipped), False if auth failed (result updated).
+    This prevents system/infrastructure failures from polluting action accuracy.
+    """
+    try:
+        import subprocess
+        check = subprocess.run(
+            ["/home/agent/.local/bin/claude", "--version"],
+            capture_output=True, text=True, timeout=10
+        )
+        # If claude CLI works, auth is likely fine (it validates on startup)
+        if check.returncode != 0:
+            stderr = check.stderr or ""
+            if "401" in stderr or "auth" in stderr.lower() or "token" in stderr.lower():
+                log("AUTH PRE-CHECK FAILED: API token appears expired/invalid — skipping heartbeat")
+                result["status"] = "skip"
+                result["skip_reason"] = "auth_preflight_failed"
+                return False
+        return True
+    except Exception as e:
+        log(f"Auth pre-check error (non-fatal, proceeding): {e}")
+        return True  # fail-open: don't block heartbeat on check failure
+
+
 def _make_preflight_result():
     """Create the initial result dict with default values."""
     return {
@@ -1285,6 +1338,11 @@ def run_preflight(dry_run=False):
     next_task, task_section, best_salience = sel
     if dry_run:
         result["timings"]["total"] = round(time.monotonic() - t0, 3)
+        return result
+
+    # --- Auth pre-check: abort early if API token is invalid ---
+    # Prevents "system" failures (expired OAuth) from polluting action accuracy
+    if not _preflight_auth_check(result):
         return result
 
     try:

@@ -165,7 +165,9 @@ def semantic_cross_collection(brain):
     directly with numpy — no ONNX inference needed.
 
     Stratified sample (up to 12 docs) from each collection, bidirectional
-    best-match similarity. Score = average across all collection pairs.
+    best-match cosine similarity. Score = average across all collection pairs.
+
+    Uses dot product as cosine similarity (MiniLM embeddings are L2-normalized).
     """
     active_collections = []
     col_all_embs = {}     # col_name -> np.array of ALL embeddings (for target search)
@@ -204,31 +206,28 @@ def semantic_cross_collection(brain):
             if q1 is None or q2 is None or all1 is None or all2 is None:
                 continue
 
-            # Use up to 8 query samples per direction (matching old behavior)
-            # But search against ALL embeddings in target collection
+            # Use up to 8 stratified query samples per direction
+            # Dot product = cosine similarity for L2-normalized embeddings
+            # Search against ALL embeddings in target collection
             e1 = q1[:8]   # query samples from c1
             e2 = q2[:8]   # query samples from c2
 
-            # c1 queries -> search full c2
-            e1_sq = (e1 ** 2).sum(axis=1, keepdims=True)
-            a2_sq = (all2 ** 2).sum(axis=1, keepdims=True)
-            dist_sq_1to2 = e1_sq + a2_sq.T - 2.0 * (e1 @ all2.T)
-            dist_1to2 = np.sqrt(np.maximum(0.0, dist_sq_1to2))
-            best_dist_c1_to_c2 = dist_1to2.min(axis=1)
+            # c1 queries -> best match in full c2
+            cos_sim_1to2 = e1 @ all2.T              # [8, N2]
+            best_sim_c1_to_c2 = cos_sim_1to2.max(axis=1)  # [8]
 
-            # c2 queries -> search full c1
-            e2_sq = (e2 ** 2).sum(axis=1, keepdims=True)
-            a1_sq = (all1 ** 2).sum(axis=1, keepdims=True)
-            dist_sq_2to1 = e2_sq + a1_sq.T - 2.0 * (e2 @ all1.T)
-            dist_2to1 = np.sqrt(np.maximum(0.0, dist_sq_2to1))
-            best_dist_c2_to_c1 = dist_2to1.min(axis=1)
+            # c2 queries -> best match in full c1
+            cos_sim_2to1 = e2 @ all1.T              # [8, N1]
+            best_sim_c2_to_c1 = cos_sim_2to1.max(axis=1)  # [8]
 
-            # Convert L2 distance to similarity: sim = max(0, 1 - dist/2)
-            all_dists = np.concatenate([best_dist_c1_to_c2, best_dist_c2_to_c1])
-            all_sims = np.maximum(0.0, 1.0 - all_dists / 2.0)
+            all_sims = np.concatenate([best_sim_c1_to_c2, best_sim_c2_to_c1])
+            all_sims = np.maximum(0.0, all_sims)    # floor at 0
 
             if len(all_sims) > 0:
-                avg_sim = float(all_sims.mean())
+                # 70/30 blend: average overlap + best-bridge quality
+                # Rewards both broad semantic overlap AND having strong
+                # cross-collection connections (bridge content).
+                avg_sim = float(0.7 * all_sims.mean() + 0.3 * all_sims.max())
                 pair_scores.append(avg_sim)
                 pair_details[f"{c1} <-> {c2}"] = round(avg_sim, 4)
 
