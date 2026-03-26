@@ -239,14 +239,18 @@ log = lambda msg: print(f"[{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:
 
 
 def _classify_error(exit_code, output_text):
-    """Classify error into one of 5 categories using keyword matching on output.
+    """Classify error into structured failure categories using keyword matching.
 
-    Categories:
+    Categories (checked in priority order):
       - timeout: exit code 124 or timeout-related keywords
+      - import_error: ImportError, ModuleNotFoundError, missing dependencies
+      - data_missing: missing files, empty data, broken JSON, missing config
+      - external_dep: network, API, auth, rate-limit, service failures
       - memory: ChromaDB, embedding, brain, recall failures
       - planning: task selection, queue, routing, preflight failures
-      - system: OS, network, permissions, disk, import errors
-      - action: everything else (code errors, assertion failures, etc.)
+      - logic_bug: assertion, type error, value error, index error
+      - system: OS, permissions, disk, OOM, segfault
+      - action: everything else (default)
 
     Returns: (error_type: str, evidence: str)
     """
@@ -254,6 +258,38 @@ def _classify_error(exit_code, output_text):
         return "timeout", "exit code 124"
 
     text_lower = (output_text or "")[-3000:].lower()
+
+    # Import errors (specific, check before broad system category)
+    import_kw = [
+        "importerror", "modulenotfounderror", "no module named",
+        "cannot import name", "dll load failed", "shared object",
+    ]
+    import_hits = sum(1 for kw in import_kw if kw in text_lower)
+    if import_hits >= 1:
+        return "import_error", f"{import_hits} import keywords matched"
+
+    # Data/config missing
+    data_kw = [
+        "filenotfounderror", "no such file", "file not found",
+        "json.decoder.jsondecodeerror", "empty file", "missing config",
+        "keyerror", "data not found", "not found in collection",
+        "jsondecodeerror", "yaml.scanner", "config missing",
+    ]
+    data_hits = sum(1 for kw in data_kw if kw in text_lower)
+    if data_hits >= 2:
+        return "data_missing", f"{data_hits} data-missing keywords matched"
+
+    # External dependency failures (network, APIs, auth)
+    ext_kw = [
+        "connectionerror", "connectionrefusederror", "timeout error",
+        "httperror", "401", "403", "429", "500", "502", "503",
+        "rate limit", "authentication_error", "oauth", "api error",
+        "requests.exceptions", "urllib", "ssl", "certificate",
+        "unreachable", "dns", "econnrefused", "etimeout",
+    ]
+    ext_hits = sum(1 for kw in ext_kw if kw in text_lower)
+    if ext_hits >= 2:
+        return "external_dep", f"{ext_hits} external-dep keywords matched"
 
     # Memory-related keywords
     memory_kw = [
@@ -275,18 +311,27 @@ def _classify_error(exit_code, output_text):
     if planning_hits >= 2:
         return "planning", f"{planning_hits} planning keywords matched"
 
-    # System-related keywords
+    # Logic bugs (type/value/assertion errors)
+    logic_kw = [
+        "assertionerror", "typeerror", "valueerror", "indexerror",
+        "attributeerror", "nameerror", "zerodivisionerror",
+        "recursionerror", "unboundlocalerror", "stopiteration",
+    ]
+    logic_hits = sum(1 for kw in logic_kw if kw in text_lower)
+    if logic_hits >= 1:
+        return "logic_bug", f"{logic_hits} logic-bug keywords matched"
+
+    # System-related keywords (broad catch-all for OS/infra)
     system_kw = [
-        "permission denied", "no such file", "filenotfounderror", "oserror",
-        "connectionerror", "timeout", "disk", "importerror", "modulenotfounderror",
-        "killed", "oom", "memory error", "segfault", "errno",
-        "subprocess", "command not found", "systemctl",
+        "permission denied", "oserror", "disk", "killed", "oom",
+        "memory error", "segfault", "errno", "command not found",
+        "systemctl", "subprocess.calledprocesserror",
     ]
     system_hits = sum(1 for kw in system_kw if kw in text_lower)
-    if system_hits >= 2:
+    if system_hits >= 1:
         return "system", f"{system_hits} system keywords matched"
 
-    # Default: action error (code bug, assertion, logic error)
+    # Default: action error
     return "action", "default classification"
 
 
@@ -561,6 +606,7 @@ def _build_postflight_ctx(exit_code, output_file, preflight_data, task_duration)
         "output_text": output_text,
         "task_status": task_status,
         "error_type": error_type,
+        "error_evidence": error_evidence,
         "exit_code": exit_code,
         "task_duration": task_duration,
         "preflight_data": preflight_data,
@@ -1921,6 +1967,7 @@ def _persist_completeness(ctx, timings, _pf_errors, completeness, stages_attempt
             "stages_attempted": stages_attempted, "stages_ok": stages_ok,
             "stages_failed": stages_failed, "completeness": round(completeness, 4),
             "errors": _pf_errors, "error_type": ctx["error_type"],
+            "error_evidence": ctx.get("error_evidence"),
             "total_time_s": timings["total"],
         }
         with open(completeness_file, "a") as cf:

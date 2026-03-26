@@ -363,11 +363,16 @@ class EpisodicMemory:
 
     # Valid failure types for structured categorization
     FAILURE_TYPES = {
-        "timeout":  "Task exceeded time limit (exit 124 or similar)",
-        "memory":   "ChromaDB/embedding/brain subsystem failure",
-        "planning": "Task selection, queue, routing, preflight failure",
-        "system":   "OS, network, permissions, disk, import errors",
-        "action":   "Code bug, assertion, logic error (default)",
+        "timeout":      "Task exceeded time limit (exit 124 or similar)",
+        "import_error": "ImportError/ModuleNotFoundError — missing dependency",
+        "data_missing": "Missing file, broken JSON, empty data, missing config",
+        "external_dep": "Network, API, auth, rate-limit, service failure",
+        "memory":       "ChromaDB/embedding/brain subsystem failure",
+        "planning":     "Task selection, queue, routing, preflight failure",
+        "logic_bug":    "Assertion, type, value, index, attribute error",
+        "system":       "OS, permissions, disk, OOM, segfault",
+        "action":       "General code/execution error (default)",
+        "crash":        "Infrastructure crash (instant-fail, <10s duration)",
         "partial-success": "Task partially completed but did not fully succeed",
     }
 
@@ -439,7 +444,11 @@ class EpisodicMemory:
         tags = ["episode", outcome, section]
         if episode.get("is_code_task"):
             tags.append("code_task")
+        if ft:
+            tags.append(f"failure:{ft}")
         summary = f"Episode: {task_text[:100]} -> {outcome}"
+        if ft:
+            summary += f" [{ft}]"
         if error_msg:
             summary += f" (error: {error_msg[:80]})"
 

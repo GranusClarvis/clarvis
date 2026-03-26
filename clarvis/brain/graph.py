@@ -279,8 +279,45 @@ class GraphMixin:
                     _log.warning("SQLite write failed for backfill: %s", exc)
         return backfilled
 
+    # Synonym groups for cross-collection matching: when a memory contains
+    # terms from one group, also query using terms from related groups.
+    _SYNONYM_GROUPS = [
+        {"brain", "memory", "chromadb", "vector", "embedding", "recall", "store"},
+        {"goal", "objective", "target", "milestone", "deliverable", "outcome"},
+        {"procedure", "workflow", "pipeline", "process", "routine", "recipe"},
+        {"infrastructure", "system", "server", "cron", "service", "gateway"},
+        {"learning", "insight", "lesson", "pattern", "discovery", "finding"},
+        {"episode", "task", "heartbeat", "execution", "run", "attempt"},
+        {"context", "environment", "config", "setting", "parameter"},
+        {"cost", "budget", "spending", "token", "usage", "pricing"},
+        {"performance", "latency", "speed", "benchmark", "metric"},
+        {"identity", "self", "clarvis", "agent", "persona", "role"},
+    ]
+
+    def _synonym_expand(self, text):
+        """Generate synonym-expanded query variants for better cross-collection matching."""
+        text_lower = text.lower()
+        expansions = []
+        for group in self._SYNONYM_GROUPS:
+            hits = [w for w in group if w in text_lower]
+            if hits:
+                # Add remaining synonyms as expansion terms
+                remaining = group - set(hits)
+                if remaining:
+                    expansions.extend(list(remaining)[:3])
+        if not expansions:
+            return None
+        # Return original text augmented with synonym terms
+        return text[:200] + " " + " ".join(expansions[:8])
+
     def bulk_cross_link(self, max_distance=1.5, max_links_per_memory=3, verbose=False):
-        """Scan all memories and create cross-collection edges where missing."""
+        """Scan all memories and create cross-collection edges where missing.
+
+        Uses synonym-aware matching: when a memory contains domain terms,
+        also queries with related synonyms to find bridges that pure embedding
+        distance would miss. Under-connected collections get a relaxed distance
+        threshold and more links per memory to boost bridge density.
+        """
         new_edges = 0
         memories_scanned = 0
 
@@ -290,7 +327,24 @@ class GraphMixin:
                 existing_pairs.add((e["from"], e["to"]))
                 existing_pairs.add((e["to"], e["from"]))
 
+        # Count existing cross-collection edges per collection for boost targeting
+        col_cross_counts = {}
+        for e in self.graph.get("edges", []):
+            if e.get("type") == "cross_collection":
+                src_col = e.get("source_collection", "")
+                tgt_col = e.get("target_collection", "")
+                col_cross_counts[src_col] = col_cross_counts.get(src_col, 0) + 1
+                col_cross_counts[tgt_col] = col_cross_counts.get(tgt_col, 0) + 1
+
+        # Under-connected collections get boosted parameters
+        median_count = sorted(col_cross_counts.values())[len(col_cross_counts) // 2] if col_cross_counts else 60
+        boost_threshold = median_count * 0.7  # collections below 70% of median get a boost
+
         for col_name, col in self.collections.items():
+            is_boosted = col_cross_counts.get(col_name, 0) < boost_threshold
+            col_max_distance = max_distance + 0.3 if is_boosted else max_distance
+            col_max_links = max_links_per_memory + 2 if is_boosted else max_links_per_memory
+
             results = col.get()
             ids = results.get("ids", [])
             docs = results.get("documents", [])
@@ -302,45 +356,68 @@ class GraphMixin:
                 memories_scanned += 1
                 links_added = 0
 
+                # Build query variants: original + synonym-expanded
+                queries = [doc]
+                syn_expanded = self._synonym_expand(doc)
+                if syn_expanded:
+                    queries.append(syn_expanded)
+
                 for other_col_name, other_col in self.collections.items():
                     if other_col_name == col_name:
                         continue
                     if other_col.count() == 0:
                         continue
 
-                    try:
-                        xresults = other_col.query(
-                            query_texts=[doc],
-                            n_results=1
-                        )
-                        if (xresults["ids"] and xresults["ids"][0] and
-                            xresults["distances"] and xresults["distances"][0]):
-                            target_id = xresults["ids"][0][0]
-                            dist = xresults["distances"][0][0]
+                    # Query with more results to find better matches
+                    n_query = 2 if is_boosted else 1
+                    best_matches = []
 
-                            if dist < max_distance and (mem_id, target_id) not in existing_pairs:
-                                self.add_relationship(mem_id, target_id, "cross_collection",
-                                                      source_collection=col_name, target_collection=other_col_name)
-                                existing_pairs.add((mem_id, target_id))
-                                existing_pairs.add((target_id, mem_id))
-                                new_edges += 1
-                                links_added += 1
+                    for query_text in queries:
+                        try:
+                            xresults = other_col.query(
+                                query_texts=[query_text],
+                                n_results=n_query
+                            )
+                            if xresults["ids"] and xresults["ids"][0]:
+                                for i, (tid, tdist) in enumerate(zip(
+                                        xresults["ids"][0], xresults["distances"][0])):
+                                    if tdist < col_max_distance and (mem_id, tid) not in existing_pairs:
+                                        best_matches.append((tid, tdist, other_col_name))
+                        except Exception:
+                            continue
 
-                                if verbose:
-                                    print(f"  {col_name} -> {other_col_name} (dist={dist:.3f})")
+                    # Deduplicate and sort by distance
+                    seen_targets = set()
+                    for tid, tdist, tcol in sorted(best_matches, key=lambda x: x[1]):
+                        if tid in seen_targets:
+                            continue
+                        seen_targets.add(tid)
 
-                                if links_added >= max_links_per_memory:
-                                    break
-                    except Exception:
-                        continue
+                        self.add_relationship(mem_id, tid, "cross_collection",
+                                              source_collection=col_name, target_collection=tcol)
+                        existing_pairs.add((mem_id, tid))
+                        existing_pairs.add((tid, mem_id))
+                        new_edges += 1
+                        links_added += 1
+
+                        if verbose:
+                            print(f"  {col_name} -> {tcol} (dist={tdist:.3f}{'*' if is_boosted else ''})")
+
+                        if links_added >= col_max_links:
+                            break
+
+                    if links_added >= col_max_links:
+                        break
 
             if verbose and ids:
-                print(f"  Scanned {col_name}: {len(ids)} memories")
+                boost_tag = " [BOOSTED]" if is_boosted else ""
+                print(f"  Scanned {col_name}: {len(ids)} memories{boost_tag}")
 
         return {
             "new_edges": new_edges,
             "memories_scanned": memories_scanned,
             "total_edges": len(self.graph.get("edges", [])),
+            "boosted_collections": [c for c, cnt in col_cross_counts.items() if cnt < boost_threshold],
         }
 
     def bulk_intra_link(self, max_distance=1.2, max_links_per_memory=5,
