@@ -98,6 +98,12 @@ class GraphStoreSQLite:
     def node_count(self) -> int:
         return self._conn.execute("SELECT COUNT(*) FROM nodes").fetchone()[0]
 
+    def remove_node(self, node_id: str) -> int:
+        """Remove a node by id. Returns count removed."""
+        cur = self._conn.execute("DELETE FROM nodes WHERE id = ?", (node_id,))
+        self._conn.commit()
+        return cur.rowcount
+
     # ------------------------------------------------------------------
     # Edges
     # ------------------------------------------------------------------

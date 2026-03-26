@@ -90,6 +90,103 @@ def search(query: str, n: int = 5):
             print(f"  └─ Related: {len(r['related'])} memories")
 
 
+@app.command("search-json")
+def search_json(query: str, n: int = 10):
+    """Search memories and emit structured JSON."""
+    b = _get_brain()
+    print(json.dumps(b.recall(query, n=n, include_related=True), indent=2))
+
+
+@app.command()
+def inspect(memory_id: str, collection: Optional[str] = None):
+    """Inspect one memory by id."""
+    b = _get_brain()
+    mem = b.get_memory(memory_id, collection=collection)
+    if not mem:
+        print(json.dumps({"success": False, "message": f"Memory '{memory_id}' not found"}, indent=2))
+        raise typer.Exit(1)
+    print(json.dumps(mem, indent=2))
+
+
+@app.command("list-collection")
+def list_collection(
+    collection: str,
+    limit: int = 50,
+    contains: Optional[str] = None,
+):
+    """List memories from a collection, optionally filtered by substring."""
+    b = _get_brain()
+    rows = b.get(collection, n=max(limit * 5, limit))
+    if contains:
+        needle = contains.lower()
+        rows = [r for r in rows if needle in (r.get("document", "").lower())]
+    print(json.dumps(rows[:limit], indent=2))
+
+
+@app.command()
+def revise(
+    memory_id: str,
+    new_text: str,
+    reason: str = "updated",
+    confidence: Optional[float] = None,
+    valid_until: Optional[str] = None,
+    collection: Optional[str] = None,
+):
+    """Revise a memory; old version becomes superseded."""
+    b = _get_brain()
+    print(json.dumps(
+        b.revise(memory_id, new_text, collection=collection, reason=reason, confidence=confidence, valid_until=valid_until),
+        indent=2,
+    ))
+
+
+@app.command("update-meta")
+def update_meta(
+    memory_id: str,
+    collection: Optional[str] = None,
+    confidence: Optional[float] = None,
+    valid_until: Optional[str] = None,
+    status: Optional[str] = None,
+):
+    """Patch selected metadata fields on a memory."""
+    b = _get_brain()
+    patch = {}
+    if confidence is not None:
+        patch["confidence"] = confidence
+    if valid_until is not None:
+        patch["valid_until"] = valid_until
+    if status is not None:
+        patch["status"] = status
+    if not patch:
+        print(json.dumps({"success": False, "message": "No metadata fields provided"}, indent=2))
+        raise typer.Exit(1)
+    print(json.dumps(b.update_memory(memory_id, collection=collection, metadata_patch=patch), indent=2))
+
+
+@app.command()
+def delete(
+    memory_id: str,
+    collection: Optional[str] = None,
+    reason: str = "manual",
+    hard: bool = False,
+):
+    """Delete or retire a memory. Default is safe soft-delete."""
+    b = _get_brain()
+    print(json.dumps(b.delete_memory(memory_id, collection=collection, reason=reason, hard=hard), indent=2))
+
+
+@app.command()
+def supersede(
+    keep_id: str,
+    duplicate_ids: list[str] = typer.Argument(..., help="Duplicate memory ids to supersede"),
+    collection: Optional[str] = None,
+    reason: str = "duplicate_cluster",
+):
+    """Mark duplicate memories as superseded by a canonical keeper."""
+    b = _get_brain()
+    print(json.dumps(b.supersede_duplicates(keep_id, duplicate_ids, collection=collection, reason=reason), indent=2))
+
+
 @app.command()
 def optimize():
     """Run decay and prune (quick optimization)."""

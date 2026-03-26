@@ -2,6 +2,7 @@
 """Brain store operations — memory storage, goals, context, decay, stats."""
 
 import json
+import os
 import time
 from datetime import datetime, timezone
 
@@ -218,6 +219,177 @@ class StoreMixin:
             except Exception:
                 continue
         return {"success": False, "message": f"Memory '{memory_id}' not found"}
+
+    # === MEMORY TUNING / MAINTENANCE ===
+
+    def get_memory(self, memory_id, collection=None):
+        """Fetch one memory by id with collection + metadata."""
+        cols = [collection] if collection else list(self.collections.keys())
+        for col_name in cols:
+            if col_name not in self.collections:
+                continue
+            try:
+                result = self.collections[col_name].get(ids=[memory_id])
+                if result.get("ids"):
+                    return {
+                        "id": result["ids"][0],
+                        "collection": col_name,
+                        "document": result["documents"][0] if result.get("documents") else "",
+                        "metadata": result["metadatas"][0] if result.get("metadatas") else {},
+                    }
+            except Exception:
+                continue
+        return None
+
+    def update_memory(self, memory_id, *, text=None, metadata_patch=None, collection=None):
+        """Update memory text and/or metadata in place."""
+        current = self.get_memory(memory_id, collection=collection)
+        if not current:
+            return {"success": False, "message": f"Memory '{memory_id}' not found"}
+
+        meta = dict(current.get("metadata") or {})
+        if metadata_patch:
+            meta.update(metadata_patch)
+        meta["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+        doc = current["document"] if text is None else text
+        col = self.collections[current["collection"]]
+        col.update(ids=[memory_id], documents=[doc], metadatas=[meta])
+        self._invalidate_cache(current["collection"])
+        return {
+            "success": True,
+            "memory_id": memory_id,
+            "collection": current["collection"],
+            "updated_text": text is not None,
+            "metadata_keys": sorted(metadata_patch.keys()) if metadata_patch else [],
+        }
+
+    def _record_memory_mutation(self, action, payload):
+        """Append a mutation record for auditability."""
+        try:
+            path = os.path.join(self.data_dir, "brain_mutations.jsonl")
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            entry = {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "action": action,
+                **payload,
+            }
+            with open(path, "a") as f:
+                f.write(json.dumps(entry) + "\n")
+        except Exception:
+            pass
+
+    def delete_memory(self, memory_id, collection=None, reason="manual", hard=False):
+        """Delete or soft-retire a memory.
+
+        hard=False performs a safe soft delete by setting status=deleted and
+        confidence=0.0 so recall deprioritizes/hides it for most flows.
+        hard=True removes it from Chroma and graph stores.
+        """
+        current = self.get_memory(memory_id, collection=collection)
+        if not current:
+            return {"success": False, "message": f"Memory '{memory_id}' not found"}
+
+        if not hard:
+            meta = dict(current.get("metadata") or {})
+            meta.update({
+                "status": "deleted",
+                "deleted_at": datetime.now(timezone.utc).isoformat(),
+                "deletion_reason": reason,
+                "confidence": 0.0,
+            })
+            self.collections[current["collection"]].update(
+                ids=[memory_id], metadatas=[meta]
+            )
+            self._invalidate_cache(current["collection"])
+            self._record_memory_mutation("soft_delete", {
+                "memory_id": memory_id,
+                "collection": current["collection"],
+                "reason": reason,
+                "document": current["document"][:400],
+            })
+            return {"success": True, "mode": "soft", "memory_id": memory_id, "collection": current["collection"]}
+
+        self.collections[current["collection"]].delete(ids=[memory_id])
+
+        # Remove from JSON graph
+        graph_changed = False
+        if memory_id in self.graph.get("nodes", {}):
+            del self.graph["nodes"][memory_id]
+            graph_changed = True
+        edges = self.graph.get("edges", [])
+        filtered = [e for e in edges if e.get("from") != memory_id and e.get("to") != memory_id]
+        if len(filtered) != len(edges):
+            self.graph["edges"] = filtered
+            graph_changed = True
+        if graph_changed:
+            self._save_graph()
+
+        # Remove from SQLite graph store if enabled
+        if getattr(self, "_sqlite_store", None) is not None:
+            try:
+                self._sqlite_store.remove_edges(where_sql="from_id = ? OR to_id = ?", params=(memory_id, memory_id))
+                self._sqlite_store.remove_node(memory_id)
+            except Exception:
+                pass
+
+        self._invalidate_cache(current["collection"])
+        self._record_memory_mutation("hard_delete", {
+            "memory_id": memory_id,
+            "collection": current["collection"],
+            "reason": reason,
+            "document": current["document"][:400],
+        })
+        return {"success": True, "mode": "hard", "memory_id": memory_id, "collection": current["collection"]}
+
+    def supersede_duplicates(self, keep_id, duplicate_ids, collection=None, reason="duplicate_cluster"):
+        """Mark duplicate memories as superseded by a canonical keeper."""
+        keeper = self.get_memory(keep_id, collection=collection)
+        if not keeper:
+            return {"success": False, "message": f"Keeper '{keep_id}' not found"}
+
+        updated = []
+        skipped = []
+        now_iso = datetime.now(timezone.utc).isoformat()
+        for dup_id in duplicate_ids:
+            if dup_id == keep_id:
+                continue
+            dup = self.get_memory(dup_id, collection=collection or keeper["collection"])
+            if not dup:
+                skipped.append({"id": dup_id, "reason": "not_found"})
+                continue
+            meta = dict(dup.get("metadata") or {})
+            meta.update({
+                "status": "superseded",
+                "superseded_by": keep_id,
+                "superseded_at": now_iso,
+                "revision_reason": reason,
+                "confidence": min(float(meta.get("confidence", 1.0) or 1.0), 0.2),
+            })
+            self.collections[dup["collection"]].update(ids=[dup_id], metadatas=[meta])
+            try:
+                self.add_relationship(dup_id, keep_id, "superseded_by",
+                                      source_collection=dup["collection"],
+                                      target_collection=keeper["collection"])
+            except Exception:
+                pass
+            updated.append(dup_id)
+            self._record_memory_mutation("supersede", {
+                "memory_id": dup_id,
+                "collection": dup["collection"],
+                "superseded_by": keep_id,
+                "reason": reason,
+                "document": dup["document"][:400],
+            })
+
+        self._invalidate_cache(collection or keeper["collection"])
+        return {
+            "success": True,
+            "keeper": keep_id,
+            "updated": updated,
+            "skipped": skipped,
+            "collection": keeper["collection"],
+        }
 
     # === GOAL TRACKING ===
 

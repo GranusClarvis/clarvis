@@ -198,8 +198,9 @@ def _filter_belief_revision(results: list) -> list:
     for r in results:
         meta = r.get("metadata", {})
 
-        # Skip superseded memories entirely
-        if str(meta.get("status", "")).lower() == "superseded":
+        # Skip superseded/deleted memories entirely
+        status = str(meta.get("status", "")).lower()
+        if status in {"superseded", "deleted"}:
             continue
 
         # Deprioritize low-confidence memories
