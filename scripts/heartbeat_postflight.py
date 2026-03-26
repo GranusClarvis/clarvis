@@ -370,7 +370,10 @@ def _episode_encode(task, task_section, best_salience, task_status, task_duratio
             em.encode(task, task_section, best_salience, task_status,
                      duration_s=task_duration, error_msg=error_msg,
                      failure_type=error_type)
-            log(f"Encoded episode ({task_status}, {task_duration}s{', type=' + error_type if error_type else ''})")
+            latest_ep = em.episodes[-1] if em.episodes else {}
+            causal_n = latest_ep.get("causal_links_created", 0)
+            causal_info = f", causal_links={causal_n}" if causal_n else ""
+            log(f"Encoded episode ({task_status}, {task_duration}s{', type=' + error_type if error_type else ''}{causal_info})")
         except Exception as e:
             log(f"Episodic encoding failed: {e}")
             _pf_errors.append("episodic")

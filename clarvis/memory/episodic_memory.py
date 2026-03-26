@@ -42,6 +42,7 @@ CAUSAL_RELATIONSHIPS = {
     "blocked": "A prevented B from succeeding",
     "fixed":   "B was a fix/resolution of A's failure",
     "retried": "B was a retry of the same task as A",
+    "related": "A and B share topic/collection overlap (auto-inferred)",
 }
 
 
@@ -271,12 +272,12 @@ class EpisodicMemory:
         """Retroactively detect causal links across ALL existing episodes.
 
         Walks through episodes chronologically, applying _auto_link_against()
-        for each episode against its predecessors (window of 20).
+        for each episode against its predecessors (window of 30).
         Returns count of links created.
         """
         created = 0
         for i, ep in enumerate(self.episodes):
-            window_start = max(0, i - 20)
+            window_start = max(0, i - 30)
             window = self.episodes[window_start:i]
             if not window:
                 continue
@@ -305,49 +306,86 @@ class EpisodicMemory:
             return 0.0
         return len(ka & kb) / max(1, len(ka | kb))
 
-    def _auto_link_against(self, new_episode, candidates):
+    def _auto_link_against(self, new_episode, candidates, max_links=3):
         """Heuristically detect causal links between new_episode and candidates.
 
         Uses both raw word overlap and keyword overlap (ignoring tags/short words)
         to catch relationships between diverse task descriptions.
+        Creates up to max_links links per episode (strongest relationships first).
+        Returns number of links created.
         """
         if not candidates:
-            return
+            return 0
 
         new_words = set(new_episode["task"].lower().split())
         new_section = new_episode["section"]
         new_outcome = new_episode["outcome"]
+        links_created = 0
+        linked_ids = set()
 
         for prior in reversed(candidates):
+            if links_created >= max_links:
+                break
+            prior_id = prior.get("id", "")
+            if prior_id in linked_ids:
+                continue
+
             prior_words = set(prior["task"].lower().split())
             raw_overlap = len(new_words & prior_words) / max(1, len(new_words | prior_words))
             kw_overlap = self._keyword_overlap(new_episode["task"], prior["task"])
-            # Use the higher of the two overlap measures
             overlap = max(raw_overlap, kw_overlap)
 
+            # Strong causal: retry (same section + prior failed + high overlap)
             if (overlap > 0.35
                     and prior["outcome"] in ("failure", "timeout")
                     and prior["section"] == new_section):
                 self.causal_link(prior, new_episode, "retried", confidence=round(overlap, 2))
-                break
+                linked_ids.add(prior_id)
+                links_created += 1
+                continue
 
+            # Fix: new success after prior failure with overlap
             if (new_outcome == "success"
                     and prior["outcome"] in ("failure", "timeout", "soft_failure")
                     and overlap > 0.20):
                 self.causal_link(prior, new_episode, "fixed", confidence=round(overlap, 2))
-                break
+                linked_ids.add(prior_id)
+                links_created += 1
+                continue
 
+            # Enabled: prior success enables new success
             if (prior["outcome"] == "success"
-                    and overlap > 0.15
+                    and overlap > 0.12
                     and new_outcome == "success"):
                 self.causal_link(prior, new_episode, "enabled", confidence=round(min(0.7, overlap), 2))
-                break
+                linked_ids.add(prior_id)
+                links_created += 1
+                continue
 
+            # Blocked: both failed with overlap
             if (prior["outcome"] in ("failure", "timeout")
                     and new_outcome in ("failure", "timeout")
                     and overlap > 0.20):
                 self.causal_link(prior, new_episode, "blocked", confidence=round(overlap, 2))
-                break
+                linked_ids.add(prior_id)
+                links_created += 1
+                continue
+
+            # Related: moderate topic overlap regardless of outcome (new rule)
+            if overlap > 0.15 and prior["section"] == new_section:
+                self.causal_link(prior, new_episode, "related", confidence=round(overlap, 2))
+                linked_ids.add(prior_id)
+                links_created += 1
+                continue
+
+            # Related: higher overlap across sections
+            if overlap > 0.25:
+                self.causal_link(prior, new_episode, "related", confidence=round(overlap, 2))
+                linked_ids.add(prior_id)
+                links_created += 1
+                continue
+
+        return links_created
 
     def _auto_link(self, new_episode):
         """Heuristically detect causal links between new_episode and recent episodes.
@@ -355,11 +393,14 @@ class EpisodicMemory:
         Detection rules:
         1. RETRY: same section + similar task text + prior was failure → retried
         2. FIX: new success that follows a failure with overlapping keywords → fixed
-        3. ENABLED: prior success in same section within last 10 episodes → enabled
+        3. ENABLED: prior success with topic overlap → enabled
         4. BLOCKED: prior failure in same section, new episode also fails → blocked
+        5. RELATED: moderate topic/section overlap regardless of outcome → related
+
+        Returns number of links created.
         """
-        recent = self.episodes[-20:-1]  # last 20 episodes excluding new one
-        self._auto_link_against(new_episode, recent)
+        recent = self.episodes[-30:-1]  # last 30 episodes excluding new one
+        return self._auto_link_against(new_episode, recent)
 
     # Valid failure types for structured categorization
     FAILURE_TYPES = {
@@ -432,46 +473,39 @@ class EpisodicMemory:
         self._save()
 
         # Auto-detect causal links with recent episodes
-        self._auto_link(episode)
+        causal_links_created = self._auto_link(episode)
+        episode["causal_links_created"] = causal_links_created
 
-        # Auto-tag code-related episodes for first_pass_success_rate metric
+        self._post_encode(episode, task_text, valence, ft, error_msg)
+        return episode
+
+    def _post_encode(self, episode, task_text, valence, ft, error_msg):
+        """Auto-tag, store in brain, and create somatic markers for a new episode."""
         import re
-        _code_pattern = re.compile(
-            r'code|implement|fix|create|add|write|refactor|migrate|wire|test|build',
-            re.I
-        )
-        if _code_pattern.search(task_text):
+        if re.search(r'code|implement|fix|create|add|write|refactor|migrate|wire|test|build',
+                      task_text, re.I):
             episode["is_code_task"] = True
 
-        # Store searchable version in brain
         importance = min(1.0, 0.5 + valence * 0.3)
-        tags = ["episode", outcome, section]
+        tags = ["episode", episode["outcome"], episode["section"]]
         if episode.get("is_code_task"):
             tags.append("code_task")
         if ft:
             tags.append(f"failure:{ft}")
-        summary = f"Episode: {task_text[:100]} -> {outcome}"
+        summary = f"Episode: {task_text[:100]} -> {episode['outcome']}"
         if ft:
             summary += f" [{ft}]"
         if error_msg:
             summary += f" (error: {error_msg[:80]})"
 
-        brain.store(
-            summary,
-            collection="clarvis-episodes",
-            importance=importance,
-            tags=tags,
-            source="episodic_memory"
-        )
+        brain.store(summary, collection="clarvis-episodes",
+                    importance=importance, tags=tags, source="episodic_memory")
 
-        # Create somatic markers (emotional tags for decision biasing)
         try:
             from clarvis.cognition.somatic_markers import somatic
             somatic.tag_episode(episode)
         except Exception:
-            pass  # Don't let somatic tagging break episode encoding
-
-        return episode
+            pass
 
     def get_recent(self, limit=50):
         """Return the most recent episodes (newest first), up to `limit`."""
@@ -763,70 +797,49 @@ class EpisodicMemory:
             ep["activation"] = self._compute_activation(ep)
         self._last_decay_time = now
 
-    def synthesize(self):
-        """Analyze all episodes for recurring patterns, generate goal entries.
+    # Domain keywords for synthesis classification
+    _DOMAIN_KEYWORDS = {
+        "memory_retrieval": ["retrieval", "recall", "search", "benchmark", "hit rate", "precision"],
+        "memory_system":    ["brain", "episodic", "procedural", "working_memory", "smart_recall"],
+        "automation":       ["cron", "task_selector", "scheduler", "autonomous", "cron_autonomous"],
+        "goal_tracking":    ["goal", "tracker", "progress", "goal-tracker"],
+        "consciousness":    ["consciousness", "phi", "awareness", "consciousness_metrics"],
+        "attention":        ["attention", "spotlight", "salience", "gwt"],
+        "infrastructure":   ["wire", "wiring", "import", "module", "cross-collection", "cross_link"],
+    }
 
-        Examines outcomes, action verbs, error types, and domain clusters to
-        produce actionable goal items stored in the clarvis-goals collection.
-
-        Returns a summary dict with patterns found and goals generated.
-        """
-        if not self.episodes:
-            return {"error": "No episodes to analyze", "goals_generated": []}
-
-        # 1. Count outcomes — separate real executions from soft-failure observations
+    def _synth_counts(self):
+        """Compute outcome counts, action verbs, domain outcomes, error types."""
         outcome_counts: dict = {}
+        success_actions: dict = {}
+        failure_actions: dict = {}
+        domain_outcomes: dict = {}
+        error_types: dict = {}
+
         for ep in self.episodes:
             o = ep["outcome"]
             outcome_counts[o] = outcome_counts.get(o, 0) + 1
 
-        total = len(self.episodes)
-        # Real execution outcomes exclude soft_failures (manufactured by failure_amplifier)
-        real_episodes = [ep for ep in self.episodes if ep["outcome"] != "soft_failure"]
-        real_total = len(real_episodes)
-        success_count = outcome_counts.get("success", 0)
-        success_rate = success_count / real_total if real_total else 0.0
-
-        # 2. Extract first-word action verbs (typically the imperative verb)
-        success_actions: dict = {}
-        failure_actions: dict = {}
-        for ep in self.episodes:
+            # Action verb extraction
             words = ep["task"].split()
             verb = words[0].lower().strip("[]()") if words else ""
-            if not verb:
-                continue
-            if ep["outcome"] == "success":
-                success_actions[verb] = success_actions.get(verb, 0) + 1
-            else:
-                failure_actions[verb] = failure_actions.get(verb, 0) + 1
+            if verb:
+                bucket = success_actions if o == "success" else failure_actions
+                bucket[verb] = bucket.get(verb, 0) + 1
 
-        # 3. Domain classification via keyword matching
-        DOMAIN_KEYWORDS = {
-            "memory_retrieval": ["retrieval", "recall", "search", "benchmark", "hit rate", "precision"],
-            "memory_system":    ["brain", "episodic", "procedural", "working_memory", "smart_recall"],
-            "automation":       ["cron", "task_selector", "scheduler", "autonomous", "cron_autonomous"],
-            "goal_tracking":    ["goal", "tracker", "progress", "goal-tracker"],
-            "consciousness":    ["consciousness", "phi", "awareness", "consciousness_metrics"],
-            "attention":        ["attention", "spotlight", "salience", "gwt"],
-            "infrastructure":   ["wire", "wiring", "import", "module", "cross-collection", "cross_link"],
-        }
-
-        domain_outcomes: dict = {}
-        for ep in self.episodes:
+            # Domain classification
             task_lower = ep["task"].lower()
-            matched = [d for d, kws in DOMAIN_KEYWORDS.items() if any(kw in task_lower for kw in kws)]
+            matched = [d for d, kws in self._DOMAIN_KEYWORDS.items()
+                       if any(kw in task_lower for kw in kws)]
             if not matched:
                 matched = ["general"]
             for domain in matched:
                 if domain not in domain_outcomes:
                     domain_outcomes[domain] = {"success": 0, "failure": 0, "timeout": 0, "soft_failure": 0}
-                outcome = ep["outcome"]
-                bucket = outcome if outcome in domain_outcomes[domain] else "failure"
-                domain_outcomes[domain][bucket] += 1
+                dom_bucket = o if o in domain_outcomes[domain] else "failure"
+                domain_outcomes[domain][dom_bucket] += 1
 
-        # 4. Classify error types across failures
-        error_types: dict = {}
-        for ep in self.episodes:
+            # Error classification
             if ep.get("error"):
                 err = ep["error"].lower()
                 if "importerror" in err or "modulenotfounderror" in err or "no module" in err:
@@ -838,11 +851,25 @@ class EpisodicMemory:
                 else:
                     error_types["other"] = error_types.get("other", 0) + 1
 
-        # 5. Generate goals based on findings
-        now = datetime.now(timezone.utc)
-        goals_generated: list = []
+        real_episodes = [ep for ep in self.episodes if ep["outcome"] != "soft_failure"]
+        real_total = len(real_episodes)
+        success_count = outcome_counts.get("success", 0)
+        success_rate = success_count / real_total if real_total else 0.0
 
-        # GUARDRAIL: Check existing goal count before creating new ones
+        return {
+            "outcome_counts": outcome_counts,
+            "success_actions": success_actions,
+            "failure_actions": failure_actions,
+            "domain_outcomes": domain_outcomes,
+            "error_types": error_types,
+            "real_total": real_total,
+            "success_count": success_count,
+            "success_rate": success_rate,
+        }
+
+    def _synth_goals(self, counts):
+        """Generate goals from synthesis counts. Returns (goals_generated, tasks_injected, skip_reason)."""
+        # GUARDRAIL: Check existing goal count
         try:
             existing_goals = brain.get_goals()
             existing_goal_count = len(existing_goals)
@@ -850,140 +877,137 @@ class EpisodicMemory:
         except Exception:
             existing_goal_count = 0
             existing_goal_names = set()
+            existing_goals = []
 
         if existing_goal_count >= 20:
-            # Too many goals already — skip goal creation entirely
-            return {
-                "total_episodes": total,
-                "real_episodes": real_total,
-                "success_rate": round(success_rate, 2),
-                "outcome_counts": outcome_counts,
-                "goals_generated": [],
-                "skipped_reason": f"goal_cap_reached ({existing_goal_count} goals exist)",
-            }
+            return [], [], f"goal_cap_reached ({existing_goal_count} goals exist)"
+
+        goals = self._synth_create_goals(counts, existing_goals, existing_goal_names)
+        tasks_injected = self._synth_inject_queue(goals)
+        return goals, tasks_injected, None
+
+    def _synth_create_goals(self, counts, existing_goals, existing_goal_names):
+        """Create brain goals from synthesis pattern analysis."""
+        now = datetime.now(timezone.utc)
+        goals_generated: list = []
+        domain_outcomes = counts["domain_outcomes"]
 
         # Goal: fix domains with >30% REAL failure rate
-        # Soft failures are observational notes (shallow reasoning, long duration, etc.)
-        # and should not inflate domain failure rates or trigger corrective goals.
-        for domain, counts in domain_outcomes.items():
-            d_real_total = counts.get("success", 0) + counts.get("failure", 0) + counts.get("timeout", 0)
-            d_hard_failures = counts.get("failure", 0) + counts.get("timeout", 0)
-            d_soft_failures = counts.get("soft_failure", 0)
+        for domain, dc in domain_outcomes.items():
+            d_real_total = dc.get("success", 0) + dc.get("failure", 0) + dc.get("timeout", 0)
+            d_hard_failures = dc.get("failure", 0) + dc.get("timeout", 0)
+            d_soft_failures = dc.get("soft_failure", 0)
             if d_hard_failures > 0 and d_real_total > 0:
                 fail_rate = d_hard_failures / d_real_total
                 if fail_rate > 0.3:
                     goal_name = f"Reduce {domain.replace('_', ' ')} failure rate"
-                    # GUARDRAIL: Skip if goal already exists with progress > 0
                     if goal_name.lower() in existing_goal_names:
                         matching = [g for g in existing_goals if g.get("metadata", {}).get("goal", "").lower() == goal_name.lower()]
                         if matching and matching[0].get("metadata", {}).get("progress", 0) > 0:
                             continue
                     brain.set_goal(goal_name, 0, subtasks={
-                        "source": "episodic_synthesis",
-                        "domain": domain,
-                        "fail_rate": round(fail_rate, 2),
-                        "episode_count": d_real_total,
+                        "source": "episodic_synthesis", "domain": domain,
+                        "fail_rate": round(fail_rate, 2), "episode_count": d_real_total,
                         "soft_failures_noted": d_soft_failures,
-                        "description": (
-                            f"Failure rate {fail_rate:.0%} detected in {domain.replace('_', ' ')} tasks "
-                            f"({d_hard_failures}/{d_real_total} real episodes, "
-                            f"+{d_soft_failures} soft observations). "
-                            f"Investigate and fix root causes."
-                        ),
+                        "description": (f"Failure rate {fail_rate:.0%} in {domain.replace('_', ' ')} "
+                                        f"({d_hard_failures}/{d_real_total} real, +{d_soft_failures} soft)."),
                         "generated_at": now.isoformat(),
                     })
                     goals_generated.append(goal_name)
 
-        # Goal: fix module import errors if any
+        # Goal: fix module import errors
+        error_types = counts["error_types"]
         if error_types.get("module_import", 0) > 0:
             goal_name = "Fix module import reliability"
             brain.set_goal(goal_name, 0, subtasks={
                 "source": "episodic_synthesis",
-                "description": (
-                    f"ImportError/ModuleNotFoundError appeared in {error_types['module_import']} episode(s). "
-                    "Audit sys.path, __init__.py files, and missing dependencies."
-                ),
+                "description": f"ImportError in {error_types['module_import']} episode(s).",
                 "occurrences": error_types["module_import"],
                 "generated_at": now.isoformat(),
             })
             goals_generated.append(goal_name)
 
         # Goal: strengthen dominant success domains
-        high_success_domains = {
-            d: c["success"] for d, c in domain_outcomes.items() if c.get("success", 0) >= 2
-        }
-        if high_success_domains:
-            best = max(high_success_domains, key=lambda d: high_success_domains[d])
+        high_success = {d: c["success"] for d, c in domain_outcomes.items() if c.get("success", 0) >= 2}
+        if high_success:
+            best = max(high_success, key=lambda d: high_success[d])
             goal_name = f"Deepen {best.replace('_', ' ')} capabilities"
             brain.set_goal(goal_name, 25, subtasks={
                 "source": "episodic_synthesis",
-                "description": (
-                    f"Strong track record in {best.replace('_', ' ')} "
-                    f"({high_success_domains[best]} successes). "
-                    "Continue building depth: add tests, metrics, and stress cases."
-                ),
-                "success_count": high_success_domains[best],
-                "generated_at": now.isoformat(),
+                "description": f"Strong in {best.replace('_', ' ')} ({high_success[best]} successes).",
+                "success_count": high_success[best], "generated_at": now.isoformat(),
             })
             goals_generated.append(goal_name)
 
-        # Goal: improve overall success rate if below 80% (real executions only)
+        # Goal: improve success rate if below 80%
+        success_rate, real_total = counts["success_rate"], counts["real_total"]
         if success_rate < 0.8 and real_total >= 3:
             goal_name = "Improve task success rate above 80%"
             brain.set_goal(goal_name, int(success_rate * 100), subtasks={
                 "source": "episodic_synthesis",
-                "description": (
-                    f"Current success rate is {success_rate:.0%} ({success_count}/{real_total} real episodes). "
-                    "Review failure patterns and add pre-flight checks."
-                ),
-                "current_rate": round(success_rate, 2),
-                "generated_at": now.isoformat(),
+                "description": f"Rate {success_rate:.0%} ({counts['success_count']}/{real_total}).",
+                "current_rate": round(success_rate, 2), "generated_at": now.isoformat(),
             })
             goals_generated.append(goal_name)
 
-        top_success = sorted(success_actions.items(), key=lambda x: x[1], reverse=True)[:5]
-        top_failure = sorted(failure_actions.items(), key=lambda x: x[1], reverse=True)[:5]
+        return goals_generated
 
-        # === INJECT TOP GOALS INTO QUEUE.MD ===
-        # Close the loop: episodes → patterns → goals → executable tasks
-        tasks_injected = []
-        if goals_generated:
+    @staticmethod
+    def _synth_inject_queue(goals_generated):
+        """Inject top goals into QUEUE.md as actionable tasks."""
+        if not goals_generated:
+            return []
+        try:
+            from queue_writer import add_tasks
+            actionable = [f"Investigate and fix: {g}" for g in goals_generated[:2]]
+            return add_tasks(actionable, priority="P1", source="episodic_synthesis")
+        except Exception as e:
+            import sys as _sys
+            print(f"[EPISODIC SYNTHESIZE] queue_writer injection failed: {e}", file=_sys.stderr)
             try:
-                from queue_writer import add_tasks
-                # Convert goal names to actionable task descriptions, cap at 2
-                actionable = []
-                for goal_name in goals_generated[:2]:
-                    actionable.append(f"Investigate and fix: {goal_name}")
-                injected = add_tasks(actionable, priority="P1", source="episodic_synthesis")
-                tasks_injected = injected
-            except Exception as e:
-                import sys as _sys
-                print(f"[EPISODIC SYNTHESIZE] queue_writer injection failed: {e}", file=_sys.stderr)
-                # Fallback: store goals in brain so they're at least discoverable
-                try:
-                    from brain import get_brain
-                    b = get_brain()
-                    for goal_name in goals_generated[:2]:
-                        b.store(
-                            f"[SYNTHESIS GOAL] {goal_name} — generated from episodic pattern analysis",
-                            collection="clarvis-learnings",
-                            importance=0.75,
-                            tags=["synthesis", "goal", "auto-generated"],
-                            source="episodic_synthesis"
-                        )
-                except Exception:
-                    pass
+                from brain import get_brain
+                b = get_brain()
+                for gn in goals_generated[:2]:
+                    b.store(f"[SYNTHESIS GOAL] {gn}", collection="clarvis-learnings",
+                            importance=0.75, tags=["synthesis", "goal"], source="episodic_synthesis")
+            except Exception:
+                pass
+        return []
+
+    def synthesize(self):
+        """Analyze all episodes for recurring patterns, generate goal entries.
+
+        Returns a summary dict with patterns found and goals generated.
+        """
+        if not self.episodes:
+            return {"error": "No episodes to analyze", "goals_generated": []}
+
+        counts = self._synth_counts()
+
+        goals_generated, tasks_injected, skip_reason = self._synth_goals(counts)
+        if skip_reason:
+            return {
+                "total_episodes": len(self.episodes),
+                "real_episodes": counts["real_total"],
+                "success_rate": round(counts["success_rate"], 2),
+                "outcome_counts": counts["outcome_counts"],
+                "goals_generated": [],
+                "skipped_reason": skip_reason,
+            }
+
+        top_success = sorted(counts["success_actions"].items(), key=lambda x: x[1], reverse=True)[:5]
+        top_failure = sorted(counts["failure_actions"].items(), key=lambda x: x[1], reverse=True)[:5]
 
         return {
-            "total_episodes": total,
-            "real_episodes": real_total,
-            "soft_failure_episodes": outcome_counts.get("soft_failure", 0),
-            "outcome_counts": outcome_counts,
-            "success_rate": round(success_rate, 2),
+            "total_episodes": len(self.episodes),
+            "real_episodes": counts["real_total"],
+            "soft_failure_episodes": counts["outcome_counts"].get("soft_failure", 0),
+            "outcome_counts": counts["outcome_counts"],
+            "success_rate": round(counts["success_rate"], 2),
             "top_success_actions": top_success,
             "top_failure_actions": top_failure,
-            "domain_outcomes": domain_outcomes,
-            "error_types": error_types,
+            "domain_outcomes": counts["domain_outcomes"],
+            "error_types": counts["error_types"],
             "goals_generated": goals_generated,
             "goals_count": len(goals_generated),
             "tasks_injected": tasks_injected,
@@ -994,49 +1018,40 @@ class EpisodicMemory:
 episodic = EpisodicMemory()
 
 # CLI interface
-def main():
-    if len(sys.argv) < 2:
-        print("Usage: episodic_memory.py <encode|recall|failures|stats|failure-types"
-              "|synthesize|link|causes|effects|chain|roots|causal-stats|backfill>")
-        sys.exit(1)
-
-    cmd = sys.argv[1]
-
+def _cli_basic(cmd):
+    """Handle basic CLI subcommands (encode, recall, failures, stats, failure-types)."""
     if cmd == "encode":
-        # encode <task> <section> <salience> <outcome> [duration_s] [error]
         if len(sys.argv) < 6:
             print("Usage: encode <task> <section> <salience> <outcome> [duration] [error]")
             sys.exit(1)
         ep = episodic.encode(
-            task_text=sys.argv[2],
-            section=sys.argv[3],
-            salience=sys.argv[4],
-            outcome=sys.argv[5],
+            task_text=sys.argv[2], section=sys.argv[3],
+            salience=sys.argv[4], outcome=sys.argv[5],
             duration_s=int(sys.argv[6]) if len(sys.argv) > 6 else 0,
             error_msg=sys.argv[7] if len(sys.argv) > 7 else None
         )
         print(json.dumps(ep, indent=2))
+        return True
 
-    elif cmd == "recall":
+    if cmd == "recall":
         query = sys.argv[2] if len(sys.argv) > 2 else ""
-        episodes = episodic.recall_similar(query)
-        for ep in episodes:
+        for ep in episodic.recall_similar(query):
             print(f"  [{ep['outcome']}] (act={ep['activation']:.2f}) {ep['task'][:80]}")
+        return True
 
-    elif cmd == "failures":
-        failures = episodic.recall_failures()
-        for ep in failures:
+    if cmd == "failures":
+        for ep in episodic.recall_failures():
             print(f"  (act={ep['activation']:.2f}, val={ep['valence']:.2f}) {ep['task'][:70]}")
             if ep.get("error"):
                 print(f"    Error: {ep['error'][:100]}")
+        return True
 
-    elif cmd == "stats":
-        stats = episodic.get_stats()
-        print(json.dumps(stats, indent=2))
+    if cmd == "stats":
+        print(json.dumps(episodic.get_stats(), indent=2))
+        return True
 
-    elif cmd == "failure-types":
-        stats = episodic.get_stats()
-        ft = stats.get("failure_types", {})
+    if cmd == "failure-types":
+        ft = episodic.get_stats().get("failure_types", {})
         if not ft:
             print("No failure types recorded.")
         else:
@@ -1044,67 +1059,66 @@ def main():
             total_failures = sum(ft.values())
             for ftype, count in sorted(ft.items(), key=lambda x: x[1], reverse=True):
                 pct = count / total_failures * 100
-                bar = "█" * int(pct / 5)
-                print(f"  {ftype:16s}  {count:3d}  ({pct:4.1f}%)  {bar}")
+                print(f"  {ftype:16s}  {count:3d}  ({pct:4.1f}%)  {'█' * int(pct / 5)}")
             print(f"\nTotal failures: {total_failures}")
             weakest = max(ft, key=ft.get)
             print(f"Weakest mode: {weakest} ({ft[weakest]} episodes)")
+        return True
 
-    elif cmd == "synthesize":
-        result = episodic.synthesize()
+    return False
 
-        if "error" in result:
-            print(f"Error: {result['error']}")
-            sys.exit(1)
 
-        print("=" * 60)
-        print("EPISODIC MEMORY SYNTHESIS REPORT")
-        print("=" * 60)
-        print(f"\nEpisodes analyzed : {result['total_episodes']}")
-        print("Outcome breakdown :")
-        for outcome, count in sorted(result["outcome_counts"].items()):
-            print(f"  {outcome:10s} {count}")
-        print(f"Success rate      : {result['success_rate']:.0%}")
+def _cli_synthesize():
+    """Handle the synthesize CLI subcommand with formatted output."""
+    result = episodic.synthesize()
+    if "error" in result:
+        print(f"Error: {result['error']}")
+        sys.exit(1)
 
-        print("\nTop action verbs (successes):")
-        for verb, count in result["top_success_actions"]:
+    print("=" * 60)
+    print("EPISODIC MEMORY SYNTHESIS REPORT")
+    print("=" * 60)
+    print(f"\nEpisodes analyzed : {result['total_episodes']}")
+    print("Outcome breakdown :")
+    for outcome, count in sorted(result["outcome_counts"].items()):
+        print(f"  {outcome:10s} {count}")
+    print(f"Success rate      : {result['success_rate']:.0%}")
+
+    print("\nTop action verbs (successes):")
+    for verb, count in result["top_success_actions"]:
+        print(f"  {count:2d}x  {verb}")
+
+    if result["top_failure_actions"]:
+        print("\nTop action verbs (failures):")
+        for verb, count in result["top_failure_actions"]:
             print(f"  {count:2d}x  {verb}")
 
-        if result["top_failure_actions"]:
-            print("\nTop action verbs (failures):")
-            for verb, count in result["top_failure_actions"]:
-                print(f"  {count:2d}x  {verb}")
+    print("\nDomain outcomes (real | soft):")
+    for domain, counts in sorted(result["domain_outcomes"].items()):
+        s = counts.get("success", 0)
+        f = counts.get("failure", 0) + counts.get("timeout", 0)
+        sf = counts.get("soft_failure", 0)
+        soft_note = f" +{sf}soft" if sf else ""
+        print(f"  {domain:22s}  {'█' * s + '░' * f + '·' * sf}  ({s}✓ {f}✗{soft_note})")
 
-        print("\nDomain outcomes (real | soft):")
-        for domain, counts in sorted(result["domain_outcomes"].items()):
-            s = counts.get("success", 0)
-            f = counts.get("failure", 0) + counts.get("timeout", 0)
-            sf = counts.get("soft_failure", 0)
-            bar = "█" * s + "░" * f + "·" * sf
-            soft_note = f" +{sf}soft" if sf else ""
-            print(f"  {domain:22s}  {bar}  ({s}✓ {f}✗{soft_note})")
+    if result["error_types"]:
+        print("\nError type breakdown:")
+        for etype, count in result["error_types"].items():
+            print(f"  {count:2d}x  {etype}")
 
-        if result["error_types"]:
-            print("\nError type breakdown:")
-            for etype, count in result["error_types"].items():
-                print(f"  {count:2d}x  {etype}")
+    print(f"\nGoals generated ({result['goals_count']}):")
+    if result["goals_generated"]:
+        for goal in result["goals_generated"]:
+            print(f"  → {goal}")
+    else:
+        print("  (none — all patterns already well-handled)")
+    print("\n[Full JSON]")
+    print(json.dumps(result, indent=2))
 
-        print(f"\nGoals generated ({result['goals_count']}):")
-        if result["goals_generated"]:
-            for goal in result["goals_generated"]:
-                print(f"  → {goal}")
-        else:
-            print("  (none — all patterns already well-handled)")
 
-        print("\n[Full JSON]")
-        print(json.dumps(result, indent=2))
-
-    # ------------------------------------------------------------------
-    # Causal graph CLI commands
-    # ------------------------------------------------------------------
-
-    elif cmd == "link":
-        # link <episode_a_id> <episode_b_id> <relationship> [confidence]
+def _cli_causal_link(cmd):
+    """Handle link/causes/effects CLI subcommands."""
+    if cmd == "link":
         if len(sys.argv) < 5:
             print("Usage: link <from_id> <to_id> <relationship> [confidence]")
             print(f"  relationships: {list(CAUSAL_RELATIONSHIPS.keys())}")
@@ -1116,9 +1130,9 @@ def main():
                   f"(conf={result['confidence']})")
         else:
             print("Link creation failed (invalid relationship or self-loop)")
+        return True
 
-    elif cmd == "causes":
-        # causes <episode_id> [relationship]
+    if cmd == "causes":
         if len(sys.argv) < 3:
             print("Usage: causes <episode_id> [relationship]")
             sys.exit(1)
@@ -1130,9 +1144,9 @@ def main():
             task = ep["task"][:60] if ep else "?"
             print(f"  {link['from']} --[{link['relationship']}]--> {sys.argv[2]}  "
                   f"(conf={link['confidence']})  {task}")
+        return True
 
-    elif cmd == "effects":
-        # effects <episode_id> [relationship]
+    if cmd == "effects":
         if len(sys.argv) < 3:
             print("Usage: effects <episode_id> [relationship]")
             sys.exit(1)
@@ -1144,9 +1158,14 @@ def main():
             task = ep["task"][:60] if ep else "?"
             print(f"  {sys.argv[2]} --[{link['relationship']}]--> {link['to']}  "
                   f"(conf={link['confidence']})  {task}")
+        return True
 
-    elif cmd == "chain":
-        # chain <episode_id> [backward|forward] [max_depth]
+    return False
+
+
+def _cli_causal_graph(cmd):
+    """Handle chain/roots/causal-stats/backfill CLI subcommands."""
+    if cmd == "chain":
         if len(sys.argv) < 3:
             print("Usage: chain <episode_id> [backward|forward] [max_depth]")
             sys.exit(1)
@@ -1164,9 +1183,9 @@ def main():
                 node = link["from"] if direction == "backward" else link["to"]
                 print(f"  {indent}depth={depth} [{link['relationship']}] "
                       f"{node} [{outcome}] {task}")
+        return True
 
-    elif cmd == "roots":
-        # roots <episode_id>
+    if cmd == "roots":
         if len(sys.argv) < 3:
             print("Usage: roots <episode_id>")
             sys.exit(1)
@@ -1177,21 +1196,41 @@ def main():
             print(f"Root causes of {sys.argv[2]}:")
             for ep in roots:
                 print(f"  {ep['id']} [{ep['outcome']}] {ep['task'][:70]}")
+        return True
 
-    elif cmd == "causal-stats":
-        stats = episodic.causal_graph_stats()
-        print(json.dumps(stats, indent=2, default=str))
+    if cmd == "causal-stats":
+        print(json.dumps(episodic.causal_graph_stats(), indent=2, default=str))
+        return True
 
-    elif cmd == "backfill":
-        # Retroactively detect causal links across all episodes
+    if cmd == "backfill":
         count = episodic.backfill_causal_links()
         print(f"Backfilled {count} causal links across {len(episodic.episodes)} episodes")
-        stats = episodic.causal_graph_stats()
-        print(json.dumps(stats, indent=2, default=str))
+        print(json.dumps(episodic.causal_graph_stats(), indent=2, default=str))
+        return True
 
-    else:
-        print(f"Unknown command: {cmd}")
+    return False
+
+
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: episodic_memory.py <encode|recall|failures|stats|failure-types"
+              "|synthesize|link|causes|effects|chain|roots|causal-stats|backfill>")
         sys.exit(1)
+
+    cmd = sys.argv[1]
+
+    if _cli_basic(cmd):
+        return
+    if cmd == "synthesize":
+        _cli_synthesize()
+        return
+    if _cli_causal_link(cmd):
+        return
+    if _cli_causal_graph(cmd):
+        return
+
+    print(f"Unknown command: {cmd}")
+    sys.exit(1)
 
 
 if __name__ == "__main__":

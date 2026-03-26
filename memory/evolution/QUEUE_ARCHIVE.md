@@ -1631,3 +1631,7 @@ _Last archived: 2026-03-24_
 - [x] [POSTFLIGHT_ERROR_CLASSIFIER_TESTS] Add regression tests for `_classify_error()` thresholds and precedence in `scripts/heartbeat_postflight.py` (single-hit import/data/external cases, 401/auth, timeout priority). _(2026-03-26: 16 new tests covering thresholds, precedence, edge cases; fixed 3 pre-existing test bugs)_
 - [x] [CRASH_GUARD_ATOMIC_WRITE] Make `scripts/cron_autonomous.sh` crash-guard preflight JSON rewrite atomic and add a regression check for partial-write / malformed-JSON handling. _(2026-03-26: 3 inline Python blocks use tempfile+rename atomic pattern; 9 regression tests in test_cron_autonomous_guards.py)_
 - [x] [RESEARCH_PHIID_SYNERGISTIC_WORKSPACE] (2026-03-26)
+
+## Archived 2026-03-26
+- [x] [CRON_ORCHESTRATOR_LOCKFILE_DOCS] Added header docs (pipeline, lock behavior, benchmark fallback, error interpretation, troubleshooting FAQ) and inline stage comments. (2026-03-26)
+- [x] [EPISODE_STATUS_FIELD_FIX] Fixed: `failure_type` now always defaults to `"action"` for non-success episodes in `encode()`. Backfilled 45 historical episodes. 249 tests pass. (2026-03-26)
