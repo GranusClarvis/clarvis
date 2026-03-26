@@ -274,6 +274,29 @@ DIGEST_FILE="memory/cron/digest.md"
     echo ""
 } >> "$DIGEST_FILE"
 
+# Deterministic queue completion: do NOT rely on Claude to remember to tick the box.
+if [ "$TASK_EXIT" -eq 0 ]; then
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Marking research task complete in QUEUE.md..." >> "$LOGFILE"
+    export RESEARCH_TASK
+    python3 - <<'PY' >> "$LOGFILE" 2>&1
+import os, sys
+from datetime import datetime, timezone
+sys.path.insert(0, '/home/agent/.openclaw/workspace/scripts')
+from heartbeat_postflight import _mark_task_in_queue
+from queue_writer import archive_completed
+
+queue_file = 'memory/evolution/QUEUE.md'
+archive_file = 'memory/evolution/QUEUE_ARCHIVE.md'
+research_task = os.environ.get('RESEARCH_TASK', '').strip()
+annotation = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
+
+result = _mark_task_in_queue(research_task, annotation, queue_file, archive_file)
+print(f'Queue mark result: {result}')
+archived = archive_completed()
+print(f'Queue archive moved: {archived}')
+PY
+fi
+
 # === RESEARCH POSTFLIGHT: Ensure insights are stored in brain ===
 # Uses brain.py ingest-research (single source of truth for ingestion logic).
 # Hash-based dedup prevents double-ingestion. Files get moved to ingested/ after.

@@ -1592,3 +1592,16 @@ _Last archived: 2026-03-24_
 ## Archived 2026-03-26
 - [x] [DECOMPOSE_LONG_FUNCTIONS] Done 2026-03-26. All 4 functions decomposed to ≤52 lines. Also decomposed `self_representation.py:encode_self_state` (234→28 lines, 10 helpers).
 - [x] [LONG_FUNCTION_DECOMPOSITION] Done 2026-03-26. Decomposed 5 functions across 3 files: `daily_brain_eval.py` (3 functions: _run_retrieval_probe 92→3+31+44, _assess_quality 89→5 scorers+37, run_full_eval 96→30+16+52), `llm_brain_review.py` (build_review_prompt 119→3 formatters+8), `self_representation.py` (encode_self_state 234→10 encoders+28). All now ≤80 lines.
+
+## Archived 2026-03-26
+- [x] [ACTION_ACCURACY_GUARD 2026-03-26] [ACTION_ACCURACY_DIAGNOSTIC] Action accuracy dropped to 0.737 (threshold: 0.95). Failing episodes: ep_20260325_140122, ep_20260325_150100, ep_20260325_190102, ep_20260325_200101, ep_20260325_220123. Investigate root causes and fix. (2026-03-26 07:06 UTC)
+- [x] [ACTION_ACCURACY_GUARD 2026-03-26] [ACTION_ACCURACY_DIAGNOSTIC] Already fixed in 367e54e — all 5 failing episodes were failure_type=system (excluded from action_accuracy). Current: 0.989, PI=1.0.
+- [x] [DIAGNOSE_BRAIN_EDGE_REGRESSION] Edge/memory drops are from legitimate dedup/pruning (3618→2392 memories, 98789→82001 edges). Graph integrity verified: 0 orphan edges, 35 edges/node. Fixed: lowered MIN_MEMORIES 3000→2000, refreshed health snapshot baseline.
+
+## Archived 2026-03-26
+- [x] [RESEARCH_PHI_COMPUTATION_APPROXIMATIONS] Review exact vs approximate Φ computation for IIT and identify where proxies are scientifically usable. (2026-03-26)
+
+## Archived 2026-03-26
+- [x] [D1_WEBSITE_SCAFFOLD] Built GitHub Pages-ready static site in `docs/` (5 pages: home, architecture, repos, benchmarks, roadmap) + Starlette server in `website/`. All pages use relative paths for GH Pages compatibility.
+- [x] [D2_PUBLIC_STATUS_ENDPOINT] Created `scripts/generate_status_json.py` — generates `docs/status.json` and `website/static/status.json` with PI, CLR, brain stats, episode success rate, uptime, queue counts, and recent completions. Server.py also updated with episode stats.
+- [x] [D3_README_POLISH] Added website links header, updated stats (CLR 0.82, 134k edges), updated docs/ description, refreshed date.

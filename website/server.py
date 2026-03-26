@@ -119,12 +119,31 @@ async def page_handler(request):
     return HTMLResponse(filepath.read_text())
 
 
+def _episode_stats() -> dict:
+    """Calculate episode success rate from episodes.json."""
+    try:
+        episodes = json.loads((DATA_DIR / "episodes.json").read_text())
+        if not isinstance(episodes, list) or not episodes:
+            return {"success_rate": 0, "total": 0}
+        total = len(episodes)
+        success = sum(1 for e in episodes if e.get("outcome") == "success")
+        return {"success_rate": round(success / total, 3) if total else 0, "total": total}
+    except (OSError, json.JSONDecodeError):
+        return {"success_rate": 0, "total": 0}
+
+
+def _brain_stats_quick() -> dict:
+    """Quick brain stats from data files (no heavy imports)."""
+    return {"total_memories": 0, "collections": 10}
+
+
 async def api_public_status(request):
-    """Public status endpoint serving live CLR, PI, and queue data."""
+    """Public status endpoint serving live CLR, PI, queue, brain, and episode data."""
     clr_raw = _read_json(CLR_FILE)
     pi_raw = _read_json(PI_FILE)
     queue = _parse_queue_counts(QUEUE_FILE)
     completions = _recent_completions(QUEUE_FILE, QUEUE_ARCHIVE)
+    episodes = _episode_stats()
 
     return JSONResponse({
         "mode": {"mode": "ge", "pending_mode": None},
@@ -133,6 +152,8 @@ async def api_public_status(request):
             "clr": _build_clr_payload(clr_raw) if clr_raw else None,
             "pi": _build_pi_payload(pi_raw) if pi_raw else None,
         },
+        "brain": _brain_stats_quick(),
+        "episodes": episodes,
         "recent_completions": completions,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     })

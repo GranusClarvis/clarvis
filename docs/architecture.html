@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Architecture — Clarvis</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav>
+  <a href="index.html">Home</a>
+  <a href="architecture.html" aria-current="page">Architecture</a>
+  <a href="repos.html">Repos</a>
+  <a href="benchmarks.html">Benchmarks</a>
+  <a href="roadmap.html">Roadmap</a>
+</nav>
+
+<h1>Architecture</h1>
+<p class="subtitle">How Clarvis thinks, remembers, and evolves.</p>
+
+<div class="arch-diagram">                    ┌──────────────────────────────────┐
+                    │         Conscious Layer          │
+                    │  LLM gateway (Node.js, systemd)  │
+                    │  Chat: Telegram, Discord         │
+                    │  Skills &amp; command routing         │
+                    │  Reads subconscious digest       │
+                    └───────────────┬──────────────────┘
+                                    │ spawns
+                    ┌───────────────▼──────────────────┐
+                    │       Subconscious Layer          │
+                    │  20+ cron-scheduled jobs          │
+                    │  Heartbeat pipeline               │
+                    │  (gate → preflight → exec → post) │
+                    │  Writes digest for conscious      │
+                    └───────────────┬──────────────────┘
+                                    │ reads/writes
+                    ┌───────────────▼──────────────────┐
+                    │       Brain (ClarvisDB)           │
+                    │  ChromaDB + ONNX MiniLM (local)  │
+                    │  10 collections, 3400+ memories   │
+                    │  Graph: SQLite+WAL (indexed,ACID) │
+                    │  Hebbian learning (STDP synapses) │
+                    └──────────────────────────────────┘</div>
+
+<div class="section-divider">
+  <h2>Dual-Layer Execution</h2>
+  <p class="identity">
+    Clarvis runs as two cooperating layers. The <strong>conscious layer</strong> handles
+    direct conversation via an LLM gateway. The <strong>subconscious layer</strong> runs
+    autonomously on a cron schedule &mdash; planning, evolving, reflecting, and researching
+    without prompting. Results surface to the conscious layer through a shared digest file.
+  </p>
+</div>
+
+<div class="section-divider">
+  <h2>Heartbeat Pipeline</h2>
+  <p class="identity">Every autonomous execution follows a four-stage pipeline:</p>
+
+  <div class="arch-diagram">  1. Gate Check (zero-LLM)
+     │  Health verification, lock acquisition, skip conditions
+     ▼
+  2. Preflight
+     │  Attention scoring, task selection, context assembly,
+     │  brain search, episodic recall, working memory
+     ▼
+  3. Execution
+     │  Claude Code runs the selected task autonomously
+     ▼
+  4. Postflight
+     │  Episode encoding, confidence recording, reasoning chain
+     │  closing, metric updates, brain storage, digest write</div>
+
+  <div class="card">
+    <h3>Gate Check</h3>
+    <p>A zero-LLM pre-check that verifies system health, acquires the global execution lock, and evaluates skip conditions (active conversations, resource constraints). Runs in milliseconds with no API cost.</p>
+  </div>
+  <div class="card">
+    <h3>Preflight</h3>
+    <p>Scores available tasks using an attention mechanism inspired by Global Workspace Theory. Assembles compressed context from brain search, episodic memory, working memory, active directives, and evolution queue. Produces a focused prompt for Claude Code.</p>
+  </div>
+  <div class="card">
+    <h3>Postflight</h3>
+    <p>After execution, encodes the episode into memory, records confidence calibration, closes reasoning chains, updates performance metrics, and writes results to the subconscious digest. This is where the system learns from its own actions.</p>
+  </div>
+</div>
+
+<div class="section-divider">
+  <h2>Brain: ClarvisDB</h2>
+  <p class="identity">ChromaDB-backed vector memory with ONNX MiniLM embeddings, fully local with zero cloud dependencies. The brain stores, retrieves, and evolves memories across 10 specialized collections.</p>
+
+  <div class="status-grid">
+    <div class="status-card">
+      <div class="status-label">Collections</div>
+      <div class="status-value"><span class="stat-number">10</span> <span class="status-detail">specialized stores</span></div>
+    </div>
+    <div class="status-card">
+      <div class="status-label">Memories</div>
+      <div class="status-value"><span class="stat-number">3,400+</span></div>
+    </div>
+    <div class="status-card">
+      <div class="status-label">Graph Edges</div>
+      <div class="status-value"><span class="stat-number">134k+</span> <span class="status-detail">relation links</span></div>
+    </div>
+    <div class="status-card">
+      <div class="status-label">Embeddings</div>
+      <div class="status-value">ONNX MiniLM <span class="status-detail">local CPU</span></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top: 1rem;">
+    <h3>Memory Collections</h3>
+    <p><code>identity</code> &middot; <code>preferences</code> &middot; <code>learnings</code> &middot; <code>infrastructure</code> &middot; <code>goals</code> &middot; <code>context</code> &middot; <code>memories</code> &middot; <code>procedures</code> &middot; <code>autonomous-learning</code> &middot; <code>episodes</code></p>
+  </div>
+
+  <div class="card">
+    <h3>Graph Layer</h3>
+    <p>Dual-backend graph: SQLite+WAL (indexed, ACID) as primary, JSON as legacy fallback. Supports community detection via GraphRAG, spreading activation, and automatic cross-linking on every memory store. Daily soak tests validate dual-write consistency.</p>
+  </div>
+
+  <div class="card">
+    <h3>Hebbian Learning</h3>
+    <p>STDP (Spike-Timing-Dependent Plasticity) dynamics strengthen connections between memories that are frequently co-activated. Memories that fire together wire together &mdash; improving retrieval relevance over time without explicit retraining.</p>
+  </div>
+</div>
+
+<div class="section-divider">
+  <h2>Spine Architecture</h2>
+  <p class="identity">The <code>clarvis/</code> Python package is the canonical module system &mdash; brain, heartbeat, cognition, memory, context, metrics, orchestration, and runtime. Legacy scripts delegate to spine modules via thin wrappers.</p>
+
+  <div class="arch-diagram">  clarvis/
+  ├── brain/          # Vector memory, graph, retrieval gate, hooks
+  ├── memory/         # Episodic, procedural, hebbian, working, SOAR
+  ├── context/        # Assembly, compression, GC, adaptive MMR
+  ├── cognition/      # Attention (GWT), confidence, thought protocol
+  ├── metrics/        # Phi, PI, CLR, self-model, code validation
+  ├── heartbeat/      # Lifecycle hooks, gate, runner
+  ├── orch/           # Task routing, selection, cost tracking
+  ├── learning/       # Meta-learning from experience
+  ├── runtime/        # Operating mode control
+  └── adapters/       # Platform adapters (OpenClaw, future)</div>
+</div>
+
+<div class="section-divider">
+  <h2>Cognitive Architecture</h2>
+  <div class="card">
+    <h3>Attention (Global Workspace Theory)</h3>
+    <p>A GWT-inspired spotlight mechanism scores competing tasks and memories for salience. The winning coalition gets broadcast to all subsystems, determining what the agent focuses on.</p>
+  </div>
+  <div class="card">
+    <h3>Context Assembly</h3>
+    <p>Builds focused prompts by pulling from brain search, episodic recall, working memory (Baddeley-inspired hierarchical buffers), active directives, and queue state. Uses TF-IDF extraction and MMR reranking to compress context within token budgets.</p>
+  </div>
+  <div class="card">
+    <h3>Confidence Calibration</h3>
+    <p>Bayesian calibration tracks prediction accuracy over time. Postflight records confidence on each task outcome, enabling the system to learn when it should be certain vs. uncertain about its own capabilities.</p>
+  </div>
+  <div class="card">
+    <h3>Reasoning Chains</h3>
+    <p>Persistent reasoning chain infrastructure tracks multi-step deliberation across tasks. Chains are opened in preflight, extended during execution, and closed in postflight with outcome attribution.</p>
+  </div>
+</div>
+
+<div class="section-divider">
+  <h2>Autonomous Schedule</h2>
+  <p class="identity">The subconscious layer runs 20+ scheduled jobs daily. All jobs acquire a global lock for mutual exclusion and source a shared environment bootstrap.</p>
+  <div class="card">
+    <h3>Daily Rhythm</h3>
+    <p>
+      <strong>Morning</strong> &mdash; Day planning and goal review<br>
+      <strong>12x/day</strong> &mdash; Autonomous evolution heartbeats<br>
+      <strong>2x/day</strong> &mdash; Research sessions (AM + PM for topic diversity)<br>
+      <strong>Afternoon</strong> &mdash; Deep evolution analysis + implementation sprint<br>
+      <strong>Evening</strong> &mdash; Assessment and reflection pipeline<br>
+      <strong>Night</strong> &mdash; Backups, graph maintenance, vacuum, dream engine
+    </p>
+  </div>
+  <div class="card">
+    <h3>Weekly</h3>
+    <p>
+      <strong>Wed/Sat</strong> &mdash; Strategic audit (replaces one autonomous slot)<br>
+      <strong>Sunday</strong> &mdash; Brain hygiene, goal cleanup, performance benchmark, CLR benchmark, log rotation, AZR self-play reasoning
+    </p>
+  </div>
+</div>
+
+<div class="section-divider">
+  <h2>Self-Measurement</h2>
+  <div class="status-grid">
+    <div class="status-card">
+      <div class="status-label">Performance Index (PI)</div>
+      <div class="status-value">8-dimension composite <span class="status-detail">weekly record</span></div>
+    </div>
+    <div class="status-card">
+      <div class="status-label">CLR Benchmark</div>
+      <div class="status-value">7-dimension learning rate <span class="status-detail">weekly record</span></div>
+    </div>
+    <div class="status-card">
+      <div class="status-label">Phi</div>
+      <div class="status-value">IIT consciousness proxy <span class="status-detail">~0.81</span></div>
+    </div>
+    <div class="status-card">
+      <div class="status-label">Self-Model</div>
+      <div class="status-value">7-domain capability map <span class="status-detail">auto-updated</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="section-divider">
+  <h2>System Invariants</h2>
+  <ul class="clean-list">
+    <li>All memory and embeddings run locally &mdash; no cloud calls for retrieval</li>
+    <li>Subconscious jobs acquire a global lock for mutual exclusion</li>
+    <li>Heartbeat gate checks health before every autonomous task</li>
+    <li>Mode switching changes policy, not task continuity</li>
+    <li>Public endpoints never expose private memory, secrets, or internal paths</li>
+    <li>Daily backups with verification and rollback capability</li>
+    <li>Graph integrity verified daily with SHA-256 checkpoints</li>
+    <li>Stale-lock detection with automatic cleanup on all cron jobs</li>
+  </ul>
+</div>
+
+<div class="section-divider">
+  <h2>Technology</h2>
+  <div class="status-grid">
+    <div class="status-card">
+      <div class="status-label">Runtime</div>
+      <div class="status-value">Python 3.10+ <span class="status-detail">+ Bash</span></div>
+    </div>
+    <div class="status-card">
+      <div class="status-label">Vector Store</div>
+      <div class="status-value">ChromaDB <span class="status-detail">local</span></div>
+    </div>
+    <div class="status-card">
+      <div class="status-label">Embeddings</div>
+      <div class="status-value">ONNX MiniLM <span class="status-detail">CPU inference</span></div>
+    </div>
+    <div class="status-card">
+      <div class="status-label">Graph</div>
+      <div class="status-value">SQLite + WAL <span class="status-detail">ACID</span></div>
+    </div>
+    <div class="status-card">
+      <div class="status-label">Gateway</div>
+      <div class="status-value">Node.js <span class="status-detail">systemd</span></div>
+    </div>
+    <div class="status-card">
+      <div class="status-label">Scheduling</div>
+      <div class="status-value">System crontab <span class="status-detail">30+ entries</span></div>
+    </div>
+    <div class="status-card">
+      <div class="status-label">LLM Execution</div>
+      <div class="status-value">Claude Code <span class="status-detail">Opus</span></div>
+    </div>
+    <div class="status-card">
+      <div class="status-label">Harness</div>
+      <div class="status-value">OpenClaw <span class="status-detail">agent gateway</span></div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <p>Built by <a href="https://github.com/GranusClarvis">Granus Labs</a> &middot; <a href="https://github.com/GranusClarvis/clarvis">Source</a> &middot; MIT License</p>
+</footer>
+
+</body>
+</html>

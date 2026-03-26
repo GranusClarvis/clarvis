@@ -18,20 +18,25 @@ Presentable Clarvis by 2026-03-31:
 ### March 24 audit note
 _Queue audited on 2026-03-24 evening. Removed 3 completed items (A5_A7, TEMPORAL_RETRIEVAL_FIX, BACKFILL_SENTINEL_FIX). Demoted 2 items (postflight import cleanup, semantic bridges) to P1 — functional via bridges, not release-blocking. 7 items remain on the critical path._
 
-### Milestone C — Repo / Open-Source Readiness (by 2026-03-26)
+### Milestone C — Repo / Open-Source Readiness (by 2026-03-26) ✅ COMPLETE
 
 ### Milestone D — Public Surface (by 2026-03-29)
 
 ### Milestone E — Final Validation (by 2026-03-31)
+- [ ] [E1_FULL_TEST_SUITE_PASS] Run all tests (`clarvis-db`, smoke tests, brain health) — fix any failures. Green CI.
+- [ ] [E2_OSS_READINESS_FINAL] Run `oss_readiness_check.sh` — all gates green. No secrets, no hardcoded paths leaking, LICENSE present.
+- [ ] [E3_DEMO_DRY_RUN] End-to-end demo: clone → install → brain init → store → recall → heartbeat cycle. Document in README.
 
 
 ---
 
 ## P1 — This Week
 
-- [x] [ACTION_ACCURACY_GUARD 2026-03-26] [ACTION_ACCURACY_DIAGNOSTIC] Already fixed in 367e54e — all 5 failing episodes were failure_type=system (excluded from action_accuracy). Current: 0.989, PI=1.0.
 
 ### Demoted from P0 (2026-03-24 audit)
+
+### Episode Success Rate Hardening
+- [ ] [EPISODE_CRASH_GUARD] Harden `cron_autonomous.sh` against instant-fail episodes (5 failures on 3/25 at 2-4s duration — task selection crashed before execution). Add pre-execution validation: verify selected task is non-empty, queue file parseable, graceful fallback when queue empty.
 
 ### Code Quality
 
@@ -65,4 +70,3 @@ _(Completed items archived.)_
 
 ## NEW ITEMS
 
-- [x] [DIAGNOSE_BRAIN_EDGE_REGRESSION] Edge/memory drops are from legitimate dedup/pruning (3618→2392 memories, 98789→82001 edges). Graph integrity verified: 0 orphan edges, 35 edges/node. Fixed: lowered MIN_MEMORIES 3000→2000, refreshed health snapshot baseline.

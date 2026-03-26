@@ -6,6 +6,8 @@
 
 > Autonomous evolving AI agent — dual-layer cognitive architecture with persistent memory, self-directed task execution, and continuous self-improvement.
 
+**[Website](https://granusclarvis.github.io/clarvis/)** &middot; **[Architecture](https://granusclarvis.github.io/clarvis/architecture.html)** &middot; **[Benchmarks](https://granusclarvis.github.io/clarvis/benchmarks.html)** &middot; **[Roadmap](https://granusclarvis.github.io/clarvis/roadmap.html)**
+
 Clarvis is a cognitive agent system that operates autonomously on a dedicated host. It has a **conscious layer** for direct interaction (chat) and a **subconscious layer** that works in the background — researching, planning, building, and reflecting on its own performance. All memory is local and persistent. The system continuously learns from its own execution history.
 
 ---
@@ -122,7 +124,7 @@ flowchart TB
 ## Core Components
 
 ### ClarvisDB Brain
-Hybrid vector-graph memory system. ChromaDB for semantic search + relationship graph for structured knowledge. 10 specialized collections (~2400 memories, ~74k graph edges), ONNX MiniLM embeddings, fully local. No external API calls.
+Hybrid vector-graph memory system. ChromaDB for semantic search + relationship graph for structured knowledge. 10 specialized collections (~2400 memories, ~134k graph edges), ONNX MiniLM embeddings, fully local. No external API calls.
 
 ### Heartbeat Pipeline
 The core action cycle: **gate** (should we wake?) → **preflight** (score attention, select task, build context) → **execute** (code agent runs the task) → **postflight** (encode episode, update metrics, store learnings).
@@ -163,7 +165,7 @@ scripts/                     # Operational scripts (~140 Python/Bash: cron, hear
 packages/                    # Installable packages (clarvis-db, clarvis-cost, clarvis-reasoning)
 tests/                       # Smoke, integration, and unit tests
 website/                     # Public website (Starlette server + static HTML)
-docs/                        # Architecture, runbook, gap audit
+docs/                        # Public website (GitHub Pages) + architecture docs
 ```
 
 ---
@@ -233,7 +235,7 @@ Clarvis is in **Phase 3 — Autonomy Expansion**, targeting open-source readines
 
 | Area | Status | Notes |
 |------|--------|-------|
-| Brain (ClarvisDB) | Stable | 10 collections, ~2400 memories, weekly CLR benchmark scoring ~0.79 |
+| Brain (ClarvisDB) | Stable | 10 collections, ~2400 memories, weekly CLR benchmark scoring ~0.82 |
 | Heartbeat Pipeline | Stable | 12x/day autonomous execution via cron |
 | Agent Orchestrator | Active | Multi-project delegation with isolated workspaces |
 | Self-Model & Metrics | Stable | 8-dimension performance index, trajectory evaluation |
@@ -295,4 +297,4 @@ MIT — see [pyproject.toml](pyproject.toml) for details.
 
 ---
 
-*Last updated: 2026-03-23*
+*Last updated: 2026-03-26*

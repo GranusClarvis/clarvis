@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Repos &amp; Boundaries — Clarvis</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav>
+  <a href="index.html">Home</a>
+  <a href="architecture.html">Architecture</a>
+  <a href="repos.html" aria-current="page">Repos</a>
+  <a href="benchmarks.html">Benchmarks</a>
+  <a href="roadmap.html">Roadmap</a>
+</nav>
+
+<h1>Repositories</h1>
+<p class="subtitle">Clarvis is split into two repositories with clearly defined boundaries.</p>
+
+<div class="repo-card">
+  <div class="repo-header">
+    <span class="repo-name">clarvis</span>
+    <span class="badge badge-stabilizing">stabilizing</span>
+  </div>
+  <p class="repo-desc">Autonomous cognitive agent runtime &mdash; spine, heartbeat, CLI, metrics, orchestration, and cron infrastructure.</p>
+  <dl class="repo-details">
+    <dt>GitHub</dt>
+    <dd><a href="https://github.com/GranusClarvis/clarvis">github.com/GranusClarvis/clarvis</a></dd>
+    <dt>Contains</dt>
+    <dd><code>clarvis/</code> spine (brain, heartbeat, cognition, context, metrics, runtime, orchestration), operational scripts, tests, skills, architecture docs, identity docs</dd>
+    <dt>Language</dt>
+    <dd>Python 3.10+</dd>
+    <dt>License</dt>
+    <dd>MIT</dd>
+  </dl>
+</div>
+
+<div class="repo-card">
+  <div class="repo-header">
+    <span class="repo-name">clarvis-db</span>
+    <span class="badge badge-stabilizing">stabilizing</span>
+  </div>
+  <p class="repo-desc">Standalone vector memory package &mdash; ChromaDB with Hebbian learning, STDP synapses, and graph relations. Independently useful for any agent system that needs associative memory with biological learning dynamics.</p>
+  <dl class="repo-details">
+    <dt>GitHub</dt>
+    <dd><a href="https://github.com/GranusClarvis/clarvis-db">github.com/GranusClarvis/clarvis-db</a></dd>
+    <dt>Contains</dt>
+    <dd><code>clarvis_db/</code> core library, tests, documented API boundary</dd>
+    <dt>Language</dt>
+    <dd>Python 3.10+</dd>
+    <dt>License</dt>
+    <dd>MIT</dd>
+    <dt>API Surface</dt>
+    <dd><code>remember()</code>, <code>search()</code>, <code>capture()</code>, retrieval evaluation, retrieval feedback, retrieval tracing</dd>
+  </dl>
+</div>
+
+<div class="boundary-section">
+  <h2>Extraction Status</h2>
+  <p><code>clarvis-db</code> is being extracted from the main repository into a standalone package. The API boundary is documented and stable. Remaining work: CI pipeline, credential scrub, and public README.</p>
+  <table>
+    <thead><tr><th>Package</th><th>Status</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td><code>clarvis</code></td><td><span class="badge badge-stabilizing">stabilizing</span></td><td>Open-source prep in progress</td></tr>
+      <tr><td><code>clarvis-db</code></td><td><span class="badge badge-stabilizing">stabilizing</span></td><td>API boundary stable, extraction pending</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="boundary-section">
+  <h2>Anti-Sprawl Policy</h2>
+  <p>New packages or repos are only created when all of the following are true:</p>
+  <ul class="policy-list">
+    <li>At least 2 independent consumers exist</li>
+    <li>Clean, documented API boundary stable for 14+ days</li>
+    <li>Meaningful test coverage (behavior, not just imports)</li>
+    <li>Independent release cadence from the main repo</li>
+    <li>Substantial logic &mdash; not a re-export wrapper</li>
+  </ul>
+</div>
+
+<footer>
+  <p>Built by <a href="https://github.com/GranusClarvis">Granus Labs</a> &middot; <a href="https://github.com/GranusClarvis/clarvis">Source</a> &middot; MIT License</p>
+</footer>
+
+</body>
+</html>
