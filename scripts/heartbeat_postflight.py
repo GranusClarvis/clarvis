@@ -291,46 +291,12 @@ def _classify_error(exit_code, output_text):
 
 
 def _mark_task_in_queue(task_text, annotation, queue_file, archive_file=None):
-    """Mark a task as [x] in a QUEUE.md file with an annotation.
-
-    Returns: 'marked' if found and marked, 'archived' if already in archive, False if not found.
-
-    Matching strategy:
-    1) Prefer exact tag match when task_text contains [TAG]
-    2) Fallback to prefix substring match (legacy)
-    """
-    with open(queue_file, 'r') as f:
-        lines = f.readlines()
-
-    task_prefix = task_text[:60]
-    m = re.match(r"\[([^\]]+)\]", task_text.strip())
-    tag = m.group(1) if m else None
-
-    # Strategy A: tag-based match (robust against description drift)
-    if tag:
-        tag_re = re.compile(rf"^\- \[ \] \[{re.escape(tag)}\](?=\s|$)")
-        for i, line in enumerate(lines):
-            if tag_re.search(line):
-                lines[i] = line.replace("- [ ] ", "- [x] ", 1).rstrip() + f" ({annotation})\n"
-                with open(queue_file, 'w') as f:
-                    f.writelines(lines)
-                return "marked"
-
-    # Strategy B: legacy prefix substring match
-    for i, line in enumerate(lines):
-        if line.strip().startswith("- [ ] ") and task_prefix in line:
-            lines[i] = line.replace("- [ ] ", "- [x] ", 1).rstrip() + f" ({annotation})\n"
-            with open(queue_file, 'w') as f:
-                f.writelines(lines)
-            return "marked"
-
-    # Check if already archived (race: preflight archived before postflight ran)
-    if archive_file and os.path.exists(archive_file):
-        with open(archive_file, 'r') as f:
-            archive = f.read()
-        if task_prefix in archive:
-            return "archived"
-    return False
+    """Back-compat shim; use queue_writer.mark_task_complete as canonical path."""
+    try:
+        from queue_writer import mark_task_complete
+        return mark_task_complete(task_text, annotation, queue_file=queue_file, archive_file=archive_file)
+    except Exception:
+        return False
 
 
 def _compute_completeness(timings, pf_errors):
@@ -684,34 +650,25 @@ def _pf_attention_hooks_procedural(ctx, _pf_errors):
     return timings
 
 
-def _pf_prompt_predict_cognitive(ctx, _pf_errors):
-    """§5.05 Prompt opt, §5.1 Prediction resolve, §5.5-5.95 Cognitive subsystems."""
-    timings = {}
-    task = ctx["task"]
-    task_status = ctx["task_status"]
-    exit_code = ctx["exit_code"]
-    output_text = ctx["output_text"]
+def _pf_prompt_optimization(ctx):
+    """§5.05 Prompt optimization outcome recording."""
     preflight_data = ctx["preflight_data"]
-    task_duration = ctx["task_duration"]
-    route_executor = ctx["route_executor"]
-
-    # §5.05 Prompt optimization
-    t505 = time.monotonic()
     variant_id = preflight_data.get("prompt_variant_id", "")
     variant_task_type = preflight_data.get("prompt_variant_task_type", "")
     if po_record_outcome and variant_id:
         try:
-            quality_score = _compute_prompt_quality(task_status, output_text, task_duration)
-            po_record_outcome(variant_id, variant_task_type, task_status,
-                              task_duration, task, quality_score=quality_score)
-            log(f"Prompt optimization: recorded {task_status} q={quality_score} for variant {variant_id[:50]}")
+            quality_score = _compute_prompt_quality(ctx["task_status"], ctx["output_text"], ctx["task_duration"])
+            po_record_outcome(variant_id, variant_task_type, ctx["task_status"],
+                              ctx["task_duration"], ctx["task"], quality_score=quality_score)
+            log(f"Prompt optimization: recorded {ctx['task_status']} q={quality_score} for variant {variant_id[:50]}")
         except Exception as e:
             log(f"Prompt optimization recording failed (non-fatal): {e}")
-    timings["prompt_optimization"] = round(time.monotonic() - t505, 3)
 
-    # §5.1 Prediction auto-resolver
-    t51 = time.monotonic()
-    actual = "success" if exit_code == 0 else "failure"
+
+def _pf_prediction_resolve(ctx):
+    """§5.1 Prediction auto-resolver."""
+    task = ctx["task"]
+    actual = "success" if ctx["exit_code"] == 0 else "failure"
     if pred_resolve_enhanced:
         try:
             ar = pred_resolve_enhanced(task, actual)
@@ -739,7 +696,13 @@ def _pf_prompt_predict_cognitive(ctx, _pf_errors):
                 log(f"Prediction auto-resolve: no matches, remaining={ar['remaining_open']}")
         except Exception as e:
             log(f"Prediction auto-resolve failed: {e}")
-    timings["prediction_auto_resolve"] = round(time.monotonic() - t51, 3)
+
+
+def _pf_world_model_and_metagradient(ctx, _pf_errors):
+    """§5.5 World model + §5.6 Meta-gradient RL."""
+    timings = {}
+    task = ctx["task"]
+    task_status = ctx["task_status"]
 
     # §5.5 World model
     t55 = time.monotonic()
@@ -768,6 +731,18 @@ def _pf_prompt_predict_cognitive(ctx, _pf_errors):
             log(f"Meta-gradient adaptation failed: {e}")
     timings["meta_gradient_rl"] = round(time.monotonic() - t56, 3)
 
+    return timings
+
+
+def _pf_self_awareness(ctx):
+    """§5.7 Self-representation + §5.75 Meta-thought."""
+    timings = {}
+    task = ctx["task"]
+    task_status = ctx["task_status"]
+    exit_code = ctx["exit_code"]
+    task_duration = ctx["task_duration"]
+    route_executor = ctx["route_executor"]
+
     # §5.7 Self-representation
     t57 = time.monotonic()
     if self_rep_update:
@@ -794,6 +769,17 @@ def _pf_prompt_predict_cognitive(ctx, _pf_errors):
         except Exception as e:
             log(f"Meta-thought generation failed: {e}")
     timings["meta_thought"] = round(time.monotonic() - t575, 3)
+
+    return timings
+
+
+def _pf_goal_engines(ctx):
+    """§5.8 SOAR engine, §5.9 AtomSpace, §5.95 GWT workspace."""
+    timings = {}
+    task = ctx["task"]
+    task_status = ctx["task_status"]
+    exit_code = ctx["exit_code"]
+    task_duration = ctx["task_duration"]
 
     # §5.8 SOAR engine
     t58 = time.monotonic()
@@ -847,6 +833,32 @@ def _pf_prompt_predict_cognitive(ctx, _pf_errors):
         except Exception as e:
             log(f"GWT outcome submission failed: {e}")
     timings["gwt_outcome"] = round(time.monotonic() - t595, 3)
+
+    return timings
+
+
+def _pf_prompt_predict_cognitive(ctx, _pf_errors):
+    """§5.05 Prompt opt, §5.1 Prediction resolve, §5.5-5.95 Cognitive subsystems."""
+    timings = {}
+
+    # §5.05 Prompt optimization
+    t505 = time.monotonic()
+    _pf_prompt_optimization(ctx)
+    timings["prompt_optimization"] = round(time.monotonic() - t505, 3)
+
+    # §5.1 Prediction auto-resolver
+    t51 = time.monotonic()
+    _pf_prediction_resolve(ctx)
+    timings["prediction_auto_resolve"] = round(time.monotonic() - t51, 3)
+
+    # §5.5-5.6 World model + Meta-gradient
+    timings.update(_pf_world_model_and_metagradient(ctx, _pf_errors))
+
+    # §5.7-5.75 Self-awareness
+    timings.update(_pf_self_awareness(ctx))
+
+    # §5.8-5.95 Goal engines (SOAR, AtomSpace, GWT)
+    timings.update(_pf_goal_engines(ctx))
 
     return timings
 
@@ -1773,39 +1785,46 @@ def _pf_evolution_synthesis(ctx, _pf_errors):
     return timings
 
 
+def _pf_queue_update(ctx, _pf_errors):
+    """§10 Queue update — mark task complete or handle timeout retry."""
+    task = ctx["task"]
+    exit_code = ctx["exit_code"]
+    preflight_data = ctx["preflight_data"]
+
+    if not task or task == "unknown":
+        return
+    try:
+        if exit_code == 0:
+            timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+            task_for_marking = task
+            try:
+                if isinstance(preflight_data, dict) and preflight_data.get("task_tag"):
+                    task_for_marking = f"[{preflight_data['task_tag']}]"
+            except Exception:
+                pass
+            result_mark = _mark_task_in_queue(task_for_marking, timestamp, ctx["QUEUE_FILE"], ctx["QUEUE_ARCHIVE"])
+            if result_mark == "marked":
+                log("Marked task complete in QUEUE.md")
+            elif result_mark == "archived":
+                log(f"Task already in QUEUE_ARCHIVE.md: {task[:60]}")
+            else:
+                log(f"Task not found in QUEUE.md for completion: {task[:60]}...")
+        elif exit_code == 124:
+            _handle_timeout_retry(task, ctx["RETRY_FILE"], ctx["QUEUE_FILE"], ctx["QUEUE_ARCHIVE"])
+    except Exception as e:
+        log(f"Queue completion marking failed: {e}")
+        _pf_errors.append("queue_update")
+
+
 def _pf_finalize(ctx, _pf_errors):
     """§10-13: Queue update, attention save, queue hygiene, cognitive workspace, obligations, directives."""
     timings = {}
     task = ctx["task"]
     task_status = ctx["task_status"]
-    exit_code = ctx["exit_code"]
-    task_duration = ctx["task_duration"]
-    preflight_data = ctx["preflight_data"]
 
     # §10 Queue update
     t10 = time.monotonic()
-    if task and task != "unknown":
-        try:
-            if exit_code == 0:
-                timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-                task_for_marking = task
-                try:
-                    if isinstance(preflight_data, dict) and preflight_data.get("task_tag"):
-                        task_for_marking = f"[{preflight_data['task_tag']}]"
-                except Exception:
-                    pass
-                result_mark = _mark_task_in_queue(task_for_marking, timestamp, ctx["QUEUE_FILE"], ctx["QUEUE_ARCHIVE"])
-                if result_mark == "marked":
-                    log("Marked task complete in QUEUE.md")
-                elif result_mark == "archived":
-                    log(f"Task already in QUEUE_ARCHIVE.md: {task[:60]}")
-                else:
-                    log(f"Task not found in QUEUE.md for completion: {task[:60]}...")
-            elif exit_code == 124:
-                _handle_timeout_retry(task, ctx["RETRY_FILE"], ctx["QUEUE_FILE"], ctx["QUEUE_ARCHIVE"])
-        except Exception as e:
-            log(f"Queue completion marking failed: {e}")
-            _pf_errors.append("queue_update")
+    _pf_queue_update(ctx, _pf_errors)
     timings["queue_update"] = round(time.monotonic() - t10, 3)
 
     # §11 Attention save
