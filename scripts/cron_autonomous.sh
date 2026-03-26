@@ -49,6 +49,18 @@ WEAKEST_METRIC=$(get_weakest_metric)
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Heartbeat starting (optimized batched pipeline) ===" >> "$LOGFILE"
 
 PREFLIGHT_FILE=$(mktemp --suffix=.json)
+
+# === PRE-EXECUTION VALIDATION: Queue file sanity check ===
+QUEUE_FILE="/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md"
+if [ ! -f "$QUEUE_FILE" ]; then
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] CRASH_GUARD: Queue file missing ($QUEUE_FILE) — creating empty" >> "$LOGFILE"
+    mkdir -p "$(dirname "$QUEUE_FILE")"
+    echo "# Evolution Queue — Clarvis" > "$QUEUE_FILE"
+elif [ ! -r "$QUEUE_FILE" ]; then
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] CRASH_GUARD: Queue file not readable — aborting" >> "$LOGFILE"
+    exit 1
+fi
+
 python3 "$SCRIPTS/heartbeat_preflight.py" > "$PREFLIGHT_FILE" 2>> "$LOGFILE"
 PREFLIGHT_EXIT=$?
 
@@ -79,7 +91,7 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-eval "$(python3 -c "
+EVAL_OUTPUT=$(python3 -c "
 import json, sys, shlex
 with open('$PREFLIGHT_FILE') as f:
     d = json.load(f)
@@ -113,7 +125,16 @@ else:
 # Timings summary
 timings = d.get('timings', {})
 print(f'PF_TOTAL_TIME={shlex.quote(str(timings.get(\"total\", \"?\")))}')
-" 2>> "$LOGFILE")"
+" 2>> "$LOGFILE")
+EVAL_PARSE_EXIT=$?
+
+if [ "$EVAL_PARSE_EXIT" -ne 0 ] || [ -z "$EVAL_OUTPUT" ]; then
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] CRASH_GUARD: Preflight JSON parse failed (exit $EVAL_PARSE_EXIT) — aborting" >> "$LOGFILE"
+    rm -f "$PREFLIGHT_FILE"
+    exit 1
+fi
+
+eval "$EVAL_OUTPUT"
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] PREFLIGHT: status=$PF_STATUS task_salience=$BEST_SALIENCE route=$ROUTE_EXECUTOR confidence_tier=$CONFIDENCE_TIER time=${PF_TOTAL_TIME}s" >> "$LOGFILE"
 
@@ -147,6 +168,14 @@ fi
 
 if [ -z "$NEXT_TASK" ]; then
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] No task selected — exiting" >> "$LOGFILE"
+    rm -f "$PREFLIGHT_FILE"
+    exit 0
+fi
+
+# === CRASH GUARD: Validate selected task before execution ===
+TASK_STRIPPED=$(echo "$NEXT_TASK" | tr -d '[:space:]')
+if [ ${#TASK_STRIPPED} -lt 5 ]; then
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] CRASH_GUARD: Task too short or whitespace-only (${#TASK_STRIPPED} chars) — skipping: '$NEXT_TASK'" >> "$LOGFILE"
     rm -f "$PREFLIGHT_FILE"
     exit 0
 fi
@@ -422,6 +451,25 @@ rm -f "$OPENROUTER_STDERR"
 
 TASK_DURATION=$((SECONDS - TASK_START_SECONDS))
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] EXECUTION: executor=$EXECUTOR_USED exit=$TASK_EXIT duration=${TASK_DURATION}s timeout=${CLAUDE_TIMEOUT}s tier=$ROUTE_TIER" >> "$LOGFILE"
+
+# === CRASH GUARD: Detect instant-fail episodes ===
+# If execution took < 10s and failed, this is likely an infrastructure crash (auth, binary, etc.)
+# not a real task failure. Inject crash marker into preflight JSON so postflight records it correctly.
+INSTANT_FAIL_THRESHOLD=10
+if [ "$TASK_EXIT" -ne 0 ] && [ "$TASK_DURATION" -lt "$INSTANT_FAIL_THRESHOLD" ]; then
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] CRASH_GUARD: Instant-fail detected (${TASK_DURATION}s < ${INSTANT_FAIL_THRESHOLD}s, exit=$TASK_EXIT) — marking as crash, not failure" >> "$LOGFILE"
+    # Inject crash marker into preflight JSON for postflight to pick up
+    python3 -c "
+import json
+with open('$PREFLIGHT_FILE') as f:
+    d = json.load(f)
+d['crash_guard'] = True
+d['crash_reason'] = 'instant_fail'
+d['crash_duration'] = $TASK_DURATION
+with open('$PREFLIGHT_FILE', 'w') as f:
+    json.dump(d, f)
+" 2>> "$LOGFILE"
+fi
 
 # Log executor output (truncated to last 2000 chars to prevent log bloat)
 tail -c 2000 "$TASK_OUTPUT_FILE" >> "$LOGFILE" 2>/dev/null

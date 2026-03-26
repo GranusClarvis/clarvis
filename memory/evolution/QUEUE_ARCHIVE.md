@@ -1605,3 +1605,8 @@ _Last archived: 2026-03-24_
 - [x] [D1_WEBSITE_SCAFFOLD] Built GitHub Pages-ready static site in `docs/` (5 pages: home, architecture, repos, benchmarks, roadmap) + Starlette server in `website/`. All pages use relative paths for GH Pages compatibility.
 - [x] [D2_PUBLIC_STATUS_ENDPOINT] Created `scripts/generate_status_json.py` — generates `docs/status.json` and `website/static/status.json` with PI, CLR, brain stats, episode success rate, uptime, queue counts, and recent completions. Server.py also updated with episode stats.
 - [x] [D3_README_POLISH] Added website links header, updated stats (CLR 0.82, 134k edges), updated docs/ description, refreshed date.
+
+## Archived 2026-03-26
+- [x] [E1_FULL_TEST_SUITE_PASS] ✅ 2026-03-26: 25/25 clarvis-db tests pass, brain health OK (2439 memories, store/recall healthy), smoke tests green.
+- [x] [E2_OSS_READINESS_FINAL] ✅ 2026-03-26: 17 pass, 0 fail, 1 advisory warning (chat_id in CLAUDE.md — internal only, not leaked to public files). LICENSE present, no secrets.
+- [x] [E3_DEMO_DRY_RUN] ✅ 2026-03-26: Dry run passed (store→recall→cleanup→heartbeat gate all green). Added Demo Walkthrough section to README.md.

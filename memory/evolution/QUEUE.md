@@ -23,9 +23,6 @@ _Queue audited on 2026-03-24 evening. Removed 3 completed items (A5_A7, TEMPORAL
 ### Milestone D — Public Surface (by 2026-03-29)
 
 ### Milestone E — Final Validation (by 2026-03-31)
-- [x] [E1_FULL_TEST_SUITE_PASS] ✅ 2026-03-26: 25/25 clarvis-db tests pass, brain health OK (2439 memories, store/recall healthy), smoke tests green.
-- [x] [E2_OSS_READINESS_FINAL] ✅ 2026-03-26: 17 pass, 0 fail, 1 advisory warning (chat_id in CLAUDE.md — internal only, not leaked to public files). LICENSE present, no secrets.
-- [x] [E3_DEMO_DRY_RUN] ✅ 2026-03-26: Dry run passed (store→recall→cleanup→heartbeat gate all green). Added Demo Walkthrough section to README.md.
 
 
 ---
@@ -36,7 +33,7 @@ _Queue audited on 2026-03-24 evening. Removed 3 completed items (A5_A7, TEMPORAL
 ### Demoted from P0 (2026-03-24 audit)
 
 ### Episode Success Rate Hardening
-- [ ] [EPISODE_CRASH_GUARD] Harden `cron_autonomous.sh` against instant-fail episodes (5 failures on 3/25 at 2-4s duration — task selection crashed before execution). Add pre-execution validation: verify selected task is non-empty, queue file parseable, graceful fallback when queue empty.
+- [x] [EPISODE_CRASH_GUARD] Harden `cron_autonomous.sh` against instant-fail episodes (5 failures on 3/25 at 2-4s duration — task selection crashed before execution). Add pre-execution validation: verify selected task is non-empty, queue file parseable, graceful fallback when queue empty. _(Done 2026-03-26: queue file validation, eval error catch, task length check, instant-fail detection <10s→crash status, postflight excludes crashes from accuracy/evolution)_
 
 ### Code Quality
 

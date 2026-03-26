@@ -563,16 +563,25 @@ def _build_postflight_ctx(exit_code, output_file, preflight_data, task_duration)
     except Exception:
         pass
 
+    # Crash guard: instant-fail episodes (< 10s, non-zero exit) are infrastructure
+    # crashes, not real task failures. Don't penalize episode success rate.
+    is_crash = preflight_data.get("crash_guard", False)
+
     if exit_code == 0:
         task_status = "success"
     elif exit_code == 124:
         task_status = "timeout"
+    elif is_crash:
+        task_status = "crash"
     else:
         task_status = "failure"
 
     error_type = error_evidence = None
-    if task_status != "success":
+    if task_status not in ("success",):
         error_type, error_evidence = _classify_error(exit_code, output_text)
+        if is_crash:
+            error_type = "crash"
+            error_evidence = f"instant-fail ({preflight_data.get('crash_duration', '?')}s), original: {error_evidence}"
         log(f"Error taxonomy: {error_type} ({error_evidence})")
 
     return {
@@ -1579,11 +1588,12 @@ def _pf_retrieval_feedback(ctx, _pf_errors):
                 _aa_successes = sum(1 for e in _recent_eps if e.get("outcome") == "success")
                 _aa_soft = sum(1 for e in _recent_eps if e.get("outcome") == "soft_failure")
                 _aa_timeouts = sum(1 for e in _recent_eps if e.get("outcome") == "timeout")
-                _aa_denom = len(_recent_eps) - _aa_soft - _aa_timeouts
+                _aa_crashes = sum(1 for e in _recent_eps if e.get("outcome") == "crash")
+                _aa_denom = len(_recent_eps) - _aa_soft - _aa_timeouts - _aa_crashes
                 if _aa_denom > 0:
                     _aa_score = round(_aa_successes / _aa_denom, 3)
                     log(f"ACTION ACCURACY: trailing-{len(_recent_eps)} = {_aa_score:.3f} "
-                        f"({_aa_successes}/{_aa_denom} excl {_aa_soft} soft_fail, {_aa_timeouts} timeout)")
+                        f"({_aa_successes}/{_aa_denom} excl {_aa_soft} soft_fail, {_aa_timeouts} timeout, {_aa_crashes} crash)")
                     if _aa_score < 0.95:
                         _failing_ids = [e.get("id", e.get("task", "?")[:40]) for e in _recent_eps if e.get("outcome") == "failure"]
                         _diag_task = (f"[ACTION_ACCURACY_DIAGNOSTIC] Action accuracy dropped to {_aa_score:.3f} "
@@ -1723,7 +1733,8 @@ def _pf_evolution_synthesis(ctx, _pf_errors):
     task_duration = ctx["task_duration"]
 
     t8 = time.monotonic()
-    if exit_code != 0 and exit_code != 124 and EvolutionLoop:
+    is_crash = ctx.get("preflight_data", {}).get("crash_guard", False)
+    if exit_code != 0 and exit_code != 124 and not is_crash and EvolutionLoop:
         try:
             evo = EvolutionLoop()
             failure_id = evo.capture_failure("cron_autonomous", f"Exit code {exit_code} running task",
