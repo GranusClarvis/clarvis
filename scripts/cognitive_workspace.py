@@ -80,32 +80,48 @@ class WorkspaceItem:
     def relevance_to(self, query):
         """Compute task-driven relevance score (0-1) for a query/task.
 
-        Uses word overlap + importance weighting. Fast, no embeddings needed.
+        Uses word + bigram overlap, importance, recency, and reuse-history
+        weighting. Items proven useful across multiple tasks get a boost.
         """
         if not query:
             return self.importance * 0.5
 
         text = (self.content + " " + (self.summary or "")).lower()
-        query_words = set(re.findall(r'[a-z]{3,}', query.lower()))
-        text_words = set(re.findall(r'[a-z]{3,}', text))
+        query_words = re.findall(r'[a-z]{3,}', query.lower())
+        text_words = re.findall(r'[a-z]{3,}', text)
 
-        if not query_words or not text_words:
+        query_set = set(query_words)
+        text_set = set(text_words)
+
+        if not query_set or not text_set:
             return self.importance * 0.3
 
-        overlap = len(query_words & text_words)
-        jaccard = overlap / max(1, len(query_words | text_words))
+        # Unigram Jaccard overlap
+        jaccard = len(query_set & text_set) / max(1, len(query_set | text_set))
 
-        # Weight by importance and recency
+        # Bigram overlap — catches partial phrase matches (e.g. "reuse rate")
+        def bigrams(words):
+            return set(zip(words, words[1:])) if len(words) > 1 else set()
+        q_bi = bigrams(query_words)
+        t_bi = bigrams(text_words)
+        bigram_score = len(q_bi & t_bi) / max(1, len(q_bi | t_bi)) if q_bi else 0.0
+
+        # Recency — slower decay than attention (half-life ~14h)
         now = datetime.now(timezone.utc)
         try:
             created = datetime.fromisoformat(self.created_at)
             age_hours = max(0.01, (now - created).total_seconds() / 3600)
         except (ValueError, TypeError):
             age_hours = 24
+        recency = math.exp(-0.05 * age_hours)
 
-        recency = math.exp(-0.05 * age_hours)  # slower decay than attention (half-life ~14h)
+        # Reuse history boost — items used across 2+ tasks are proven valuable
+        reuse_bonus = min(0.15, 0.05 * len(self.tasks_used_in))
 
-        return min(1.0, jaccard * 0.5 + self.importance * 0.3 + recency * 0.2)
+        # Composite: word match 40%, bigram 15%, importance 20%, recency 15%, reuse 10%
+        score = (jaccard * 0.40 + bigram_score * 0.15 + self.importance * 0.20
+                 + recency * 0.15 + reuse_bonus)
+        return min(1.0, score)
 
     def touch(self, task_id=None):
         """Mark as accessed. Tracks cross-task reuse."""
@@ -447,7 +463,11 @@ class CognitiveWorkspace:
 
         for item in dormant:
             rel = item.relevance_to(task_description)
-            if rel >= REUSE_RELEVANCE_THRESHOLD:
+            # Adaptive threshold: proven items (reused 2+ times) get a lower bar
+            threshold = REUSE_RELEVANCE_THRESHOLD
+            if len(item.tasks_used_in) >= 2:
+                threshold = max(0.15, threshold - 0.10)
+            if rel >= threshold:
                 # Promote to active
                 item.tier = "active"
                 item.touch(task_id)

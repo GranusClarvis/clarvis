@@ -29,7 +29,6 @@ _Queue audited on 2026-03-24 evening. Removed 3 completed items (A5_A7, TEMPORAL
 
 ## P1 — This Week
 
-- [x] [DECOMPOSE_LONG_FUNCTIONS] Already decomposed in prior refactor (822afff). `_pf_prompt_predict_cognitive`=24 lines, `_pf_finalize`=65 lines — both under 80. (2026-03-26)
 
 
 ### Demoted from P0 (2026-03-24 audit)
@@ -68,8 +67,6 @@ _(Completed items archived.)_
 
 ## NEW ITEMS
 
-- [x] [SEMANTIC_CROSS_COLLECTION_BOOST] Enhanced `bulk_cross_link` with synonym-aware matching (10 synonym groups), boosted params for under-connected collections (relaxed distance +0.3, +2 links/memory), multi-query with synonym expansion. (2026-03-26)
-- [x] [EPISODE_FAILURE_POSTMORTEM] Added 11 structured failure categories (timeout, import_error, data_missing, external_dep, memory, planning, logic_bug, system, action, crash, partial-success). Failure type now stored as searchable tag `failure:<type>` in brain episodes. Error evidence persisted in completeness log. (2026-03-26)
-- [ ] [PI_BENCHMARK_FULL_RUN] Run a full 8-dimension PI benchmark (`python3 scripts/performance_benchmark.py record`) and verify history is appended to `data/performance_history.jsonl` — last entries are structural_health only, no PI composite recorded recently.
-- [ ] [WORKSPACE_REUSE_OPTIMIZATION] Push cognitive workspace reuse rate from 53% toward 58.6% target: tune dormant reactivation threshold in `scripts/cognitive_workspace.py` and add relevance-weighted scoring for dormant item promotion.
+- [x] [PI_BENCHMARK_FULL_RUN] ✓ PI=1.0000 (15/15 pass), appended to performance_history.jsonl. Brain 268ms avg. (2026-03-26)
+- [x] [WORKSPACE_REUSE_OPTIMIZATION] ✓ Reuse already at 83.5% (was 53% in Feb). Added bigram overlap + reuse-history boost to `relevance_to()`, adaptive threshold for proven items. (2026-03-26)
 

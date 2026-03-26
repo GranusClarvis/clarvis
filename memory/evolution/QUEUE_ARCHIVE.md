@@ -1617,3 +1617,8 @@ _Last archived: 2026-03-24_
 ## Archived 2026-03-26
 - [x] [RESEARCH_PHI_COMPUTATION_ARCHITECTURES] (2026-03-26) New research on consciousness architectures and Phi computation completed; summary in `memory/research/phi-computation-consciousness-architectures.md`.
 - [x] [CRON_SHELL_LINT] Non-Python: ShellCheck-lint all 12 cron orchestrator `.sh` scripts in `scripts/cron_*.sh` — fix any SC2086/SC2046/SC2155 warnings, add `set -euo pipefail` where missing, ensure consistent lock-file cleanup on trap. (2026-03-26 14:04 UTC)
+
+## Archived 2026-03-26
+- [x] [DECOMPOSE_LONG_FUNCTIONS] Already decomposed in prior refactor (822afff). `_pf_prompt_predict_cognitive`=24 lines, `_pf_finalize`=65 lines — both under 80. (2026-03-26)
+- [x] [SEMANTIC_CROSS_COLLECTION_BOOST] Enhanced `bulk_cross_link` with synonym-aware matching (10 synonym groups), boosted params for under-connected collections (relaxed distance +0.3, +2 links/memory), multi-query with synonym expansion. (2026-03-26)
+- [x] [EPISODE_FAILURE_POSTMORTEM] Added 11 structured failure categories (timeout, import_error, data_missing, external_dep, memory, planning, logic_bug, system, action, crash, partial-success). Failure type now stored as searchable tag `failure:<type>` in brain episodes. Error evidence persisted in completeness log. (2026-03-26)
