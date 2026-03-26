@@ -1588,3 +1588,7 @@ _Last archived: 2026-03-24_
 - [x] [ACTION_FAILURE_PATTERN_ANALYSIS] Done: Analyzed 68 non-success episodes. Top 3 root causes: (1) auth 401 errors (5 episodes, reclassified system), (2) NO_ERROR failures (3, reclassified partial-success), (3) shallow_reasoning (21 soft_failures). Fixes: auto-detect system failures in `_get_failure_type()` and `encode()`, exclude system failures from action_accuracy formula, added auth pre-check to heartbeat_preflight.py, backfilled 20 episode failure_types. Action accuracy: 0.963→0.989.
 - [x] [SEMANTIC_CROSS_COLLECTION_BOOST] Done: score boosted 0.588→0.6617 (target 0.65+ met). Fixed L2-to-cosine formula in phi.py, added 42 bridge memories, Phi 0.7949→0.8205.
 - [x] [OPEN_SOURCE_PRELAUNCH_CHECKLIST] Done: `scripts/oss_readiness_check.sh` built and tested. 17 checks pass, 0 fail, 1 advisory warning.
+
+## Archived 2026-03-26
+- [x] [DECOMPOSE_LONG_FUNCTIONS] Done 2026-03-26. All 4 functions decomposed to ≤52 lines. Also decomposed `self_representation.py:encode_self_state` (234→28 lines, 10 helpers).
+- [x] [LONG_FUNCTION_DECOMPOSITION] Done 2026-03-26. Decomposed 5 functions across 3 files: `daily_brain_eval.py` (3 functions: _run_retrieval_probe 92→3+31+44, _assess_quality 89→5 scorers+37, run_full_eval 96→30+16+52), `llm_brain_review.py` (build_review_prompt 119→3 formatters+8), `self_representation.py` (encode_self_state 234→10 encoders+28). All now ≤80 lines.

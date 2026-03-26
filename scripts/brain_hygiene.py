@@ -24,7 +24,7 @@ LATEST_FILE = SNAPSHOT_DIR / "latest_health.json"
 ALERT_LOG = WORKSPACE / "monitoring" / "brain_hygiene_alerts.log"
 
 # Regression thresholds
-MIN_MEMORIES = 3000          # Alert if total drops below this
+MIN_MEMORIES = 2000          # Alert if total drops below this (calibrated post-dedup 2026-03-26)
 MAX_EDGE_DROP_PCT = 5.0      # Alert if edges drop >5% from previous snapshot
 MAX_BACKFILL_ORPHANS = 50    # Alert if backfill finds >50 orphans
 

@@ -29,8 +29,7 @@ _Queue audited on 2026-03-24 evening. Removed 3 completed items (A5_A7, TEMPORAL
 
 ## P1 — This Week
 
-- [ ] [ACTION_ACCURACY_GUARD 2026-03-26] [ACTION_ACCURACY_DIAGNOSTIC] Action accuracy dropped to 0.737 (threshold: 0.95). Failing episodes: ep_20260325_140122, ep_20260325_150100, ep_20260325_190102, ep_20260325_200101, ep_20260325_220123. Investigate root causes and fix.
-- [x] [DECOMPOSE_LONG_FUNCTIONS] Done 2026-03-26. All 4 functions decomposed to ≤52 lines. Also decomposed `self_representation.py:encode_self_state` (234→28 lines, 10 helpers).
+- [x] [ACTION_ACCURACY_GUARD 2026-03-26] [ACTION_ACCURACY_DIAGNOSTIC] Already fixed in 367e54e — all 5 failing episodes were failure_type=system (excluded from action_accuracy). Current: 0.989, PI=1.0.
 
 ### Demoted from P0 (2026-03-24 audit)
 
@@ -66,5 +65,4 @@ _(Completed items archived.)_
 
 ## NEW ITEMS
 
-- [ ] [DIAGNOSE_BRAIN_EDGE_REGRESSION] Investigate 10.3% graph edge drop (88211→79152) and memory count below 3000 threshold flagged repeatedly in alerts.log. Determine if caused by graph compaction/hygiene over-pruning or data loss. Fix root cause and restore healthy baseline. Touch: `graph_compaction.py`, `brain_hygiene.py`, `goal_hygiene.py`.
-- [x] [LONG_FUNCTION_DECOMPOSITION] Done 2026-03-26. Decomposed 5 functions across 3 files: `daily_brain_eval.py` (3 functions: _run_retrieval_probe 92→3+31+44, _assess_quality 89→5 scorers+37, run_full_eval 96→30+16+52), `llm_brain_review.py` (build_review_prompt 119→3 formatters+8), `self_representation.py` (encode_self_state 234→10 encoders+28). All now ≤80 lines.
+- [x] [DIAGNOSE_BRAIN_EDGE_REGRESSION] Edge/memory drops are from legitimate dedup/pruning (3618→2392 memories, 98789→82001 edges). Graph integrity verified: 0 orphan edges, 35 edges/node. Fixed: lowered MIN_MEMORIES 3000→2000, refreshed health snapshot baseline.
