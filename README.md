@@ -64,6 +64,22 @@ python3 -m clarvis metrics                # Self-model, phi, performance index
 python3 -m clarvis queue                  # Evolution queue management
 ```
 
+### Demo Walkthrough
+
+```bash
+# 1. Verify brain is healthy (on fresh clone, starts empty — that's OK)
+python3 -m clarvis brain health
+
+# 2. Store a memory
+python3 -c "from clarvis.brain import remember; print(remember('Hello from Clarvis', importance=0.8))"
+
+# 3. Recall it
+python3 -m clarvis brain search "Hello from Clarvis" --n 3
+
+# 4. Run heartbeat gate (should output {"decision": "wake", ...} or "skip")
+python3 -m clarvis heartbeat gate
+```
+
 ### Python API
 
 ```python
