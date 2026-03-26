@@ -359,12 +359,17 @@ class StoreMixin:
                 skipped.append({"id": dup_id, "reason": "not_found"})
                 continue
             meta = dict(dup.get("metadata") or {})
+            existing_conf = meta.get("confidence")
+            try:
+                existing_conf = float(existing_conf) if existing_conf is not None else 1.0
+            except (TypeError, ValueError):
+                existing_conf = 1.0
             meta.update({
                 "status": "superseded",
                 "superseded_by": keep_id,
                 "superseded_at": now_iso,
                 "revision_reason": reason,
-                "confidence": min(float(meta.get("confidence", 1.0) or 1.0), 0.2),
+                "confidence": min(existing_conf, 0.2),
             })
             self.collections[dup["collection"]].update(ids=[dup_id], metadatas=[meta])
             try:

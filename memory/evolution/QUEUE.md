@@ -29,11 +29,12 @@ _Queue audited on 2026-03-24 evening. Removed 3 completed items (A5_A7, TEMPORAL
 
 ## P1 — This Week
 
+- [ ] [DECOMPOSE_LONG_FUNCTIONS] Decompose oversized functions: `scripts/heartbeat_postflight.py:_pf_prompt_predict_cognitive` (165 lines), `scripts/heartbeat_postflight.py:_pf_finalize` (89 lines). Target: all functions ≤80 lines.
+
 
 ### Demoted from P0 (2026-03-24 audit)
 
 ### Episode Success Rate Hardening
-- [x] [EPISODE_CRASH_GUARD] Harden `cron_autonomous.sh` against instant-fail episodes (5 failures on 3/25 at 2-4s duration — task selection crashed before execution). Add pre-execution validation: verify selected task is non-empty, queue file parseable, graceful fallback when queue empty. _(Done 2026-03-26: queue file validation, eval error catch, task length check, instant-fail detection <10s→crash status, postflight excludes crashes from accuracy/evolution)_
 
 ### Code Quality
 
@@ -66,4 +67,9 @@ _(Completed items archived.)_
 ---
 
 ## NEW ITEMS
+
+- [ ] [SEMANTIC_CROSS_COLLECTION_BOOST] Improve semantic_cross_collection score (currently 0.66, target >0.75): audit `bulk_cross_link` edge creation — add synonym-aware matching and increase cross-collection bridge density for under-connected collections (clarvis-infrastructure=50, clarvis-goals=36).
+- [ ] [EPISODE_FAILURE_POSTMORTEM] Harden episode success rate: add structured failure-cause tagging to `heartbeat_postflight.py` episode encoding (categories: timeout, import_error, data_missing, logic_bug, external_dep) so failure patterns become searchable and preventable.
+- [ ] [PI_BENCHMARK_FULL_RUN] Run a full 8-dimension PI benchmark (`python3 scripts/performance_benchmark.py record`) and verify history is appended to `data/performance_history.jsonl` — last entries are structural_health only, no PI composite recorded recently.
+- [ ] [WORKSPACE_REUSE_OPTIMIZATION] Push cognitive workspace reuse rate from 53% toward 58.6% target: tune dormant reactivation threshold in `scripts/cognitive_workspace.py` and add relevance-weighted scoring for dormant item promotion.
 

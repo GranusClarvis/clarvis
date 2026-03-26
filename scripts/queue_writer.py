@@ -305,6 +305,49 @@ def ensure_subtasks_for_tag(parent_tag: str, subtasks: list[str], source: str = 
             lock_fd.close()
 
 
+def mark_task_complete(task_text: str, annotation: str, queue_file: str = QUEUE_FILE, archive_file: str | None = None):
+    """Mark a task complete in QUEUE.md with an annotation.
+
+    Returns:
+      - "marked" if task was found and marked [x]
+      - "archived" if it already appears in QUEUE_ARCHIVE.md
+      - False if not found
+
+    Matching strategy:
+      1) Prefer exact tag match when task_text contains [TAG]
+      2) Fallback to prefix substring match
+    """
+    with open(queue_file, 'r') as f:
+        lines = f.readlines()
+
+    task_prefix = task_text[:60]
+    m = re.match(r"\[([^\]]+)\]", task_text.strip())
+    tag = m.group(1) if m else None
+
+    if tag:
+        tag_re = re.compile(rf"^\- \[ \] \[{re.escape(tag)}\](?=\s|$)")
+        for i, line in enumerate(lines):
+            if tag_re.search(line):
+                lines[i] = line.replace("- [ ] ", "- [x] ", 1).rstrip() + f" ({annotation})\n"
+                with open(queue_file, 'w') as f:
+                    f.writelines(lines)
+                return "marked"
+
+    for i, line in enumerate(lines):
+        if line.strip().startswith("- [ ] ") and task_prefix in line:
+            lines[i] = line.replace("- [ ] ", "- [x] ", 1).rstrip() + f" ({annotation})\n"
+            with open(queue_file, 'w') as f:
+                f.writelines(lines)
+            return "marked"
+
+    if archive_file and os.path.exists(archive_file):
+        with open(archive_file, 'r') as f:
+            archive = f.read()
+        if task_prefix in archive:
+            return "archived"
+    return False
+
+
 def archive_completed():
     """Move all [x] completed items from QUEUE.md to QUEUE_ARCHIVE.md.
 

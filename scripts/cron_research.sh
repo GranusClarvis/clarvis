@@ -282,15 +282,14 @@ if [ "$TASK_EXIT" -eq 0 ]; then
 import os, sys
 from datetime import datetime, timezone
 sys.path.insert(0, '/home/agent/.openclaw/workspace/scripts')
-from heartbeat_postflight import _mark_task_in_queue
-from queue_writer import archive_completed
+from queue_writer import mark_task_complete, archive_completed
 
 queue_file = 'memory/evolution/QUEUE.md'
 archive_file = 'memory/evolution/QUEUE_ARCHIVE.md'
 research_task = os.environ.get('RESEARCH_TASK', '').strip()
 annotation = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
 
-result = _mark_task_in_queue(research_task, annotation, queue_file, archive_file)
+result = mark_task_complete(research_task, annotation, queue_file=queue_file, archive_file=archive_file)
 print(f'Queue mark result: {result}')
 archived = archive_completed()
 print(f'Queue archive moved: {archived}')

@@ -37,6 +37,9 @@ TOPIC_PATTERNS = {
         r'scalable phi',
         r'consciousness architectures',
     ],
+    'all_research': [
+        r'.+',
+    ],
 }
 
 STOPWORDS = {
@@ -95,6 +98,9 @@ def is_research_memory(mem: dict, topic: str) -> bool:
     if not researchish:
         return False
 
+    if topic == 'all_research':
+        return True
+
     blob = f"{text}\n{source}\n{tags}".lower()
     pats = TOPIC_PATTERNS.get(topic, [])
     return any(re.search(p, blob, re.I) for p in pats)
@@ -120,25 +126,68 @@ def keeper_score(mem: dict) -> tuple:
     return (status, imp, acc, length, created)
 
 
+def _canonical_research_text(text: str) -> str:
+    t = normalize_topic_text(text)
+    # Collapse common ingest wrappers while preserving the actual topic.
+    t = re.sub(r'^research summary\s*', '', t)
+    t = re.sub(r'^research\s*', '', t)
+    t = re.sub(r'\singested from\s.*$', '', t)
+    t = re.sub(r'\s\d{4}\s\d{2}\s\d{2}\s*', ' ', t)
+    t = re.sub(r'\s+', ' ', t).strip()
+    return t
+
+
+def _summary_group_key(mem: dict) -> str | None:
+    text = mem.get('document', '').strip()
+    tl = text.lower().strip()
+    if not tl.startswith('[research summary]'):
+        return None
+    meta = mem.get('metadata', {}) or {}
+    source = str(meta.get('source', '')).lower()
+    if not source.startswith('research'):
+        return None
+    return _canonical_research_text(text)
+
+
 def build_clusters(memories: list[dict]) -> list[list[dict]]:
+    # Phase 1: exact/near-exact research-summary duplicates by canonicalized title.
     clusters = []
     used = set()
+    summary_groups = defaultdict(list)
+    for mem in memories:
+        key = _summary_group_key(mem)
+        if key:
+            summary_groups[key].append(mem)
+    for group in summary_groups.values():
+        if len(group) > 1:
+            clusters.append(group)
+            used.update(m['id'] for m in group)
+
+    # Phase 2: strongly similar research conclusions (conservative thresholds).
     sigs = {m['id']: token_signature(m['document']) for m in memories}
     for mem in memories:
         if mem['id'] in used:
             continue
         cluster = [mem]
         used.add(mem['id'])
+        mem_text = mem.get('document', '').lower().strip()
+        mem_is_summary = mem_text.startswith('[research summary]')
         for other in memories:
             if other['id'] in used:
                 continue
+            other_text = other.get('document', '').lower().strip()
+            other_is_summary = other_text.startswith('[research summary]')
+            # Don't merge summary stubs into substantive conclusions.
+            if mem_is_summary != other_is_summary:
+                continue
             sim = jaccard(sigs[mem['id']], sigs[other['id']])
-            same_prefix = normalize_topic_text(mem['document'])[:90] == normalize_topic_text(other['document'])[:90]
-            if sim >= 0.55 or same_prefix:
+            same_prefix = _canonical_research_text(mem['document'])[:110] == _canonical_research_text(other['document'])[:110]
+            if sim >= 0.72 or same_prefix:
                 cluster.append(other)
                 used.add(other['id'])
-        clusters.append(cluster)
-    return [c for c in clusters if len(c) > 1]
+        if len(cluster) > 1:
+            clusters.append(cluster)
+    return clusters
 
 
 def audit(topic: str):
