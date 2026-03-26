@@ -1622,3 +1622,12 @@ _Last archived: 2026-03-24_
 - [x] [DECOMPOSE_LONG_FUNCTIONS] Already decomposed in prior refactor (822afff). `_pf_prompt_predict_cognitive`=24 lines, `_pf_finalize`=65 lines — both under 80. (2026-03-26)
 - [x] [SEMANTIC_CROSS_COLLECTION_BOOST] Enhanced `bulk_cross_link` with synonym-aware matching (10 synonym groups), boosted params for under-connected collections (relaxed distance +0.3, +2 links/memory), multi-query with synonym expansion. (2026-03-26)
 - [x] [EPISODE_FAILURE_POSTMORTEM] Added 11 structured failure categories (timeout, import_error, data_missing, external_dep, memory, planning, logic_bug, system, action, crash, partial-success). Failure type now stored as searchable tag `failure:<type>` in brain episodes. Error evidence persisted in completeness log. (2026-03-26)
+
+## Archived 2026-03-26
+- [x] [PI_BENCHMARK_FULL_RUN] ✓ PI=1.0000 (15/15 pass), appended to performance_history.jsonl. Brain 268ms avg. (2026-03-26)
+- [x] [WORKSPACE_REUSE_OPTIMIZATION] ✓ Reuse already at 83.5% (was 53% in Feb). Added bigram overlap + reuse-history boost to `relevance_to()`, adaptive threshold for proven items. (2026-03-26)
+
+## Archived 2026-03-26
+- [x] [POSTFLIGHT_ERROR_CLASSIFIER_TESTS] Add regression tests for `_classify_error()` thresholds and precedence in `scripts/heartbeat_postflight.py` (single-hit import/data/external cases, 401/auth, timeout priority). _(2026-03-26: 16 new tests covering thresholds, precedence, edge cases; fixed 3 pre-existing test bugs)_
+- [x] [CRASH_GUARD_ATOMIC_WRITE] Make `scripts/cron_autonomous.sh` crash-guard preflight JSON rewrite atomic and add a regression check for partial-write / malformed-JSON handling. _(2026-03-26: 3 inline Python blocks use tempfile+rename atomic pattern; 9 regression tests in test_cron_autonomous_guards.py)_
+- [x] [RESEARCH_PHIID_SYNERGISTIC_WORKSPACE] (2026-03-26)

@@ -6,6 +6,7 @@ _Completed items auto-archived to QUEUE_ARCHIVE.md._
 
 ## P0 — 14-Day Delivery Window (Deadline: 2026-03-31)
 
+
 ### Delivery Goal
 Presentable Clarvis by 2026-03-31:
 - open-source-ready main repo
@@ -28,6 +29,7 @@ _Queue audited on 2026-03-24 evening. Removed 3 completed items (A5_A7, TEMPORAL
 ---
 
 ## P1 — This Week
+
 
 
 
@@ -67,6 +69,4 @@ _(Completed items archived.)_
 
 ## NEW ITEMS
 
-- [x] [PI_BENCHMARK_FULL_RUN] ✓ PI=1.0000 (15/15 pass), appended to performance_history.jsonl. Brain 268ms avg. (2026-03-26)
-- [x] [WORKSPACE_REUSE_OPTIMIZATION] ✓ Reuse already at 83.5% (was 53% in Feb). Added bigram overlap + reuse-history boost to `relevance_to()`, adaptive threshold for proven items. (2026-03-26)
 

@@ -409,30 +409,7 @@ class CognitiveWorkspace:
                 item.touch(self.current_task_id)
 
         # === Dormant buffer (compressed, only high-relevance) ===
-        dormant_items = [i for i in self.items.values() if i.tier == "dormant"]
-        scored_dormant = [(i.relevance_to(query), i) for i in dormant_items]
-        scored_dormant.sort(key=lambda x: x[0], reverse=True)
-
-        remaining = char_budget - used_chars
-        if scored_dormant and remaining > 80:
-            dormant_shown = []
-            for rel, item in scored_dormant:
-                if rel < REUSE_RELEVANCE_THRESHOLD:
-                    break
-                display = item.summary or item.compress()
-                text = f"  ({rel:.2f}) {display}"
-                if used_chars + len(text) > char_budget:
-                    break
-                dormant_shown.append(text)
-                used_chars += len(text)
-                item.touch(self.current_task_id)
-                # Track reuse
-                if len(item.tasks_used_in) > 1:
-                    self._reuse_hits += 1
-
-            if dormant_shown:
-                parts.append("REUSED CONTEXT (dormant):")
-                parts.extend(dormant_shown)
+        used_chars = self._collect_dormant_context(parts, query, char_budget, used_chars)
 
         # Footer with stats
         sizes = self._buffer_sizes()
@@ -440,6 +417,39 @@ class CognitiveWorkspace:
         parts.append(f"--- workspace: active={sizes['active']}, working={sizes['working']}, dormant={sizes['dormant']}, reuse={rate:.0%}")
 
         return "\n".join(parts)
+
+    def _collect_dormant_context(self, parts, query, char_budget, used_chars):
+        """Collect high-relevance dormant items into context parts.
+
+        Returns updated used_chars count.
+        """
+        dormant_items = [i for i in self.items.values() if i.tier == "dormant"]
+        scored_dormant = [(i.relevance_to(query), i) for i in dormant_items]
+        scored_dormant.sort(key=lambda x: x[0], reverse=True)
+
+        remaining = char_budget - used_chars
+        if not scored_dormant or remaining <= 80:
+            return used_chars
+
+        dormant_shown = []
+        for rel, item in scored_dormant:
+            if rel < REUSE_RELEVANCE_THRESHOLD:
+                break
+            display = item.summary or item.compress()
+            text = f"  ({rel:.2f}) {display}"
+            if used_chars + len(text) > char_budget:
+                break
+            dormant_shown.append(text)
+            used_chars += len(text)
+            item.touch(self.current_task_id)
+            if len(item.tasks_used_in) > 1:
+                self._reuse_hits += 1
+
+        if dormant_shown:
+            parts.append("REUSED CONTEXT (dormant):")
+            parts.extend(dormant_shown)
+
+        return used_chars
 
     def reuse_rate(self):
         """Compute memory reuse rate (paper target: 58.6%).

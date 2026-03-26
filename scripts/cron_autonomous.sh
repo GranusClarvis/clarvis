@@ -73,7 +73,7 @@ fi
 # Parse preflight results (single jq-like parse via python — 1 invocation for all fields)
 # Safety: strip any non-JSON lines that leaked to stdout from imported modules
 python3 -c "
-import json, sys
+import json, sys, os, tempfile
 with open('$PREFLIGHT_FILE') as f:
     lines = f.readlines()
 # Find the JSON line (starts with '{')
@@ -81,8 +81,16 @@ json_lines = [l for l in lines if l.strip().startswith('{')]
 if not json_lines:
     print('ERROR: No JSON found in preflight output', file=sys.stderr)
     sys.exit(1)
-with open('$PREFLIGHT_FILE', 'w') as f:
-    f.write(json_lines[-1])
+# Atomic write: validate JSON, write to temp, then rename
+data = json.loads(json_lines[-1])  # validate it's real JSON
+fd, tmp = tempfile.mkstemp(suffix='.json', dir=os.path.dirname('$PREFLIGHT_FILE') or '/tmp')
+try:
+    with os.fdopen(fd, 'w') as f:
+        json.dump(data, f)
+    os.rename(tmp, '$PREFLIGHT_FILE')
+except Exception:
+    os.unlink(tmp)
+    raise
 " 2>> "$LOGFILE"
 
 if [ $? -ne 0 ]; then
@@ -375,7 +383,7 @@ if [ "$OPENROUTER_ROUTING" = "true" ] && { [ "$ROUTE_EXECUTOR" = "gemini" ] || [
         OR_USAGE_FILE=$(mktemp --suffix=.json)
         echo "$OR_USAGE" > "$OR_USAGE_FILE"
         python3 -c "
-import json, sys
+import json, sys, os, tempfile
 with open('$PREFLIGHT_FILE') as f:
     d = json.load(f)
 with open('$OR_USAGE_FILE') as f:
@@ -386,8 +394,14 @@ d['actual_model'] = usage.get('actual_model', '')
 d['actual_input_tokens'] = usage.get('prompt_tokens', 0)
 d['actual_output_tokens'] = usage.get('completion_tokens', 0)
 d['route_executor'] = 'openrouter'
-with open('$PREFLIGHT_FILE', 'w') as f:
-    json.dump(d, f)
+fd, tmp = tempfile.mkstemp(suffix='.json', dir=os.path.dirname('$PREFLIGHT_FILE') or '/tmp')
+try:
+    with os.fdopen(fd, 'w') as f:
+        json.dump(d, f)
+    os.rename(tmp, '$PREFLIGHT_FILE')
+except Exception:
+    os.unlink(tmp)
+    raise
 " 2>> "$LOGFILE"
         echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] OPENROUTER: cost=$(python3 -c "import json; print(json.load(open('$OR_USAGE_FILE')).get('cost','?'))" 2>/dev/null)" >> "$LOGFILE"
         rm -f "$OR_USAGE_FILE"
@@ -460,14 +474,20 @@ if [ "$TASK_EXIT" -ne 0 ] && [ "$TASK_DURATION" -lt "$INSTANT_FAIL_THRESHOLD" ];
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] CRASH_GUARD: Instant-fail detected (${TASK_DURATION}s < ${INSTANT_FAIL_THRESHOLD}s, exit=$TASK_EXIT) — marking as crash, not failure" >> "$LOGFILE"
     # Inject crash marker into preflight JSON for postflight to pick up
     python3 -c "
-import json
+import json, os, tempfile
 with open('$PREFLIGHT_FILE') as f:
     d = json.load(f)
 d['crash_guard'] = True
 d['crash_reason'] = 'instant_fail'
 d['crash_duration'] = $TASK_DURATION
-with open('$PREFLIGHT_FILE', 'w') as f:
-    json.dump(d, f)
+fd, tmp = tempfile.mkstemp(suffix='.json', dir=os.path.dirname('$PREFLIGHT_FILE') or '/tmp')
+try:
+    with os.fdopen(fd, 'w') as f:
+        json.dump(d, f)
+    os.rename(tmp, '$PREFLIGHT_FILE')
+except Exception:
+    os.unlink(tmp)
+    raise
 " 2>> "$LOGFILE"
 fi
 

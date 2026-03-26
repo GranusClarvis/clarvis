@@ -482,14 +482,14 @@ class TestClassifyError:
         assert "planning keywords" in evidence
 
     def test_system_keywords(self):
-        output = "FileNotFoundError: no such file, permission denied on /tmp/lock"
+        output = "segfault in process, permission denied on /tmp/lock"
         etype, evidence = self._classify_error(1, output)
         assert etype == "system"
         assert "system keywords" in evidence
 
     def test_action_default(self):
         """Unrecognized errors default to 'action'."""
-        output = "AssertionError: expected 42 got 17"
+        output = "something went wrong but no recognized keywords here"
         etype, evidence = self._classify_error(1, output)
         assert etype == "action"
         assert "default" in evidence
@@ -512,6 +512,114 @@ class TestClassifyError:
         output = "recall failed once, nothing else wrong"
         etype, _ = self._classify_error(1, output)
         assert etype == "action"  # only 1 memory keyword
+
+    # --- Regression: single-hit categories (threshold=1) ---
+
+    def test_import_single_hit_matches(self):
+        """import_error requires only 1 keyword hit (threshold=1)."""
+        output = "cannot import name 'foo' from 'bar'"
+        etype, evidence = self._classify_error(1, output)
+        assert etype == "import_error"
+        assert "1 import keywords" in evidence
+
+    def test_logic_bug_single_hit_matches(self):
+        """logic_bug requires only 1 keyword hit (threshold=1)."""
+        output = "TypeError: unsupported operand type(s)"
+        etype, evidence = self._classify_error(1, output)
+        assert etype == "logic_bug"
+        assert "1 logic-bug keywords" in evidence
+
+    def test_system_single_hit_matches(self):
+        """system requires only 1 keyword hit (threshold=1)."""
+        output = "killed by signal 9"
+        etype, evidence = self._classify_error(1, output)
+        assert etype == "system"
+        assert "1 system keywords" in evidence
+
+    # --- Regression: threshold=2 categories need 2+ hits ---
+
+    def test_data_single_hit_not_enough(self):
+        """data_missing requires >=2 keyword hits."""
+        output = "keyerror: 'missing_key'"
+        etype, _ = self._classify_error(1, output)
+        assert etype != "data_missing"
+
+    def test_data_two_hits_matches(self):
+        """data_missing matches with 2 keyword hits."""
+        output = "FileNotFoundError: no such file /tmp/data.json"
+        etype, evidence = self._classify_error(1, output)
+        assert etype == "data_missing"
+        assert "data-missing keywords" in evidence
+
+    def test_external_single_hit_not_enough(self):
+        """external_dep requires >=2 keyword hits."""
+        output = "got 401 response"
+        etype, _ = self._classify_error(1, output)
+        assert etype != "external_dep"
+
+    def test_external_auth_401_with_context(self):
+        """401 + auth keyword = external_dep."""
+        output = "authentication_error: 401 Unauthorized"
+        etype, evidence = self._classify_error(1, output)
+        assert etype == "external_dep"
+        assert "external-dep keywords" in evidence
+
+    def test_external_network_errors(self):
+        """Network-related keywords trigger external_dep."""
+        output = "ConnectionError: ConnectionRefusedError: econnrefused"
+        etype, _ = self._classify_error(1, output)
+        assert etype == "external_dep"
+
+    # --- Regression: precedence / priority ---
+
+    def test_timeout_beats_all_keywords(self):
+        """Exit code 124 takes priority over any keyword matches."""
+        output = "ImportError: No module named 'foo' — chromadb chroma embedding"
+        etype, _ = self._classify_error(124, output)
+        assert etype == "timeout"
+
+    def test_import_beats_data_missing(self):
+        """import_error (checked first) wins over data_missing when both present."""
+        output = "ImportError: No module named 'foo'\nFileNotFoundError: no such file /data"
+        etype, _ = self._classify_error(1, output)
+        assert etype == "import_error"
+
+    def test_import_beats_logic_bug(self):
+        """import_error (threshold=1) checked before logic_bug (threshold=1)."""
+        output = "ImportError: foo\nTypeError: bar"
+        etype, _ = self._classify_error(1, output)
+        assert etype == "import_error"
+
+    def test_data_beats_external_when_both_present(self):
+        """data_missing checked before external_dep in precedence order."""
+        output = "FileNotFoundError: no such file\njson.decoder.JSONDecodeError: bad json\n401 connectionerror"
+        etype, _ = self._classify_error(1, output)
+        assert etype == "data_missing"
+
+    def test_logic_bug_beats_system(self):
+        """logic_bug checked before system in precedence order."""
+        output = "ValueError: invalid value, permission denied"
+        etype, _ = self._classify_error(1, output)
+        assert etype == "logic_bug"
+
+    # --- Regression: edge cases ---
+
+    def test_empty_string_output(self):
+        """Empty string output should default to action."""
+        etype, _ = self._classify_error(1, "")
+        assert etype == "action"
+
+    def test_case_insensitive(self):
+        """Keyword matching is case-insensitive."""
+        output = "IMPORTERROR: Cannot Import Name 'something'"
+        etype, _ = self._classify_error(1, output)
+        assert etype == "import_error"
+
+    def test_exit_code_zero_with_keywords(self):
+        """Non-error exit code still classifies keywords (function is called regardless)."""
+        output = "ImportError: foo"
+        etype, _ = self._classify_error(0, output)
+        assert etype == "import_error"
 
 
 # ---------------------------------------------------------------------------
