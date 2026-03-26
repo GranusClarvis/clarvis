@@ -406,6 +406,10 @@ class EpisodicMemory:
                     "permission denied", "disk quota", "no space left",
                 )):
                     ft = "system"
+            # Always assign a failure_type for non-success outcomes;
+            # "action" is the catch-all default when no specific type detected
+            if ft is None:
+                ft = "action"
 
         episode = {
             "id": f"ep_{now.strftime('%Y%m%d_%H%M%S')}",

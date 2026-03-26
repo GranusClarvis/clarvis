@@ -69,4 +69,8 @@ _(Completed items archived.)_
 
 ## NEW ITEMS
 
-
+- [ ] [ORCH_BENCHMARK_SCRIPTS] Create `scripts/orchestration_benchmark.py` and `scripts/orchestration_scoreboard.py` — both are referenced by `cron_orchestrator.sh` (lines 60, 72) but missing, causing 5 daily benchmark failures since 2026-03-17. Implement per-agent composite scoring (isolation, latency, PR success, retrieval, cost) and JSONL scoreboard writer.
+- [ ] [EPISODE_ACTION_SUBCLASS] Decompose the catch-all "action" failure category in `heartbeat_postflight.py` error classifier (~line 241) into sub-types (param_missing, api_error, race_condition, validation_fail). 45 of 68 failures are bucketed as generic "action" — finer classification will surface root causes and directly improve Episode Success Rate (current 0.922).
+- [ ] [EPISODE_CAUSAL_DENSITY] Add automatic causal-link inference in `heartbeat_postflight.py` episode encoding: when a new episode's task overlaps a recent episode by topic/collection, auto-create a causal edge. Current ratio is 64 links / 341 episodes (0.19) — target 0.5+. This strengthens episodic retrieval and indirectly improves episode success rate.
+- [x] [CRON_ORCHESTRATOR_LOCKFILE_DOCS] Added header docs (pipeline, lock behavior, benchmark fallback, error interpretation, troubleshooting FAQ) and inline stage comments. (2026-03-26)
+- [x] [EPISODE_STATUS_FIELD_FIX] Fixed: `failure_type` now always defaults to `"action"` for non-success episodes in `encode()`. Backfilled 45 historical episodes. 249 tests pass. (2026-03-26)
