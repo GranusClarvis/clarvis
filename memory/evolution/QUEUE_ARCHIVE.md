@@ -1648,3 +1648,6 @@ _Last archived: 2026-03-24_
 
 ## Archived 2026-03-27
 - [x] [LLM_BRAIN_REVIEW 2026-03-27] [LLM_BRAIN_REVIEW] Implement temporal recency boosting in brain search — ✓ 3 fixes: (1) calendar-day precision for "today"/"yesterday" (midnight boundary instead of rolling 24h), (2) adaptive normalization window (7d/30d/90d based on intent strength), (3) stronger recency blending (up to 70% for "today" vs old 24-32%). Tested: "today" returns only same-day results, "recent" properly surfaces last-week items.
+
+## Archived 2026-03-27
+- [x] [RESEARCH_RETRIEVAL_OPTIMIZATION] Research: Retrieval optimization for RAG and memory systems — completed 2026-03-27. Key insight: retrieval should be controlled as an adaptive pipeline (query transformation, iterative evidence accumulation, noise filtering, and stop conditions based on confidence/marginal gain) rather than fixed top-k similarity search.

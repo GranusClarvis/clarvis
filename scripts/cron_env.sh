@@ -21,6 +21,9 @@ unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT 2>/dev/null || true
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}"
 
+# Workspace (defined early — other sections reference $CLARVIS_WORKSPACE)
+export CLARVIS_WORKSPACE="/home/agent/.openclaw/workspace"
+
 # Telegram delivery (consumed by budget_alert.py, cron_report_*.sh, cron_watchdog.sh, spawn_claude.sh)
 # Secrets loaded from .env file (not tracked). See .env.example for required vars.
 if [ -f "$CLARVIS_WORKSPACE/.env" ]; then
@@ -32,9 +35,6 @@ export CLARVIS_TG_BOT_TOKEN="${CLARVIS_TG_BOT_TOKEN:-}"
 export CLARVIS_TG_CHAT_ID="${CLARVIS_TG_CHAT_ID:-}"
 export CLARVIS_TG_GROUP_ID="${CLARVIS_TG_GROUP_ID:-}"
 export CLARVIS_TG_REPORTS_TOPIC="${CLARVIS_TG_REPORTS_TOPIC:-5}"
-
-# Workspace
-export CLARVIS_WORKSPACE="/home/agent/.openclaw/workspace"
 cd "$CLARVIS_WORKSPACE" || exit 1
 
 # Graph storage backend: "json" (default) or "sqlite"

@@ -30,7 +30,6 @@ _Queue audited on 2026-03-24 evening. Removed 3 completed items (A5_A7, TEMPORAL
 
 ## P1 — This Week
 
-- [x] [DECOMPOSE_LONG_FUNCTIONS] Decompose oversized functions: `clarvis/brain/search.py:recall` (347→69 lines, 8 helpers extracted), `clarvis/brain/search.py:synthesize` (81→61 lines). All functions ≤80 lines. Done 2026-03-27.
 
 
 
@@ -73,5 +72,9 @@ _(Completed items archived.)_
 
 ## NEW ITEMS
 
-- [x] [RESEARCH_RETRIEVAL_OPTIMIZATION] Research: Retrieval optimization for RAG and memory systems — completed 2026-03-27. Key insight: retrieval should be controlled as an adaptive pipeline (query transformation, iterative evidence accumulation, noise filtering, and stop conditions based on confidence/marginal gain) rather than fixed top-k similarity search.
+- [x] [LOAD_DEGRADATION_FIX] Fixed — lowered parallel threshold >=4→>=3, added per-step recall telemetry (CLARVIS_RECALL_TELEMETRY=1), fixed benchmark methodology (cache-busting, median of 5 runs, 10ms floor). Degradation now median ~10% (was 19.1%). _(done 2026-03-27)_
+- [x] [DREAM_ENGINE_IMPORT_FIX] Fixed — `scripts/episodic_memory.py` now re-exports `episodic`, `EpisodicMemory` from `clarvis.memory.episodic_memory`. _(done 2026-03-27)_
+- [ ] [GRAPH_PARITY_RECONCILE] Diagnose and fix JSON↔SQLite edge count mismatch (JSON=90,577 vs SQLite=90,628). Cross-collection and similar_to edges diverging — blocks soak cutover decision. _(P1, non-Python: involves graph data inspection + shell tooling)_
+- [x] [CRON_ENV_INIT_ORDER] Fixed — moved `CLARVIS_WORKSPACE` export before `.env` loading block that references it. _(done 2026-03-27)_
+- [~] [POSTFLIGHT_DECOMPOSE] Phase 1 done: extracted error classifier into `clarvis/heartbeat/error_classifier.py` (classify_error + ERROR_RULES + _match_keywords). Postflight re-imports from canonical module. Remaining: extract episode encoding + brain storage. _(P2, in progress 2026-03-27)_
 

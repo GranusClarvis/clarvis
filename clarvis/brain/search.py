@@ -370,7 +370,7 @@ class SearchMixin:
     def _dispatch_collection_queries(self, valid_collections, query_embedding, n,
                                      cutoff_epoch, cutoff_date, min_importance,
                                      include_related):
-        """Query all collections (parallel when >=4, sequential otherwise)."""
+        """Query all collections (parallel when >=3, sequential otherwise)."""
         import os as _os
         from functools import partial
 
@@ -380,7 +380,7 @@ class SearchMixin:
         elif _parallel_env == "1":
             use_parallel = len(valid_collections) > 1
         else:
-            use_parallel = len(valid_collections) >= 4
+            use_parallel = len(valid_collections) >= 3
 
         query_fn = partial(self._query_single_collection,
                            query_embedding=query_embedding, n=n,
@@ -543,7 +543,13 @@ class SearchMixin:
 
         Uses registered hooks for scoring (actr), boosting (attention/hebbian),
         and observation (retrieval_quality) via dependency inversion.
+
+        Set CLARVIS_RECALL_TELEMETRY=1 to log per-step timings.
         """
+        import os as _os
+        _telemetry = _os.environ.get("CLARVIS_RECALL_TELEMETRY") == "1"
+        _t0 = time.monotonic()
+
         # Phase 1: Resolve parameters
         collections, n, since_days, recency_weight, calendar_epoch = \
             self._resolve_recall_params(query, collections, n, since_days, recency_weight)
@@ -557,11 +563,14 @@ class SearchMixin:
             return cached_result[1]
 
         # Phase 3: Compute cutoffs and embedding
+        _t_emb = time.monotonic()
         cutoff_date, cutoff_epoch = self._compute_temporal_cutoff(since_days, calendar_epoch)
         valid_collections = [c for c in collections if c in self.collections]
         query_embedding = self._get_or_compute_embedding(query, valid_collections)
+        _t_emb_done = time.monotonic()
 
         # Phase 4: Fetch from collections
+        _t_fetch = time.monotonic()
         all_results = self._dispatch_collection_queries(
             valid_collections, query_embedding, n,
             cutoff_epoch, cutoff_date, min_importance, include_related)
@@ -570,6 +579,7 @@ class SearchMixin:
         temporal_target = n * len(valid_collections)
         if cutoff_epoch and recency_weight >= 0.5 and len(all_results) < temporal_target:
             self._supplement_chronological(all_results, valid_collections, cutoff_epoch, n)
+        _t_fetch_done = time.monotonic()
 
         # Phase 5: Score, sort, filter
         all_results = self._score_and_sort(
@@ -602,6 +612,18 @@ class SearchMixin:
         if len(self._recall_cache) > 50:
             oldest = min(self._recall_cache, key=lambda k: self._recall_cache[k][0])
             del self._recall_cache[oldest]
+
+        if _telemetry:
+            _t_end = time.monotonic()
+            _log.info(
+                "recall telemetry n=%d cols=%d results=%d | "
+                "embed=%.1fms fetch=%.1fms sort+filter=%.1fms total=%.1fms",
+                n, len(valid_collections), len(final_results),
+                (_t_emb_done - _t_emb) * 1000,
+                (_t_fetch_done - _t_fetch) * 1000,
+                (_t_end - _t_fetch_done) * 1000,
+                (_t_end - _t0) * 1000,
+            )
 
         return final_results
 
