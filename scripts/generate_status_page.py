@@ -105,44 +105,10 @@ def generate_stats_json() -> dict:
     }
 
 
-def render_html(stats: dict) -> str:
-    """Render the status page HTML from stats dict."""
-    brain = stats["brain"]
-    perf = stats["performance"]
-    cron = stats["cron"]
-    ts = stats["generated_at"][:19].replace("T", " ") + " UTC"
-
-    # Build collection rows
-    collections = brain.get("collections", {})
-    collection_rows = ""
-    for name, count in sorted(collections.items()):
-        collection_rows += f'            <tr><td>{name}</td><td>{count:,}</td></tr>\n'
-
-    # Build metric rows
-    results = perf.get("results", {})
-    metric_rows = ""
-    status_class = {"PASS": "pass", "WARN": "warn", "FAIL": "fail"}
-    for name, status in sorted(results.items()):
-        cls = status_class.get(status, "")
-        metric_rows += f'            <tr><td>{name}</td><td class="{cls}">{status}</td></tr>\n'
-
-    # PI gauge color
-    pi = perf.get("pi_score", 0)
-    if pi >= 0.8:
-        pi_color = "#4caf50"
-    elif pi >= 0.6:
-        pi_color = "#ff9800"
-    else:
-        pi_color = "#f44336"
-
-    html = f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Clarvis — Cognitive Agent Status</title>
-<style>
-:root {{
+def _render_css() -> str:
+    """Return the <style> block for the status page."""
+    return """<style>
+:root {
     --bg: #0d1117;
     --surface: #161b22;
     --border: #30363d;
@@ -152,9 +118,9 @@ def render_html(stats: dict) -> str:
     --green: #3fb950;
     --yellow: #d29922;
     --red: #f85149;
-}}
-* {{ margin: 0; padding: 0; box-sizing: border-box; }}
-body {{
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
     background: var(--bg);
     color: var(--text);
@@ -162,27 +128,27 @@ body {{
     padding: 2rem;
     max-width: 960px;
     margin: 0 auto;
-}}
-h1 {{ color: var(--accent); margin-bottom: 0.5rem; font-size: 2rem; }}
-h2 {{ color: var(--text); margin: 2rem 0 1rem; font-size: 1.3rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }}
-.subtitle {{ color: var(--text-dim); margin-bottom: 2rem; }}
-.grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; margin: 1.5rem 0; }}
-.card {{
+}
+h1 { color: var(--accent); margin-bottom: 0.5rem; font-size: 2rem; }
+h2 { color: var(--text); margin: 2rem 0 1rem; font-size: 1.3rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+.subtitle { color: var(--text-dim); margin-bottom: 2rem; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; margin: 1.5rem 0; }
+.card {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 8px;
     padding: 1.5rem;
-}}
-.card h3 {{ color: var(--accent); font-size: 1rem; margin-bottom: 0.75rem; }}
-.stat {{ font-size: 2.5rem; font-weight: 700; }}
-.stat-label {{ color: var(--text-dim); font-size: 0.85rem; }}
-table {{ width: 100%; border-collapse: collapse; margin-top: 0.5rem; }}
-th, td {{ padding: 0.4rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.9rem; }}
-th {{ color: var(--text-dim); font-weight: 600; }}
-.pass {{ color: var(--green); font-weight: 600; }}
-.warn {{ color: var(--yellow); font-weight: 600; }}
-.fail {{ color: var(--red); font-weight: 600; }}
-.arch-diagram {{
+}
+.card h3 { color: var(--accent); font-size: 1rem; margin-bottom: 0.75rem; }
+.stat { font-size: 2.5rem; font-weight: 700; }
+.stat-label { color: var(--text-dim); font-size: 0.85rem; }
+table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; }
+th, td { padding: 0.4rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+th { color: var(--text-dim); font-weight: 600; }
+.pass { color: var(--green); font-weight: 600; }
+.warn { color: var(--yellow); font-weight: 600; }
+.fail { color: var(--red); font-weight: 600; }
+.arch-diagram {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 8px;
@@ -193,25 +159,32 @@ th {{ color: var(--text-dim); font-weight: 600; }}
     overflow-x: auto;
     line-height: 1.4;
     color: var(--text-dim);
-}}
-.footer {{
+}
+.footer {
     margin-top: 3rem;
     padding-top: 1rem;
     border-top: 1px solid var(--border);
     color: var(--text-dim);
     font-size: 0.8rem;
     text-align: center;
-}}
-a {{ color: var(--accent); text-decoration: none; }}
-a:hover {{ text-decoration: underline; }}
-</style>
-</head>
-<body>
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+</style>"""
 
-<h1>Clarvis</h1>
-<p class="subtitle">Dual-layer cognitive agent &mdash; conscious reasoning + autonomous subconscious evolution</p>
 
-<div class="grid">
+def _render_summary_cards(brain: dict, perf: dict, cron: dict) -> str:
+    """Render the top-level summary stat cards."""
+    collections = brain.get("collections", {})
+    pi = perf.get("pi_score", 0)
+    if pi >= 0.8:
+        pi_color = "#4caf50"
+    elif pi >= 0.6:
+        pi_color = "#ff9800"
+    else:
+        pi_color = "#f44336"
+
+    return f"""<div class="grid">
     <div class="card">
         <h3>Performance Index</h3>
         <div class="stat" style="color: {pi_color}">{pi:.1%}</div>
@@ -232,9 +205,13 @@ a:hover {{ text-decoration: underline; }}
         <div class="stat">{cron.get('active_jobs', 0)}</div>
         <div class="stat-label">Active cron entries &bull; subconscious layer</div>
     </div>
-</div>
+</div>"""
 
-<h2>Architecture</h2>
+
+def _render_architecture(brain: dict) -> str:
+    """Render the ASCII architecture diagram section."""
+    collections = brain.get("collections", {})
+    return f"""<h2>Architecture</h2>
 <div class="arch-diagram">
 Conscious Layer (MiniMax M2.5 via OpenClaw Gateway)
   \u251c\u2500\u2500 Direct chat with user via Telegram / Discord
@@ -257,9 +234,19 @@ Cognitive Architecture
   \u251c\u2500\u2500 GWT attention (Global Workspace Theory salience scoring)
   \u251c\u2500\u2500 Meta-cognitive reasoning chains with confidence calibration
   \u251c\u2500\u2500 Self-model (7 capability domains) + Phi metric (IIT proxy)
-  \u2514\u2500\u2500 Heartbeat pipeline: gate \u2192 preflight \u2192 execute \u2192 postflight</div>
+  \u2514\u2500\u2500 Heartbeat pipeline: gate \u2192 preflight \u2192 execute \u2192 postflight</div>"""
 
-<h2>Performance Metrics</h2>
+
+def _render_performance_section(perf: dict) -> str:
+    """Render performance metric cards and status table."""
+    results = perf.get("results", {})
+    status_class = {"PASS": "pass", "WARN": "warn", "FAIL": "fail"}
+    metric_rows = ""
+    for name, status in sorted(results.items()):
+        cls = status_class.get(status, "")
+        metric_rows += f'            <tr><td>{name}</td><td class="{cls}">{status}</td></tr>\n'
+
+    return f"""<h2>Performance Metrics</h2>
 <div class="grid">
     <div class="card">
         <h3>Brain Query Speed</h3>
@@ -285,12 +272,55 @@ Cognitive Architecture
 
 <table>
     <tr><th>Metric</th><th>Status</th></tr>
-{metric_rows}</table>
+{metric_rows}</table>"""
 
-<h2>Brain Collections</h2>
+
+def _render_collections_table(brain: dict) -> str:
+    """Render the brain collections table."""
+    collections = brain.get("collections", {})
+    rows = ""
+    for name, count in sorted(collections.items()):
+        rows += f'            <tr><td>{name}</td><td>{count:,}</td></tr>\n'
+
+    return f"""<h2>Brain Collections</h2>
 <table>
     <tr><th>Collection</th><th>Memories</th></tr>
-{collection_rows}</table>
+{rows}</table>"""
+
+
+def render_html(stats: dict) -> str:
+    """Render the status page HTML from stats dict."""
+    brain = stats["brain"]
+    perf = stats["performance"]
+    cron = stats["cron"]
+    ts = stats["generated_at"][:19].replace("T", " ") + " UTC"
+
+    css = _render_css()
+    summary = _render_summary_cards(brain, perf, cron)
+    architecture = _render_architecture(brain)
+    performance = _render_performance_section(perf)
+    collections = _render_collections_table(brain)
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clarvis — Cognitive Agent Status</title>
+{css}
+</head>
+<body>
+
+<h1>Clarvis</h1>
+<p class="subtitle">Dual-layer cognitive agent &mdash; conscious reasoning + autonomous subconscious evolution</p>
+
+{summary}
+
+{architecture}
+
+{performance}
+
+{collections}
 
 <div class="footer">
     <p>Generated {ts} &bull; <a href="https://github.com/GranusClarvis/clarvis">github.com/GranusClarvis/clarvis</a></p>
@@ -299,7 +329,6 @@ Cognitive Architecture
 
 </body>
 </html>"""
-    return html
 
 
 def main():
