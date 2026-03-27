@@ -69,6 +69,37 @@ check_job "backup_verify"   "$LOG_DIR/backup_verify.log"    26   # daily at 02:3
 check_job "dream_engine"    "$LOG_DIR/dream.log"            26   # daily at 02:45, grace 2h
 check_job "research"        "$LOG_DIR/research.log"         10   # 2x/day at 10,16, grace 4h
 
+# --- Stale lock check ---
+# Alert on any /tmp/clarvis_*.lock files older than 2 hours
+STALE_LOCK_THRESHOLD=7200  # 2 hours in seconds
+STALE_LOCKS=""
+STALE_LOCK_COUNT=0
+for lockfile in /tmp/clarvis_*.lock; do
+    [ -f "$lockfile" ] || continue
+    lock_mod=$(stat -c%Y "$lockfile" 2>/dev/null || echo 0)
+    lock_age=$((NOW - lock_mod))
+    if [ "$lock_age" -gt "$STALE_LOCK_THRESHOLD" ]; then
+        lock_pid=$(cat "$lockfile" 2>/dev/null || echo "?")
+        lock_name=$(basename "$lockfile")
+        lock_hours=$((lock_age / 3600))
+        lock_mins=$(( (lock_age % 3600) / 60 ))
+        # Check if holding process is still alive
+        pid_status="dead"
+        if [ "$lock_pid" != "?" ] && kill -0 "$lock_pid" 2>/dev/null; then
+            pid_status="alive"
+        fi
+        STALE_LOCKS="${STALE_LOCKS}STALE   ${lock_name} — ${lock_hours}h ${lock_mins}m old (PID ${lock_pid}, ${pid_status})\n"
+        ((STALE_LOCK_COUNT++)) || true
+    fi
+done
+
+if [ "$STALE_LOCK_COUNT" -gt 0 ]; then
+    REPORT="${REPORT}${STALE_LOCKS}"
+    ((FAILURES += STALE_LOCK_COUNT)) || true
+else
+    REPORT="${REPORT}OK      locks — no stale locks (>2h)\n"
+fi
+
 # --- Working memory health check ---
 # Verify attention spotlight has active items (target: 3+)
 WM_FILE="/home/agent/.openclaw/workspace/data/attention/spotlight.json"
@@ -161,7 +192,7 @@ if [ "$FAILURES" -gt 0 ] && [ "$ALERT_MODE" = true ]; then
 
 ${FAILURES} cron job(s) still failing after auto-recovery:
 
-$(echo -e "$REPORT" | grep "MISSED")
+$(echo -e "$REPORT" | grep -E "MISSED|STALE")
 
 Recovery log: memory/cron/doctor.log
 Watchdog log: memory/cron/watchdog.log"

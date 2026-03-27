@@ -74,12 +74,10 @@ _(Completed items archived.)_
 
 ## NEW ITEMS
 
-- [x] [RESEARCH_DISCOVERY 2026-03-27] Research: Late Chunking for Retrieval Optimization — completed. Long-context embedding models perform better when chunking is delayed until after full-document encoding, preserving cross-chunk references. Best fit: long, context-dependent notes; weak effect on short atomic docs. Research note: `memory/research/late_chunking_retrieval_optimization_2026-03-27.md`.
 
-- [ ] [GRAPH_PARITY_RECONCILE] Diagnose and fix JSON↔SQLite edge count mismatch (JSON=90,577 vs SQLite=90,628). Cross-collection and similar_to edges diverging — blocks soak cutover decision. _(P1, non-Python: involves graph data inspection + shell tooling)_
 - [~] [POSTFLIGHT_DECOMPOSE] Phase 1 done: extracted error classifier into `clarvis/heartbeat/error_classifier.py` (classify_error + ERROR_RULES + _match_keywords). Postflight re-imports from canonical module. Remaining: extract episode encoding + brain storage. _(P2, in progress 2026-03-27)_
 - [ ] [LOAD_SCALING_OPTIMIZE] Profile and reduce n=1→n=10 recall degradation from 19.1% to <15% target. Investigate `brain.recall()` post-processing: graph-edge lookups, reranking, and result enrichment likely scale linearly with n. Batch graph queries or add early-exit optimizations. _(P1, targets weakest metric: load_degradation)_
 - [ ] [BENCHMARK_LOAD_NOISE_FLOOR] Load degradation jumped 0%→19.1% in a single benchmark run — high volatility suggests measurement noise. In `benchmark_load_scaling()`: increase samples from 5→9, add IQR outlier trimming, and log raw timings to history for trend analysis. _(P1, stabilizes the metric that gates LOAD_SCALING_OPTIMIZE)_
-- [ ] [CRON_STALE_LOCK_AUDIT] Audit all `/tmp/clarvis_*.lock` files and cron scripts for stale-lock handling. Verify `trap EXIT` cleanup works when scripts are killed by timeout. Add a check to `cron_watchdog.sh` that alerts on locks older than 2 hours. _(P1, non-Python: shell scripting + cron inspection)_
-- [ ] [MILESTONE_D_STATUS_PAGE] P0 deadline 2026-03-29. Scaffold a minimal public landing page for Clarvis: architecture overview, live brain stats, current PI score, link to repo. Static HTML or lightweight framework — keep it deployable. _(P1, supports Milestone D: Public Surface)_
+- [x] [CRON_STALE_LOCK_AUDIT] Done 2026-03-27. Audited all lock patterns: lock_helper.sh handles 3 tiers with /proc cmdline validation. Verified trap EXIT fires under timeout (SIGTERM). Added stale lock check (>2h) to cron_watchdog.sh with pid-alive status. Inline-pattern scripts (absolute_zero, cleanup) are lightweight/no-Claude so simpler pattern is acceptable.
+- [x] [MILESTONE_D_STATUS_PAGE] Done 2026-03-27. Created `scripts/generate_status_page.py` — pulls live brain stats, PI score, cron job count. Generates `site/index.html` (dark theme, responsive, GitHub-style). Supports `--json` for API use. Architecture diagram, 4 stat cards, metric table, collection table, repo link.
 

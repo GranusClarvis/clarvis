@@ -1656,3 +1656,7 @@ _Last archived: 2026-03-24_
 - [x] [LOAD_DEGRADATION_FIX] Fixed — lowered parallel threshold >=4→>=3, added per-step recall telemetry (CLARVIS_RECALL_TELEMETRY=1), fixed benchmark methodology (cache-busting, median of 5 runs, 10ms floor). Degradation now median ~10% (was 19.1%). _(done 2026-03-27)_
 - [x] [DREAM_ENGINE_IMPORT_FIX] Fixed — `scripts/episodic_memory.py` now re-exports `episodic`, `EpisodicMemory` from `clarvis.memory.episodic_memory`. _(done 2026-03-27)_
 - [x] [CRON_ENV_INIT_ORDER] Fixed — moved `CLARVIS_WORKSPACE` export before `.env` loading block that references it. _(done 2026-03-27)_
+
+## Archived 2026-03-27
+- [x] [RESEARCH_DISCOVERY 2026-03-27] Research: Late Chunking for Retrieval Optimization — completed. Long-context embedding models perform better when chunking is delayed until after full-document encoding, preserving cross-chunk references. Best fit: long, context-dependent notes; weak effect on short atomic docs. Research note: `memory/research/late_chunking_retrieval_optimization_2026-03-27.md`.
+- [x] [GRAPH_PARITY_RECONCILE] Diagnose and fix JSON↔SQLite edge count mismatch (JSON=90,577 vs SQLite=90,628). Cross-collection and similar_to edges diverging — blocks soak cutover decision. _(P1, non-Python: involves graph data inspection + shell tooling)_ (2026-03-27 14:05 UTC)
