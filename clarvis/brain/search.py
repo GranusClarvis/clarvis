@@ -249,29 +249,14 @@ def _filter_belief_revision(results: list) -> list:
 class SearchMixin:
     """Search operations for ClarvisBrain (mixed into the main class)."""
 
-    def recall(self, query, collections=None, n=5, min_importance=None,
-               include_related=False, since_days=None, attention_boost=False,
-               caller=None, graph_expand=False, filter_bridges=True,
-               cross_collection_expand=False, recency_weight=0.0):
-        """Recall memories matching a query.
+    # --- recall helper: resolve params ---
 
-        Uses registered hooks for scoring (actr), boosting (attention/hebbian),
-        and observation (retrieval_quality) instead of importing those modules
-        directly — dependency inversion breaks the circular import SCC.
-
-        graph_expand: If True, expand top results with 1-hop graph neighbors.
-        filter_bridges: If True (default), deprioritize synthetic bridge memories.
-        cross_collection_expand: If True, dynamically query adjacent collections
-            for cross-domain matches (replaces static bridge memories).
-        """
+    def _resolve_recall_params(self, query, collections, n, since_days, recency_weight):
+        """Resolve collection routing and temporal intent for recall."""
         if collections is None:
             routed = route_query(query)
             collections = routed if routed else DEFAULT_COLLECTIONS
 
-        # --- Auto-detect temporal intent from query text ---
-        # If caller didn't explicitly set since_days or recency_weight,
-        # detect temporal keywords and apply automatically.
-        # calendar_epoch: precise cutoff for "today"/"yesterday" (midnight boundary)
         calendar_epoch = None
         auto_since, auto_recency, auto_cal_epoch = detect_temporal_intent(query)
         if since_days is None and auto_since is not None:
@@ -285,18 +270,14 @@ class SearchMixin:
         if since_days is not None and n <= 5:
             n = 15
 
-        # Result-level cache (30s TTL) — avoids repeated ChromaDB queries
-        cache_key = (query, tuple(sorted(collections)), n, min_importance, since_days, attention_boost, recency_weight)
-        now_cache = time.monotonic()
-        cached_result = self._recall_cache.get(cache_key)
-        if cached_result and (now_cache - cached_result[0]) < self._recall_cache_ttl:
-            return cached_result[1]
+        return collections, n, since_days, recency_weight, calendar_epoch
 
-        all_results = []
-        cutoff_date = None
-        cutoff_epoch = None
+    # --- recall helper: compute temporal cutoff ---
+
+    @staticmethod
+    def _compute_temporal_cutoff(since_days, calendar_epoch):
+        """Compute cutoff_date and cutoff_epoch from temporal params."""
         if calendar_epoch is not None:
-            # Calendar-day precision: use midnight boundary instead of rolling window
             cutoff_epoch = calendar_epoch
             cutoff_date = datetime.fromtimestamp(calendar_epoch, tz=timezone.utc).isoformat()
         elif since_days:
@@ -304,112 +285,112 @@ class SearchMixin:
             cutoff_dt = datetime.now(timezone.utc) - timedelta(days=since_days)
             cutoff_date = cutoff_dt.isoformat()
             cutoff_epoch = int(cutoff_dt.timestamp())
+        else:
+            cutoff_date = None
+            cutoff_epoch = None
+        return cutoff_date, cutoff_epoch
 
-        # Pre-compute embedding once
-        query_embedding = None
-        valid_collections = [c for c in collections if c in self.collections]
-        if valid_collections:
-            now = time.monotonic()
-            cached = self._embedding_cache.get(query)
-            if cached and (now - cached[0]) < self._embedding_cache_ttl:
-                query_embedding = cached[1]
+    # --- recall helper: embedding ---
+
+    def _get_or_compute_embedding(self, query, valid_collections):
+        """Get cached embedding or compute from first valid collection's EF."""
+        now = time.monotonic()
+        cached = self._embedding_cache.get(query)
+        if cached and (now - cached[0]) < self._embedding_cache_ttl:
+            return cached[1]
+
+        if not valid_collections:
+            return None
+
+        col0 = self.collections[valid_collections[0]]
+        ef = col0._embedding_function
+        if ef is None:
+            return None
+        try:
+            vecs = ef([query])
+            if vecs and len(vecs) > 0:
+                emb = vecs[0]
+                if hasattr(emb, 'tolist'):
+                    emb = emb.tolist()
+                self._embedding_cache[query] = (now, emb)
+                if len(self._embedding_cache) > 50:
+                    oldest_key = min(self._embedding_cache, key=lambda k: self._embedding_cache[k][0])
+                    del self._embedding_cache[oldest_key]
+                return emb
+        except Exception:
+            pass
+        return None
+
+    # --- recall helper: query single collection ---
+
+    def _query_single_collection(self, col_name, query_embedding, n,
+                                 cutoff_epoch, cutoff_date, min_importance,
+                                 include_related):
+        """Query a single ChromaDB collection. Designed for parallel execution."""
+        col = self.collections[col_name]
+        fetch_n = n * 3 if cutoff_epoch else n
+
+        where_clause = {"created_epoch": {"$gte": cutoff_epoch}} if cutoff_epoch else None
+        try:
+            if query_embedding is not None:
+                results = col.query(query_embeddings=[query_embedding],
+                                    n_results=fetch_n, where=where_clause)
             else:
-                col0 = self.collections[valid_collections[0]]
-                ef = col0._embedding_function
-                if ef is not None:
-                    try:
-                        vecs = ef([query])
-                        if vecs and len(vecs) > 0:
-                            query_embedding = vecs[0]
-                            if hasattr(query_embedding, 'tolist'):
-                                query_embedding = query_embedding.tolist()
-                            self._embedding_cache[query] = (now, query_embedding)
-                            if len(self._embedding_cache) > 50:
-                                oldest_key = min(self._embedding_cache, key=lambda k: self._embedding_cache[k][0])
-                                del self._embedding_cache[oldest_key]
-                    except Exception:
-                        pass
+                results = col.query(query_texts=[""], n_results=fetch_n,
+                                    where=where_clause)
+        except Exception:
+            if query_embedding is not None:
+                results = col.query(query_embeddings=[query_embedding], n_results=fetch_n)
+            else:
+                results = col.query(query_texts=[""], n_results=fetch_n)
 
-        def _query_collection(col_name):
-            """Query a single collection — designed for parallel execution."""
-            col = self.collections[col_name]
-            # Over-fetch 3x when temporal filtering active (compensates for
-            # post-query filtering losses on memories missing created_epoch)
-            fetch_n = n * 3 if cutoff_epoch else n
-
-            # Build ChromaDB where clause for DB-level temporal filtering
-            where_clause = None
-            if cutoff_epoch:
-                where_clause = {"created_epoch": {"$gte": cutoff_epoch}}
-
-            try:
-                if query_embedding is not None:
-                    results = col.query(
-                        query_embeddings=[query_embedding], n_results=fetch_n,
-                        where=where_clause)
-                else:
-                    results = col.query(
-                        query_texts=[query], n_results=fetch_n,
-                        where=where_clause)
-            except Exception:
-                # Fallback without where clause (e.g. no memories have created_epoch yet)
-                if query_embedding is not None:
-                    results = col.query(
-                        query_embeddings=[query_embedding], n_results=fetch_n)
-                else:
-                    results = col.query(query_texts=[query], n_results=fetch_n)
-
-            items = []
-            if results["documents"] and results["documents"][0]:
-                for i, doc in enumerate(results["documents"][0]):
-                    meta = results["metadatas"][0][i] if results["metadatas"] else {}
-
-                    if min_importance is not None:
-                        if meta.get("importance", 0) < min_importance:
-                            continue
-
-                    # Fallback post-query filter for memories without created_epoch
-                    if cutoff_date and not meta.get("created_epoch") and meta.get("created_at"):
-                        if meta["created_at"] < cutoff_date:
-                            continue
-
-                    distance = results["distances"][0][i] if results.get("distances") else None
-
-                    result_item = {
-                        "document": doc,
-                        "metadata": meta,
-                        "collection": col_name,
-                        "id": results["ids"][0][i],
-                        "distance": distance,
-                        "related": []
-                    }
-
-                    if include_related:
-                        related = self.get_related(results["ids"][0][i], depth=1)
-                        result_item["related"] = related
-
-                    items.append(result_item)
+        items = []
+        if not (results["documents"] and results["documents"][0]):
             return items
 
-        # Query collections — parallel by default when 4+ collections (uses pre-warmed
-        # executor to avoid thread creation overhead). Sequential for few collections
-        # or when CLARVIS_PARALLEL_RECALL=0 forces it off.
-        # Previous benchmark (2026-03-20): new-executor-per-call was slower (0.41s vs 0.28s).
-        # Pre-warmed executor eliminates that overhead.
-        import os as _os
-        _parallel_env = _os.environ.get("CLARVIS_PARALLEL_RECALL")
-        # Auto-parallel for 4+ collections, explicit override via env var
-        if _parallel_env == "0":
-            _use_parallel = False
-        elif _parallel_env == "1":
-            _use_parallel = len(valid_collections) > 1
-        else:
-            _use_parallel = len(valid_collections) >= 4
+        for i, doc in enumerate(results["documents"][0]):
+            meta = results["metadatas"][0][i] if results["metadatas"] else {}
+            if min_importance is not None and meta.get("importance", 0) < min_importance:
+                continue
+            if cutoff_date and not meta.get("created_epoch") and meta.get("created_at"):
+                if meta["created_at"] < cutoff_date:
+                    continue
+            distance = results["distances"][0][i] if results.get("distances") else None
+            item = {
+                "document": doc, "metadata": meta, "collection": col_name,
+                "id": results["ids"][0][i], "distance": distance, "related": [],
+            }
+            if include_related:
+                item["related"] = self.get_related(results["ids"][0][i], depth=1)
+            items.append(item)
+        return items
 
-        if _use_parallel:
+    # --- recall helper: dispatch queries across collections ---
+
+    def _dispatch_collection_queries(self, valid_collections, query_embedding, n,
+                                     cutoff_epoch, cutoff_date, min_importance,
+                                     include_related):
+        """Query all collections (parallel when >=4, sequential otherwise)."""
+        import os as _os
+        from functools import partial
+
+        _parallel_env = _os.environ.get("CLARVIS_PARALLEL_RECALL")
+        if _parallel_env == "0":
+            use_parallel = False
+        elif _parallel_env == "1":
+            use_parallel = len(valid_collections) > 1
+        else:
+            use_parallel = len(valid_collections) >= 4
+
+        query_fn = partial(self._query_single_collection,
+                           query_embedding=query_embedding, n=n,
+                           cutoff_epoch=cutoff_epoch, cutoff_date=cutoff_date,
+                           min_importance=min_importance, include_related=include_related)
+
+        all_results = []
+        if use_parallel:
             from concurrent.futures import as_completed
-            futures = {_recall_executor.submit(_query_collection, c): c
-                       for c in valid_collections}
+            futures = {_recall_executor.submit(query_fn, c): c for c in valid_collections}
             for future in as_completed(futures):
                 try:
                     all_results.extend(future.result())
@@ -418,45 +399,42 @@ class SearchMixin:
         else:
             for c in valid_collections:
                 try:
-                    all_results.extend(_query_collection(c))
+                    all_results.extend(query_fn(c))
                 except Exception:
                     pass
+        return all_results
 
-        # --- Chronological fallback for pure temporal queries ---
-        # If temporal intent is strong but semantic search yielded few results,
-        # supplement with reverse-chronological retrieval via col.get().
-        _temporal_target = n * len(valid_collections)
-        if cutoff_epoch and recency_weight >= 0.5 and len(all_results) < _temporal_target:
-            existing_ids = {r.get("id") for r in all_results}
-            for col_name in valid_collections:
-                col = self.collections[col_name]
-                try:
-                    chrono = col.get(
-                        where={"created_epoch": {"$gte": cutoff_epoch}},
-                        limit=n * 3,
-                        include=["documents", "metadatas"],
-                    )
-                except Exception:
-                    continue
-                if not chrono.get("ids"):
-                    continue
-                for i, mid in enumerate(chrono["ids"]):
-                    if mid in existing_ids:
-                        continue
-                    existing_ids.add(mid)
-                    meta = chrono["metadatas"][i] if chrono.get("metadatas") else {}
-                    doc = chrono["documents"][i] if chrono.get("documents") else ""
-                    all_results.append({
-                        "document": doc,
-                        "metadata": meta,
-                        "collection": col_name,
-                        "id": mid,
-                        "distance": None,  # no semantic distance for chrono results
-                        "related": [],
-                        "_chrono_fallback": True,
-                    })
+    # --- recall helper: chronological fallback ---
 
-        # --- Hook: attention boost ---
+    def _supplement_chronological(self, all_results, valid_collections, cutoff_epoch, n):
+        """Supplement semantic results with reverse-chronological retrieval."""
+        existing_ids = {r.get("id") for r in all_results}
+        for col_name in valid_collections:
+            col = self.collections[col_name]
+            try:
+                chrono = col.get(where={"created_epoch": {"$gte": cutoff_epoch}},
+                                 limit=n * 3, include=["documents", "metadatas"])
+            except Exception:
+                continue
+            if not chrono.get("ids"):
+                continue
+            for i, mid in enumerate(chrono["ids"]):
+                if mid in existing_ids:
+                    continue
+                existing_ids.add(mid)
+                meta = chrono["metadatas"][i] if chrono.get("metadatas") else {}
+                doc = chrono["documents"][i] if chrono.get("documents") else ""
+                all_results.append({
+                    "document": doc, "metadata": meta, "collection": col_name,
+                    "id": mid, "distance": None, "related": [],
+                    "_chrono_fallback": True,
+                })
+
+    # --- recall helper: score + sort ---
+
+    def _score_and_sort(self, all_results, recency_weight, attention_boost, filter_bridges):
+        """Apply hooks, recency scoring, sorting, and filtering to results."""
+        # Hook: attention boost
         if attention_boost:
             for fn in self._recall_boosters:
                 try:
@@ -464,132 +442,162 @@ class SearchMixin:
                 except Exception:
                     pass
 
-        # --- Hook: scoring (actr or fallback) ---
+        # Hook: scoring (actr or fallback)
         scored = False
         for fn in self._recall_scorers:
             try:
                 fn(all_results)
                 scored = True
-                break  # Use first successful scorer
+                break
             except Exception:
                 continue
 
-        # Compute recency scores if recency_weight > 0
-        _recency_w = max(0.0, min(1.0, recency_weight))
-        if _recency_w > 0:
-            _now_ts = datetime.now(timezone.utc).timestamp()
-            # Adaptive normalization window: shorter for strong temporal intent
-            # "today" (rw=0.9) → 7 days; "recent" (rw=0.6) → 30 days; weak → 90 days
-            if _recency_w >= 0.8:
-                _max_age = 7 * 86400
-            elif _recency_w >= 0.6:
-                _max_age = 30 * 86400
-            else:
-                _max_age = 90 * 86400
-            for r in all_results:
-                created = r["metadata"].get("created_at", "")
-                try:
-                    age_s = _now_ts - datetime.fromisoformat(created).timestamp()
-                    r["_recency_score"] = max(0.0, 1.0 - age_s / _max_age)
-                except (ValueError, TypeError):
-                    r["_recency_score"] = 0.0
+        rw = max(0.0, min(1.0, recency_weight))
+        if rw > 0:
+            self._apply_recency_scores(all_results, rw)
 
-        # Recency blending factor: stronger for explicit temporal queries.
-        # rw >= 0.8 ("today"): recency dominates (60-70% of score)
-        # rw ~0.5-0.7 ("recent", "this week"): moderate blend (30-45%)
-        # rw < 0.5: gentle nudge (15-20%)
-        if _recency_w >= 0.8:
-            _recency_blend = 0.7  # recency-dominant
-        elif _recency_w >= 0.5:
-            _recency_blend = _recency_w * 0.65  # 0.325 - 0.52
+        # Recency blending factor
+        if rw >= 0.8:
+            blend = 0.7
+        elif rw >= 0.5:
+            blend = rw * 0.65
         else:
-            _recency_blend = _recency_w * 0.4   # 0 - 0.2
+            blend = rw * 0.4
 
-        if scored:
-            if _recency_w > 0:
-                all_results.sort(
-                    key=lambda x: x.get("_actr_score", 0) * (1 - _recency_blend)
-                    + x.get("_recency_score", 0) * _recency_blend,
-                    reverse=True)
-            else:
-                all_results.sort(key=lambda x: x.get("_actr_score", 0), reverse=True)
-        else:
-            # Fallback: distance + importance + optional recency scoring
-            def sort_key(x):
-                distance = x.get("distance")
-                if distance is not None:
-                    semantic_relevance = 1.0 / (1.0 + distance)
-                else:
-                    semantic_relevance = 0.5
-                importance = x["metadata"].get("importance", 0.5)
-                boost = x["metadata"].get("_attention_boost", 0)
-                base = semantic_relevance * 0.85 + (importance + boost) * 0.15
-                if _recency_w > 0:
-                    recency = x.get("_recency_score", 0.0)
-                    return base * (1 - _recency_blend) + recency * _recency_blend
-                return base
-            all_results.sort(key=sort_key, reverse=True)
+        self._sort_results(all_results, scored, rw, blend)
 
-        # --- Bridge filtering: deprioritize synthetic bridge memories ---
         if filter_bridges:
             all_results = _deprioritize_bridges(all_results)
+        return _filter_belief_revision(all_results)
 
-        # --- Belief revision: filter superseded, deprioritize uncertain/expired ---
-        all_results = _filter_belief_revision(all_results)
+    @staticmethod
+    def _apply_recency_scores(results, recency_weight):
+        """Compute _recency_score for each result based on age."""
+        now_ts = datetime.now(timezone.utc).timestamp()
+        if recency_weight >= 0.8:
+            max_age = 7 * 86400
+        elif recency_weight >= 0.6:
+            max_age = 30 * 86400
+        else:
+            max_age = 90 * 86400
+        for r in results:
+            created = r["metadata"].get("created_at", "")
+            try:
+                age_s = now_ts - datetime.fromisoformat(created).timestamp()
+                r["_recency_score"] = max(0.0, 1.0 - age_s / max_age)
+            except (ValueError, TypeError):
+                r["_recency_score"] = 0.0
 
+    @staticmethod
+    def _sort_results(results, scored, recency_weight, blend):
+        """Sort results by actr score or fallback, blended with recency."""
+        if scored:
+            if recency_weight > 0:
+                results.sort(
+                    key=lambda x: x.get("_actr_score", 0) * (1 - blend)
+                    + x.get("_recency_score", 0) * blend, reverse=True)
+            else:
+                results.sort(key=lambda x: x.get("_actr_score", 0), reverse=True)
+        else:
+            def sort_key(x):
+                dist = x.get("distance")
+                sem = 1.0 / (1.0 + dist) if dist is not None else 0.5
+                imp = x["metadata"].get("importance", 0.5)
+                boost = x["metadata"].get("_attention_boost", 0)
+                base = sem * 0.85 + (imp + boost) * 0.15
+                if recency_weight > 0:
+                    return base * (1 - blend) + x.get("_recency_score", 0.0) * blend
+                return base
+            results.sort(key=sort_key, reverse=True)
+
+    # --- recall helper: fire observers ---
+
+    def _fire_recall_observers(self, query, final_results, caller):
+        """Fire recall observers in background thread (hebbian, synaptic, etc.)."""
+        if not (final_results and query and self._recall_observers):
+            return
+        now_mono = time.monotonic()
+        last_obs = getattr(self, '_last_observer_time', 0)
+        if (now_mono - last_obs) >= 5.0:
+            self._last_observer_time = now_mono
+
+        obs_snapshot = copy.deepcopy(final_results)
+        observers = list(self._recall_observers)
+
+        def _run():
+            for fn in observers:
+                try:
+                    fn(query, obs_snapshot, caller=caller,
+                       rate_limit_mono=now_mono, last_mono=last_obs)
+                except Exception:
+                    _log.debug("Observer %s failed", fn.__qualname__, exc_info=True)
+        _observer_executor.submit(_run)
+
+    # --- recall: main entry point ---
+
+    def recall(self, query, collections=None, n=5, min_importance=None,
+               include_related=False, since_days=None, attention_boost=False,
+               caller=None, graph_expand=False, filter_bridges=True,
+               cross_collection_expand=False, recency_weight=0.0):
+        """Recall memories matching a query.
+
+        Uses registered hooks for scoring (actr), boosting (attention/hebbian),
+        and observation (retrieval_quality) via dependency inversion.
+        """
+        # Phase 1: Resolve parameters
+        collections, n, since_days, recency_weight, calendar_epoch = \
+            self._resolve_recall_params(query, collections, n, since_days, recency_weight)
+
+        # Phase 2: Cache check
+        cache_key = (query, tuple(sorted(collections)), n, min_importance,
+                     since_days, attention_boost, recency_weight)
+        now_cache = time.monotonic()
+        cached_result = self._recall_cache.get(cache_key)
+        if cached_result and (now_cache - cached_result[0]) < self._recall_cache_ttl:
+            return cached_result[1]
+
+        # Phase 3: Compute cutoffs and embedding
+        cutoff_date, cutoff_epoch = self._compute_temporal_cutoff(since_days, calendar_epoch)
+        valid_collections = [c for c in collections if c in self.collections]
+        query_embedding = self._get_or_compute_embedding(query, valid_collections)
+
+        # Phase 4: Fetch from collections
+        all_results = self._dispatch_collection_queries(
+            valid_collections, query_embedding, n,
+            cutoff_epoch, cutoff_date, min_importance, include_related)
+
+        # Phase 4b: Chronological fallback for strong temporal queries
+        temporal_target = n * len(valid_collections)
+        if cutoff_epoch and recency_weight >= 0.5 and len(all_results) < temporal_target:
+            self._supplement_chronological(all_results, valid_collections, cutoff_epoch, n)
+
+        # Phase 5: Score, sort, filter
+        all_results = self._score_and_sort(
+            all_results, recency_weight, attention_boost, filter_bridges)
         final_results = all_results[:n * len(collections)]
 
-        # --- Dynamic cross-collection expansion (replaces static bridges) ---
+        # Phase 6: Expansions
         if cross_collection_expand and query_embedding is not None:
             try:
                 final_results = self._cross_collection_expand(
-                    query, query_embedding, final_results, collections, n
-                )
+                    query, query_embedding, final_results, collections, n)
             except Exception:
                 _log.debug("Cross-collection expansion failed", exc_info=True)
-
-        # --- Graph expansion: fetch 1-hop neighbor documents ---
         if graph_expand and final_results:
             try:
                 final_results = self._expand_with_graph_neighbors(final_results, n)
             except Exception:
                 _log.debug("Graph expansion failed", exc_info=True)
 
-        # --- Hook: recall observers (async fire-and-forget) ---
-        # Observers (hebbian, synaptic, retrieval_quality) are side-effects that
-        # don't affect query results. Run them in a background thread to avoid
-        # blocking recall (saves ~1-5s per query).
-        if final_results and query and self._recall_observers:
-            now_mono = time.monotonic()
-            last_obs = getattr(self, '_last_observer_time', 0)
-            if (now_mono - last_obs) >= 5.0:
-                self._last_observer_time = now_mono
-
-            # Deep-copy results snapshot so observers don't race with caller
-            obs_snapshot = copy.deepcopy(final_results)
-            observers = list(self._recall_observers)
-
-            def _run_observers():
-                for fn in observers:
-                    try:
-                        fn(query, obs_snapshot, caller=caller,
-                           rate_limit_mono=now_mono, last_mono=last_obs)
-                    except Exception:
-                        _log.debug("Observer %s failed", fn.__qualname__, exc_info=True)
-
-            _observer_executor.submit(_run_observers)
-
-        # Reconsolidation: mark retrieved memories as labile
+        # Phase 7: Observers + reconsolidation + cache
+        self._fire_recall_observers(query, final_results, caller)
         for result in final_results:
             mem_id = result.get("id")
             col_name = result.get("collection")
             if mem_id and col_name:
                 self._labile_memories[mem_id] = {
-                    "retrieved_at": time.monotonic(),
-                    "collection": col_name,
+                    "retrieved_at": time.monotonic(), "collection": col_name,
                 }
-
-        # Cache result (evict oldest if > 50 entries)
         self._recall_cache[cache_key] = (time.monotonic(), final_results)
         if len(self._recall_cache) > 50:
             oldest = min(self._recall_cache, key=lambda k: self._recall_cache[k][0])
@@ -828,31 +836,11 @@ class SearchMixin:
                    contradiction_threshold=0.7, bundle_distance=1.2):
         """Draw conclusions across multiple memories for a query.
 
-        Instead of returning loosely related top hits, this method:
-        1. Recalls relevant memories across collections
-        2. Groups them into evidence bundles by semantic proximity
-        3. Detects contradictions within and across bundles
-        4. Returns structured synthesis with conclusions
+        Recalls memories, groups into evidence bundles by semantic proximity,
+        detects contradictions within/across bundles, returns structured synthesis.
 
-        Args:
-            query: The topic/question to synthesize across
-            n: Number of memories to retrieve per collection set
-            collections: Collections to search (default: all)
-            contradiction_threshold: Distance below which two memories
-                with opposing signals are flagged as contradictions (0-2)
-            bundle_distance: Max distance between memories in same bundle
-
-        Returns:
-            {
-                "query": str,
-                "bundles": [{"theme": str, "evidence": [...], "contradictions": [...]}],
-                "cross_bundle_contradictions": [...],
-                "conclusion": str,  # synthesized summary
-                "confidence": float,  # 0-1 based on evidence quality
-                "n_memories": int,
-                "n_bundles": int,
-                "n_contradictions": int,
-            }
+        Returns dict with: query, bundles, cross_bundle_contradictions,
+        conclusion, confidence (0-1), n_memories, n_bundles, n_contradictions.
         """
         if collections is None:
             collections = ALL_COLLECTIONS

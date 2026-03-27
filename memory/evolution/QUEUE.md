@@ -30,6 +30,8 @@ _Queue audited on 2026-03-24 evening. Removed 3 completed items (A5_A7, TEMPORAL
 
 ## P1 — This Week
 
+- [x] [DECOMPOSE_LONG_FUNCTIONS] Decompose oversized functions: `clarvis/brain/search.py:recall` (347→69 lines, 8 helpers extracted), `clarvis/brain/search.py:synthesize` (81→61 lines). All functions ≤80 lines. Done 2026-03-27.
+
 
 
 
@@ -43,7 +45,6 @@ _Queue audited on 2026-03-24 evening. Removed 3 completed items (A5_A7, TEMPORAL
 
 ### Phi / Benchmarking
 
-- [x] [LLM_BRAIN_REVIEW 2026-03-27] [LLM_BRAIN_REVIEW] Implement temporal recency boosting in brain search — ✓ 3 fixes: (1) calendar-day precision for "today"/"yesterday" (midnight boundary instead of rolling 24h), (2) adaptive normalization window (7d/30d/90d based on intent strength), (3) stronger recency blending (up to 70% for "today" vs old 24-32%). Tested: "today" returns only same-day results, "recent" properly surfaces last-week items.
 ---
 
 ## P2 — When Idle (Demoted 2026-03-17)
@@ -71,4 +72,6 @@ _(Completed items archived.)_
 ---
 
 ## NEW ITEMS
+
+- [x] [RESEARCH_RETRIEVAL_OPTIMIZATION] Research: Retrieval optimization for RAG and memory systems — completed 2026-03-27. Key insight: retrieval should be controlled as an adaptive pipeline (query transformation, iterative evidence accumulation, noise filtering, and stop conditions based on confidence/marginal gain) rather than fixed top-k similarity search.
 

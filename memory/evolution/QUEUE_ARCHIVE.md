@@ -1645,3 +1645,6 @@ _Last archived: 2026-03-24_
 ## Archived 2026-03-27
 - [x] [DECOMPOSE_LONG_FUNCTIONS] Decompose `_classify_error` from 138→21 lines via data-driven `_ERROR_RULES` table + `_match_keywords` helper. All 12 category tests pass. _(done 2026-03-27)_
 - [x] [ORCH_BENCHMARK_SCRIPTS] Create `scripts/orchestration_benchmark.py` and `scripts/orchestration_scoreboard.py` — both scripts created and tested. All 5 agents benchmarked successfully (composite scores: clarvis-db=0.962, star-world-order=0.865, goat=0.675, kinkly=0.675, star-arena=0.603). _(done 2026-03-27)_
+
+## Archived 2026-03-27
+- [x] [LLM_BRAIN_REVIEW 2026-03-27] [LLM_BRAIN_REVIEW] Implement temporal recency boosting in brain search — ✓ 3 fixes: (1) calendar-day precision for "today"/"yesterday" (midnight boundary instead of rolling 24h), (2) adaptive normalization window (7d/30d/90d based on intent strength), (3) stronger recency blending (up to 70% for "today" vs old 24-32%). Tested: "today" returns only same-day results, "recent" properly surfaces last-week items.
