@@ -1681,3 +1681,7 @@ _Last archived: 2026-03-27_
 - [x] [RESEARCH_PHI_COMPUTATION] Research Phi computation tractability, approximation quality, and formal limitations in IIT. (2026-03-27)
 - [x] [STATUS_PAGE_CRON_COUNT_ACCURACY] Fix `scripts/generate_status_page.py` cron counting to ignore env/variable lines in `crontab -l` and report only scheduled jobs. _(2026-03-27: filter with regex `^(@|\d|*)`, now reports 47 actual jobs.)_
 - [x] [STATUS_PAGE_TEMPLATE_OR_DOC_CLEANUP] Either use `site/template.html` in `scripts/generate_status_page.py` or remove the dead `TEMPLATE_FILE` path/doc claim so the script has a single clear rendering path. _(2026-03-27: removed unused TEMPLATE_FILE constant — no template.html exists, HTML is inline.)_
+
+## Archived 2026-03-27
+- [x] [CRONTAB_DOCS_DRIFT] Sync CLAUDE.md cron table with actual crontab — added 3 missing entries (brain_eval 06:00, llm_brain_review 06:15, relevance_refresh 02:40), updated date to 2026-03-27.
+- [x] [BARE_EXCEPT_AUDIT] Fixed 52 silent `except Exception: pass` blocks across 3 priority files: heartbeat_postflight.py (18), performance_benchmark.py (29), reasoning_chain_hook.py (5). All now log via `logging.debug()`. 50 files total have this pattern; remaining are lower priority.
