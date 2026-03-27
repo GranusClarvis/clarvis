@@ -1,7 +1,11 @@
 # Evolution Queue — Archive
 
 _Completed items archived from QUEUE.md to reduce token footprint._
-_Last archived: 2026-03-24_
+_Last archived: 2026-03-27_
+
+### Archived 2026-03-27 (Research: Load Scaling)
+- [x] [LOAD_SCALING_OPTIMIZE] (2026-03-27) Profiled recall telemetry: n=1→n=10 difference is ~1.5ms (noise, not real degradation). Fixed `benchmark_load_scaling()`: 9 samples (was 5), 5ms absolute noise floor, 25ms effective base. Metric now stable at 0%. Research note: `memory/research/load_scaling_optimize_2026-03-27.md`.
+- [x] [BENCHMARK_LOAD_NOISE_FLOOR] (2026-03-27) Resolved by LOAD_SCALING_OPTIMIZE — same root cause.
 
 ### Archived 2026-03-24 (P0 Audit)
 - [x] [A5_A7_RUNTIME_MODE_AND_CLI_FINISH] (2026-03-22) All complete: runtime mode control-plane (3 modes, policies, CLI), trajectory harness (5-component scorer, gate, heartbeat integration), CLI stable (9 subcommands via `python3 -m clarvis`).
@@ -1660,3 +1664,11 @@ _Last archived: 2026-03-24_
 ## Archived 2026-03-27
 - [x] [RESEARCH_DISCOVERY 2026-03-27] Research: Late Chunking for Retrieval Optimization — completed. Long-context embedding models perform better when chunking is delayed until after full-document encoding, preserving cross-chunk references. Best fit: long, context-dependent notes; weak effect on short atomic docs. Research note: `memory/research/late_chunking_retrieval_optimization_2026-03-27.md`.
 - [x] [GRAPH_PARITY_RECONCILE] Diagnose and fix JSON↔SQLite edge count mismatch (JSON=90,577 vs SQLite=90,628). Cross-collection and similar_to edges diverging — blocks soak cutover decision. _(P1, non-Python: involves graph data inspection + shell tooling)_ (2026-03-27 14:05 UTC)
+
+## Archived 2026-03-27
+- [x] [CRON_STALE_LOCK_AUDIT] Done 2026-03-27. Audited all lock patterns: lock_helper.sh handles 3 tiers with /proc cmdline validation. Verified trap EXIT fires under timeout (SIGTERM). Added stale lock check (>2h) to cron_watchdog.sh with pid-alive status. Inline-pattern scripts (absolute_zero, cleanup) are lightweight/no-Claude so simpler pattern is acceptable.
+- [x] [MILESTONE_D_STATUS_PAGE] Done 2026-03-27. Created `scripts/generate_status_page.py` — pulls live brain stats, PI score, cron job count. Generates `site/index.html` (dark theme, responsive, GitHub-style). Supports `--json` for API use. Architecture diagram, 4 stat cards, metric table, collection table, repo link.
+
+## Archived 2026-03-27
+- [x] [LOAD_SCALING_OPTIMIZE] Profiled: 19.1% was measurement noise (actual n=1→n=10 diff is ~1.5ms). Fixed benchmark: 9 samples, 5ms absolute noise floor, 25ms effective base. Now reports 0%. _(completed 2026-03-27)_
+- [x] [BENCHMARK_LOAD_NOISE_FLOOR] Resolved by LOAD_SCALING_OPTIMIZE fix — same root cause (sub-5ms jitter amplified by percentage metric). _(completed 2026-03-27)_

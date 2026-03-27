@@ -30,7 +30,7 @@ _Queue audited on 2026-03-24 evening. Removed 3 completed items (A5_A7, TEMPORAL
 
 ## P1 — This Week
 
-- [ ] [DECOMPOSE_LONG_FUNCTIONS] Decompose oversized functions: `clarvis/brain/search.py:recall` (91 lines), `scripts/performance_benchmark.py:benchmark_retrieval_quality` (83 lines), `scripts/performance_benchmark.py:benchmark_context_quality` (91 lines), `scripts/performance_benchmark.py:run_full_benchmark` (135 lines), `scripts/performance_benchmark.py:run_refresh_benchmark` (101 lines). Target: all functions ≤80 lines.
+- [x] [DECOMPOSE_LONG_FUNCTIONS] All 5 functions now ≤80 lines (recall=80, retrieval=54, context=61, full=63, refresh=60). Done in commits e3a5167 + f302f7a.
 
 
 
@@ -76,8 +76,4 @@ _(Completed items archived.)_
 
 
 - [~] [POSTFLIGHT_DECOMPOSE] Phase 1 done: extracted error classifier into `clarvis/heartbeat/error_classifier.py` (classify_error + ERROR_RULES + _match_keywords). Postflight re-imports from canonical module. Remaining: extract episode encoding + brain storage. _(P2, in progress 2026-03-27)_
-- [ ] [LOAD_SCALING_OPTIMIZE] Profile and reduce n=1→n=10 recall degradation from 19.1% to <15% target. Investigate `brain.recall()` post-processing: graph-edge lookups, reranking, and result enrichment likely scale linearly with n. Batch graph queries or add early-exit optimizations. _(P1, targets weakest metric: load_degradation)_
-- [ ] [BENCHMARK_LOAD_NOISE_FLOOR] Load degradation jumped 0%→19.1% in a single benchmark run — high volatility suggests measurement noise. In `benchmark_load_scaling()`: increase samples from 5→9, add IQR outlier trimming, and log raw timings to history for trend analysis. _(P1, stabilizes the metric that gates LOAD_SCALING_OPTIMIZE)_
-- [x] [CRON_STALE_LOCK_AUDIT] Done 2026-03-27. Audited all lock patterns: lock_helper.sh handles 3 tiers with /proc cmdline validation. Verified trap EXIT fires under timeout (SIGTERM). Added stale lock check (>2h) to cron_watchdog.sh with pid-alive status. Inline-pattern scripts (absolute_zero, cleanup) are lightweight/no-Claude so simpler pattern is acceptable.
-- [x] [MILESTONE_D_STATUS_PAGE] Done 2026-03-27. Created `scripts/generate_status_page.py` — pulls live brain stats, PI score, cron job count. Generates `site/index.html` (dark theme, responsive, GitHub-style). Supports `--json` for API use. Architecture diagram, 4 stat cards, metric table, collection table, repo link.
 

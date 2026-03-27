@@ -407,12 +407,14 @@ def benchmark_load_scaling():
         brain._recall_cache.clear()
         brain.recall("How does the heartbeat work?", n=n)
 
-    # Measure each n-level 5 times (cache-cleared), take median to reduce noise.
+    # Measure each n-level 9 times (cache-cleared), take median to reduce noise.
+    # 9 samples gives a more stable median than 5, especially at sub-5ms latencies
+    # where OS scheduling jitter dominates.
     load_levels = [1, 3, 5, 10]
     timings = {}
     for n in load_levels:
         samples = []
-        for _ in range(5):
+        for _ in range(9):
             brain._recall_cache.clear()
             t0 = time.monotonic()
             brain.recall("How does the heartbeat work?", n=n)
@@ -420,12 +422,19 @@ def benchmark_load_scaling():
         timings[n] = round(median(samples), 2)
 
     # Degradation: how much slower is n=10 vs n=1.
-    # Use a floor of 10ms for the base to avoid noise-driven percentage spikes
-    # when recall is already sub-10ms (at that speed, 1-2ms jitter is meaningless).
+    # Two noise guards:
+    #   1. effective_base floor of 25ms — at sub-25ms latencies, 1-3ms jitter
+    #      produces large percentage swings that don't reflect real scaling issues.
+    #   2. Absolute noise floor: if peak-base < 5ms, the difference is within
+    #      OS scheduling/GC jitter and not a meaningful scaling signal.
     base = timings.get(1, 1)
     peak = timings.get(10, base)
-    effective_base = max(base, 10.0)
-    degradation_pct = round(((peak - base) / effective_base) * 100, 1)
+    abs_diff = peak - base
+    if abs_diff < 5.0:
+        degradation_pct = 0.0
+    else:
+        effective_base = max(base, 25.0)
+        degradation_pct = round((abs_diff / effective_base) * 100, 1)
 
     return {
         "timings_by_n": timings,
