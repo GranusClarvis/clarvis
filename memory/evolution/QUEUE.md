@@ -30,6 +30,8 @@ _Queue audited on 2026-03-24 evening. Removed 3 completed items (A5_A7, TEMPORAL
 
 ## P1 — This Week
 
+- [x] [DECOMPOSE_LONG_FUNCTIONS] Decompose `_classify_error` from 138→21 lines via data-driven `_ERROR_RULES` table + `_match_keywords` helper. All 12 category tests pass. _(done 2026-03-27)_
+
 
 
 
@@ -70,5 +72,4 @@ _(Completed items archived.)_
 
 ## NEW ITEMS
 
-- [ ] [ORCH_BENCHMARK_SCRIPTS] Create `scripts/orchestration_benchmark.py` and `scripts/orchestration_scoreboard.py` — both are referenced by `cron_orchestrator.sh` (lines 60, 72) but missing, causing 5 daily benchmark failures since 2026-03-17. Implement per-agent composite scoring (isolation, latency, PR success, retrieval, cost) and JSONL scoreboard writer.
-- [x] [EPISODE_ACTION_SUBCLASS] Decompose "action" catch-all into 4 sub-types: `action.param_missing`, `action.api_error`, `action.race_condition`, `action.validation`. Updated `_classify_error()` in postflight + `FAILURE_TYPES` in episodic_memory. All 8 postflight tests pass. _(done 2026-03-27)_
+- [x] [ORCH_BENCHMARK_SCRIPTS] Create `scripts/orchestration_benchmark.py` and `scripts/orchestration_scoreboard.py` — both scripts created and tested. All 5 agents benchmarked successfully (composite scores: clarvis-db=0.962, star-world-order=0.865, goat=0.675, kinkly=0.675, star-arena=0.603). _(done 2026-03-27)_

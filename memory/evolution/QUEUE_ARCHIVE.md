@@ -1638,3 +1638,6 @@ _Last archived: 2026-03-24_
 
 ## Archived 2026-03-26
 - [x] [EPISODE_CAUSAL_DENSITY] Add automatic causal-link inference in `heartbeat_postflight.py` episode encoding: when a new episode's task overlaps a recent episode by topic/collection, auto-create a causal edge. Current ratio is 64 links / 341 episodes (0.19) — target 0.5+. This strengthens episodic retrieval and indirectly improves episode success rate. _(Done 2026-03-26: added "related" relationship type, multi-link per episode (up to 3), widened window 20→30, lowered enabled threshold. Backfill: 66→254 links, ratio 0.19→0.74.)_
+
+## Archived 2026-03-27
+- [x] [EPISODE_ACTION_SUBCLASS] Decompose "action" catch-all into 4 sub-types: `action.param_missing`, `action.api_error`, `action.race_condition`, `action.validation`. Updated `_classify_error()` in postflight + `FAILURE_TYPES` in episodic_memory. All 8 postflight tests pass. _(done 2026-03-27)_

@@ -238,19 +238,84 @@ _import_time = time.monotonic() - start_import
 log = lambda msg: print(f"[{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S')}] POSTFLIGHT: {msg}", file=sys.stderr)
 
 
+# Error classification rules: (category, keywords, min_hits)
+# Checked in order — first match wins. Priority matters.
+_ERROR_RULES = [
+    ("import_error", [
+        "importerror", "modulenotfounderror", "no module named",
+        "cannot import name", "dll load failed", "shared object",
+    ], 1),
+    ("data_missing", [
+        "filenotfounderror", "no such file", "file not found",
+        "json.decoder.jsondecodeerror", "empty file", "missing config",
+        "keyerror", "data not found", "not found in collection",
+        "jsondecodeerror", "yaml.scanner", "config missing",
+    ], 2),
+    ("external_dep", [
+        "connectionerror", "connectionrefusederror", "timeout error",
+        "httperror", "401", "403", "429", "500", "502", "503",
+        "rate limit", "authentication_error", "oauth", "api error",
+        "requests.exceptions", "urllib", "ssl", "certificate",
+        "unreachable", "dns", "econnrefused", "etimeout",
+    ], 2),
+    ("memory", [
+        "chromadb", "chroma", "embedding", "brain.store", "brain.recall",
+        "collection", "vector", "onnx", "recall failed", "store failed",
+        "memory_consolidation", "hebbian", "graph edge", "relationships.json",
+    ], 2),
+    ("planning", [
+        "task_selector", "queue.md", "preflight", "routing", "attention",
+        "salience", "task selection", "no tasks", "queue empty",
+        "codelet", "spotlight", "score_tasks",
+    ], 2),
+    ("logic_bug", [
+        "assertionerror", "typeerror", "valueerror", "indexerror",
+        "attributeerror", "nameerror", "zerodivisionerror",
+        "recursionerror", "unboundlocalerror", "stopiteration",
+    ], 1),
+    ("system", [
+        "permission denied", "oserror", "disk", "killed", "oom",
+        "memory error", "segfault", "errno", "command not found",
+        "systemctl", "subprocess.calledprocesserror",
+    ], 1),
+    # Action sub-types (was catch-all "action")
+    ("action.validation", [
+        "validation error", "invalid", "schema", "pydantic",
+        "required field", "must be", "expected type", "malformed",
+        "not a valid", "constraint", "violat", "format error",
+    ], 2),
+    ("action.param_missing", [
+        "missing required", "missing argument", "missing parameter",
+        "positional argument", "unexpected keyword", "got an unexpected",
+        "takes 0 positional", "takes 1 positional", "required positional",
+        "none is not", "nonetype", "missing key", "argument required",
+    ], 1),
+    ("action.api_error", [
+        "api error", "api_error", "bad request", "response error",
+        "status code", "http error", "endpoint", "api call failed",
+        "openrouter", "anthropic", "response.status",
+    ], 1),
+    ("action.race_condition", [
+        "race condition", "lock", "deadlock", "concurrent", "stale",
+        "already running", "lock file", "flock", "mutex", "conflict",
+        "resource busy", "locked", "try again",
+    ], 2),
+]
+
+
+def _match_keywords(text_lower, keywords, min_hits):
+    """Count keyword hits in text and check against threshold."""
+    hits = sum(1 for kw in keywords if kw in text_lower)
+    return hits if hits >= min_hits else 0
+
+
 def _classify_error(exit_code, output_text):
     """Classify error into structured failure categories using keyword matching.
 
-    Categories (checked in priority order):
-      - timeout: exit code 124 or timeout-related keywords
-      - import_error: ImportError, ModuleNotFoundError, missing dependencies
-      - data_missing: missing files, empty data, broken JSON, missing config
-      - external_dep: network, API, auth, rate-limit, service failures
-      - memory: ChromaDB, embedding, brain, recall failures
-      - planning: task selection, queue, routing, preflight failures
-      - logic_bug: assertion, type error, value error, index error
-      - system: OS, permissions, disk, OOM, segfault
-      - action: everything else (default)
+    Categories (checked in priority order via _ERROR_RULES):
+      timeout, import_error, data_missing, external_dep, memory,
+      planning, logic_bug, system, action.validation, action.param_missing,
+      action.api_error, action.race_condition, action (default).
 
     Returns: (error_type: str, evidence: str)
     """
@@ -259,122 +324,11 @@ def _classify_error(exit_code, output_text):
 
     text_lower = (output_text or "")[-3000:].lower()
 
-    # Import errors (specific, check before broad system category)
-    import_kw = [
-        "importerror", "modulenotfounderror", "no module named",
-        "cannot import name", "dll load failed", "shared object",
-    ]
-    import_hits = sum(1 for kw in import_kw if kw in text_lower)
-    if import_hits >= 1:
-        return "import_error", f"{import_hits} import keywords matched"
+    for category, keywords, min_hits in _ERROR_RULES:
+        hits = _match_keywords(text_lower, keywords, min_hits)
+        if hits:
+            return category, f"{hits} {category} keywords matched"
 
-    # Data/config missing
-    data_kw = [
-        "filenotfounderror", "no such file", "file not found",
-        "json.decoder.jsondecodeerror", "empty file", "missing config",
-        "keyerror", "data not found", "not found in collection",
-        "jsondecodeerror", "yaml.scanner", "config missing",
-    ]
-    data_hits = sum(1 for kw in data_kw if kw in text_lower)
-    if data_hits >= 2:
-        return "data_missing", f"{data_hits} data-missing keywords matched"
-
-    # External dependency failures (network, APIs, auth)
-    ext_kw = [
-        "connectionerror", "connectionrefusederror", "timeout error",
-        "httperror", "401", "403", "429", "500", "502", "503",
-        "rate limit", "authentication_error", "oauth", "api error",
-        "requests.exceptions", "urllib", "ssl", "certificate",
-        "unreachable", "dns", "econnrefused", "etimeout",
-    ]
-    ext_hits = sum(1 for kw in ext_kw if kw in text_lower)
-    if ext_hits >= 2:
-        return "external_dep", f"{ext_hits} external-dep keywords matched"
-
-    # Memory-related keywords
-    memory_kw = [
-        "chromadb", "chroma", "embedding", "brain.store", "brain.recall",
-        "collection", "vector", "onnx", "recall failed", "store failed",
-        "memory_consolidation", "hebbian", "graph edge", "relationships.json",
-    ]
-    memory_hits = sum(1 for kw in memory_kw if kw in text_lower)
-    if memory_hits >= 2:
-        return "memory", f"{memory_hits} memory keywords matched"
-
-    # Planning-related keywords
-    planning_kw = [
-        "task_selector", "queue.md", "preflight", "routing", "attention",
-        "salience", "task selection", "no tasks", "queue empty",
-        "codelet", "spotlight", "score_tasks",
-    ]
-    planning_hits = sum(1 for kw in planning_kw if kw in text_lower)
-    if planning_hits >= 2:
-        return "planning", f"{planning_hits} planning keywords matched"
-
-    # Logic bugs (type/value/assertion errors)
-    logic_kw = [
-        "assertionerror", "typeerror", "valueerror", "indexerror",
-        "attributeerror", "nameerror", "zerodivisionerror",
-        "recursionerror", "unboundlocalerror", "stopiteration",
-    ]
-    logic_hits = sum(1 for kw in logic_kw if kw in text_lower)
-    if logic_hits >= 1:
-        return "logic_bug", f"{logic_hits} logic-bug keywords matched"
-
-    # System-related keywords (broad catch-all for OS/infra)
-    system_kw = [
-        "permission denied", "oserror", "disk", "killed", "oom",
-        "memory error", "segfault", "errno", "command not found",
-        "systemctl", "subprocess.calledprocesserror",
-    ]
-    system_hits = sum(1 for kw in system_kw if kw in text_lower)
-    if system_hits >= 1:
-        return "system", f"{system_hits} system keywords matched"
-
-    # --- Action sub-type decomposition (was catch-all "action") ---
-
-    # Validation failures (schema, contract, format violations)
-    validation_kw = [
-        "validation error", "invalid", "schema", "pydantic",
-        "required field", "must be", "expected type", "malformed",
-        "not a valid", "constraint", "violat", "format error",
-    ]
-    validation_hits = sum(1 for kw in validation_kw if kw in text_lower)
-    if validation_hits >= 2:
-        return "action.validation", f"{validation_hits} validation keywords matched"
-
-    # Missing parameters / arguments
-    param_kw = [
-        "missing required", "missing argument", "missing parameter",
-        "positional argument", "unexpected keyword", "got an unexpected",
-        "takes 0 positional", "takes 1 positional", "required positional",
-        "none is not", "nonetype", "missing key", "argument required",
-    ]
-    param_hits = sum(1 for kw in param_kw if kw in text_lower)
-    if param_hits >= 1:
-        return "action.param_missing", f"{param_hits} param-missing keywords matched"
-
-    # API / HTTP errors not caught by external_dep (single-hit threshold)
-    api_kw = [
-        "api error", "api_error", "bad request", "response error",
-        "status code", "http error", "endpoint", "api call failed",
-        "openrouter", "anthropic", "response.status",
-    ]
-    api_hits = sum(1 for kw in api_kw if kw in text_lower)
-    if api_hits >= 1:
-        return "action.api_error", f"{api_hits} api-error keywords matched"
-
-    # Race conditions / concurrency issues
-    race_kw = [
-        "race condition", "lock", "deadlock", "concurrent", "stale",
-        "already running", "lock file", "flock", "mutex", "conflict",
-        "resource busy", "locked", "try again",
-    ]
-    race_hits = sum(1 for kw in race_kw if kw in text_lower)
-    if race_hits >= 2:
-        return "action.race_condition", f"{race_hits} race-condition keywords matched"
-
-    # Default: unclassified action error
     return "action", "default classification (no sub-type matched)"
 
 
