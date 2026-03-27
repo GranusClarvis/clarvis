@@ -11,6 +11,7 @@ Usage:
 
 import json
 import os
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,7 +19,6 @@ from pathlib import Path
 WORKSPACE = Path("/home/agent/.openclaw/workspace")
 SITE_DIR = WORKSPACE / "site"
 METRICS_FILE = WORKSPACE / "data" / "performance_metrics.json"
-TEMPLATE_FILE = SITE_DIR / "template.html"
 OUTPUT_FILE = SITE_DIR / "index.html"
 
 
@@ -85,9 +85,10 @@ def get_cron_summary() -> dict:
         result = subprocess.run(
             ["crontab", "-l"], capture_output=True, text=True, timeout=5
         )
+        cron_re = re.compile(r"^\s*(@\w+|[0-9*])")
         lines = [
             l for l in result.stdout.splitlines()
-            if l.strip() and not l.strip().startswith("#")
+            if cron_re.match(l)
         ]
         return {"active_jobs": len(lines)}
     except Exception:

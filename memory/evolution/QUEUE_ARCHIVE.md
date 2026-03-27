@@ -1672,3 +1672,7 @@ _Last archived: 2026-03-27_
 ## Archived 2026-03-27
 - [x] [LOAD_SCALING_OPTIMIZE] Profiled: 19.1% was measurement noise (actual n=1→n=10 diff is ~1.5ms). Fixed benchmark: 9 samples, 5ms absolute noise floor, 25ms effective base. Now reports 0%. _(completed 2026-03-27)_
 - [x] [BENCHMARK_LOAD_NOISE_FLOOR] Resolved by LOAD_SCALING_OPTIMIZE fix — same root cause (sub-5ms jitter amplified by percentage metric). _(completed 2026-03-27)_
+
+## Archived 2026-03-27
+- [x] [DECOMPOSE_LONG_FUNCTIONS] All 5 functions now ≤80 lines (recall=80, retrieval=54, context=61, full=63, refresh=60). Done in commits e3a5167 + f302f7a.
+- [x] [POSTFLIGHT_DECOMPOSE] Phase 2 done: extracted episode encoding → `clarvis/heartbeat/episode_encoder.py`, brain storage → `clarvis/heartbeat/brain_store.py`. Postflight uses thin wrappers. 1964→1875 lines. _(P2, completed 2026-03-27)_

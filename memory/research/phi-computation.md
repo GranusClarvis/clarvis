@@ -1,0 +1,9 @@
+# Phi computation in Integrated Information Theory
+
+Research date: 2026-03-27
+
+Phi (Φ) computation remains the central technical bottleneck in Integrated Information Theory (IIT). Exact IIT 3.0 computation scales combinatorially because it must search system partitions, purviews, and cause-effect repertoires over a full transition probability matrix; in practice this confines exact work to very small discrete systems. A 2020 evaluation of approximations found that several heuristics can correlate strongly with exact Φ in small 3–6 node binary networks, including decoder-based Φ*, state-differentiation measures, and signal-complexity proxies such as Lempel-Ziv. However, the paper’s key caution is that these methods do not deliver major computational savings while preserving full theoretical fidelity, and some are better at identifying low-Φ systems than estimating genuinely high-Φ ones.
+
+A second important result is that tractability is not the only obstacle: the 2023 non-uniqueness analysis argues that published Φ values may be mathematically underdetermined because tied minimizations can yield multiple equally valid outcomes. That means better optimization alone does not solve the problem; the definition itself must be made uniquely computable.
+
+Recent PyPhi extensions to multi-valued elements broaden the framework beyond Boolean systems, which is useful for richer biological models, but they also enlarge the computational burden. The overall picture: progress in Phi computation will likely require both principled approximation benchmarks and formal cleanup of IIT’s objective function before scaling to realistic brains.

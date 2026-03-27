@@ -30,7 +30,6 @@ _Queue audited on 2026-03-24 evening. Removed 3 completed items (A5_A7, TEMPORAL
 
 ## P1 — This Week
 
-- [x] [DECOMPOSE_LONG_FUNCTIONS] All 5 functions now ≤80 lines (recall=80, retrieval=54, context=61, full=63, refresh=60). Done in commits e3a5167 + f302f7a.
 
 
 
@@ -69,11 +68,15 @@ _Design: `docs/ADAPTIVE_RAG_PLAN.md` — 4-phase rollout (GATE → EVAL → RETR
 
 ### Research Sessions
 _(Completed items archived.)_
+- [x] [RESEARCH_PHI_COMPUTATION] Research Phi computation tractability, approximation quality, and formal limitations in IIT. (2026-03-27)
 
 ---
 
 ## NEW ITEMS
 
+### P0 — Found in 2026-03-27 evening code review
+- [x] [STATUS_PAGE_CRON_COUNT_ACCURACY] Fix `scripts/generate_status_page.py` cron counting to ignore env/variable lines in `crontab -l` and report only scheduled jobs. _(2026-03-27: filter with regex `^(@|\d|*)`, now reports 47 actual jobs.)_
+- [x] [STATUS_PAGE_TEMPLATE_OR_DOC_CLEANUP] Either use `site/template.html` in `scripts/generate_status_page.py` or remove the dead `TEMPLATE_FILE` path/doc claim so the script has a single clear rendering path. _(2026-03-27: removed unused TEMPLATE_FILE constant — no template.html exists, HTML is inline.)_
 
-- [x] [POSTFLIGHT_DECOMPOSE] Phase 2 done: extracted episode encoding → `clarvis/heartbeat/episode_encoder.py`, brain storage → `clarvis/heartbeat/brain_store.py`. Postflight uses thin wrappers. 1964→1875 lines. _(P2, completed 2026-03-27)_
+
 
