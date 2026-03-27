@@ -75,5 +75,5 @@ _(Completed items archived.)_
 ## NEW ITEMS
 
 
-- [~] [POSTFLIGHT_DECOMPOSE] Phase 1 done: extracted error classifier into `clarvis/heartbeat/error_classifier.py` (classify_error + ERROR_RULES + _match_keywords). Postflight re-imports from canonical module. Remaining: extract episode encoding + brain storage. _(P2, in progress 2026-03-27)_
+- [x] [POSTFLIGHT_DECOMPOSE] Phase 2 done: extracted episode encoding → `clarvis/heartbeat/episode_encoder.py`, brain storage → `clarvis/heartbeat/brain_store.py`. Postflight uses thin wrappers. 1964→1875 lines. _(P2, completed 2026-03-27)_
 

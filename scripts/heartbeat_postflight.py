@@ -238,12 +238,20 @@ _import_time = time.monotonic() - start_import
 log = lambda msg: print(f"[{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S')}] POSTFLIGHT: {msg}", file=sys.stderr)
 
 
-# Error classification rules: (category, keywords, min_hits)
 # Error classification — canonical implementation in clarvis.heartbeat.error_classifier
 from clarvis.heartbeat.error_classifier import (  # noqa: F401
     ERROR_RULES as _ERROR_RULES,
     classify_error as _classify_error,
     _match_keywords,
+)
+
+# Episode encoding — canonical implementation in clarvis.heartbeat.episode_encoder
+from clarvis.heartbeat.episode_encoder import episode_encode as _episode_encode_canonical
+
+# Brain storage — canonical implementation in clarvis.heartbeat.brain_store
+from clarvis.heartbeat.brain_store import (
+    brain_store as _brain_store_canonical,
+    store_failure_lesson as _store_failure_lesson_canonical,
 )
 
 
@@ -270,51 +278,14 @@ def _compute_completeness(timings, pf_errors):
 
 def _episode_encode(task, task_section, best_salience, task_status, task_duration,
                     error_type, output_text, preflight_data, _pf_errors):
-    """§5 Episode encoding + §5.01 Trajectory scoring."""
-    timings = {}
-
-    # === 5. EPISODIC MEMORY: Encode episode ===
-    t5 = time.monotonic()
-    if EpisodicMemory:
-        try:
-            em = EpisodicMemory()
-            error_msg = output_text[-200:] if task_status != "success" else None
-            em.encode(task, task_section, best_salience, task_status,
-                     duration_s=task_duration, error_msg=error_msg,
-                     failure_type=error_type)
-            latest_ep = em.episodes[-1] if em.episodes else {}
-            causal_n = latest_ep.get("causal_links_created", 0)
-            causal_info = f", causal_links={causal_n}" if causal_n else ""
-            log(f"Encoded episode ({task_status}, {task_duration}s{', type=' + error_type if error_type else ''}{causal_info})")
-        except Exception as e:
-            log(f"Episodic encoding failed: {e}")
-            _pf_errors.append("episodic")
-    timings["episodic"] = round(time.monotonic() - t5, 3)
-
-    # === 5.01 TRAJECTORY SCORING: Score episode execution quality ===
-    t501 = time.monotonic()
-    if record_trajectory_event:
-        try:
-            traj_event = {
-                "task": task[:200],
-                "task_outcome": task_status,
-                "duration_s": task_duration,
-                "retrieval_verdict": preflight_data.get("retrieval_verdict", "SKIPPED"),
-                "code_validation_errors": 0,  # not yet computed at this stage
-                "tool_call_count": None,  # not available from postflight
-                "error_type": error_type,
-                "task_section": task_section,
-            }
-            scored = record_trajectory_event(traj_event)
-            log(f"TRAJECTORY: score={scored['trajectory_score']:.3f} "
-                f"(completion={scored['trajectory_components']['completion']:.2f}, "
-                f"efficiency={scored['trajectory_components']['efficiency']:.2f}, "
-                f"retrieval={scored['trajectory_components']['retrieval_alignment']:.2f})")
-        except Exception as e:
-            log(f"Trajectory scoring failed (non-fatal): {e}")
-    timings["trajectory"] = round(time.monotonic() - t501, 3)
-
-    return timings
+    """§5 Episode encoding + §5.01 Trajectory scoring. Delegates to canonical module."""
+    return _episode_encode_canonical(
+        task, task_section, best_salience, task_status, task_duration,
+        error_type, output_text, preflight_data, _pf_errors,
+        EpisodicMemory=EpisodicMemory,
+        record_trajectory_event=record_trajectory_event,
+        log=log,
+    )
 
 
 def _confidence_record(task_event, exit_code, task, preflight_data, _pf_errors):
@@ -374,85 +345,25 @@ def _reasoning_close(chain_id, task_status, task, exit_code, output_text, _pf_er
 
 
 def _store_failure_lesson(task, exit_code, output_text, error_type):
-    """Store a failure lesson in brain and run contradiction checks."""
-    error_snippet = output_text[-300:] if output_text else "no output"
-    error_snippet = re.sub(r'[^a-zA-Z0-9 _.,:;=+\-/()@#%\n]', '', error_snippet)[:250]
-    lesson = f"FAILURE LESSON [{error_type}]: Attempted '{task[:100]}' — exit {exit_code}. Error: {error_snippet}"
-    brain_mod = None
-    try:
-        from brain import brain as brain_mod
-    except ImportError:
-        pass
-    if not brain_mod:
-        return
-    brain_mod.store(lesson, collection="clarvis-learnings", importance=0.8,
-                    tags=["failure", "lesson", f"error_type:{error_type}"],
-                    source="postflight_failure")
-    log("Stored failure lesson in brain")
-    if mem_evo_find_contradictions and mem_evo_evolve:
-        try:
-            contras = mem_evo_find_contradictions(brain_mod, lesson, "clarvis-learnings",
-                                                  threshold=0.4, top_n=3)
-            for c in contras[:2]:
-                evo = mem_evo_evolve(brain_mod, c["id"], c["collection"], lesson, reason="contradiction")
-                if evo.get("evolved"):
-                    log(f"MEMORY EVOLUTION: Evolved {c['id']} → {evo['new_id']} (contradiction: {c['contradiction_signal'][:3]})")
-        except Exception as e:
-            log(f"Contradiction check failed (non-fatal): {e}")
+    """Store a failure lesson in brain. Delegates to canonical module."""
+    _store_failure_lesson_canonical(
+        task, exit_code, output_text, error_type,
+        mem_evo_find_contradictions=mem_evo_find_contradictions,
+        mem_evo_evolve=mem_evo_evolve, log=log,
+    )
 
 
 def _brain_store(task, task_status, exit_code, output_text, error_type,
                  task_duration, _pf_errors, RETRY_FILE):
-    """§2.5 Failure lessons + §2.7 Brain bridge outcome recording."""
-    timings = {}
-
-    t25 = time.monotonic()
-    if task_status == "failure" and exit_code != 0 and exit_code != 124:
-        try:
-            _store_failure_lesson(task, exit_code, output_text, error_type)
-            # Generate follow-up if not too many prior failures
-            retry_data = {}
-            if os.path.exists(RETRY_FILE):
-                try:
-                    with open(RETRY_FILE) as rf:
-                        retry_data = json.load(rf)
-                except Exception:
-                    pass
-            task_key = task[:80]
-            if retry_data.get(task_key, 0) < 2:
-                try:
-                    from queue_writer import add_task
-                    followup = f"Investigate failure: '{task[:80]}' failed with exit {exit_code}. Check logs and fix root cause."
-                    if add_task(followup, priority="P1", source="reasoning_failure"):
-                        log("Generated follow-up investigation task")
-                except ImportError:
-                    pass
-            else:
-                log(f"Skipped follow-up task — {task_key[:40]}... failed {retry_data.get(task_key, 0)}+ times")
-        except Exception as e:
-            log(f"Failure lesson recording failed: {e}")
-            _pf_errors.append("failure_lessons")
-    timings["failure_lessons"] = round(time.monotonic() - t25, 3)
-
-    t27 = time.monotonic()
-    if brain_record_outcome:
-        try:
-            mem_id = brain_record_outcome(task, task_status, output_text, task_duration)
-            if mem_id:
-                log(f"Brain bridge: recorded {task_status} outcome → {mem_id}")
-        except Exception as e:
-            log(f"Brain bridge outcome recording failed: {e}")
-            _pf_errors.append("brain_bridge")
-    if brain_update_context:
-        try:
-            brain_update_context(task, task_status)
-            log("Brain bridge: context updated")
-        except Exception as e:
-            log(f"Brain bridge context update failed: {e}")
-            _pf_errors.append("brain_bridge_ctx")
-    timings["brain_bridge"] = round(time.monotonic() - t27, 3)
-
-    return timings
+    """§2.5 Failure lessons + §2.7 Brain bridge outcome recording. Delegates to canonical module."""
+    return _brain_store_canonical(
+        task, task_status, exit_code, output_text, error_type,
+        task_duration, _pf_errors, RETRY_FILE,
+        brain_record_outcome=brain_record_outcome,
+        brain_update_context=brain_update_context,
+        mem_evo_find_contradictions=mem_evo_find_contradictions,
+        mem_evo_evolve=mem_evo_evolve, log=log,
+    )
 
 
 def _digest_write_fn(task, task_status, exit_code, task_duration, output_text, _pf_errors):
