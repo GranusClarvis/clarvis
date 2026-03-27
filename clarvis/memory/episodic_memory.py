@@ -412,7 +412,11 @@ class EpisodicMemory:
         "planning":     "Task selection, queue, routing, preflight failure",
         "logic_bug":    "Assertion, type, value, index, attribute error",
         "system":       "OS, permissions, disk, OOM, segfault",
-        "action":       "General code/execution error (default)",
+        "action":       "General code/execution error (unclassified)",
+        "action.param_missing":  "Missing required argument or parameter",
+        "action.api_error":      "API call failure (HTTP, OpenRouter, model error)",
+        "action.race_condition": "Concurrency/lock/stale-state issue",
+        "action.validation":     "Schema, format, or contract validation failure",
         "crash":        "Infrastructure crash (instant-fail, <10s duration)",
         "partial-success": "Task partially completed but did not fully succeed",
     }

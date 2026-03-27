@@ -30,7 +30,6 @@ _Queue audited on 2026-03-24 evening. Removed 3 completed items (A5_A7, TEMPORAL
 
 ## P1 — This Week
 
-- [x] [DECOMPOSE_LONG_FUNCTIONS] Decompose oversized functions: `clarvis/memory/episodic_memory.py:main` (198 lines), `clarvis/memory/episodic_memory.py:encode` (96 lines), `clarvis/memory/episodic_memory.py:synthesize` (225 lines). Target: all functions ≤80 lines. _(Done 2026-03-26: main→4 CLI helpers, encode→encode+_post_encode, synthesize→_synth_counts+_synth_create_goals+_synth_inject_queue. All functions ≤80 lines.)_
 
 
 
@@ -72,5 +71,4 @@ _(Completed items archived.)_
 ## NEW ITEMS
 
 - [ ] [ORCH_BENCHMARK_SCRIPTS] Create `scripts/orchestration_benchmark.py` and `scripts/orchestration_scoreboard.py` — both are referenced by `cron_orchestrator.sh` (lines 60, 72) but missing, causing 5 daily benchmark failures since 2026-03-17. Implement per-agent composite scoring (isolation, latency, PR success, retrieval, cost) and JSONL scoreboard writer.
-- [ ] [EPISODE_ACTION_SUBCLASS] Decompose the catch-all "action" failure category in `heartbeat_postflight.py` error classifier (~line 241) into sub-types (param_missing, api_error, race_condition, validation_fail). 45 of 68 failures are bucketed as generic "action" — finer classification will surface root causes and directly improve Episode Success Rate (current 0.922).
-- [x] [EPISODE_CAUSAL_DENSITY] Add automatic causal-link inference in `heartbeat_postflight.py` episode encoding: when a new episode's task overlaps a recent episode by topic/collection, auto-create a causal edge. Current ratio is 64 links / 341 episodes (0.19) — target 0.5+. This strengthens episodic retrieval and indirectly improves episode success rate. _(Done 2026-03-26: added "related" relationship type, multi-link per episode (up to 3), widened window 20→30, lowered enabled threshold. Backfill: 66→254 links, ratio 0.19→0.74.)_
+- [x] [EPISODE_ACTION_SUBCLASS] Decompose "action" catch-all into 4 sub-types: `action.param_missing`, `action.api_error`, `action.race_condition`, `action.validation`. Updated `_classify_error()` in postflight + `FAILURE_TYPES` in episodic_memory. All 8 postflight tests pass. _(done 2026-03-27)_

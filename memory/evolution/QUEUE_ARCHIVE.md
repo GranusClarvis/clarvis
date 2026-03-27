@@ -1635,3 +1635,6 @@ _Last archived: 2026-03-24_
 ## Archived 2026-03-26
 - [x] [CRON_ORCHESTRATOR_LOCKFILE_DOCS] Added header docs (pipeline, lock behavior, benchmark fallback, error interpretation, troubleshooting FAQ) and inline stage comments. (2026-03-26)
 - [x] [EPISODE_STATUS_FIELD_FIX] Fixed: `failure_type` now always defaults to `"action"` for non-success episodes in `encode()`. Backfilled 45 historical episodes. 249 tests pass. (2026-03-26)
+
+## Archived 2026-03-26
+- [x] [EPISODE_CAUSAL_DENSITY] Add automatic causal-link inference in `heartbeat_postflight.py` episode encoding: when a new episode's task overlaps a recent episode by topic/collection, auto-create a causal edge. Current ratio is 64 links / 341 episodes (0.19) — target 0.5+. This strengthens episodic retrieval and indirectly improves episode success rate. _(Done 2026-03-26: added "related" relationship type, multi-link per episode (up to 3), widened window 20→30, lowered enabled threshold. Backfill: 66→254 links, ratio 0.19→0.74.)_

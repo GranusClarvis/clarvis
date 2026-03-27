@@ -331,8 +331,51 @@ def _classify_error(exit_code, output_text):
     if system_hits >= 1:
         return "system", f"{system_hits} system keywords matched"
 
-    # Default: action error
-    return "action", "default classification"
+    # --- Action sub-type decomposition (was catch-all "action") ---
+
+    # Validation failures (schema, contract, format violations)
+    validation_kw = [
+        "validation error", "invalid", "schema", "pydantic",
+        "required field", "must be", "expected type", "malformed",
+        "not a valid", "constraint", "violat", "format error",
+    ]
+    validation_hits = sum(1 for kw in validation_kw if kw in text_lower)
+    if validation_hits >= 2:
+        return "action.validation", f"{validation_hits} validation keywords matched"
+
+    # Missing parameters / arguments
+    param_kw = [
+        "missing required", "missing argument", "missing parameter",
+        "positional argument", "unexpected keyword", "got an unexpected",
+        "takes 0 positional", "takes 1 positional", "required positional",
+        "none is not", "nonetype", "missing key", "argument required",
+    ]
+    param_hits = sum(1 for kw in param_kw if kw in text_lower)
+    if param_hits >= 1:
+        return "action.param_missing", f"{param_hits} param-missing keywords matched"
+
+    # API / HTTP errors not caught by external_dep (single-hit threshold)
+    api_kw = [
+        "api error", "api_error", "bad request", "response error",
+        "status code", "http error", "endpoint", "api call failed",
+        "openrouter", "anthropic", "response.status",
+    ]
+    api_hits = sum(1 for kw in api_kw if kw in text_lower)
+    if api_hits >= 1:
+        return "action.api_error", f"{api_hits} api-error keywords matched"
+
+    # Race conditions / concurrency issues
+    race_kw = [
+        "race condition", "lock", "deadlock", "concurrent", "stale",
+        "already running", "lock file", "flock", "mutex", "conflict",
+        "resource busy", "locked", "try again",
+    ]
+    race_hits = sum(1 for kw in race_kw if kw in text_lower)
+    if race_hits >= 2:
+        return "action.race_condition", f"{race_hits} race-condition keywords matched"
+
+    # Default: unclassified action error
+    return "action", "default classification (no sub-type matched)"
 
 
 def _mark_task_in_queue(task_text, annotation, queue_file, archive_file=None):
