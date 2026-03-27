@@ -533,6 +533,23 @@ class SearchMixin:
                     _log.debug("Observer %s failed", fn.__qualname__, exc_info=True)
         _observer_executor.submit(_run)
 
+    # --- recall helper: finalize (observers + reconsolidation + cache) ---
+
+    def _finalize_recall(self, query, final_results, caller, cache_key):
+        """Fire observers, mark labile memories, and update recall cache."""
+        self._fire_recall_observers(query, final_results, caller)
+        for result in final_results:
+            mem_id = result.get("id")
+            col_name = result.get("collection")
+            if mem_id and col_name:
+                self._labile_memories[mem_id] = {
+                    "retrieved_at": time.monotonic(), "collection": col_name,
+                }
+        self._recall_cache[cache_key] = (time.monotonic(), final_results)
+        if len(self._recall_cache) > 50:
+            oldest = min(self._recall_cache, key=lambda k: self._recall_cache[k][0])
+            del self._recall_cache[oldest]
+
     # --- recall: main entry point ---
 
     def recall(self, query, collections=None, n=5, min_importance=None,
@@ -600,18 +617,7 @@ class SearchMixin:
                 _log.debug("Graph expansion failed", exc_info=True)
 
         # Phase 7: Observers + reconsolidation + cache
-        self._fire_recall_observers(query, final_results, caller)
-        for result in final_results:
-            mem_id = result.get("id")
-            col_name = result.get("collection")
-            if mem_id and col_name:
-                self._labile_memories[mem_id] = {
-                    "retrieved_at": time.monotonic(), "collection": col_name,
-                }
-        self._recall_cache[cache_key] = (time.monotonic(), final_results)
-        if len(self._recall_cache) > 50:
-            oldest = min(self._recall_cache, key=lambda k: self._recall_cache[k][0])
-            del self._recall_cache[oldest]
+        self._finalize_recall(query, final_results, caller, cache_key)
 
         if _telemetry:
             _t_end = time.monotonic()

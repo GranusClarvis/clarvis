@@ -199,40 +199,11 @@ def benchmark_retrieval_quality():
     except Exception as e1:
         # Fallback: test against known-answer pairs
         try:
-            from brain import brain
-            hits = 0
-            for query, expected in ACCURACY_QUERIES:
-                results = brain.recall(query, n=3)
-                for r in results:
-                    doc = r.get("document", "").lower()
-                    if any(exp.lower() in doc for exp in expected):
-                        hits += 1
-                        break
-            hit_rate = round(hits / len(ACCURACY_QUERIES), 3) if ACCURACY_QUERIES else 0.0
-            precision_hits = 0
-            precision_total = 0
-            for query, expected in ACCURACY_QUERIES[:5]:
-                results = brain.recall(query, n=3)
-                for r in results:
-                    precision_total += 1
-                    doc = r.get("document", "").lower()
-                    if any(exp.lower() in doc for exp in expected):
-                        precision_hits += 1
-            precision_at_3 = round(precision_hits / max(precision_total, 1), 3)
-            return {
-                "hit_rate": hit_rate,
-                "precision_at_3": precision_at_3,
-                "n_pairs": len(ACCURACY_QUERIES),
-                "source": "accuracy_fallback",
-            }
+            return _retrieval_accuracy_fallback()
         except Exception as e2:
-            # Both paths failed — return error state instead of crashing
             return {
-                "hit_rate": None,
-                "precision_at_3": None,
-                "n_pairs": 0,
-                "source": "error",
-                "error": f"primary: {e1}, fallback: {e2}",
+                "hit_rate": None, "precision_at_3": None, "n_pairs": 0,
+                "source": "error", "error": f"primary: {e1}, fallback: {e2}",
             }
 
 
@@ -413,40 +384,10 @@ def benchmark_context_quality():
     # Fallback: measure compression quality directly
     if result["brief_compression"] == 0.0:
         try:
-            from context_compressor import generate_tiered_brief, compress_text
-            # Build raw input (uncompressed context sources)
-            raw_parts = []
-            try:
-                from context_compressor import compress_queue, get_latest_scores
-                raw_parts.append(compress_queue())
-                scores = get_latest_scores()
-                if scores:
-                    raw_parts.append(json.dumps(scores))
-            except Exception:
-                pass
-            try:
-                from attention import attention
-                attention._load()
-                focused = attention.focus()
-                for item in focused[:10]:
-                    raw_parts.append(item.get("content", ""))
-            except Exception:
-                pass
-            raw_input = "\n".join(raw_parts)
-
-            # Generate compressed brief
-            brief = generate_tiered_brief("Test task for benchmark", "standard", [])
-            if brief and len(brief) > 100:
-                if result["context_relevance"] == 0.0:
-                    result["context_relevance"] = 0.6
-                if raw_input and len(raw_input) > len(brief):
-                    result["brief_compression"] = round(
-                        1.0 - len(brief) / len(raw_input), 3
-                    )
-                else:
-                    # Fallback: measure compression of the brief itself
-                    _, stats = compress_text(brief, ratio=0.3)
-                    result["brief_compression"] = round(1.0 - stats["ratio"], 3)
+            live = _measure_compression_live()
+            result["brief_compression"] = live["brief_compression"]
+            if result["context_relevance"] == 0.0:
+                result["context_relevance"] = live["context_relevance"]
         except Exception:
             pass
 
@@ -788,6 +729,140 @@ def benchmark_quality():
 # check_self_optimization() is imported at module top from clarvis.metrics.benchmark
 
 
+def _evaluate_targets(metrics):
+    """Evaluate metrics against TARGETS, return (results, pass_count, fail_count, total_scored)."""
+    results = {}
+    for key, meta in TARGETS.items():
+        value = metrics.get(key)
+        target = meta["target"]
+        direction = meta["direction"]
+        if value is None or direction == "monitor":
+            status = "tracking"
+        elif direction == "lower":
+            status = "PASS" if value <= target else "FAIL"
+        else:
+            status = "PASS" if value >= target else "FAIL"
+        results[key] = {"value": value, "target": target, "status": status, "label": meta["label"]}
+    pass_count = sum(1 for r in results.values() if r["status"] == "PASS")
+    fail_count = sum(1 for r in results.values() if r["status"] == "FAIL")
+    return results, pass_count, fail_count, pass_count + fail_count
+
+
+def _build_report(timestamp, bench_duration, metrics, details, report_type=None):
+    """Build a standardized benchmark report dict."""
+    results, pass_count, fail_count, total_scored = _evaluate_targets(metrics)
+    pi_data = compute_pi(metrics)
+    report = {
+        "timestamp": timestamp,
+        "bench_duration_s": bench_duration,
+        "metrics": metrics,
+        "results": results,
+        "pi": pi_data,
+        "summary": {
+            "pass": pass_count,
+            "fail": fail_count,
+            "total_scored": total_scored,
+            "score": round(pass_count / max(total_scored, 1), 3),
+            "pi": pi_data["pi"],
+        },
+        "details": details,
+    }
+    if report_type:
+        report["type"] = report_type
+    return report
+
+
+def _retrieval_accuracy_fallback():
+    """Fallback retrieval benchmark using known-answer pairs."""
+    from brain import brain
+    hits = 0
+    for query, expected in ACCURACY_QUERIES:
+        results = brain.recall(query, n=3)
+        for r in results:
+            doc = r.get("document", "").lower()
+            if any(exp.lower() in doc for exp in expected):
+                hits += 1
+                break
+    hit_rate = round(hits / len(ACCURACY_QUERIES), 3) if ACCURACY_QUERIES else 0.0
+    precision_hits = 0
+    precision_total = 0
+    for query, expected in ACCURACY_QUERIES[:5]:
+        results = brain.recall(query, n=3)
+        for r in results:
+            precision_total += 1
+            doc = r.get("document", "").lower()
+            if any(exp.lower() in doc for exp in expected):
+                precision_hits += 1
+    precision_at_3 = round(precision_hits / max(precision_total, 1), 3)
+    return {
+        "hit_rate": hit_rate,
+        "precision_at_3": precision_at_3,
+        "n_pairs": len(ACCURACY_QUERIES),
+        "source": "accuracy_fallback",
+    }
+
+
+def _measure_compression_live():
+    """Measure brief compression quality by running context_compressor live."""
+    from context_compressor import generate_tiered_brief, compress_text
+    raw_parts = []
+    try:
+        from context_compressor import compress_queue, get_latest_scores
+        raw_parts.append(compress_queue())
+        scores = get_latest_scores()
+        if scores:
+            raw_parts.append(json.dumps(scores))
+    except Exception:
+        pass
+    try:
+        from attention import attention
+        attention._load()
+        focused = attention.focus()
+        for item in focused[:10]:
+            raw_parts.append(item.get("content", ""))
+    except Exception:
+        pass
+    raw_input = "\n".join(raw_parts)
+
+    brief = generate_tiered_brief("Test task for benchmark", "standard", [])
+    result = {"brief_compression": 0.0, "context_relevance": 0.0}
+    if brief and len(brief) > 100:
+        result["context_relevance"] = 0.6
+        if raw_input and len(raw_input) > len(brief):
+            result["brief_compression"] = round(1.0 - len(brief) / len(raw_input), 3)
+        else:
+            _, stats = compress_text(brief, ratio=0.3)
+            result["brief_compression"] = round(1.0 - stats["ratio"], 3)
+    return result
+
+
+def _flatten_full_metrics(speed, retrieval, efficiency, brain_stats, phi,
+                          episodes, context, load, quality, intelligence):
+    """Flatten individual benchmark results into a unified metrics dict."""
+    return {
+        "brain_query_avg_ms":   speed.get("avg_ms", 0),
+        "brain_query_p95_ms":   speed.get("p95_ms", 0),
+        "retrieval_hit_rate":   retrieval.get("hit_rate") or 0.0,
+        "retrieval_precision3": retrieval.get("precision_at_3") or 0.0,
+        "avg_tokens_per_op":    efficiency.get("avg_tokens_per_op"),
+        "heartbeat_overhead_s": efficiency.get("heartbeat_overhead_s"),
+        "episode_success_rate": episodes["success_rate"],
+        "action_accuracy":      episodes.get("action_accuracy", 0.0),
+        "failure_types":        episodes.get("failure_types", {}),
+        "weakest_failure_mode": episodes.get("weakest_failure_mode"),
+        "phi":                  phi["phi"],
+        "context_relevance":    context.get("context_relevance", 0.0),
+        "graph_density":        brain_stats["graph_density"],
+        "brain_total_memories": brain_stats["total_memories"],
+        "bloat_score":          brain_stats.get("bloat_score", 0.0),
+        "brief_compression":    context.get("brief_compression", 0.0),
+        "load_degradation_pct": load.get("degradation_pct", 0.0),
+        "task_quality_score":   quality.get("task_quality_score", 0.5),
+        "code_quality_score":   quality.get("code_quality_score", 0.5),
+        "confidence_brier":     intelligence.get("confidence_brier", 1.0),
+    }
+
+
 def write_alerts(alerts):
     """Append alerts to the alerts log."""
     if not alerts:
@@ -908,92 +983,20 @@ def run_full_benchmark():
 
     bench_duration = round(time.monotonic() - t0, 2)
 
-    # Flatten key metrics (use .get() with defaults for resilience)
-    metrics = {
-        "brain_query_avg_ms":   speed.get("avg_ms", 0),
-        "brain_query_p95_ms":   speed.get("p95_ms", 0),
-        "retrieval_hit_rate":   retrieval.get("hit_rate") or 0.0,  # None → 0.0
-        "retrieval_precision3": retrieval.get("precision_at_3") or 0.0,
-        "avg_tokens_per_op":    efficiency.get("avg_tokens_per_op"),
-        "heartbeat_overhead_s": efficiency.get("heartbeat_overhead_s"),
-        "episode_success_rate": episodes["success_rate"],
-        "action_accuracy":      episodes.get("action_accuracy", 0.0),
-        "failure_types":        episodes.get("failure_types", {}),
-        "weakest_failure_mode": episodes.get("weakest_failure_mode"),
-        "phi":                  phi["phi"],
-        "context_relevance":    context.get("context_relevance", 0.0),
-        "graph_density":        brain_stats["graph_density"],
-        "brain_total_memories": brain_stats["total_memories"],
-        "bloat_score":          brain_stats.get("bloat_score", 0.0),
-        "brief_compression":    context.get("brief_compression", 0.0),
-        "load_degradation_pct": load.get("degradation_pct", 0.0),
-        # New quality metrics (beyond binary success)
-        "task_quality_score":   quality.get("task_quality_score", 0.5),
-        "code_quality_score":   quality.get("code_quality_score", 0.5),
-        # Confidence calibration (Brier score — lower is better)
-        "confidence_brier":     intelligence.get("confidence_brier", 1.0),
+    metrics = _flatten_full_metrics(
+        speed, retrieval, efficiency, brain_stats, phi,
+        episodes, context, load, quality, intelligence)
+
+    details = {
+        "speed": speed, "retrieval": retrieval, "efficiency": efficiency,
+        "brain_stats": brain_stats, "phi": phi, "episodes": episodes,
+        "context": context, "load": load, "autonomy": autonomy,
+        "consciousness": consciousness, "intelligence": intelligence,
+        "self_improvement": self_improvement, "quality": quality,
+        "brier_check": brier_check,
     }
 
-    # Evaluate each metric against targets
-    results = {}
-    for key, meta in TARGETS.items():
-        value = metrics.get(key)
-        target = meta["target"]
-        direction = meta["direction"]
-
-        if value is None or direction == "monitor":
-            status = "tracking"
-        elif direction == "lower":
-            status = "PASS" if value <= target else "FAIL"
-        else:
-            status = "PASS" if value >= target else "FAIL"
-
-        results[key] = {
-            "value": value,
-            "target": target,
-            "status": status,
-            "label": meta["label"],
-        }
-
-    pass_count = sum(1 for r in results.values() if r["status"] == "PASS")
-    fail_count = sum(1 for r in results.values() if r["status"] == "FAIL")
-    total_scored = pass_count + fail_count
-
-    # Compute PI
-    pi_data = compute_pi(metrics)
-
-    report = {
-        "timestamp": timestamp,
-        "bench_duration_s": bench_duration,
-        "metrics": metrics,
-        "results": results,
-        "pi": pi_data,
-        "summary": {
-            "pass": pass_count,
-            "fail": fail_count,
-            "total_scored": total_scored,
-            "score": round(pass_count / max(total_scored, 1), 3),
-            "pi": pi_data["pi"],
-        },
-        "details": {
-            "speed": speed,
-            "retrieval": retrieval,
-            "efficiency": efficiency,
-            "brain_stats": brain_stats,
-            "phi": phi,
-            "episodes": episodes,
-            "context": context,
-            "load": load,
-            "autonomy": autonomy,
-            "consciousness": consciousness,
-            "intelligence": intelligence,
-            "self_improvement": self_improvement,
-            "quality": quality,  # Beyond binary success
-            "brier_check": brier_check,
-        },
-    }
-
-    return report
+    return _build_report(timestamp, bench_duration, metrics, details)
 
 
 def run_refresh_benchmark():
@@ -1052,51 +1055,10 @@ def run_refresh_benchmark():
         "code_quality_score":   quality.get("code_quality_score", 0.5),
     })
 
-    # Evaluate each metric against targets
-    results = {}
-    for key, meta in TARGETS.items():
-        value = metrics.get(key)
-        target = meta["target"]
-        direction = meta["direction"]
-        if value is None or direction == "monitor":
-            status = "tracking"
-        elif direction == "lower":
-            status = "PASS" if value <= target else "FAIL"
-        else:
-            status = "PASS" if value >= target else "FAIL"
-        results[key] = {"value": value, "target": target, "status": status, "label": meta["label"]}
-
-    pass_count = sum(1 for r in results.values() if r["status"] == "PASS")
-    fail_count = sum(1 for r in results.values() if r["status"] == "FAIL")
-    total_scored = pass_count + fail_count
-
-    pi_data = compute_pi(metrics)
-
-    # Merge details
     details = dict(prev_details)
-    details.update({
-        "speed": speed,
-        "brain_stats": brain_stats,
-        "episodes": episodes,
-        "quality": quality,
-    })
+    details.update({"speed": speed, "brain_stats": brain_stats, "episodes": episodes, "quality": quality})
 
-    return {
-        "timestamp": timestamp,
-        "type": "refresh",
-        "bench_duration_s": bench_duration,
-        "metrics": metrics,
-        "results": results,
-        "pi": pi_data,
-        "summary": {
-            "pass": pass_count,
-            "fail": fail_count,
-            "total_scored": total_scored,
-            "score": round(pass_count / max(total_scored, 1), 3),
-            "pi": pi_data["pi"],
-        },
-        "details": details,
-    }
+    return _build_report(timestamp, bench_duration, metrics, details, report_type="refresh")
 
 
 def run_quick_benchmark():

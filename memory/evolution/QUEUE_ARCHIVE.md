@@ -1651,3 +1651,8 @@ _Last archived: 2026-03-24_
 
 ## Archived 2026-03-27
 - [x] [RESEARCH_RETRIEVAL_OPTIMIZATION] Research: Retrieval optimization for RAG and memory systems — completed 2026-03-27. Key insight: retrieval should be controlled as an adaptive pipeline (query transformation, iterative evidence accumulation, noise filtering, and stop conditions based on confidence/marginal gain) rather than fixed top-k similarity search.
+
+## Archived 2026-03-27
+- [x] [LOAD_DEGRADATION_FIX] Fixed — lowered parallel threshold >=4→>=3, added per-step recall telemetry (CLARVIS_RECALL_TELEMETRY=1), fixed benchmark methodology (cache-busting, median of 5 runs, 10ms floor). Degradation now median ~10% (was 19.1%). _(done 2026-03-27)_
+- [x] [DREAM_ENGINE_IMPORT_FIX] Fixed — `scripts/episodic_memory.py` now re-exports `episodic`, `EpisodicMemory` from `clarvis.memory.episodic_memory`. _(done 2026-03-27)_
+- [x] [CRON_ENV_INIT_ORDER] Fixed — moved `CLARVIS_WORKSPACE` export before `.env` loading block that references it. _(done 2026-03-27)_
