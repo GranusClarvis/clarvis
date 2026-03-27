@@ -45,8 +45,8 @@ _TEMPORAL_PATTERNS = [
     (re.compile(r'\bpast\s+(\d+)\s+hours?\b', re.I), lambda m: (max(1, int(m.group(1)) // 24) or 1, 0.7)),
     (re.compile(r'\bpast\s+(\d+)\s+days?\b', re.I), lambda m: (int(m.group(1)), 0.6)),
     (re.compile(r'\bpast\s+(\d+)\s+weeks?\b', re.I), lambda m: (int(m.group(1)) * 7, 0.5)),
-    # "today", "last 24 hours"
-    (re.compile(r'\btoday\b', re.I), lambda m: (1, 0.8)),
+    # "today", "last 24 hours" — calendar-day aware (use_calendar_day flag)
+    (re.compile(r'\btoday\b', re.I), lambda m: (1, 0.9)),
     (re.compile(r'\blast\s+24\s+hours?\b', re.I), lambda m: (1, 0.8)),
     # "yesterday"
     (re.compile(r'\byesterday\b', re.I), lambda m: (2, 0.7)),
@@ -62,25 +62,47 @@ _TEMPORAL_PATTERNS = [
     (re.compile(r'\bwhat\s+happened\b', re.I), lambda m: (7, 0.5)),
 ]
 
+# Calendar-aware patterns: "today" and "yesterday" use calendar-day boundaries
+# instead of rolling 24h/48h windows. This returns an epoch cutoff directly.
+_CALENDAR_PATTERNS = [
+    (re.compile(r'\btoday\b', re.I), 0),       # 0 = start of today
+    (re.compile(r'\byesterday\b', re.I), 1),    # 1 = start of yesterday
+]
+
 
 def detect_temporal_intent(query):
     """Detect temporal intent in a query string.
 
-    Returns (since_days, recency_weight) if temporal keywords are found,
-    or (None, 0.0) if no temporal intent detected.
+    Returns (since_days, recency_weight, calendar_epoch) where:
+      - since_days: int or None — rolling window cutoff in days
+      - recency_weight: float 0.0-1.0 — how much to bias ranking by recency
+      - calendar_epoch: int or None — if set, use this epoch as the hard cutoff
+        instead of since_days (for calendar-day precision like "today"/"yesterday")
 
     Examples:
-        "what happened recently" → (7, 0.6)
-        "last 3 days progress" → (3, 0.6)
-        "today's events" → (1, 0.8)
-        "search architecture" → (None, 0.0)
+        "what happened recently" → (7, 0.6, None)
+        "last 3 days progress" → (3, 0.6, None)
+        "today's events" → (1, 0.9, <epoch of midnight today>)
+        "search architecture" → (None, 0.0, None)
     """
+    # Check calendar-day patterns first (more precise than rolling windows)
+    for pattern, days_back in _CALENDAR_PATTERNS:
+        if pattern.search(query):
+            from datetime import timedelta
+            now = datetime.now(timezone.utc)
+            day_start = now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=days_back)
+            cal_epoch = int(day_start.timestamp())
+            # Match recency_weight from _TEMPORAL_PATTERNS for consistency
+            rw = 0.9 if days_back == 0 else 0.7
+            sd = days_back + 1  # fallback since_days for memories without created_epoch
+            return sd, rw, cal_epoch
+
     for pattern, extractor in _TEMPORAL_PATTERNS:
         m = pattern.search(query)
         if m:
             since_days, recency_weight = extractor(m)
-            return since_days, recency_weight
-    return None, 0.0
+            return since_days, recency_weight, None
+    return None, 0.0, None
 
 
 # --- Contextual Retrieval: collection-level metadata synthesis ---
@@ -249,11 +271,15 @@ class SearchMixin:
         # --- Auto-detect temporal intent from query text ---
         # If caller didn't explicitly set since_days or recency_weight,
         # detect temporal keywords and apply automatically.
-        auto_since, auto_recency = detect_temporal_intent(query)
+        # calendar_epoch: precise cutoff for "today"/"yesterday" (midnight boundary)
+        calendar_epoch = None
+        auto_since, auto_recency, auto_cal_epoch = detect_temporal_intent(query)
         if since_days is None and auto_since is not None:
             since_days = auto_since
         if recency_weight == 0.0 and auto_recency > 0.0:
             recency_weight = auto_recency
+        if auto_cal_epoch is not None:
+            calendar_epoch = auto_cal_epoch
 
         # Temporal queries benefit from more results (timeline, not single answer)
         if since_days is not None and n <= 5:
@@ -269,7 +295,11 @@ class SearchMixin:
         all_results = []
         cutoff_date = None
         cutoff_epoch = None
-        if since_days:
+        if calendar_epoch is not None:
+            # Calendar-day precision: use midnight boundary instead of rolling window
+            cutoff_epoch = calendar_epoch
+            cutoff_date = datetime.fromtimestamp(calendar_epoch, tz=timezone.utc).isoformat()
+        elif since_days:
             from datetime import timedelta
             cutoff_dt = datetime.now(timezone.utc) - timedelta(days=since_days)
             cutoff_date = cutoff_dt.isoformat()
@@ -448,7 +478,14 @@ class SearchMixin:
         _recency_w = max(0.0, min(1.0, recency_weight))
         if _recency_w > 0:
             _now_ts = datetime.now(timezone.utc).timestamp()
-            _max_age = 90 * 86400  # 90 days normalisation window
+            # Adaptive normalization window: shorter for strong temporal intent
+            # "today" (rw=0.9) → 7 days; "recent" (rw=0.6) → 30 days; weak → 90 days
+            if _recency_w >= 0.8:
+                _max_age = 7 * 86400
+            elif _recency_w >= 0.6:
+                _max_age = 30 * 86400
+            else:
+                _max_age = 90 * 86400
             for r in all_results:
                 created = r["metadata"].get("created_at", "")
                 try:
@@ -457,12 +494,22 @@ class SearchMixin:
                 except (ValueError, TypeError):
                     r["_recency_score"] = 0.0
 
+        # Recency blending factor: stronger for explicit temporal queries.
+        # rw >= 0.8 ("today"): recency dominates (60-70% of score)
+        # rw ~0.5-0.7 ("recent", "this week"): moderate blend (30-45%)
+        # rw < 0.5: gentle nudge (15-20%)
+        if _recency_w >= 0.8:
+            _recency_blend = 0.7  # recency-dominant
+        elif _recency_w >= 0.5:
+            _recency_blend = _recency_w * 0.65  # 0.325 - 0.52
+        else:
+            _recency_blend = _recency_w * 0.4   # 0 - 0.2
+
         if scored:
             if _recency_w > 0:
-                # Blend ACTR score with recency
                 all_results.sort(
-                    key=lambda x: x.get("_actr_score", 0) * (1 - _recency_w * 0.3)
-                    + x.get("_recency_score", 0) * (_recency_w * 0.3),
+                    key=lambda x: x.get("_actr_score", 0) * (1 - _recency_blend)
+                    + x.get("_recency_score", 0) * _recency_blend,
                     reverse=True)
             else:
                 all_results.sort(key=lambda x: x.get("_actr_score", 0), reverse=True)
@@ -479,7 +526,7 @@ class SearchMixin:
                 base = semantic_relevance * 0.85 + (importance + boost) * 0.15
                 if _recency_w > 0:
                     recency = x.get("_recency_score", 0.0)
-                    return base * (1 - _recency_w * 0.4) + recency * (_recency_w * 0.4)
+                    return base * (1 - _recency_blend) + recency * _recency_blend
                 return base
             all_results.sort(key=sort_key, reverse=True)
 
