@@ -17,6 +17,7 @@ Usage:
 """
 
 import json
+import logging
 import os
 import re
 import sys
@@ -397,8 +398,8 @@ def _build_postflight_ctx(exit_code, output_file, preflight_data, task_duration)
         if output_file and os.path.exists(output_file):
             with open(output_file, 'r', errors='replace') as f:
                 output_text = f.read()
-    except Exception:
-        pass
+    except Exception as e:
+        logging.debug("Reading task output file failed: %s", e)
 
     # Crash guard: instant-fail episodes (< 10s, non-zero exit) are infrastructure
     # crashes, not real task failures. Don't penalize episode success rate.
@@ -460,8 +461,8 @@ def _pf_attention_hooks_procedural(ctx, _pf_errors):
         attention.submit(
             f"OUTCOME: {task_status.upper()} (exit {exit_code}) — {task[:80]}",
             source="heartbeat", importance=importance, relevance=0.8)
-    except Exception:
-        pass
+    except Exception as e:
+        logging.debug("Attention outcome submit failed: %s", e)
     timings["attention_outcome"] = round(time.monotonic() - t3, 3)
 
     # §4 Hooks / procedural memory
@@ -503,8 +504,8 @@ def _pf_attention_hooks_procedural(ctx, _pf_errors):
         elif ctx["proc_id"] and record_use:
             try:
                 record_use(ctx["proc_id"], False)
-            except Exception:
-                pass
+            except Exception as e:
+                logging.debug("Procedural record_use (failure path) failed: %s", e)
     timings["procedural"] = round(time.monotonic() - t4, 3)
 
     # §4.5 Tool maker
@@ -557,8 +558,8 @@ def _pf_prediction_resolve(ctx):
                 try:
                     ar = conf_auto_resolve(task, actual)
                     log(f"Prediction resolve (fallback): matched={ar['matched']}, remaining={ar['remaining_open']}")
-                except Exception:
-                    pass
+                except Exception as e:
+                    logging.debug("Prediction resolve fallback (conf_auto_resolve) failed: %s", e)
     elif conf_auto_resolve:
         try:
             ar = conf_auto_resolve(task, actual)
@@ -773,8 +774,8 @@ def _pf_broadcast_routing(ctx):
     try:
         attention.submit(f"Heartbeat task {task_status}: {task[:100]}", source="heartbeat",
                         importance=0.7 if task_status == "success" else 0.9, relevance=0.8)
-    except Exception:
-        pass
+    except Exception as e:
+        logging.debug("Attention broadcast submit failed: %s", e)
     timings["attention_broadcast"] = round(time.monotonic() - t6, 3)
 
     # §7 Routing log
@@ -913,15 +914,15 @@ def _store_regression_alert(task, selftest_result, brain_ok):
                  f"pytest: {selftest_result.get('pytest_summary', 'N/A')}")
         brain_instance.store(alert, collection="clarvis-learnings", importance=0.95,
                             tags=["regression", "self-test"], source="self_test_harness")
-    except Exception:
-        pass
+    except Exception as e:
+        logging.debug("Storing regression alert in brain failed: %s", e)
     try:
         from queue_writer import add_task
         fix_task = f"FIX REGRESSION: Self-test failed after '{task[:60]}'. Review and fix immediately."
         add_task(fix_task, priority="P0", source="self_test_harness")
         log("Pushed P0 regression fix task to QUEUE.md")
-    except Exception:
-        pass
+    except Exception as e:
+        logging.debug("Pushing P0 regression fix task to QUEUE.md failed: %s", e)
 
 
 def _capture_pytest_results(selftest_result, WORKSPACE):
@@ -1126,8 +1127,8 @@ def _pf_complexity_gate(ctx):
                         if func_len > _max_func_lines:
                             _long_funcs.append({"file": relpath, "function": node.name,
                                                 "lines": func_len, "start": node.lineno, "end": end_line})
-            except Exception:
-                pass
+            except Exception as e:
+                logging.debug("Complexity gate: AST parse failed for %s: %s", relpath, e)
 
         if _long_funcs:
             log(f"Complexity gate: {len(_long_funcs)} function(s) exceed {_max_func_lines} lines")
@@ -1225,8 +1226,8 @@ def _handle_cv_failures(ctx, cv_output_result, cv_file_errors, has_output_errs):
                         "output_errors": has_output_errs, "refinement": refinement_prompt[:300],
                     }
                     em_cv._save()
-        except Exception:
-            pass
+        except Exception as e:
+            logging.debug("Tagging episode with code_validation:fail failed: %s", e)
 
     # Persist
     cv_entry = {
@@ -1265,8 +1266,8 @@ def _tag_cv_pass(task):
                 if latest.get("task", "")[:60] == task[:60]:
                     latest.setdefault("tags", []).append("code_validation:pass")
                     em_cv._save()
-        except Exception:
-            pass
+        except Exception as e:
+            logging.debug("Tagging episode with code_validation:pass failed: %s", e)
 
 
 def _pf_gates(ctx, _pf_errors):
@@ -1486,8 +1487,8 @@ def _pf_retrieval_feedback(ctx, _pf_errors):
                             from queue_writer import add_task
                             if add_task(_diag_task, priority="P1", source="action_accuracy_guard"):
                                 log(f"ACTION ACCURACY GUARD: pushed P1 diagnostic (score={_aa_score})")
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logging.debug("Action accuracy guard: pushing P1 diagnostic task failed: %s", e)
                 else:
                     log(f"ACTION ACCURACY: insufficient non-timeout/non-soft episodes in trailing-{len(_recent_eps)}")
     except Exception as e:
@@ -1540,16 +1541,16 @@ def _pf_context_relevance(ctx, rv, preflight_data, output_text):
                     _total_eps = sum(v.get("episodes", 0) for v in _mmr_st.values() if isinstance(v, dict))
                     if _total_eps < 10:
                         _mmr_skip_reason = f"episodes={_total_eps}<10"
-            except Exception:
-                pass
+            except Exception as e:
+                logging.debug("Reading adaptive MMR state file failed: %s", e)
         if _mmr_skip_reason:
             log(f"ADAPTIVE MMR: skipped update ({_mmr_skip_reason})")
         else:
             try:
                 updated = mmr_update_lambdas()
                 log(f"ADAPTIVE MMR: lambdas updated — {updated}")
-            except Exception:
-                pass
+            except Exception as e:
+                logging.debug("Adaptive MMR lambda update failed: %s", e)
 
 
 def _pf_cost_and_budget(ctx, _pf_errors):
@@ -1672,8 +1673,8 @@ def _pf_queue_update(ctx, _pf_errors):
             try:
                 if isinstance(preflight_data, dict) and preflight_data.get("task_tag"):
                     task_for_marking = f"[{preflight_data['task_tag']}]"
-            except Exception:
-                pass
+            except Exception as e:
+                logging.debug("Extracting task_tag from preflight_data failed: %s", e)
             result_mark = _mark_task_in_queue(task_for_marking, timestamp, ctx["QUEUE_FILE"], ctx["QUEUE_ARCHIVE"])
             if result_mark == "marked":
                 log("Marked task complete in QUEUE.md")
@@ -1702,8 +1703,8 @@ def _pf_finalize(ctx, _pf_errors):
     # §11 Attention save
     try:
         attention.save()
-    except Exception:
-        pass
+    except Exception as e:
+        logging.debug("Attention save failed: %s", e)
 
     # §12 Queue hygiene
     try:
@@ -1711,8 +1712,8 @@ def _pf_finalize(ctx, _pf_errors):
         archived = archive_completed()
         if archived > 0:
             log(f"Queue hygiene: archived {archived} completed items")
-    except Exception:
-        pass
+    except Exception as e:
+        logging.debug("Queue hygiene archive_completed failed: %s", e)
 
     # §13 Cognitive workspace
     if cog_workspace:
@@ -1798,8 +1799,8 @@ def _persist_completeness(ctx, timings, _pf_errors, completeness, stages_attempt
         }
         with open(completeness_file, "a") as cf:
             cf.write(json.dumps(entry) + "\n")
-    except Exception:
-        pass
+    except Exception as e:
+        logging.debug("Persisting postflight completeness entry failed: %s", e)
 
 
 def run_postflight(exit_code, output_file, preflight_data, task_duration=0):

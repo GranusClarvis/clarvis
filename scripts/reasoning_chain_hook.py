@@ -17,6 +17,9 @@ Usage:
 
 import sys
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -71,8 +74,8 @@ def open_chain(task_text: str, section: str = "unknown", salience: str = "0.0") 
         for c in recent_chains:
             if any(word in c["title"].lower() for word in task_text.lower().split()[:3]):
                 related.append(c["title"])
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Failed to list recent chains for related-task search: %s", e)
 
     # Retrieve brain context
     context_memories = _recall_context(task_text)
@@ -104,8 +107,8 @@ def open_chain(task_text: str, section: str = "unknown", salience: str = "0.0") 
         try:
             state = thought_proto.encode_state()
             print(f"THOUGHT_STATE: {state}", file=sys.stderr)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("thought_proto.encode_state() failed at chain open: %s", e)
 
     # --- Step 1: Strategy and expected outcome ---
     # Classify task type from keywords
@@ -193,8 +196,8 @@ def _save_session_map(chain_id: str, session_id: str):
         os.makedirs(os.path.dirname(_SESSION_MAP_FILE), exist_ok=True)
         with open(_SESSION_MAP_FILE, "w") as f:
             json.dump(data, f)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Failed to save chain→session mapping to %s: %s", _SESSION_MAP_FILE, e)
 
 
 def _get_session_id(chain_id: str) -> str:
@@ -205,8 +208,8 @@ def _get_session_id(chain_id: str) -> str:
             with open(_SESSION_MAP_FILE) as f:
                 data = json.load(f)
             return data.get(chain_id, "")
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Failed to load chain→session mapping for chain_id=%s: %s", chain_id, e)
     return ""
 
 
@@ -247,7 +250,8 @@ def close_chain(chain_id: str, result: str, task_text: str, exit_code: str = "0"
     complete_step(chain_id, f"Chain complete: {result}")
     try:
         step_count = len(list_chains().get(chain_id, {}).get("steps", []))
-    except Exception:
+    except Exception as e:
+        logger.debug("Failed to count steps for chain_id=%s: %s", chain_id, e)
         step_count = "?"
     print(f"Chain {chain_id} closed: {result} ({step_count} steps)", file=sys.stderr)
 

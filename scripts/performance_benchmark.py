@@ -37,10 +37,13 @@ Usage:
 """
 
 import json
+import logging
 import os
 import sys
 import time
 from datetime import datetime, timezone, timedelta
+
+logger = logging.getLogger(__name__)
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -177,8 +180,8 @@ def benchmark_retrieval_quality():
                         "category_scores": report.get("by_category", {}),
                         "source": "retrieval_benchmark_cached",
                     }
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Reading retrieval_benchmark cached results failed: %s", e)
 
     # Live run if no cache available
     try:
@@ -187,8 +190,8 @@ def benchmark_retrieval_quality():
         # Cache results so next benchmark_retrieval_quality() call can use cached path
         try:
             save_report(report)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Saving retrieval_benchmark report to cache failed: %s", e)
         return {
             "hit_rate": report.get("avg_recall", 0.0),
             "precision_at_3": report.get("avg_precision_at_k", 0.0),
@@ -219,8 +222,8 @@ def benchmark_efficiency():
             result["heartbeat_overhead_s"] = prev.get("details", {}).get(
                 "efficiency", {}
             ).get("heartbeat_overhead_s")
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Reading previous metrics for heartbeat overhead estimate failed: %s", e)
 
     # Cost tracking: costs.jsonl removed (was deprecated).
     # Real cost data available via cost_tracker.py telegram / cost_api.py
@@ -362,8 +365,8 @@ def benchmark_context_quality():
                 agg = aggregate_relevance(days=7)
                 if agg.get("episodes", 0) >= 5:
                     result["context_relevance"] = round(agg["mean_relevance"], 3)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Computing context relevance from episode data failed: %s", e)
 
             # Fallback: static proxy from v2 success rate vs v1
             if result["context_relevance"] == 0.0:
@@ -378,8 +381,8 @@ def benchmark_context_quality():
                         v1_rate = v1_data["success_rate"]
                 if v2_rate > 0:
                     result["context_relevance"] = round(min(v2_rate / max(v1_rate, 0.01), 1.5) / 1.5, 3)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Parsing brief_v2_report.json for context quality metrics failed: %s", e)
 
     # Fallback: measure compression quality directly
     if result["brief_compression"] == 0.0:
@@ -388,8 +391,8 @@ def benchmark_context_quality():
             result["brief_compression"] = live["brief_compression"]
             if result["context_relevance"] == 0.0:
                 result["context_relevance"] = live["context_relevance"]
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Live compression measurement fallback failed: %s", e)
 
     # Clamp to [0, 1]
     result["brief_compression"] = max(0.0, min(1.0, result["brief_compression"]))
@@ -475,8 +478,8 @@ def benchmark_autonomy():
             total = completions + failures
             if total > 0:
                 result["cron_success_rate_24h"] = round(completions / total, 3)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Parsing autonomous.log for cron success rate failed: %s", e)
 
     # Queue throughput: completed items per day (from archive)
     archive_file = os.path.join(WORKSPACE, "memory/evolution/QUEUE_ARCHIVE.md")
@@ -490,8 +493,8 @@ def benchmark_autonomy():
             result["queue_throughput_day"] = len(re.findall(
                 rf'\[x\].*{today}', content
             ))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Counting today's completed queue items from QUEUE_ARCHIVE.md failed: %s", e)
 
     # Self-recovery rate from cron_doctor
     doctor_log = os.path.join(WORKSPACE, "memory/cron/doctor.log")
@@ -504,8 +507,8 @@ def benchmark_autonomy():
             total = fixes + failures
             if total > 0:
                 result["self_recovery_rate"] = round(fixes / total, 3)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Parsing doctor.log for self-recovery rate failed: %s", e)
 
     return result
 
@@ -533,8 +536,8 @@ def benchmark_consciousness(phi_data=None):
             result["phi_composite"] = phi_result.get("phi", 0.0)
             components = phi_result.get("components", {})
             result["cross_collection_overlap"] = components.get("semantic_cross_collection", 0.0)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Computing Phi consciousness metric failed: %s", e)
 
     # Goal progress velocity (avg weekly delta)
     try:
@@ -546,8 +549,8 @@ def benchmark_consciousness(phi_data=None):
                 latest = history[-1].get("avg_progress", 0)
                 prev = history[-2].get("avg_progress", 0)
                 result["goal_progress_velocity"] = round(latest - prev, 3)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Computing goal progress velocity from goal_history.json failed: %s", e)
 
     return result
 
@@ -591,8 +594,8 @@ def benchmark_intelligence(retrieval_data=None, speed_data=None):
                     "total": cal.get("total", 0),
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 }, _f, indent=2)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Computing confidence calibration Brier score failed: %s", e)
 
     # Context compression ratio
     try:
@@ -607,8 +610,8 @@ def benchmark_intelligence(retrieval_data=None, speed_data=None):
                     result["context_compression_ratio"] = round(
                         1.0 - (len(brief) / full_size), 3
                     )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Computing context compression ratio via context_compressor failed: %s", e)
 
     return result
 
@@ -630,8 +633,8 @@ def benchmark_self_improvement():
             with open(queue_file) as f:
                 content = f.read()
             result["queue_items_pending"] = len(re.findall(r'^- \[ \]', content, re.MULTILINE))
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Counting pending QUEUE.md items failed: %s", e)
 
     # Research bundles completed (count from queue archive)
     try:
@@ -642,8 +645,8 @@ def benchmark_self_improvement():
             result["research_bundles_completed"] = len(
                 [l for l in content.split("\n") if "Bundle" in l and "[x]" in l]
             )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Counting completed research bundles from QUEUE_ARCHIVE.md failed: %s", e)
 
     # Episodes per day (recent)
     try:
@@ -655,8 +658,8 @@ def benchmark_self_improvement():
             result["episodes_per_day"] = sum(
                 1 for ep in episodes if ep.get("timestamp", "").startswith(today)
             )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Counting today's episodes from episodes.json failed: %s", e)
 
     # Goal non-zombie rate
     try:
@@ -669,8 +672,8 @@ def benchmark_self_improvement():
                 or str(g.get("metadata", {}).get("archived", "")).lower() != "true"
             )
             result["goal_non_zombie_rate"] = round(non_zombie / len(goals), 3)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Computing goal non-zombie rate from brain goals failed: %s", e)
 
     return result
 
@@ -821,16 +824,16 @@ def _measure_compression_live():
         scores = get_latest_scores()
         if scores:
             raw_parts.append(json.dumps(scores))
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Gathering raw queue data for compression measurement failed: %s", e)
     try:
         from attention import attention
         attention._load()
         focused = attention.focus()
         for item in focused[:10]:
             raw_parts.append(item.get("content", ""))
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Gathering attention-focused items for compression measurement failed: %s", e)
     raw_input = "\n".join(raw_parts)
 
     brief = generate_tiered_brief("Test task for benchmark", "standard", [])
@@ -888,8 +891,8 @@ def write_alerts(alerts):
                             entries.append(json.loads(line))
                         except json.JSONDecodeError:
                             continue
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Reading existing alerts from %s failed: %s", ALERTS_FILE, e)
 
     for alert in alerts:
         alert["timestamp"] = timestamp
@@ -934,8 +937,8 @@ def push_optimization_tasks(alerts):
         try:
             if add_task(task_text, priority="P1", source="performance_benchmark"):
                 added += 1
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Pushing optimization task to evolution queue failed: %s", e)
     return added
 
 
@@ -987,8 +990,8 @@ def run_full_benchmark():
             "archived": recal.get("archived", 0),
             "swept": recal.get("swept", 0),
         }
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Post-benchmark confidence recalibration check failed: %s", e)
 
     bench_duration = round(time.monotonic() - t0, 2)
 
@@ -1035,8 +1038,8 @@ def run_refresh_benchmark():
                 stored = json.load(f)
             prev_metrics = stored.get("metrics", {})
             prev_details = stored.get("details", {})
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Loading previously stored metrics for refresh merge failed: %s", e)
 
     # Refresh context_relevance from live episode data to avoid stale cached values
     try:
@@ -1046,7 +1049,8 @@ def run_refresh_benchmark():
             fresh_context_relevance = round(agg["mean_relevance"], 3)
         else:
             fresh_context_relevance = prev_metrics.get("context_relevance", 0.0)
-    except Exception:
+    except Exception as e:
+        logger.debug("Refreshing context_relevance from live episode data failed: %s", e)
         fresh_context_relevance = prev_metrics.get("context_relevance", 0.0)
 
     # Merge: refresh overwrites, previous fills gaps
@@ -1131,8 +1135,8 @@ def run_heartbeat_check():
             with open(METRICS_FILE) as f:
                 prev = json.load(f)
             prev_pi = prev.get("pi", {}).get("pi")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Reading previous PI from metrics file for heartbeat check failed: %s", e)
 
     duration = round(time.monotonic() - t0, 2)
 
@@ -1174,8 +1178,8 @@ def record(report=None):
                         prev_report = None  # Too stale for regression comparison
                 except (ValueError, TypeError):
                     prev_report = None
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Loading previous report for regression comparison failed: %s", e)
 
     # Write latest snapshot
     with open(METRICS_FILE, "w") as f:
@@ -1513,16 +1517,16 @@ if __name__ == "__main__":
                     age_h = (datetime.now(timezone.utc) - stored_time.replace(
                         tzinfo=timezone.utc) if stored_time.tzinfo is None else stored_time
                     ).total_seconds() / 3600
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("Parsing stored benchmark timestamp for age calculation failed: %s", e)
                 pi_val = pi.get("pi", 0)
                 interp = pi.get("interpretation", "")
                 stale = " (stale — use --fresh)" if age_h > 48 else ""
                 print(f"PI: {pi_val:.4f} — {interp}")
                 print(f"  Last recorded: {ts} ({age_h:.0f}h ago){stale}")
                 sys.exit(0)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Reading cached PI from metrics file failed, falling back to fresh computation: %s", e)
         # Fresh computation
         report = run_full_benchmark()
         pi = report.get("pi", {})
@@ -1541,8 +1545,8 @@ if __name__ == "__main__":
                 agg = aggregate_relevance(days=7)
                 if agg.get("episodes", 0) >= 5:
                     metrics["context_relevance"] = round(agg["mean_relevance"], 3)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Refreshing context_relevance for weakest metric report failed: %s", e)
             # Compute margin-to-target ratio for each scored metric
             worst_name, worst_margin = None, float("inf")
             for key, meta in TARGETS.items():

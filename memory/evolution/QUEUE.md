@@ -30,7 +30,6 @@ _Queue audited on 2026-03-24 evening. Removed 3 completed items (A5_A7, TEMPORAL
 
 ## P1 — This Week
 
-- [x] [DECOMPOSE_LONG_FUNCTIONS] Decompose oversized functions: `scripts/generate_status_page.py:render_html` (195→41 lines). Split into 5 helpers, all ≤66 lines. Done 2026-03-27.
 
 
 
@@ -75,7 +74,12 @@ _(Completed items archived.)_
 
 ## NEW ITEMS
 
-### P0 — Found in 2026-03-27 evening code review
+### P0 — Found in 2026-03-27 evening scan
 
+- [ ] [BRIEF_COMPRESSION_BOOST] Improve brief compression ratio from 0.503→0.55+ by adding MMR-based redundancy removal to `compress_text()` in `context_compressor.py`. The MMR reranker (lines 75-151) already exists but isn't wired into brief generation — integrate it as a post-extraction dedup pass, and tighten `tfidf_extract` ratio from 0.3 to 0.25 for tiered briefs. _Weakest metric fix._
+- [ ] [D2_PUBLIC_STATUS_ENDPOINT] Wire the `/api/public/status` endpoint in `website/` — serve runtime mode, queue summary, latest PI/CLR scores, and uptime. Schema already defined in `WEBSITE_V0_INFORMATION_ARCH.md`. Last greenfield delivery item before 2026-03-31 deadline.
+- [x] [CRONTAB_DOCS_DRIFT] Sync CLAUDE.md cron table with actual crontab — added 3 missing entries (brain_eval 06:00, llm_brain_review 06:15, relevance_refresh 02:40), updated date to 2026-03-27.
+- [ ] [E6_ROADMAP_SANITIZE] Sanitize ROADMAP.md for public consumption — remove internal references to specific API keys, budget thresholds, and server IPs. Cross-ref with D4 architecture page content. Delivery checklist E6 blocker.
+- [x] [BARE_EXCEPT_AUDIT] Fixed 52 silent `except Exception: pass` blocks across 3 priority files: heartbeat_postflight.py (18), performance_benchmark.py (29), reasoning_chain_hook.py (5). All now log via `logging.debug()`. 50 files total have this pattern; remaining are lower priority.
 
 
