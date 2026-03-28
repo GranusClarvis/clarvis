@@ -58,7 +58,7 @@ if __name__ == "__main__":
         print("  crosslink          - Build cross-collection edges for all memories")
         print("  remember <text>    - High-importance store (--importance 0.8 --collection clarvis-learnings --tags t1,t2)")
         print("  global <query>     - GraphRAG global search (holistic queries)")
-        print("  ingest-research [file] - Ingest research markdown into brain (all files if no arg)")
+        print("  ingest-research [file] - Ingest a specific research markdown file into brain")
         sys.exit(1)
 
     cmd = sys.argv[1]
@@ -222,7 +222,14 @@ if __name__ == "__main__":
         if len(sys.argv) > 2 and not sys.argv[2].startswith("--"):
             files = [sys.argv[2]]
         else:
+            # DEPRECATED: root sweep of memory/research/*.md was the source of
+            # duplicate ingestion. cron_research.sh now passes specific files.
+            # Keep for backward compat but warn.
             files = sorted(glob_mod.glob(os.path.join(research_dir, "*.md")))
+            if files:
+                print(f"WARNING: root sweep found {len(files)} file(s) in {research_dir}/")
+                print("  Prefer: brain.py ingest-research <specific-file>")
+                print("  Root sweep is deprecated — use scoped run dirs instead.")
 
         if not files:
             print("No research files found")

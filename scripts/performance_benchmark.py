@@ -1229,10 +1229,13 @@ def record(report=None):
     return report
 
 
-def show_trend(days=30):
-    """Show performance trend with PI trajectory."""
+def _load_performance_history(days=30):
+    """Load and filter performance history entries within the given day range.
+
+    Returns (recent_entries, error_dict). On error, recent_entries is None.
+    """
     if not os.path.exists(HISTORY_FILE):
-        return {"error": "No history yet. Run 'record' first."}
+        return None, {"error": "No history yet. Run 'record' first."}
 
     history = []
     with open(HISTORY_FILE) as f:
@@ -1241,7 +1244,6 @@ def show_trend(days=30):
             if line:
                 try:
                     entry = json.loads(line)
-                    # Skip foreign entries (e.g. structural_health) that lack performance metrics
                     if entry.get("type") and entry["type"] != "performance":
                         continue
                     history.append(entry)
@@ -1249,13 +1251,21 @@ def show_trend(days=30):
                     continue
 
     if not history:
-        return {"error": "Empty history."}
+        return None, {"error": "Empty history."}
 
     cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
     recent = [h for h in history if h["timestamp"] >= cutoff]
-
     if not recent:
         recent = history[-5:]
+
+    return recent, None
+
+
+def show_trend(days=30):
+    """Show performance trend with PI trajectory."""
+    recent, err = _load_performance_history(days)
+    if err:
+        return err
 
     # Metric trends
     trends = {}
@@ -1361,8 +1371,16 @@ def print_report(report):
     print(f"  Score: {summary.get('pass', 0)}/{summary.get('total_scored', 0)} "
           f"passed ({score_pct}%)  |  PI: {pi:.4f}")
 
-    # Speed breakdown
-    speed = report.get("details", {}).get("speed", {})
+    _print_report_details(report)
+
+    print("=" * 65)
+
+
+def _print_report_details(report):
+    """Print speed, brain, phi, episodes, load, and alerts sections."""
+    details = report.get("details", {})
+
+    speed = details.get("speed", {})
     if speed:
         print(f"\n  Speed: Avg={speed['avg_ms']:.1f}ms  "
               f"P50={speed['p50_ms']:.1f}ms  "
@@ -1370,21 +1388,18 @@ def print_report(report):
               f"Max={speed['max_ms']:.1f}ms")
         print(f"    Slowest: \"{speed.get('slowest_query', 'N/A')}\"")
 
-    # Brain
-    bs = report.get("details", {}).get("brain_stats", {})
+    bs = details.get("brain_stats", {})
     if bs:
         print(f"\n  Brain: {bs['total_memories']} memories, "
               f"{bs['graph_edges']} edges, "
               f"density={bs['graph_density']}, "
               f"bloat={bs.get('bloat_score', 0):.2f}")
 
-    # Phi
-    phi_d = report.get("details", {}).get("phi", {})
+    phi_d = details.get("phi", {})
     if phi_d and "phi" in phi_d:
         print(f"  Phi: {phi_d['phi']:.4f} — {phi_d.get('interpretation', '')}")
 
-    # Episodes
-    ep = report.get("details", {}).get("episodes", {})
+    ep = details.get("episodes", {})
     if ep and ep.get("total_episodes"):
         print(f"\n  Episodes: {ep['total_episodes']} total, "
               f"{ep['success_rate']*100:.0f}% success, "
@@ -1394,21 +1409,17 @@ def print_report(report):
             parts = [f"{k}={v}" for k, v in outcomes.items()]
             print(f"    Outcomes: {', '.join(parts)}")
 
-    # Load scaling
-    load = report.get("details", {}).get("load", {})
+    load = details.get("load", {})
     if load:
         print(f"\n  Load: base={load.get('base_ms', '?')}ms, "
               f"peak(n=10)={load.get('peak_ms', '?')}ms, "
               f"degradation={load.get('degradation_pct', '?')}%")
 
-    # Alerts
     alerts = report.get("_alerts", [])
     if alerts:
         print(f"\n  ALERTS ({len(alerts)}):")
         for a in alerts:
             print(f"    [{a['severity'].upper()}] {a['message']}")
-
-    print("=" * 65)
 
 
 def print_trend(trend_data):

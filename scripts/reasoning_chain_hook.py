@@ -59,6 +59,20 @@ def _recall_context(task_text: str) -> list:
             return []
 
 
+def _classify_task_type(task_text: str) -> str:
+    """Classify task type from keywords for strategy labelling."""
+    task_lower = task_text.lower()
+    if any(w in task_lower for w in ["fix", "bug", "error", "broken"]):
+        return "bug fix"
+    if any(w in task_lower for w in ["build", "create", "implement", "add"]):
+        return "new capability"
+    if any(w in task_lower for w in ["wire", "hook", "integrate", "connect"]):
+        return "integration"
+    if any(w in task_lower for w in ["improve", "boost", "optimize", "increase"]):
+        return "optimization"
+    return "evolution task"
+
+
 def open_chain(task_text: str, section: str = "unknown", salience: str = "0.0") -> str:
     """Create a multi-step reasoning chain before executing a task.
 
@@ -111,18 +125,7 @@ def open_chain(task_text: str, section: str = "unknown", salience: str = "0.0") 
             logger.debug("thought_proto.encode_state() failed at chain open: %s", e)
 
     # --- Step 1: Strategy and expected outcome ---
-    # Classify task type from keywords
-    task_lower = task_text.lower()
-    if any(w in task_lower for w in ["fix", "bug", "error", "broken"]):
-        task_type = "bug fix"
-    elif any(w in task_lower for w in ["build", "create", "implement", "add"]):
-        task_type = "new capability"
-    elif any(w in task_lower for w in ["wire", "hook", "integrate", "connect"]):
-        task_type = "integration"
-    elif any(w in task_lower for w in ["improve", "boost", "optimize", "increase"]):
-        task_type = "optimization"
-    else:
-        task_type = "evolution task"
+    task_type = _classify_task_type(task_text)
 
     step1_thought = (
         f"Strategy: This is a {task_type}. "
@@ -135,49 +138,53 @@ def open_chain(task_text: str, section: str = "unknown", salience: str = "0.0") 
 
     add_step(chain_id, step1_thought, previous_outcome="Context gathered, strategy formed")
 
-    # === ClarvisReasoning dual-write: richer session with decomposition ===
-    if cr_reasoner:
-        try:
-            session = cr_reasoner.begin(task_text[:200])
-            # Decompose based on task type
-            if task_type == "bug fix":
-                session.decompose(["Diagnose root cause", "Design fix", "Implement and verify"])
-            elif task_type == "new capability":
-                session.decompose(["Understand requirements", "Design approach", "Build implementation", "Test"])
-            elif task_type == "integration":
-                session.decompose(["Identify integration points", "Wire connections", "Verify end-to-end"])
-            else:
-                session.decompose(["Analyze context", "Plan approach", "Execute"])
-
-            # Step 1: Context analysis with evidence
-            session.step(
-                step0_thought,
-                sub_problem=session.sub_problems[0] if session.sub_problems else "",
-                evidence=[s[:80] for s in context_snippets[:3]] or ["no prior context found"],
-                confidence=min(0.9, 0.5 + float(salience) * 0.4),
-            )
-
-            # Step 2: Strategy with evidence
-            risk_level = "low" if related else "medium"
-            session.step(
-                step1_thought,
-                sub_problem=session.sub_problems[1] if len(session.sub_problems) > 1 else "",
-                evidence=[f"task_type={task_type}", f"salience={salience}", f"risk={risk_level}"],
-                confidence=min(0.9, 0.5 + float(salience) * 0.3),
-            )
-
-            # Predict outcome
-            pred_conf = min(0.85, 0.6 + float(salience) * 0.2)
-            session.predict("success", pred_conf)
-
-            # Save session_id mapping so close_chain can find it
-            _save_session_map(chain_id, session.session_id)
-            print(f"REASONING_SESSION: {session.session_id}", file=sys.stderr)
-        except Exception as e:
-            print(f"ClarvisReasoning session error: {e}", file=sys.stderr)
+    # === ClarvisReasoning dual-write ===
+    _open_reasoning_session(
+        chain_id, task_text, task_type, salience,
+        context_snippets, related, step0_thought, step1_thought,
+    )
 
     print(chain_id, file=sys.stderr)  # stderr — don't contaminate stdout JSON
     return chain_id
+
+
+def _open_reasoning_session(chain_id, task_text, task_type, salience,
+                            context_snippets, related, step0_thought, step1_thought):
+    """Dual-write a ClarvisReasoning session with decomposition and prediction."""
+    if not cr_reasoner:
+        return
+    try:
+        session = cr_reasoner.begin(task_text[:200])
+        # Decompose based on task type
+        decomp_map = {
+            "bug fix": ["Diagnose root cause", "Design fix", "Implement and verify"],
+            "new capability": ["Understand requirements", "Design approach", "Build implementation", "Test"],
+            "integration": ["Identify integration points", "Wire connections", "Verify end-to-end"],
+        }
+        session.decompose(decomp_map.get(task_type, ["Analyze context", "Plan approach", "Execute"]))
+
+        session.step(
+            step0_thought,
+            sub_problem=session.sub_problems[0] if session.sub_problems else "",
+            evidence=[s[:80] for s in context_snippets[:3]] or ["no prior context found"],
+            confidence=min(0.9, 0.5 + float(salience) * 0.4),
+        )
+
+        risk_level = "low" if related else "medium"
+        session.step(
+            step1_thought,
+            sub_problem=session.sub_problems[1] if len(session.sub_problems) > 1 else "",
+            evidence=[f"task_type={task_type}", f"salience={salience}", f"risk={risk_level}"],
+            confidence=min(0.9, 0.5 + float(salience) * 0.3),
+        )
+
+        pred_conf = min(0.85, 0.6 + float(salience) * 0.2)
+        session.predict("success", pred_conf)
+
+        _save_session_map(chain_id, session.session_id)
+        print(f"REASONING_SESSION: {session.session_id}", file=sys.stderr)
+    except Exception as e:
+        print(f"ClarvisReasoning session error: {e}", file=sys.stderr)
 
 
 def _save_session_map(chain_id: str, session_id: str):

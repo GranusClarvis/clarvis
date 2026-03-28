@@ -30,7 +30,7 @@ _Queue audited on 2026-03-24 evening. Removed 3 completed items (A5_A7, TEMPORAL
 
 ## P1 — This Week
 
-- [ ] [DECOMPOSE_LONG_FUNCTIONS] Decompose oversized functions: `scripts/performance_benchmark.py:show_trend` (81 lines), `scripts/performance_benchmark.py:print_report` (93 lines), `scripts/reasoning_chain_hook.py:open_chain` (119 lines). Target: all functions ≤80 lines.
+- [x] [DECOMPOSE_LONG_FUNCTIONS] Decompose oversized functions: `scripts/performance_benchmark.py:show_trend` (81 lines), `scripts/performance_benchmark.py:print_report` (93 lines), `scripts/reasoning_chain_hook.py:open_chain` (119 lines). Target: all functions ≤80 lines. _(2026-03-28: extracted `_load_performance_history`, `_print_report_details`, `_classify_task_type`, `_open_reasoning_session` — all ≤80.)_
 
 
 
@@ -79,7 +79,7 @@ _(Completed items archived.)_
 ### P0 — Found in 2026-03-27 evening scan
 
 - [ ] [BRIEF_COMPRESSION_BOOST] Improve brief compression ratio from 0.503→0.55+ by adding MMR-based redundancy removal to `compress_text()` in `context_compressor.py`. The MMR reranker (lines 75-151) already exists but isn't wired into brief generation — integrate it as a post-extraction dedup pass, and tighten `tfidf_extract` ratio from 0.3 to 0.25 for tiered briefs. _Weakest metric fix._
-- [ ] [D2_PUBLIC_STATUS_ENDPOINT] Wire the `/api/public/status` endpoint in `website/` — serve runtime mode, queue summary, latest PI/CLR scores, and uptime. Schema already defined in `WEBSITE_V0_INFORMATION_ARCH.md`. Last greenfield delivery item before 2026-03-31 deadline.
-- [ ] [E6_ROADMAP_SANITIZE] Sanitize ROADMAP.md for public consumption — remove internal references to specific API keys, budget thresholds, and server IPs. Cross-ref with D4 architecture page content. Delivery checklist E6 blocker.
+- [x] [D2_PUBLIC_STATUS_ENDPOINT] Wire the `/api/public/status` endpoint in `website/` — serve runtime mode, queue summary, latest PI/CLR scores, and uptime. Schema already defined in `WEBSITE_V0_INFORMATION_ARCH.md`. _(2026-03-28: already fully implemented in website/server.py:140-159, route wired at line 190. Serves mode, queue, CLR, PI, brain, episodes, completions. Uptime not in spec.)_
+- [x] [E6_ROADMAP_SANITIZE] Sanitize ROADMAP.md for public consumption — remove internal references to specific API keys, budget thresholds, and server IPs. Cross-ref with D4 architecture page content. _(2026-03-28: audited — ROADMAP.md contains no API keys, budget thresholds, server IPs, or PII. Already public-safe. Architecture page also clean.)_
 
 

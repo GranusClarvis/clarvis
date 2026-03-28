@@ -41,8 +41,6 @@ for line in lines:
     # Match unchecked items that are research tasks
     if re.match(r'^-\s*\[\s*\]', stripped):
         task = re.sub(r'^-\s*\[\s*\]\s*', '', stripped)
-        # Strip auto-generated source tags like [RESEARCH_DISCOVERY 2026-02-27]
-        task = re.sub(r'^\[[A-Z_]+\s+\d{4}-\d{2}-\d{2}\]\s*', '', task)
         task_lower = task.lower()
         # Match research tasks by various indicators
         if any(marker in task_lower for marker in ['research:', 'bundle ', '[research', 'study ', 'paper ', 'explore ', 'investigate ']):
@@ -179,6 +177,52 @@ fi
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] RESEARCH TASK: ${RESEARCH_TASK:0:120}" >> "$LOGFILE"
 
+# === STAGE 1: PRE-SELECT NOVELTY GATE ===
+# Check if this topic has already been thoroughly researched.
+# Exit codes: 0=proceed (NEW/REFINEMENT), 1=skip (ALREADY_KNOWN)
+NOVELTY_RESULT=$(python3 "$SCRIPTS/research_novelty.py" classify "$RESEARCH_TASK" 2>> "$LOGFILE")
+NOVELTY_EXIT=$?
+NOVELTY_TIER=$(echo "$NOVELTY_RESULT" | grep "^NOVELTY:" | head -1 | sed 's/NOVELTY: //')
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] NOVELTY CHECK: tier=$NOVELTY_TIER exit=$NOVELTY_EXIT" >> "$LOGFILE"
+echo "$NOVELTY_RESULT" >> "$LOGFILE"
+
+if [ "$NOVELTY_EXIT" -ne 0 ]; then
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] SKIP: topic is ALREADY_KNOWN — marking complete and exiting" >> "$LOGFILE"
+    # Mark as complete with skip annotation so it doesn't get re-selected
+    export RESEARCH_TASK
+    python3 - <<'PY' >> "$LOGFILE" 2>&1
+import os, sys
+from datetime import datetime, timezone
+sys.path.insert(0, '/home/agent/.openclaw/workspace/scripts')
+from queue_writer import mark_task_complete, archive_completed
+queue_file = 'memory/evolution/QUEUE.md'
+archive_file = 'memory/evolution/QUEUE_ARCHIVE.md'
+task = os.environ.get('RESEARCH_TASK', '').strip()
+annotation = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC') + ' SKIP:duplicate'
+result = mark_task_complete(task, annotation, queue_file=queue_file, archive_file=archive_file)
+print(f'Queue skip-mark result: {result}')
+archive_completed()
+PY
+    {
+        echo ""
+        echo "### Research — $(date -u +%H:%M) UTC"
+        echo ""
+        echo "SKIPPED (ALREADY_KNOWN): ${RESEARCH_TASK:0:100}. Duplicate topic detected by novelty gate."
+        echo ""
+        echo "---"
+        echo ""
+    } >> "memory/cron/digest.md"
+    emit_dashboard_event task_completed --task-name "Research session" --section cron_research --status "skipped:duplicate" --duration-s "0"
+    exit 0
+fi
+
+# === STAGE 2: PREPARE SCOPED ARTIFACT DIRECTORY ===
+# Each research run writes to its own directory to prevent cross-run pollution.
+RUN_ID=$(date -u +%Y-%m-%d-%H%M%S)
+RUN_DIR="memory/research/runs/$RUN_ID"
+mkdir -p "$RUN_DIR"
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Run dir: $RUN_DIR (novelty=$NOVELTY_TIER)" >> "$LOGFILE"
+
 # Pre-compute weakest metric for prompt injection
 WEAKEST_METRIC=$(get_weakest_metric)
 
@@ -210,6 +254,11 @@ RESEARCH_RESULT:
   STORED: <count> brain memories
 If DECISION=APPLY, also queue items: python3 scripts/queue_writer.py add '<task>' --priority P1 --source research"
 
+# IMPORTANT: Claude Code MUST write research notes to the scoped run directory,
+# not to memory/research/ root. This prevents cross-run artifact pollution.
+ARTIFACT_INSTRUCTION="ARTIFACT RULE: Write ALL research notes to $RUN_DIR/ (NOT memory/research/ root, NOT ingested/).
+One markdown file per topic. Filename format: <topic-slug>.md"
+
 if [ "$IS_BUNDLE" = "true" ]; then
     RESEARCH_PROMPT="You are Clarvis's research engine. BUNDLE session — scan 3 related topics.
 TIME BUDGET: ~25 min. ~7 min/topic.
@@ -217,12 +266,13 @@ QUEUE: Mark this task [x] in memory/evolution/QUEUE.md when done.
 WEAKEST METRIC: $WEAKEST_METRIC — note if research findings relate to this.
 CONTEXT: $CONTEXT_BRIEF
 $PAST_LESSONS
+$ARTIFACT_INSTRUCTION
 
 BUNDLE: $RESEARCH_TASK
 
 STEPS:
 1. Research each of the 3 topics (web search, abstracts, key results).
-2. Write ONE combined note to memory/research/ (NOT ingested/). Focus on cross-topic patterns.
+2. Write ONE combined note to $RUN_DIR/ (NOT memory/research/ root, NOT ingested/). Focus on cross-topic patterns.
 3. Store 3-5 insights: python3 scripts/brain.py remember 'I learned that [insight]' --importance 0.7 --collection clarvis-learnings
 4. Mark task [x] in QUEUE.md with date.
 5. Evaluate: is this actionable for Clarvis? Set DECISION accordingly.
@@ -235,13 +285,14 @@ QUEUE: Mark this task [x] in memory/evolution/QUEUE.md when done.
 WEAKEST METRIC: $WEAKEST_METRIC — note if research findings relate to this.
 CONTEXT: $CONTEXT_BRIEF
 $PAST_LESSONS
+$ARTIFACT_INSTRUCTION
 
 RESEARCH TASK: $RESEARCH_TASK
 
 STEPS:
 1. Search the web for the key paper(s) or concept. Focus on abstracts + key results.
 2. Store 3-5 insights: python3 scripts/brain.py remember 'I learned that [insight]' --importance 0.8 --collection clarvis-learnings
-3. Write research note to memory/research/ (NOT ingested/): title, 3-5 ideas, Clarvis application.
+3. Write research note to $RUN_DIR/ (NOT memory/research/ root, NOT ingested/): title, 3-5 ideas, Clarvis application.
 4. Mark task [x] in QUEUE.md with date.
 5. Evaluate: is this actionable for Clarvis? Set DECISION accordingly.
 
@@ -296,30 +347,67 @@ print(f'Queue archive moved: {archived}')
 PY
 fi
 
-# === RESEARCH POSTFLIGHT: Ensure insights are stored in brain ===
-# Uses brain.py ingest-research (single source of truth for ingestion logic).
-# Hash-based dedup prevents double-ingestion. Files get moved to ingested/ after.
+# === STAGE 3: POST-EXECUTE NOVELTY GATE + SCOPED INGESTION ===
+# Only ingest files from the run directory. Evaluate each file's novelty before ingestion.
+# NO root sweep of memory/research/*.md — that was the source of duplication.
 if [ "$TASK_EXIT" -eq 0 ]; then
-    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running research postflight..." >> "$LOGFILE"
-    python3 "$SCRIPTS/brain.py" ingest-research >> "$LOGFILE" 2>&1
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running scoped research postflight (run=$RUN_ID)..." >> "$LOGFILE"
 
-    # Safety net: check for files Claude Code may have written directly to ingested/
-    python3 -c "
-import json, os, subprocess
-tracker_file = 'data/research_ingested.json'
-ingested_dir = 'memory/research/ingested'
-tracker = {}
-if os.path.exists(tracker_file):
-    with open(tracker_file) as f:
-        tracker = json.load(f)
-if os.path.exists(ingested_dir):
-    for fname in os.listdir(ingested_dir):
-        if fname.endswith('.md') and fname not in tracker:
-            fpath = os.path.join(ingested_dir, fname)
-            print(f'SAFETY NET: re-ingesting untracked file: {fname}')
-            subprocess.run(['python3', 'scripts/brain.py', 'ingest-research', fpath, '--force'],
-                           capture_output=True, text=True)
-" >> "$LOGFILE" 2>&1
+    # Also pick up files Claude Code wrote to memory/research/ root DURING THIS RUN
+    # (despite instructions) and move them into the run dir for unified processing.
+    # Only move files newer than the run start to avoid swallowing unrelated historical files.
+    RUN_START_EPOCH=$(date -u -d "$RUN_ID" +%s 2>/dev/null || date -u +%s)
+    for stray in memory/research/*.md; do
+        [ -f "$stray" ] || continue
+        fname=$(basename "$stray")
+        # Skip known permanent files
+        case "$fname" in OBLITERATUS_review.md) continue ;; esac
+        MTIME=$(stat -c %Y "$stray" 2>/dev/null || echo 0)
+        if [ "$MTIME" -lt "$RUN_START_EPOCH" ]; then
+            echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Leaving pre-existing root artifact in place: $fname" >> "$LOGFILE"
+            continue
+        fi
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Moving stray artifact $fname → $RUN_DIR/" >> "$LOGFILE"
+        mv "$stray" "$RUN_DIR/$fname"
+    done
+
+    # Process each file in the run directory through the novelty gate
+    INGESTED_COUNT=0
+    SKIPPED_COUNT=0
+    for research_file in "$RUN_DIR"/*.md; do
+        [ -f "$research_file" ] || continue
+        fname=$(basename "$research_file")
+
+        # Evaluate novelty of this specific file
+        FILE_NOVELTY=$(python3 "$SCRIPTS/research_novelty.py" evaluate-file "$research_file" 2>> "$LOGFILE")
+        FILE_NOVELTY_EXIT=$?
+        FILE_TIER=$(echo "$FILE_NOVELTY" | grep "^NOVELTY:" | head -1 | sed 's/NOVELTY: //')
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] File novelty: $fname → $FILE_TIER (exit=$FILE_NOVELTY_EXIT)" >> "$LOGFILE"
+
+        if [ "$FILE_NOVELTY_EXIT" -ne 0 ]; then
+            echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] SKIP INGESTION: $fname is ALREADY_KNOWN" >> "$LOGFILE"
+            SKIPPED_COUNT=$((SKIPPED_COUNT + 1))
+            continue
+        fi
+
+        # Ingest this specific file (not a root sweep)
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Ingesting $fname (novelty=$FILE_TIER)..." >> "$LOGFILE"
+        python3 "$SCRIPTS/brain.py" ingest-research "$research_file" >> "$LOGFILE" 2>&1
+
+        # Register topic in the novelty registry
+        TOPIC_NAME=$(python3 -c "
+with open('$research_file') as f:
+    for line in f:
+        if line.startswith('# '):
+            print(line[2:].strip()); break
+" 2>/dev/null)
+        [ -z "$TOPIC_NAME" ] && TOPIC_NAME="$fname"
+        python3 "$SCRIPTS/research_novelty.py" register "$TOPIC_NAME" --source "$fname" --memories 1 >> "$LOGFILE" 2>&1
+
+        INGESTED_COUNT=$((INGESTED_COUNT + 1))
+    done
+
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Postflight: ingested=$INGESTED_COUNT skipped=$SKIPPED_COUNT" >> "$LOGFILE"
 fi
 
     # === LESSON RECORDING: Extract structured output and record lesson ===
