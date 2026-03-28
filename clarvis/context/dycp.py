@@ -362,27 +362,86 @@ def _cross_section_dedup(text: str) -> str:
 # DyCP brief pruning
 # ---------------------------------------------------------------------------
 
+def _update_content_cache(sections: dict) -> None:
+    """Update the section content cache for future containment checks."""
+    global _section_content_cache
+    new_cache = {}
+    for sname, scontent in sections.items():
+        tokens = set(re.findall(r"[a-z][a-z0-9_]{2,}", scontent.lower())) - _CONTAINMENT_STOPWORDS
+        if len(tokens) > _CONTENT_SAMPLE_SIZE:
+            tokens = set(sorted(tokens)[:_CONTENT_SAMPLE_SIZE])
+        new_cache[sname] = tokens
+    _section_content_cache = new_cache
+
+
+def _find_prunable_sections(sections: dict, task_text: str, historical: dict) -> set:
+    """Identify sections to prune based on task containment and historical scores."""
+    pruned = set()
+    for name, content in sections.items():
+        if name in DYCP_PROTECTED_SECTIONS:
+            continue
+        enriched = f"{name.replace('_', ' ')} {content}"
+        containment = _dycp_task_containment(enriched, task_text)
+        if containment >= DYCP_MIN_CONTAINMENT:
+            continue
+        hist_score = historical.get(name, 0.5)
+        # Tier 0: chronic noise (hist < 0.15) → always prune
+        if hist_score < 0.15:
+            pruned.add(name)
+        # Tier 1: historically weak + low task overlap → prune
+        elif hist_score < DYCP_HISTORICAL_FLOOR:
+            pruned.add(name)
+        # Tier 2: zero overlap + borderline history → prune
+        elif containment == 0.0 and hist_score < DYCP_ZERO_OVERLAP_CEILING:
+            pruned.add(name)
+    return pruned
+
+
+def _rebuild_pruned_brief(brief_text: str, pruned_names: set, historical: dict) -> str:
+    """Replace pruned sections with 1-line stubs and clean up separators."""
+    from clarvis.cognition.context_relevance import _SECTION_MARKERS
+    lines = brief_text.split("\n")
+    result_lines = []
+    skip_until_next = False
+
+    for line in lines:
+        new_section = None
+        for sname, pattern in _SECTION_MARKERS:
+            if pattern.search(line):
+                new_section = sname
+                break
+        if new_section is not None:
+            skip_until_next = new_section in pruned_names
+            if skip_until_next:
+                hist_score = historical.get(new_section, 0.0)
+                result_lines.append(
+                    f"[{new_section}: pruned — hist_relevance={hist_score:.2f}]"
+                )
+                continue
+        elif line.strip() == "---":
+            skip_until_next = False
+        if not skip_until_next:
+            result_lines.append(line)
+
+    # Clean consecutive/trailing separators
+    cleaned = []
+    for line in result_lines:
+        if line.strip() == "---" and cleaned and cleaned[-1].strip() == "---":
+            continue
+        cleaned.append(line)
+    while cleaned and cleaned[-1].strip() == "---":
+        cleaned.pop()
+    return "\n".join(cleaned)
+
+
 def dycp_prune_brief(brief_text: str, task_text: str) -> str:
     """Dynamic Context Pruning — remove sections irrelevant to the current task.
 
     Inspired by DyCP (arXiv:2601.07994): query-dependent segment-level pruning.
-    Each section is scored against the task query using token containment.
-    Sections that are both historically low-relevance AND have low task-overlap
-    are pruned to reduce noise in the context.
-
-    Protected sections (decision_context, reasoning, knowledge, etc.) are
-    never pruned — they carry critical task-shaping information.
-
-    Args:
-        brief_text: The assembled context brief (with section markers).
-        task_text: The current task description.
-
-    Returns:
-        Pruned brief text with irrelevant sections removed.
+    Protected sections are never pruned.
     """
     if not brief_text or not task_text:
         return brief_text
-
     try:
         from clarvis.cognition.context_relevance import parse_brief_sections
     except ImportError:
@@ -390,98 +449,17 @@ def dycp_prune_brief(brief_text: str, task_text: str) -> str:
 
     sections = parse_brief_sections(brief_text)
     if len(sections) <= 3:
-        return brief_text  # too few sections to prune
+        return brief_text
 
-    # Update the content cache so future _dycp_task_containment_fast calls
-    # (in should_suppress_section) consider actual section content.
-    global _section_content_cache
-    new_cache = {}
-    for sname, scontent in sections.items():
-        tokens = set(re.findall(r"[a-z][a-z0-9_]{2,}", scontent.lower())) - _CONTAINMENT_STOPWORDS
-        # Sample up to _CONTENT_SAMPLE_SIZE tokens (sorted for determinism)
-        if len(tokens) > _CONTENT_SAMPLE_SIZE:
-            tokens = set(sorted(tokens)[:_CONTENT_SAMPLE_SIZE])
-        new_cache[sname] = tokens
-    _section_content_cache = new_cache
-
+    _update_content_cache(sections)
     historical = _load_historical_section_means()
-    pruned_names = set()
+    pruned_names = _find_prunable_sections(sections, task_text, historical)
 
-    for name, content in sections.items():
-        if name in DYCP_PROTECTED_SECTIONS:
-            continue
-        # Compute task-relevance via containment.
-        # Include section name in content so header keywords count
-        # (parse_brief_sections strips the header line).
-        enriched = f"{name.replace('_', ' ')} {content}"
-        containment = _dycp_task_containment(enriched, task_text)
-        if containment >= DYCP_MIN_CONTAINMENT:
-            continue  # section has task-relevant content, keep it
-        # Check historical performance
-        hist_score = historical.get(name, 0.5)  # default=keep if no data
-        # Tier 0 (aggressive): Historical mean < 0.15 → always stub-collapse
-        # regardless of task containment. These sections are chronic noise;
-        # even marginal containment hits don't justify full rendering.
-        if hist_score < 0.15:
-            pruned_names.add(name)
-        # Tier 1: Historically weak sections with low task overlap → prune
-        elif hist_score < DYCP_HISTORICAL_FLOOR:
-            pruned_names.add(name)
-        # Tier 2 (DyCP query-dependent): Zero overlap + borderline history → prune
-        elif containment == 0.0 and hist_score < DYCP_ZERO_OVERLAP_CEILING:
-            pruned_names.add(name)
-
-    if not pruned_names:
-        text_after_prune = brief_text
+    if pruned_names:
+        text_after_prune = _rebuild_pruned_brief(brief_text, pruned_names, historical)
     else:
-        # Rebuild brief: pruned sections become 1-line stubs (preserves signal,
-        # removes noise). Stubs let the LLM know the section exists without
-        # the token cost of full rendering.
-        lines = brief_text.split("\n")
-        from clarvis.cognition.context_relevance import _SECTION_MARKERS
-        result_lines = []
-        current_section = None
-        skip_until_next = False
+        text_after_prune = brief_text
 
-        for line in lines:
-            # Check if this line starts a new section
-            new_section = None
-            for sname, pattern in _SECTION_MARKERS:
-                if pattern.search(line):
-                    new_section = sname
-                    break
-
-            if new_section is not None:
-                current_section = new_section
-                skip_until_next = current_section in pruned_names
-                if skip_until_next:
-                    # Emit a 1-line stub instead of the full section
-                    hist_score = historical.get(current_section, 0.0)
-                    result_lines.append(
-                        f"[{current_section}: pruned — hist_relevance={hist_score:.2f}]"
-                    )
-                    continue
-            elif line.strip() == "---":
-                # Separator — don't skip, but reset skip state
-                skip_until_next = False
-
-            if not skip_until_next:
-                result_lines.append(line)
-
-        # Clean up consecutive --- separators and trailing ---
-        cleaned = []
-        for line in result_lines:
-            if line.strip() == "---" and cleaned and cleaned[-1].strip() == "---":
-                continue
-            cleaned.append(line)
-        # Remove trailing ---
-        while cleaned and cleaned[-1].strip() == "---":
-            cleaned.pop()
-
-        text_after_prune = "\n".join(cleaned)
-
-    # Cross-section sentence dedup: remove near-duplicate lines that appear
-    # across different sections (e.g., episodic hints echoing knowledge hints).
     return _cross_section_dedup(text_after_prune)
 
 

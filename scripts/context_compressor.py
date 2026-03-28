@@ -372,6 +372,36 @@ def compress_queue(queue_file=QUEUE_FILE, max_recent_completed=5):
     return _format_compressed_queue(pending_tasks, recent_completed)
 
 
+def _extract_calibration(calibration_output):
+    """Extract Brier score and accuracy from calibration output."""
+    brier_match = re.search(r'[Bb]rier[:\s=]*([0-9.]+)', calibration_output)
+    accuracy_match = re.search(r'(\d+)/(\d+)\s*correct|accuracy[:\s=]*([0-9.]+)', calibration_output)
+    brier = brier_match.group(1) if brier_match else "?"
+    if accuracy_match:
+        accuracy = f"{accuracy_match.group(1)}/{accuracy_match.group(2)}" if accuracy_match.group(1) else accuracy_match.group(3)
+    else:
+        accuracy = "?"
+    return f"Calibration: Brier={brier}, accuracy={accuracy}"
+
+
+def _extract_capabilities(capability_output):
+    """Extract capability scores into summary lines."""
+    scores = re.findall(r'(\w[\w_]+)[:=]\s*([0-9.]+)', capability_output)
+    if not scores:
+        return []
+    score_pairs = [(name, float(val)) for name, val in scores if 0 <= float(val) <= 1.0]
+    if not score_pairs:
+        return []
+    score_pairs.sort(key=lambda x: x[1])
+    worst = score_pairs[0]
+    avg = sum(v for _, v in score_pairs) / len(score_pairs)
+    scores_str = ", ".join(f"{n}={v:.2f}" for n, v in score_pairs)
+    return [
+        f"Capabilities: avg={avg:.2f}, worst={worst[0]}={worst[1]:.2f}, n={len(score_pairs)}",
+        f"  Scores: {scores_str}",
+    ]
+
+
 def compress_health(
     calibration_output="",
     phi_output="",
@@ -384,75 +414,35 @@ def compress_health(
 ):
     """Compress multi-line health data into compact key=value summary.
 
-    Takes raw stdout from various health scripts and extracts only the
-    essential metrics, discarding verbose explanations.
-
     Typical reduction: 8KB → 1KB (87% token savings).
     """
-    summary = []
-    summary.append("=== SYSTEM HEALTH (compressed) ===")
+    summary = ["=== SYSTEM HEALTH (compressed) ==="]
 
-    # Extract key numbers from calibration
     if calibration_output:
-        brier_match = re.search(r'[Bb]rier[:\s=]*([0-9.]+)', calibration_output)
-        accuracy_match = re.search(r'(\d+)/(\d+)\s*correct|accuracy[:\s=]*([0-9.]+)', calibration_output)
-        brier = brier_match.group(1) if brier_match else "?"
-        if accuracy_match:
-            if accuracy_match.group(1):
-                accuracy = f"{accuracy_match.group(1)}/{accuracy_match.group(2)}"
-            else:
-                accuracy = accuracy_match.group(3)
-        else:
-            accuracy = "?"
-        summary.append(f"Calibration: Brier={brier}, accuracy={accuracy}")
+        summary.append(_extract_calibration(calibration_output))
 
-    # Extract Phi value
     if phi_output:
         phi_match = re.search(r'[Pp]hi[:\s=]*([0-9.]+)', phi_output)
         trend_match = re.search(r'trend[:\s=]*([a-z_]+|[↑↓→]+)', phi_output, re.IGNORECASE)
-        phi_val = phi_match.group(1) if phi_match else "?"
-        trend = trend_match.group(1) if trend_match else "stable"
-        summary.append(f"Phi={phi_val} (trend: {trend})")
+        summary.append(f"Phi={phi_match.group(1) if phi_match else '?'} (trend: {trend_match.group(1) if trend_match else 'stable'})")
 
-    # Extract capability scores — just the numbers
     if capability_output:
-        # Pattern: "domain_name: 0.XX" or "domain: X.XX"
-        scores = re.findall(r'(\w[\w_]+)[:=]\s*([0-9.]+)', capability_output)
-        if scores:
-            # Find lowest
-            score_pairs = [(name, float(val)) for name, val in scores if 0 <= float(val) <= 1.0]
-            if score_pairs:
-                score_pairs.sort(key=lambda x: x[1])
-                worst = score_pairs[0]
-                avg = sum(v for _, v in score_pairs) / len(score_pairs)
-                summary.append(f"Capabilities: avg={avg:.2f}, worst={worst[0]}={worst[1]:.2f}, n={len(score_pairs)}")
-                # List all briefly
-                scores_str = ", ".join(f"{n}={v:.2f}" for n, v in score_pairs)
-                summary.append(f"  Scores: {scores_str}")
+        summary.extend(_extract_capabilities(capability_output))
 
-    # Extract retrieval health
     if retrieval_output:
         hit_match = re.search(r'hit[_ ]rate[:\s=]*([0-9.]+)%?', retrieval_output, re.IGNORECASE)
         health_match = re.search(r'(HEALTHY|DEGRADED|CRITICAL)', retrieval_output)
-        hit = hit_match.group(1) if hit_match else "?"
-        health = health_match.group(1) if health_match else "?"
-        summary.append(f"Retrieval: hit_rate={hit}%, status={health}")
+        summary.append(f"Retrieval: hit_rate={hit_match.group(1) if hit_match else '?'}%, status={health_match.group(1) if health_match else '?'}")
 
-    # Episode stats — just count and success rate
     if episode_output:
         count_match = re.search(r'(\d+)\s*episodes?', episode_output)
         success_match = re.search(r'success[:\s=]*([0-9.]+)%?', episode_output, re.IGNORECASE)
-        count = count_match.group(1) if count_match else "?"
-        success = success_match.group(1) if success_match else "?"
-        summary.append(f"Episodes: n={count}, success_rate={success}%")
+        summary.append(f"Episodes: n={count_match.group(1) if count_match else '?'}, success_rate={success_match.group(1) if success_match else '?'}%")
 
-    # Goal tracker — just stalled count
     if goal_output:
         stalled_match = re.search(r'(\d+)\s*stalled', goal_output, re.IGNORECASE)
         tasks_match = re.search(r'(\d+)\s*tasks?\s*(generated|added)', goal_output, re.IGNORECASE)
-        stalled = stalled_match.group(1) if stalled_match else "0"
-        tasks_gen = tasks_match.group(1) if tasks_match else "0"
-        summary.append(f"Goals: {stalled} stalled, {tasks_gen} remediation tasks generated")
+        summary.append(f"Goals: {stalled_match.group(1) if stalled_match else '0'} stalled, {tasks_match.group(1) if tasks_match else '0'} remediation tasks generated")
 
     if not any(line for line in summary if not line.startswith("===")):
         summary.append("No health data available this cycle.")
@@ -778,131 +768,117 @@ def _detect_wire_task(task_text):
     return True, source, target
 
 
+_WIRE_SCRIPTS = "/home/agent/.openclaw/workspace/scripts"
+
+_WIRE_KNOWN_TARGETS = {
+    "cron_reflection.sh": {
+        "path": f"{_WIRE_SCRIPTS}/cron_reflection.sh",
+        "structure": "Steps 0.5-7, each runs a python3 script. Add new steps between existing ones.",
+        "pattern": '# Step N: Description\necho "[$(date)] Step N: ..." >> "$LOGFILE"\npython3 {}/script.py >> "$LOGFILE" 2>&1 || true'.format(_WIRE_SCRIPTS),
+        "insert_hint": "Add between the last numbered step and the digest/cleanup section.",
+    },
+    "cron_autonomous.sh": {
+        "path": f"{_WIRE_SCRIPTS}/cron_autonomous.sh",
+        "structure": "3 phases: preflight → execution → postflight. Do NOT edit this bash script directly.",
+        "pattern": "Modify heartbeat_preflight.py (add import + call) or heartbeat_postflight.py instead.",
+        "insert_hint": "Wire into preflight (before task) or postflight (after task), not the bash orchestrator.",
+    },
+    "cron_evening.sh": {
+        "path": f"{_WIRE_SCRIPTS}/cron_evening.sh",
+        "structure": "Sequential sections: PHI_METRIC → CODE_QUALITY → CAPABILITY_ASSESSMENT → RETRIEVAL → SELF_REPORT → DASHBOARD → Claude Code audit → DIGEST.",
+        "pattern": '# === SECTION_NAME ===\necho "[$(date)] Section ..." >> "$LOGFILE"\nOUTPUT=$(python3 {}/script.py 2>&1) || true\necho "$OUTPUT" >> "$LOGFILE"'.format(_WIRE_SCRIPTS),
+        "insert_hint": "Add new section BEFORE the '# === DIGEST' section (last step).",
+    },
+    "cron_morning.sh": {
+        "path": f"{_WIRE_SCRIPTS}/cron_morning.sh",
+        "structure": "Spawns Claude Code with day planning prompt. Pre-run metrics, then Claude Code execution.",
+        "pattern": "Add metric collection BEFORE the Claude Code spawn, or post-processing AFTER.",
+        "insert_hint": "New metric calls go between 'Morning routine started' and the Claude Code prompt.",
+    },
+    "cron_evolution.sh": {
+        "path": f"{_WIRE_SCRIPTS}/cron_evolution.sh",
+        "structure": "Batched preflight (evolution_preflight.py) → Claude Code deep analysis → digest.",
+        "pattern": "For new metrics: add to evolution_preflight.py, NOT to this bash script.",
+        "insert_hint": "Prefer editing evolution_preflight.py over this orchestrator.",
+    },
+    "heartbeat_preflight.py": {
+        "path": f"{_WIRE_SCRIPTS}/heartbeat_preflight.py",
+        "structure": "Sections 1-10 in run_preflight(). Each section has timing + try/except.",
+        "pattern": "try:\n    from module import func\nexcept ImportError:\n    func = None\n# In run_preflight(): if func: try: result = func(...) except: pass",
+        "insert_hint": "Import at file top with try/except. Call in run_preflight() inside try/except with timing.",
+    },
+    "heartbeat_postflight.py": {
+        "path": f"{_WIRE_SCRIPTS}/heartbeat_postflight.py",
+        "structure": "Post-execution steps in run_postflight(). Same pattern as preflight.",
+        "pattern": "try:\n    from module import func\nexcept ImportError:\n    func = None\n# In run_postflight(): if func: try: result = func(...) except: pass",
+        "insert_hint": "Import at top with try/except. Call in run_postflight() with timing.",
+    },
+    "cron_strategic_audit.sh": {
+        "path": f"{_WIRE_SCRIPTS}/cron_strategic_audit.sh",
+        "structure": "Runs Wed+Sat at 15:00. Spawns Claude Code for strategic analysis.",
+        "pattern": "Add metric collection before or post-processing after the Claude Code spawn.",
+        "insert_hint": "New analysis steps go before the main Claude Code invocation.",
+    },
+}
+
+_WIRE_SUB_STEPS = [
+    "  REQUIRED SUB-STEPS (do each one explicitly, ~3min per step):",
+    "    1. READ the target file — find the exact insertion point (line number). Output: 'Inserting at line N, after <context>'",
+    "    2. READ the source script — find the exact function/class to import and its call signature. Output: 'Will import <func> from <module>, signature: <sig>'",
+    "    3. ADD the import at the top of target (with try/except fallback for resilience)",
+    "    4. ADD the call at the identified insertion point (with try/except + timing if target uses timing)",
+    "    5. TEST: run `python3 -c 'import <module>'` or `bash -n <script>.sh` to verify no syntax errors",
+    "    6. VERIFY: run the target script in test mode (or grep for your added lines) to confirm integration",
+    "  AVOID: Do NOT explore the codebase broadly. The target and source are given — read only those two files.",
+    "  AVOID: Do NOT refactor or improve the source script. Only wire it in.",
+]
+
+
+def _resolve_wire_target(target):
+    """Resolve target name to path and guidance. Returns (path, guidance_lines)."""
+    if not target:
+        return None, []
+    for known_name, info in _WIRE_KNOWN_TARGETS.items():
+        if known_name in target:
+            return info["path"], [
+                f"  TARGET: {info['path']}",
+                f"  STRUCTURE: {info['structure']}",
+                f"  PATTERN: {info['pattern']}",
+                f"  INSERT_HINT: {info['insert_hint']}",
+            ]
+    # Auto-detect from filesystem
+    import glob as _glob
+    candidates = _glob.glob(f"{_WIRE_SCRIPTS}/{target}") + _glob.glob(f"{_WIRE_SCRIPTS}/*{target}*")
+    if candidates:
+        return candidates[0], [f"  TARGET: {candidates[0]} (auto-detected, read carefully before editing)"]
+    return None, []
+
+
+def _build_target_preview(target_path):
+    """Build a file preview snippet for wire guidance. Returns lines or []."""
+    if not target_path or not os.path.isfile(target_path):
+        return []
+    try:
+        with open(target_path) as f:
+            lines = f.readlines()
+        snippet_lines = lines[:10] + ["    ...\n"] + lines[-10:] if len(lines) > 30 else lines
+        snippet = "".join(f"    {l.rstrip()}\n" for l in snippet_lines[:25])
+        return [f"  TARGET PREVIEW ({len(lines)} lines total):", snippet.rstrip()]
+    except Exception:
+        return []
+
+
 def _build_wire_guidance(task_text):
-    """Generate explicit integration sub-steps for wire tasks.
-
-    Wire tasks historically have ~42% success rate due to:
-      - shallow_reasoning (57%): jumping to edits without reading files first
-      - long_duration (29%): exploring unfamiliar code without a plan
-      - missing imports (14%): wiring calls without verifying the source API
-
-    Improvements v2 (2026-02-28):
-      - Expanded KNOWN_TARGETS from 4 to 8 (covers all cron scripts)
-      - Added INSERT_HINT per target (where exactly to add code)
-      - Added target file pre-read (first/last lines) to eliminate exploration
-      - Time-budgeted sub-steps with explicit output requirements
-      - Anti-patterns section to prevent scope creep
-    """
+    """Generate explicit integration sub-steps for wire tasks."""
     is_wire, source, target = _detect_wire_task(task_text)
     if not is_wire:
         return ""
 
-    SCRIPTS = "/home/agent/.openclaw/workspace/scripts"
-
-    # Known integration targets — expanded from 4 to 8
-    KNOWN_TARGETS = {
-        "cron_reflection.sh": {
-            "path": f"{SCRIPTS}/cron_reflection.sh",
-            "structure": "Steps 0.5-7, each runs a python3 script. Add new steps between existing ones.",
-            "pattern": '# Step N: Description\necho "[$(date)] Step N: ..." >> "$LOGFILE"\npython3 {}/script.py >> "$LOGFILE" 2>&1 || true'.format(SCRIPTS),
-            "insert_hint": "Add between the last numbered step and the digest/cleanup section.",
-        },
-        "cron_autonomous.sh": {
-            "path": f"{SCRIPTS}/cron_autonomous.sh",
-            "structure": "3 phases: preflight → execution → postflight. Do NOT edit this bash script directly.",
-            "pattern": "Modify heartbeat_preflight.py (add import + call) or heartbeat_postflight.py instead.",
-            "insert_hint": "Wire into preflight (before task) or postflight (after task), not the bash orchestrator.",
-        },
-        "cron_evening.sh": {
-            "path": f"{SCRIPTS}/cron_evening.sh",
-            "structure": "Sequential sections: PHI_METRIC → CODE_QUALITY → CAPABILITY_ASSESSMENT → RETRIEVAL → SELF_REPORT → DASHBOARD → Claude Code audit → DIGEST.",
-            "pattern": '# === SECTION_NAME ===\necho "[$(date)] Section ..." >> "$LOGFILE"\nOUTPUT=$(python3 {}/script.py 2>&1) || true\necho "$OUTPUT" >> "$LOGFILE"'.format(SCRIPTS),
-            "insert_hint": "Add new section BEFORE the '# === DIGEST' section (last step).",
-        },
-        "cron_morning.sh": {
-            "path": f"{SCRIPTS}/cron_morning.sh",
-            "structure": "Spawns Claude Code with day planning prompt. Pre-run metrics, then Claude Code execution.",
-            "pattern": "Add metric collection BEFORE the Claude Code spawn, or post-processing AFTER.",
-            "insert_hint": "New metric calls go between 'Morning routine started' and the Claude Code prompt.",
-        },
-        "cron_evolution.sh": {
-            "path": f"{SCRIPTS}/cron_evolution.sh",
-            "structure": "Batched preflight (evolution_preflight.py) → Claude Code deep analysis → digest.",
-            "pattern": "For new metrics: add to evolution_preflight.py, NOT to this bash script.",
-            "insert_hint": "Prefer editing evolution_preflight.py over this orchestrator.",
-        },
-        "heartbeat_preflight.py": {
-            "path": f"{SCRIPTS}/heartbeat_preflight.py",
-            "structure": "Sections 1-10 in run_preflight(). Each section has timing + try/except.",
-            "pattern": "try:\n    from module import func\nexcept ImportError:\n    func = None\n# In run_preflight(): if func: try: result = func(...) except: pass",
-            "insert_hint": "Import at file top with try/except. Call in run_preflight() inside try/except with timing.",
-        },
-        "heartbeat_postflight.py": {
-            "path": f"{SCRIPTS}/heartbeat_postflight.py",
-            "structure": "Post-execution steps in run_postflight(). Same pattern as preflight.",
-            "pattern": "try:\n    from module import func\nexcept ImportError:\n    func = None\n# In run_postflight(): if func: try: result = func(...) except: pass",
-            "insert_hint": "Import at top with try/except. Call in run_postflight() with timing.",
-        },
-        "cron_strategic_audit.sh": {
-            "path": f"{SCRIPTS}/cron_strategic_audit.sh",
-            "structure": "Runs Wed+Sat at 15:00. Spawns Claude Code for strategic analysis.",
-            "pattern": "Add metric collection before or post-processing after the Claude Code spawn.",
-            "insert_hint": "New analysis steps go before the main Claude Code invocation.",
-        },
-    }
-
     parts = ["WIRE TASK GUIDANCE (wire tasks have ~42% success — follow these steps carefully):"]
-
-    # Add target-specific guidance if we recognize the target
-    target_found = False
-    target_path = None
-    if target:
-        for known_name, info in KNOWN_TARGETS.items():
-            if known_name in (target or ""):
-                target_found = True
-                target_path = info["path"]
-                parts.append(f"  TARGET: {info['path']}")
-                parts.append(f"  STRUCTURE: {info['structure']}")
-                parts.append(f"  PATTERN: {info['pattern']}")
-                parts.append(f"  INSERT_HINT: {info['insert_hint']}")
-                break
-
-    # If target not in known list, try to auto-detect from filesystem
-    if not target_found and target:
-        import glob as _glob
-        candidates = _glob.glob(f"{SCRIPTS}/{target}") + _glob.glob(f"{SCRIPTS}/*{target}*")
-        if candidates:
-            target_path = candidates[0]
-            parts.append(f"  TARGET: {target_path} (auto-detected, read carefully before editing)")
-
-    # Pre-read: include first/last lines of target to reduce exploration overhead
-    if target_path:
-        try:
-            import os
-            if os.path.isfile(target_path):
-                with open(target_path) as f:
-                    lines = f.readlines()
-                if len(lines) > 30:
-                    snippet_lines = lines[:10] + ["    ...\n"] + lines[-10:]
-                else:
-                    snippet_lines = lines
-                snippet = "".join(f"    {l.rstrip()}\n" for l in snippet_lines[:25])
-                parts.append(f"  TARGET PREVIEW ({len(lines)} lines total):")
-                parts.append(snippet.rstrip())
-        except Exception:
-            pass
-
-    # Time-budgeted sub-steps with explicit output requirements
-    parts.append("  REQUIRED SUB-STEPS (do each one explicitly, ~3min per step):")
-    parts.append("    1. READ the target file — find the exact insertion point (line number). Output: 'Inserting at line N, after <context>'")
-    parts.append("    2. READ the source script — find the exact function/class to import and its call signature. Output: 'Will import <func> from <module>, signature: <sig>'")
-    parts.append("    3. ADD the import at the top of target (with try/except fallback for resilience)")
-    parts.append("    4. ADD the call at the identified insertion point (with try/except + timing if target uses timing)")
-    parts.append("    5. TEST: run `python3 -c 'import <module>'` or `bash -n <script>.sh` to verify no syntax errors")
-    parts.append("    6. VERIFY: run the target script in test mode (or grep for your added lines) to confirm integration")
-    parts.append("  AVOID: Do NOT explore the codebase broadly. The target and source are given — read only those two files.")
-    parts.append("  AVOID: Do NOT refactor or improve the source script. Only wire it in.")
-
+    target_path, target_lines = _resolve_wire_target(target)
+    parts.extend(target_lines)
+    parts.extend(_build_target_preview(target_path))
+    parts.extend(_WIRE_SUB_STEPS)
     return "\n".join(parts)
 
 
@@ -1062,6 +1038,104 @@ def _get_recent_completions(queue_file=QUEUE_FILE, n=3):
     return completions[:n]
 
 
+def _build_brief_beginning(current_task, tier, budget, knowledge_hints):
+    """Build the high-attention beginning sections of the brief."""
+    parts = []
+
+    # Decision Context (success criteria + failure avoidance)
+    if budget.get("decision_context", 0) > 0:
+        decision_ctx = _build_decision_context(current_task, tier=tier)
+        if decision_ctx:
+            parts.append(decision_ctx)
+
+    # Brain Knowledge (research, dreams, synthesis) — reranked by task relevance
+    if knowledge_hints and tier != "minimal":
+        try:
+            from clarvis.context.assembly import rerank_knowledge_hints
+            knowledge_hints = rerank_knowledge_hints(knowledge_hints, current_task)
+        except ImportError:
+            pass
+        if knowledge_hints and knowledge_hints.strip():
+            parts.append("RELEVANT KNOWLEDGE:")
+            max_chars = 600 if tier == "full" else 350
+            if len(knowledge_hints) > max_chars * 1.5:
+                compressed_knowledge, _ = compress_text(knowledge_hints, ratio=0.25)
+                parts.append(compressed_knowledge[:max_chars])
+            else:
+                parts.append(knowledge_hints[:max_chars])
+
+    # Working Memory (Cognitive Workspace + Spotlight fallback)
+    if budget["spotlight"] > 0:
+        workspace_ctx = _get_workspace_context(current_task, tier=tier)
+        if workspace_ctx:
+            ws_budget = 500 if tier == "full" else 300
+            if len(workspace_ctx) > ws_budget * 1.5:
+                workspace_ctx, _ = compress_text(workspace_ctx, ratio=0.25)
+            parts.append(workspace_ctx[:ws_budget])
+        else:
+            n_items = 5 if tier == "full" else 3
+            spotlight = _get_spotlight_items(n=n_items, exclude_task=current_task)
+            if spotlight:
+                parts.append("WORKING MEMORY:")
+                parts.extend(spotlight[:n_items])
+    return parts
+
+
+def _build_brief_middle(current_task, tier, budget, queue_file):
+    """Build the lower-attention middle sections (reference data)."""
+    parts = []
+
+    # Related Pending Tasks
+    if budget["related_tasks"] > 0:
+        n_related = 3 if tier == "full" else 2
+        related = _find_related_tasks(current_task, queue_file, max_tasks=n_related)
+        if related:
+            parts.append("RELATED TASKS:")
+            for t in related:
+                parts.append(f"  - {t}")
+
+    # Metrics
+    if budget["metrics"] > 0:
+        scores = get_latest_scores()
+        if scores:
+            caps = scores.get("capabilities", {})
+            phi = scores.get("phi", "?")
+            if caps:
+                worst_k = min(caps, key=caps.get)
+                worst_v = caps[worst_k]
+                if tier == "full":
+                    parts.append(f"METRICS: Phi={phi}, cap_avg={scores.get('capability_avg', '?')}, worst={worst_k}={worst_v}")
+                    parts.append(f"  {', '.join(f'{k}={v}' for k, v in sorted(caps.items(), key=lambda x: x[1]))}")
+                else:
+                    parts.append(f"METRICS: Phi={phi}, worst_cap={worst_k}={worst_v}")
+            else:
+                parts.append(f"METRICS: Phi={phi}")
+
+    # Recent Completions
+    if budget["completions"] > 0:
+        n_comp = 3 if tier == "full" else 2
+        completions = _get_recent_completions(queue_file, n=n_comp)
+        if completions:
+            parts.append("RECENT:")
+            parts.extend(completions)
+    return parts
+
+
+def _build_brief_end(tier, budget, episodic_hints):
+    """Build the high-attention end sections (episodes + reasoning scaffold)."""
+    parts = []
+    if budget["episodes"] > 0 and episodic_hints:
+        max_chars = budget["episodes"] * 4
+        if len(episodic_hints) > max_chars * 1.5:
+            compressed_episodes, _ = compress_text(episodic_hints, ratio=0.25)
+            parts.append(compressed_episodes[:max_chars])
+        else:
+            parts.append(episodic_hints[:max_chars])
+    if budget.get("reasoning_scaffold", 0) > 0:
+        parts.append(_build_reasoning_scaffold(tier=tier))
+    return parts
+
+
 def generate_tiered_brief(
     current_task,
     tier="standard",
@@ -1072,137 +1146,15 @@ def generate_tiered_brief(
     """Generate a quality-optimized context brief using primacy/recency positioning.
 
     Ordering follows LLM attention research (Liu et al. "Lost in the Middle"):
-      BEGINNING (highest attention): Decision context — success criteria, failure
-          avoidance, constraints. This shapes HOW the model approaches the task.
-      MIDDLE (lower attention): Metrics, related tasks, completions — useful but
-          non-critical reference data.
-      END (high attention): Episodic lessons + reasoning scaffold — the final
-          instructions the model sees before generating output.
-
-    Args:
-        current_task: The task being executed (used for relevance filtering).
-        tier: "minimal" | "standard" | "full" — controls depth, not just size.
-        episodic_hints: Pre-compressed episode text (from compress_episodes).
-        queue_file: Path to QUEUE.md.
-
-    Returns:
-        Quality-optimized context string. Size varies by tier:
-          minimal:  ~200 tokens (task-focused, no extras)
-          standard: ~600 tokens (decision context + spotlight + metrics + scaffold)
-          full:     ~1000 tokens (everything, optimally ordered for attention)
+      BEGINNING (highest attention): decision context, knowledge, working memory.
+      MIDDLE (lower attention): related tasks, metrics, completions.
+      END (high attention): episodic lessons, reasoning scaffold.
     """
     budget = TIER_BUDGETS.get(tier, TIER_BUDGETS["standard"])
-    # Build sections in attention-optimal order:
-    #   beginning_parts → middle_parts → end_parts
-    beginning = []
-    middle = []
-    end = []
+    beginning = _build_brief_beginning(current_task, tier, budget, knowledge_hints)
+    middle = _build_brief_middle(current_task, tier, budget, queue_file)
+    end = _build_brief_end(tier, budget, episodic_hints)
 
-    # =====================================================================
-    # BEGINNING — High attention zone: shapes the model's approach
-    # =====================================================================
-
-    # === SECTION 1: Decision Context (success criteria + failure avoidance) ===
-    if budget.get("decision_context", 0) > 0:
-        decision_ctx = _build_decision_context(current_task, tier=tier)
-        if decision_ctx:
-            beginning.append(decision_ctx)
-
-    # === SECTION 1.5: Brain Knowledge (research, dreams, synthesis) ===
-    # Task-aware reranking: drop tangential matches before injection
-    if knowledge_hints and tier != "minimal":
-        try:
-            from clarvis.context.assembly import rerank_knowledge_hints
-            knowledge_hints = rerank_knowledge_hints(knowledge_hints, current_task)
-        except ImportError:
-            pass  # graceful fallback — no reranking
-        if knowledge_hints and knowledge_hints.strip():
-            beginning.append("RELEVANT KNOWLEDGE:")
-            max_chars = 600 if tier == "full" else 350
-            if len(knowledge_hints) > max_chars * 1.5:
-                compressed_knowledge, _ = compress_text(knowledge_hints, ratio=0.25)
-                beginning.append(compressed_knowledge[:max_chars])
-            else:
-                beginning.append(knowledge_hints[:max_chars])
-
-    # === SECTION 2: Working Memory (Cognitive Workspace + Spotlight fallback) ===
-    if budget["spotlight"] > 0:
-        workspace_ctx = _get_workspace_context(current_task, tier=tier)
-        if workspace_ctx:
-            # Compress workspace context if it exceeds budget
-            ws_budget = 500 if tier == "full" else 300
-            if len(workspace_ctx) > ws_budget * 1.5:
-                workspace_ctx, _ = compress_text(workspace_ctx, ratio=0.25)
-            beginning.append(workspace_ctx[:ws_budget])
-        else:
-            # Fallback to flat spotlight if workspace is empty
-            n_items = 5 if tier == "full" else 3
-            spotlight = _get_spotlight_items(n=n_items, exclude_task=current_task)
-            if spotlight:
-                beginning.append("WORKING MEMORY:")
-                beginning.extend(spotlight[:n_items])
-
-    # =====================================================================
-    # MIDDLE — Lower attention zone: reference data
-    # =====================================================================
-
-    # === SECTION 3: Related Pending Tasks ===
-    if budget["related_tasks"] > 0:
-        n_related = 3 if tier == "full" else 2
-        related = _find_related_tasks(current_task, queue_file, max_tasks=n_related)
-        if related:
-            middle.append("RELATED TASKS:")
-            for t in related:
-                middle.append(f"  - {t}")
-
-    # === SECTION 4: Metrics ===
-    if budget["metrics"] > 0:
-        scores = get_latest_scores()
-        if scores:
-            if tier == "full" and "capabilities" in scores:
-                caps = scores["capabilities"]
-                worst_k = min(caps, key=caps.get) if caps else "?"
-                worst_v = caps.get(worst_k, "?") if caps else "?"
-                middle.append(f"METRICS: Phi={scores.get('phi', '?')}, cap_avg={scores.get('capability_avg', '?')}, worst={worst_k}={worst_v}")
-                middle.append(f"  {', '.join(f'{k}={v}' for k, v in sorted(caps.items(), key=lambda x: x[1]))}")
-            else:
-                phi = scores.get("phi", "?")
-                if "capabilities" in scores:
-                    caps = scores["capabilities"]
-                    worst_k = min(caps, key=caps.get) if caps else "?"
-                    worst_v = caps.get(worst_k, "?") if caps else "?"
-                    middle.append(f"METRICS: Phi={phi}, worst_cap={worst_k}={worst_v}")
-                else:
-                    middle.append(f"METRICS: Phi={phi}")
-
-    # === SECTION 5: Recent Completions ===
-    if budget["completions"] > 0:
-        n_comp = 3 if tier == "full" else 2
-        completions = _get_recent_completions(queue_file, n=n_comp)
-        if completions:
-            middle.append("RECENT:")
-            middle.extend(completions)
-
-    # =====================================================================
-    # END — High attention zone: last thing the model sees before output
-    # =====================================================================
-
-    # === SECTION 6: Episodic Lessons (specific to this task type) ===
-    if budget["episodes"] > 0 and episodic_hints:
-        max_chars = budget["episodes"] * 4  # ~4 chars per token
-        # Compress episodic hints if verbose
-        if len(episodic_hints) > max_chars * 1.5:
-            compressed_episodes, _ = compress_text(episodic_hints, ratio=0.25)
-            end.append(compressed_episodes[:max_chars])
-        else:
-            end.append(episodic_hints[:max_chars])
-
-    # === SECTION 7: Reasoning Scaffold (think-then-do instruction) ===
-    if budget.get("reasoning_scaffold", 0) > 0:
-        scaffold = _build_reasoning_scaffold(tier=tier)
-        end.append(scaffold)
-
-    # Assemble: beginning → middle → end
     parts = beginning
     if middle:
         parts.append("---")
@@ -1210,17 +1162,58 @@ def generate_tiered_brief(
     if end:
         parts.append("---")
         parts.extend(end)
-
     return "\n".join(parts)
+
+
+def _classify_queue_lines(lines, cutoff_str):
+    """Classify queue lines into kept vs archived based on completion date cutoff.
+
+    Returns (kept_lines, archived_lines, stats_dict).
+    """
+    kept_lines = []
+    archived_lines = []
+    stats = {"archived": 0, "kept_completed": 0, "pending": 0}
+
+    for line in lines:
+        stripped = line.strip()
+        match_done = re.match(r'^- \[x\] (.+)$', stripped)
+        if match_done:
+            date_match = re.search(r'(\d{4}-\d{2}-\d{2})', match_done.group(1))
+            if date_match and date_match.group(1) < cutoff_str:
+                archived_lines.append(line)
+                stats["archived"] += 1
+                continue
+            stats["kept_completed"] += 1
+            kept_lines.append(line)
+            continue
+        if re.match(r'^- \[ \] ', stripped):
+            stats["pending"] += 1
+        kept_lines.append(line)
+    return kept_lines, archived_lines, stats
+
+
+def _write_archive(archived_lines, archive_file, stats, keep_days):
+    """Write archived lines to archive file and store summary in brain."""
+    header = f"\n## Archived {datetime.now(timezone.utc).strftime('%Y-%m-%d')}\n"
+    with open(archive_file, 'a') as f:
+        f.write(header)
+        f.writelines(archived_lines)
+    try:
+        from brain import brain
+        brain.store(
+            f"Archived {stats['archived']} completed tasks from QUEUE.md "
+            f"(older than {keep_days} days). Saved {stats['bytes_saved']} bytes.",
+            collection="context",
+            metadata={"type": "archive_event", "date": datetime.now(timezone.utc).isoformat()},
+            importance=0.3
+        )
+    except Exception:
+        pass
 
 
 def archive_completed(queue_file=QUEUE_FILE, archive_file=QUEUE_ARCHIVE,
                       keep_days=7, dry_run=False):
     """Move old completed tasks from QUEUE.md to archive file.
-
-    Keeps completed tasks from the last `keep_days` days in QUEUE.md.
-    Older completed tasks are appended to QUEUE_ARCHIVE.md and removed
-    from the main file.
 
     Returns dict with stats: {archived: N, kept: N, pending: N, bytes_saved: N}.
     """
@@ -1232,39 +1225,8 @@ def archive_completed(queue_file=QUEUE_FILE, archive_file=QUEUE_ARCHIVE,
         lines = content.splitlines(keepends=True)
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=keep_days)
-    cutoff_str = cutoff.strftime("%Y-%m-%d")
-
-    kept_lines = []
-    archived_lines = []
-    stats = {"archived": 0, "kept_completed": 0, "pending": 0, "bytes_before": len(content)}
-
-    for line in lines:
-        stripped = line.strip()
-
-        # Check if this is a completed task
-        match_done = re.match(r'^- \[x\] (.+)$', stripped)
-        if match_done:
-            task_text = match_done.group(1)
-            # Extract date
-            date_match = re.search(r'(\d{4}-\d{2}-\d{2})', task_text)
-            if date_match:
-                task_date = date_match.group(1)
-                if task_date < cutoff_str:
-                    # Old completed task — archive it
-                    archived_lines.append(line)
-                    stats["archived"] += 1
-                    continue
-            # No date or recent — keep
-            stats["kept_completed"] += 1
-            kept_lines.append(line)
-            continue
-
-        # Pending task — always keep
-        if re.match(r'^- \[ \] ', stripped):
-            stats["pending"] += 1
-
-        kept_lines.append(line)
-
+    kept_lines, archived_lines, stats = _classify_queue_lines(lines, cutoff.strftime("%Y-%m-%d"))
+    stats["bytes_before"] = len(content)
     new_content = "".join(kept_lines)
     stats["bytes_after"] = len(new_content)
     stats["bytes_saved"] = stats["bytes_before"] - stats["bytes_after"]
@@ -1273,26 +1235,7 @@ def archive_completed(queue_file=QUEUE_FILE, archive_file=QUEUE_ARCHIVE,
         return stats
 
     if archived_lines:
-        # Append to archive file
-        header = f"\n## Archived {datetime.now(timezone.utc).strftime('%Y-%m-%d')}\n"
-        with open(archive_file, 'a') as f:
-            f.write(header)
-            f.writelines(archived_lines)
-
-        # Store archive summary in brain (if available)
-        try:
-            from brain import brain
-            brain.store(
-                f"Archived {stats['archived']} completed tasks from QUEUE.md "
-                f"(older than {keep_days} days). Saved {stats['bytes_saved']} bytes.",
-                collection="context",
-                metadata={"type": "archive_event", "date": datetime.now(timezone.utc).isoformat()},
-                importance=0.3
-            )
-        except Exception:
-            pass
-
-        # Rewrite QUEUE.md without archived tasks
+        _write_archive(archived_lines, archive_file, stats, keep_days)
         with open(queue_file, 'w') as f:
             f.write(new_content)
 

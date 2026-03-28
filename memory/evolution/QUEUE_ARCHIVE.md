@@ -1697,3 +1697,6 @@ _Last archived: 2026-03-27_
 - [x] [ASSEMBLY_DECOMPOSE] Extracted DYCP pruning → `clarvis/context/dycp.py` (480 lines) and budget logic → `clarvis/context/budgets.py` (197 lines). assembly.py: 2044→1436 lines, all silent except-pass replaced with logging.debug. All 1122 tests pass. _(Completed 2026-03-28)_
 - [x] [HEARTBEAT_PREFLIGHT_TESTS] Added `tests/test_heartbeat_pipeline.py` with 35 test cases across 9 classes: preflight result factory, task verification, proc hint formatting, memory hint tagging, error classification (8 tests), completeness computation, prompt quality scoring, postflight context building, keyword matching. _(Completed 2026-03-28)_
 - [x] [DATA_LIFECYCLE_POLICY] Created `scripts/data_lifecycle.py`: archives reasoning chains >14d (gzip), deletes sessions >30d, cleans archives >90d. First run: 750 chains archived, 3 sessions deleted, 1.7MB freed. Sunday cron at 05:20. _(Completed 2026-03-28)_
+
+## Archived 2026-03-28
+- [x] [CROSS_SECTION_BRIEF_DEDUP] Added `_cross_section_dedup()` to `dycp.py` — Jaccard-based near-duplicate line removal across section boundaries. brief_compression: 0.503→0.621 (target 0.55). (2026-03-28)
