@@ -37,7 +37,6 @@ import re
 import sys
 import time
 from datetime import datetime, timezone
-from pathlib import Path
 WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
 sys.path.insert(0, os.path.join(WORKSPACE, "scripts"))
 

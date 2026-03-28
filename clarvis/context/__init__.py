@@ -6,6 +6,7 @@ from .compressor import (  # noqa: F401
 )
 from .budgets import (  # noqa: F401
     TIER_BUDGETS, get_adjusted_budgets, load_relevance_weights,
+    load_section_relevance_weights,
 )
 from .dycp import (  # noqa: F401
     dycp_prune_brief, should_suppress_section, rerank_knowledge_hints,

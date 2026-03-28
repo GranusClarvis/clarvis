@@ -133,6 +133,72 @@ def load_relevance_weights(min_episodes=MIN_EPISODES_FOR_ADJUSTMENT, days=14):
     return weights
 
 
+# Per-section relevance weights for fine-grained char budget scaling inside
+# the brief builders.  These map individual section names (e.g. "episodes",
+# "reasoning", "working_memory") to a continuous 0.0–1.5 scale factor.
+# Unlike load_relevance_weights() which bins into 0/0.5/1.0 per *category*,
+# this uses smooth scaling so high-value sections expand and low-value ones
+# shrink proportionally.
+
+# Sections whose relevance consistently matters more than their raw score
+# suggests.  These get a floor so they're never fully pruned.
+_HIGH_VALUE_SECTIONS = frozenset([
+    "episodes", "reasoning", "decision_context", "failure_avoidance",
+])
+_HIGH_VALUE_FLOOR = 0.6   # never scale below 60% for these
+
+# Sections that are informational/low-signal — allowed to compress to zero.
+_LOW_VALUE_SECTIONS = frozenset([
+    "metrics", "completions", "synaptic",
+])
+_LOW_VALUE_CEILING = 0.8  # cap at 80% even if raw score is high
+
+
+def load_section_relevance_weights(min_episodes=MIN_EPISODES_FOR_ADJUSTMENT, days=14):
+    """Load per-section relevance scores as continuous scaling factors.
+
+    Unlike load_relevance_weights() which returns category-level tiered scales,
+    this returns per-section continuous weights suitable for scaling individual
+    char budgets inside the brief builders.
+
+    Scaling formula:
+      - Raw mean score is normalised into [0, 1.5] range via:
+        scale = min(1.5, max(0, score / 0.20))
+        (0.20 is the median expected section relevance)
+      - High-value sections get a floor of 0.6
+      - Low-value sections get a ceiling of 0.8
+
+    Returns:
+        Dict mapping section names to float scaling factors, or empty dict
+        if insufficient episode data exists.
+    """
+    try:
+        from clarvis.cognition.context_relevance import aggregate_relevance
+        agg = aggregate_relevance(days=days, recency_boost=RECENCY_BOOST_EPISODES)
+    except Exception:
+        logger.debug("Failed to load section relevance weights", exc_info=True)
+        return {}
+
+    if agg.get("episodes", 0) < min_episodes:
+        return {}
+
+    per_section = agg.get("per_section_mean", {})
+    if not per_section:
+        return {}
+
+    median_expected = 0.20  # normalisation anchor
+    weights = {}
+    for section, score in per_section.items():
+        scale = min(1.5, max(0.0, score / median_expected))
+        if section in _HIGH_VALUE_SECTIONS:
+            scale = max(scale, _HIGH_VALUE_FLOOR)
+        elif section in _LOW_VALUE_SECTIONS:
+            scale = min(scale, _LOW_VALUE_CEILING)
+        weights[section] = round(scale, 3)
+
+    return weights
+
+
 def get_adjusted_budgets(tier="standard"):
     """Get tier budgets adjusted by adaptive relevance-based caps.
 

@@ -18,7 +18,6 @@ import json
 import logging
 import os
 import shutil
-import sys
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path

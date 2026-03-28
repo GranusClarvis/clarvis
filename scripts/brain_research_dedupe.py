@@ -10,7 +10,6 @@ Usage:
   python3 scripts/brain_research_dedupe.py apply --topic phi
 """
 
-from __future__ import annotations
 
 import argparse
 import json

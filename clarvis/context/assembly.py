@@ -19,6 +19,7 @@ from .budgets import (  # noqa: F401 — re-exported for backward compat
     TIER_BUDGETS, RECENCY_BOOST_EPISODES,
     MIN_EPISODES_FOR_ADJUSTMENT,
     load_relevance_weights, get_adjusted_budgets,
+    load_section_relevance_weights,
 )
 from .dycp import (  # noqa: F401 — re-exported for backward compat
     DYCP_PROTECTED_SECTIONS, DYCP_MIN_CONTAINMENT, DYCP_HISTORICAL_FLOOR,
@@ -1265,20 +1266,32 @@ def get_recommended_procedures(current_task, max_procs=2):
 
 
 
-def _build_brief_beginning(current_task, tier, budget, knowledge_hints):
+def _scale_chars(base_chars, section_name, section_weights):
+    """Scale a char budget by the section's relevance weight."""
+    if not section_weights:
+        return base_chars
+    w = section_weights.get(section_name, 1.0)
+    return max(50, round(base_chars * w))
+
+
+def _build_brief_beginning(current_task, tier, budget, knowledge_hints, section_weights=None):
     """Build the BEGINNING (high-attention) zone of the tiered brief."""
     parts = []
 
     if budget.get("decision_context", 0) > 0:
         decision_ctx = build_decision_context(current_task, tier=tier)
         if decision_ctx:
-            parts.append(decision_ctx)
+            # Scale decision context by its relevance weight
+            dc_max = _scale_chars(
+                len(decision_ctx), "decision_context", section_weights)
+            parts.append(decision_ctx[:dc_max])
 
     if knowledge_hints and tier != "minimal":
         reranked = rerank_knowledge_hints(knowledge_hints, current_task)
         if reranked and reranked.strip():
             parts.append("RELEVANT KNOWLEDGE:")
-            max_chars = 600 if tier == "full" else 350
+            base_chars = 600 if tier == "full" else 350
+            max_chars = _scale_chars(base_chars, "knowledge", section_weights)
             if len(reranked) > max_chars * 1.5:
                 compressed_knowledge, _ = compress_text(reranked, ratio=0.25)
                 parts.append(compressed_knowledge[:max_chars])
@@ -1288,7 +1301,8 @@ def _build_brief_beginning(current_task, tier, budget, knowledge_hints):
     if budget["spotlight"] > 0:
         workspace_ctx = get_workspace_context(current_task, tier=tier)
         if workspace_ctx:
-            ws_budget = 500 if tier == "full" else 300
+            base_ws = 500 if tier == "full" else 300
+            ws_budget = _scale_chars(base_ws, "working_memory", section_weights)
             if len(workspace_ctx) > ws_budget * 1.5:
                 workspace_ctx, _ = compress_text(workspace_ctx, ratio=0.25)
             parts.append(workspace_ctx[:ws_budget])
@@ -1299,28 +1313,33 @@ def _build_brief_beginning(current_task, tier, budget, knowledge_hints):
                 parts.append("WORKING MEMORY:")
                 parts.extend(spotlight[:n_items])
 
-    # Metrics one-liner (appended to beginning for primacy)
+    # Metrics one-liner — scaled down when metrics relevance is low
     if not should_suppress_section("metrics", current_task):
-        scores = get_latest_scores()
-        if scores:
-            phi = scores.get("phi", "?")
-            if "capabilities" in scores:
-                caps = scores["capabilities"]
-                worst_k = min(caps, key=caps.get) if caps else "?"
-                worst_v = caps.get(worst_k, "?") if caps else "?"
-                parts.append(f"METRICS: Phi={phi}, worst={worst_k}={worst_v}")
-            else:
-                parts.append(f"METRICS: Phi={phi}")
+        metrics_w = section_weights.get("metrics", 1.0) if section_weights else 1.0
+        if metrics_w > 0.2:  # skip entirely if relevance is very low
+            scores = get_latest_scores()
+            if scores:
+                phi = scores.get("phi", "?")
+                if "capabilities" in scores:
+                    caps = scores["capabilities"]
+                    worst_k = min(caps, key=caps.get) if caps else "?"
+                    worst_v = caps.get(worst_k, "?") if caps else "?"
+                    parts.append(f"METRICS: Phi={phi}, worst={worst_k}={worst_v}")
+                else:
+                    parts.append(f"METRICS: Phi={phi}")
 
     return parts
 
 
-def _build_brief_middle(current_task, tier, budget, queue_file):
+def _build_brief_middle(current_task, tier, budget, queue_file, section_weights=None):
     """Build the MIDDLE (lower-attention) zone of the tiered brief."""
     parts = []
 
     if budget["related_tasks"] > 0:
-        n_related = 3 if tier == "full" else 2
+        # Scale number of related tasks by relevance weight
+        rt_w = section_weights.get("related_tasks", 1.0) if section_weights else 1.0
+        base_n = 3 if tier == "full" else 2
+        n_related = max(1, round(base_n * rt_w))
         related = find_related_tasks(current_task, queue_file, max_tasks=n_related)
         if related:
             parts.append("RELATED TASKS:")
@@ -1328,7 +1347,9 @@ def _build_brief_middle(current_task, tier, budget, queue_file):
                 parts.append(f"  - {t}")
 
     if budget["completions"] > 0:
-        n_comp = 3 if tier == "full" else 2
+        comp_w = section_weights.get("completions", 1.0) if section_weights else 1.0
+        base_n = 3 if tier == "full" else 2
+        n_comp = max(1, round(base_n * comp_w))
         completions = get_recent_completions(queue_file, n=n_comp)
         if completions:
             parts.append("RECENT:")
@@ -1337,7 +1358,7 @@ def _build_brief_middle(current_task, tier, budget, queue_file):
     return parts
 
 
-def _build_brief_end(current_task, tier, budget, episodic_hints):
+def _build_brief_end(current_task, tier, budget, episodic_hints, section_weights=None):
     """Build the END (high-attention) zone of the tiered brief."""
     parts = []
 
@@ -1347,10 +1368,15 @@ def _build_brief_end(current_task, tier, budget, episodic_hints):
             parts.append(procedures_text)
 
     if budget["episodes"] > 0:
-        max_chars = budget["episodes"] * 4
+        # Episodes are high-value — scale char budget up when relevant
+        base_chars = budget["episodes"] * 4
+        max_chars = _scale_chars(base_chars, "episodes", section_weights)
+        base_patterns = 3 if tier == "full" else 2
+        ep_w = section_weights.get("episodes", 1.0) if section_weights else 1.0
+        max_patterns = max(1, round(base_patterns * ep_w))
         hierarchical = build_hierarchical_episodes(
             current_task, episodic_hints=episodic_hints or "",
-            max_patterns=3 if tier == "full" else 2,
+            max_patterns=max_patterns,
             max_chars=max_chars,
         )
         if hierarchical and hierarchical.strip():
@@ -1358,7 +1384,8 @@ def _build_brief_end(current_task, tier, budget, episodic_hints):
 
     if synthesize_knowledge and tier != "minimal":
         try:
-            max_chars = 500 if tier == "full" else 350
+            base_chars = 500 if tier == "full" else 350
+            max_chars = _scale_chars(base_chars, "knowledge", section_weights)
             knowledge_section = synthesize_knowledge(
                 current_task, tier=tier, max_chars=max_chars)
             if knowledge_section and knowledge_section.strip():
@@ -1386,13 +1413,19 @@ def generate_tiered_brief(
       BEGINNING (highest attention): Decision context, knowledge, working memory.
       MIDDLE (lower attention): Related tasks, completions.
       END (high attention): Episodic lessons, knowledge synthesis, reasoning scaffold.
+
+    Per-section relevance weights scale individual char budgets within each zone,
+    so high-value sections (episodes, reasoning, knowledge) expand while low-value
+    sections (metrics, completions) compress.  This improves brief compression
+    ratio by allocating tokens where they contribute most to task success.
     """
     queue_file = queue_file or QUEUE_FILE
     budget = get_adjusted_budgets(tier)
+    section_weights = load_section_relevance_weights()
 
-    beginning = _build_brief_beginning(current_task, tier, budget, knowledge_hints)
-    middle = _build_brief_middle(current_task, tier, budget, queue_file)
-    end = _build_brief_end(current_task, tier, budget, episodic_hints)
+    beginning = _build_brief_beginning(current_task, tier, budget, knowledge_hints, section_weights)
+    middle = _build_brief_middle(current_task, tier, budget, queue_file, section_weights)
+    end = _build_brief_end(current_task, tier, budget, episodic_hints, section_weights)
 
     parts = beginning
     if middle:

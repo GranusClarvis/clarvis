@@ -1700,3 +1700,7 @@ _Last archived: 2026-03-27_
 
 ## Archived 2026-03-28
 - [x] [CROSS_SECTION_BRIEF_DEDUP] Added `_cross_section_dedup()` to `dycp.py` — Jaccard-based near-duplicate line removal across section boundaries. brief_compression: 0.503→0.621 (target 0.55). (2026-03-28)
+
+## Archived 2026-03-28
+- [x] [BRIER_CALIBRATION_AUDIT] **Done 2026-03-28**: Root cause was already fixed by BRIER_CALIBRATION_OVERHAUL (2026-03-25). Pipeline is healthy: Brier=0.059 (14d), 164/165 resolved (99.4%). Fixed secondary bug: `_assess_learning_feedback()` resolution_rate used all-time denominator instead of 14d window — inflated from 49%→99%, score 0.88→0.96.
+- [x] [CRON_STALE_LOCK_HARDENING] **Done 2026-03-28**: (1) `lock_helper.sh`: added `_write_lock`/`_read_lock_pid` — all lock files now write "PID TIMESTAMP" (backward-compat with old PID-only format). (2) `cron_watchdog.sh`: stale locks with dead PIDs are now auto-reclaimed (handles SIGKILL orphans). (3) Updated 6 legacy scripts to write PID+timestamp. All 14 lock sites audited — EXIT traps verified on all.
