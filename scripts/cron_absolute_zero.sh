@@ -8,7 +8,7 @@ LOCKFILE="/tmp/clarvis_absolute_zero.lock"
 
 # Prevent overlapping runs
 if [ -f "$LOCKFILE" ]; then
-    pid=$(cat "$LOCKFILE" 2>/dev/null)
+    pid=$(awk '{print $1}' "$LOCKFILE" 2>/dev/null)
     if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
         echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] SKIP: Previous run still active (PID $pid)"
         exit 0

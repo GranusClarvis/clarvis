@@ -4,9 +4,19 @@
 source /home/agent/.openclaw/workspace/scripts/cron_env.sh
 
 LOCKFILE="/tmp/clarvis_report_morning.lock"
+MAX_LOCK_AGE=1200  # seconds — reclaim stale locks older than 20 min
 if [ -f "$LOCKFILE" ]; then
-    pid=$(cat "$LOCKFILE" 2>/dev/null)
-    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then exit 0; fi
+    lock_content=$(cat "$LOCKFILE" 2>/dev/null)
+    pid=$(echo "$lock_content" | awk '{print $1}')
+    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+        # Process alive — check if lock is stale (hung process)
+        lock_age=$(( $(date +%s) - $(stat -c %Y "$LOCKFILE" 2>/dev/null || echo 0) ))
+        if [ "$lock_age" -lt "$MAX_LOCK_AGE" ]; then
+            exit 0
+        fi
+        echo "[report_morning] Stale lock (age=${lock_age}s, pid=$pid) — reclaiming"
+    fi
+    rm -f "$LOCKFILE"
 fi
 echo "$$ $(date -u +%Y-%m-%dT%H:%M:%S)" > "$LOCKFILE"
 trap 'rm -f "$LOCKFILE"' EXIT

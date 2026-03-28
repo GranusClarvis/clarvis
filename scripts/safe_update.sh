@@ -806,7 +806,7 @@ do_full_update() {
   # Prevent concurrent updates
   if [ -f "$LOCKFILE" ]; then
     local lock_pid
-    lock_pid=$(cat "$LOCKFILE" 2>/dev/null || echo "unknown")
+    lock_pid=$(awk '{print $1}' "$LOCKFILE" 2>/dev/null || echo "unknown")
     if kill -0 "$lock_pid" 2>/dev/null; then
       die "Another update is already running (PID: $lock_pid). Remove $LOCKFILE if stale."
     else

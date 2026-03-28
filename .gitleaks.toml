@@ -1,0 +1,12 @@
+# Gitleaks configuration — suppress known false positives
+# See: https://github.com/gitleaks/gitleaks
+
+[allowlist]
+  description = "Known false positives: documentation placeholders and regex patterns"
+  paths = [
+    '''docs/composio_technical_reference\.md''',
+    '''docs/DATA_LAYOUT\.md''',
+    '''scripts/oss_readiness_check\.sh''',
+    '''tests/test_open_source_smoke\.py''',
+    '''memory/evolution/QUEUE_ARCHIVE\.md''',
+  ]
