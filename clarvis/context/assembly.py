@@ -223,66 +223,34 @@ def get_failure_patterns(current_task, n=3):
     return patterns
 
 
-def build_decision_context(current_task, tier="standard"):
-    """Build decision-context block: success criteria, failure avoidance, constraints.
-
-    Highest-value context — shapes HOW Claude Code approaches the task.
-    """
-    parts = []
-
-    # Task description — prominent placement for LLM grounding
-    # Extract task tag if present (e.g., [SOME_TAG 2026-03-15])
-    tag_match = re.match(r'\[([A-Z0-9_]+(?:\s+\d{4}-\d{2}-\d{2})?)\]\s*', current_task)
-    task_tag = tag_match.group(1) if tag_match else None
-    task_body = current_task[tag_match.end():] if tag_match else current_task
-    # Truncate to first 200 chars for the summary line
-    task_summary = task_body[:200].strip()
-    if task_tag:
-        parts.append(f"CURRENT TASK: [{task_tag}] {task_summary}")
-    else:
-        parts.append(f"CURRENT TASK: {task_summary}")
-
-    # Success criteria from task text
+def _extract_success_criteria(task_text):
+    """Extract success criteria from task text: numeric targets + action verbs."""
     targets = []
     for m in re.finditer(
         r'(?:target|goal|above|>|improve.*to)\s*[:=]?\s*([0-9.]+[%+]?)',
-        current_task, re.IGNORECASE
+        task_text, re.IGNORECASE
     ):
         targets.append(m.group(0).strip())
     done_verbs = re.findall(
         r'(?:verify|ensure|confirm|test|check|wire|implement|fix|build|add|create)\s+[^,.]+',
-        current_task, re.IGNORECASE
+        task_text, re.IGNORECASE
     )
     if done_verbs:
         targets.extend(v.strip()[:60] for v in done_verbs[:3])
-    # Also extract "Success criteria:" lines if present
     sc_match = re.search(
         r'[Ss]uccess\s+criteria[:\s]+(.+?)(?:\.\s*\*\*|$)',
-        current_task, re.DOTALL
+        task_text, re.DOTALL
     )
     if sc_match:
         sc_text = sc_match.group(1).strip()[:120]
         if sc_text and sc_text not in targets:
             targets.insert(0, sc_text)
-    if targets:
-        parts.append("SUCCESS CRITERIA:")
-        for t in targets[:5]:
-            parts.append(f"  - {t}")
+    return targets
 
-    # Wire guidance
-    wire_guidance = build_wire_guidance(current_task)
-    if wire_guidance:
-        parts.append(wire_guidance)
 
-    # Failure patterns (default-suppressed unless task-relevant)
-    if not should_suppress_section("failure_avoidance", current_task):
-        failure_patterns = get_failure_patterns(
-            current_task, n=3 if tier == "full" else 2
-        )
-        if failure_patterns:
-            parts.append("AVOID THESE FAILURE PATTERNS:")
-            parts.extend(failure_patterns)
-
+def _get_supplementary_hints(current_task, tier):
+    """Get meta-gradient hint + weak capabilities warning."""
+    hints = []
     # Meta-gradient RL (default-suppressed — mean=0.056 historically)
     if not should_suppress_section("meta_gradient", current_task):
         try:
@@ -292,14 +260,13 @@ def build_decision_context(current_task, tier="standard"):
             weights = mg_params.get("strategy_weights", {})
             best_strategy = max(weights, key=weights.get) if weights else None
             if best_strategy and weights[best_strategy] > 1.2:
-                parts.append(
+                hints.append(
                     f"META-GRADIENT: Prefer '{best_strategy}' strategy "
                     f"(weight={weights[best_strategy]:.2f}), explore={explore:.0%}"
                 )
         except Exception:
             logger.debug("Failed to load meta-gradient params", exc_info=True)
 
-    # Weak capabilities warning
     scores = get_latest_scores()
     if scores:
         caps = scores.get("capabilities", {})
@@ -308,58 +275,47 @@ def build_decision_context(current_task, tier="standard"):
             weak_names = ", ".join(
                 f"{k}={v}" for k, v in sorted(weak_caps, key=lambda x: x[1])
             )
-            parts.append(f"WEAK AREAS (be extra careful): {weak_names}")
+            hints.append(f"WEAK AREAS (be extra careful): {weak_names}")
+    return hints
 
-    # Output-vocabulary keywords — terms likely to appear in Claude Code's
-    # response, injected here so context_relevance containment scoring
-    # credits the decision_context section.  Extracts file paths, function
-    # names, metric names, numeric targets, AND domain vocabulary from the
-    # task text.  The domain vocabulary is critical: 14% of episodes had
-    # decision_context=0.0 because only code identifiers were extracted,
-    # missing general terms like "reranking", "synthesis", "benchmark" that
-    # naturally appear in both task and output.
+
+_DOMAIN_STOP = {
+    "this", "that", "with", "from", "have", "been", "will", "each",
+    "make", "like", "into", "than", "also", "when", "what", "which",
+    "their", "them", "then", "there", "these", "those", "they", "were",
+    "would", "could", "should", "about", "after", "before", "above",
+    "below", "between", "through", "during", "within", "without",
+    "does", "done", "doing", "only", "just", "more", "most", "some",
+    "such", "very", "much", "many", "here", "where", "over", "under",
+    "file", "task", "current", "added", "based", "using", "currently",
+}
+
+
+def _extract_output_vocabulary(task_text, task_tag=None):
+    """Extract output-vocabulary keywords for context_relevance containment scoring.
+
+    Extracts file paths, function names, numeric targets, domain vocabulary,
+    and tag words from the task text.
+    """
     vocab_tokens = []
-    # File paths / module names
-    vocab_tokens.extend(re.findall(r'`([^`]+)`', current_task))
+    vocab_tokens.extend(re.findall(r'`([^`]+)`', task_text))
     vocab_tokens.extend(
-        re.findall(r'\b[\w/.-]+\.(?:py|sh|js|ts|json|md|yaml)\b', current_task)
+        re.findall(r'\b[\w/.-]+\.(?:py|sh|js|ts|json|md|yaml)\b', task_text)
     )
-    # Underscore identifiers (function/variable names)
     vocab_tokens.extend(
-        t for t in re.findall(r'\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b', current_task)
+        t for t in re.findall(r'\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b', task_text)
         if len(t) > 5
     )
-    # Numeric targets (e.g., "0.73", "≥0.75")
-    vocab_tokens.extend(re.findall(r'[≥≤><]?\s*\d+\.\d+', current_task))
-    # CamelCase identifiers
-    vocab_tokens.extend(re.findall(r'\b[A-Z][a-z]+(?:[A-Z][a-zA-Z]*)+\b', current_task))
-    # Uppercase acronyms (e.g., CLR, RAG, ONNX, LLM)
-    vocab_tokens.extend(re.findall(r'\b[A-Z]{2,6}\b', current_task))
-    # Domain vocabulary — meaningful words (4+ chars) from the task text
-    # that are likely to appear in Claude Code's output.  Stopwords and
-    # common filler are excluded to keep the signal high.
-    _domain_stop = {
-        "this", "that", "with", "from", "have", "been", "will", "each",
-        "make", "like", "into", "than", "also", "when", "what", "which",
-        "their", "them", "then", "there", "these", "those", "they", "were",
-        "would", "could", "should", "about", "after", "before", "above",
-        "below", "between", "through", "during", "within", "without",
-        "does", "done", "doing", "only", "just", "more", "most", "some",
-        "such", "very", "much", "many", "here", "where", "over", "under",
-        "file", "task", "current", "added", "based", "using", "currently",
-    }
-    domain_words = re.findall(r'\b[a-z]{4,}\b', current_task.lower())
-    vocab_tokens.extend(
-        w for w in domain_words if w not in _domain_stop
-    )
-    # Words from task tag (e.g., [CONTEXT_BRAIN_SEARCH_RERANKING] → context, brain, search, reranking)
+    vocab_tokens.extend(re.findall(r'[≥≤><]?\s*\d+\.\d+', task_text))
+    vocab_tokens.extend(re.findall(r'\b[A-Z][a-z]+(?:[A-Z][a-zA-Z]*)+\b', task_text))
+    vocab_tokens.extend(re.findall(r'\b[A-Z]{2,6}\b', task_text))
+    domain_words = re.findall(r'\b[a-z]{4,}\b', task_text.lower())
+    vocab_tokens.extend(w for w in domain_words if w not in _DOMAIN_STOP)
     if task_tag:
-        # Strip optional date suffix (e.g., "BRAIN_REVIEW 2026-03-21" → "BRAIN_REVIEW")
         tag_name = re.sub(r'\s+\d{4}-\d{2}-\d{2}$', '', task_tag)
         tag_words = [w.lower() for w in tag_name.split("_") if len(w) >= 4]
         vocab_tokens.extend(tag_words)
-    # Hyphenated compound terms (e.g., "task-aware", "cross-collection")
-    vocab_tokens.extend(re.findall(r'\b[a-z]+-[a-z]+\b', current_task.lower()))
+    vocab_tokens.extend(re.findall(r'\b[a-z]+-[a-z]+\b', task_text.lower()))
     # Deduplicate while preserving order
     seen_vocab = set()
     unique_vocab = []
@@ -368,10 +324,49 @@ def build_decision_context(current_task, tier="standard"):
         if t and t not in seen_vocab and len(t) > 2:
             seen_vocab.add(t)
             unique_vocab.append(t)
-    if unique_vocab:
-        parts.append(
-            "KEY TERMS: " + ", ".join(unique_vocab[:15])
+    return unique_vocab
+
+
+def build_decision_context(current_task, tier="standard"):
+    """Build decision-context block: success criteria, failure avoidance, constraints.
+
+    Highest-value context — shapes HOW Claude Code approaches the task.
+    """
+    parts = []
+
+    # Task description — prominent placement for LLM grounding
+    tag_match = re.match(r'\[([A-Z0-9_]+(?:\s+\d{4}-\d{2}-\d{2})?)\]\s*', current_task)
+    task_tag = tag_match.group(1) if tag_match else None
+    task_body = current_task[tag_match.end():] if tag_match else current_task
+    task_summary = task_body[:200].strip()
+    if task_tag:
+        parts.append(f"CURRENT TASK: [{task_tag}] {task_summary}")
+    else:
+        parts.append(f"CURRENT TASK: {task_summary}")
+
+    targets = _extract_success_criteria(current_task)
+    if targets:
+        parts.append("SUCCESS CRITERIA:")
+        for t in targets[:5]:
+            parts.append(f"  - {t}")
+
+    wire_guidance = build_wire_guidance(current_task)
+    if wire_guidance:
+        parts.append(wire_guidance)
+
+    if not should_suppress_section("failure_avoidance", current_task):
+        failure_patterns = get_failure_patterns(
+            current_task, n=3 if tier == "full" else 2
         )
+        if failure_patterns:
+            parts.append("AVOID THESE FAILURE PATTERNS:")
+            parts.extend(failure_patterns)
+
+    parts.extend(_get_supplementary_hints(current_task, tier))
+
+    vocab = _extract_output_vocabulary(current_task, task_tag)
+    if vocab:
+        parts.append("KEY TERMS: " + ", ".join(vocab[:15]))
 
     return "\n".join(parts)
 
@@ -952,20 +947,130 @@ def _get_similar_failure_lessons(current_task, max_lessons=2):
     return lessons
 
 
+_EPISODE_DOMAIN_PATTERNS = {
+    "brain": r"brain|chroma|memory|retrieval|search|recall|embed",
+    "metrics": r"metric|phi|benchmark|score|brier|confidence|calibrat",
+    "context": r"context|assembly|compress|brief|relevance|episode",
+    "infra": r"cron|gateway|health|backup|monitor|watchdog|graph",
+    "code": r"implement|refactor|migrate|fix|build|wire|test|create",
+    "research": r"research|paper|arxiv|ingest|literature|survey",
+}
+
+# Shared stopwords for episode token overlap calculations
+_EPISODE_STOPWORDS = {
+    "the", "and", "for", "are", "but", "not", "you", "all", "can",
+    "had", "was", "one", "our", "out", "has", "have", "from",
+    "with", "this", "that", "they", "been", "will", "each", "make",
+    "like", "into", "than", "its", "also", "use", "two", "how",
+}
+
+
+def _classify_episode_domain(task_text: str) -> str:
+    """Classify an episode's task text into a domain category."""
+    task_lower = task_text.lower()
+    for domain, pattern in _EPISODE_DOMAIN_PATTERNS.items():
+        if re.search(pattern, task_lower):
+            return domain
+    return "general"
+
+
+def _ep_tokens(text):
+    """Extract meaningful tokens from text, minus stopwords."""
+    return set(re.findall(r'[a-z][a-z0-9_]{2,}', text.lower())) - _EPISODE_STOPWORDS
+
+
+def _find_recovery_pairs(failure_eps, success_eps, max_pairs=2):
+    """Find failure→success recovery pairs on similar tasks."""
+    pairs = []
+    for fail_ep in failure_eps[:5]:
+        fail_tokens = _ep_tokens(fail_ep.get("task", ""))
+        if not fail_tokens:
+            continue
+        for succ_ep in success_eps:
+            succ_tokens = _ep_tokens(succ_ep.get("task", ""))
+            overlap = len(fail_tokens & succ_tokens) / max(1, len(fail_tokens))
+            if overlap >= 0.3:
+                pairs.append((fail_ep, succ_ep))
+                break
+        if len(pairs) >= max_pairs:
+            break
+    return pairs
+
+
+def _score_domain_groups(domain_groups, current_task):
+    """Score episode domain groups by token relevance to current task."""
+    task_tokens = _ep_tokens(current_task)
+    domain_scores = []
+    for domain, eps in domain_groups.items():
+        overlaps = []
+        for ep in eps:
+            ep_tok = _ep_tokens(ep.get("task", ""))
+            if task_tokens and ep_tok:
+                overlaps.append(len(task_tokens & ep_tok) / max(1, len(task_tokens)))
+        avg_overlap = sum(overlaps) / max(1, len(overlaps)) if overlaps else 0
+        domain_scores.append((avg_overlap, domain, eps))
+    domain_scores.sort(key=lambda x: x[0], reverse=True)
+    return domain_scores
+
+
+def _format_episode_patterns(domain_scores, max_patterns):
+    """Format success patterns as abstract→concrete lines."""
+    lines = []
+    pattern_count = 0
+    for _, domain, eps in domain_scores:
+        if pattern_count >= max_patterns:
+            break
+        best_ep = eps[0]
+        task_str = best_ep.get("task", "")[:80]
+
+        lesson_str = ""
+        for ep in eps:
+            lesson = ep.get("lesson", "")
+            if lesson and lesson.lower() not in ("success", "failure", ""):
+                lesson_str = lesson[:60]
+                break
+        if not lesson_str:
+            ids = _extract_actionable_context(task_str)
+            duration = best_ep.get("duration_s")
+            dur_str = f" ({int(duration)}s)" if duration else ""
+            lesson_str = f"{best_ep.get('outcome', 'success')}{dur_str}{ids}"
+
+        tag = re.search(r'\[([A-Z_]+)\]', task_str)
+        tag_str = f"[{tag.group(1)}]" if tag else f"[{domain}]"
+        lines.append(f"  {tag_str} {lesson_str}")
+        lines.append(f"    eg: {task_str}")
+        pattern_count += 1
+    return lines
+
+
+def _format_recovery_lines(recovery_pairs):
+    """Format failure→recovery pairs with concrete identifiers."""
+    if not recovery_pairs:
+        return []
+    lines = ["  RECOVERY:"]
+    for fail_ep, succ_ep in recovery_pairs[:2]:
+        fail_task = fail_ep.get("task", "")[:70]
+        fail_err = fail_ep.get("error", "")[:40] or "failed"
+        succ_lesson = succ_ep.get("lesson", "")
+        if succ_lesson and succ_lesson.lower() not in ("success", ""):
+            fix_str = succ_lesson[:60]
+        else:
+            fix_str = succ_ep.get("task", "")[:60]
+        lines.append(f"    fail: {fail_task} ({fail_err})")
+        if fix_str.strip():
+            lines.append(f"    fix: {fix_str}")
+    return lines
+
+
 def build_hierarchical_episodes(current_task: str, episodic_hints: str = "",
                                 max_patterns: int = 3, max_chars: int = 400) -> str:
     """Build multi-level episode summaries: abstract pattern → concrete example.
-
-    Queries episodic memory for task-similar episodes, groups them by
-    domain/outcome, extracts patterns (success strategies, failure-recovery),
-    and formats as structured summaries that score higher on context relevance.
 
     Returns formatted string for the EPISODIC LESSONS section.
     """
     if not current_task:
         return episodic_hints[:max_chars] if episodic_hints else ""
 
-    # --- 1. Fetch task-similar episodes from brain ---
     episodes = []
     try:
         from clarvis.memory.episodic_memory import EpisodicMemory
@@ -975,140 +1080,33 @@ def build_hierarchical_episodes(current_task: str, episodic_hints: str = "",
         logger.debug("Failed to recall episodes for hierarchical build", exc_info=True)
 
     if not episodes:
-        # Fall back to reranking the pre-compressed hints
         if episodic_hints:
             return rerank_episodes_by_task(episodic_hints, current_task)[:max_chars]
         return ""
 
-    # --- 2. Classify episodes by domain and outcome ---
-    _DOMAIN_PATTERNS = {
-        "brain": r"brain|chroma|memory|retrieval|search|recall|embed",
-        "metrics": r"metric|phi|benchmark|score|brier|confidence|calibrat",
-        "context": r"context|assembly|compress|brief|relevance|episode",
-        "infra": r"cron|gateway|health|backup|monitor|watchdog|graph",
-        "code": r"implement|refactor|migrate|fix|build|wire|test|create",
-        "research": r"research|paper|arxiv|ingest|literature|survey",
-    }
+    # Classify episodes by outcome
+    success_eps = [ep for ep in episodes if ep.get("outcome") == "success"]
+    failure_eps = [ep for ep in episodes
+                   if ep.get("outcome") in ("failure", "soft_failure", "timeout")]
 
-    def _classify_domain(task_text: str) -> str:
-        task_lower = task_text.lower()
-        for domain, pattern in _DOMAIN_PATTERNS.items():
-            if re.search(pattern, task_lower):
-                return domain
-        return "general"
+    recovery_pairs = _find_recovery_pairs(failure_eps, success_eps)
 
-    success_eps = []
-    failure_eps = []
-    recovery_pairs = []  # (failure_ep, recovery_ep) pairs
-
-    for ep in episodes:
-        outcome = ep.get("outcome", "unknown")
-        if outcome in ("success",):
-            success_eps.append(ep)
-        elif outcome in ("failure", "soft_failure", "timeout"):
-            failure_eps.append(ep)
-
-    # --- 3. Detect failure→recovery patterns ---
-    # Look for failures followed by successes on similar tasks
-    _sw = {"the", "and", "for", "are", "but", "not", "you", "all", "can",
-           "had", "was", "one", "our", "out", "has", "have", "from",
-           "with", "this", "that", "they", "been", "will", "each", "make",
-           "like", "into", "than", "its", "also", "use", "two", "how"}
-
-    for fail_ep in failure_eps[:5]:
-        fail_tokens = set(re.findall(r'[a-z][a-z0-9_]{2,}',
-                                     fail_ep.get("task", "").lower())) - _sw
-        if not fail_tokens:
-            continue
-        for succ_ep in success_eps:
-            succ_tokens = set(re.findall(r'[a-z][a-z0-9_]{2,}',
-                                         succ_ep.get("task", "").lower())) - _sw
-            overlap = len(fail_tokens & succ_tokens) / max(1, len(fail_tokens))
-            if overlap >= 0.3:
-                recovery_pairs.append((fail_ep, succ_ep))
-                break
-        if len(recovery_pairs) >= 2:
-            break
-
-    # --- 4. Group successes by domain, pick top pattern per domain ---
+    # Group successes by domain, score by relevance
     domain_groups: dict = {}
     for ep in success_eps:
-        domain = _classify_domain(ep.get("task", ""))
+        domain = _classify_episode_domain(ep.get("task", ""))
         domain_groups.setdefault(domain, []).append(ep)
+    domain_scores = _score_domain_groups(domain_groups, current_task)
 
-    # Score domains by relevance to current task
-    task_tokens = set(re.findall(r'[a-z][a-z0-9_]{2,}', current_task.lower())) - _sw
-    domain_scores = []
-    for domain, eps in domain_groups.items():
-        # Average token overlap with current task
-        overlaps = []
-        for ep in eps:
-            ep_tokens = set(re.findall(r'[a-z][a-z0-9_]{2,}',
-                                       ep.get("task", "").lower())) - _sw
-            if task_tokens and ep_tokens:
-                overlaps.append(len(task_tokens & ep_tokens) / max(1, len(task_tokens)))
-        avg_overlap = sum(overlaps) / max(1, len(overlaps)) if overlaps else 0
-        domain_scores.append((avg_overlap, domain, eps))
+    # Format output
+    lines = _format_episode_patterns(domain_scores, max_patterns)
+    lines.extend(_format_recovery_lines(recovery_pairs))
 
-    domain_scores.sort(key=lambda x: x[0], reverse=True)
-
-    # --- 5. Format hierarchical output ---
-    lines = []
-
-    # Success patterns: abstract → concrete, with actionable identifiers
-    pattern_count = 0
-    for _, domain, eps in domain_scores:
-        if pattern_count >= max_patterns:
-            break
-        best_ep = eps[0]  # highest activation (already sorted by recall_similar)
-        task_str = best_ep.get("task", "")[:80]
-
-        # Extract a meaningful lesson: prefer lesson field, then steps summary,
-        # then fall back to outcome + duration for at least some signal
-        lesson_str = ""
-        for ep in eps:
-            l = ep.get("lesson", "")
-            if l and l.lower() not in ("success", "failure", ""):
-                lesson_str = l[:60]
-                break
-        if not lesson_str:
-            # Extract identifiers from task text as actionable context
-            ids = _extract_actionable_context(task_str)
-            duration = best_ep.get("duration_s")
-            dur_str = f" ({int(duration)}s)" if duration else ""
-            lesson_str = f"{best_ep.get('outcome', 'success')}{dur_str}{ids}"
-
-        tag = re.search(r'\[([A-Z_]+)\]', task_str)
-        tag_str = f"[{tag.group(1)}]" if tag else f"[{domain}]"
-
-        lines.append(f"  {tag_str} {lesson_str}")
-        lines.append(f"    eg: {task_str}")
-        pattern_count += 1
-
-    # Failure→recovery pairs with concrete identifiers
-    if recovery_pairs:
-        lines.append("  RECOVERY:")
-        for fail_ep, succ_ep in recovery_pairs[:2]:
-            fail_task = fail_ep.get("task", "")[:70]
-            fail_err = fail_ep.get("error", "")[:40] or "failed"
-            succ_task = succ_ep.get("task", "")[:60]
-            succ_lesson = succ_ep.get("lesson", "")
-            if succ_lesson and succ_lesson.lower() not in ("success", ""):
-                fix_str = succ_lesson[:60]
-            else:
-                fix_str = succ_task
-            lines.append(f"    fail: {fail_task} ({fail_err})")
-            if fix_str.strip():
-                lines.append(f"    fix: {fix_str}")
-
-    # Inject failure avoidance from _get_similar_failure_lessons
     avoidance = _get_similar_failure_lessons(current_task, max_lessons=2)
     if avoidance:
         lines.extend(avoidance)
 
     result = "\n".join(lines)
-
-    # If we got very little from structured approach, blend with reranked hints
     if len(result) < 80 and episodic_hints:
         fallback = rerank_episodes_by_task(episodic_hints, current_task)
         result = result + "\n" + fallback if result else fallback
@@ -1116,24 +1114,8 @@ def build_hierarchical_episodes(current_task: str, episodic_hints: str = "",
     return result[:max_chars]
 
 
-def rerank_episodes_by_task(episodic_hints: str, current_task: str) -> str:
-    """Re-rank episode lines by combined recency + task similarity.
-
-    Episodes come as pre-compressed text lines. This function parses them,
-    scores each by task-token overlap (content relevance) and position
-    (recency proxy), then returns them sorted by combined score.
-
-    Lines that share more tokens with the current task float to the top.
-    Failure-avoidance lessons from similar past tasks are injected inline.
-    """
-    if not episodic_hints or not current_task:
-        return episodic_hints
-
-    lines = [l for l in episodic_hints.strip().split('\n') if l.strip()]
-    if len(lines) <= 1:
-        return episodic_hints
-
-    # Separate header/separator lines from episode content lines
+def _split_episode_lines(lines):
+    """Separate header/separator lines from episode content lines."""
     episode_lines = []
     other_lines = []
     for line in lines:
@@ -1144,45 +1126,15 @@ def rerank_episodes_by_task(episodic_hints: str, current_task: str) -> str:
             episode_lines.append(line)
         else:
             other_lines.append(line)
+    return episode_lines, other_lines
 
-    if len(episode_lines) <= 1:
-        return episodic_hints
 
-    # Score each episode line by task-token overlap + recency (position)
-    task_tokens = set(re.findall(r'[a-z][a-z0-9_]{2,}', current_task.lower()))
-    _sw = {"the", "and", "for", "are", "but", "not", "you", "all", "can",
-           "had", "was", "one", "our", "out", "has", "have", "from",
-           "with", "this", "that", "they", "been", "will", "each", "make",
-           "like", "into", "than", "its", "also", "use", "two", "how"}
-    task_tokens -= _sw
-
-    scored = []
-    n_eps = len(episode_lines)
-    for i, line in enumerate(episode_lines):
-        ep_tokens = set(re.findall(r'[a-z][a-z0-9_]{2,}', line.lower())) - _sw
-        if task_tokens and ep_tokens:
-            overlap = len(task_tokens & ep_tokens) / max(1, len(task_tokens))
-        else:
-            overlap = 0.0
-        # Recency bonus: later episodes (higher index = more recent) get a boost
-        recency = (i + 1) / n_eps  # 0..1
-        # Combined: 60% task similarity, 40% recency
-        combined = 0.6 * overlap + 0.4 * recency
-        scored.append((combined, line))
-
-    scored.sort(key=lambda x: x[0], reverse=True)
-
-    # Inject failure-avoidance lessons from similar past tasks
-    failure_lessons = _get_similar_failure_lessons(current_task, max_lessons=2)
-
-    # Annotate top episodes with task-relevant terms to boost section containment.
-    # This helps context_relevance see that the episodes section carries terms
-    # the downstream output is likely to reference.
+def _enrich_top_episodes(scored, task_tokens):
+    """Annotate top episodes with task-relevant terms for containment boost."""
     enriched = []
     for idx, (score, line) in enumerate(scored):
         if idx < 3 and task_tokens:
-            ep_tokens = set(re.findall(r'[a-z][a-z0-9_]{2,}', line.lower())) - _sw
-            shared = task_tokens & ep_tokens
+            shared = task_tokens & _ep_tokens(line)
             if shared:
                 tag = " [rel: " + ", ".join(sorted(shared)[:4]) + "]"
                 enriched.append(line.rstrip() + tag)
@@ -1190,8 +1142,40 @@ def rerank_episodes_by_task(episodic_hints: str, current_task: str) -> str:
                 enriched.append(line)
         else:
             enriched.append(line)
+    return enriched
 
-    # Rebuild: other_lines first (headers), then sorted episodes, then failure lessons
+
+def rerank_episodes_by_task(episodic_hints: str, current_task: str) -> str:
+    """Re-rank episode lines by combined recency + task similarity.
+
+    Scores each line by task-token overlap + position (recency proxy),
+    returns sorted by combined score with failure-avoidance lessons injected.
+    """
+    if not episodic_hints or not current_task:
+        return episodic_hints
+
+    lines = [l for l in episodic_hints.strip().split('\n') if l.strip()]
+    if len(lines) <= 1:
+        return episodic_hints
+
+    episode_lines, other_lines = _split_episode_lines(lines)
+    if len(episode_lines) <= 1:
+        return episodic_hints
+
+    task_tokens = _ep_tokens(current_task)
+
+    scored = []
+    n_eps = len(episode_lines)
+    for i, line in enumerate(episode_lines):
+        ep_tok = _ep_tokens(line)
+        overlap = len(task_tokens & ep_tok) / max(1, len(task_tokens)) if task_tokens and ep_tok else 0.0
+        recency = (i + 1) / n_eps
+        scored.append((0.6 * overlap + 0.4 * recency, line))
+    scored.sort(key=lambda x: x[0], reverse=True)
+
+    failure_lessons = _get_similar_failure_lessons(current_task, max_lessons=2)
+    enriched = _enrich_top_episodes(scored, task_tokens)
+
     result = other_lines + enriched
     if failure_lessons:
         result.append("AVOID THESE FAILURE PATTERNS:")
@@ -1281,6 +1265,114 @@ def get_recommended_procedures(current_task, max_procs=2):
 
 
 
+def _build_brief_beginning(current_task, tier, budget, knowledge_hints):
+    """Build the BEGINNING (high-attention) zone of the tiered brief."""
+    parts = []
+
+    if budget.get("decision_context", 0) > 0:
+        decision_ctx = build_decision_context(current_task, tier=tier)
+        if decision_ctx:
+            parts.append(decision_ctx)
+
+    if knowledge_hints and tier != "minimal":
+        reranked = rerank_knowledge_hints(knowledge_hints, current_task)
+        if reranked and reranked.strip():
+            parts.append("RELEVANT KNOWLEDGE:")
+            max_chars = 600 if tier == "full" else 350
+            if len(reranked) > max_chars * 1.5:
+                compressed_knowledge, _ = compress_text(reranked, ratio=0.25)
+                parts.append(compressed_knowledge[:max_chars])
+            else:
+                parts.append(reranked[:max_chars])
+
+    if budget["spotlight"] > 0:
+        workspace_ctx = get_workspace_context(current_task, tier=tier)
+        if workspace_ctx:
+            ws_budget = 500 if tier == "full" else 300
+            if len(workspace_ctx) > ws_budget * 1.5:
+                workspace_ctx, _ = compress_text(workspace_ctx, ratio=0.25)
+            parts.append(workspace_ctx[:ws_budget])
+        else:
+            n_items = 5 if tier == "full" else 3
+            spotlight = get_spotlight_items(n=n_items, exclude_task=current_task)
+            if spotlight:
+                parts.append("WORKING MEMORY:")
+                parts.extend(spotlight[:n_items])
+
+    # Metrics one-liner (appended to beginning for primacy)
+    if not should_suppress_section("metrics", current_task):
+        scores = get_latest_scores()
+        if scores:
+            phi = scores.get("phi", "?")
+            if "capabilities" in scores:
+                caps = scores["capabilities"]
+                worst_k = min(caps, key=caps.get) if caps else "?"
+                worst_v = caps.get(worst_k, "?") if caps else "?"
+                parts.append(f"METRICS: Phi={phi}, worst={worst_k}={worst_v}")
+            else:
+                parts.append(f"METRICS: Phi={phi}")
+
+    return parts
+
+
+def _build_brief_middle(current_task, tier, budget, queue_file):
+    """Build the MIDDLE (lower-attention) zone of the tiered brief."""
+    parts = []
+
+    if budget["related_tasks"] > 0:
+        n_related = 3 if tier == "full" else 2
+        related = find_related_tasks(current_task, queue_file, max_tasks=n_related)
+        if related:
+            parts.append("RELATED TASKS:")
+            for t in related:
+                parts.append(f"  - {t}")
+
+    if budget["completions"] > 0:
+        n_comp = 3 if tier == "full" else 2
+        completions = get_recent_completions(queue_file, n=n_comp)
+        if completions:
+            parts.append("RECENT:")
+            parts.extend(completions)
+
+    return parts
+
+
+def _build_brief_end(current_task, tier, budget, episodic_hints):
+    """Build the END (high-attention) zone of the tiered brief."""
+    parts = []
+
+    if tier != "minimal":
+        procedures_text = get_recommended_procedures(current_task, max_procs=2)
+        if procedures_text:
+            parts.append(procedures_text)
+
+    if budget["episodes"] > 0:
+        max_chars = budget["episodes"] * 4
+        hierarchical = build_hierarchical_episodes(
+            current_task, episodic_hints=episodic_hints or "",
+            max_patterns=3 if tier == "full" else 2,
+            max_chars=max_chars,
+        )
+        if hierarchical and hierarchical.strip():
+            parts.append("EPISODIC LESSONS:\n" + hierarchical)
+
+    if synthesize_knowledge and tier != "minimal":
+        try:
+            max_chars = 500 if tier == "full" else 350
+            knowledge_section = synthesize_knowledge(
+                current_task, tier=tier, max_chars=max_chars)
+            if knowledge_section and knowledge_section.strip():
+                parts.append("KNOWLEDGE SYNTHESIS:\n" + knowledge_section)
+        except Exception:
+            logger.debug("Failed to synthesize knowledge", exc_info=True)
+
+    if budget.get("reasoning_scaffold", 0) > 0:
+        scaffold = build_reasoning_scaffold(tier=tier, task_text=current_task)
+        parts.append(scaffold)
+
+    return parts
+
+
 def generate_tiered_brief(
     current_task,
     tier="standard",
@@ -1291,134 +1383,17 @@ def generate_tiered_brief(
     """Generate a quality-optimized context brief using primacy/recency positioning.
 
     Ordering follows LLM attention research (Liu et al. "Lost in the Middle"):
-      BEGINNING (highest attention): Decision context — success criteria, failure
-          avoidance, constraints.
-      MIDDLE (lower attention): Metrics, related tasks, completions.
-      END (high attention): Episodic lessons + reasoning scaffold.
-
-    Args:
-        current_task: The task being executed.
-        tier: "minimal" | "standard" | "full" — controls depth.
-        episodic_hints: Pre-compressed episode text.
-        knowledge_hints: Brain knowledge text.
-        queue_file: Path to QUEUE.md (default: auto-detected).
-
-    Returns:
-        Quality-optimized context string.
+      BEGINNING (highest attention): Decision context, knowledge, working memory.
+      MIDDLE (lower attention): Related tasks, completions.
+      END (high attention): Episodic lessons, knowledge synthesis, reasoning scaffold.
     """
     queue_file = queue_file or QUEUE_FILE
     budget = get_adjusted_budgets(tier)
-    beginning = []
-    middle = []
-    end = []
 
-    # === BEGINNING — High attention zone ===
+    beginning = _build_brief_beginning(current_task, tier, budget, knowledge_hints)
+    middle = _build_brief_middle(current_task, tier, budget, queue_file)
+    end = _build_brief_end(current_task, tier, budget, episodic_hints)
 
-    # Decision Context (success criteria + failure avoidance)
-    if budget.get("decision_context", 0) > 0:
-        decision_ctx = build_decision_context(current_task, tier=tier)
-        if decision_ctx:
-            beginning.append(decision_ctx)
-
-    # Brain Knowledge — task-aware reranking before injection
-    if knowledge_hints and tier != "minimal":
-        # Rerank: score each hint by keyword relevance to task, drop tangential
-        reranked = rerank_knowledge_hints(knowledge_hints, current_task)
-        if reranked and reranked.strip():
-            beginning.append("RELEVANT KNOWLEDGE:")
-            max_chars = 600 if tier == "full" else 350
-            if len(reranked) > max_chars * 1.5:
-                compressed_knowledge, _ = compress_text(reranked, ratio=0.25)
-                beginning.append(compressed_knowledge[:max_chars])
-            else:
-                beginning.append(reranked[:max_chars])
-
-    # Working Memory (Cognitive Workspace + Spotlight fallback)
-    if budget["spotlight"] > 0:
-        workspace_ctx = get_workspace_context(current_task, tier=tier)
-        if workspace_ctx:
-            ws_budget = 500 if tier == "full" else 300
-            if len(workspace_ctx) > ws_budget * 1.5:
-                workspace_ctx, _ = compress_text(workspace_ctx, ratio=0.25)
-            beginning.append(workspace_ctx[:ws_budget])
-        else:
-            n_items = 5 if tier == "full" else 3
-            spotlight = get_spotlight_items(n=n_items, exclude_task=current_task)
-            if spotlight:
-                beginning.append("WORKING MEMORY:")
-                beginning.extend(spotlight[:n_items])
-
-    # === MIDDLE — Lower attention zone ===
-
-    # Related Pending Tasks
-    if budget["related_tasks"] > 0:
-        n_related = 3 if tier == "full" else 2
-        related = find_related_tasks(current_task, queue_file, max_tasks=n_related)
-        if related:
-            middle.append("RELATED TASKS:")
-            for t in related:
-                middle.append(f"  - {t}")
-
-    # Metrics — folded into decision_context as a compact one-liner (2026-03-18).
-    # Previously a standalone middle section; mean relevance=0.100 suggested it
-    # was noise on its own but the Phi score is useful alongside decision context.
-    if not should_suppress_section("metrics", current_task):
-        scores = get_latest_scores()
-        if scores:
-            phi = scores.get("phi", "?")
-            if "capabilities" in scores:
-                caps = scores["capabilities"]
-                worst_k = min(caps, key=caps.get) if caps else "?"
-                worst_v = caps.get(worst_k, "?") if caps else "?"
-                beginning.append(f"METRICS: Phi={phi}, worst={worst_k}={worst_v}")
-            else:
-                beginning.append(f"METRICS: Phi={phi}")
-
-    # Recent Completions
-    if budget["completions"] > 0:
-        n_comp = 3 if tier == "full" else 2
-        completions = get_recent_completions(queue_file, n=n_comp)
-        if completions:
-            middle.append("RECENT:")
-            middle.extend(completions)
-
-    # === END — High attention zone ===
-
-    # Recommended Procedures — task-similar procedures from clarvis-procedures
-    if tier != "minimal":
-        procedures_text = get_recommended_procedures(current_task, max_procs=2)
-        if procedures_text:
-            end.append(procedures_text)
-
-    # Episodic Lessons — hierarchical pattern → example summaries
-    # Header matches context_relevance.py _SECTION_MARKERS regex for "episodes"
-    if budget["episodes"] > 0:
-        max_chars = budget["episodes"] * 4
-        hierarchical = build_hierarchical_episodes(
-            current_task, episodic_hints=episodic_hints or "",
-            max_patterns=3 if tier == "full" else 2,
-            max_chars=max_chars,
-        )
-        if hierarchical and hierarchical.strip():
-            end.append("EPISODIC LESSONS:\n" + hierarchical)
-
-    # Knowledge Synthesis — cross-collection bridges (procedures+episodes+learnings+goals)
-    if synthesize_knowledge and tier != "minimal":
-        try:
-            max_chars = 500 if tier == "full" else 350
-            knowledge_section = synthesize_knowledge(
-                current_task, tier=tier, max_chars=max_chars)
-            if knowledge_section and knowledge_section.strip():
-                end.append("KNOWLEDGE SYNTHESIS:\n" + knowledge_section)
-        except Exception:
-            logger.debug("Failed to synthesize knowledge", exc_info=True)
-
-    # Reasoning Scaffold — task-type-specific
-    if budget.get("reasoning_scaffold", 0) > 0:
-        scaffold = build_reasoning_scaffold(tier=tier, task_text=current_task)
-        end.append(scaffold)
-
-    # Assemble: beginning → middle → end
     parts = beginning
     if middle:
         parts.append("---")
@@ -1429,7 +1404,6 @@ def generate_tiered_brief(
 
     assembled = "\n".join(parts)
 
-    # DyCP: Query-dependent pruning — remove sections irrelevant to this task
     if tier != "minimal":
         assembled = dycp_prune_brief(assembled, current_task)
 

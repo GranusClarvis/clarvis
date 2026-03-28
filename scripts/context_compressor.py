@@ -288,82 +288,50 @@ def compress_text(text, ratio=0.3):
     }
 
 
-def compress_queue(queue_file=QUEUE_FILE, max_recent_completed=5):
-    """Compress QUEUE.md: pending tasks in full, last N completed as 1-liners, rest stripped.
-
-    Returns a string suitable for injection into Claude Code prompts.
-
-    Typical reduction: 48KB → 3-5KB (85-90% token savings).
-    """
-    if not os.path.exists(queue_file):
-        return "No evolution queue found."
-
-    with open(queue_file, 'r') as f:
-        lines = f.readlines()
-
-    pending_tasks = []       # [ ] items — keep in full
-    recent_completed = []    # [x] items — keep last N as summaries
+def _parse_queue_items(lines):
+    """Parse QUEUE.md lines into pending and completed task lists."""
+    pending_tasks = []
+    recent_completed = []
     current_section = ""
 
     for line in lines:
         stripped = line.strip()
 
-        # Track section headers
         if stripped.startswith('## '):
             current_section = stripped
             continue
-
-        # Skip completed section entirely
         if '## Completed' in current_section:
             continue
 
-        # Pending tasks — keep verbatim with section context
         match_pending = re.match(r'^- \[ \] (.+)$', stripped)
         if match_pending:
             task_text = match_pending.group(1)
-            # Strip long parenthetical timestamps/details for compression
-            # Keep up to first ( or — to get the core task
             core = re.split(r'\s*[\(—]', task_text, 1)[0].strip()
             if len(core) < 20:
-                core = task_text[:150]  # fallback: keep more if core is too short
-            pending_tasks.append({
-                "section": current_section,
-                "task": core,
-            })
+                core = task_text[:150]
+            pending_tasks.append({"section": current_section, "task": core})
             continue
 
-        # Completed tasks — collect for recency trimming
         match_done = re.match(r'^- \[x\] (.+)$', stripped)
         if match_done:
             task_text = match_done.group(1)
-            # Try to extract date BEFORE splitting (it's often in the parenthetical)
             date_match = re.search(r'(\d{4}-\d{2}-\d{2})', task_text)
             date_str = date_match.group(1) if date_match else "unknown"
-            # Extract just the core task name (before timestamp/details)
             core = re.split(r'\s*[\(—]', task_text, 1)[0].strip()
             if len(core) < 15:
                 core = task_text[:100]
-            recent_completed.append({
-                "section": current_section,
-                "task": core,
-                "date": date_str,
-            })
+            recent_completed.append({"section": current_section, "task": core, "date": date_str})
 
-    # Sort completed by date (newest first), "unknown" goes last
-    recent_completed.sort(key=lambda x: x["date"] if x["date"] != "unknown" else "0000", reverse=True)
-    recent_completed = recent_completed[:max_recent_completed]
+    return pending_tasks, recent_completed
 
-    # Build compressed output
-    output = []
-    output.append("=== EVOLUTION QUEUE (compressed) ===\n")
 
-    # Group pending by section
+def _format_compressed_queue(pending_tasks, recent_completed):
+    """Format parsed queue items into compressed output string."""
+    output = ["=== EVOLUTION QUEUE (compressed) ===\n"]
+
     pending_by_section = {}
     for t in pending_tasks:
-        sec = t["section"]
-        if sec not in pending_by_section:
-            pending_by_section[sec] = []
-        pending_by_section[sec].append(t["task"])
+        pending_by_section.setdefault(t["section"], []).append(t["task"])
 
     if pending_by_section:
         output.append(f"PENDING ({len(pending_tasks)} tasks):")
@@ -380,8 +348,28 @@ def compress_queue(queue_file=QUEUE_FILE, max_recent_completed=5):
             output.append(f"  [x] ({t['date']}) {t['task'][:80]}")
 
     output.append(f"\nTOTAL: {len(pending_tasks)} pending, {len(recent_completed)} recently completed shown (older history stripped for token efficiency)")
-
     return "\n".join(output)
+
+
+def compress_queue(queue_file=QUEUE_FILE, max_recent_completed=5):
+    """Compress QUEUE.md: pending tasks in full, last N completed as 1-liners, rest stripped.
+
+    Returns a string suitable for injection into Claude Code prompts.
+    Typical reduction: 48KB → 3-5KB (85-90% token savings).
+    """
+    if not os.path.exists(queue_file):
+        return "No evolution queue found."
+
+    with open(queue_file, 'r') as f:
+        lines = f.readlines()
+
+    pending_tasks, recent_completed = _parse_queue_items(lines)
+
+    recent_completed.sort(
+        key=lambda x: x["date"] if x["date"] != "unknown" else "0000", reverse=True)
+    recent_completed = recent_completed[:max_recent_completed]
+
+    return _format_compressed_queue(pending_tasks, recent_completed)
 
 
 def compress_health(

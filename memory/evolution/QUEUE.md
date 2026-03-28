@@ -30,7 +30,6 @@ _Queue audited on 2026-03-24 evening. Removed 3 completed items (A5_A7, TEMPORAL
 
 ## P1 — This Week
 
-- [ ] [DECOMPOSE_LONG_FUNCTIONS] Decompose oversized functions: `clarvis/context/assembly.py:build_decision_context` (151 lines), `clarvis/context/assembly.py:build_hierarchical_episodes` (162 lines), `clarvis/context/assembly.py:rerank_episodes_by_task` (81 lines), `clarvis/context/assembly.py:generate_tiered_brief` (153 lines), `scripts/context_compressor.py:compress_queue` (94 lines). Target: all functions ≤80 lines.
 
 
 
@@ -82,7 +81,7 @@ _(Completed items archived.)_
 
 ### P1 — Found in 2026-03-28 system scan
 
-- [ ] [CROSS_SECTION_BRIEF_DEDUP] Brief compression ratio still at risk (0.503 vs 0.55 target). The MMR pass operates within each section independently — add a cross-section dedup pass to `dycp_prune_brief()` in `assembly.py:1664` that detects and removes near-duplicate sentences across section boundaries before final assembly. Measure ratio improvement with `brief_benchmark.py`.
+- [x] [CROSS_SECTION_BRIEF_DEDUP] Added `_cross_section_dedup()` to `dycp.py` — Jaccard-based near-duplicate line removal across section boundaries. brief_compression: 0.503→0.621 (target 0.55). (2026-03-28)
 
 
 

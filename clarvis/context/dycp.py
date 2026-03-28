@@ -268,6 +268,97 @@ def _load_historical_section_means() -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Cross-section sentence dedup
+# ---------------------------------------------------------------------------
+
+# Minimum Jaccard similarity to consider two lines near-duplicates.
+_XSEC_DEDUP_JACCARD = 0.55
+# Lines shorter than this (non-whitespace chars) are never deduped — they're
+# structural (headers, separators, stubs) rather than content.
+_XSEC_DEDUP_MIN_LEN = 40
+
+
+def _tokenize_line(line: str) -> frozenset:
+    """Extract lowercase 3+ char tokens from a line for similarity comparison."""
+    return frozenset(re.findall(r"[a-z][a-z0-9_]{2,}", line.lower())) - _CONTAINMENT_STOPWORDS
+
+
+def _cross_section_dedup(text: str) -> str:
+    """Remove near-duplicate lines across section boundaries.
+
+    Scans all content lines and drops later occurrences that have high
+    Jaccard overlap with an earlier line (from a *different* section).
+    Structural lines (headers, separators, short lines) are always kept.
+
+    This catches the common pattern where episodic hints, knowledge hints,
+    and working memory repeat the same information in slightly different
+    phrasing, bloating the brief without adding signal.
+    """
+    if not text:
+        return text
+
+    lines = text.split("\n")
+    if len(lines) < 10:
+        return text  # too short to benefit
+
+    # Build fingerprints for content lines; track which section each is in.
+    # We detect section boundaries by looking for common header patterns.
+    _header_re = re.compile(
+        r"^(?:#{1,4}\s|[A-Z][A-Z _/]{4,}:|---$|\[.*: pruned)",
+    )
+
+    current_section_idx = 0
+    line_meta = []  # (tokens, section_idx, is_content)
+    for line in lines:
+        stripped = line.strip()
+        # Detect section boundary
+        if _header_re.match(stripped) or stripped == "---":
+            if stripped != "---":
+                current_section_idx += 1
+            line_meta.append((frozenset(), current_section_idx, False))
+            continue
+
+        is_content = len(stripped) >= _XSEC_DEDUP_MIN_LEN
+        tokens = _tokenize_line(stripped) if is_content else frozenset()
+        line_meta.append((tokens, current_section_idx, is_content))
+
+    # First pass: collect fingerprints keyed by section
+    seen: list[tuple[frozenset, int]] = []  # (tokens, section_idx)
+    drop = set()  # line indices to drop
+
+    for i, (tokens, sec_idx, is_content) in enumerate(line_meta):
+        if not is_content or len(tokens) < 3:
+            continue
+        # Check against all previously seen content lines from OTHER sections
+        for prev_tokens, prev_sec in seen:
+            if prev_sec == sec_idx:
+                continue  # same section — intra-section dedup is not our job
+            # Jaccard similarity
+            intersection = len(tokens & prev_tokens)
+            union = len(tokens | prev_tokens)
+            if union > 0 and intersection / union >= _XSEC_DEDUP_JACCARD:
+                drop.add(i)
+                break
+        else:
+            seen.append((tokens, sec_idx))
+
+    if not drop:
+        return text
+
+    result = [line for i, line in enumerate(lines) if i not in drop]
+
+    # Clean up any resulting empty sequences (consecutive blank lines → max 1)
+    cleaned = []
+    for line in result:
+        if line.strip() == "" and cleaned and cleaned[-1].strip() == "":
+            continue
+        cleaned.append(line)
+
+    logger.debug("cross-section dedup: removed %d near-duplicate lines", len(drop))
+    return "\n".join(cleaned)
+
+
+# ---------------------------------------------------------------------------
 # DyCP brief pruning
 # ---------------------------------------------------------------------------
 
@@ -341,53 +432,57 @@ def dycp_prune_brief(brief_text: str, task_text: str) -> str:
             pruned_names.add(name)
 
     if not pruned_names:
-        return brief_text
+        text_after_prune = brief_text
+    else:
+        # Rebuild brief: pruned sections become 1-line stubs (preserves signal,
+        # removes noise). Stubs let the LLM know the section exists without
+        # the token cost of full rendering.
+        lines = brief_text.split("\n")
+        from clarvis.cognition.context_relevance import _SECTION_MARKERS
+        result_lines = []
+        current_section = None
+        skip_until_next = False
 
-    # Rebuild brief: pruned sections become 1-line stubs (preserves signal,
-    # removes noise). Stubs let the LLM know the section exists without
-    # the token cost of full rendering.
-    lines = brief_text.split("\n")
-    from clarvis.cognition.context_relevance import _SECTION_MARKERS
-    result_lines = []
-    current_section = None
-    skip_until_next = False
+        for line in lines:
+            # Check if this line starts a new section
+            new_section = None
+            for sname, pattern in _SECTION_MARKERS:
+                if pattern.search(line):
+                    new_section = sname
+                    break
 
-    for line in lines:
-        # Check if this line starts a new section
-        new_section = None
-        for sname, pattern in _SECTION_MARKERS:
-            if pattern.search(line):
-                new_section = sname
-                break
+            if new_section is not None:
+                current_section = new_section
+                skip_until_next = current_section in pruned_names
+                if skip_until_next:
+                    # Emit a 1-line stub instead of the full section
+                    hist_score = historical.get(current_section, 0.0)
+                    result_lines.append(
+                        f"[{current_section}: pruned — hist_relevance={hist_score:.2f}]"
+                    )
+                    continue
+            elif line.strip() == "---":
+                # Separator — don't skip, but reset skip state
+                skip_until_next = False
 
-        if new_section is not None:
-            current_section = new_section
-            skip_until_next = current_section in pruned_names
-            if skip_until_next:
-                # Emit a 1-line stub instead of the full section
-                hist_score = historical.get(current_section, 0.0)
-                result_lines.append(
-                    f"[{current_section}: pruned — hist_relevance={hist_score:.2f}]"
-                )
+            if not skip_until_next:
+                result_lines.append(line)
+
+        # Clean up consecutive --- separators and trailing ---
+        cleaned = []
+        for line in result_lines:
+            if line.strip() == "---" and cleaned and cleaned[-1].strip() == "---":
                 continue
-        elif line.strip() == "---":
-            # Separator — don't skip, but reset skip state
-            skip_until_next = False
+            cleaned.append(line)
+        # Remove trailing ---
+        while cleaned and cleaned[-1].strip() == "---":
+            cleaned.pop()
 
-        if not skip_until_next:
-            result_lines.append(line)
+        text_after_prune = "\n".join(cleaned)
 
-    # Clean up consecutive --- separators and trailing ---
-    cleaned = []
-    for line in result_lines:
-        if line.strip() == "---" and cleaned and cleaned[-1].strip() == "---":
-            continue
-        cleaned.append(line)
-    # Remove trailing ---
-    while cleaned and cleaned[-1].strip() == "---":
-        cleaned.pop()
-
-    return "\n".join(cleaned)
+    # Cross-section sentence dedup: remove near-duplicate lines that appear
+    # across different sections (e.g., episodic hints echoing knowledge hints).
+    return _cross_section_dedup(text_after_prune)
 
 
 # ---------------------------------------------------------------------------
