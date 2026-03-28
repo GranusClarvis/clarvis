@@ -984,17 +984,18 @@ def _assess_learning_feedback():
             with open(cal_path) as f:
                 lines = [l.strip() for l in f if l.strip()]
             resolved = []
-            total_predictions = len(lines)
+            total_in_window = 0
             for line in lines:
                 try:
                     pred = json.loads(line)
+                    ts_str = pred.get("timestamp", "")
+                    if ts_str:
+                        _ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+                        if _ts.timestamp() < _cutoff:
+                            continue
+                    total_in_window += 1
                     # Exclude stale predictions — outcome unknown, not "wrong"
                     if pred.get("correct") is not None and pred.get("outcome") != "stale":
-                        ts_str = pred.get("timestamp", "")
-                        if ts_str:
-                            _ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
-                            if _ts.timestamp() < _cutoff:
-                                continue
                         confidence = float(pred.get("confidence", 0.5))
                         outcome = 1.0 if pred["correct"] else 0.0
                         resolved.append((confidence, outcome))
@@ -1005,15 +1006,15 @@ def _assess_learning_feedback():
                 brier = sum((conf - outcome) ** 2 for conf, outcome in resolved) / len(resolved)
                 cal_score = (1.0 - brier) * 0.3
                 score += cal_score
-                evidence.append(f"calibration brier={brier:.3f} ({len(resolved)}/{total_predictions} resolved, 14d window) (+{cal_score:.2f})")
+                evidence.append(f"calibration brier={brier:.3f} ({len(resolved)}/{total_in_window} resolved, 14d window) (+{cal_score:.2f})")
 
-                # Feedback loop completeness: what fraction of predictions get resolved?
-                resolution_rate = len(resolved) / total_predictions if total_predictions > 0 else 0
+                # Feedback loop completeness: what fraction of 14d predictions get resolved?
+                resolution_rate = len(resolved) / total_in_window if total_in_window > 0 else 0
                 loop_score = resolution_rate * 0.15
                 score += loop_score
                 evidence.append(f"resolution rate={resolution_rate:.0%} (+{loop_score:.2f})")
             else:
-                evidence.append(f"{total_predictions} predictions (none resolved in 14d window)")
+                evidence.append(f"{total_in_window} predictions in 14d window (none resolved)")
         else:
             evidence.append("no calibration data")
     except Exception as e:

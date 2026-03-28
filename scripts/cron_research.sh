@@ -76,7 +76,7 @@ if [ -z "$RESEARCH_TASK" ]; then
             exit 0
         fi
     fi
-    echo $$ > "$DISC_LOCKFILE"
+    echo "$$ $(date -u +%Y-%m-%dT%H:%M:%S)" > "$DISC_LOCKFILE"
     # Update trap to clean discovery lockfile AND lock_helper's locks
     trap 'rm -f "$DISC_LOCKFILE"; _lock_helper_cleanup 2>/dev/null' EXIT
 

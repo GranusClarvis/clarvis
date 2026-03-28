@@ -814,7 +814,7 @@ do_full_update() {
       rm -f "$LOCKFILE"
     fi
   fi
-  echo $$ > "$LOCKFILE"
+  echo "$$ $(date -u +%Y-%m-%dT%H:%M:%S)" > "$LOCKFILE"
 
   separator
   info "=== Clarvis Safe OpenClaw Update ==="

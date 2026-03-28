@@ -129,7 +129,7 @@ cat > "$WORKER_SCRIPT" <<EOF
 set -euo pipefail
 source /home/agent/.openclaw/workspace/scripts/cron_env.sh
 GLOBAL_LOCK="/tmp/clarvis_claude_global.lock"
-echo \$\$ > "\$GLOBAL_LOCK"
+echo "\$\$ \$(date -u +%Y-%m-%dT%H:%M:%S)" > "\$GLOBAL_LOCK"
 cleanup() {
   rm -f "\$GLOBAL_LOCK" "$WORKER_SCRIPT"
 }
@@ -201,7 +201,7 @@ chmod +x "$WORKER_SCRIPT"
 nohup "$WORKER_SCRIPT" >/dev/null 2>&1 &
 WORKER_PID=$!
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] Worker detached pid=$WORKER_PID" >> "/home/agent/.openclaw/workspace/memory/cron/spawn_claude.log"
-echo "$WORKER_PID" > /tmp/clarvis_claude_global.lock
+echo "$WORKER_PID $(date -u +%Y-%m-%dT%H:%M:%S)" > /tmp/clarvis_claude_global.lock
 
 # Parent exits immediately; detached worker handles Claude, Telegram delivery, and cleanup.
 exit 0

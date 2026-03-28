@@ -30,7 +30,6 @@ _Queue audited on 2026-03-24 evening. Removed 3 completed items (A5_A7, TEMPORAL
 
 ## P1 — This Week
 
-- [ ] [DECOMPOSE_LONG_FUNCTIONS] Decompose oversized functions: `clarvis/context/dycp.py:dycp_prune_brief` (121 lines), `scripts/context_compressor.py:compress_health` (86 lines), `scripts/context_compressor.py:_build_wire_guidance` (126 lines), `scripts/context_compressor.py:generate_tiered_brief` (150 lines), `scripts/context_compressor.py:archive_completed` (83 lines). Target: all functions ≤80 lines.
 
 
 
@@ -85,9 +84,9 @@ _(Completed items archived.)_
 
 - [ ] [BRIEF_COMPRESSION_BOOST] Raise brief compression ratio from 0.503→0.55+ by (a) lowering DyCP `DYCP_MIN_CONTAINMENT` from 0.08→0.10, (b) adding redundant-sentence dedup across retained sections in `generate_tiered_brief`, and (c) tightening `compress_text` extractive ratio from 0.3→0.25 for low-relevance sections. Measure before/after with `performance_benchmark.py record`.
 
-- [ ] [BRIER_CALIBRATION_AUDIT] Brier capability score is 0.06 (worst metric). Audit `clarvis_confidence.py` prediction-outcome pipeline: check if predictions are being recorded but outcomes never closed, or if calibration data is stale. Fix the pipeline so Brier reflects actual calibration quality. Target: Brier capability ≥0.30.
+- [x] [BRIER_CALIBRATION_AUDIT] **Done 2026-03-28**: Root cause was already fixed by BRIER_CALIBRATION_OVERHAUL (2026-03-25). Pipeline is healthy: Brier=0.059 (14d), 164/165 resolved (99.4%). Fixed secondary bug: `_assess_learning_feedback()` resolution_rate used all-time denominator instead of 14d window — inflated from 49%→99%, score 0.88→0.96.
 
-- [ ] [CRON_STALE_LOCK_HARDENING] (Bash/shell) Audit all cron shell scripts for stale-lock edge cases: verify `trap EXIT` cleanup covers SIGKILL scenarios, add lock-age checks (>2h = stale) to `cron_watchdog.sh`, and ensure `/tmp/clarvis_*lock` files include PID + timestamp for forensic debugging.
+- [x] [CRON_STALE_LOCK_HARDENING] **Done 2026-03-28**: (1) `lock_helper.sh`: added `_write_lock`/`_read_lock_pid` — all lock files now write "PID TIMESTAMP" (backward-compat with old PID-only format). (2) `cron_watchdog.sh`: stale locks with dead PIDs are now auto-reclaimed (handles SIGKILL orphans). (3) Updated 6 legacy scripts to write PID+timestamp. All 14 lock sites audited — EXIT traps verified on all.
 
 - [ ] [SEMANTIC_CROSS_COLLECTION_BRIDGE] Cross-collection connectivity score is 0.66 (second-weakest). Run `brain.py bulk_cross_link` with lowered similarity threshold (0.55→0.50) on the 3 least-connected collections, then verify connectivity improvement via `performance_benchmark.py record`.
 

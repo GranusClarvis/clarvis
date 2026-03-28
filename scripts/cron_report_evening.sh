@@ -8,7 +8,7 @@ if [ -f "$LOCKFILE" ]; then
     pid=$(cat "$LOCKFILE" 2>/dev/null)
     if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then exit 0; fi
 fi
-echo $$ > "$LOCKFILE"
+echo "$$ $(date -u +%Y-%m-%dT%H:%M:%S)" > "$LOCKFILE"
 trap 'rm -f "$LOCKFILE"' EXIT
 
 python3 << 'PYEOF'

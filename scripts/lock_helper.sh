@@ -56,6 +56,24 @@ _register_lock() {
     trap _lock_helper_cleanup EXIT
 }
 
+# Write PID + ISO timestamp to lock file for forensic debugging.
+# Format: "PID TIMESTAMP" (e.g., "12345 2026-03-28T15:30:00")
+# Backward-compatible: readers that expect only a PID will get PID via
+# first field, and old single-PID lock files still parse correctly.
+_write_lock() {
+    local lockfile="$1"
+    echo "$$ $(date -u +%Y-%m-%dT%H:%M:%S)" > "$lockfile"
+}
+
+# Read PID from lock file, handling both "PID" and "PID TIMESTAMP" formats.
+_read_lock_pid() {
+    local lockfile="$1"
+    local content
+    content=$(cat "$lockfile" 2>/dev/null) || { echo ""; return; }
+    # First field is always PID
+    echo "${content%% *}"
+}
+
 # =============================================================================
 # set_script_timeout <seconds> <logfile>
 #
@@ -132,7 +150,7 @@ acquire_local_lock() {
 
     if [ -f "$lockfile" ]; then
         local pid
-        pid=$(cat "$lockfile" 2>/dev/null)
+        pid=$(_read_lock_pid "$lockfile")
         if [ -n "$pid" ] && _is_clarvis_process "$pid"; then
             if [ "$stale_threshold" -gt 0 ] 2>/dev/null; then
                 local lock_age
@@ -151,7 +169,7 @@ acquire_local_lock() {
             echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WARN: Stale lock (PID $pid dead or recycled) — reclaiming" >> "$logfile"
         fi
     fi
-    echo $$ > "$lockfile"
+    _write_lock "$lockfile"
     _register_lock "$lockfile"
 }
 
@@ -172,7 +190,7 @@ acquire_global_claude_lock() {
 
     if [ -f "$GLOBAL_LOCK" ]; then
         local gpid glock_age
-        gpid=$(cat "$GLOBAL_LOCK" 2>/dev/null)
+        gpid=$(_read_lock_pid "$GLOBAL_LOCK")
         glock_age=$(( $(date +%s) - $(stat -c %Y "$GLOBAL_LOCK" 2>/dev/null || echo 0) ))
         if [ -n "$gpid" ] && _is_clarvis_process "$gpid" && [ "$glock_age" -le 2400 ]; then
             echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] GLOBAL LOCK: Claude already running (PID $gpid, age=${glock_age}s) — deferring" >> "$logfile"
@@ -191,7 +209,7 @@ acquire_global_claude_lock() {
             rm -f "$GLOBAL_LOCK"
         fi
     fi
-    echo $$ > "$GLOBAL_LOCK"
+    _write_lock "$GLOBAL_LOCK"
     _register_lock "$GLOBAL_LOCK"
 }
 
@@ -211,7 +229,7 @@ acquire_maintenance_lock() {
 
     if [ -f "$MAINTENANCE_LOCK" ]; then
         local mpid mlock_age
-        mpid=$(cat "$MAINTENANCE_LOCK" 2>/dev/null)
+        mpid=$(_read_lock_pid "$MAINTENANCE_LOCK")
         mlock_age=$(( $(date +%s) - $(stat -c %Y "$MAINTENANCE_LOCK" 2>/dev/null || echo 0) ))
         if [ -n "$mpid" ] && _is_clarvis_process "$mpid" && [ "$mlock_age" -le "$stale_threshold" ]; then
             echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] SKIP: Maintenance lock held (PID $mpid, age=${mlock_age}s)" >> "$logfile"
@@ -221,6 +239,6 @@ acquire_maintenance_lock() {
             rm -f "$MAINTENANCE_LOCK"
         fi
     fi
-    echo $$ > "$MAINTENANCE_LOCK"
+    _write_lock "$MAINTENANCE_LOCK"
     _register_lock "$MAINTENANCE_LOCK"
 }

@@ -14,7 +14,7 @@ if [ -f "$LOCKFILE" ]; then
         exit 0
     fi
 fi
-echo $$ > "$LOCKFILE"
+echo "$$ $(date -u +%Y-%m-%dT%H:%M:%S)" > "$LOCKFILE"
 trap 'rm -f "$LOCKFILE"' EXIT
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Weekly cleanup started ==="
