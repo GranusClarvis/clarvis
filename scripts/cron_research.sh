@@ -356,7 +356,9 @@ if [ "$TASK_EXIT" -eq 0 ]; then
     # Also pick up files Claude Code wrote to memory/research/ root DURING THIS RUN
     # (despite instructions) and move them into the run dir for unified processing.
     # Only move files newer than the run start to avoid swallowing unrelated historical files.
-    RUN_START_EPOCH=$(date -u -d "$RUN_ID" +%s 2>/dev/null || date -u +%s)
+    # RUN_ID format is YYYY-MM-DD-HHMMSS — rewrite to YYYY-MM-DD HH:MM:SS for date -d
+    RUN_ID_PARSED=$(echo "$RUN_ID" | sed 's/\([0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}\)-\([0-9]\{2\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)/\1 \2:\3:\4/')
+    RUN_START_EPOCH=$(date -u -d "$RUN_ID_PARSED" +%s 2>/dev/null || date -u +%s)
     for stray in memory/research/*.md; do
         [ -f "$stray" ] || continue
         fname=$(basename "$stray")

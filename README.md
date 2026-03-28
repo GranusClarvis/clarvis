@@ -140,7 +140,7 @@ flowchart TB
 ## Core Components
 
 ### ClarvisDB Brain
-Hybrid vector-graph memory system. ChromaDB for semantic search + relationship graph for structured knowledge. 10 specialized collections (~2400 memories, ~134k graph edges), ONNX MiniLM embeddings, fully local. No external API calls.
+Hybrid vector-graph memory system. ChromaDB for semantic search + relationship graph for structured knowledge. 10 specialized collections (~2600 memories, ~106k graph edges), ONNX MiniLM embeddings, fully local. No external API calls.
 
 ### Heartbeat Pipeline
 The core action cycle: **gate** (should we wake?) → **preflight** (score attention, select task, build context) → **execute** (code agent runs the task) → **postflight** (encode episode, update metrics, store learnings).
@@ -251,7 +251,7 @@ Clarvis is in **Phase 3 — Autonomy Expansion**, targeting open-source readines
 
 | Area | Status | Notes |
 |------|--------|-------|
-| Brain (ClarvisDB) | Stable | 10 collections, ~2400 memories, weekly CLR benchmark scoring ~0.82 |
+| Brain (ClarvisDB) | Stable | 10 collections, ~2600 memories, weekly CLR benchmark scoring ~0.82 |
 | Heartbeat Pipeline | Stable | 12x/day autonomous execution via cron |
 | Agent Orchestrator | Active | Multi-project delegation with isolated workspaces |
 | Self-Model & Metrics | Stable | 8-dimension performance index, trajectory evaluation |
@@ -280,7 +280,7 @@ See [`docs/CLARVIS_MODES_AND_REPOS.md`](docs/CLARVIS_MODES_AND_REPOS.md) for the
 ## Known Limitations
 
 - **Single-host design** — built for a dedicated server with systemd, not containerized
-- **CPU-only embeddings** — ONNX MiniLM on CPU (~7.5s per full brain query across 10 collections)
+- **CPU-only embeddings** — ONNX MiniLM on CPU (~270ms avg per brain query via parallel collection search)
 - **Path defaults** — some scripts default to a fixed workspace path (override with `CLARVIS_WORKSPACE` env var)
 - **Test fragmentation** — tests spread across `tests/`, `clarvis/tests/`, `packages/*/tests/`
 
@@ -313,4 +313,4 @@ MIT — see [pyproject.toml](pyproject.toml) for details.
 
 ---
 
-*Last updated: 2026-03-26*
+*Last updated: 2026-03-28*

@@ -22,10 +22,8 @@ _Queue audited on 2026-03-24 evening. Removed 3 completed items (A5_A7, TEMPORAL
 ### Milestone C — Repo / Open-Source Readiness (by 2026-03-26) ✅ COMPLETE
 
 ### Milestone D — Public Surface (by 2026-03-29)
-- [x] [D1_WEBSITE_SMOKE] Verify website v0 serves all 5 pages + /api/public/status returns valid JSON. (Done 2026-03-28 — all 5 pages 200, status JSON valid, no broken internal links)
-- [x] [D2_SECRETS_SCAN] Add gitleaks secrets scanning to CI. Manual scan confirmed no real secrets in tracked files. (Done 2026-03-28 — added gitleaks-action job to ci.yml + .gitleaks.toml allowlist for doc placeholders)
-- [ ] [D3_STATUS_JSON_FRESH] Ensure `generate_status_json.py` cron produces fresh `website/static/status.json` (or verify it's already running).
-- [ ] [D4_README_FINAL] Review README.md — verify install instructions work, remove any internal-only references, ensure metrics table is current.
+- [x] [D3_STATUS_JSON_FRESH] Ensure `generate_status_json.py` cron produces fresh `website/static/status.json` (or verify it's already running). _(2026-03-28: added daily cron at 05:50, regenerated status.json)_
+- [x] [D4_README_FINAL] Review README.md — verify install instructions work, remove any internal-only references, ensure metrics table is current. _(2026-03-28: updated memory count 2400→2600, query speed 7.5s→270ms, no internal refs found)_
 
 ### Milestone E — Final Validation (by 2026-03-31)
 - [ ] [E1_CI_GREEN] All CI checks pass on main (lint + test). Fix any failures.
@@ -93,8 +91,7 @@ _(Completed items archived.)_
 
 ### P0 — Found in 2026-03-27 evening scan
 
-- [x] [LOCKFILE_PID_PARSE_REGRESSION] Fix `scripts/cron_report_morning.sh` and `scripts/cron_report_evening.sh` to parse the new `PID TIMESTAMP` lockfile format before calling `kill -0`. (Done 2026-03-28 — also fixed same bug in cron_absolute_zero.sh, cron_cleanup.sh, safe_update.sh)
-- [ ] [RESEARCH_ROOT_ARTIFACT_SWEEP_CUTOFF] Fix `scripts/cron_research.sh` run-start cutoff parsing. `RUN_ID=$(date +%Y-%m-%d-%H%M%S)` is not reliably parseable by `date -d`, so the fallback to `now` can miss/misclassify root artifacts created earlier in the same run.
+- [x] [RESEARCH_ROOT_ARTIFACT_SWEEP_CUTOFF] Fix `scripts/cron_research.sh` run-start cutoff parsing. `RUN_ID=$(date +%Y-%m-%d-%H%M%S)` is not reliably parseable by `date -d`, so the fallback to `now` can miss/misclassify root artifacts created earlier in the same run. _(2026-03-28: sed-transforms RUN_ID to insert colons before date -d)_
 
 ### P1 — Found in 2026-03-28 evolution scan
 

@@ -4,42 +4,42 @@
     "pending_mode": null
   },
   "queue": {
-    "pending": 7,
+    "pending": 14,
     "in_progress": 3,
     "done": 0
   },
   "benchmarks": {
     "clr": {
-      "clr": 0.82,
+      "clr": 0.845,
       "baseline_clr": 0.19,
-      "value_add": 0.63,
+      "value_add": 0.655,
       "gate_pass": true,
       "dimensions": {
-        "memory_quality": 0.884,
+        "memory_quality": 0.948,
         "retrieval_precision": 0.933,
-        "prompt_context": 0.69,
-        "task_success": 0.782,
-        "autonomy": 0.747,
+        "prompt_context": 0.685,
+        "task_success": 0.787,
+        "autonomy": 0.836,
         "efficiency": 0.984,
-        "integration_dynamics": 0.799
+        "integration_dynamics": 0.83
       },
-      "timestamp": "2026-03-26T05:45:13.897799+00:00"
+      "timestamp": "2026-03-28T05:45:13.266822+00:00"
     },
     "pi": {
-      "pi": 1.0,
-      "dimensions": 14,
-      "timestamp": "2026-03-26T05:45:01.847937+00:00"
+      "pi": 0.9974,
+      "dimensions": 15,
+      "timestamp": "2026-03-28T05:45:01.561812+00:00"
     }
   },
   "brain": {
-    "total_memories": 2421,
+    "total_memories": 2654,
     "collections": 10
   },
   "episodes": {
-    "success_rate": 0.796,
-    "total": 334,
+    "success_rate": 0.812,
+    "total": 362,
     "breakdown": {
-      "success": 266,
+      "success": 294,
       "soft_failure": 45,
       "failure": 10,
       "timeout": 13
@@ -47,6 +47,14 @@
   },
   "uptime_since": "2026-02-18 12:20:37",
   "recent_completions": [
+    {
+      "tag": "LOAD_SCALING_OPTIMIZE",
+      "status": "success"
+    },
+    {
+      "tag": "BENCHMARK_LOAD_NOISE_FLOOR",
+      "status": "success"
+    },
     {
       "tag": "A5_A7_RUNTIME_MODE_AND_CLI_FINISH",
       "status": "success"
@@ -58,15 +66,7 @@
     {
       "tag": "P0_BACKFILL_CREATED_EPOCH_SENTINEL_FIX",
       "status": "success"
-    },
-    {
-      "tag": "C11_CLARVIS_DB_EXTRACTION_PLAN",
-      "status": "success"
-    },
-    {
-      "tag": "RESEARCH_NEW_CONSCIOUSNESS_ARCHITECTURES",
-      "status": "success"
     }
   ],
-  "updated_at": "2026-03-26T09:06:25.300792+00:00"
+  "updated_at": "2026-03-28T22:01:44.039857+00:00"
 }
