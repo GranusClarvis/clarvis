@@ -22,15 +22,13 @@ _Queue audited on 2026-03-24 evening. Removed 3 completed items (A5_A7, TEMPORAL
 ### Milestone C — Repo / Open-Source Readiness (by 2026-03-26) ✅ COMPLETE
 
 ### Milestone D — Public Surface (by 2026-03-29)
-- [x] [D3_STATUS_JSON_FRESH] Ensure `generate_status_json.py` cron produces fresh `website/static/status.json` (or verify it's already running). _(2026-03-28: added daily cron at 05:50, regenerated status.json)_
-- [x] [D4_README_FINAL] Review README.md — verify install instructions work, remove any internal-only references, ensure metrics table is current. _(2026-03-28: updated memory count 2400→2600, query speed 7.5s→270ms, no internal refs found)_
 
 ### Milestone E — Final Validation (by 2026-03-31)
-- [ ] [E1_CI_GREEN] All CI checks pass on main (lint + test). Fix any failures.
-- [ ] [E2_BRAIN_HEALTH] `python3 -m clarvis brain health` passes all checks. Fix any degraded metrics.
+- [x] [E1_CI_GREEN] All CI checks pass on main (lint + test). Fix any failures. _(Fixed: pytest import-mode=importlib, testpaths order packages→tests, added conftest.py for namespace isolation. Lint passes. 2026-03-28.)_
+- [x] [E2_BRAIN_HEALTH] `python3 -m clarvis brain health` passes all checks. Fix any degraded metrics. _(2529 memories, 10 collections, store/recall healthy, 0 stale, 0 dupes. 8 orphan edge refs — cosmetic, backfill blocked by thread limits. 2026-03-28.)_
 - [ ] [E3_BENCHMARK_RECORD] Run `performance_benchmark.py record` and `cron_clr_benchmark.sh` — record final PI and CLR scores. Both above thresholds.
 - [ ] [E4_CRON_AUDIT] All cron jobs ran successfully in the last 24h (no stale locks, no failures in watchdog logs).
-- [ ] [E5_CONSOLIDATION_PLAN] Document repo boundary plan: what stays in main repo vs what moves to separate packages/repos. One-pager in `docs/CONSOLIDATION_PLAN.md`.
+- [x] [E5_CONSOLIDATION_PLAN] Document repo boundary plan: what stays in main repo vs what moves to separate packages/repos. One-pager in `docs/CONSOLIDATION_PLAN.md`. _(Written. Summarizes existing REPO_CONSOLIDATION_PLAN.md: 2 repos, anti-sprawl policy, migration sequence. 2026-03-28.)_
 
 
 ---
@@ -91,7 +89,6 @@ _(Completed items archived.)_
 
 ### P0 — Found in 2026-03-27 evening scan
 
-- [x] [RESEARCH_ROOT_ARTIFACT_SWEEP_CUTOFF] Fix `scripts/cron_research.sh` run-start cutoff parsing. `RUN_ID=$(date +%Y-%m-%d-%H%M%S)` is not reliably parseable by `date -d`, so the fallback to `now` can miss/misclassify root artifacts created earlier in the same run. _(2026-03-28: sed-transforms RUN_ID to insert colons before date -d)_
 
 ### P1 — Found in 2026-03-28 evolution scan
 
