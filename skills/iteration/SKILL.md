@@ -29,6 +29,28 @@ In ONE job, run N sequential cycles by invoking the same bash entrypoint used by
 
 This preserves the exact preflight → Claude Code → postflight pipeline, queue selection, episode encoding, and metrics.
 
+## Examples
+
+**User says:** `/iteration2`
+
+The skill creates a Gateway cron job that runs 2 back-to-back evolution cycles:
+
+```
+[09:15:01] Iteration 1/2 — acquiring global lock...
+[09:15:02] Preflight: selected task [ASSEMBLY_DECOMPOSE] (score=0.38)
+[09:15:03] Context brief: 580 tokens (standard tier)
+[09:27:44] Postflight: episode encoded, confidence=0.85
+[09:27:45] Iteration 1/2 complete (762s)
+
+[09:27:46] Iteration 2/2 — acquiring global lock...
+[09:27:47] Preflight: selected task [SKILL_DOCS_EXAMPLES] (score=0.36)
+[09:27:48] Context brief: 420 tokens (standard tier)
+[09:35:12] Postflight: episode encoded, confidence=0.90
+[09:35:13] Iteration 2/2 complete (447s)
+
+All 2 iterations complete. Total: 1209s.
+```
+
 ## Guardrails
 - Respect the global Claude lock used by cron scripts (the script already enforces it).
 - If a run is skipped due to lock conflict, stop the chain (don’t spin).

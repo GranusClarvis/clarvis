@@ -152,6 +152,22 @@ class TestContextCompressor:
         assert "input_chars" in stats
         assert "output_chars" in stats
         assert stats["output_chars"] <= stats["input_chars"]
+        assert "mmr_applied" in stats
+
+    def test_compress_text_mmr_dedups_redundant_lines(self):
+        from clarvis.context.compressor import compress_text
+        text = "\n".join([
+            "Critical metric improved from 0.50 to 0.55 after redundancy removal.",
+            "Critical metric improved from 0.50 to 0.55 after redundancy removal!",
+            "Compression target remains 0.55 for the brief pipeline.",
+            "Compression target remains 0.55 for the brief pipeline with extra wording.",
+            "Distinct lesson: MMR helps diversify retained sentences.",
+            "Distinct lesson: MMR helps diversify retained sentences in summaries.",
+        ] * 4)
+        compressed, stats = compress_text(text, ratio=0.5)
+        assert stats["mmr_applied"] is True
+        assert len(compressed) < len(text)
+        assert compressed.count("Critical metric improved") <= 1
 
     def test_compress_text_short_passthrough(self):
         from clarvis.context.compressor import compress_text

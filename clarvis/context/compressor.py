@@ -179,7 +179,7 @@ def tfidf_extract(text, ratio=0.3, min_sentences=2, max_sentences=20):
 
 
 def compress_text(text, ratio=0.3):
-    """Compress arbitrary text via extractive TF-IDF + deduplication.
+    """Compress arbitrary text via extractive TF-IDF + MMR + deduplication.
 
     Returns (compressed_text, stats_dict).
     """
@@ -189,7 +189,13 @@ def compress_text(text, ratio=0.3):
     input_chars = len(text)
     extracted = tfidf_extract(text, ratio=ratio)
 
-    lines = extracted.split('\n')
+    # Stage 2: MMR post-pass over extracted sentences to reduce redundancy
+    lines = [line.strip() for line in extracted.split('\n') if line.strip()]
+    if len(lines) > 1:
+        mmr_items = [{"document": line, "distance": 0.0} for line in lines]
+        lines = [item["document"] for item in mmr_rerank(mmr_items, text, lambda_param=0.35, n=len(lines))]
+
+    # Stage 3: Exact-ish core dedup to catch residual near-duplicates
     seen_cores = set()
     deduped = []
     for line in lines:
@@ -209,6 +215,7 @@ def compress_text(text, ratio=0.3):
         "ratio": round(actual_ratio, 3),
         "sentences_in": len(_split_sentences(text)),
         "sentences_out": len(deduped),
+        "mmr_applied": len(lines) > 1,
     }
 
 

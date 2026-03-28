@@ -148,6 +148,48 @@ Common property formats for database items:
 - **Parent in responses:** Pages show `parent.data_source_id` alongside `parent.database_id`
 - **Finding the data_source_id:** Search for the database, or call `GET /v1/data_sources/{data_source_id}`
 
+## Examples
+
+**Find a page by name and read it:**
+```bash
+NOTION_KEY=$(cat ~/.config/notion/api_key)
+# Search for the page
+curl -s -X POST "https://api.notion.com/v1/search" \
+  -H "Authorization: Bearer $NOTION_KEY" \
+  -H "Notion-Version: 2025-09-03" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "Meeting Notes"}' | python3 -c "
+import sys, json
+results = json.load(sys.stdin)['results']
+for r in results[:3]:
+    title = r.get('properties',{}).get('title',{}).get('title',[{}])[0].get('text',{}).get('content','(untitled)')
+    print(f'{r[\"id\"]}: {title}')
+"
+```
+```
+a1b2c3d4-...: Meeting Notes March 2026
+e5f6g7h8-...: Meeting Notes February 2026
+```
+
+**Add a task to a database:**
+```bash
+curl -s -X POST "https://api.notion.com/v1/pages" \
+  -H "Authorization: Bearer $NOTION_KEY" \
+  -H "Notion-Version: 2025-09-03" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "parent": {"database_id": "abc123..."},
+    "properties": {
+      "Name": {"title": [{"text": {"content": "Review PR #42"}}]},
+      "Status": {"select": {"name": "Todo"}},
+      "Due": {"date": {"start": "2026-03-30"}}
+    }
+  }' | python3 -c "import sys,json; print('Created:', json.load(sys.stdin)['id'])"
+```
+```
+Created: f9e8d7c6-...
+```
+
 ## Notes
 
 - Page/database IDs are UUIDs (with or without dashes)

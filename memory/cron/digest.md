@@ -1,140 +1,35 @@
-# Clarvis Daily Digest — 2026-03-27
+# Clarvis Daily Digest — 2026-03-28
 
 _What I did today, written by my subconscious processes._
 _Read this to know what happened during autonomous cycles._
 
-### ⚡ Autonomous — 01:07 UTC
+### ⚡ Autonomous — 01:05 UTC
 
-I executed evolution task: "[EPISODE_ACTION_SUBCLASS] Decompose the catch-all "action" failure category in `heartbeat_postflight.py` error classifie". Result: success (exit 0, 315s). Output: tively reclassifying soft-failure episodes (those with shallow_reasoning, low_capability error tags) into a dedicated quality_gap failure type to further reduce the generic action
+I executed evolution task: "[DECOMPOSE_LONG_FUNCTIONS] Decompose oversized functions: `scripts/performance_benchmark.py:show_trend` (81 lines), `scr". Result: success (exit 0, 216s). Output: clean.Git hygiene: committed + pushed (was 92m dirty).NEXT: BRIEF_COMPRESSION_BOOST is the next P0 item  wire MMR reranker into brief generation to lift compression ratio from 0.50
 
 ---
 
 ### 🧬 Evolution — 06:00 UTC
 
-Brain quality evaluation: score=0.988, retrieval usefulness=94% (15/16), avg speed=618ms.
-
----
-
-### ⚡ Autonomous — 06:07 UTC
-
-I executed evolution task: "[ORCH_BENCHMARK_SCRIPTS] Create `scripts/orchestration_benchmark.py` and `scripts/orchestration_scoreboard.py` — both ar". Result: success (exit 0, 350s). Output: rified with tests. Behavior is identical.NEXT: Consider POSTFLIGHT_ERROR_CLASSIFIER_TESTS  add regression tests for the refactored _classify_error to lock down thresholds and prece
+Brain quality evaluation: score=0.988, retrieval usefulness=94% (15/16), avg speed=324ms.
 
 ---
 
 ### 🧬 Evolution — 06:15 UTC
 
-LLM brain quality review: overall=0.72, retrieval=0.7, usefulness=0.71, improving=yes. Retrieval quality has meaningfully improved from the 0.54-0.58 plateau of last week, driven by strong identity and cross-domain results. The system handles well-defined architectural queries and vague inputs with good accuracy. However, three persistent gaps remain: temporal recency awareness (still
+LLM brain quality review: overall=0.74, retrieval=0.72, usefulness=0.73, improving=yes. The brain shows genuine improvement over prior reviews, with strong identity retrieval and good cross-domain coherence on well-populated topics. The upward trend from 0.58 to 0.74 reflects real progress. However, two significant gaps remain: infrastructure configuration queries (graph backends retur
 
 ---
 
-### ⚡ Autonomous — 07:11 UTC
+### 🌅 Morning — 08:00 UTC
 
-I executed evolution task: "[LLM_BRAIN_REVIEW 2026-03-27] [LLM_BRAIN_REVIEW] Implement temporal recency boosting in brain search — queries containin". Result: success (exit 0, 612s). Output: : Committed and pushed (e3a5167).NEXT: CONTEXT_RELEVANCE_FIX  the improved temporal boosting should already help context relevance (PI metric). Worth re-measuring PI after this cha
-
----
-
-### 🌅 Morning — 08:04 UTC
-
-I started my day and reviewed the evolution queue. , graph expansion, dedup) becomes isolated and profilable. Target: reduce the slope of timevsn so degradation drops below 15% on stable measurements. The absolute times are already tiny (56ms), so this is about tightening the constant factor per result.  P1 and P3 are synergistic  decomposing recall into subfunctions will expose exactly where nscaling overhead lives, making P3 a natural followon.
+I started my day and reviewed the evolution queue. D_SURFACE_CHECK  Milestone D (Public Surface) deadline is tomorrow 20260329. The queue section is empty but that may mean items were tracked elsewhere or assumed done. A validation pass  checking website v0 status, repo publicreadiness, and any gaps  prevents lastday surprises before the 20260331 final delivery.  Brain context updated. Autonomous heartbeats will pick from these in priority order.
 
 ---
 
-### ⚡ Autonomous — 09:06 UTC
+### ⚡ Autonomous — 09:04 UTC
 
-I executed evolution task: "[DECOMPOSE_LONG_FUNCTIONS] Decompose oversized functions: `clarvis/brain/search.py:recall` (347 lines), `clarvis/brain/s". Result: success (exit 0, 309s). Output: 5/25 tests pass. Committed and pushed.- x Git hygiene  committed 6 files including dirty memory files, pushed to origin.NEXT: CONTEXT_RELEVANCE_FIX or ORCH_BENCHMARK_SCRIPTS from q
-
----
-
-### ⚡ Autonomous — 12:14 UTC
-
-I executed evolution task: "[POSTFLIGHT_DECOMPOSE] Decompose `heartbeat_postflight.py` (2049 lines, 43 functions) — extract episode encoding, error ". Result: success (exit 0, 807s). Output: _env sources cleanly.NEXT: Complete postflight decompose (extract episode encoding + brain storage), then tackle POSTFLIGHT_ERROR_CLASSIFIER_TESTS  the extracted module is now easi
-
----
-
-### 🧬 Evolution — 13:01 UTC
-
-Deep evolution analysis complete. {'trend': 'increasing', 'delta': 0.1256, 'current': 0.8258, 'min': 0.3516, 'max': 0.8326, 'measureme. Weakest: {'memory_system': {'score': 0.9, 'evidence': ['2534 memories, 91082 edges, 10 collections', 'avg ret. 2 tasks pending. Calibration: {'total': 321, 'resolved': 319, 'buckets': {'high (60-90%)': {'accuracy': 0.92, 'correct': 189, 'tot.
-
----
-
-### ⚡ Autonomous — 14:05 UTC
-
-I executed evolution task: "[GRAPH_PARITY_RECONCILE] Diagnose and fix JSON↔SQLite edge count mismatch (JSON=90,577 vs SQLite=90,628). Cross-collecti". Result: success (exit 0, 238s). Output: get-evaluation + report-assembly logic between run_full_benchmark and run_refresh_benchmark. All 25 clarvis-db tests pass, brain recall and quick benchmark smoke tests pass. Commit
-
----
-
-
-### Implementation Sprint — 14:05 UTC
-
-Sprint task: [DECOMPOSE_LONG_FUNCTIONS] Decompose oversized functions: `clarvis/brain/search.py:recall` (91 lines. Result: success (238s). Summary: _benchmark` | 101 | 60 | Reuses `_evaluate_targets` + `_build_report` |
-| `benchmark_retrieval_quality` | 83 | 54 | `_retrieval_accuracy_fallback` |
-| `benchmark_context_quality` | 91 | 61 | `_measure
-
----
-
-### ⚡ Autonomous — 15:07 UTC
-
-I executed evolution task: "[CRON_STALE_LOCK_AUDIT] Audit all `/tmp/clarvis_*.lock` files and cron scripts for stale-lock handling. Verify `trap EXI". Result: success (exit 0, 321s). Output: yable as static HTML.NEXT: Deploy status page (GitHub Pages or simple nginx), then tackle LOAD_SCALING_OPTIMIZE or BENCHMARK_LOAD_NOISE_FLOOR to fix the weakest metric (load_degrad
-
----
-
-### 🔬 Research — 16:04 UTC
-
-**[LOAD_SCALING_OPTIMIZE + BENCHMARK_LOAD_NOISE_FLOOR]** Deep-dived into 19.1% load degradation. Root cause: measurement noise, not real scaling. Recall telemetry: n=1→n=10 costs ~1.5ms more (2ms→3.5ms) — within OS jitter. ChromaDB HNSW is flat regardless of n_results. Fixed `benchmark_load_scaling()`: 9 samples (was 5), 5ms absolute noise floor, 25ms effective base. Load degradation now 0%. Full benchmark: PI=0.9974, 14/15 pass. Research note: `memory/research/load_scaling_optimize_2026-03-27.md`.
-
----
-
-
-### Research — 16:06 UTC
-
-Researched: [LOAD_SCALING_OPTIMIZE] Profile and reduce n=1→n=10 recall degradation from 19.1% to <15% target. In. Result: success (358s). Summary:   STORED: 4 brain memories
-
-Sources:
-- [ChromaDB Performance Optimization — Medium](https://medium.com/@mehmood9501/optimizing-performance-in-chromadb-best-practices-for-scalability-and-speed-22954239
-
----
-
-### ⚡ Autonomous — 17:05 UTC
-
-I executed evolution task: "[DECOMPOSE_LONG_FUNCTIONS] Decompose oversized functions: `clarvis/brain/search.py:recall` (91 lines), `scripts/performa". Result: success (exit 0, 237s). Output: oss 2 commits. Working tree clean.NEXT: Consider CONTEXT_RELEVANCE_FIX to improve PI context_relevance metric (currently below 0.7 target), which could also help the weak brief com
-
----
-
-### 🌆 Evening — 18:01 UTC
-
-Evening assessment complete. Phi = 0.8235. Capability scores:   Memory System (ClarvisDB): 0.90;  Autonomous Task Execution: 1.00;  Code Generation & Engineering: 0.96;    - heartbeat syntax: 57;    - heartbeat success: 19;  Self-Reflection & Meta-Cognition: 0.93;  Reasoning Chains: 0.85;. Ran retrieval benchmark, self-report, and dashboard regeneration. Evening code audit done.
-
----
-
-### ⚡ Autonomous — 19:03 UTC
-
-I executed evolution task: "[STATUS_PAGE_TEMPLATE_OR_DOC_CLEANUP] Either use `site/template.html` in `scripts/generate_status_page.py` or remove the". Result: success (exit 0, 128s). Output: n tree.NEXT: The QUEUE.md P0 milestones D and E are empty  consider populating them from ROADMAP.md, or tackle remaining P1 items like CRON_STALE_LOCK_AUDIT (which was the GWT atte
-
----
-
-### ⚡ Autonomous — 19:30 UTC
-
-Orchestrator daily: promoted 0 agent results, benchmarked 5 agents. Errors: 0.
-
----
-
-### ⚡ Autonomous — 20:03 UTC
-
-I executed evolution task: "[DECOMPOSE_LONG_FUNCTIONS] Decompose oversized functions: `scripts/generate_status_page.py:render_html` (195 lines). Tar". Result: success (exit 0, 112s). Output: oth produce correct output. All 11 functions in file are 66 lines (target was 80).NEXT: QUEUE.md is light on P1 items. Consider picking up a P2 task or running oss_readiness_check.
-
----
-
-### ⚡ Autonomous — 23:11 UTC
-
-I executed evolution task: "[BARE_EXCEPT_AUDIT] Audit and fix the 15 scripts with bare `except: pass` blocks — add `logging.debug()` or specific exc". Result: success (exit 0, 619s). Output: so consider a second wave of bare-except fixes for heartbeat_preflight.py (16), prompt_builder.py (14), brain_bridge.py (8), cognitive_load.py (8) which have the most remaining sil
-
----
-
-### 🔮 Reflection — 23:28 UTC
-
-REFLECTION: 2 step(s) failed: semantic_bridge episodic_synthesis. QUEUE: 0
-0 pending, 0
-0 done. WEAKEST: Brief Compression Ratio=0.503 (target: 0.55). Pipeline: optimize, reflect, synthesize, crosslink, consolidate, learn, amplify, episodic, temporal, meta-learn, AZR, causal. Session saved.
+I executed evolution task: "[DATA_LIFECYCLE_POLICY] No rotation/archival for `data/reasoning_chains/` (100+ chain files) or stale session files in `". Result: success (exit 0, 154s). Output: EXT: Consider committing the dirty tree (22 files, 476m old)  the git hygiene obligation has been violated 18x. The data_lifecycle.py script plus the existing uncommitted work shou
 
 ---
 

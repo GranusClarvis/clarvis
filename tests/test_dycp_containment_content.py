@@ -6,14 +6,14 @@ relevant content but non-matching names were wrongly suppressed.
 """
 
 import pytest
-from clarvis.context.assembly import (
+from clarvis.context.dycp import (
     _dycp_task_containment_fast,
     _section_content_cache,
     should_suppress_section,
     DYCP_DEFAULT_SUPPRESS,
     DYCP_DEFAULT_SUPPRESS_CONTAINMENT_OVERRIDE,
 )
-import clarvis.context.assembly as assembly
+import clarvis.context.dycp as assembly
 
 
 @pytest.fixture(autouse=True)
@@ -133,7 +133,7 @@ def test_suppress_still_works_with_irrelevant_cache():
 
 def test_hard_suppress_ignores_content_cache():
     """Hard-suppressed section stays suppressed even with relevant cached content."""
-    from clarvis.context.assembly import HARD_SUPPRESS
+    from clarvis.context.dycp import HARD_SUPPRESS
     section = "meta_gradient"
     assert section in HARD_SUPPRESS
 

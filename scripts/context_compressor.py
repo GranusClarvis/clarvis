@@ -242,10 +242,11 @@ def tfidf_extract(text, ratio=0.3, min_sentences=2, max_sentences=20):
 
 
 def compress_text(text, ratio=0.3):
-    """Public API: compress arbitrary text via extractive-then-abstractive pipeline.
+    """Public API: compress arbitrary text via extractive TF-IDF + MMR + dedup.
 
-    Stage 1 (extractive): TF-IDF sentence selection
-    Stage 2 (abstractive): merge adjacent short sentences, remove redundancy
+    Stage 1: TF-IDF sentence selection
+    Stage 2: MMR reranking to reduce semantic redundancy
+    Stage 3: core-string dedup to catch residual near-duplicates
 
     Returns (compressed_text, compression_stats) tuple.
     """
@@ -257,8 +258,13 @@ def compress_text(text, ratio=0.3):
     # Stage 1: Extractive — select key sentences
     extracted = tfidf_extract(text, ratio=ratio)
 
-    # Stage 2: Light abstractive — deduplicate near-identical lines
-    lines = extracted.split('\n')
+    # Stage 2: MMR post-pass over extracted sentences to reduce redundancy
+    lines = [line.strip() for line in extracted.split('\n') if line.strip()]
+    if len(lines) > 1:
+        mmr_items = [{"document": line, "distance": 0.0} for line in lines]
+        lines = [item["document"] for item in mmr_rerank(mmr_items, text, lambda_param=0.35, n=len(lines))]
+
+    # Stage 3: Light abstractive — deduplicate near-identical lines
     seen_cores = set()
     deduped = []
     for line in lines:
@@ -278,6 +284,7 @@ def compress_text(text, ratio=0.3):
         "ratio": round(actual_ratio, 3),
         "sentences_in": len(_split_sentences(text)),
         "sentences_out": len(deduped),
+        "mmr_applied": len(lines) > 1,
     }
 
 
@@ -1125,7 +1132,7 @@ def generate_tiered_brief(
             beginning.append("RELEVANT KNOWLEDGE:")
             max_chars = 600 if tier == "full" else 350
             if len(knowledge_hints) > max_chars * 1.5:
-                compressed_knowledge, _ = compress_text(knowledge_hints, ratio=0.3)
+                compressed_knowledge, _ = compress_text(knowledge_hints, ratio=0.25)
                 beginning.append(compressed_knowledge[:max_chars])
             else:
                 beginning.append(knowledge_hints[:max_chars])
@@ -1137,7 +1144,7 @@ def generate_tiered_brief(
             # Compress workspace context if it exceeds budget
             ws_budget = 500 if tier == "full" else 300
             if len(workspace_ctx) > ws_budget * 1.5:
-                workspace_ctx, _ = compress_text(workspace_ctx, ratio=0.3)
+                workspace_ctx, _ = compress_text(workspace_ctx, ratio=0.25)
             beginning.append(workspace_ctx[:ws_budget])
         else:
             # Fallback to flat spotlight if workspace is empty
@@ -1197,7 +1204,7 @@ def generate_tiered_brief(
         max_chars = budget["episodes"] * 4  # ~4 chars per token
         # Compress episodic hints if verbose
         if len(episodic_hints) > max_chars * 1.5:
-            compressed_episodes, _ = compress_text(episodic_hints, ratio=0.3)
+            compressed_episodes, _ = compress_text(episodic_hints, ratio=0.25)
             end.append(compressed_episodes[:max_chars])
         else:
             end.append(episodic_hints[:max_chars])

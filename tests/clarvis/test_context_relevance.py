@@ -451,16 +451,18 @@ class TestRegenerateReport:
 
 # === Feedback Loop: Relevance-Weighted Budget Adjustment ===
 
-from clarvis.context.assembly import (
+from clarvis.context.budgets import (
     load_relevance_weights,
     get_adjusted_budgets,
-    dycp_prune_brief,
-    _dycp_task_containment,
-    DYCP_PROTECTED_SECTIONS,
     TIER_BUDGETS,
     BUDGET_FLOOR,
     BUDGET_CEILING,
-    _BUDGET_TO_SECTIONS,
+    BUDGET_TO_SECTIONS as _BUDGET_TO_SECTIONS,
+)
+from clarvis.context.dycp import (
+    dycp_prune_brief,
+    _dycp_task_containment,
+    DYCP_PROTECTED_SECTIONS,
 )
 
 
@@ -492,9 +494,9 @@ class TestDyCPTaskContainment:
 class TestDyCPPruneBrief:
     def test_prunes_irrelevant_sections(self, monkeypatch):
         """Sections with low historical score AND low task overlap are pruned."""
-        import clarvis.context.assembly as asm
+        import clarvis.context.dycp as dycp_mod
         # Mock historical means: meta_gradient and brain_goals are weak
-        monkeypatch.setattr(asm, "_load_historical_section_means", lambda: {
+        monkeypatch.setattr(dycp_mod, "_load_historical_section_means", lambda: {
             "meta_gradient": 0.05,
             "brain_goals": 0.08,
             "knowledge": 0.20,
@@ -521,8 +523,8 @@ class TestDyCPPruneBrief:
 
     def test_keeps_sections_with_task_overlap(self, monkeypatch):
         """Even historically weak sections are kept if they overlap with task."""
-        import clarvis.context.assembly as asm
-        monkeypatch.setattr(asm, "_load_historical_section_means", lambda: {
+        import clarvis.context.dycp as dycp_mod
+        monkeypatch.setattr(dycp_mod, "_load_historical_section_means", lambda: {
             "synaptic": 0.10,  # historically weak
         })
 
@@ -539,8 +541,8 @@ class TestDyCPPruneBrief:
 
     def test_preserves_protected_sections(self, monkeypatch):
         """Protected sections are never pruned even with no overlap."""
-        import clarvis.context.assembly as asm
-        monkeypatch.setattr(asm, "_load_historical_section_means", lambda: {})
+        import clarvis.context.dycp as dycp_mod
+        monkeypatch.setattr(dycp_mod, "_load_historical_section_means", lambda: {})
 
         brief = (
             "SUCCESS CRITERIA: do something\n"
@@ -558,8 +560,8 @@ class TestDyCPPruneBrief:
 
     def test_passthrough_when_few_sections(self, monkeypatch):
         """Brief with <= 3 sections is returned unchanged."""
-        import clarvis.context.assembly as asm
-        monkeypatch.setattr(asm, "_load_historical_section_means", lambda: {
+        import clarvis.context.dycp as dycp_mod
+        monkeypatch.setattr(dycp_mod, "_load_historical_section_means", lambda: {
             "meta_gradient": 0.01,
         })
 
@@ -573,8 +575,8 @@ class TestDyCPPruneBrief:
 
     def test_tier2_zero_overlap_pruning(self, monkeypatch):
         """Tier 2: sections with zero overlap and borderline history get pruned."""
-        import clarvis.context.assembly as asm
-        monkeypatch.setattr(asm, "_load_historical_section_means", lambda: {
+        import clarvis.context.dycp as dycp_mod
+        monkeypatch.setattr(dycp_mod, "_load_historical_section_means", lambda: {
             "attention": 0.13,    # below Tier 0 threshold (0.15)
             "brain_context": 0.14,  # below Tier 0 threshold (0.15)
         })
@@ -678,15 +680,15 @@ class TestLoadRelevanceWeights:
 class TestGetAdjustedBudgets:
     def test_returns_static_budgets_when_no_data(self, monkeypatch):
         """Falls back to static TIER_BUDGETS when no relevance data exists."""
-        import clarvis.context.assembly as asm
-        monkeypatch.setattr(asm, "load_relevance_weights", lambda: {})
+        import clarvis.context.budgets as budgets_mod
+        monkeypatch.setattr(budgets_mod, "load_relevance_weights", lambda: {})
 
         result = get_adjusted_budgets("standard")
         assert result == TIER_BUDGETS["standard"]
 
     def test_adjusts_budgets_with_weights(self, monkeypatch):
         """Adjusts budgets using tiered adaptive caps with redistribution."""
-        import clarvis.context.assembly as asm
+        import clarvis.context.budgets as budgets_mod
         # Mock tiered weights: some full, some half, some zero
         mock_weights = {
             "decision_context": 1.0,   # full
@@ -696,7 +698,7 @@ class TestGetAdjustedBudgets:
             "episodes": 1.0,           # full
             "reasoning_scaffold": 0.5, # half
         }
-        monkeypatch.setattr(asm, "load_relevance_weights", lambda: mock_weights)
+        monkeypatch.setattr(budgets_mod, "load_relevance_weights", lambda: mock_weights)
 
         result = get_adjusted_budgets("standard")
         base = TIER_BUDGETS["standard"]
@@ -717,17 +719,17 @@ class TestGetAdjustedBudgets:
 
     def test_minimal_tier_unchanged(self, monkeypatch):
         """Minimal tier has all-zero budgets so should not change."""
-        import clarvis.context.assembly as asm
-        monkeypatch.setattr(asm, "load_relevance_weights", lambda: {"decision_context": 1.3})
+        import clarvis.context.budgets as budgets_mod
+        monkeypatch.setattr(budgets_mod, "load_relevance_weights", lambda: {"decision_context": 1.3})
 
         result = get_adjusted_budgets("minimal")
         assert result == TIER_BUDGETS["minimal"]
 
     def test_zero_budget_sections_pruned(self, monkeypatch):
         """Sections with scale=0.0 get zero budget (hard-pruned)."""
-        import clarvis.context.assembly as asm
+        import clarvis.context.budgets as budgets_mod
         mock_weights = {k: 0.0 for k in _BUDGET_TO_SECTIONS}
-        monkeypatch.setattr(asm, "load_relevance_weights", lambda: mock_weights)
+        monkeypatch.setattr(budgets_mod, "load_relevance_weights", lambda: mock_weights)
 
         result = get_adjusted_budgets("standard")
         for key, value in result.items():
@@ -737,9 +739,9 @@ class TestGetAdjustedBudgets:
 
     def test_full_tier_adjusts(self, monkeypatch):
         """Full tier also gets adjusted."""
-        import clarvis.context.assembly as asm
+        import clarvis.context.budgets as budgets_mod
         mock_weights = {"episodes": 1.4, "completions": 0.4}
-        monkeypatch.setattr(asm, "load_relevance_weights", lambda: mock_weights)
+        monkeypatch.setattr(budgets_mod, "load_relevance_weights", lambda: mock_weights)
 
         result = get_adjusted_budgets("full")
         base = TIER_BUDGETS["full"]

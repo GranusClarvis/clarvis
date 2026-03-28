@@ -10,381 +10,36 @@ Usage:
     brief = generate_tiered_brief("my task", tier="standard")
 """
 
+import logging
 import os
 import re
-import time
 from .compressor import compress_text, get_latest_scores
+from .budgets import (  # noqa: F401 — re-exported for backward compat
+    BUDGET_TO_SECTIONS as _BUDGET_TO_SECTIONS,
+    TIER_BUDGETS, RECENCY_BOOST_EPISODES,
+    MIN_EPISODES_FOR_ADJUSTMENT,
+    load_relevance_weights, get_adjusted_budgets,
+)
+from .dycp import (  # noqa: F401 — re-exported for backward compat
+    DYCP_PROTECTED_SECTIONS, DYCP_MIN_CONTAINMENT, DYCP_HISTORICAL_FLOOR,
+    DYCP_ZERO_OVERLAP_CEILING, HARD_SUPPRESS, DYCP_DEFAULT_SUPPRESS,
+    DYCP_DEFAULT_SUPPRESS_CONTAINMENT_OVERRIDE,
+    DYNAMIC_SUPPRESS_THRESHOLD, DYNAMIC_SOFT_SUPPRESS_CEILING,
+    should_suppress_section, dycp_prune_brief,
+    rerank_knowledge_hints, _extract_task_keywords,
+)
 try:
     from .knowledge_synthesis import synthesize_knowledge
 except ImportError:
     synthesize_knowledge = None
+
+logger = logging.getLogger(__name__)
 
 WORKSPACE = os.environ.get(
     "CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace"
 )
 SCRIPTS = os.path.join(WORKSPACE, "scripts")
 QUEUE_FILE = os.path.join(WORKSPACE, "memory/evolution/QUEUE.md")
-
-# Mapping from budget keys to context_relevance section names.
-# Each budget key controls a region of the brief; the section names are
-# what context_relevance.py tracks at the per-section level.
-# Note: brain_goals, metrics folded into decision_context; synaptic folded
-# into spotlight (2026-03-18) — all had mean relevance < 0.12 as standalone.
-_BUDGET_TO_SECTIONS = {
-    "decision_context": ["decision_context", "failure_avoidance", "meta_gradient",
-                         "brain_goals", "metrics"],
-    "spotlight": ["working_memory", "attention", "gwt_broadcast", "brain_context",
-                  "synaptic"],
-    "related_tasks": ["related_tasks"],
-    "completions": ["completions"],
-    "episodes": ["episodes"],
-    "reasoning_scaffold": ["reasoning"],
-}
-
-# Relevance-based budget adjustment parameters
-MIN_EPISODES_FOR_ADJUSTMENT = 5  # need enough data before adjusting
-BUDGET_FLOOR = 0.4   # minimum 40% of base budget (legacy, used as fallback)
-BUDGET_CEILING = 1.4  # maximum 140% of base budget (legacy, used as fallback)
-
-# Adaptive section cap thresholds — tiered budget allocation based on
-# rolling 14-day mean relevance score per budget category.
-# Replaces smooth linear interpolation with aggressive stepped scaling.
-# Evidence: last 30 episodes show clear tier separation (2026-03-19).
-ADAPTIVE_HIGH_THRESHOLD = 0.25   # mean ≥ 0.25 → 100% budget
-ADAPTIVE_MID_THRESHOLD = 0.12    # mean 0.12-0.25 → 50% budget
-# mean < 0.12 → 0% budget (hard-pruned)
-
-# Token budgets per tier (attention-optimal allocation)
-# Sections that are never pruned by DyCP (high-value regardless of task overlap)
-DYCP_PROTECTED_SECTIONS = frozenset({
-    "decision_context", "reasoning", "knowledge", "related_tasks",
-    "episodes", "completions",
-})
-
-# Minimum containment (section∩task / section) to keep a prunable section.
-# Calibrated from per-section data: sections with mean relevance < 0.10
-# almost never contribute. Raised 0.04→0.08 on 2026-03-18 to prune more
-# aggressively — the 5 weakest sections (mean < 0.12) were still leaking through.
-DYCP_MIN_CONTAINMENT = 0.08
-
-# Also consider historical mean relevance — sections historically below
-# this AND below task-containment threshold get pruned.
-# History: 0.13→0.16 (2026-03-15) → 0.20 (2026-03-18) → 0.15 (2026-03-19).
-# Lowered back: 0.20 was too aggressive — pruned moderately useful sections
-# (brain_context=0.163, confidence_gate=0.167) that agents do reference.
-# Tier 0 (hardcoded < 0.15) still catches truly noisy sections.
-DYCP_HISTORICAL_FLOOR = 0.15
-
-# Sections with zero task overlap AND historical score below this
-# stricter ceiling are also pruned (DyCP query-dependent tier 2).
-# Lowered 0.20→0.15 on 2026-03-19: same rationale — borderline-useful
-# sections (hist 0.15-0.20) shouldn't be pruned even with zero overlap.
-DYCP_ZERO_OVERLAP_CEILING = 0.15
-
-# Hard-suppressed: bottom-4 noise sections with 14-day mean < 0.12.
-# These are ALWAYS suppressed — no task-containment override.  They waste
-# ~600 tokens per brief for near-zero downstream signal.
-# Recalibrated 2026-03-21: failure_avoidance promoted (mean=0.126 > 0.12)
-HARD_SUPPRESS = frozenset({
-    "meta_gradient",      # mean=0.083
-    "brain_goals",        # mean=0.089
-    "metrics",            # mean=0.099
-    "synaptic",           # mean=0.112
-})
-
-# Soft-suppressed: borderline sections (mean 0.12-0.13) that ARE included
-# when task-containment exceeds DYCP_DEFAULT_SUPPRESS_CONTAINMENT_OVERRIDE.
-# This list is separate from DyCP pruning — DyCP prunes post-assembly,
-# while default-suppress prevents generation in the first place (cheaper).
-DYCP_DEFAULT_SUPPRESS = frozenset({
-    "world_model",        # mean=0.122
-    "gwt_broadcast",      # mean=0.128
-    "introspection",      # mean=0.129
-})
-# Task-containment threshold to override default suppression — if the task
-# tokens overlap significantly with a suppressed section, include it anyway.
-DYCP_DEFAULT_SUPPRESS_CONTAINMENT_OVERRIDE = 0.10
-
-# Threshold for dynamic hard-suppression feedback loop.  Sections with
-# 14-day recency-weighted mean below this are auto-suppressed (same as
-# HARD_SUPPRESS but computed from live data instead of hardcoded).
-DYNAMIC_SUPPRESS_THRESHOLD = 0.12
-# Sections with mean between DYNAMIC_SUPPRESS_THRESHOLD and this value
-# become soft-suppressed (overridable by task containment).
-DYNAMIC_SOFT_SUPPRESS_CEILING = 0.13
-
-# Cache: (timestamp, hard_set, soft_set).  TTL = 300s (5 min) to avoid
-# re-reading the relevance JSONL on every brief assembly.
-_dynamic_suppress_cache: tuple = (0.0, None, None)
-_DYNAMIC_SUPPRESS_TTL = 300
-
-
-def _compute_dynamic_suppress():
-    """Compute hard and soft suppress sets from live relevance data.
-
-    Returns (hard_set, soft_set) where:
-      - hard_set: sections with 14-day recency-weighted mean < DYNAMIC_SUPPRESS_THRESHOLD
-      - soft_set: sections with mean in [DYNAMIC_SUPPRESS_THRESHOLD, DYNAMIC_SOFT_SUPPRESS_CEILING)
-
-    Falls back to static HARD_SUPPRESS / DYCP_DEFAULT_SUPPRESS if no data.
-    """
-    global _dynamic_suppress_cache
-    now = time.monotonic()
-    cached_ts, cached_hard, cached_soft = _dynamic_suppress_cache
-    if cached_hard is not None and (now - cached_ts) < _DYNAMIC_SUPPRESS_TTL:
-        return cached_hard, cached_soft
-
-    try:
-        from clarvis.cognition.context_relevance import aggregate_relevance
-        agg = aggregate_relevance(days=14, recency_boost=RECENCY_BOOST_EPISODES)
-    except Exception:
-        _dynamic_suppress_cache = (now, HARD_SUPPRESS, DYCP_DEFAULT_SUPPRESS)
-        return HARD_SUPPRESS, DYCP_DEFAULT_SUPPRESS
-
-    if agg.get("episodes", 0) < MIN_EPISODES_FOR_ADJUSTMENT:
-        _dynamic_suppress_cache = (now, HARD_SUPPRESS, DYCP_DEFAULT_SUPPRESS)
-        return HARD_SUPPRESS, DYCP_DEFAULT_SUPPRESS
-
-    per_section = agg.get("per_section_mean", {})
-    if not per_section:
-        _dynamic_suppress_cache = (now, HARD_SUPPRESS, DYCP_DEFAULT_SUPPRESS)
-        return HARD_SUPPRESS, DYCP_DEFAULT_SUPPRESS
-
-    hard = set()
-    soft = set()
-    for section, mean_score in per_section.items():
-        # Never suppress protected sections regardless of score
-        if section in DYCP_PROTECTED_SECTIONS:
-            continue
-        if mean_score < DYNAMIC_SUPPRESS_THRESHOLD:
-            hard.add(section)
-        elif mean_score < DYNAMIC_SOFT_SUPPRESS_CEILING:
-            soft.add(section)
-
-    hard = frozenset(hard) if hard else HARD_SUPPRESS
-    soft = frozenset(soft) if soft else DYCP_DEFAULT_SUPPRESS
-    _dynamic_suppress_cache = (now, hard, soft)
-    return hard, soft
-
-# Cache of section name → content token sample from the last assembled brief.
-# Populated by dycp_prune_brief(); used by _dycp_task_containment_fast() so
-# that suppression decisions consider actual section content, not just the
-# section name.  First run (empty cache) falls back to name-only matching.
-_section_content_cache: dict = {}
-
-# Maximum number of content tokens to sample per section for the cache.
-# Kept small to make the containment check fast (O(n) set intersection).
-_CONTENT_SAMPLE_SIZE = 40
-
-
-TIER_BUDGETS = {
-    "minimal": {
-        "total": 200,
-        "decision_context": 0,
-        "spotlight": 0,
-        "related_tasks": 0,
-        "completions": 0,
-        "episodes": 0,
-        "reasoning_scaffold": 0,
-    },
-    "standard": {
-        "total": 600,
-        "decision_context": 140,   # +40 from merged metrics
-        "spotlight": 80,
-        "related_tasks": 60,
-        "completions": 30,
-        "episodes": 80,            # +20: hierarchical episodes need room
-        "reasoning_scaffold": 40,
-    },
-    "full": {
-        "total": 1000,
-        "decision_context": 230,   # +80 from merged metrics
-        "spotlight": 120,
-        "related_tasks": 100,
-        "completions": 50,
-        "episodes": 150,           # +30: hierarchical episodes need room
-        "reasoning_scaffold": 60,
-    },
-}
-
-RECENCY_BOOST_EPISODES = 5  # last N episodes get up to 3x weight in budget adjustment
-
-def load_relevance_weights(min_episodes=MIN_EPISODES_FOR_ADJUSTMENT, days=14):
-    """Load per-section relevance scores and convert to adaptive budget scaling factors.
-
-    Reads aggregated context_relevance data and maps per-section mean scores
-    to budget category scaling factors using tiered thresholds:
-      - mean ≥ ADAPTIVE_HIGH_THRESHOLD (0.25): scale=1.0 (full budget)
-      - ADAPTIVE_MID_THRESHOLD ≤ mean < ADAPTIVE_HIGH_THRESHOLD: scale=0.5 (half budget)
-      - mean < ADAPTIVE_MID_THRESHOLD (0.12): scale=0.0 (hard-pruned)
-
-    Uses exponential recency weighting so the last 5 episodes have ~3x
-    influence — budget adjustments respond within 1-2 heartbeat cycles
-    instead of waiting for the full 14-day window to rotate.
-
-    Returns:
-        Dict mapping budget keys to scaling factors, or empty dict if
-        insufficient episode data exists.
-    """
-    try:
-        from clarvis.cognition.context_relevance import aggregate_relevance
-        agg = aggregate_relevance(days=days, recency_boost=RECENCY_BOOST_EPISODES)
-    except Exception:
-        return {}
-
-    if agg.get("episodes", 0) < min_episodes:
-        return {}
-
-    per_section = agg.get("per_section_mean", {})
-    if not per_section:
-        return {}
-
-    weights = {}
-    for budget_key, section_names in _BUDGET_TO_SECTIONS.items():
-        # Exclude dynamically hard-suppressed sections from averaging —
-        # they're already suppressed at generation time and shouldn't drag
-        # down the budget of the category they were folded into (e.g.,
-        # meta_gradient=0.058 shouldn't penalize decision_context=0.300).
-        dynamic_hard, _ = _compute_dynamic_suppress()
-        active_scores = [
-            per_section[s] for s in section_names
-            if s in per_section and s not in dynamic_hard
-        ]
-        if not active_scores:
-            continue
-        mean_score = sum(active_scores) / len(active_scores)
-        # Tiered adaptive scaling (replaces linear interpolation 2026-03-19)
-        if mean_score >= ADAPTIVE_HIGH_THRESHOLD:
-            scale = 1.0
-        elif mean_score >= ADAPTIVE_MID_THRESHOLD:
-            scale = 0.5
-        else:
-            scale = 0.0
-        weights[budget_key] = scale
-
-    return weights
-
-
-def get_adjusted_budgets(tier="standard"):
-    """Get tier budgets adjusted by adaptive relevance-based caps.
-
-    Uses tiered scaling from load_relevance_weights():
-      - High relevance (≥0.25): full budget
-      - Mid relevance (0.12-0.25): 50% budget
-      - Low relevance (<0.12): 0 tokens (hard-pruned from brief)
-
-    When CLR's context_relevance sub-score is below 0.5 (raw < 0.25),
-    high-relevance sections get a 20% boost to improve brief quality.
-
-    Tokens freed by pruned/halved sections are redistributed to full-budget
-    sections proportionally, keeping total token budget constant.
-
-    Falls back to static TIER_BUDGETS when no relevance data exists.
-    """
-    base = TIER_BUDGETS.get(tier, TIER_BUDGETS["standard"]).copy()
-    weights = load_relevance_weights()
-
-    if not weights:
-        return base
-
-    # Check CLR context_relevance score for adaptive boost
-    clr_boost = 1.0
-    try:
-        from clarvis.metrics.clr import get_latest_context_relevance
-        cr = get_latest_context_relevance()
-        cr_score = cr.get("score")
-        if cr_score is not None and cr_score < 0.5:
-            # Context relevance is weak — boost high-relevance sections by 20%
-            # to increase signal density in the brief.
-            clr_boost = 1.2
-    except Exception:
-        pass
-
-    total_base = sum(v for k, v in base.items() if k != "total" and v > 0)
-    if total_base == 0:
-        return base
-
-    adjusted = {"total": base["total"]}
-    for key, value in base.items():
-        if key == "total" or value == 0:
-            adjusted[key] = value
-            continue
-        scale = weights.get(key, 1.0)  # default 1.0 = keep full if no data
-        # Apply CLR boost only to full-budget (high-relevance) sections
-        if scale >= 1.0 and clr_boost > 1.0:
-            scale *= clr_boost
-        adjusted[key] = round(value * scale)
-
-    # Redistribute freed tokens to full-budget sections (scale=1.0)
-    total_adjusted = sum(v for k, v in adjusted.items() if k != "total")
-    freed = total_base - total_adjusted
-    if freed > 0:
-        full_keys = [k for k in adjusted if k != "total" and weights.get(k, 1.0) >= 1.0 and adjusted[k] > 0]
-        if full_keys:
-            full_total = sum(adjusted[k] for k in full_keys)
-            for k in full_keys:
-                share = adjusted[k] / full_total if full_total > 0 else 1.0 / len(full_keys)
-                adjusted[k] += round(freed * share)
-
-    return adjusted
-
-
-def should_suppress_section(section_name: str, task_text: str = "") -> bool:
-    """Check if a section should be suppressed before generation.
-
-    Uses a dynamic feedback loop: sections are classified as hard or soft
-    suppressed based on their 14-day recency-weighted mean relevance score
-    (computed from live context_relevance data).
-
-    Hard-suppressed (mean < 0.12): ALWAYS suppressed — no override.
-    Soft-suppressed (mean 0.12-0.13): suppressed unless task-containment
-    exceeds the override threshold.
-    Protected sections are never suppressed.
-    """
-    if section_name in DYCP_PROTECTED_SECTIONS:
-        return False
-    # Dynamic feedback loop: compute suppress sets from live relevance data
-    dynamic_hard, dynamic_soft = _compute_dynamic_suppress()
-    # Hard suppress: unconditional — these sections are chronic noise
-    if section_name in dynamic_hard:
-        return True
-    # Soft suppress: can be overridden by task containment
-    if section_name not in dynamic_soft:
-        return False
-    if not task_text:
-        return True  # no task context → suppress by default
-    containment = _dycp_task_containment_fast(section_name, task_text)
-    return containment < DYCP_DEFAULT_SUPPRESS_CONTAINMENT_OVERRIDE
-
-
-def _dycp_task_containment_fast(section_name: str, task_text: str) -> float:
-    """Fast containment check using section name + cached content vs task tokens.
-
-    Checks both the section *name* tokens AND a small sample of actual content
-    tokens (cached from the previous brief assembly).  This prevents sections
-    with relevant content but non-matching names from being wrongly suppressed.
-    """
-    task_lower = task_text.lower()
-    task_words = set(re.findall(r"[a-z][a-z0-9_]{2,}", task_lower))
-    if not task_words:
-        return 0.0
-
-    # Name-based score (original heuristic)
-    name_words = set(section_name.replace("_", " ").split())
-    name_score = (
-        len(name_words & task_words) / len(name_words) if name_words else 0.0
-    )
-
-    # Content-based score from cache (populated by previous dycp_prune_brief)
-    content_tokens = _section_content_cache.get(section_name)
-    if content_tokens:
-        overlap = len(content_tokens & task_words)
-        content_score = overlap / max(1, len(content_tokens))
-    else:
-        content_score = 0.0
-
-    # Return the higher of the two — either signal is enough to keep
-    return max(name_score, content_score)
 
 
 # Known integration targets for wire-task guidance
@@ -518,7 +173,7 @@ def build_wire_guidance(task_text):
             parts.append(f"  TARGET PREVIEW ({len(lines)} lines total):")
             parts.append(snippet.rstrip())
         except Exception:
-            pass
+            logger.debug("Failed to read target preview", exc_info=True)
 
     parts.append("  REQUIRED SUB-STEPS (do each one explicitly, ~3min per step):")
     parts.append("    1. READ the target file — find the exact insertion point (line number). Output: 'Inserting at line N, after <context>'")
@@ -564,7 +219,7 @@ def get_failure_patterns(current_task, n=3):
             if len(patterns) >= n:
                 break
     except Exception:
-        pass
+        logger.debug("Failed to load failure patterns", exc_info=True)
     return patterns
 
 
@@ -642,7 +297,7 @@ def build_decision_context(current_task, tier="standard"):
                     f"(weight={weights[best_strategy]:.2f}), explore={explore:.0%}"
                 )
         except Exception:
-            pass
+            logger.debug("Failed to load meta-gradient params", exc_info=True)
 
     # Weak capabilities warning
     scores = get_latest_scores()
@@ -1220,7 +875,7 @@ def find_related_tasks(current_task, queue_file=None, max_tasks=3):
             scored = _semantic_rank(current_task, parsed, embed_fn)
             related = [text for _, text in scored[:max_tasks]]
     except Exception:
-        pass
+        logger.debug("Semantic ranking failed, falling back to word overlap", exc_info=True)
 
     if related is None:
         # Fallback to word overlap
@@ -1293,7 +948,7 @@ def _get_similar_failure_lessons(current_task, max_lessons=2):
             if len(lessons) >= max_lessons:
                 break
     except Exception:
-        pass
+        logger.debug("Failed to load similar failure lessons", exc_info=True)
     return lessons
 
 
@@ -1317,7 +972,7 @@ def build_hierarchical_episodes(current_task: str, episodic_hints: str = "",
         em = EpisodicMemory()
         episodes = em.recall_similar(current_task, n=12, use_spreading_activation=True)
     except Exception:
-        pass
+        logger.debug("Failed to recall episodes for hierarchical build", exc_info=True)
 
     if not episodes:
         # Fall back to reranking the pre-compressed hints
@@ -1596,7 +1251,7 @@ def get_recommended_procedures(current_task, max_procs=2):
                 step_text = step if isinstance(step, str) else str(step)
                 parts.append(f"    {i}. {step_text[:80]}")
     except Exception:
-        pass
+        logger.debug("Failed to load recommended procedures", exc_info=True)
 
     # 2. Check for code generation templates
     try:
@@ -1616,7 +1271,7 @@ def get_recommended_procedures(current_task, max_procs=2):
             if verify:
                 parts.append(f"    VERIFY: {', '.join(verify[:2])}")
     except Exception:
-        pass
+        logger.debug("Failed to load code generation templates", exc_info=True)
 
     if not parts:
         return ""
@@ -1624,269 +1279,6 @@ def get_recommended_procedures(current_task, max_procs=2):
     return "CODE GENERATION TEMPLATES (matched scaffolds from top patterns):\n" + "\n".join(parts[:20])
 
 
-def _dycp_task_containment(section_text: str, task_text: str) -> float:
-    """Compute bidirectional containment between section and task tokens.
-
-    Returns max(section_in_task, task_in_section) — captures relevance
-    regardless of which text is larger.
-    """
-    sec_tokens = set(re.findall(r"[a-z][a-z0-9_]{2,}", section_text.lower()))
-    task_tokens = set(re.findall(r"[a-z][a-z0-9_]{2,}", task_text.lower()))
-    # Remove stopwords
-    _sw = {"the", "and", "for", "are", "but", "not", "you", "all", "can",
-           "had", "her", "was", "one", "our", "out", "has", "have", "from",
-           "with", "this", "that", "they", "been", "will", "each", "make",
-           "like", "into", "than", "its", "also", "use", "two", "how"}
-    sec_tokens -= _sw
-    task_tokens -= _sw
-    if not sec_tokens or not task_tokens:
-        return 0.0
-    sec_in_task = len(sec_tokens & task_tokens) / len(sec_tokens)
-    task_in_sec = len(sec_tokens & task_tokens) / len(task_tokens)
-    return max(sec_in_task, task_in_sec)
-
-
-def _load_historical_section_means() -> dict:
-    """Load per-section historical mean relevance scores.
-
-    Returns dict mapping section_name → mean_relevance, or empty dict on error.
-    """
-    try:
-        from clarvis.cognition.context_relevance import aggregate_relevance
-        agg = aggregate_relevance(days=14)
-        if agg.get("episodes", 0) >= 5:
-            return agg.get("per_section_mean", {})
-    except Exception:
-        pass
-    return {}
-
-
-def dycp_prune_brief(brief_text: str, task_text: str) -> str:
-    """Dynamic Context Pruning — remove sections irrelevant to the current task.
-
-    Inspired by DyCP (arXiv:2601.07994): query-dependent segment-level pruning.
-    Each section is scored against the task query using token containment.
-    Sections that are both historically low-relevance AND have low task-overlap
-    are pruned to reduce noise in the context.
-
-    Protected sections (decision_context, reasoning, knowledge, etc.) are
-    never pruned — they carry critical task-shaping information.
-
-    Args:
-        brief_text: The assembled context brief (with section markers).
-        task_text: The current task description.
-
-    Returns:
-        Pruned brief text with irrelevant sections removed.
-    """
-    if not brief_text or not task_text:
-        return brief_text
-
-    try:
-        from clarvis.cognition.context_relevance import parse_brief_sections
-    except ImportError:
-        return brief_text
-
-    sections = parse_brief_sections(brief_text)
-    if len(sections) <= 3:
-        return brief_text  # too few sections to prune
-
-    # Update the content cache so future _dycp_task_containment_fast calls
-    # (in should_suppress_section) consider actual section content.
-    _sw = {"the", "and", "for", "are", "but", "not", "you", "all", "can",
-           "had", "was", "one", "our", "out", "has", "have", "from",
-           "with", "this", "that", "they", "been", "will", "each", "make",
-           "like", "into", "than", "its", "also", "use", "two", "how"}
-    global _section_content_cache
-    new_cache = {}
-    for sname, scontent in sections.items():
-        tokens = set(re.findall(r"[a-z][a-z0-9_]{2,}", scontent.lower())) - _sw
-        # Sample up to _CONTENT_SAMPLE_SIZE tokens (sorted for determinism)
-        if len(tokens) > _CONTENT_SAMPLE_SIZE:
-            tokens = set(sorted(tokens)[:_CONTENT_SAMPLE_SIZE])
-        new_cache[sname] = tokens
-    _section_content_cache = new_cache
-
-    historical = _load_historical_section_means()
-    pruned_names = set()
-
-    for name, content in sections.items():
-        if name in DYCP_PROTECTED_SECTIONS:
-            continue
-        # Compute task-relevance via containment.
-        # Include section name in content so header keywords count
-        # (parse_brief_sections strips the header line).
-        enriched = f"{name.replace('_', ' ')} {content}"
-        containment = _dycp_task_containment(enriched, task_text)
-        if containment >= DYCP_MIN_CONTAINMENT:
-            continue  # section has task-relevant content, keep it
-        # Check historical performance
-        hist_score = historical.get(name, 0.5)  # default=keep if no data
-        # Tier 0 (aggressive): Historical mean < 0.15 → always stub-collapse
-        # regardless of task containment. These sections are chronic noise;
-        # even marginal containment hits don't justify full rendering.
-        if hist_score < 0.15:
-            pruned_names.add(name)
-        # Tier 1: Historically weak sections with low task overlap → prune
-        elif hist_score < DYCP_HISTORICAL_FLOOR:
-            pruned_names.add(name)
-        # Tier 2 (DyCP query-dependent): Zero overlap + borderline history → prune
-        elif containment == 0.0 and hist_score < DYCP_ZERO_OVERLAP_CEILING:
-            pruned_names.add(name)
-
-    if not pruned_names:
-        return brief_text
-
-    # Rebuild brief: pruned sections become 1-line stubs (preserves signal,
-    # removes noise). Stubs let the LLM know the section exists without
-    # the token cost of full rendering.
-    lines = brief_text.split("\n")
-    from clarvis.cognition.context_relevance import _SECTION_MARKERS
-    result_lines = []
-    current_section = None
-    skip_until_next = False
-
-    for line in lines:
-        # Check if this line starts a new section
-        new_section = None
-        for sname, pattern in _SECTION_MARKERS:
-            if pattern.search(line):
-                new_section = sname
-                break
-
-        if new_section is not None:
-            current_section = new_section
-            skip_until_next = current_section in pruned_names
-            if skip_until_next:
-                # Emit a 1-line stub instead of the full section
-                hist_score = historical.get(current_section, 0.0)
-                result_lines.append(
-                    f"[{current_section}: pruned — hist_relevance={hist_score:.2f}]"
-                )
-                continue
-        elif line.strip() == "---":
-            # Separator — don't skip, but reset skip state
-            skip_until_next = False
-
-        if not skip_until_next:
-            result_lines.append(line)
-
-    # Clean up consecutive --- separators and trailing ---
-    cleaned = []
-    for line in result_lines:
-        if line.strip() == "---" and cleaned and cleaned[-1].strip() == "---":
-            continue
-        cleaned.append(line)
-    # Remove trailing ---
-    while cleaned and cleaned[-1].strip() == "---":
-        cleaned.pop()
-
-    return "\n".join(cleaned)
-
-
-# ---------------------------------------------------------------------------
-# Task-aware reranking for brain knowledge hints
-# ---------------------------------------------------------------------------
-
-# Stopwords excluded from keyword overlap scoring
-_RERANK_STOPWORDS = frozenset({
-    "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
-    "have", "has", "had", "do", "does", "did", "will", "would", "could",
-    "should", "may", "might", "shall", "can", "need", "must", "to", "of",
-    "in", "for", "on", "with", "at", "by", "from", "as", "into", "through",
-    "during", "before", "after", "above", "below", "between", "out", "off",
-    "over", "under", "again", "further", "then", "once", "and", "but", "or",
-    "nor", "not", "so", "very", "just", "also", "than", "that", "this",
-    "these", "those", "it", "its", "all", "each", "every", "both", "few",
-    "more", "most", "other", "some", "such", "only", "own", "same", "too",
-    "add", "use", "new", "get", "set", "run", "see", "now", "one", "two",
-})
-
-
-def _extract_task_keywords(task_text):
-    """Extract meaningful keywords from task text for relevance scoring."""
-    words = set(re.findall(r'[a-z][a-z0-9_]+', task_text.lower()))
-    # Also extract backtick content (file names, identifiers)
-    backtick_tokens = re.findall(r'`([^`]+)`', task_text)
-    for tok in backtick_tokens:
-        words.update(re.findall(r'[a-z][a-z0-9_]+', tok.lower()))
-    # Extract UPPER_SNAKE identifiers (like CONTEXT_BRAIN_SEARCH_RERANKING)
-    upper_ids = re.findall(r'[A-Z][A-Z0-9_]{3,}', task_text)
-    for uid in upper_ids:
-        words.update(w.lower() for w in uid.split('_') if len(w) >= 3)
-    return words - _RERANK_STOPWORDS
-
-
-def rerank_knowledge_hints(knowledge_hints, current_task, min_score=0.08,
-                           boost_threshold=0.25):
-    """Rerank knowledge hint lines by keyword relevance to the current task.
-
-    Each line of knowledge_hints is scored by:
-      - Keyword overlap: |task_words ∩ hint_words| / |task_words|
-      - Identifier match bonus: extra weight for matching file/function names
-
-    Lines below min_score are dropped (tangential matches).
-    Lines above boost_threshold get priority ordering.
-
-    Returns reranked knowledge_hints string.
-    """
-    if not knowledge_hints or not current_task:
-        return knowledge_hints
-
-    task_keywords = _extract_task_keywords(current_task)
-    if not task_keywords:
-        return knowledge_hints
-
-    # Extract high-signal identifiers (file names, function names) for bonus
-    task_identifiers = set()
-    for kw in task_keywords:
-        if '_' in kw or '.' in kw:  # underscore_names or file.ext
-            task_identifiers.add(kw)
-    # Also grab CamelCase and file paths from original text
-    task_identifiers.update(
-        t.lower() for t in re.findall(r'[a-z_]+\.py|[a-z_]+\.sh', current_task.lower())
-    )
-
-    lines = knowledge_hints.split('\n')
-    scored = []
-
-    for line in lines:
-        stripped = line.strip()
-        if not stripped:
-            continue
-
-        hint_words = set(re.findall(r'[a-z][a-z0-9_]+', stripped.lower()))
-        hint_words -= _RERANK_STOPWORDS
-
-        if not hint_words:
-            scored.append((0.0, line))
-            continue
-
-        # Base score: keyword overlap ratio
-        overlap = task_keywords & hint_words
-        base_score = len(overlap) / len(task_keywords) if task_keywords else 0.0
-
-        # Identifier bonus: matching specific file/function names is high signal
-        id_bonus = 0.0
-        if task_identifiers:
-            id_overlap = task_identifiers & hint_words
-            id_bonus = len(id_overlap) * 0.15  # 0.15 per identifier match
-
-        score = base_score + id_bonus
-        scored.append((score, line))
-
-    # Filter out low-relevance lines
-    kept = [(s, l) for s, l in scored if s >= min_score]
-
-    if not kept:
-        # If all filtered out, keep top 2 by score as fallback
-        scored.sort(key=lambda x: x[0], reverse=True)
-        kept = scored[:2]
-
-    # Sort by score descending (most relevant first)
-    kept.sort(key=lambda x: x[0], reverse=True)
-
-    return '\n'.join(line for _, line in kept)
 
 
 def generate_tiered_brief(
@@ -1936,7 +1328,7 @@ def generate_tiered_brief(
             beginning.append("RELEVANT KNOWLEDGE:")
             max_chars = 600 if tier == "full" else 350
             if len(reranked) > max_chars * 1.5:
-                compressed_knowledge, _ = compress_text(reranked, ratio=0.3)
+                compressed_knowledge, _ = compress_text(reranked, ratio=0.25)
                 beginning.append(compressed_knowledge[:max_chars])
             else:
                 beginning.append(reranked[:max_chars])
@@ -1947,7 +1339,7 @@ def generate_tiered_brief(
         if workspace_ctx:
             ws_budget = 500 if tier == "full" else 300
             if len(workspace_ctx) > ws_budget * 1.5:
-                workspace_ctx, _ = compress_text(workspace_ctx, ratio=0.3)
+                workspace_ctx, _ = compress_text(workspace_ctx, ratio=0.25)
             beginning.append(workspace_ctx[:ws_budget])
         else:
             n_items = 5 if tier == "full" else 3
@@ -2019,7 +1411,7 @@ def generate_tiered_brief(
             if knowledge_section and knowledge_section.strip():
                 end.append("KNOWLEDGE SYNTHESIS:\n" + knowledge_section)
         except Exception:
-            pass
+            logger.debug("Failed to synthesize knowledge", exc_info=True)
 
     # Reasoning Scaffold — task-type-specific
     if budget.get("reasoning_scaffold", 0) > 0:

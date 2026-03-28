@@ -121,6 +121,41 @@ temporal_self -> meta_learning -> absolute_zero -> causal_model -> session_close
 - **Self-model** (self_model.py) — 7 capability domains scored 0-1
 - **Calibration** (clarvis_confidence.py) — Prediction accuracy (Brier score)
 
+## Example Session
+
+**User:** "How's your brain doing?"
+```bash
+python3 -m clarvis brain stats
+```
+```
+Collections: 10 | Total memories: 3,412 | Graph edges: 134,218
+Embeddings: ONNX MiniLM (local)
+```
+
+**User:** "What's your consciousness score?"
+```bash
+python3 /home/agent/.openclaw/workspace/scripts/phi_metric.py measure
+```
+```
+Phi (IIT integration): 0.824
+  intra_density: 0.71  inter_connectivity: 0.89  temporal_coherence: 0.85
+```
+
+**User:** "What are you focused on?"
+```bash
+python3 -c "
+import sys; sys.path.insert(0, '/home/agent/.openclaw/workspace/scripts')
+from attention import attention
+for item in attention.focus()[:3]:
+    print(f'[{item[\"salience\"]:.3f}] {item[\"content\"][:80]}')
+"
+```
+```
+[0.892] OUTCOME [success]: [BARE_EXCEPT_AUDIT] Audit and fix 15 scripts
+[0.764] Evening heartbeat: Brain healthy, P0 complete
+[0.651] Heartbeat: verified session_close works
+```
+
 ### Key Insight for Users
 The subconscious (Claude Code via cron) runs all cognitive systems automatically.
 The conscious layer (this M2.5 session) reads digests and can query state on demand.

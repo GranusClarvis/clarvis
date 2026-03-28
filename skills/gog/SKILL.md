@@ -28,6 +28,40 @@ Common commands
 - Docs export: `gog docs export <docId> --format txt --out /tmp/doc.txt`
 - Docs cat: `gog docs cat <docId>`
 
+## Examples
+
+**Read recent emails:**
+```bash
+gog gmail search 'newer_than:1d' --max 5 --json
+```
+```json
+[{"id":"18f...","from":"alice@example.com","subject":"Meeting tomorrow","date":"2026-03-28T10:30:00Z","snippet":"Hi, can we..."}]
+```
+
+**Send an email:**
+```bash
+gog gmail send --to bob@example.com --subject "Status update" --body "All tasks complete."
+```
+```
+Message sent. ID: 18f4a2b...
+```
+
+**Check today's calendar:**
+```bash
+gog calendar events primary --from "$(date -I)" --to "$(date -I -d '+1 day')" --json
+```
+```json
+[{"summary":"Standup","start":"2026-03-28T09:00:00+01:00","end":"2026-03-28T09:30:00+01:00"}]
+```
+
+**Read a spreadsheet range:**
+```bash
+gog sheets get "1BxiM..." "Sheet1!A1:C5" --json
+```
+```json
+[["Name","Score","Status"],["Alpha","0.82","Pass"],["Beta","0.45","Fail"]]
+```
+
 Notes
 - Set `GOG_ACCOUNT=you@gmail.com` to avoid repeating `--account`.
 - For scripting, prefer `--json` plus `--no-input`.

@@ -120,6 +120,17 @@ cd /path && claude -p "refactor this module" \
 
 ## Common Patterns
 
+### Quick Example — Fix a Bug
+```bash
+cd /home/agent/.openclaw/workspace && timeout 600 claude -p \
+  "The test test_brain_roundtrip.py::test_search_returns_results is failing. Investigate, fix, and verify." \
+  --dangerously-skip-permissions --model claude-opus-4-6 --output-format json
+```
+Expected JSON output:
+```json
+{"type":"result","result":"Fixed: search index was stale after bulk insert. Added explicit flush. Test passes.","cost_usd":0.12,"duration_ms":45000}
+```
+
 ### Build a New Project
 ```bash
 mkdir -p /home/agent/projects/new-project && \

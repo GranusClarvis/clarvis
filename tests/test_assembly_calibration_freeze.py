@@ -158,14 +158,14 @@ def test_standard_tier_allocations_frozen():
 # ---------------------------------------------------------------------------
 
 def test_budget_floor_ceiling_frozen():
-    from clarvis.context.assembly import BUDGET_FLOOR, BUDGET_CEILING
+    from clarvis.context.budgets import BUDGET_FLOOR, BUDGET_CEILING
     assert BUDGET_FLOOR == 0.4, f"BUDGET_FLOOR={BUDGET_FLOOR}, expected 0.4"
     assert BUDGET_CEILING == 1.4, f"BUDGET_CEILING={BUDGET_CEILING}, expected 1.4"
 
 
 def test_adaptive_thresholds_frozen():
     """Pin the adaptive section cap thresholds (2026-03-19)."""
-    from clarvis.context.assembly import ADAPTIVE_HIGH_THRESHOLD, ADAPTIVE_MID_THRESHOLD
+    from clarvis.context.budgets import ADAPTIVE_HIGH_THRESHOLD, ADAPTIVE_MID_THRESHOLD
     assert ADAPTIVE_HIGH_THRESHOLD == 0.25, (
         f"ADAPTIVE_HIGH_THRESHOLD={ADAPTIVE_HIGH_THRESHOLD} — "
         "sections with mean ≥0.25 get full budget."
@@ -177,7 +177,7 @@ def test_adaptive_thresholds_frozen():
 
 
 def test_min_episodes_for_adjustment_frozen():
-    from clarvis.context.assembly import MIN_EPISODES_FOR_ADJUSTMENT
+    from clarvis.context.budgets import MIN_EPISODES_FOR_ADJUSTMENT
     assert MIN_EPISODES_FOR_ADJUSTMENT == 5
 
 
@@ -201,11 +201,11 @@ def test_suppressed_sections_return_true_without_task(monkeypatch):
     constants, since earlier tests may load context_relevance data that changes
     the dynamic computation.
     """
-    import clarvis.context.assembly as asm
-    from clarvis.context.assembly import (
+    import clarvis.context.dycp as dycp_mod
+    from clarvis.context.dycp import (
         should_suppress_section, DYCP_DEFAULT_SUPPRESS, HARD_SUPPRESS
     )
-    monkeypatch.setattr(asm, "_compute_dynamic_suppress",
+    monkeypatch.setattr(dycp_mod, "_compute_dynamic_suppress",
                         lambda: (HARD_SUPPRESS, DYCP_DEFAULT_SUPPRESS))
     for section in DYCP_DEFAULT_SUPPRESS:
         assert should_suppress_section(section, "") is True
@@ -215,11 +215,11 @@ def test_suppressed_sections_return_true_without_task(monkeypatch):
 
 def test_hard_suppress_ignores_task_containment(monkeypatch):
     """Hard-suppressed sections are always suppressed, even with matching task."""
-    import clarvis.context.assembly as asm
-    from clarvis.context.assembly import (
+    import clarvis.context.dycp as dycp_mod
+    from clarvis.context.dycp import (
         should_suppress_section, HARD_SUPPRESS, DYCP_DEFAULT_SUPPRESS
     )
-    monkeypatch.setattr(asm, "_compute_dynamic_suppress",
+    monkeypatch.setattr(dycp_mod, "_compute_dynamic_suppress",
                         lambda: (HARD_SUPPRESS, DYCP_DEFAULT_SUPPRESS))
     # Use a task that contains the section name words — should still suppress
     for section in HARD_SUPPRESS:
@@ -236,7 +236,7 @@ def test_generate_tiered_brief_returns_string():
 
 def test_budget_to_sections_covers_all_budget_keys():
     """Every non-total budget key has a section mapping."""
-    from clarvis.context.assembly import _BUDGET_TO_SECTIONS, TIER_BUDGETS
+    from clarvis.context.budgets import BUDGET_TO_SECTIONS as _BUDGET_TO_SECTIONS, TIER_BUDGETS
     budget_keys = {k for k in TIER_BUDGETS["standard"] if k != "total"}
     mapped_keys = set(_BUDGET_TO_SECTIONS.keys())
     assert budget_keys == mapped_keys, (

@@ -1685,3 +1685,15 @@ _Last archived: 2026-03-27_
 ## Archived 2026-03-27
 - [x] [CRONTAB_DOCS_DRIFT] Sync CLAUDE.md cron table with actual crontab — added 3 missing entries (brain_eval 06:00, llm_brain_review 06:15, relevance_refresh 02:40), updated date to 2026-03-27.
 - [x] [BARE_EXCEPT_AUDIT] Fixed 52 silent `except Exception: pass` blocks across 3 priority files: heartbeat_postflight.py (18), performance_benchmark.py (29), reasoning_chain_hook.py (5). All now log via `logging.debug()`. 50 files total have this pattern; remaining are lower priority.
+
+## Archived 2026-03-28
+- [x] [D2_PUBLIC_STATUS_ENDPOINT] Wire the `/api/public/status` endpoint in `website/` — serve runtime mode, queue summary, latest PI/CLR scores, and uptime. Schema already defined in `WEBSITE_V0_INFORMATION_ARCH.md`. _(2026-03-28: already fully implemented in website/server.py:140-159, route wired at line 190. Serves mode, queue, CLR, PI, brain, episodes, completions. Uptime not in spec.)_
+- [x] [E6_ROADMAP_SANITIZE] Sanitize ROADMAP.md for public consumption — remove internal references to specific API keys, budget thresholds, and server IPs. Cross-ref with D4 architecture page content. _(2026-03-28: audited — ROADMAP.md contains no API keys, budget thresholds, server IPs, or PII. Already public-safe. Architecture page also clean.)_
+
+## Archived 2026-03-28
+- [x] [RESEARCH_PHI_APPROXIMATION_VALIDATION] Review whether practical Phi approximations are reliable enough for real consciousness/agent measurement. _(Completed 2026-03-28)_
+- [x] [BRIEF_COMPRESSION_BOOST] Improve brief compression ratio from 0.503→0.55+ by adding MMR-based redundancy removal to `compress_text()` in `context_compressor.py`. The MMR reranker (lines 75-151) already exists but isn't wired into brief generation — integrate it as a post-extraction dedup pass, and tighten `tfidf_extract` ratio from 0.3 to 0.25 for tiered briefs. _(Completed 2026-03-28 UTC: wired MMR into both canonical/script compressors, tightened tiered brief compression ratios to 0.25, added regression coverage.)_
+- [x] [SKILL_DOCS_EXAMPLES] Added concrete example invocations with expected output to all 6 SKILL.md files (clarvis-cognition, claude-code, gog, iteration, nano-pdf, notion). _(Completed 2026-03-28)_
+- [x] [ASSEMBLY_DECOMPOSE] Extracted DYCP pruning → `clarvis/context/dycp.py` (480 lines) and budget logic → `clarvis/context/budgets.py` (197 lines). assembly.py: 2044→1436 lines, all silent except-pass replaced with logging.debug. All 1122 tests pass. _(Completed 2026-03-28)_
+- [x] [HEARTBEAT_PREFLIGHT_TESTS] Added `tests/test_heartbeat_pipeline.py` with 35 test cases across 9 classes: preflight result factory, task verification, proc hint formatting, memory hint tagging, error classification (8 tests), completeness computation, prompt quality scoring, postflight context building, keyword matching. _(Completed 2026-03-28)_
+- [x] [DATA_LIFECYCLE_POLICY] Created `scripts/data_lifecycle.py`: archives reasoning chains >14d (gzip), deletes sessions >30d, cleans archives >90d. First run: 750 chains archived, 3 sessions deleted, 1.7MB freed. Sunday cron at 05:20. _(Completed 2026-03-28)_
