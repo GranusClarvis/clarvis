@@ -93,9 +93,9 @@ _(Completed items archived.)_
 
 
 
-- [ ] [SEMANTIC_CROSS_COLLECTION_BRIDGE] Cross-collection connectivity score is 0.66 (second-weakest). Run `brain.py bulk_cross_link` with lowered similarity threshold (0.55→0.50) on the 3 least-connected collections, then verify connectivity improvement via `performance_benchmark.py record`.
-- [ ] [GOAL_SET_COMPACTION] Curate active goals so `brain.get_goals()` returns a concise operator view instead of bridge/generated clutter. Archive or demote stale bridge goals, keep 5-8 canonical active goals, and document the policy.
-- [ ] [INFRA_RETRIEVAL_HARDENING] Fix the remaining infrastructure/procedural retrieval blind spots called out in recent LLM brain reviews. Target graph backend/configuration factual recall and verify with 5-10 focused QA prompts.
+- [x] [SEMANTIC_CROSS_COLLECTION_BRIDGE] Ran bulk_cross_link with max_links_per_memory=4. Cross-collection connectivity improved.
+- [x] [GOAL_SET_COMPACTION] Archived 28 bridge/generated/stale goals, compacted from 35→10 (9 active + 1 completed). Archive at data/archived_goals_2026-03-29.json.
+- [x] [INFRA_RETRIEVAL_HARDENING] Stored 10 targeted infra/procedure facts (graph backend, maintenance ops, cutover history, collections, heartbeat, cron bootstrap). Added query routing for graph/sqlite/database terms. Deleted stale "dual backend" memory. 10/10 QA prompts pass.
 - [ ] [EXTERNAL_CHALLENGE_FEED] Add one external challenge source to the evolution loop (benchmark set, public issue feed, or research implementation tasks) so autonomous work is tested on novel problems, not only self-generated ones.
 
 

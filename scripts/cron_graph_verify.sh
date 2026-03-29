@@ -1,10 +1,9 @@
 #!/bin/bash
-# Graph verification — daily soak-test when CLARVIS_GRAPH_BACKEND=sqlite
-# Runs graph-verify parity check between JSON and SQLite stores.
-# Exits nonzero on FAIL so cron_watchdog / health_monitor can alert.
+# Graph verification — daily SQLite integrity check.
+# Post-cutover (2026-03-29): SQLite is the sole runtime backend.
+# Runs integrity check + stats. Exits nonzero on FAIL.
 #
 # Schedule: after graph_compaction (04:30), e.g. 04:45 UTC
-# Only runs when CLARVIS_GRAPH_BACKEND=sqlite; exits 0 silently otherwise.
 
 source /home/agent/.openclaw/workspace/scripts/cron_env.sh
 source /home/agent/.openclaw/workspace/scripts/lock_helper.sh
@@ -12,7 +11,7 @@ source /home/agent/.openclaw/workspace/scripts/lock_helper.sh
 LOGFILE="memory/cron/graph_verify.log"
 
 # Only run when sqlite backend is active
-if [ "${CLARVIS_GRAPH_BACKEND:-json}" != "sqlite" ]; then
+if [ "${CLARVIS_GRAPH_BACKEND:-sqlite}" != "sqlite" ]; then
     exit 0
 fi
 
@@ -24,30 +23,23 @@ acquire_maintenance_lock "$LOGFILE"
 
 TS="$(date -u +%Y-%m-%dT%H:%M:%S)"
 echo "[$TS] === Graph verify started ===" >> "$LOGFILE"
-echo "[$TS] Backend: ${CLARVIS_GRAPH_BACKEND:-json}" >> "$LOGFILE"
+echo "[$TS] Backend: sqlite (post-cutover)" >> "$LOGFILE"
 echo "[$TS] SQLite DB: $(ls -lh data/clarvisdb/graph.db 2>/dev/null || echo 'NOT FOUND')" >> "$LOGFILE"
-echo "[$TS] JSON file: $(ls -lh data/clarvisdb/relationships.json 2>/dev/null || echo 'NOT FOUND')" >> "$LOGFILE"
 
-DUAL_WRITE="${CLARVIS_GRAPH_DUAL_WRITE:-1}"
-
-if [ "$DUAL_WRITE" = "0" ]; then
-    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Dual-write disabled — running SQLite integrity check only" >> "$LOGFILE"
-    OUTPUT=$(python3 - 2>&1 <<'PY'
+OUTPUT=$(python3 - 2>&1 <<'PY'
 import sys
 from clarvis.brain.graph_store_sqlite import GraphStoreSQLite
 store = GraphStoreSQLite("/home/agent/.openclaw/workspace/data/clarvisdb/graph.db")
 ok = store.integrity_check()
 stats = store.stats()
 store.close()
-print({"integrity_ok": ok, "nodes": stats.get("nodes"), "edges": stats.get("edges")})
+print(f"integrity_ok={ok}, nodes={stats.get('nodes')}, edges={stats.get('edges')}")
+for t, c in sorted(stats.get("edge_types", {}).items(), key=lambda x: -x[1]):
+    print(f"  {t}: {c}")
 sys.exit(0 if ok else 1)
 PY
 )
-    EXIT_CODE=$?
-else
-    OUTPUT=$(python3 -m clarvis brain graph-verify --sample-n 200 2>&1)
-    EXIT_CODE=$?
-fi
+EXIT_CODE=$?
 
 echo "$OUTPUT" >> "$LOGFILE"
 

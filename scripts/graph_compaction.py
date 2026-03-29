@@ -393,19 +393,12 @@ def run_compaction_json(brain, dry_run=False):
 def run_compaction(dry_run=False):
     """Dispatch to backend-specific compaction pipeline.
 
-    When dual-write is active (backend=sqlite + CLARVIS_GRAPH_DUAL_WRITE=1),
-    compact BOTH stores to keep them in sync.  Otherwise compaction only runs
-    on SQLite while JSON keeps growing, causing parity drift.
+    SQLite is the sole runtime backend since 2026-03-29 cutover.
+    JSON compaction retained as fallback if SQLite store isn't initialized.
     """
     brain = get_brain()
     if brain._sqlite_store is not None:
-        result = run_compaction_sqlite(brain, dry_run=dry_run)
-        # Also compact JSON when dual-write is active to prevent drift
-        dual_write = os.environ.get("CLARVIS_GRAPH_DUAL_WRITE", "1") != "0"
-        if dual_write:
-            print("\n--- JSON dual-write compaction (sync) ---")
-            run_compaction_json(brain, dry_run=dry_run)
-        return result
+        return run_compaction_sqlite(brain, dry_run=dry_run)
     return run_compaction_json(brain, dry_run=dry_run)
 
 

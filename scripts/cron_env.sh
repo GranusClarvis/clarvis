@@ -37,18 +37,15 @@ export CLARVIS_TG_GROUP_ID="${CLARVIS_TG_GROUP_ID:-}"
 export CLARVIS_TG_REPORTS_TOPIC="${CLARVIS_TG_REPORTS_TOPIC:-5}"
 cd "$CLARVIS_WORKSPACE" || exit 1
 
-# Graph storage backend: "json" (default) or "sqlite"
-# Uncomment the line below to enable SQLite graph backend for soak testing.
-# Before enabling, run: python3 scripts/graph_migrate_to_sqlite.py --safe
+# Graph storage backend: SQLite (cutover finalized 2026-03-29).
+# JSON graph file is archived; no longer written at runtime.
 # Limit OpenBLAS/NumPy thread spawning — prevents thread exhaustion under the
 # PAM nproc limit (4096 in /etc/security/limits.d/agent.conf).
-# Added 2026-03-29 after OpenBLAS thread storms exhausted NPROC and broke all cron.
 export OPENBLAS_NUM_THREADS=4
 export OMP_NUM_THREADS=4
 
 export CLARVIS_GRAPH_BACKEND="sqlite"
-# During soak: dual-write JSON+SQLite to validate parity. After soak cutover, this will be set to 0.
-export CLARVIS_GRAPH_DUAL_WRITE="1"
+export CLARVIS_GRAPH_DUAL_WRITE="0"
 
 # Shared helper: get current weakest performance metric (fast, reads cached file)
 get_weakest_metric() {

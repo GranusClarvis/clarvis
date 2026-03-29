@@ -17,9 +17,9 @@ LOCAL_GRAPH_FILE = os.path.join(LOCAL_DATA_DIR, "relationships.json")
 GRAPH_SQLITE_FILE = os.path.join(DATA_DIR, "graph.db")
 LOCAL_GRAPH_SQLITE_FILE = os.path.join(LOCAL_DATA_DIR, "graph.db")
 
-# Graph backend: "json" (default) or "sqlite"
-# Set CLARVIS_GRAPH_BACKEND=sqlite to switch to SQLite backend.
-GRAPH_BACKEND = os.environ.get("CLARVIS_GRAPH_BACKEND", "json")
+# Graph backend: sqlite (default since 2026-03-29 cutover).
+# JSON backend retained only for export/archive tooling.
+GRAPH_BACKEND = os.environ.get("CLARVIS_GRAPH_BACKEND", "sqlite")
 
 # Collection names
 IDENTITY = "clarvis-identity"
@@ -44,6 +44,7 @@ _ROUTE_PATTERNS = [
     (re.compile(r'\b(procedur\w*|how to|steps? for|recipe|workflow)\b', re.I), [PROCEDURES, LEARNINGS]),
     (re.compile(r'\b(who am i|my identity|my name|about me|self model|who created|creator|capabilit\w+|what am i)\b', re.I), [IDENTITY, MEMORIES]),
     (re.compile(r'\b(cron|script|server|system|infra|config)\b', re.I), [INFRASTRUCTURE, LEARNINGS]),
+    (re.compile(r'\b(graph|sqlite|backend|database|chromadb|checkpoint|compaction|maintenance|collections?)\b', re.I), [INFRASTRUCTURE, PROCEDURES]),
     (re.compile(r'\b(current|right now|working on|context|today|last|recent|previous|heartbeat)\b', re.I), [CONTEXT, MEMORIES]),
     (re.compile(r'\b(learned|lesson|insight|pattern|discovery|found that)\b', re.I), [LEARNINGS]),
     (re.compile(r'\b(prefer|like|style|format|convention)\b', re.I), [PREFERENCES]),
