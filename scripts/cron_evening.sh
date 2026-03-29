@@ -8,7 +8,7 @@ LOGFILE="memory/cron/evening.log"
 # Global Claude lock is acquired later, just before Claude Code spawn (line ~100).
 # Previously held global lock for 2+ hours while running non-Claude Python work,
 # which blocked autonomous runs unnecessarily. Fixed 2026-03-15 per cron schedule audit.
-acquire_local_lock "/tmp/clarvis_evening.lock" "$LOGFILE"
+acquire_local_lock "/tmp/clarvis_evening.lock" "$LOGFILE" 3600
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Evening routine started ===" >> "$LOGFILE"
 emit_dashboard_event task_started --task-name "Evening assessment" --section cron_evening --executor claude-opus

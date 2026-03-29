@@ -624,23 +624,6 @@ def _collect_extra_procedures(procs_for_injection, next_task):
     return procs_for_injection
 
 
-def _preflight_reasoning_chain(result, next_task, task_section, best_salience):
-    """§6: Open reasoning chain for task tracking."""
-    t6 = time.monotonic()
-    if open_chain:
-        try:
-            chain_id = open_chain(next_task, task_section, str(best_salience))
-            result["chain_id"] = chain_id
-            log(f"Reasoning chain opened: {chain_id}")
-            try:
-                attention.submit(f"REASONING CHAIN: {chain_id} tracking current task",
-                                 source="heartbeat", importance=0.4)
-            except Exception:
-                pass
-        except Exception as e:
-            log(f"Reasoning chain open failed: {e}")
-    result["timings"]["reasoning_open"] = round(time.monotonic() - t6, 3)
-
 
 def _preflight_confidence_world_model(result, next_task, task_section):
     """§7+7.5: Confidence prediction + world model. Returns dyn_conf."""
@@ -1030,35 +1013,6 @@ def _build_failure_avoidance(next_task):
     return ""
 
 
-def _preflight_routing(result, next_task):
-    """§9: Task routing / classification."""
-    t9 = time.monotonic()
-    if classify_task:
-        try:
-            cl = classify_task(next_task)
-            result["route_tier"] = cl.get("tier", "complex")
-            result["route_executor"] = cl.get("executor", "claude")
-            result["route_score"] = cl.get("score", 0.5)
-            result["route_reason"] = cl.get("reason", "unknown")
-            log(f"Route: tier={result['route_tier']} executor={result['route_executor']} score={result['route_score']}")
-        except Exception as e:
-            log(f"Task classification failed: {e}")
-    result["timings"]["routing"] = round(time.monotonic() - t9, 3)
-
-
-def _preflight_compress_episodes(similar_episodes, failure_episodes):
-    """Compress episodic hints for tiered brief."""
-    if (similar_episodes or failure_episodes) and compress_episodes:
-        try:
-            compressed = compress_episodes(similar_episodes, failure_episodes)
-            if compressed:
-                return compressed
-        except Exception:
-            pass
-    if similar_episodes or failure_episodes:
-        return f"{similar_episodes}\n---\n{failure_episodes}"
-    return ""
-
 
 def _preflight_generate_brief(result, next_task, knowledge_hints, compressed_episodes):
     """Generate the tiered/legacy context brief."""
@@ -1283,12 +1237,18 @@ def _make_preflight_result():
     }
 
 
-def _preflight_assemble_context(result, next_task, similar_episodes, failure_episodes,
-                                 knowledge_hints, brain_goals, brain_context, brain_working_memory,
-                                 failure_avoidance, procs_for_injection, synaptic_associations,
-                                 codelet_result, gwt_broadcast_text, introspection_text,
-                                 code_templates_hint, compressed_episodes):
-    """§10: Full context assembly pipeline (brief + supplements + enrichments + pruning)."""
+def _preflight_assemble_context(result, next_task, ctx):
+    """§10: Full context assembly pipeline (brief + supplements + enrichments + pruning).
+
+    Args:
+        result: The preflight result dict (mutated in place).
+        next_task: Selected task string.
+        ctx: Dict with keys: similar_episodes, failure_episodes, knowledge_hints,
+             brain_goals, brain_context, brain_working_memory, failure_avoidance,
+             procs_for_injection, synaptic_associations, codelet_result,
+             gwt_broadcast_text, introspection_text, code_templates_hint,
+             compressed_episodes.
+    """
     t10 = time.monotonic()
     _suppressed_sections = set()
     try:
@@ -1299,12 +1259,13 @@ def _preflight_assemble_context(result, next_task, similar_episodes, failure_epi
     except Exception:
         pass
 
-    brief = _preflight_generate_brief(result, next_task, knowledge_hints, compressed_episodes)
+    brief = _preflight_generate_brief(result, next_task, ctx["knowledge_hints"], ctx["compressed_episodes"])
     brief = _preflight_append_supplementary(
-        brief, result, brain_goals, brain_context, brain_working_memory,
-        failure_avoidance, procs_for_injection, synaptic_associations, codelet_result,
-        gwt_broadcast_text, introspection_text, code_templates_hint, _suppressed_sections)
-    brief = _preflight_insights_prompt_workspace(brief, result, next_task, compressed_episodes)
+        brief, result, ctx["brain_goals"], ctx["brain_context"], ctx["brain_working_memory"],
+        ctx["failure_avoidance"], ctx["procs_for_injection"], ctx["synaptic_associations"],
+        ctx["codelet_result"], ctx["gwt_broadcast_text"], ctx["introspection_text"],
+        ctx["code_templates_hint"], _suppressed_sections)
+    brief = _preflight_insights_prompt_workspace(brief, result, next_task, ctx["compressed_episodes"])
     brief = _preflight_pruning_obligations_directives(brief, result, next_task)
 
     result["context_brief"] = brief
@@ -1353,7 +1314,21 @@ def run_preflight(dry_run=False):
 
     _preflight_load_sizing(result, next_task, task_section)
     procs_for_injection, code_templates_hint = _preflight_procedural(result, next_task)
-    _preflight_reasoning_chain(result, next_task, task_section, best_salience)
+    # §6: Open reasoning chain for task tracking
+    t6 = time.monotonic()
+    if open_chain:
+        try:
+            chain_id = open_chain(next_task, task_section, str(best_salience))
+            result["chain_id"] = chain_id
+            log(f"Reasoning chain opened: {chain_id}")
+            try:
+                attention.submit(f"REASONING CHAIN: {chain_id} tracking current task",
+                                 source="heartbeat", importance=0.4)
+            except Exception:
+                pass
+        except Exception as e:
+            log(f"Reasoning chain open failed: {e}")
+    result["timings"]["reasoning_open"] = round(time.monotonic() - t6, 3)
     dyn_conf = _preflight_confidence_world_model(result, next_task, task_section)
     dyn_conf = _preflight_confidence_tier(result, dyn_conf, next_task, t0)
     if dyn_conf is None:
@@ -1365,14 +1340,41 @@ def run_preflight(dry_run=False):
         _preflight_brain_bridge(result, next_task, _rt, retrieval_tier_info)
     introspection_text, synaptic_associations, failure_avoidance = \
         _preflight_introspection_synaptic(result, next_task)
-    _preflight_routing(result, next_task)
+    # §9: Task routing / classification
+    t9 = time.monotonic()
+    if classify_task:
+        try:
+            cl = classify_task(next_task)
+            result["route_tier"] = cl.get("tier", "complex")
+            result["route_executor"] = cl.get("executor", "claude")
+            result["route_score"] = cl.get("score", 0.5)
+            result["route_reason"] = cl.get("reason", "unknown")
+            log(f"Route: tier={result['route_tier']} executor={result['route_executor']} score={result['route_score']}")
+        except Exception as e:
+            log(f"Task classification failed: {e}")
+    result["timings"]["routing"] = round(time.monotonic() - t9, 3)
 
-    compressed_episodes = _preflight_compress_episodes(similar_episodes, failure_episodes)
-    _preflight_assemble_context(
-        result, next_task, similar_episodes, failure_episodes, knowledge_hints,
-        brain_goals, brain_context, brain_working_memory, failure_avoidance,
-        procs_for_injection, synaptic_associations, codelet_result, gwt_broadcast_text,
-        introspection_text, code_templates_hint, compressed_episodes)
+    # Compress episodic hints for tiered brief
+    if (similar_episodes or failure_episodes) and compress_episodes:
+        try:
+            compressed_episodes = compress_episodes(similar_episodes, failure_episodes)
+            if not compressed_episodes:
+                compressed_episodes = f"{similar_episodes}\n---\n{failure_episodes}" if (similar_episodes or failure_episodes) else ""
+        except Exception:
+            compressed_episodes = f"{similar_episodes}\n---\n{failure_episodes}" if (similar_episodes or failure_episodes) else ""
+    elif similar_episodes or failure_episodes:
+        compressed_episodes = f"{similar_episodes}\n---\n{failure_episodes}"
+    else:
+        compressed_episodes = ""
+    _preflight_assemble_context(result, next_task, ctx={
+        "similar_episodes": similar_episodes, "failure_episodes": failure_episodes,
+        "knowledge_hints": knowledge_hints, "brain_goals": brain_goals,
+        "brain_context": brain_context, "brain_working_memory": brain_working_memory,
+        "failure_avoidance": failure_avoidance, "procs_for_injection": procs_for_injection,
+        "synaptic_associations": synaptic_associations, "codelet_result": codelet_result,
+        "gwt_broadcast_text": gwt_broadcast_text, "introspection_text": introspection_text,
+        "code_templates_hint": code_templates_hint, "compressed_episodes": compressed_episodes,
+    })
 
     try:
         attention.save()

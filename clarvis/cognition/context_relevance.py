@@ -540,28 +540,32 @@ def _weighted_means(entries: list[dict], weights: list[float]) -> tuple[float, d
 
     Returns (mean_relevance, per_section_mean, success_mean, failure_mean).
     """
-    w_sum, w_total = 0.0, 0.0
-    sec_w: dict[str, float] = {}
-    sec_w_total: dict[str, float] = {}
-    suc_sum, suc_w, fail_sum, fail_w = 0.0, 0.0, 0.0, 0.0
+    weighted_sum, weight_total = 0.0, 0.0
+    section_weighted: dict[str, float] = {}
+    section_weight_total: dict[str, float] = {}
+    success_sum, success_weight = 0.0, 0.0
+    failure_sum, failure_weight = 0.0, 0.0
 
-    for entry, w in zip(entries, weights):
+    for entry, weight in zip(entries, weights):
         if "overall" in entry:
-            w_sum += entry["overall"] * w
-            w_total += w
+            weighted_sum += entry["overall"] * weight
+            weight_total += weight
             if entry.get("outcome") == "success":
-                suc_sum += entry["overall"] * w
-                suc_w += w
+                success_sum += entry["overall"] * weight
+                success_weight += weight
             else:
-                fail_sum += entry["overall"] * w
-                fail_w += w
+                failure_sum += entry["overall"] * weight
+                failure_weight += weight
         for name, score in entry.get("per_section", {}).items():
-            sec_w[name] = sec_w.get(name, 0.0) + score * w
-            sec_w_total[name] = sec_w_total.get(name, 0.0) + w
+            section_weighted[name] = section_weighted.get(name, 0.0) + score * weight
+            section_weight_total[name] = section_weight_total.get(name, 0.0) + weight
 
-    mean = w_sum / w_total if w_total > 0 else 0.0
-    per_sec = {n: round(sec_w[n] / sec_w_total[n], 4) for n in sec_w if sec_w_total.get(n, 0) > 0}
-    return mean, per_sec, suc_sum / suc_w if suc_w > 0 else 0.0, fail_sum / fail_w if fail_w > 0 else 0.0
+    mean = weighted_sum / weight_total if weight_total > 0 else 0.0
+    per_section = {n: round(section_weighted[n] / section_weight_total[n], 4)
+                   for n in section_weighted if section_weight_total.get(n, 0) > 0}
+    success_mean = success_sum / success_weight if success_weight > 0 else 0.0
+    failure_mean = failure_sum / failure_weight if failure_weight > 0 else 0.0
+    return mean, per_section, success_mean, failure_mean
 
 
 def aggregate_relevance(days: int = 7, relevance_file: str = RELEVANCE_FILE,

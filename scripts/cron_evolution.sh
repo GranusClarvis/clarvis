@@ -13,7 +13,7 @@ LOGFILE="memory/cron/evolution.log"
 SCRIPTS="/home/agent/.openclaw/workspace/scripts"
 
 # Acquire locks: local + global Claude
-acquire_local_lock "/tmp/clarvis_evolution.lock" "$LOGFILE"
+acquire_local_lock "/tmp/clarvis_evolution.lock" "$LOGFILE" 3600
 acquire_global_claude_lock "$LOGFILE"
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Evolution analysis starting (optimized) ===" >> "$LOGFILE"

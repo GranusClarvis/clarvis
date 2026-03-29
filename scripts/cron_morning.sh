@@ -6,7 +6,7 @@ source /home/agent/.openclaw/workspace/scripts/lock_helper.sh
 LOGFILE="memory/cron/morning.log"
 
 # Acquire locks: local + global Claude
-acquire_local_lock "/tmp/clarvis_morning.lock" "$LOGFILE"
+acquire_local_lock "/tmp/clarvis_morning.lock" "$LOGFILE" 3600
 acquire_global_claude_lock "$LOGFILE"
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Morning routine started ===" >> "$LOGFILE"

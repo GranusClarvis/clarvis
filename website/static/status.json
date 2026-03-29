@@ -4,42 +4,42 @@
     "pending_mode": null
   },
   "queue": {
-    "pending": 14,
+    "pending": 7,
     "in_progress": 3,
-    "done": 0
+    "done": 4
   },
   "benchmarks": {
     "clr": {
-      "clr": 0.845,
+      "clr": 0.815,
       "baseline_clr": 0.19,
-      "value_add": 0.655,
+      "value_add": 0.625,
       "gate_pass": true,
       "dimensions": {
         "memory_quality": 0.948,
-        "retrieval_precision": 0.933,
-        "prompt_context": 0.685,
-        "task_success": 0.787,
-        "autonomy": 0.836,
-        "efficiency": 0.984,
-        "integration_dynamics": 0.83
+        "retrieval_precision": 1.0,
+        "prompt_context": 0.694,
+        "task_success": 0.789,
+        "autonomy": 0.397,
+        "efficiency": 0.988,
+        "integration_dynamics": 0.869
       },
-      "timestamp": "2026-03-28T05:45:13.266822+00:00"
+      "timestamp": "2026-03-29T03:01:29.994672+00:00"
     },
     "pi": {
-      "pi": 0.9974,
+      "pi": 1.0,
       "dimensions": 15,
-      "timestamp": "2026-03-28T05:45:01.561812+00:00"
+      "timestamp": "2026-03-29T03:01:15.597979+00:00"
     }
   },
   "brain": {
-    "total_memories": 2654,
+    "total_memories": 0,
     "collections": 10
   },
   "episodes": {
-    "success_rate": 0.812,
-    "total": 362,
+    "success_rate": 0.813,
+    "total": 363,
     "breakdown": {
-      "success": 294,
+      "success": 295,
       "soft_failure": 45,
       "failure": 10,
       "timeout": 13
@@ -48,25 +48,25 @@
   "uptime_since": "2026-02-18 12:20:37",
   "recent_completions": [
     {
+      "tag": "E1_CI_GREEN",
+      "status": "success"
+    },
+    {
+      "tag": "E2_BRAIN_HEALTH",
+      "status": "success"
+    },
+    {
+      "tag": "E3_BENCHMARK_RECORD",
+      "status": "success"
+    },
+    {
+      "tag": "E5_CONSOLIDATION_PLAN",
+      "status": "success"
+    },
+    {
       "tag": "LOAD_SCALING_OPTIMIZE",
-      "status": "success"
-    },
-    {
-      "tag": "BENCHMARK_LOAD_NOISE_FLOOR",
-      "status": "success"
-    },
-    {
-      "tag": "A5_A7_RUNTIME_MODE_AND_CLI_FINISH",
-      "status": "success"
-    },
-    {
-      "tag": "TEMPORAL_RETRIEVAL_FIX",
-      "status": "success"
-    },
-    {
-      "tag": "P0_BACKFILL_CREATED_EPOCH_SENTINEL_FIX",
       "status": "success"
     }
   ],
-  "updated_at": "2026-03-28T22:01:44.039857+00:00"
+  "updated_at": "2026-03-29T05:50:02.924683+00:00"
 }

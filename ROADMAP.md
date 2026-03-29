@@ -1,7 +1,7 @@
 # ROADMAP.md — Clarvis Evolution Roadmap
 
 _The single source of truth for where Clarvis is going and how to get there._
-_Updated: 2026-03-23_
+_Updated: 2026-03-29_
 
 ---
 
@@ -46,29 +46,30 @@ Clarvis should grow into:
 - likely first extraction candidate: **ClarvisDB** (vector memory with graph associations)
 - a public website presenting Clarvis, linked repos, current work, and benchmarks
 
-## Current State (2026-03-22)
+## Current State (2026-03-29)
 
 | Capability | Status | Summary |
 |-----------|--------|---------|
-| **Brain (ClarvisDB)** | 97% | ChromaDB + ONNX local embeddings, 10 collections, unified API, weekly benchmark |
-| **Session Continuity** | 86% | Daily memory, curated memory, session automation |
-| **Heartbeat Evolution** | 100% | Autonomous cron-based execution backbone |
-| **Self-Awareness** | 93% | Phi ~0.81, 7 capability domains tracked |
-| **Task Tracking** | 93% | Prioritized evolution queue with delivery-window targeting |
-| **Reflection** | 92% | Daily/weekly synthesis feeding roadmap and queue maintenance |
-| **Confidence Gating** | 91% | Prediction-outcome calibration with Brier scoring |
-| **Attention & Working Memory** | 92% | Cognitive workspace with hierarchical buffers |
-| **Reasoning Chains** | 100% | Persistent multi-step reasoning infrastructure |
-| **Knowledge Synthesis** | 93% | Cross-domain connection finding via graph associations |
-| **Procedural Memory** | 91% | Procedure capture from successful task completions |
-| **Context Quality** | 91% | Adaptive RAG, semantic containment, dynamic section pruning |
-| **Monitoring** | 94% | Health checks, watchdog, performance dashboard |
-| **Episodic Memory** | 95% | 153+ episodes, ACT-R activation, failure amplification |
-| **Self-Surgery** | 82% | Function decomposition, architecture cleanup |
-| **Cognitive Workspace** | 75% | Baddeley-inspired buffer management (Agarwal 2025) |
-| **ACT-R Activation** | 85% | Power-law decay model, recall-path integration in progress |
-| **Agent Orchestrator** | 88% | Multi-project delegation with isolated workspaces |
-| **Performance Index** | 95% | 8-dimension composite score, self-optimization alerts |
+| **Brain (ClarvisDB)** | 98% | 10 collections, healthy brain checks, faster retrieval, stronger temporal recall, final benchmark gates passing |
+| **Session Continuity** | 86% | Daily memory, curated memory, session automation; still solid but not meaningfully advanced this week |
+| **Heartbeat Evolution** | 100% | Autonomous cron backbone remains in place; remaining gap is explicit cron audit closure |
+| **Self-Awareness** | 94% | Phi 0.8304, 7 capability domains tracked, stronger weekly benchmark evidence |
+| **Task Tracking** | 94% | Queue remains active and delivery-oriented, but goal/queue signal needs compaction to reduce planning noise |
+| **Reflection** | 93% | Daily/weekly synthesis still feeding roadmap and queue maintenance effectively |
+| **Confidence Gating** | 93% | Brier calibration wiring repaired and re-validated; confidence loop looks healthy |
+| **Attention & Working Memory** | 93% | Cognitive workspace remains effective with high reuse and better brief quality |
+| **Reasoning Chains** | 100% | Persistent multi-step reasoning infrastructure remains stable |
+| **Knowledge Synthesis** | 94% | Cross-domain connection finding improved, though some bridge quality work remains |
+| **Procedural Memory** | 92% | Procedure capture is strong, but procedural/infrastructure factual retrieval still needs polish |
+| **Context Quality** | 94% | Brief compression now above target, dynamic pruning and relevance quality substantially improved |
+| **Monitoring** | 95% | Health checks, dashboards, status surfaces, and benchmark reporting are in strong shape |
+| **Episodic Memory** | 96% | Crash guarding, failure subclassing, and postmortem tagging materially improved robustness |
+| **Self-Surgery** | 90% | Major decomposition/recombine work landed across brain search, postflight, context, and benchmark code |
+| **Cognitive Workspace** | 84% | Hierarchical buffers are working well; reuse and context assembly are materially healthier |
+| **ACT-R Activation** | 88% | Power-law decay and recall-path usage remain solid, with retrieval behavior now better grounded in benchmarks |
+| **Agent Orchestrator** | 91% | Benchmark scripts and scoreboard added; orchestration layer is more measurable and release-ready |
+| **Performance Index** | 100% | PI hit 1.0000 with all final benchmark gates passing |
+| **Public Surface** | 88% | Website v0, architecture/public pages, and status surfacing exist; final reliability validation remains |
 
 ---
 

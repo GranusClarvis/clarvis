@@ -102,10 +102,12 @@ def intra_collection_density(nodes, adj):
     Degree-based metric: min(1.0, avg_degree / TARGET_DEGREE) is scale-
     invariant and reflects actual integration per memory.
 
-    TARGET_DEGREE = 10: each memory should ideally have ~10 same-collection
-    neighbors for strong intra-collection integration.
+    TARGET_DEGREE = 25: each memory should ideally have ~25 same-collection
+    neighbors for strong intra-collection integration.  Raised from 10
+    (2026-03-29) per strategic audit — 10 was too easy to saturate,
+    masking real integration quality differences.
     """
-    TARGET_DEGREE = 10
+    TARGET_DEGREE = 25
 
     col_nodes = defaultdict(set)
     for nid, col in nodes.items():

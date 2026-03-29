@@ -104,7 +104,9 @@ def _ast_structural_checks(tree, content):
 
     Returns a dict of check_name -> pass/fail (bool) for:
     - no_bare_except: no `except:` without exception type
-    - reasonable_function_length: no function >100 lines
+    - reasonable_function_length: no function >200 lines (raised from 100; see
+      DECOMPOSITION_REMEDIATION plan 2026-03-29 — 100 caused false positives on
+      healthy orchestrators/renderers)
     - no_star_imports: no `from X import *`
     - has_error_handling: try/except present if file has I/O or network calls
     """
@@ -119,13 +121,13 @@ def _ast_structural_checks(tree, content):
             bare_excepts += 1
     results["no_bare_except"] = bare_excepts == 0
 
-    # Check 2: Reasonable function length (<100 lines)
+    # Check 2: Reasonable function length (<200 lines)
     long_funcs = 0
     for node in ast.walk(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             if hasattr(node, 'end_lineno') and node.end_lineno:
                 length = node.end_lineno - node.lineno
-                if length > 100:
+                if length > 200:
                     long_funcs += 1
     results["reasonable_function_length"] = long_funcs == 0
 
@@ -518,7 +520,131 @@ def get_all_quality_metrics():
     }
 
 
+# ---------------------------------------------------------------------------
+# Advisory structural complexity risk (separate from quality scoring pipeline)
+# ---------------------------------------------------------------------------
+# This function is ADVISORY ONLY. It must NOT feed into compute_code_quality_score(),
+# PI dimensions, or any autonomous optimization loop. See:
+#   docs/DECOMPOSITION_REMEDIATION_AND_STRUCTURAL_POLICY_PLAN_2026-03-29.md
+# ---------------------------------------------------------------------------
+
+_ROLE_KEYWORDS = {
+    "orchestrator": ["run_", "execute_", "main", "pipeline", "process_all", "dispatch"],
+    "renderer": ["render_", "format_", "generate_html", "build_report", "_css", "template"],
+    "algorithmic": ["compute_", "calculate_", "score_", "evaluate_", "benchmark"],
+}
+
+
+def structural_complexity_risk(file_path: str) -> dict:
+    """Compute advisory structural risk for a Python file.
+
+    Uses 3 signals (per executive review 2026-03-29):
+      1. Length bucket (>120 / >180 / >260)
+      2. Caller count proxy (single-caller helpers = fragmentation signal)
+      3. Role classification (orchestrator / renderer / algorithmic / unknown)
+
+    Returns:
+        {
+            "file": str,
+            "risk": "low" | "medium" | "high",
+            "candidates": [
+                {"function": str, "lines": int, "role": str, "reasons": [str]}
+            ]
+        }
+
+    INVARIANT: This output is informational. It must never be used to
+    auto-generate queue tasks or feed into scoring pipelines.
+    """
+    import ast
+
+    result = {"file": file_path, "risk": "low", "candidates": []}
+    try:
+        with open(file_path) as f:
+            source = f.read()
+        tree = ast.parse(source)
+    except Exception:
+        return result
+
+    # Collect all function names for caller-count estimation
+    all_func_names = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            all_func_names.add(node.name)
+
+    # Count how many times each name is called (rough proxy for caller count)
+    call_counts: dict[str, int] = {name: 0 for name in all_func_names}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            callee_name = None
+            if isinstance(node.func, ast.Name):
+                callee_name = node.func.id
+            elif isinstance(node.func, ast.Attribute):
+                callee_name = node.func.attr
+            if callee_name and callee_name in call_counts:
+                call_counts[callee_name] += 1
+
+    max_risk = "low"
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        end_line = getattr(node, "end_lineno", None)
+        if end_line is None:
+            continue
+        length = end_line - node.lineno + 1
+        if length <= 120:
+            continue
+
+        reasons = []
+        func_name = node.name
+
+        # Signal 1: length bucket
+        if length > 260:
+            reasons.append("very_long_function")
+            risk = "high"
+        elif length > 180:
+            reasons.append("long_function")
+            risk = "medium"
+        else:
+            reasons.append("moderately_long_function")
+            risk = "low"
+
+        # Signal 2: role classification (dampens risk for orchestrators/renderers)
+        role = "unknown"
+        for role_name, keywords in _ROLE_KEYWORDS.items():
+            if any(kw in func_name.lower() for kw in keywords):
+                role = role_name
+                break
+        if role in ("orchestrator", "renderer") and risk == "medium":
+            risk = "low"
+            reasons.append(f"role_{role}_dampened")
+
+        # Signal 3: if this is a helper with only 1 caller, it's a fragmentation signal
+        callers = call_counts.get(func_name, 0)
+        if callers <= 1 and length < 30 and not func_name.startswith("_"):
+            reasons.append("single_caller_small_helper")
+
+        if risk == "high":
+            max_risk = "high"
+        elif risk == "medium" and max_risk != "high":
+            max_risk = "medium"
+
+        if risk != "low":
+            result["candidates"].append({
+                "function": func_name, "lines": length, "role": role, "reasons": reasons,
+            })
+
+    result["risk"] = max_risk
+    return result
+
+
 if __name__ == "__main__":
     import json
-    metrics = get_all_quality_metrics()
-    print(json.dumps(metrics, indent=2))
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] == "structural-risk":
+        targets = sys.argv[2:] if len(sys.argv) > 2 else []
+        for path in targets:
+            report = structural_complexity_risk(path)
+            print(json.dumps(report, indent=2))
+    else:
+        metrics = get_all_quality_metrics()
+        print(json.dumps(metrics, indent=2))

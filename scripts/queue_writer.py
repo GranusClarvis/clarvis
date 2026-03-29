@@ -30,6 +30,27 @@ STATE_FILE = "/home/agent/.openclaw/workspace/data/queue_writer_state.json"
 MAX_AUTO_TASKS_PER_DAY = 5
 SIMILARITY_THRESHOLD = 0.5  # Word overlap ratio to consider a duplicate
 
+# Patterns that identify structural/line-count refactor tasks.
+# Auto-generated tasks matching these are blocked unless from a safe source.
+_STRUCTURAL_PATTERNS = re.compile(
+    r'(?i)'
+    r'(?:decompos\w*\s+(?:long|oversized|large)\s+func)|'
+    r'(?:split\s+(?:all\s+)?(?:oversized|long)\s+func)|'
+    r'(?:<=?\s*\d+\s*lines?\b)|'
+    r'(?:function.length)|'
+    r'(?:reduce\s+func\w*\s+to\s+(?:target\s+)?line)|'
+    r'(?:DECOMPOSE_LONG_FUNCTIONS)'
+)
+
+
+def _is_structural_refactor_task(task: str) -> bool:
+    """Check if a task description is a structural/line-count refactor.
+
+    Returns True for tasks driven by line-count aesthetics rather than
+    real maintenance concern. See Phase 5 of the Decomposition Remediation plan.
+    """
+    return bool(_STRUCTURAL_PATTERNS.search(task))
+
 
 def _load_state() -> dict:
     if os.path.exists(STATE_FILE):
@@ -133,6 +154,15 @@ def add_tasks(tasks: list, priority: str = "P0", source: str = "unknown") -> lis
             return []
     except ImportError:
         pass  # Mode system not installed yet — allow all
+
+    # Provenance gate: structural refactor tasks require manual/audit source.
+    # Auto-generated structural tasks are blocked to prevent metric-cult behavior.
+    # See: docs/DECOMPOSITION_REMEDIATION_AND_STRUCTURAL_POLICY_PLAN_2026-03-29.md
+    _STRUCTURAL_SAFE_SOURCES = frozenset({"manual", "audit", "user", "cli"})
+    if source not in _STRUCTURAL_SAFE_SOURCES:
+        tasks = [t for t in tasks if not _is_structural_refactor_task(t)]
+        if not tasks:
+            return []
 
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 

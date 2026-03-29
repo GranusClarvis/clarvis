@@ -10,7 +10,7 @@ source /home/agent/.openclaw/workspace/scripts/lock_helper.sh
 LOGFILE="memory/cron/strategic_audit.log"
 
 # Acquire locks: local + global Claude
-acquire_local_lock "/tmp/clarvis_strategic_audit.lock" "$LOGFILE"
+acquire_local_lock "/tmp/clarvis_strategic_audit.lock" "$LOGFILE" 3600
 acquire_global_claude_lock "$LOGFILE"
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === STRATEGIC AUDIT START ===" >> "$LOGFILE"

@@ -24,21 +24,18 @@ _Queue audited on 2026-03-24 evening. Removed 3 completed items (A5_A7, TEMPORAL
 ### Milestone D — Public Surface (by 2026-03-29)
 
 ### Milestone E — Final Validation (by 2026-03-31)
-- [x] [E1_CI_GREEN] All CI checks pass on main (lint + test). Fix any failures. _(Fixed: pytest import-mode=importlib, testpaths order packages→tests, added conftest.py for namespace isolation. Lint passes. 2026-03-28.)_
-- [x] [E2_BRAIN_HEALTH] `python3 -m clarvis brain health` passes all checks. Fix any degraded metrics. _(2529 memories, 10 collections, store/recall healthy, 0 stale, 0 dupes. 8 orphan edge refs — cosmetic, backfill blocked by thread limits. 2026-03-28.)_
-- [ ] [E3_BENCHMARK_RECORD] Run `performance_benchmark.py record` and `cron_clr_benchmark.sh` — record final PI and CLR scores. Both above thresholds.
-- [ ] [E4_CRON_AUDIT] All cron jobs ran successfully in the last 24h (no stale locks, no failures in watchdog logs).
-- [x] [E5_CONSOLIDATION_PLAN] Document repo boundary plan: what stays in main repo vs what moves to separate packages/repos. One-pager in `docs/CONSOLIDATION_PLAN.md`. _(Written. Summarizes existing REPO_CONSOLIDATION_PLAN.md: 2 repos, anti-sprawl policy, migration sequence. 2026-03-28.)_
 
 
 ---
 
 ## P1 — This Week
 
-- [ ] [STRATEGIC_AUDIT 2026-03-28] [STRATEGIC_AUDIT/autonomy] Add external challenge source to evolution loop — e.g., user-submitted tasks, research paper implementations, or benchmark suites that test novel problem-solving.
-- [ ] [STRATEGIC_AUDIT 2026-03-28] [STRATEGIC_AUDIT/metric_integrity] Raise TARGET_DEGREE to 25 or increase semantic_overlap weight to 0.50 so Phi reflects real integration quality.
-- [ ] [STRATEGIC_AUDIT 2026-03-28] [STRATEGIC_AUDIT/metric_integrity] Investigate CLR ablation methodology. Use harder test tasks, remove scoring floors, or test with 2+ components ablated simultaneously to find interaction effects.
-- [ ] [DECOMPOSE_LONG_FUNCTIONS] Decompose oversized functions: `clarvis/metrics/self_model.py:_assess_memory_system` (95 lines), `clarvis/metrics/self_model.py:_assess_autonomous_execution` (134 lines), `clarvis/metrics/self_model.py:_assess_self_reflection` (108 lines), `clarvis/metrics/self_model.py:_assess_reasoning_chains` (95 lines), `clarvis/metrics/self_model.py:_assess_learning_feedback` (127 lines). Target: all functions ≤80 lines.
+
+- [~] [STRATEGIC_AUDIT 2026-03-28] [STRATEGIC_AUDIT/autonomy] Add external challenge source to evolution loop — e.g., user-submitted tasks, research paper implementations, or benchmark suites that test novel problem-solving.
+  - [ ] [AUTO_SPLIT 2026-03-29] [STRATEGIC_AUDIT 2026-03-28_1] Analyze: read relevant source files, identify change boundary
+  - [ ] [AUTO_SPLIT 2026-03-29] [STRATEGIC_AUDIT 2026-03-28_2] Implement: core logic change in one focused increment
+  - [ ] [AUTO_SPLIT 2026-03-29] [STRATEGIC_AUDIT 2026-03-28_3] Test: add/update test(s) covering the new behavior
+  - [ ] [AUTO_SPLIT 2026-03-29] [STRATEGIC_AUDIT 2026-03-28_4] Verify: run existing tests, confirm no regressions
 
 
 
@@ -97,6 +94,9 @@ _(Completed items archived.)_
 
 
 - [ ] [SEMANTIC_CROSS_COLLECTION_BRIDGE] Cross-collection connectivity score is 0.66 (second-weakest). Run `brain.py bulk_cross_link` with lowered similarity threshold (0.55→0.50) on the 3 least-connected collections, then verify connectivity improvement via `performance_benchmark.py record`.
+- [ ] [GOAL_SET_COMPACTION] Curate active goals so `brain.get_goals()` returns a concise operator view instead of bridge/generated clutter. Archive or demote stale bridge goals, keep 5-8 canonical active goals, and document the policy.
+- [ ] [INFRA_RETRIEVAL_HARDENING] Fix the remaining infrastructure/procedural retrieval blind spots called out in recent LLM brain reviews. Target graph backend/configuration factual recall and verify with 5-10 focused QA prompts.
+- [ ] [EXTERNAL_CHALLENGE_FEED] Add one external challenge source to the evolution loop (benchmark set, public issue feed, or research implementation tasks) so autonomous work is tested on novel problems, not only self-generated ones.
 
 
 

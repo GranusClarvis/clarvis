@@ -10,7 +10,7 @@ MONTH_TAG=$(date -u +%Y-%m)
 OUTPUT_FILE="memory/cron/monthly_reflection_${MONTH_TAG}.md"
 
 # Acquire locks: local + global Claude
-acquire_local_lock "/tmp/clarvis_monthly_reflection.lock" "$LOGFILE"
+acquire_local_lock "/tmp/clarvis_monthly_reflection.lock" "$LOGFILE" 7200
 acquire_global_claude_lock "$LOGFILE"
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Monthly reflection starting (${MONTH_TAG}) ===" >> "$LOGFILE"

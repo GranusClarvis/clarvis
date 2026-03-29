@@ -238,6 +238,26 @@ class TestBrainSearch:
         # Should route to GOALS collection
         assert isinstance(results, list)
 
+    def test_recall_text_fallback_uses_real_query(self, brain_instance):
+        """Regression test: text-search fallback must pass the actual query,
+        not an empty string. See _query_single_collection bug (2026-03-29)."""
+        brain_instance.store("The heartbeat pipeline runs every hour",
+                             importance=0.9, memory_id="hb-pipeline")
+        # Force text fallback by invalidating embedding cache
+        brain_instance._embedding_cache.clear()
+        # Monkey-patch the embedding function to return None (simulates failure)
+        original_fn = brain_instance._get_or_compute_embedding
+        brain_instance._get_or_compute_embedding = lambda q, cols: None
+        try:
+            results = brain_instance.recall("heartbeat pipeline", n=5)
+            assert isinstance(results, list)
+            assert len(results) >= 1, "Text fallback should find stored memory"
+            docs = [r["document"] for r in results]
+            assert any("heartbeat" in d.lower() for d in docs), \
+                "Text fallback must use real query, not empty string"
+        finally:
+            brain_instance._get_or_compute_embedding = original_fn
+
 
 class TestBrainGraph:
     def test_add_relationship(self, brain_instance):

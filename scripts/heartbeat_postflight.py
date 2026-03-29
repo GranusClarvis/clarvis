@@ -261,7 +261,8 @@ def _mark_task_in_queue(task_text, annotation, queue_file, archive_file=None):
     try:
         from queue_writer import mark_task_complete
         return mark_task_complete(task_text, annotation, queue_file=queue_file, archive_file=archive_file)
-    except Exception:
+    except Exception as e:
+        log(f"_mark_task_in_queue failed for '{task_text[:60]}': {e}")
         return False
 
 
@@ -523,8 +524,9 @@ def _pf_attention_hooks_procedural(ctx, _pf_errors):
     return timings
 
 
-def _pf_prompt_optimization(ctx):
-    """§5.05 Prompt optimization outcome recording."""
+def _pf_prompt_and_prediction(ctx):
+    """§5.05 Prompt optimization + §5.1 Prediction auto-resolver."""
+    # --- §5.05 Prompt optimization outcome recording ---
     preflight_data = ctx["preflight_data"]
     variant_id = preflight_data.get("prompt_variant_id", "")
     variant_task_type = preflight_data.get("prompt_variant_task_type", "")
@@ -537,9 +539,7 @@ def _pf_prompt_optimization(ctx):
         except Exception as e:
             log(f"Prompt optimization recording failed (non-fatal): {e}")
 
-
-def _pf_prediction_resolve(ctx):
-    """§5.1 Prediction auto-resolver."""
+    # --- §5.1 Prediction auto-resolver ---
     task = ctx["task"]
     actual = "success" if ctx["exit_code"] == 0 else "failure"
     if pred_resolve_enhanced:
@@ -714,15 +714,10 @@ def _pf_prompt_predict_cognitive(ctx, _pf_errors):
     """§5.05 Prompt opt, §5.1 Prediction resolve, §5.5-5.95 Cognitive subsystems."""
     timings = {}
 
-    # §5.05 Prompt optimization
+    # §5.05 Prompt optimization + §5.1 Prediction auto-resolver
     t505 = time.monotonic()
-    _pf_prompt_optimization(ctx)
-    timings["prompt_optimization"] = round(time.monotonic() - t505, 3)
-
-    # §5.1 Prediction auto-resolver
-    t51 = time.monotonic()
-    _pf_prediction_resolve(ctx)
-    timings["prediction_auto_resolve"] = round(time.monotonic() - t51, 3)
+    _pf_prompt_and_prediction(ctx)
+    timings["prompt_and_prediction"] = round(time.monotonic() - t505, 3)
 
     # §5.5-5.6 World model + Meta-gradient
     timings.update(_pf_world_model_and_metagradient(ctx, _pf_errors))
@@ -1088,14 +1083,18 @@ def _syntax_check_files(changed_py, ws):
 
 
 def _pf_complexity_gate(ctx):
-    """§7.421 Complexity gate: auto-queue decomposition for long functions."""
+    """§7.421 Structural review: advisory report on changed files (report-only).
+
+    Replaces the old line-count gate. Uses structural_complexity_risk() for
+    role-aware, multi-signal analysis. Emits findings to data/structural_review.json.
+    NEVER auto-creates queue tasks from structural findings.
+    """
     timings = {}
     t7421 = time.monotonic()
     try:
-        import ast as _ast
+        import subprocess
         _cg_changed = ctx.get("changed_py", set())
         if not _cg_changed:
-            import subprocess
             _ws = ctx["WORKSPACE"]
             for _cmd in [
                 ["git", "diff", "--name-only", "--diff-filter=ACMR", "HEAD~1", "HEAD", "--", "*.py"],
@@ -1107,50 +1106,60 @@ def _pf_complexity_gate(ctx):
                     if _l.endswith(".py"):
                         _cg_changed.add(_l)
 
-        _long_funcs = []
-        _max_func_lines = 80
-        _ws = ctx["WORKSPACE"]
-        for relpath in sorted(_cg_changed)[:15]:
-            fpath = os.path.join(_ws, relpath)
-            if not os.path.exists(fpath):
-                continue
+        if _cg_changed:
             try:
-                with open(fpath) as _f:
-                    source = _f.read()
-                tree = _ast.parse(source)
-                for node in _ast.walk(tree):
-                    if isinstance(node, (_ast.FunctionDef, _ast.AsyncFunctionDef)):
-                        end_line = getattr(node, "end_lineno", None)
-                        if end_line is None:
-                            continue
-                        func_len = end_line - node.lineno + 1
-                        if func_len > _max_func_lines:
-                            _long_funcs.append({"file": relpath, "function": node.name,
-                                                "lines": func_len, "start": node.lineno, "end": end_line})
-            except Exception as e:
-                logging.debug("Complexity gate: AST parse failed for %s: %s", relpath, e)
+                from clarvis.metrics.quality import structural_complexity_risk
+            except ImportError:
+                structural_complexity_risk = None
 
-        if _long_funcs:
-            log(f"Complexity gate: {len(_long_funcs)} function(s) exceed {_max_func_lines} lines")
-            queue_path = os.path.join(_ws, "memory/evolution/QUEUE.md")
-            if os.path.exists(queue_path):
-                with open(queue_path) as _qf:
-                    queue_content = _qf.read()
-                _func_descs = [f"`{lf['file']}:{lf['function']}` ({lf['lines']} lines)" for lf in _long_funcs[:5]]
-                _task_tag = "[DECOMPOSE_LONG_FUNCTIONS]"
-                if _task_tag not in queue_content:
-                    _task_line = f"- [ ] {_task_tag} Decompose oversized functions: {', '.join(_func_descs)}. Target: all functions ≤{_max_func_lines} lines."
-                    if "## P1" in queue_content:
-                        queue_content = queue_content.replace("## P1 — This Week\n", f"## P1 — This Week\n\n{_task_line}\n", 1)
-                        with open(queue_path, "w") as _qf:
-                            _qf.write(queue_content)
-                        log(f"Complexity gate: queued {_task_tag} as P1")
-                else:
-                    log(f"Complexity gate: {_task_tag} already in queue")
+            _ws = ctx["WORKSPACE"]
+            reviews = []
+            for relpath in sorted(_cg_changed)[:15]:
+                fpath = os.path.join(_ws, relpath)
+                if not os.path.exists(fpath):
+                    continue
+                if structural_complexity_risk:
+                    review = structural_complexity_risk(fpath)
+                    review["file"] = relpath  # use relative path
+                    if review["candidates"]:
+                        reviews.append(review)
+
+            # Determine overall recommendation level
+            has_high = any(r["risk"] == "high" for r in reviews)
+            has_medium = any(r["risk"] == "medium" for r in reviews)
+            if has_high:
+                recommendation = "REVIEW_SOON"
+            elif has_medium:
+                recommendation = "REVIEW_LATER"
+            else:
+                recommendation = "OK"
+
+            # Emit artifact (report-only, never feeds queue)
+            artifact = {
+                "ts": datetime.now(timezone.utc).isoformat(),
+                "recommendation": recommendation,
+                "files_analyzed": len(_cg_changed),
+                "flagged_files": reviews,
+            }
+            artifact_path = os.path.join(_ws, "data", "structural_review.json")
+            try:
+                import json as _json
+                os.makedirs(os.path.dirname(artifact_path), exist_ok=True)
+                with open(artifact_path, "w") as _f:
+                    _json.dump(artifact, _f, indent=2)
+            except Exception:
+                pass
+
+            total_candidates = sum(len(r["candidates"]) for r in reviews)
+            if total_candidates:
+                log(f"Structural review: {total_candidates} candidate(s) across {len(reviews)} file(s), "
+                    f"recommendation={recommendation} (report-only)")
+            else:
+                log("Structural review: no concerns in changed files")
         else:
-            log("Complexity gate: all functions within limit")
+            log("Structural review: no changed Python files")
     except Exception as e:
-        log(f"Complexity gate failed (non-fatal): {e}")
+        log(f"Structural review failed (non-fatal): {e}")
     timings["complexity_gate"] = round(time.monotonic() - t7421, 3)
     return timings
 

@@ -323,7 +323,7 @@ class SearchMixin:
 
     # --- recall helper: query single collection ---
 
-    def _query_single_collection(self, col_name, query_embedding, n,
+    def _query_single_collection(self, col_name, query, query_embedding, n,
                                  cutoff_epoch, cutoff_date, min_importance,
                                  include_related):
         """Query a single ChromaDB collection. Designed for parallel execution."""
@@ -336,13 +336,13 @@ class SearchMixin:
                 results = col.query(query_embeddings=[query_embedding],
                                     n_results=fetch_n, where=where_clause)
             else:
-                results = col.query(query_texts=[""], n_results=fetch_n,
+                results = col.query(query_texts=[query], n_results=fetch_n,
                                     where=where_clause)
         except Exception:
             if query_embedding is not None:
                 results = col.query(query_embeddings=[query_embedding], n_results=fetch_n)
             else:
-                results = col.query(query_texts=[""], n_results=fetch_n)
+                results = col.query(query_texts=[query], n_results=fetch_n)
 
         items = []
         if not (results["documents"] and results["documents"][0]):
@@ -367,7 +367,7 @@ class SearchMixin:
 
     # --- recall helper: dispatch queries across collections ---
 
-    def _dispatch_collection_queries(self, valid_collections, query_embedding, n,
+    def _dispatch_collection_queries(self, valid_collections, query, query_embedding, n,
                                      cutoff_epoch, cutoff_date, min_importance,
                                      include_related):
         """Query all collections (parallel when >=3, sequential otherwise)."""
@@ -383,7 +383,7 @@ class SearchMixin:
             use_parallel = len(valid_collections) >= 3
 
         query_fn = partial(self._query_single_collection,
-                           query_embedding=query_embedding, n=n,
+                           query=query, query_embedding=query_embedding, n=n,
                            cutoff_epoch=cutoff_epoch, cutoff_date=cutoff_date,
                            min_importance=min_importance, include_related=include_related)
 
@@ -453,8 +453,23 @@ class SearchMixin:
                 continue
 
         rw = max(0.0, min(1.0, recency_weight))
+
+        # Compute recency scores
         if rw > 0:
-            self._apply_recency_scores(all_results, rw)
+            now_ts = datetime.now(timezone.utc).timestamp()
+            if rw >= 0.8:
+                max_age = 7 * 86400
+            elif rw >= 0.6:
+                max_age = 30 * 86400
+            else:
+                max_age = 90 * 86400
+            for r in all_results:
+                created = r["metadata"].get("created_at", "")
+                try:
+                    age_s = now_ts - datetime.fromisoformat(created).timestamp()
+                    r["_recency_score"] = max(0.0, 1.0 - age_s / max_age)
+                except (ValueError, TypeError):
+                    r["_recency_score"] = 0.0
 
         # Recency blending factor
         if rw >= 0.8:
@@ -464,40 +479,14 @@ class SearchMixin:
         else:
             blend = rw * 0.4
 
-        self._sort_results(all_results, scored, rw, blend)
-
-        if filter_bridges:
-            all_results = _deprioritize_bridges(all_results)
-        return _filter_belief_revision(all_results)
-
-    @staticmethod
-    def _apply_recency_scores(results, recency_weight):
-        """Compute _recency_score for each result based on age."""
-        now_ts = datetime.now(timezone.utc).timestamp()
-        if recency_weight >= 0.8:
-            max_age = 7 * 86400
-        elif recency_weight >= 0.6:
-            max_age = 30 * 86400
-        else:
-            max_age = 90 * 86400
-        for r in results:
-            created = r["metadata"].get("created_at", "")
-            try:
-                age_s = now_ts - datetime.fromisoformat(created).timestamp()
-                r["_recency_score"] = max(0.0, 1.0 - age_s / max_age)
-            except (ValueError, TypeError):
-                r["_recency_score"] = 0.0
-
-    @staticmethod
-    def _sort_results(results, scored, recency_weight, blend):
-        """Sort results by actr score or fallback, blended with recency."""
+        # Sort by actr score or distance-based fallback, blended with recency
         if scored:
-            if recency_weight > 0:
-                results.sort(
+            if rw > 0:
+                all_results.sort(
                     key=lambda x: x.get("_actr_score", 0) * (1 - blend)
                     + x.get("_recency_score", 0) * blend, reverse=True)
             else:
-                results.sort(key=lambda x: x.get("_actr_score", 0), reverse=True)
+                all_results.sort(key=lambda x: x.get("_actr_score", 0), reverse=True)
         else:
             def sort_key(x):
                 dist = x.get("distance")
@@ -505,10 +494,14 @@ class SearchMixin:
                 imp = x["metadata"].get("importance", 0.5)
                 boost = x["metadata"].get("_attention_boost", 0)
                 base = sem * 0.85 + (imp + boost) * 0.15
-                if recency_weight > 0:
+                if rw > 0:
                     return base * (1 - blend) + x.get("_recency_score", 0.0) * blend
                 return base
-            results.sort(key=sort_key, reverse=True)
+            all_results.sort(key=sort_key, reverse=True)
+
+        if filter_bridges:
+            all_results = _deprioritize_bridges(all_results)
+        return _filter_belief_revision(all_results)
 
     # --- recall helper: fire observers ---
 
@@ -532,23 +525,6 @@ class SearchMixin:
                 except Exception:
                     _log.debug("Observer %s failed", fn.__qualname__, exc_info=True)
         _observer_executor.submit(_run)
-
-    # --- recall helper: finalize (observers + reconsolidation + cache) ---
-
-    def _finalize_recall(self, query, final_results, caller, cache_key):
-        """Fire observers, mark labile memories, and update recall cache."""
-        self._fire_recall_observers(query, final_results, caller)
-        for result in final_results:
-            mem_id = result.get("id")
-            col_name = result.get("collection")
-            if mem_id and col_name:
-                self._labile_memories[mem_id] = {
-                    "retrieved_at": time.monotonic(), "collection": col_name,
-                }
-        self._recall_cache[cache_key] = (time.monotonic(), final_results)
-        if len(self._recall_cache) > 50:
-            oldest = min(self._recall_cache, key=lambda k: self._recall_cache[k][0])
-            del self._recall_cache[oldest]
 
     # --- recall: main entry point ---
 
@@ -589,7 +565,7 @@ class SearchMixin:
         # Phase 4: Fetch from collections
         _t_fetch = time.monotonic()
         all_results = self._dispatch_collection_queries(
-            valid_collections, query_embedding, n,
+            valid_collections, query, query_embedding, n,
             cutoff_epoch, cutoff_date, min_importance, include_related)
 
         # Phase 4b: Chronological fallback for strong temporal queries
@@ -617,7 +593,18 @@ class SearchMixin:
                 _log.debug("Graph expansion failed", exc_info=True)
 
         # Phase 7: Observers + reconsolidation + cache
-        self._finalize_recall(query, final_results, caller, cache_key)
+        self._fire_recall_observers(query, final_results, caller)
+        for result in final_results:
+            mem_id = result.get("id")
+            col_name = result.get("collection")
+            if mem_id and col_name:
+                self._labile_memories[mem_id] = {
+                    "retrieved_at": time.monotonic(), "collection": col_name,
+                }
+        self._recall_cache[cache_key] = (time.monotonic(), final_results)
+        if len(self._recall_cache) > 50:
+            oldest = min(self._recall_cache, key=lambda k: self._recall_cache[k][0])
+            del self._recall_cache[oldest]
 
         if _telemetry:
             _t_end = time.monotonic()

@@ -12,6 +12,7 @@ from clarvis.metrics.quality import (
     compute_semantic_depth,
     compute_efficiency_score,
     get_all_quality_metrics,
+    structural_complexity_risk,
 )
 
 
@@ -116,3 +117,53 @@ class TestGetAllQualityMetrics:
                 score = value.get('quality_score', value.get('score', None))
                 if score is not None:
                     assert 0 <= score <= 1, f"{key} score {score} out of range"
+
+
+class TestStructuralComplexityRisk:
+    """Tests for the advisory structural_complexity_risk function."""
+
+    def test_returns_expected_shape(self, tmp_path):
+        """Test that output has the required keys."""
+        f = tmp_path / "sample.py"
+        f.write_text("def foo():\n    pass\n")
+        result = structural_complexity_risk(str(f))
+        assert "file" in result
+        assert "risk" in result
+        assert "candidates" in result
+        assert result["risk"] in ("low", "medium", "high")
+
+    def test_short_functions_are_low_risk(self, tmp_path):
+        """Short functions should never be flagged."""
+        f = tmp_path / "short.py"
+        f.write_text("def a():\n" + "    x = 1\n" * 50 + "    return x\n")
+        result = structural_complexity_risk(str(f))
+        assert result["risk"] == "low"
+        assert result["candidates"] == []
+
+    def test_very_long_function_is_flagged(self, tmp_path):
+        """A 300-line function should be flagged as high risk."""
+        f = tmp_path / "long.py"
+        f.write_text("def giant():\n" + "    x = 1\n" * 300 + "    return x\n")
+        result = structural_complexity_risk(str(f))
+        assert result["risk"] == "high"
+        assert len(result["candidates"]) >= 1
+        assert result["candidates"][0]["function"] == "giant"
+
+    def test_firewall_not_in_get_all_quality_metrics(self):
+        """FIREWALL: structural_complexity_risk must NOT appear in get_all_quality_metrics.
+
+        This test enforces the invariant from the Decomposition Remediation plan:
+        structural risk scores must never feed PI, code-quality score, or any
+        autonomous optimization loop.
+        """
+        import inspect
+        source = inspect.getsource(get_all_quality_metrics)
+        assert "structural_complexity_risk" not in source, \
+            "FIREWALL VIOLATION: structural_complexity_risk must not feed quality metrics"
+
+    def test_firewall_not_in_code_quality_score(self):
+        """FIREWALL: structural_complexity_risk must NOT be called by compute_code_quality_score."""
+        import inspect
+        source = inspect.getsource(compute_code_quality_score)
+        assert "structural_complexity_risk" not in source, \
+            "FIREWALL VIOLATION: structural_complexity_risk must not feed code quality score"

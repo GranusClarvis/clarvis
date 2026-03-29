@@ -61,7 +61,7 @@ SCRIPTS="$CLARVIS_WORKSPACE/scripts"
 LOGFILE="memory/cron/orchestrator.log"
 
 # Local lock only — no Claude Code spawned, no global lock needed
-acquire_local_lock "/tmp/clarvis_orchestrator.lock" "$LOGFILE"
+acquire_local_lock "/tmp/clarvis_orchestrator.lock" "$LOGFILE" 3600
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Orchestrator maintenance started ===" >> "$LOGFILE"
 emit_dashboard_event task_started --task-name "Orchestrator daily" --section cron_orchestrator --executor python

@@ -9,7 +9,13 @@ LOGFILE="memory/cron/reflection.log"
 # Previously acquired global Claude lock but this blocked autonomous runs for 3+ hours
 # unnecessarily (reflection only does brain optimization, not Claude Code execution).
 # Removed 2026-03-15 per cron schedule audit.
-acquire_local_lock "/tmp/clarvis_reflection.lock" "$LOGFILE"
+# Stale threshold: 7200s (2h) — prevents zombie locks from blocking future runs.
+# Added 2026-03-29 after 24h stuck reflection caused system-wide process exhaustion.
+acquire_local_lock "/tmp/clarvis_reflection.lock" "$LOGFILE" 7200
+
+# Arm timeout watchdog — kill after 3600s (1h) to prevent runaway reflection.
+# Added 2026-03-29: memory_consolidation.py hung for 22h, exhausted NPROC limit.
+set_script_timeout 3600 "$LOGFILE"
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Reflection starting ===" >> "$LOGFILE"
 emit_dashboard_event task_started --task-name "Daily reflection" --section cron_reflection --executor claude-opus
@@ -58,7 +64,8 @@ run_step "crosslink" python3 -m clarvis brain crosslink
 run_step "intra_linker" python3 /home/agent/.openclaw/workspace/scripts/intra_linker.py --cap 5
 
 # Step 3.7: Semantic bridge building (cap 5/run)
-run_step "semantic_bridge" python3 /home/agent/.openclaw/workspace/scripts/semantic_bridge_builder.py --top 2
+# semantic_bridge_builder.py was removed; skip this step.
+# run_step "semantic_bridge" python3 /home/agent/.openclaw/workspace/scripts/semantic_bridge_builder.py --top 2
 
 # Step 4: Memory consolidation — deduplicate, prune noise, archive stale
 run_step "memory_consolidation" python3 /home/agent/.openclaw/workspace/scripts/memory_consolidation.py consolidate
