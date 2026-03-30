@@ -1169,7 +1169,40 @@ def generate_tiered_brief(
         result = _cross_section_dedup(result)
     except ImportError:
         pass
+    # Record per-section token counts for utilization benchmarking
+    _record_brief_token_stats(result, tier, current_task)
     return result
+
+
+def _record_brief_token_stats(brief_text, tier, task):
+    """Record per-section token counts to sidecar JSONL for benchmarking.
+
+    Non-blocking: silently skips on any error.
+    """
+    try:
+        from clarvis.cognition.context_relevance import parse_brief_sections
+        sections = parse_brief_sections(brief_text)
+        if not sections:
+            return
+        stats = {
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "tier": tier,
+            "task": task[:120],
+            "total_tokens": 0,
+            "sections": {},
+        }
+        for name, content in sections.items():
+            word_count = len(content.split())
+            tokens = int(word_count * 1.3)
+            stats["sections"][name] = {"tokens": tokens, "chars": len(content)}
+            stats["total_tokens"] += tokens
+        brief_stats_file = os.path.join(
+            os.path.dirname(BRIEF_FILE), "brief_token_stats.jsonl")
+        os.makedirs(os.path.dirname(brief_stats_file), exist_ok=True)
+        with open(brief_stats_file, "a") as f:
+            f.write(json.dumps(stats) + "\n")
+    except Exception:
+        pass
 
 
 def _classify_queue_lines(lines, cutoff_str):

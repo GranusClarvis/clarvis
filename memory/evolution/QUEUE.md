@@ -82,6 +82,8 @@ _(Completed items archived.)_
 
 ### External Challenges
 
+- [x] [EXTERNAL_CHALLENGE:bench-context-01] Measure context window utilization efficiency across 10 heartbeats — bench_context_utilization.py created, analyzes last N heartbeats from context_relevance.jsonl. Instrumented generate_tiered_brief to record ground-truth per-section token counts. Result: 95.9% mean utilization, 1.8% noise. (2026-03-30)
+
 
 ### P0 — Found in 2026-03-27 evening scan
 

@@ -1,6 +1,7 @@
 {
   "completed": [
-    "coding-challenge-01"
+    "coding-challenge-01",
+    "bench-context-01"
   ],
   "injections": [
     {
@@ -8,6 +9,12 @@
       "title": "Implement a lock-free concurrent ring buffer in Python",
       "timestamp": 1774832607.4165404,
       "date": "2026-03-30T01:03:27"
+    },
+    {
+      "id": "bench-context-01",
+      "title": "Measure context window utilization efficiency across 10 heartbeats",
+      "timestamp": 1774868401.7807682,
+      "date": "2026-03-30T11:00:01"
     }
   ],
   "gh_last_refresh": null
