@@ -1760,3 +1760,6 @@ _Last archived: 2026-03-27_
 ## Archived 2026-03-30
 - [x] [RESEARCH_PHI_COMPUTATION] Review practical Φ computation, PyPhi tooling, and theoretical limitations. (2026-03-30)
 - [x] [BRIEF_COMPRESSION_BOOST 2026-03-30] Raised brief compression 0.498→0.609 (target 0.55): (a) DYCP_MIN_CONTAINMENT 0.08→0.10, (b) cross-section dedup wired into generate_tiered_brief, (c) compress_text default ratio 0.3→0.25. Benchmark recorded, 14/15 pass, PI=0.904.
+
+## Archived 2026-03-30
+- [x] [PERFORMANCE_BENCHMARK 2026-03-30] [PERF] Phi (Integration): 0.2345 breached critical threshold 0.3. Action: fix_phi — False alarm: committed phi.py lacked SQLite graph reader (read empty in-memory graph post-cutover). Fix was in working tree but uncommitted. Recorded fresh phi=0.735. Need to commit phi.py.

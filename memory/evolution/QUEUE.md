@@ -51,7 +51,6 @@ _Queue audited on 2026-03-24 evening. Removed 3 completed items (A5_A7, TEMPORAL
 
 ### Phi / Benchmarking
 
-- [x] [PERFORMANCE_BENCHMARK 2026-03-30] [PERF] Phi (Integration): 0.2345 breached critical threshold 0.3. Action: fix_phi — False alarm: committed phi.py lacked SQLite graph reader (read empty in-memory graph post-cutover). Fix was in working tree but uncommitted. Recorded fresh phi=0.735. Need to commit phi.py.
 - [ ] [LLM_BRAIN_REVIEW 2026-03-30] [LLM_BRAIN_REVIEW] Maintain a single authoritative 'current priorities' memory in clarvis-goals that is updated weekly, replacing stale daily planning fragments — Probe 4 returned only diary entries (dist >1.0). A curated, regularly-updated priorities memory would give goal queries a strong anchor to retrieve.
 ---
 
