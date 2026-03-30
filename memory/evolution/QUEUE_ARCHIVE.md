@@ -1763,3 +1763,13 @@ _Last archived: 2026-03-27_
 
 ## Archived 2026-03-30
 - [x] [PERFORMANCE_BENCHMARK 2026-03-30] [PERF] Phi (Integration): 0.2345 breached critical threshold 0.3. Action: fix_phi — False alarm: committed phi.py lacked SQLite graph reader (read empty in-memory graph post-cutover). Fix was in working tree but uncommitted. Recorded fresh phi=0.735. Need to commit phi.py.
+
+## Archived 2026-03-30
+- [x] [EXTERNAL_CHALLENGE:bench-context-01] Measure context window utilization efficiency across 10 heartbeats — bench_context_utilization.py created, analyzes last N heartbeats from context_relevance.jsonl. Instrumented generate_tiered_brief to record ground-truth per-section token counts. Result: 95.9% mean utilization, 1.8% noise. (2026-03-30)
+
+## Archived 2026-03-30
+- [x] [LLM_BRAIN_REVIEW 2026-03-30] [LLM_BRAIN_REVIEW] Maintain a single authoritative 'current priorities' memory in clarvis-goals — Done: created `scripts/priorities_curator.py` (refresh/show/prune), seeded `current-priorities` memory (dist=1.211, #1 result for priority queries), pruned 1 stale fragment.
+- [x] [RESEARCH_PHI_COMPUTATION_2026-03-30] Reviewed Φ computation in IIT, PyPhi implementation limits, approximation evidence, and well-definedness critiques. (2026-03-30)
+
+## Archived 2026-03-30
+- [x] [CONFIDENCE_TIERED_ACTIONS] Implement tiered action levels (HIGH/MEDIUM/LOW/UNKNOWN) in `clarvis_confidence.py` per ROADMAP §3.1. Gate destructive/external actions behind HIGH confidence, allow read-only at LOW. Wire into heartbeat preflight task selection so low-confidence tasks get extra context injection before execution. (2026-03-30 14:10 UTC)

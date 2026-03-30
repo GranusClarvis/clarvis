@@ -1038,6 +1038,66 @@ def _get_recent_completions(queue_file=QUEUE_FILE, n=3):
     return completions[:n]
 
 
+def _prune_knowledge_hints(knowledge_hints, current_task, max_hints=None):
+    """Prune low-salience brain hits from knowledge_hints before compression.
+
+    Filters by:
+      1. Distance threshold — drop hints with d > adaptive cutoff
+      2. Task-relevance — keep hints with word overlap to task
+      3. Max count — cap total hints to prevent unbounded growth
+
+    Returns pruned knowledge_hints string.
+    """
+    if not knowledge_hints or not knowledge_hints.strip():
+        return knowledge_hints
+
+    lines = [l for l in knowledge_hints.split('\n') if l.strip()]
+    if len(lines) <= 2:
+        return knowledge_hints  # too few to prune
+
+    if max_hints is None:
+        max_hints = min(8, len(lines))  # adaptive cap
+
+    task_tokens = set(re.findall(r'[a-z]{3,}', current_task.lower())) - _STOPWORDS
+
+    scored = []
+    for line in lines:
+        # Parse distance from "d=1.15" pattern
+        dm = re.search(r'd=(\d+\.?\d*)', line)
+        dist = float(dm.group(1)) if dm else 0.5  # default mid-range
+
+        # Word overlap with task (relevance signal)
+        line_tokens = set(re.findall(r'[a-z]{3,}', line.lower())) - _STOPWORDS
+        overlap = len(task_tokens & line_tokens) / max(len(task_tokens), 1) if task_tokens else 0
+
+        # Composite score: lower distance + higher overlap = better
+        # Distance typically 0.8-1.5; overlap 0-1
+        score = (1.5 - min(dist, 1.5)) + overlap * 0.5
+
+        scored.append((score, line))
+
+    # Sort by score descending, keep top max_hints
+    scored.sort(key=lambda x: x[0], reverse=True)
+
+    # Adaptive distance cutoff: median distance + 0.3
+    distances = [float(re.search(r'd=(\d+\.?\d*)', l).group(1))
+                 for _, l in scored if re.search(r'd=(\d+\.?\d*)', l)]
+    if distances:
+        median_dist = sorted(distances)[len(distances) // 2]
+        cutoff = median_dist + 0.3
+    else:
+        cutoff = 1.3  # fallback
+
+    kept = []
+    for score, line in scored[:max_hints]:
+        dm = re.search(r'd=(\d+\.?\d*)', line)
+        dist = float(dm.group(1)) if dm else 0.5
+        if dist <= cutoff or len(kept) < 3:  # always keep top 3
+            kept.append(line)
+
+    return '\n'.join(kept)
+
+
 def _build_brief_beginning(current_task, tier, budget, knowledge_hints):
     """Build the high-attention beginning sections of the brief."""
     parts = []
@@ -1050,6 +1110,9 @@ def _build_brief_beginning(current_task, tier, budget, knowledge_hints):
 
     # Brain Knowledge (research, dreams, synthesis) — reranked by task relevance
     if knowledge_hints and tier != "minimal":
+        # Prune low-salience brain hits before compression (adaptive to brain growth)
+        knowledge_hints = _prune_knowledge_hints(knowledge_hints, current_task,
+                                                  max_hints=5 if tier == "standard" else 8)
         try:
             from clarvis.context.assembly import rerank_knowledge_hints
             knowledge_hints = rerank_knowledge_hints(knowledge_hints, current_task)
@@ -1057,7 +1120,7 @@ def _build_brief_beginning(current_task, tier, budget, knowledge_hints):
             pass
         if knowledge_hints and knowledge_hints.strip():
             parts.append("RELEVANT KNOWLEDGE:")
-            max_chars = 600 if tier == "full" else 350
+            max_chars = 600 if tier == "full" else 280
             if len(knowledge_hints) > max_chars * 1.5:
                 compressed_knowledge, _ = compress_text(knowledge_hints, ratio=0.25)
                 parts.append(compressed_knowledge[:max_chars])

@@ -154,31 +154,82 @@ for name, val in ranked[:3]:
         echo "[$DATE] Phi=$PHI_TOTAL weakest:" >> "$LOG_DIR"/health.log
         echo "$PHI_WEAK" >> "$LOG_DIR"/health.log
 
-        # Alert on any sub-metric below 0.50
-        ALERTS_NEEDED=$(echo "$PHI_SUB_JSON" | python3 -c "
-import sys, json
-data = json.load(sys.stdin)
-alerts = []
-for name, val in data['components'].items():
-    if val < 0.50:
-        alerts.append(f'{name}={val:.4f}')
-if alerts:
-    print(' | '.join(alerts))
-" 2>/dev/null)
-        if [ -n "$ALERTS_NEEDED" ]; then
-            echo "[$DATE] [WARNING] Phi sub-metric(s) below 0.50: $ALERTS_NEEDED" >> "$LOG_DIR"/alerts.log
-            # Telegram alert
+        # Alert on state changes only: enter warning, escalate to critical, or recover.
+        PHI_ALERT_STATE_FILE="/tmp/clarvis_phi_alert_state.json"
+        PHI_ALERT_DECISION=$(PHI_ALERT_STATE_FILE="$PHI_ALERT_STATE_FILE" DATE="$DATE" PHI_TOTAL="$PHI_TOTAL" PHI_WEAK="$PHI_WEAK" PHI_SUB_JSON="$PHI_SUB_JSON" python3 - <<'PY'
+import json, os
+from pathlib import Path
+
+state_path = Path(os.environ['PHI_ALERT_STATE_FILE'])
+data = json.loads(os.environ['PHI_SUB_JSON'])
+components = data['components']
+phi_total = os.environ['PHI_TOTAL']
+date = os.environ['DATE']
+phi_weak = os.environ['PHI_WEAK']
+
+below = {k: round(v, 4) for k, v in components.items() if v < 0.50}
+zeros = {k: v for k, v in below.items() if v <= 0.0001}
+if zeros or len(below) >= 2:
+    severity = 'critical'
+elif below:
+    severity = 'warning'
+else:
+    severity = 'ok'
+
+current = {
+    'severity': severity,
+    'below': below,
+}
+
+previous = {'severity': 'ok', 'below': {}}
+if state_path.exists():
+    try:
+        previous = json.loads(state_path.read_text())
+    except Exception:
+        previous = {'severity': 'ok', 'below': {}}
+
+send = False
+kind = 'noop'
+log_line = ''
+tg_msg = ''
+
+if severity == 'ok' and previous.get('severity') != 'ok':
+    send = True
+    kind = 'recovery'
+    log_line = f"[{date}] [INFO] Phi sub-metric recovery: all components >= 0.50 (Phi={phi_total})"
+    tg_msg = f"✅ Phi sub-metric recovery\nAll components are now >= 0.50\nPhi={phi_total}"
+elif severity != 'ok':
+    prev_sev = previous.get('severity', 'ok')
+    prev_below = previous.get('below', {})
+    changed_keys = set(prev_below) != set(below)
+    worsened = any(below.get(k, 1.0) < prev_below.get(k, 1.0) - 0.03 for k in below)
+    escalated = (prev_sev != 'critical' and severity == 'critical')
+    entered = (prev_sev == 'ok')
+    if entered or escalated or changed_keys or worsened:
+        send = True
+        kind = 'alert'
+        level_emoji = '🚨' if severity == 'critical' else '⚠️'
+        level_word = severity.upper()
+        joined = ' | '.join(f'{k}={v:.4f}' for k, v in below.items())
+        log_line = f"[{date}] [{level_word}] Phi sub-metric state change: {joined}"
+        tg_msg = f"{level_emoji} Phi sub-metric {severity}\n{joined}\nPhi={phi_total} | Weakest 3:\n{phi_weak}"
+
+state_path.write_text(json.dumps(current))
+print(json.dumps({'send': send, 'kind': kind, 'log_line': log_line, 'tg_msg': tg_msg}))
+PY
+)
+        PHI_ALERT_SEND=$(echo "$PHI_ALERT_DECISION" | python3 -c "import sys,json; print('1' if json.load(sys.stdin).get('send') else '0')" 2>/dev/null)
+        if [ "$PHI_ALERT_SEND" = "1" ]; then
+            PHI_ALERT_LOG=$(echo "$PHI_ALERT_DECISION" | python3 -c "import sys,json; print(json.load(sys.stdin).get('log_line',''))" 2>/dev/null)
+            PHI_ALERT_MSG=$(echo "$PHI_ALERT_DECISION" | python3 -c "import sys,json; print(json.load(sys.stdin).get('tg_msg',''))" 2>/dev/null)
+            [ -n "$PHI_ALERT_LOG" ] && echo "$PHI_ALERT_LOG" >> "$LOG_DIR"/alerts.log
             TG_TOKEN="${CLARVIS_TG_BOT_TOKEN:-}"
             TG_CHAT="${CLARVIS_TG_CHAT_ID:-}"
-            if [ -n "$TG_TOKEN" ] && [ -n "$TG_CHAT" ]; then
-                TG_MSG="⚠️ Phi sub-metric alert
-$ALERTS_NEEDED
-Phi=$PHI_TOTAL | Weakest 3:
-$PHI_WEAK"
+            if [ -n "$TG_TOKEN" ] && [ -n "$TG_CHAT" ] && [ -n "$PHI_ALERT_MSG" ]; then
                 curl -s --max-time 10 \
                     "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
                     -d chat_id="$TG_CHAT" \
-                    -d text="$TG_MSG" \
+                    -d text="$PHI_ALERT_MSG" \
                     -d parse_mode="HTML" >/dev/null 2>&1 || true
             fi
         fi

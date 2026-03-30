@@ -125,6 +125,16 @@ def brain_preflight_context(task_text, n_knowledge=5, n_goals=5, graph_expand=Fa
                 pass  # graceful fallback — no enrichment
         result["raw_results"] = knowledge or []
         if knowledge:
+            # Adaptive distance pruning: drop low-relevance hits to prevent
+            # brief inflation from brain growth (2666→2761+ memories).
+            # Keep top hits by distance, with adaptive cutoff.
+            if len(knowledge) > 3:
+                distances = [m.get("distance", 1.0) for m in knowledge]
+                distances_sorted = sorted(distances)
+                median_d = distances_sorted[len(distances_sorted) // 2]
+                dist_cutoff = min(median_d + 0.25, 1.15)
+                knowledge = [m for m in knowledge
+                             if m.get("distance", 1.0) <= dist_cutoff][:n_knowledge]
             hints = []
             actr_scores = []
             for mem in knowledge:

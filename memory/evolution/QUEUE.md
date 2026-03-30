@@ -51,7 +51,6 @@ _Queue audited on 2026-03-24 evening. Removed 3 completed items (A5_A7, TEMPORAL
 
 ### Phi / Benchmarking
 
-- [ ] [LLM_BRAIN_REVIEW 2026-03-30] [LLM_BRAIN_REVIEW] Maintain a single authoritative 'current priorities' memory in clarvis-goals that is updated weekly, replacing stale daily planning fragments — Probe 4 returned only diary entries (dist >1.0). A curated, regularly-updated priorities memory would give goal queries a strong anchor to retrieve.
 ---
 
 ## P2 — When Idle (Demoted 2026-03-17)
@@ -82,13 +81,19 @@ _(Completed items archived.)_
 
 ### External Challenges
 
-- [x] [EXTERNAL_CHALLENGE:bench-context-01] Measure context window utilization efficiency across 10 heartbeats — bench_context_utilization.py created, analyzes last N heartbeats from context_relevance.jsonl. Instrumented generate_tiered_brief to record ground-truth per-section token counts. Result: 95.9% mean utilization, 1.8% noise. (2026-03-30)
 
 
 ### P0 — Found in 2026-03-27 evening scan
 
 
 ### P1 — Found in 2026-03-28 evolution scan
+
+### P1 — Found in 2026-03-30 evolution scan
+
+- [ ] [BRIEF_COMPRESSION_STABILITY] Brief compression ratio dropped from 0.615→0.550 (at target boundary). Audit `context_compressor.py` extractive-then-abstractive pipeline: check if recent brain growth (2666→2761 memories) is inflating pre-compression token counts without proportional summary improvement. Add adaptive pruning of low-salience brain hits before compression. Target: stable ≥0.58.
+- [ ] [INTRA_DENSITY_BOOST] Intra-collection density is weakest Phi component (0.434 vs next-lowest 0.67). Run `graph_compaction.py` intra-collection linking pass: for each collection, find top-50 nearest-neighbor pairs by embedding distance and add edges where missing. Validate Phi intra_density ≥0.50 afterward.
+- [ ] [HEALTH_MONITOR_METRIC_EXPORT] (Bash) Extend `scripts/health_monitor.sh` to emit a machine-readable JSON summary (`monitoring/health_latest.json`) alongside the human log. Include: brain_count, cron_ok_count, cron_fail_count, disk_pct, gateway_status, phi, pi. Enables downstream dashboards and alerting without log-parsing.
+- [ ] [ACTION_FAILURE_TRIAGE] 45 action-type episode failures dominate the failure distribution (vs 14 timeout, 7 system). Sample 10 recent action failures from episodes, classify root causes (bad tool call, wrong model, missing context, etc.), and file a short report in `memory/research/action-failure-triage.md` with top-3 actionable fixes.
 
 
 

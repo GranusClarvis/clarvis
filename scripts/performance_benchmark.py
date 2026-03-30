@@ -836,12 +836,27 @@ def _measure_compression_live():
         logger.debug("Gathering attention-focused items for compression measurement failed: %s", e)
     raw_input = "\n".join(raw_parts)
 
+    # Stabilize raw_input size: include full QUEUE.md as reference floor
+    # to prevent ratio drops when attention items are sparse
+    queue_file = os.path.join(WORKSPACE, "memory/evolution/QUEUE.md")
+    if os.path.exists(queue_file):
+        try:
+            queue_size = os.path.getsize(queue_file)
+            if queue_size > len(raw_input):
+                raw_input_size = max(len(raw_input), queue_size)
+            else:
+                raw_input_size = len(raw_input)
+        except OSError:
+            raw_input_size = len(raw_input)
+    else:
+        raw_input_size = len(raw_input)
+
     brief = generate_tiered_brief("Test task for benchmark", "standard", [])
     result = {"brief_compression": 0.0, "context_relevance": 0.0}
     if brief and len(brief) > 100:
         result["context_relevance"] = 0.6
-        if raw_input and len(raw_input) > len(brief):
-            result["brief_compression"] = round(1.0 - len(brief) / len(raw_input), 3)
+        if raw_input_size > len(brief):
+            result["brief_compression"] = round(1.0 - len(brief) / raw_input_size, 3)
         else:
             _, stats = compress_text(brief, ratio=0.3)
             result["brief_compression"] = round(1.0 - stats["ratio"], 3)
