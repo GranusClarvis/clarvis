@@ -31,11 +31,11 @@ _Queue audited on 2026-03-24 evening. Removed 3 completed items (A5_A7, TEMPORAL
 ## P1 — This Week
 
 
-- [~] [STRATEGIC_AUDIT 2026-03-28] [STRATEGIC_AUDIT/autonomy] Add external challenge source to evolution loop — e.g., user-submitted tasks, research paper implementations, or benchmark suites that test novel problem-solving.
-  - [ ] [AUTO_SPLIT 2026-03-29] [STRATEGIC_AUDIT 2026-03-28_1] Analyze: read relevant source files, identify change boundary
-  - [ ] [AUTO_SPLIT 2026-03-29] [STRATEGIC_AUDIT 2026-03-28_2] Implement: core logic change in one focused increment
-  - [ ] [AUTO_SPLIT 2026-03-29] [STRATEGIC_AUDIT 2026-03-28_3] Test: add/update test(s) covering the new behavior
-  - [ ] [AUTO_SPLIT 2026-03-29] [STRATEGIC_AUDIT 2026-03-28_4] Verify: run existing tests, confirm no regressions
+- [x] [STRATEGIC_AUDIT 2026-03-28] [STRATEGIC_AUDIT/autonomy] Add external challenge source to evolution loop — DONE: `scripts/external_challenge_feed.py` + `data/challenge_feed.json` (15 curated challenges across 7 categories). Wired into `cron_autonomous.sh` (queue replenishment + periodic injection). Rate-limited: max 2/day, 8h apart. GitHub issues integration via `refresh-gh`.
+  - [x] [AUTO_SPLIT 2026-03-29] [STRATEGIC_AUDIT 2026-03-28_1] Analyze: read relevant source files, identify change boundary
+  - [x] [AUTO_SPLIT 2026-03-29] [STRATEGIC_AUDIT 2026-03-28_2] Implement: core logic change in one focused increment
+  - [x] [AUTO_SPLIT 2026-03-29] [STRATEGIC_AUDIT 2026-03-28_3] Test: add/update test(s) covering the new behavior
+  - [x] [AUTO_SPLIT 2026-03-29] [STRATEGIC_AUDIT 2026-03-28_4] Verify: run existing tests, confirm no regressions
 
 
 
@@ -84,6 +84,10 @@ _(Completed items archived.)_
 
 ## NEW ITEMS
 
+### External Challenges
+
+- [ ] [EXTERNAL_CHALLENGE:coding-challenge-01] Implement a lock-free concurrent ring buffer in Python — Build a thread-safe ring buffer using only atomics (no threading.Lock). Support multiple producers and single consumer. Benchmark throughput vs the current Lock-based approach. Include stress tests wi
+
 ### P0 — Found in 2026-03-27 evening scan
 
 
@@ -93,10 +97,7 @@ _(Completed items archived.)_
 
 
 
-- [x] [SEMANTIC_CROSS_COLLECTION_BRIDGE] Ran bulk_cross_link with max_links_per_memory=4. Cross-collection connectivity improved.
-- [x] [GOAL_SET_COMPACTION] Archived 28 bridge/generated/stale goals, compacted from 35→10 (9 active + 1 completed). Archive at data/archived_goals_2026-03-29.json.
-- [x] [INFRA_RETRIEVAL_HARDENING] Stored 10 targeted infra/procedure facts (graph backend, maintenance ops, cutover history, collections, heartbeat, cron bootstrap). Added query routing for graph/sqlite/database terms. Deleted stale "dual backend" memory. 10/10 QA prompts pass.
-- [ ] [EXTERNAL_CHALLENGE_FEED] Add one external challenge source to the evolution loop (benchmark set, public issue feed, or research implementation tasks) so autonomous work is tested on novel problems, not only self-generated ones.
+- [x] [EXTERNAL_CHALLENGE_FEED] (2026-03-30) Added `scripts/external_challenge_feed.py` + `data/challenge_feed.json` (15 challenges, 7 categories). Wired into cron_autonomous.sh. First challenge injected: coding-challenge-01.
 
 
 

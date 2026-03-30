@@ -46,6 +46,14 @@ fi
 # Pre-compute weakest metric for prompt injection
 WEAKEST_METRIC=$(get_weakest_metric)
 
+# === EXTERNAL CHALLENGE INJECTION: ensure queue always has some external challenges ===
+# Rate-limited internally (max 2/day, min 8h apart). Runs before preflight so challenges
+# are available for task selection.
+if ! grep -q '\[EXTERNAL_CHALLENGE:' "$QUEUE_FILE" 2>/dev/null || \
+   ! grep -q '^\- \[ \] \[EXTERNAL_CHALLENGE:' "$QUEUE_FILE" 2>/dev/null; then
+    python3 "$SCRIPTS/external_challenge_feed.py" inject >> "$LOGFILE" 2>&1 || true
+fi
+
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Heartbeat starting (optimized batched pipeline) ===" >> "$LOGFILE"
 
 PREFLIGHT_FILE=$(mktemp --suffix=.json)
@@ -162,6 +170,9 @@ Add 3-5 NEW unchecked tasks to QUEUE.md under '## NEW ITEMS'. Format: - [ ] <tas
 Rules: no duplicates, at least 1 non-Python task, at least 1 targeting the weakest metric.
 OUTPUT FORMAT (mandatory): TASKS ADDED: <count>. Then list each task on its own line." \
         --dangerously-skip-permissions >> "$LOGFILE" 2>&1
+
+    # Also inject one external challenge alongside self-generated tasks
+    python3 "$SCRIPTS/external_challenge_feed.py" inject >> "$LOGFILE" 2>&1 || true
 
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Queue replenished — will execute on next run" >> "$LOGFILE"
     rm -f "$PREFLIGHT_FILE"

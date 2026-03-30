@@ -1,0 +1,142 @@
+{
+  "version": "1.0",
+  "description": "External challenge feed for Clarvis evolution loop. Challenges from benchmarks, research papers, and coding tasks that test novel problem-solving beyond self-generated work.",
+  "updated": "2026-03-30",
+  "challenges": [
+    {
+      "id": "bench-retrieval-01",
+      "title": "Implement BEIR-style retrieval benchmark for ClarvisDB",
+      "description": "Create a retrieval benchmark using 50+ query-document pairs with known relevance labels. Measure nDCG@10, MAP, and Recall@k. Compare ClarvisDB's MiniLM embeddings against BM25 baseline on the same queries. Output a benchmark report to data/benchmarks/.",
+      "source": "benchmark",
+      "category": "retrieval",
+      "difficulty": "hard",
+      "tags": ["benchmark", "retrieval", "evaluation"]
+    },
+    {
+      "id": "bench-reasoning-01",
+      "title": "Solve 5 ARC-AGI-style pattern completion puzzles programmatically",
+      "description": "Implement a solver for grid-based pattern completion (ARC-AGI style). Create 5 test puzzles with known solutions. The solver should use rule extraction (symmetry, rotation, color mapping) without LLM calls. Measure solve rate and time.",
+      "source": "benchmark",
+      "category": "reasoning",
+      "difficulty": "hard",
+      "tags": ["reasoning", "arc", "pattern-recognition"]
+    },
+    {
+      "id": "bench-code-01",
+      "title": "Write a property-based test suite for ClarvisDB graph operations",
+      "description": "Use Hypothesis library to generate random graph operations (add_edge, remove_edge, traverse) and verify invariants: no orphan edges after cleanup, bidirectional consistency, cycle detection correctness. Target: 100+ test cases auto-generated.",
+      "source": "benchmark",
+      "category": "testing",
+      "difficulty": "medium",
+      "tags": ["testing", "property-based", "graph"]
+    },
+    {
+      "id": "research-impl-01",
+      "title": "Implement Sparse Priming Representations (SPR) for brain memory compression",
+      "description": "From the SPR paper: compress long memories into minimal token priming representations that reconstruct meaning when fed to an LLM. Implement encode_spr() and decode_spr() functions. Test on 20 existing brain memories: measure compression ratio and semantic preservation (cosine similarity of embeddings before/after).",
+      "source": "research",
+      "category": "memory",
+      "difficulty": "hard",
+      "tags": ["research", "compression", "spr"]
+    },
+    {
+      "id": "research-impl-02",
+      "title": "Implement a simple Transformer attention visualization for brain search",
+      "description": "Build a lightweight attention-weight visualizer that shows which query tokens most influence retrieval results. Use the existing MiniLM embeddings to compute token-level attention scores. Output an HTML report showing query-document attention heatmaps for the last 10 brain searches.",
+      "source": "research",
+      "category": "visualization",
+      "difficulty": "medium",
+      "tags": ["research", "attention", "visualization"]
+    },
+    {
+      "id": "coding-challenge-01",
+      "title": "Implement a lock-free concurrent ring buffer in Python",
+      "description": "Build a thread-safe ring buffer using only atomics (no threading.Lock). Support multiple producers and single consumer. Benchmark throughput vs the current Lock-based approach. Include stress tests with 8 producer threads.",
+      "source": "coding",
+      "category": "systems",
+      "difficulty": "hard",
+      "tags": ["concurrency", "data-structure", "performance"]
+    },
+    {
+      "id": "coding-challenge-02",
+      "title": "Build a minimal DAG task scheduler with dependency resolution",
+      "description": "Implement a task scheduler that takes a DAG of tasks with dependencies, topologically sorts them, and executes independent tasks in parallel using asyncio. Include cycle detection, timeout handling, and a dry-run mode. Write tests covering diamond dependencies, fan-out/fan-in, and error propagation.",
+      "source": "coding",
+      "category": "systems",
+      "difficulty": "medium",
+      "tags": ["scheduler", "dag", "asyncio"]
+    },
+    {
+      "id": "coding-challenge-03",
+      "title": "Implement incremental TF-IDF for streaming document indexing",
+      "description": "Build an incremental TF-IDF index that can add documents one at a time without recomputing the entire corpus. Support search queries returning top-k results. Compare accuracy against sklearn's TfidfVectorizer on 100 brain memories. Target: <5% accuracy loss vs batch TF-IDF.",
+      "source": "coding",
+      "category": "search",
+      "difficulty": "medium",
+      "tags": ["search", "tfidf", "incremental"]
+    },
+    {
+      "id": "bench-robustness-01",
+      "title": "Chaos test: verify brain recovery after simulated corruption",
+      "description": "Create a chaos testing harness that: (1) backs up current brain state, (2) corrupts 10% of ChromaDB metadata randomly, (3) runs brain.health_check() and brain.optimize-full, (4) verifies recovery by checking recall accuracy on golden QA set, (5) restores backup. Report which corruption types are recoverable and which are not.",
+      "source": "benchmark",
+      "category": "robustness",
+      "difficulty": "hard",
+      "tags": ["chaos-testing", "robustness", "brain"]
+    },
+    {
+      "id": "bench-latency-01",
+      "title": "Profile and optimize the 3 slowest brain operations end-to-end",
+      "description": "Use cProfile to profile the top 3 slowest brain operations (likely: store with graph update, multi-collection search, batch decay). For each, create a flamegraph-style report, identify the bottleneck, and implement one optimization. Measure before/after latency. Target: 20%+ improvement on at least one operation.",
+      "source": "benchmark",
+      "category": "performance",
+      "difficulty": "medium",
+      "tags": ["profiling", "optimization", "latency"]
+    },
+    {
+      "id": "research-impl-03",
+      "title": "Implement a simple MemoryBank with forgetting curve (Ebbinghaus)",
+      "description": "Build a memory bank that models Ebbinghaus forgetting curves. Each memory has a retention strength that decays exponentially. Implement spaced repetition: memories that are recalled get strength boosts at increasing intervals. Compare with ClarvisDB's current linear decay. Test on 50 memories over simulated 30-day period.",
+      "source": "research",
+      "category": "memory",
+      "difficulty": "medium",
+      "tags": ["research", "forgetting-curve", "spaced-repetition"]
+    },
+    {
+      "id": "coding-challenge-04",
+      "title": "Build a git-diff semantic analyzer that classifies changes",
+      "description": "Create a tool that reads a git diff and classifies each hunk as: bugfix, feature, refactor, test, docs, or config. Use heuristics (file paths, changed line patterns, commit message) — no LLM calls. Test against the last 20 commits in this repo and report classification accuracy vs manual labels.",
+      "source": "coding",
+      "category": "tooling",
+      "difficulty": "medium",
+      "tags": ["git", "analysis", "classification"]
+    },
+    {
+      "id": "bench-context-01",
+      "title": "Measure context window utilization efficiency across 10 heartbeats",
+      "description": "Instrument the context brief generation to measure: (a) total tokens generated, (b) tokens actually relevant to the selected task (via post-hoc analysis), (c) wasted tokens (irrelevant sections). Report utilization ratio. Target insight: identify the top 3 sources of context waste.",
+      "source": "benchmark",
+      "category": "efficiency",
+      "difficulty": "medium",
+      "tags": ["context", "efficiency", "measurement"]
+    },
+    {
+      "id": "coding-challenge-05",
+      "title": "Implement a bloom filter for fast duplicate detection in brain.store()",
+      "description": "Add a Bloom filter as a fast pre-check before the expensive ChromaDB cosine similarity dedup in brain.store(). Tune false positive rate to <1%. Measure: (a) how many expensive dedup calls are avoided, (b) store() latency improvement. Include serialization so the filter persists across restarts.",
+      "source": "coding",
+      "category": "performance",
+      "difficulty": "medium",
+      "tags": ["bloom-filter", "dedup", "optimization"]
+    },
+    {
+      "id": "research-impl-04",
+      "title": "Implement chain-of-thought self-evaluation for episode quality scoring",
+      "description": "Build an evaluator that scores episode quality by analyzing the reasoning chain: (1) count reasoning steps, (2) check for backtracking/correction, (3) measure conclusion support (does the output follow from the chain?), (4) detect shallow reasoning patterns. Score 0-1. Validate against 20 recent episodes with manual quality labels.",
+      "source": "research",
+      "category": "evaluation",
+      "difficulty": "hard",
+      "tags": ["evaluation", "reasoning", "chain-of-thought"]
+    }
+  ]
+}
