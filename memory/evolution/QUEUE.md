@@ -51,7 +51,7 @@ _Queue audited on 2026-03-24 evening. Removed 3 completed items (A5_A7, TEMPORAL
 
 ### Phi / Benchmarking
 
-- [ ] [PERFORMANCE_BENCHMARK 2026-03-30] [PERF] Phi (Integration): 0.2345 breached critical threshold 0.3. Action: fix_phi
+- [x] [PERFORMANCE_BENCHMARK 2026-03-30] [PERF] Phi (Integration): 0.2345 breached critical threshold 0.3. Action: fix_phi — False alarm: committed phi.py lacked SQLite graph reader (read empty in-memory graph post-cutover). Fix was in working tree but uncommitted. Recorded fresh phi=0.735. Need to commit phi.py.
 - [ ] [LLM_BRAIN_REVIEW 2026-03-30] [LLM_BRAIN_REVIEW] Maintain a single authoritative 'current priorities' memory in clarvis-goals that is updated weekly, replacing stale daily planning fragments — Probe 4 returned only diary entries (dist >1.0). A curated, regularly-updated priorities memory would give goal queries a strong anchor to retrieve.
 ---
 
@@ -76,7 +76,6 @@ _Design: `docs/ADAPTIVE_RAG_PLAN.md` — 4-phase rollout (GATE → EVAL → RETR
 
 ### Research Sessions
 _(Completed items archived.)_
-- [x] [RESEARCH_PHI_COMPUTATION] Review practical Φ computation, PyPhi tooling, and theoretical limitations. (2026-03-30)
 
 ---
 
@@ -90,7 +89,6 @@ _(Completed items archived.)_
 
 ### P1 — Found in 2026-03-28 evolution scan
 
-- [x] [BRIEF_COMPRESSION_BOOST 2026-03-30] Raised brief compression 0.498→0.609 (target 0.55): (a) DYCP_MIN_CONTAINMENT 0.08→0.10, (b) cross-section dedup wired into generate_tiered_brief, (c) compress_text default ratio 0.3→0.25. Benchmark recorded, 14/15 pass, PI=0.904.
 
 
 

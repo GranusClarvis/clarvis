@@ -62,6 +62,34 @@ def _infer_collection(node_id):
     return "unknown"
 
 
+def _iter_graph_edges(brain):
+    """Yield graph edges from the authoritative backend.
+
+    After the 2026-03-29 cutover, the live graph normally resides in SQLite.
+    The legacy in-memory/JSON `brain.graph['edges']` list may remain empty even
+    when the graph is healthy, so Phi must prefer SQLite when available.
+
+    Yields normalized dicts with: from, to, type.
+    """
+    sqlite = getattr(brain, "_sqlite_store", None)
+    if sqlite is not None:
+        for e in sqlite.get_edges():
+            yield {
+                "from": e["from_id"],
+                "to": e["to_id"],
+                "type": e.get("type", "unknown"),
+            }
+        return
+
+    for e in brain.graph.get("edges", []):
+        yield {
+            "from": e["from"],
+            "to": e["to"],
+            "type": e.get("type", "unknown"),
+        }
+
+
+
 def _build_adjacency(brain):
     """Build adjacency from brain's graph edges.
 
@@ -70,7 +98,6 @@ def _build_adjacency(brain):
       adj: dict node_id -> set of neighbor node_ids
       edge_list: list of (from, to, type) tuples
     """
-    edges_raw = brain.graph.get("edges", [])
     nodes = {}
     adj = defaultdict(set)
 
@@ -80,7 +107,7 @@ def _build_adjacency(brain):
             nodes[mid] = col_name
 
     edge_list = []
-    for e in edges_raw:
+    for e in _iter_graph_edges(brain):
         f, t = e["from"], e["to"]
         adj[f].add(t)
         adj[t].add(f)

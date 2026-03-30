@@ -1756,3 +1756,7 @@ _Last archived: 2026-03-27_
 ## Archived 2026-03-30
 - [x] [PERFORMANCE_BENCHMARK 2026-03-30] [PERF] Graph Density fix — stats() now reads SQLite store instead of empty JSON dict. Density: 36.64 (was 0.0)
 - [x] [EXTERNAL_CHALLENGE:coding-challenge-01] Lock-free MPSC ring buffer — CAS-based, all stress tests pass (40k items, 0 loss), benchmarked at 863k ops/s. See scripts/challenges/lockfree_ring_buffer.py
+
+## Archived 2026-03-30
+- [x] [RESEARCH_PHI_COMPUTATION] Review practical Φ computation, PyPhi tooling, and theoretical limitations. (2026-03-30)
+- [x] [BRIEF_COMPRESSION_BOOST 2026-03-30] Raised brief compression 0.498→0.609 (target 0.55): (a) DYCP_MIN_CONTAINMENT 0.08→0.10, (b) cross-section dedup wired into generate_tiered_brief, (c) compress_text default ratio 0.3→0.25. Benchmark recorded, 14/15 pass, PI=0.904.
