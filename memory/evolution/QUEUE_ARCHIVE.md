@@ -1744,3 +1744,11 @@ _Last archived: 2026-03-27_
 - [x] [SEMANTIC_CROSS_COLLECTION_BRIDGE] Ran bulk_cross_link with max_links_per_memory=4. Cross-collection connectivity improved.
 - [x] [GOAL_SET_COMPACTION] Archived 28 bridge/generated/stale goals, compacted from 35→10 (9 active + 1 completed). Archive at data/archived_goals_2026-03-29.json.
 - [x] [INFRA_RETRIEVAL_HARDENING] Stored 10 targeted infra/procedure facts (graph backend, maintenance ops, cutover history, collections, heartbeat, cron bootstrap). Added query routing for graph/sqlite/database terms. Deleted stale "dual backend" memory. 10/10 QA prompts pass.
+
+## Archived 2026-03-30
+- [x] [STRATEGIC_AUDIT 2026-03-28] [STRATEGIC_AUDIT/autonomy] Add external challenge source to evolution loop — DONE: `scripts/external_challenge_feed.py` + `data/challenge_feed.json` (15 curated challenges across 7 categories). Wired into `cron_autonomous.sh` (queue replenishment + periodic injection). Rate-limited: max 2/day, 8h apart. GitHub issues integration via `refresh-gh`.
+- [x] [AUTO_SPLIT 2026-03-29] [STRATEGIC_AUDIT 2026-03-28_1] Analyze: read relevant source files, identify change boundary
+- [x] [AUTO_SPLIT 2026-03-29] [STRATEGIC_AUDIT 2026-03-28_2] Implement: core logic change in one focused increment
+- [x] [AUTO_SPLIT 2026-03-29] [STRATEGIC_AUDIT 2026-03-28_3] Test: add/update test(s) covering the new behavior
+- [x] [AUTO_SPLIT 2026-03-29] [STRATEGIC_AUDIT 2026-03-28_4] Verify: run existing tests, confirm no regressions
+- [x] [EXTERNAL_CHALLENGE_FEED] (2026-03-30) Added `scripts/external_challenge_feed.py` + `data/challenge_feed.json` (15 challenges, 7 categories). Wired into cron_autonomous.sh. First challenge injected: coding-challenge-01.

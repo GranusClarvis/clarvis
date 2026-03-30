@@ -31,11 +31,6 @@ _Queue audited on 2026-03-24 evening. Removed 3 completed items (A5_A7, TEMPORAL
 ## P1 — This Week
 
 
-- [x] [STRATEGIC_AUDIT 2026-03-28] [STRATEGIC_AUDIT/autonomy] Add external challenge source to evolution loop — DONE: `scripts/external_challenge_feed.py` + `data/challenge_feed.json` (15 curated challenges across 7 categories). Wired into `cron_autonomous.sh` (queue replenishment + periodic injection). Rate-limited: max 2/day, 8h apart. GitHub issues integration via `refresh-gh`.
-  - [x] [AUTO_SPLIT 2026-03-29] [STRATEGIC_AUDIT 2026-03-28_1] Analyze: read relevant source files, identify change boundary
-  - [x] [AUTO_SPLIT 2026-03-29] [STRATEGIC_AUDIT 2026-03-28_2] Implement: core logic change in one focused increment
-  - [x] [AUTO_SPLIT 2026-03-29] [STRATEGIC_AUDIT 2026-03-28_3] Test: add/update test(s) covering the new behavior
-  - [x] [AUTO_SPLIT 2026-03-29] [STRATEGIC_AUDIT 2026-03-28_4] Verify: run existing tests, confirm no regressions
 
 
 
@@ -56,6 +51,7 @@ _Queue audited on 2026-03-24 evening. Removed 3 completed items (A5_A7, TEMPORAL
 
 ### Phi / Benchmarking
 
+- [x] [PERFORMANCE_BENCHMARK 2026-03-30] [PERF] Graph Density fix — stats() now reads SQLite store instead of empty JSON dict. Density: 36.64 (was 0.0)
 ---
 
 ## P2 — When Idle (Demoted 2026-03-17)
@@ -86,7 +82,7 @@ _(Completed items archived.)_
 
 ### External Challenges
 
-- [ ] [EXTERNAL_CHALLENGE:coding-challenge-01] Implement a lock-free concurrent ring buffer in Python — Build a thread-safe ring buffer using only atomics (no threading.Lock). Support multiple producers and single consumer. Benchmark throughput vs the current Lock-based approach. Include stress tests wi
+- [x] [EXTERNAL_CHALLENGE:coding-challenge-01] Lock-free MPSC ring buffer — CAS-based, all stress tests pass (40k items, 0 loss), benchmarked at 863k ops/s. See scripts/challenges/lockfree_ring_buffer.py
 
 ### P0 — Found in 2026-03-27 evening scan
 
@@ -97,7 +93,6 @@ _(Completed items archived.)_
 
 
 
-- [x] [EXTERNAL_CHALLENGE_FEED] (2026-03-30) Added `scripts/external_challenge_feed.py` + `data/challenge_feed.json` (15 challenges, 7 categories). Wired into cron_autonomous.sh. First challenge injected: coding-challenge-01.
 
 
 

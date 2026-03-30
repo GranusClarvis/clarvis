@@ -4,69 +4,69 @@
     "pending_mode": null
   },
   "queue": {
-    "pending": 7,
+    "pending": 3,
     "in_progress": 3,
-    "done": 4
+    "done": 0
   },
   "benchmarks": {
     "clr": {
-      "clr": 0.815,
+      "clr": 0.81,
       "baseline_clr": 0.19,
-      "value_add": 0.625,
+      "value_add": 0.62,
       "gate_pass": true,
       "dimensions": {
-        "memory_quality": 0.948,
+        "memory_quality": 0.63,
         "retrieval_precision": 1.0,
-        "prompt_context": 0.694,
+        "prompt_context": 0.748,
         "task_success": 0.789,
-        "autonomy": 0.397,
-        "efficiency": 0.988,
-        "integration_dynamics": 0.869
+        "autonomy": 0.796,
+        "efficiency": 0.985,
+        "integration_dynamics": 0.864
       },
-      "timestamp": "2026-03-29T03:01:29.994672+00:00"
+      "timestamp": "2026-03-30T05:45:12.122090+00:00"
     },
     "pi": {
-      "pi": 1.0,
+      "pi": 0.9647,
       "dimensions": 15,
-      "timestamp": "2026-03-29T03:01:15.597979+00:00"
+      "timestamp": "2026-03-30T05:45:02.407615+00:00"
     }
   },
   "brain": {
-    "total_memories": 0,
+    "total_memories": 2666,
     "collections": 10
   },
   "episodes": {
-    "success_rate": 0.813,
-    "total": 363,
+    "success_rate": 0.811,
+    "total": 366,
     "breakdown": {
-      "success": 295,
+      "success": 297,
       "soft_failure": 45,
       "failure": 10,
-      "timeout": 13
+      "timeout": 14
     }
   },
   "uptime_since": "2026-02-18 12:20:37",
   "recent_completions": [
     {
-      "tag": "E1_CI_GREEN",
-      "status": "success"
-    },
-    {
-      "tag": "E2_BRAIN_HEALTH",
-      "status": "success"
-    },
-    {
-      "tag": "E3_BENCHMARK_RECORD",
-      "status": "success"
-    },
-    {
-      "tag": "E5_CONSOLIDATION_PLAN",
-      "status": "success"
-    },
-    {
       "tag": "LOAD_SCALING_OPTIMIZE",
+      "status": "success"
+    },
+    {
+      "tag": "BENCHMARK_LOAD_NOISE_FLOOR",
+      "status": "success"
+    },
+    {
+      "tag": "A5_A7_RUNTIME_MODE_AND_CLI_FINISH",
+      "status": "success"
+    },
+    {
+      "tag": "TEMPORAL_RETRIEVAL_FIX",
+      "status": "success"
+    },
+    {
+      "tag": "P0_BACKFILL_CREATED_EPOCH_SENTINEL_FIX",
       "status": "success"
     }
   ],
-  "updated_at": "2026-03-29T05:50:02.924683+00:00"
+  "updated_at": "2026-03-30T05:50:02.862202+00:00"
 }

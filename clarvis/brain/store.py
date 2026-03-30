@@ -772,11 +772,21 @@ class StoreMixin:
         if self._stats_cache and (now - self._stats_cache_time) < self._stats_cache_ttl:
             return self._stats_cache
 
+        # Get graph counts from SQLite store if available (JSON dict is empty after cutover)
+        sqlite = getattr(self, "_sqlite_store", None)
+        if sqlite is not None:
+            gs = sqlite.stats()
+            graph_nodes = gs.get("nodes", 0)
+            graph_edges = gs.get("edges", 0)
+        else:
+            graph_nodes = len(self.graph["nodes"])
+            graph_edges = len(self.graph["edges"])
+
         stats = {
             "collections": {},
             "total_memories": 0,
-            "graph_nodes": len(self.graph["nodes"]),
-            "graph_edges": len(self.graph["edges"])
+            "graph_nodes": graph_nodes,
+            "graph_edges": graph_edges
         }
 
         for name, col in self.collections.items():
