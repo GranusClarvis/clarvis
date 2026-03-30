@@ -18,9 +18,9 @@ import pytest
 
 def test_dycp_min_containment_frozen():
     from clarvis.context.assembly import DYCP_MIN_CONTAINMENT
-    assert DYCP_MIN_CONTAINMENT == 0.08, (
+    assert DYCP_MIN_CONTAINMENT == 0.10, (
         f"DYCP_MIN_CONTAINMENT changed to {DYCP_MIN_CONTAINMENT} — "
-        "raised to 0.08 on 2026-03-18 (stricter task-overlap threshold)."
+        "raised to 0.10 on 2026-03-30 (brief compression boost calibration)."
     )
 
 

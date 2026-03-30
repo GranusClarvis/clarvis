@@ -1149,7 +1149,16 @@ def _build_brief_beginning(current_task, tier, budget, knowledge_hints):
             pass
         if knowledge_hints and knowledge_hints.strip():
             parts.append("RELEVANT KNOWLEDGE:")
-            max_chars = 600 if tier == "full" else 280
+            if tier == "full":
+                max_chars = 600
+            else:
+                # Adaptive: simple tasks get tighter knowledge budgets
+                try:
+                    from clarvis.context.assembly import _estimate_task_complexity
+                    complexity = _estimate_task_complexity(current_task)
+                    max_chars = {"simple": 200, "complex": 280, "medium": 240}[complexity]
+                except Exception:
+                    max_chars = 280
             if len(knowledge_hints) > max_chars * 1.5:
                 compressed_knowledge, _ = compress_text(knowledge_hints, ratio=0.25)
                 parts.append(compressed_knowledge[:max_chars])

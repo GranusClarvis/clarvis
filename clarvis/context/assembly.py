@@ -1266,6 +1266,32 @@ def get_recommended_procedures(current_task, max_procs=2):
 
 
 
+def _estimate_task_complexity(task_text):
+    """Estimate task complexity from text: 'simple', 'medium', or 'complex'.
+
+    Heuristics: word count, presence of multi-step indicators, research keywords.
+    """
+    if not task_text:
+        return "medium"
+    words = task_text.split()
+    wc = len(words)
+    text_lower = task_text.lower()
+    complex_signals = sum(1 for kw in (
+        "research", "investigate", "analyze", "design", "architect",
+        "refactor", "migrate", "benchmark", "audit", "strategy",
+        "multi-step", "comprehensive", "deep",
+    ) if kw in text_lower)
+    simple_signals = sum(1 for kw in (
+        "fix", "update", "bump", "rename", "typo", "pin",
+        "toggle", "enable", "disable", "set",
+    ) if kw in text_lower)
+    if wc < 20 and simple_signals > 0 and complex_signals == 0:
+        return "simple"
+    if wc > 60 or complex_signals >= 2:
+        return "complex"
+    return "medium"
+
+
 def _scale_chars(base_chars, section_name, section_weights):
     """Scale a char budget by the section's relevance weight."""
     if not section_weights:
@@ -1290,7 +1316,16 @@ def _build_brief_beginning(current_task, tier, budget, knowledge_hints, section_
         reranked = rerank_knowledge_hints(knowledge_hints, current_task)
         if reranked and reranked.strip():
             parts.append("RELEVANT KNOWLEDGE:")
-            base_chars = 600 if tier == "full" else 350
+            # Adaptive budget: simple tasks get tighter knowledge budgets
+            complexity = _estimate_task_complexity(current_task)
+            if tier == "full":
+                base_chars = 600
+            elif complexity == "simple":
+                base_chars = 200
+            elif complexity == "complex":
+                base_chars = 350
+            else:
+                base_chars = 280
             max_chars = _scale_chars(base_chars, "knowledge", section_weights)
             if len(reranked) > max_chars * 1.5:
                 compressed_knowledge, _ = compress_text(reranked, ratio=0.25)

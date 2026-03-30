@@ -85,11 +85,12 @@ _(Completed items archived.)_
 
 ### P0 — Found in 2026-03-27 evening scan
 
-- [x] [CONTEXT_CACHE_SUPPRESSION_TEST_FIX] Fix and validate the pre-existing failing test `test_hard_suppress_ignores_content_cache` after today's `context_compressor.py` pruning/compression changes. Ensure static suppression and dynamic suppression expectations are aligned so benchmark-driven refactors do not ship with a red test suite. _(Fixed 2026-03-30: added static HARD_SUPPRESS check before dynamic loop in `should_suppress_section()` — 12/12 tests pass.)_
 
 ### P1 — Found in 2026-03-28 evolution scan
 
 ### P1 — Found in 2026-03-30 evolution scan
+
+- [ ] [PHI_INTRA_DENSITY_WEIGHTING] Boost Phi intra-collection density (0.52→0.65) by adding importance-weighted centroid calculation in `phi_metric.py` `compute_phi()` — high-importance memories (≥0.8) contribute 2x to centroid, reducing dilution from low-importance diverse entries.
 
 
 
