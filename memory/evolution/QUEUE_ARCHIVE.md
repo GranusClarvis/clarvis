@@ -1773,3 +1773,11 @@ _Last archived: 2026-03-27_
 
 ## Archived 2026-03-30
 - [x] [CONFIDENCE_TIERED_ACTIONS] Implement tiered action levels (HIGH/MEDIUM/LOW/UNKNOWN) in `clarvis_confidence.py` per ROADMAP §3.1. Gate destructive/external actions behind HIGH confidence, allow read-only at LOW. Wire into heartbeat preflight task selection so low-confidence tasks get extra context injection before execution. (2026-03-30 14:10 UTC)
+
+## Archived 2026-03-30
+- [x] [INTRA_DENSITY_BOOST] Done 2026-03-30. Added 1850 intra-collection semantic_similarity edges (top nearest-neighbor pairs per collection). Intra-density: 0.433→0.521 (target ≥0.50 met). Phi: 0.730→0.745.
+- [x] [HEALTH_MONITOR_METRIC_EXPORT] (Bash) Done 2026-03-30. `health_monitor.sh` now emits `monitoring/health_latest.json` with brain_count, cron_ok/fail, disk_pct, mem_pct, load, gateway_status, phi, pi. Atomic write, reads cached PI/Phi values.
+
+## Archived 2026-03-30
+- [x] [RESEARCH_PHI_COMPUTATION] (2026-03-30) Reviewed IIT 4.0, approximation literature, and core critiques; summary in `memory/research/phi-computation.md`.
+- [x] [BRIEF_COMPRESSION_STABILITY] (2026-03-30) Fixed: brain-size-adaptive pruning in `_prune_knowledge_hints` (tighter max_hints + char budget for larger brains), tighter distance cutoff in brain_bridge (0.20 margin, 1.10 cap), stabilized denominator floor in `_measure_compression_live`. Result: 0.807 (target ≥0.58).

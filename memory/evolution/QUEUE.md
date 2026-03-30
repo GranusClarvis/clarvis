@@ -74,7 +74,6 @@ _Design: `docs/ADAPTIVE_RAG_PLAN.md` — 4-phase rollout (GATE → EVAL → RETR
 
 ### Research Sessions
 _(Completed items archived.)_
-- [x] [RESEARCH_PHI_COMPUTATION] (2026-03-30) Reviewed IIT 4.0, approximation literature, and core critiques; summary in `memory/research/phi-computation.md`.
 
 ---
 
@@ -92,8 +91,7 @@ _(Completed items archived.)_
 
 ### P1 — Found in 2026-03-30 evolution scan
 
-- [x] [BRIEF_COMPRESSION_STABILITY] (2026-03-30) Fixed: brain-size-adaptive pruning in `_prune_knowledge_hints` (tighter max_hints + char budget for larger brains), tighter distance cutoff in brain_bridge (0.20 margin, 1.10 cap), stabilized denominator floor in `_measure_compression_live`. Result: 0.807 (target ≥0.58).
-- [ ] [ACTION_FAILURE_TRIAGE] 45 action-type episode failures dominate the failure distribution (vs 14 timeout, 7 system). Sample 10 recent action failures from episodes, classify root causes (bad tool call, wrong model, missing context, etc.), and file a short report in `memory/research/action-failure-triage.md` with top-3 actionable fixes.
+- [x] [ACTION_FAILURE_TRIAGE] Done 2026-03-30. Report filed in `memory/research/action-failure-triage.md`. Key finding: 47% are shallow_reasoning detector artifacts from early period (Feb 22-24), not real failures. Top fixes: improve reasoning chain step capture, exclude early episodes from accuracy metrics, add timeout guards.
 
 
 
