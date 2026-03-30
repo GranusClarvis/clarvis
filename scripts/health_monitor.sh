@@ -263,6 +263,84 @@ fi
 # Keep last 1000 lines of health log
 tail -n 1000 $LOG_DIR/health.log > $LOG_DIR/health.log.tmp && mv $LOG_DIR/health.log.tmp $LOG_DIR/health.log
 
+# === MACHINE-READABLE JSON EXPORT ===
+# Collects all metrics into a single JSON file for downstream dashboards/alerting.
+# Values from hourly-cached checks (PI, Phi) are read from their cache files;
+# if stale or missing they show as null rather than triggering expensive recomputation.
+GATEWAY_STATUS="down"
+ss -tlnp 2>/dev/null | grep -q ":18789 " && GATEWAY_STATUS="up"
+
+# Brain count (fast — just a ChromaDB count)
+BRAIN_COUNT=$(cd /home/agent/.openclaw/workspace && python3 -c "
+import sys; sys.path.insert(0, 'scripts')
+try:
+    from brain import get_brain
+    print(get_brain().stats()['total_memories'])
+except Exception:
+    print('null')
+" 2>/dev/null)
+[ -z "$BRAIN_COUNT" ] && BRAIN_COUNT="null"
+
+# Cron health: count OK vs failed from recent cron log entries (last 24h)
+CRON_OK=0
+CRON_FAIL=0
+if [ -f "$LOG_DIR/health.log" ]; then
+    TODAY=$(date '+%Y-%m-%d')
+    CRON_OK=$(grep -c -E "\[.*$TODAY.*\].*(completed|OK|success)" "$LOG_DIR/health.log" 2>/dev/null || true)
+    CRON_FAIL=$(grep -c -E "\[.*$TODAY.*\].*(FAIL|ERROR|CRITICAL)" "$LOG_DIR/alerts.log" 2>/dev/null || true)
+    CRON_OK=${CRON_OK:-0}
+    CRON_FAIL=${CRON_FAIL:-0}
+fi
+
+# Read cached PI value (computed hourly above)
+CACHED_PI="null"
+if [ -n "${PI_VAL:-}" ] && [ "${PI_VAL:-}" != "error" ]; then
+    CACHED_PI="$PI_VAL"
+elif [ -f /home/agent/.openclaw/workspace/data/performance_metrics.json ]; then
+    CACHED_PI=$(python3 -c "
+import json
+try:
+    d = json.load(open('/home/agent/.openclaw/workspace/data/performance_metrics.json'))
+    print(round(d.get('pi_estimate', d.get('pi', {}).get('pi', 0)), 4))
+except Exception:
+    print('null')
+" 2>/dev/null)
+fi
+
+# Read cached Phi value
+CACHED_PHI="null"
+if [ -n "${PHI_TOTAL:-}" ]; then
+    CACHED_PHI="$PHI_TOTAL"
+elif [ -f /home/agent/.openclaw/workspace/data/phi_history.json ]; then
+    CACHED_PHI=$(python3 -c "
+import json
+try:
+    h = json.load(open('/home/agent/.openclaw/workspace/data/phi_history.json'))
+    if h: print(h[-1].get('phi', 'null'))
+    else: print('null')
+except Exception:
+    print('null')
+" 2>/dev/null)
+fi
+
+# Write JSON (atomic via tmp + mv)
+JSON_TMP="$LOG_DIR/health_latest.json.tmp.$$"
+cat > "$JSON_TMP" <<ENDJSON
+{
+  "timestamp": "$DATE",
+  "brain_count": $BRAIN_COUNT,
+  "cron_ok_count": $CRON_OK,
+  "cron_fail_count": $CRON_FAIL,
+  "disk_pct": $DISK_USED,
+  "mem_pct": $MEM_PCT,
+  "load": "$LOAD",
+  "gateway_status": "$GATEWAY_STATUS",
+  "phi": $CACHED_PHI,
+  "pi": $CACHED_PI
+}
+ENDJSON
+mv "$JSON_TMP" "$LOG_DIR/health_latest.json"
+
 # Summary output for quick check
 echo "=== CLARVIS STATUS ==="
 echo "Uptime: $(uptime -p)"

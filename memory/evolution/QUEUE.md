@@ -91,8 +91,8 @@ _(Completed items archived.)_
 ### P1 — Found in 2026-03-30 evolution scan
 
 - [ ] [BRIEF_COMPRESSION_STABILITY] Brief compression ratio dropped from 0.615→0.550 (at target boundary). Audit `context_compressor.py` extractive-then-abstractive pipeline: check if recent brain growth (2666→2761 memories) is inflating pre-compression token counts without proportional summary improvement. Add adaptive pruning of low-salience brain hits before compression. Target: stable ≥0.58.
-- [ ] [INTRA_DENSITY_BOOST] Intra-collection density is weakest Phi component (0.434 vs next-lowest 0.67). Run `graph_compaction.py` intra-collection linking pass: for each collection, find top-50 nearest-neighbor pairs by embedding distance and add edges where missing. Validate Phi intra_density ≥0.50 afterward.
-- [ ] [HEALTH_MONITOR_METRIC_EXPORT] (Bash) Extend `scripts/health_monitor.sh` to emit a machine-readable JSON summary (`monitoring/health_latest.json`) alongside the human log. Include: brain_count, cron_ok_count, cron_fail_count, disk_pct, gateway_status, phi, pi. Enables downstream dashboards and alerting without log-parsing.
+- [x] [INTRA_DENSITY_BOOST] Done 2026-03-30. Added 1850 intra-collection semantic_similarity edges (top nearest-neighbor pairs per collection). Intra-density: 0.433→0.521 (target ≥0.50 met). Phi: 0.730→0.745.
+- [x] [HEALTH_MONITOR_METRIC_EXPORT] (Bash) Done 2026-03-30. `health_monitor.sh` now emits `monitoring/health_latest.json` with brain_count, cron_ok/fail, disk_pct, mem_pct, load, gateway_status, phi, pi. Atomic write, reads cached PI/Phi values.
 - [ ] [ACTION_FAILURE_TRIAGE] 45 action-type episode failures dominate the failure distribution (vs 14 timeout, 7 system). Sample 10 recent action failures from episodes, classify root causes (bad tool call, wrong model, missing context, etc.), and file a short report in `memory/research/action-failure-triage.md` with top-3 actionable fixes.
 
 
