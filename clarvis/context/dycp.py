@@ -31,7 +31,8 @@ DYCP_PROTECTED_SECTIONS = frozenset({
 # Calibrated from per-section data: sections with mean relevance < 0.10
 # almost never contribute. Raised 0.04→0.08 on 2026-03-18 to prune more
 # aggressively — the 5 weakest sections (mean < 0.12) were still leaking through.
-DYCP_MIN_CONTAINMENT = 0.08
+# Raised 0.08→0.10 on 2026-03-30 to further improve brief compression ratio.
+DYCP_MIN_CONTAINMENT = 0.10
 
 # Also consider historical mean relevance — sections historically below
 # this AND below task-containment threshold get pruned.

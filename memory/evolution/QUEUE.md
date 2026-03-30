@@ -51,7 +51,8 @@ _Queue audited on 2026-03-24 evening. Removed 3 completed items (A5_A7, TEMPORAL
 
 ### Phi / Benchmarking
 
-- [x] [PERFORMANCE_BENCHMARK 2026-03-30] [PERF] Graph Density fix — stats() now reads SQLite store instead of empty JSON dict. Density: 36.64 (was 0.0)
+- [ ] [PERFORMANCE_BENCHMARK 2026-03-30] [PERF] Phi (Integration): 0.2345 breached critical threshold 0.3. Action: fix_phi
+- [ ] [LLM_BRAIN_REVIEW 2026-03-30] [LLM_BRAIN_REVIEW] Maintain a single authoritative 'current priorities' memory in clarvis-goals that is updated weekly, replacing stale daily planning fragments — Probe 4 returned only diary entries (dist >1.0). A curated, regularly-updated priorities memory would give goal queries a strong anchor to retrieve.
 ---
 
 ## P2 — When Idle (Demoted 2026-03-17)
@@ -75,6 +76,7 @@ _Design: `docs/ADAPTIVE_RAG_PLAN.md` — 4-phase rollout (GATE → EVAL → RETR
 
 ### Research Sessions
 _(Completed items archived.)_
+- [x] [RESEARCH_PHI_COMPUTATION] Review practical Φ computation, PyPhi tooling, and theoretical limitations. (2026-03-30)
 
 ---
 
@@ -82,14 +84,13 @@ _(Completed items archived.)_
 
 ### External Challenges
 
-- [x] [EXTERNAL_CHALLENGE:coding-challenge-01] Lock-free MPSC ring buffer — CAS-based, all stress tests pass (40k items, 0 loss), benchmarked at 863k ops/s. See scripts/challenges/lockfree_ring_buffer.py
 
 ### P0 — Found in 2026-03-27 evening scan
 
 
 ### P1 — Found in 2026-03-28 evolution scan
 
-- [ ] [BRIEF_COMPRESSION_BOOST] Raise brief compression ratio from 0.503→0.55+ by (a) lowering DyCP `DYCP_MIN_CONTAINMENT` from 0.08→0.10, (b) adding redundant-sentence dedup across retained sections in `generate_tiered_brief`, and (c) tightening `compress_text` extractive ratio from 0.3→0.25 for low-relevance sections. Measure before/after with `performance_benchmark.py record`.
+- [x] [BRIEF_COMPRESSION_BOOST 2026-03-30] Raised brief compression 0.498→0.609 (target 0.55): (a) DYCP_MIN_CONTAINMENT 0.08→0.10, (b) cross-section dedup wired into generate_tiered_brief, (c) compress_text default ratio 0.3→0.25. Benchmark recorded, 14/15 pass, PI=0.904.
 
 
 

@@ -1752,3 +1752,7 @@ _Last archived: 2026-03-27_
 - [x] [AUTO_SPLIT 2026-03-29] [STRATEGIC_AUDIT 2026-03-28_3] Test: add/update test(s) covering the new behavior
 - [x] [AUTO_SPLIT 2026-03-29] [STRATEGIC_AUDIT 2026-03-28_4] Verify: run existing tests, confirm no regressions
 - [x] [EXTERNAL_CHALLENGE_FEED] (2026-03-30) Added `scripts/external_challenge_feed.py` + `data/challenge_feed.json` (15 challenges, 7 categories). Wired into cron_autonomous.sh. First challenge injected: coding-challenge-01.
+
+## Archived 2026-03-30
+- [x] [PERFORMANCE_BENCHMARK 2026-03-30] [PERF] Graph Density fix — stats() now reads SQLite store instead of empty JSON dict. Density: 36.64 (was 0.0)
+- [x] [EXTERNAL_CHALLENGE:coding-challenge-01] Lock-free MPSC ring buffer — CAS-based, all stress tests pass (40k items, 0 loss), benchmarked at 863k ops/s. See scripts/challenges/lockfree_ring_buffer.py

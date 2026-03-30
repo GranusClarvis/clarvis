@@ -241,7 +241,7 @@ def tfidf_extract(text, ratio=0.3, min_sentences=2, max_sentences=20):
     return '\n'.join(result)
 
 
-def compress_text(text, ratio=0.3):
+def compress_text(text, ratio=0.25):
     """Public API: compress arbitrary text via extractive TF-IDF + MMR + dedup.
 
     Stage 1: TF-IDF sentence selection
@@ -1162,7 +1162,14 @@ def generate_tiered_brief(
     if end:
         parts.append("---")
         parts.extend(end)
-    return "\n".join(parts)
+    result = "\n".join(parts)
+    # Apply cross-section dedup to remove near-duplicate lines across sections
+    try:
+        from clarvis.context.dycp import _cross_section_dedup
+        result = _cross_section_dedup(result)
+    except ImportError:
+        pass
+    return result
 
 
 def _classify_queue_lines(lines, cutoff_str):
