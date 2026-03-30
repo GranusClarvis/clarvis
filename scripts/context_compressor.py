@@ -1042,9 +1042,10 @@ def _prune_knowledge_hints(knowledge_hints, current_task, max_hints=None):
     """Prune low-salience brain hits from knowledge_hints before compression.
 
     Filters by:
-      1. Distance threshold — drop hints with d > adaptive cutoff
+      1. Distance threshold — adaptive cutoff tightens with brain size
       2. Task-relevance — keep hints with word overlap to task
       3. Max count — cap total hints to prevent unbounded growth
+      4. Character budget — hard cap on total output bytes
 
     Returns pruned knowledge_hints string.
     """
@@ -1055,8 +1056,15 @@ def _prune_knowledge_hints(knowledge_hints, current_task, max_hints=None):
     if len(lines) <= 2:
         return knowledge_hints  # too few to prune
 
+    # Scale max_hints with brain size: larger brain → stricter selection
     if max_hints is None:
-        max_hints = min(8, len(lines))  # adaptive cap
+        brain_size = _get_brain_size()
+        if brain_size > 3000:
+            max_hints = min(5, len(lines))
+        elif brain_size > 2500:
+            max_hints = min(6, len(lines))
+        else:
+            max_hints = min(8, len(lines))
 
     task_tokens = set(re.findall(r'[a-z]{3,}', current_task.lower())) - _STOPWORDS
 
@@ -1079,23 +1087,44 @@ def _prune_knowledge_hints(knowledge_hints, current_task, max_hints=None):
     # Sort by score descending, keep top max_hints
     scored.sort(key=lambda x: x[0], reverse=True)
 
-    # Adaptive distance cutoff: median distance + 0.3
+    # Adaptive distance cutoff: tightens with brain size to counteract
+    # more medium-distance hits from larger collections
     distances = [float(re.search(r'd=(\d+\.?\d*)', l).group(1))
                  for _, l in scored if re.search(r'd=(\d+\.?\d*)', l)]
     if distances:
         median_dist = sorted(distances)[len(distances) // 2]
-        cutoff = median_dist + 0.3
+        brain_size = _get_brain_size()
+        # Tighter cutoff for larger brains: 0.3 → 0.2 as brain grows past 2500
+        margin = 0.3 if brain_size < 2500 else 0.2
+        cutoff = median_dist + margin
     else:
         cutoff = 1.3  # fallback
 
     kept = []
+    total_chars = 0
+    char_budget = 800  # hard cap: ~200 tokens of knowledge
     for score, line in scored[:max_hints]:
         dm = re.search(r'd=(\d+\.?\d*)', line)
         dist = float(dm.group(1)) if dm else 0.5
         if dist <= cutoff or len(kept) < 3:  # always keep top 3
+            if total_chars + len(line) > char_budget and len(kept) >= 3:
+                break
             kept.append(line)
+            total_chars += len(line)
 
     return '\n'.join(kept)
+
+
+def _get_brain_size():
+    """Get total brain memory count (cached per process)."""
+    if not hasattr(_get_brain_size, '_cached'):
+        try:
+            from brain import brain
+            stats = brain.stats()
+            _get_brain_size._cached = stats.get('total_memories', 2000)
+        except Exception:
+            _get_brain_size._cached = 2000
+    return _get_brain_size._cached
 
 
 def _build_brief_beginning(current_task, tier, budget, knowledge_hints):

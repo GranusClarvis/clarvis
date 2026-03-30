@@ -836,20 +836,19 @@ def _measure_compression_live():
         logger.debug("Gathering attention-focused items for compression measurement failed: %s", e)
     raw_input = "\n".join(raw_parts)
 
-    # Stabilize raw_input size: include full QUEUE.md as reference floor
-    # to prevent ratio drops when attention items are sparse
+    # Stabilize raw_input size: use max of actual content, QUEUE.md, and a
+    # minimum floor to prevent ratio volatility when QUEUE shrinks after cleanup.
+    # Floor of 4000 bytes ≈ typical QUEUE.md with ~15 pending items.
+    MIN_RAW_FLOOR = 4000
     queue_file = os.path.join(WORKSPACE, "memory/evolution/QUEUE.md")
     if os.path.exists(queue_file):
         try:
             queue_size = os.path.getsize(queue_file)
-            if queue_size > len(raw_input):
-                raw_input_size = max(len(raw_input), queue_size)
-            else:
-                raw_input_size = len(raw_input)
+            raw_input_size = max(len(raw_input), queue_size, MIN_RAW_FLOOR)
         except OSError:
-            raw_input_size = len(raw_input)
+            raw_input_size = max(len(raw_input), MIN_RAW_FLOOR)
     else:
-        raw_input_size = len(raw_input)
+        raw_input_size = max(len(raw_input), MIN_RAW_FLOOR)
 
     brief = generate_tiered_brief("Test task for benchmark", "standard", [])
     result = {"brief_compression": 0.0, "context_relevance": 0.0}

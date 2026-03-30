@@ -74,6 +74,7 @@ _Design: `docs/ADAPTIVE_RAG_PLAN.md` — 4-phase rollout (GATE → EVAL → RETR
 
 ### Research Sessions
 _(Completed items archived.)_
+- [x] [RESEARCH_PHI_COMPUTATION] (2026-03-30) Reviewed IIT 4.0, approximation literature, and core critiques; summary in `memory/research/phi-computation.md`.
 
 ---
 
@@ -85,14 +86,13 @@ _(Completed items archived.)_
 
 ### P0 — Found in 2026-03-27 evening scan
 
+- [ ] [CONTEXT_CACHE_SUPPRESSION_TEST_FIX] Fix and validate the pre-existing failing test `test_hard_suppress_ignores_content_cache` after today's `context_compressor.py` pruning/compression changes. Ensure static suppression and dynamic suppression expectations are aligned so benchmark-driven refactors do not ship with a red test suite.
 
 ### P1 — Found in 2026-03-28 evolution scan
 
 ### P1 — Found in 2026-03-30 evolution scan
 
-- [ ] [BRIEF_COMPRESSION_STABILITY] Brief compression ratio dropped from 0.615→0.550 (at target boundary). Audit `context_compressor.py` extractive-then-abstractive pipeline: check if recent brain growth (2666→2761 memories) is inflating pre-compression token counts without proportional summary improvement. Add adaptive pruning of low-salience brain hits before compression. Target: stable ≥0.58.
-- [x] [INTRA_DENSITY_BOOST] Done 2026-03-30. Added 1850 intra-collection semantic_similarity edges (top nearest-neighbor pairs per collection). Intra-density: 0.433→0.521 (target ≥0.50 met). Phi: 0.730→0.745.
-- [x] [HEALTH_MONITOR_METRIC_EXPORT] (Bash) Done 2026-03-30. `health_monitor.sh` now emits `monitoring/health_latest.json` with brain_count, cron_ok/fail, disk_pct, mem_pct, load, gateway_status, phi, pi. Atomic write, reads cached PI/Phi values.
+- [x] [BRIEF_COMPRESSION_STABILITY] (2026-03-30) Fixed: brain-size-adaptive pruning in `_prune_knowledge_hints` (tighter max_hints + char budget for larger brains), tighter distance cutoff in brain_bridge (0.20 margin, 1.10 cap), stabilized denominator floor in `_measure_compression_live`. Result: 0.807 (target ≥0.58).
 - [ ] [ACTION_FAILURE_TRIAGE] 45 action-type episode failures dominate the failure distribution (vs 14 timeout, 7 system). Sample 10 recent action failures from episodes, classify root causes (bad tool call, wrong model, missing context, etc.), and file a short report in `memory/research/action-failure-triage.md` with top-3 actionable fixes.
 
 
