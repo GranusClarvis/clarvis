@@ -239,9 +239,12 @@ def should_suppress_section(section_name: str, task_text: str = "") -> bool:
     """
     if section_name in DYCP_PROTECTED_SECTIONS:
         return False
+    # Static hard suppress: unconditional floor — these are always suppressed
+    if section_name in HARD_SUPPRESS:
+        return True
     # Dynamic feedback loop: compute suppress sets from live relevance data
     dynamic_hard, dynamic_soft = _compute_dynamic_suppress()
-    # Hard suppress: unconditional — these sections are chronic noise
+    # Dynamic hard suppress: sections classified as noise from live data
     if section_name in dynamic_hard:
         return True
     # Soft suppress: can be overridden by task containment

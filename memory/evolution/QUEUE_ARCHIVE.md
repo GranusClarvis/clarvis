@@ -1781,3 +1781,6 @@ _Last archived: 2026-03-27_
 ## Archived 2026-03-30
 - [x] [RESEARCH_PHI_COMPUTATION] (2026-03-30) Reviewed IIT 4.0, approximation literature, and core critiques; summary in `memory/research/phi-computation.md`.
 - [x] [BRIEF_COMPRESSION_STABILITY] (2026-03-30) Fixed: brain-size-adaptive pruning in `_prune_knowledge_hints` (tighter max_hints + char budget for larger brains), tighter distance cutoff in brain_bridge (0.20 margin, 1.10 cap), stabilized denominator floor in `_measure_compression_live`. Result: 0.807 (target ≥0.58).
+
+## Archived 2026-03-30
+- [x] [ACTION_FAILURE_TRIAGE] Done 2026-03-30. Report filed in `memory/research/action-failure-triage.md`. Key finding: 47% are shallow_reasoning detector artifacts from early period (Feb 22-24), not real failures. Top fixes: improve reasoning chain step capture, exclude early episodes from accuracy metrics, add timeout guards.
