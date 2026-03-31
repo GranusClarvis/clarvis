@@ -51,7 +51,7 @@ _Queue audited on 2026-03-24 evening. Removed 3 completed items (A5_A7, TEMPORAL
 
 ### Phi / Benchmarking
 
-- [ ] [LLM_BRAIN_REVIEW 2026-03-31] [LLM_BRAIN_REVIEW] Create and maintain a single authoritative 'current-priorities' memory in clarvis-goals, updated weekly by the priorities curator, replacing stale planning fragments — Probe 4 failed because no clean priorities document exists — the LLM brain review from 2026-03-30 already recommended this exact action but it hasn't been implemented yet
+- [x] [LLM_BRAIN_REVIEW 2026-03-31] [LLM_BRAIN_REVIEW] Create and maintain a single authoritative 'current-priorities' memory in clarvis-goals — Done: refreshed to W14, fixed self-reference bug + ISO week format in priorities_curator.py, pruned 1 stale fragment, verified #1 retrieval rank
 ---
 
 ## P2 — When Idle (Demoted 2026-03-17)
@@ -82,7 +82,6 @@ _(Completed items archived.)_
 
 ### External Challenges
 
-- [x] [EXTERNAL_CHALLENGE:research-impl-01] Implement Sparse Priming Representations (SPR) for brain memory compression — Done 2026-03-31: `clarvis/brain/spr.py` — encode_spr(), decode_spr(), batch_encode(), CLI. Tested on 20 memories: 0.545 compression ratio (45% savings), 20/20 decode roundtrip. Passthrough for short mems, structured extraction for known formats, general NLP pipeline for free text.
 
 
 

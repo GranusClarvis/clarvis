@@ -79,9 +79,12 @@ def _read_active_goals():
     if not col:
         return []
 
-    results = col.get(include=['documents', 'metadatas'])
+    results = col.get(include=['documents', 'metadatas'], ids=None)
     goals = []
-    for doc, meta in zip(results['documents'], results['metadatas']):
+    for doc_id, doc, meta in zip(results['ids'], results['documents'], results['metadatas']):
+        # Skip the priorities memory itself
+        if doc_id == PRIORITIES_ID:
+            continue
         if meta.get('lifecycle') == 'completed' or meta.get('archived') == 'true':
             continue
         progress = meta.get('progress', 0)
@@ -103,7 +106,7 @@ def _build_priorities_text(queue_data, goals):
     """Build the authoritative priorities text."""
     now = datetime.now(timezone.utc)
     date_str = now.strftime('%Y-%m-%d')
-    week_str = now.strftime('%Y-W%W')
+    week_str = now.strftime('%G-W%V')
 
     lines = [
         f"Current priorities (week of {date_str}, updated {week_str}):",

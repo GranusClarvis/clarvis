@@ -1802,3 +1802,10 @@ _Last archived: 2026-03-27_
 - [x] [BRIEF_COMPRESSION_STABILIZER] EWMA smoothing added to `performance_benchmark.py` (_bcr_ewma_smooth, window=10, alpha=0.3) + `brief_benchmark.py` (history-aware scoring, stores compression_ratio). BCR=0.829 smoothed. _(2026-03-31)_
 - [x] [HEALTH_MONITOR_HEREDOC_FIX] Converted `python3 -c "..."` to heredoc (`python3 - <<'PYEOF'`) in health_monitor.sh — eliminates fragile bash escaping. _(2026-03-31)_
 - [x] [INTRA_DENSITY_NEAREST_NEIGHBOR] Added `_sqlite_nearest_neighbor_edges()` to graph_compaction.py (k=5, 80/col). Intra-density: 0.52→0.5608 (above 0.55 target). _(2026-03-31)_
+
+## Archived 2026-03-31
+- [x] [STALLED_GOAL_IMPORT_RELIABILITY] 8 subprocess integration tests in `packages/clarvis-db/tests/test_import_reliability.py` — covers spine imports (brain, search, remember, capture), metrics (phi), legacy path, heartbeat, cognition. All pass. Goal "Fix module import reliability" now has regression coverage.
+- [x] [HEALTH_METRIC_JSON_EXPORT] Already implemented (lines 267-343 of health_monitor.sh) — emits `monitoring/health_latest.json` with timestamp, mem_pct, disk_pct, load, gateway_status, phi, pi, brain_count, cron counts. No work needed.
+
+## Archived 2026-03-31
+- [x] [EXTERNAL_CHALLENGE:research-impl-01] Implement Sparse Priming Representations (SPR) for brain memory compression — Done 2026-03-31: `clarvis/brain/spr.py` — encode_spr(), decode_spr(), batch_encode(), CLI. Tested on 20 memories: 0.545 compression ratio (45% savings), 20/20 decode roundtrip. Passthrough for short mems, structured extraction for known formats, general NLP pipeline for free text.
