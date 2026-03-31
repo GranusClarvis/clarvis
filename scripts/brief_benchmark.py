@@ -233,7 +233,9 @@ def _load_history_scores(window: int = 5) -> list[float]:
                     continue
                 try:
                     entry = json.loads(line)
-                    scores.append(float(entry["mean_overall"]))
+                    # Prefer raw score to avoid double-smoothing
+                    raw = entry.get("mean_overall_raw", entry.get("mean_overall"))
+                    scores.append(float(raw))
                 except (json.JSONDecodeError, KeyError, ValueError):
                     continue
     except OSError:
@@ -383,6 +385,7 @@ def _append_history(benchmark_result: dict) -> None:
     entry = {
         "ts": benchmark_result["generated"],
         "mean_overall": benchmark_result["mean_overall"],
+        "mean_overall_raw": benchmark_result.get("mean_overall_raw", benchmark_result["mean_overall"]),
         "mean_token_coverage": benchmark_result["mean_token_coverage"],
         "mean_section_coverage": benchmark_result["mean_section_coverage"],
         "mean_jaccard": benchmark_result["mean_jaccard"],

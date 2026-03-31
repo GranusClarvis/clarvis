@@ -328,13 +328,14 @@ class GraphStoreSQLite:
         )
         self._conn.commit()
 
-    def bulk_add_edges(self, edges: list[tuple]):
+    def bulk_add_edges(self, edges: list[tuple]) -> int:
         """Bulk insert edges. Each tuple:
         (from_id, to_id, type, created_at, source_collection, target_collection, weight).
 
         Uses executemany + INSERT OR IGNORE for speed. Wraps in a single
-        transaction for atomicity.
+        transaction for atomicity. Returns actual number of rows inserted.
         """
+        before = self._conn.total_changes
         self._conn.executemany(
             "INSERT OR IGNORE INTO edges "
             "(from_id, to_id, type, created_at, source_collection, target_collection, weight) "
@@ -342,6 +343,7 @@ class GraphStoreSQLite:
             edges,
         )
         self._conn.commit()
+        return self._conn.total_changes - before
 
     # ------------------------------------------------------------------
     # Stats & integrity

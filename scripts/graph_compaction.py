@@ -333,9 +333,9 @@ def _sqlite_nearest_neighbor_edges(store, brain, k=5, sample_per_col=80, dry_run
                 continue
 
         if edges_batch and not dry_run:
-            store.bulk_add_edges(edges_batch)
-
-        inserted = len(edges_batch)
+            inserted = store.bulk_add_edges(edges_batch)
+        else:
+            inserted = len(edges_batch)  # dry-run: report attempted
         new_edges += inserted
         if inserted > 0:
             print(f"  {col_name}: {inserted} nearest-neighbor edges")
