@@ -81,7 +81,6 @@ _(Completed items archived.)_
 
 ### External Challenges
 
-- [x] [EXTERNAL_CHALLENGE:bench-robustness-01] Chaos test: verify brain recovery after simulated corruption — 7-test harness in `tests/clarvis/test_chaos_recovery.py` (10%/30% metadata corruption, graph orphans, isolation, optimize-during-store). All green.
 
 
 
@@ -92,7 +91,6 @@ _(Completed items archived.)_
 
 ### P1 — Found in 2026-03-30 evolution scan
 
-- [x] [PHI_INTRA_DENSITY_WEIGHTING] Boost Phi intra-collection density by importance-weighted centroid — high-importance memories (≥0.8) contribute 2x. Result: intra_density 0.5149→0.5217, Phi 0.7479→0.7492.
 
 
 

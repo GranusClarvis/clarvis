@@ -1792,3 +1792,7 @@ _Last archived: 2026-03-27_
 - [x] [BRIEF_ADAPTIVE_BUDGET] _(2026-03-30)_ Added `_estimate_task_complexity()` to `clarvis/context/assembly.py` — simple tasks get 200-char knowledge budget, medium 280, complex 350. Legacy `context_compressor.py` also patched. Benchmark: 0.352 overall (avg brief 851 bytes).
 - [x] [OPENCLAW_HEARTBEAT_ALIGN] _(2026-03-30)_ Set `heartbeat.every` to `"never"` in `openclaw.json` — gateway heartbeat disabled, cron handles all autonomous execution (12x/day).
 - [x] [DYCP_TEST_EXPECTATION_FIX] _(2026-03-30)_ Updated test threshold 0.08→0.10 in `test_assembly_calibration_freeze.py`. All 20 calibration tests pass green.
+
+## Archived 2026-03-31
+- [x] [EXTERNAL_CHALLENGE:bench-robustness-01] Chaos test: verify brain recovery after simulated corruption — 7-test harness in `tests/clarvis/test_chaos_recovery.py` (10%/30% metadata corruption, graph orphans, isolation, optimize-during-store). All green.
+- [x] [PHI_INTRA_DENSITY_WEIGHTING] Boost Phi intra-collection density by importance-weighted centroid — high-importance memories (≥0.8) contribute 2x. Result: intra_density 0.5149→0.5217, Phi 0.7479→0.7492.
