@@ -1831,3 +1831,7 @@ _Last archived: 2026-03-27_
 - [x] [HARNESS_CONCURRENT_TOOL_EXEC] (2026-03-31) Implemented `ThreadPoolExecutor(max_workers=3)` parallel execution in `heartbeat_preflight.py` for episodic/brain_bridge/introspection stages. Env `CLARVIS_PREFLIGHT_PARALLEL=0` to disable. Logs wall vs sequential time + savings.
 - [x] [HARNESS_CONTEXT_CACHING] (2026-03-31) Added section-level caching to `context_compressor.py`: hash+TTL (300s) invalidation for scores, queue, related tasks, completions. Tiered brief 381ms→6ms on cache hit (98% reduction). CLI: `cache-stats`.
 - [x] [HARNESS_WORKTREE_ISOLATION] (2026-03-31) Added `worktree_create/cleanup/merge_back/list` functions to `project_agent.py`. Shared git objects, ~1-2s setup vs ~60-120s clone. Per-task worktree in `<agent>/worktrees/<task_id>/`. Not yet wired into `cmd_spawn` (needs integration test with live agent).
+
+## Archived 2026-03-31
+- [x] [BENCHMARK_DOUBLE_SMOOTH_FIX] Fixed: `_append_history()` now stores `mean_overall_raw`; `_load_history_scores()` reads raw field (fallback to smoothed for old entries). Double-smoothing eliminated.
+- [x] [NN_EDGE_INSERT_COUNT_FIX] Fixed: `bulk_add_edges()` now returns actual inserted count via `total_changes` diff; `graph_compaction.py` uses the return value. Verified: dupes correctly report 0.

@@ -6,8 +6,6 @@ _Completed items auto-archived to QUEUE_ARCHIVE.md._
 
 ## P0 — 14-Day Delivery Window (Deadline: 2026-03-31)
 
-- [x] [BENCHMARK_DOUBLE_SMOOTH_FIX] Fixed: `_append_history()` now stores `mean_overall_raw`; `_load_history_scores()` reads raw field (fallback to smoothed for old entries). Double-smoothing eliminated.
-- [x] [NN_EDGE_INSERT_COUNT_FIX] Fixed: `bulk_add_edges()` now returns actual inserted count via `total_changes` diff; `graph_compaction.py` uses the return value. Verified: dupes correctly report 0.
 
 ### Delivery Goal
 Presentable Clarvis by 2026-03-31:
