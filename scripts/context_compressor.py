@@ -57,6 +57,87 @@ _STOPWORDS = frozenset(
 )
 
 
+# Per-category TF-IDF extraction ratios — higher ratio keeps more sentences
+_CATEGORY_RATIOS = {
+    "code": 0.35,        # code tasks need more detail preserved
+    "research": 0.30,    # research needs moderate detail
+    "maintenance": 0.30, # maintenance is more routine
+    "default": 0.25,     # fallback
+}
+
+# Category detection patterns
+_CATEGORY_PATTERNS = {
+    "code": re.compile(
+        r'(?:implement|refactor|fix|add.*test|pytest|coverage|bug|regex|extract|'
+        r'module|function|class|import|endpoint|api|cli|parser)', re.I),
+    "research": re.compile(
+        r'(?:research|analyze|investigate|survey|literature|paper|study|compare|'
+        r'explore|evaluate|benchmark|audit)', re.I),
+    "maintenance": re.compile(
+        r'(?:health|monitor|backup|cleanup|compact|vacuum|watchdog|cron|rotate|'
+        r'verify|check|status|report|graph.*compaction|dedup)', re.I),
+}
+
+
+def _classify_task_category(task_text):
+    """Classify task into code/research/maintenance category for ratio selection."""
+    if not task_text:
+        return "default"
+    for category, pattern in _CATEGORY_PATTERNS.items():
+        if pattern.search(task_text):
+            return category
+    return "default"
+
+
+def _extract_task_keywords(task_text):
+    """Extract critical keywords from a task description for pinning.
+
+    Returns a set of lowercase keyword strings that must survive compression.
+    Extracts: bracketed tags, quoted terms, CamelCase/snake_case identifiers,
+    and significant nouns from the task.
+    """
+    if not task_text:
+        return set()
+
+    keywords = set()
+
+    # 1. Bracketed tags like [BRIEF_KEYWORD_COVERAGE]
+    for m in re.finditer(r'\[([A-Z][A-Z0-9_]+)\]', task_text):
+        # Add the tag and its parts
+        tag = m.group(1).lower()
+        keywords.add(tag)
+        for part in tag.split('_'):
+            if len(part) >= 3:
+                keywords.add(part)
+
+    # 2. snake_case identifiers (e.g., context_compressor, compress_text)
+    for m in re.finditer(r'[a-z][a-z0-9]*(?:_[a-z0-9]+)+', task_text):
+        ident = m.group(0)
+        keywords.add(ident)
+        for part in ident.split('_'):
+            if len(part) >= 3:
+                keywords.add(part)
+
+    # 3. File references (e.g., context_compressor.py)
+    for m in re.finditer(r'(\w+\.(?:py|sh|js|ts|json|md))', task_text):
+        fname = m.group(1).replace('.py', '').replace('.sh', '').replace('.md', '')
+        keywords.add(fname.lower())
+        for part in fname.split('_'):
+            if len(part) >= 3:
+                keywords.add(part.lower())
+
+    # 4. CamelCase identifiers
+    for m in re.finditer(r'[A-Z][a-z]+(?:[A-Z][a-z]+)+', task_text):
+        keywords.add(m.group(0).lower())
+
+    # 5. Significant content words (non-stopword tokens >= 4 chars)
+    for w in re.findall(r'[a-z][a-z0-9_]+', task_text.lower()):
+        if w not in _STOPWORDS and len(w) >= 4:
+            keywords.add(w)
+
+    return keywords
+
+
 def _tokenize(text):
     """Split text into lowercase word tokens, filtering stopwords."""
     return [w for w in re.findall(r'[a-z][a-z0-9_]+', text.lower()) if w not in _STOPWORDS]
@@ -167,7 +248,7 @@ def _split_sentences(text):
     return segments
 
 
-def tfidf_extract(text, ratio=0.3, min_sentences=2, max_sentences=20):
+def tfidf_extract(text, ratio=0.3, min_sentences=2, max_sentences=20, pinned_keywords=None):
     """Extractive compression via TF-IDF sentence scoring.
 
     Selects the most informative sentences from text based on TF-IDF salience.
@@ -178,6 +259,7 @@ def tfidf_extract(text, ratio=0.3, min_sentences=2, max_sentences=20):
         ratio: Target output/input ratio (0.3 = keep ~30% of content).
         min_sentences: Minimum sentences to keep regardless of ratio.
         max_sentences: Maximum sentences to return.
+        pinned_keywords: Optional set of keywords that boost sentence scores when present.
 
     Returns:
         Compressed text string with highest-salience sentences.
@@ -188,6 +270,8 @@ def tfidf_extract(text, ratio=0.3, min_sentences=2, max_sentences=20):
     sentences = _split_sentences(text)
     if len(sentences) <= min_sentences:
         return text  # already short enough
+
+    pinned = pinned_keywords or set()
 
     # --- TF-IDF scoring ---
     # Compute document frequency for each word across sentences
@@ -218,6 +302,13 @@ def tfidf_extract(text, ratio=0.3, min_sentences=2, max_sentences=20):
         # Bonus for sentences with key indicators
         if re.search(r'(?:error|fail|fix|target|metric|score|result|bug|critical)', sentences[i], re.I):
             score *= 1.15
+        # Keyword-pinning boost: sentences containing task-critical terms score higher
+        if pinned:
+            token_set = set(tokens)
+            pin_hits = len(pinned & token_set)
+            if pin_hits:
+                # Scale boost: 1.25 per pinned keyword hit, multiplicative
+                score *= 1.0 + 0.25 * pin_hits
         scores.append(score)
 
     # Determine how many sentences to keep
@@ -241,12 +332,19 @@ def tfidf_extract(text, ratio=0.3, min_sentences=2, max_sentences=20):
     return '\n'.join(result)
 
 
-def compress_text(text, ratio=0.25):
+def compress_text(text, ratio=0.25, task_context=None):
     """Public API: compress arbitrary text via extractive TF-IDF + MMR + dedup.
 
-    Stage 1: TF-IDF sentence selection
+    Stage 1: TF-IDF sentence selection (with keyword-pinning if task_context given)
     Stage 2: MMR reranking to reduce semantic redundancy
     Stage 3: core-string dedup to catch residual near-duplicates
+
+    Args:
+        text: Input text to compress.
+        ratio: Base extraction ratio (overridden by category ratio if task_context given).
+        task_context: Optional task description string. When provided, enables:
+            - Per-category ratio (code=0.35, maintenance=0.30, research=0.30)
+            - Keyword-pinning: task-critical terms boost sentence selection scores
 
     Returns (compressed_text, compression_stats) tuple.
     """
@@ -255,8 +353,17 @@ def compress_text(text, ratio=0.25):
 
     input_chars = len(text)
 
-    # Stage 1: Extractive — select key sentences
-    extracted = tfidf_extract(text, ratio=ratio)
+    # Determine ratio and pinned keywords from task context
+    pinned_keywords = set()
+    effective_ratio = ratio
+    category = "default"
+    if task_context:
+        category = _classify_task_category(task_context)
+        effective_ratio = _CATEGORY_RATIOS.get(category, ratio)
+        pinned_keywords = _extract_task_keywords(task_context)
+
+    # Stage 1: Extractive — select key sentences (with keyword pinning)
+    extracted = tfidf_extract(text, ratio=effective_ratio, pinned_keywords=pinned_keywords or None)
 
     # Stage 2: MMR post-pass over extracted sentences to reduce redundancy
     lines = [line.strip() for line in extracted.split('\n') if line.strip()]
@@ -285,6 +392,8 @@ def compress_text(text, ratio=0.25):
         "sentences_in": len(_split_sentences(text)),
         "sentences_out": len(deduped),
         "mmr_applied": len(lines) > 1,
+        "task_category": category,
+        "pinned_keywords_count": len(pinned_keywords),
     }
 
 
@@ -1131,6 +1240,15 @@ def _build_brief_beginning(current_task, tier, budget, knowledge_hints):
     """Build the high-attention beginning sections of the brief."""
     parts = []
 
+    # Task echo — ensures task-critical keywords appear in the brief
+    if current_task:
+        # Extract [TAG] if present
+        tag_match = re.search(r'\[([A-Z][A-Z0-9_]+)\]', current_task)
+        if tag_match:
+            parts.append(f"CURRENT TASK: [{tag_match.group(1)}] {current_task[:120]}")
+        else:
+            parts.append(f"CURRENT TASK: {current_task[:120]}")
+
     # Decision Context (success criteria + failure avoidance)
     if budget.get("decision_context", 0) > 0:
         decision_ctx = _build_decision_context(current_task, tier=tier)
@@ -1160,7 +1278,7 @@ def _build_brief_beginning(current_task, tier, budget, knowledge_hints):
                 except Exception:
                     max_chars = 280
             if len(knowledge_hints) > max_chars * 1.5:
-                compressed_knowledge, _ = compress_text(knowledge_hints, ratio=0.25)
+                compressed_knowledge, _ = compress_text(knowledge_hints, ratio=0.25, task_context=current_task)
                 parts.append(compressed_knowledge[:max_chars])
             else:
                 parts.append(knowledge_hints[:max_chars])
@@ -1171,7 +1289,7 @@ def _build_brief_beginning(current_task, tier, budget, knowledge_hints):
         if workspace_ctx:
             ws_budget = 500 if tier == "full" else 300
             if len(workspace_ctx) > ws_budget * 1.5:
-                workspace_ctx, _ = compress_text(workspace_ctx, ratio=0.25)
+                workspace_ctx, _ = compress_text(workspace_ctx, ratio=0.25, task_context=current_task)
             parts.append(workspace_ctx[:ws_budget])
         else:
             n_items = 5 if tier == "full" else 3
@@ -1222,13 +1340,13 @@ def _build_brief_middle(current_task, tier, budget, queue_file):
     return parts
 
 
-def _build_brief_end(tier, budget, episodic_hints):
+def _build_brief_end(tier, budget, episodic_hints, current_task=None):
     """Build the high-attention end sections (episodes + reasoning scaffold)."""
     parts = []
     if budget["episodes"] > 0 and episodic_hints:
         max_chars = budget["episodes"] * 4
         if len(episodic_hints) > max_chars * 1.5:
-            compressed_episodes, _ = compress_text(episodic_hints, ratio=0.25)
+            compressed_episodes, _ = compress_text(episodic_hints, ratio=0.25, task_context=current_task)
             parts.append(compressed_episodes[:max_chars])
         else:
             parts.append(episodic_hints[:max_chars])
@@ -1254,7 +1372,7 @@ def generate_tiered_brief(
     budget = TIER_BUDGETS.get(tier, TIER_BUDGETS["standard"])
     beginning = _build_brief_beginning(current_task, tier, budget, knowledge_hints)
     middle = _build_brief_middle(current_task, tier, budget, queue_file)
-    end = _build_brief_end(tier, budget, episodic_hints)
+    end = _build_brief_end(tier, budget, episodic_hints, current_task=current_task)
 
     parts = beginning
     if middle:

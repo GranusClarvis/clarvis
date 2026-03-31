@@ -37,6 +37,68 @@ _STOPWORDS = frozenset(
 )
 
 
+# Per-category TF-IDF extraction ratios
+_CATEGORY_RATIOS = {
+    "code": 0.35,
+    "research": 0.30,
+    "maintenance": 0.30,
+    "default": 0.25,
+}
+
+_CATEGORY_PATTERNS = {
+    "code": re.compile(
+        r'(?:implement|refactor|fix|add.*test|pytest|coverage|bug|regex|extract|'
+        r'module|function|class|import|endpoint|api|cli|parser)', re.I),
+    "research": re.compile(
+        r'(?:research|analyze|investigate|survey|literature|paper|study|compare|'
+        r'explore|evaluate|benchmark|audit)', re.I),
+    "maintenance": re.compile(
+        r'(?:health|monitor|backup|cleanup|compact|vacuum|watchdog|cron|rotate|'
+        r'verify|check|status|report|graph.*compaction|dedup)', re.I),
+}
+
+
+def _classify_task_category(task_text):
+    """Classify task into code/research/maintenance category."""
+    if not task_text:
+        return "default"
+    for category, pattern in _CATEGORY_PATTERNS.items():
+        if pattern.search(task_text):
+            return category
+    return "default"
+
+
+def _extract_task_keywords(task_text):
+    """Extract critical keywords from task description for pinning."""
+    if not task_text:
+        return set()
+    keywords = set()
+    for m in re.finditer(r'\[([A-Z][A-Z0-9_]+)\]', task_text):
+        tag = m.group(1).lower()
+        keywords.add(tag)
+        for part in tag.split('_'):
+            if len(part) >= 3:
+                keywords.add(part)
+    for m in re.finditer(r'[a-z][a-z0-9]*(?:_[a-z0-9]+)+', task_text):
+        ident = m.group(0)
+        keywords.add(ident)
+        for part in ident.split('_'):
+            if len(part) >= 3:
+                keywords.add(part)
+    for m in re.finditer(r'(\w+\.(?:py|sh|js|ts|json|md))', task_text):
+        fname = m.group(1).replace('.py', '').replace('.sh', '').replace('.md', '')
+        keywords.add(fname.lower())
+        for part in fname.split('_'):
+            if len(part) >= 3:
+                keywords.add(part.lower())
+    for m in re.finditer(r'[A-Z][a-z]+(?:[A-Z][a-z]+)+', task_text):
+        keywords.add(m.group(0).lower())
+    for w in re.findall(r'[a-z][a-z0-9_]+', task_text.lower()):
+        if w not in _STOPWORDS and len(w) >= 4:
+            keywords.add(w)
+    return keywords
+
+
 def _tokenize(text):
     """Split text into lowercase word tokens, filtering stopwords."""
     return [w for w in re.findall(r'[a-z][a-z0-9_]+', text.lower()) if w not in _STOPWORDS]
@@ -125,7 +187,7 @@ def mmr_rerank(results, query_text, lambda_param=0.5, n=None):
     return [results[i] for i in selected_indices]
 
 
-def tfidf_extract(text, ratio=0.3, min_sentences=2, max_sentences=20):
+def tfidf_extract(text, ratio=0.3, min_sentences=2, max_sentences=20, pinned_keywords=None):
     """Extractive compression via TF-IDF sentence scoring."""
     if not text or len(text) < 100:
         return text
@@ -133,6 +195,8 @@ def tfidf_extract(text, ratio=0.3, min_sentences=2, max_sentences=20):
     sentences = _split_sentences(text)
     if len(sentences) <= min_sentences:
         return text
+
+    pinned = pinned_keywords or set()
 
     doc_freq = Counter()
     sentence_tokens = []
@@ -158,6 +222,11 @@ def tfidf_extract(text, ratio=0.3, min_sentences=2, max_sentences=20):
             score *= 1.2
         if re.search(r'(?:error|fail|fix|target|metric|score|result|bug|critical)', sentences[i], re.I):
             score *= 1.15
+        if pinned:
+            token_set = set(tokens)
+            pin_hits = len(pinned & token_set)
+            if pin_hits:
+                score *= 1.0 + 0.25 * pin_hits
         scores.append(score)
 
     target_chars = int(len(text) * ratio)
@@ -178,8 +247,13 @@ def tfidf_extract(text, ratio=0.3, min_sentences=2, max_sentences=20):
     return '\n'.join(result)
 
 
-def compress_text(text, ratio=0.3):
+def compress_text(text, ratio=0.3, task_context=None):
     """Compress arbitrary text via extractive TF-IDF + MMR + deduplication.
+
+    Args:
+        text: Input text to compress.
+        ratio: Base extraction ratio (overridden by category ratio if task_context given).
+        task_context: Optional task description for category-specific ratio and keyword pinning.
 
     Returns (compressed_text, stats_dict).
     """
@@ -187,7 +261,16 @@ def compress_text(text, ratio=0.3):
         return text, {"input_chars": len(text or ""), "output_chars": len(text or ""), "ratio": 1.0}
 
     input_chars = len(text)
-    extracted = tfidf_extract(text, ratio=ratio)
+
+    pinned_keywords = set()
+    effective_ratio = ratio
+    category = "default"
+    if task_context:
+        category = _classify_task_category(task_context)
+        effective_ratio = _CATEGORY_RATIOS.get(category, ratio)
+        pinned_keywords = _extract_task_keywords(task_context)
+
+    extracted = tfidf_extract(text, ratio=effective_ratio, pinned_keywords=pinned_keywords or None)
 
     # Stage 2: MMR post-pass over extracted sentences to reduce redundancy
     lines = [line.strip() for line in extracted.split('\n') if line.strip()]
@@ -216,6 +299,8 @@ def compress_text(text, ratio=0.3):
         "sentences_in": len(_split_sentences(text)),
         "sentences_out": len(deduped),
         "mmr_applied": len(lines) > 1,
+        "task_category": category,
+        "pinned_keywords_count": len(pinned_keywords),
     }
 
 

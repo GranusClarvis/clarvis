@@ -1328,7 +1328,7 @@ def _build_brief_beginning(current_task, tier, budget, knowledge_hints, section_
                 base_chars = 280
             max_chars = _scale_chars(base_chars, "knowledge", section_weights)
             if len(reranked) > max_chars * 1.5:
-                compressed_knowledge, _ = compress_text(reranked, ratio=0.25)
+                compressed_knowledge, _ = compress_text(reranked, ratio=0.25, task_context=current_task)
                 parts.append(compressed_knowledge[:max_chars])
             else:
                 parts.append(reranked[:max_chars])
@@ -1339,7 +1339,7 @@ def _build_brief_beginning(current_task, tier, budget, knowledge_hints, section_
             base_ws = 500 if tier == "full" else 300
             ws_budget = _scale_chars(base_ws, "working_memory", section_weights)
             if len(workspace_ctx) > ws_budget * 1.5:
-                workspace_ctx, _ = compress_text(workspace_ctx, ratio=0.25)
+                workspace_ctx, _ = compress_text(workspace_ctx, ratio=0.25, task_context=current_task)
             parts.append(workspace_ctx[:ws_budget])
         else:
             n_items = 5 if tier == "full" else 3
