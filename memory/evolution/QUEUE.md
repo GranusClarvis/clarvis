@@ -93,8 +93,8 @@ _(Completed items archived.)_
 ### P1 — Found in 2026-03-30 evolution scan
 
 ### P1 — Found in 2026-03-31 evolution scan
-- [ ] [STALLED_GOAL_IMPORT_RELIABILITY] Goal "Fix module import reliability" stuck at 0% — add integration test in `packages/clarvis-db/tests/` that exercises `from clarvis.brain import brain, search, remember, capture` and `from clarvis.metrics import phi` from a clean subprocess to catch import regressions.
-- [ ] [HEALTH_METRIC_JSON_EXPORT] Extend `health_monitor.sh` to emit `monitoring/health_latest.json` with structured fields (timestamp, mem_pct, disk_pct, load, pi, brain_ok) so downstream dashboards and alerting can consume metrics without log parsing. _(Bash task, non-Python)_
+- [x] [STALLED_GOAL_IMPORT_RELIABILITY] 8 subprocess integration tests in `packages/clarvis-db/tests/test_import_reliability.py` — covers spine imports (brain, search, remember, capture), metrics (phi), legacy path, heartbeat, cognition. All pass. Goal "Fix module import reliability" now has regression coverage.
+- [x] [HEALTH_METRIC_JSON_EXPORT] Already implemented (lines 267-343 of health_monitor.sh) — emits `monitoring/health_latest.json` with timestamp, mem_pct, disk_pct, load, gateway_status, phi, pi, brain_count, cron counts. No work needed.
 
 
 
