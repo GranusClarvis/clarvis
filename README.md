@@ -97,91 +97,241 @@ capture("learned something new")              # Auto-classify and store
 ```mermaid
 flowchart TB
     subgraph External["Interfaces"]
-        MSG[Messaging]
-        GH[GitHub]
+        TG["Telegram"]
+        DC["Discord"]
+        GH["GitHub"]
     end
 
-    subgraph Conscious["Conscious Layer"]
-        GW[Gateway]
-        LLM[Chat LLM]
+    subgraph Conscious["Conscious Layer  (OpenClaw Gateway · port 18789)"]
+        GW["Gateway (Node.js / systemd)"]
+        LLM["Chat LLM (GPT-5.4 · M2.5 fallback)"]
     end
 
-    subgraph Subconscious["Subconscious Layer"]
-        CRON[Scheduled Jobs]
-        CC[Code Agent]
+    subgraph Subconscious["Subconscious Layer  (system crontab · 40+ jobs)"]
+        CRON["Cron Orchestrators"]
+        CC["Claude Code (Opus)"]
     end
 
-    subgraph Core["Clarvis Core"]
-        HB[Heartbeat Pipeline]
-        BRAIN[ClarvisDB Brain]
-        MEM[Memory Systems]
-        COG[Cognition Engine]
-        CTX[Context Assembly]
-        MET[Metrics & Self-Model]
+    subgraph Spine["clarvis/ Spine Package"]
+        HB["Heartbeat Pipeline"]
+        BRAIN["ClarvisDB Brain"]
+        MEM["Memory Systems"]
+        COG["Cognition Engine"]
+        CTX["Context Assembly"]
+        MET["Metrics · Self-Model · Phi"]
+        ORCH["Task Router"]
     end
 
-    MSG --> GW --> LLM
+    subgraph Storage["Storage (fully local)"]
+        CHROMA["ChromaDB\n10 collections · ~3,800 vectors"]
+        GRAPH["SQLite+WAL Graph\n~138k edges"]
+        EPIS["Episodes · Reasoning Chains"]
+    end
+
+    TG & DC --> GW --> LLM
+    GH --> CC
     LLM -->|spawn| CC
     CRON -->|trigger| HB
     HB -->|select task| CC
     CC -->|learn| BRAIN
     LLM -->|recall| BRAIN
-    BRAIN --> MEM
+    BRAIN --> CHROMA & GRAPH
+    MEM --> BRAIN
     COG --> CTX
     MET -->|observe| BRAIN
+    ORCH -->|route| CC
+    CC --> EPIS
 ```
 
-**Conscious layer** — handles direct conversation, reads digests of subconscious work, and spawns the code agent for complex tasks.
+**Conscious layer** — handles direct conversation via Telegram/Discord, reads digests of subconscious work, and spawns Claude Code for complex tasks.
 
-**Subconscious layer** — runs 20+ scheduled jobs daily: autonomous evolution, research ingestion, reflection, maintenance, and performance benchmarking. Results surface through a shared memory digest.
+**Subconscious layer** — runs 40+ scheduled jobs: autonomous evolution (12x/day), research (2x/day), morning planning, evolution analysis, implementation sprints, evening assessment, reflection, maintenance, and benchmarking. Results surface through `memory/cron/digest.md`.
 
 ---
 
 ## Core Components
 
 ### ClarvisDB Brain
-Hybrid vector-graph memory system. ChromaDB for semantic search + relationship graph for structured knowledge. 10 specialized collections (~2600 memories, ~106k graph edges), ONNX MiniLM embeddings, fully local. No external API calls.
+
+Hybrid vector-graph memory system. ChromaDB for semantic search, SQLite+WAL relationship graph for structured knowledge. ONNX MiniLM L6 v2 embeddings, fully local — no external API calls.
+
+```mermaid
+flowchart LR
+    subgraph Input
+        Q["Query / Memory"]
+    end
+
+    subgraph VectorStore["ChromaDB (10 collections)"]
+        direction TB
+        ID["identity (189)"]
+        LR2["learnings (1,067)"]
+        EP["episodes (350)"]
+        MM["memories (450)"]
+        PR["procedures (187)"]
+        AL["autonomous-learning (292)"]
+        OT["context · goals ·\npreferences · infrastructure"]
+    end
+
+    subgraph GraphStore["SQLite+WAL Graph"]
+        direction TB
+        ND["Nodes"]
+        ED["Edges (~138k)"]
+        IDX["Indexed lookups\n(from_id · to_id · type)"]
+    end
+
+    subgraph Retrieval
+        EMB["ONNX MiniLM\nembeddings"]
+        ROUTE["Collection Router\n(pattern-based)"]
+        RANK["MMR Re-ranking"]
+    end
+
+    Q --> EMB --> ROUTE
+    ROUTE --> VectorStore
+    VectorStore --> RANK
+    Q --> GraphStore
+    GraphStore --> RANK
+    RANK --> R["Ranked Results"]
+```
+
+**10 collections** (~3,800 vectors total): `clarvis-identity`, `clarvis-preferences`, `clarvis-learnings`, `clarvis-infrastructure`, `clarvis-goals`, `clarvis-context`, `clarvis-memories`, `clarvis-procedures`, `autonomous-learning`, `clarvis-episodes`.
+
+**Graph backend**: SQLite+WAL is the sole runtime backend (since the [2026-03-29 cutover](docs/GRAPH_SQLITE_CUTOVER_2026-03-29.md)). Fully indexed, ACID-safe. The legacy JSON graph file is retained as an archival snapshot only.
 
 ### Heartbeat Pipeline
-The core action cycle: **gate** (should we wake?) → **preflight** (score attention, select task, build context) → **execute** (code agent runs the task) → **postflight** (encode episode, update metrics, store learnings).
+
+The core autonomous action cycle:
+
+```
+gate ──► preflight ──► execute ──► postflight
+ │          │            │            │
+ │     score attention   │      encode episode
+ │     select task       │      store learnings
+ │     build context     │      update metrics
+ │     brain search      │      record trajectory
+ │                       │
+ zero-LLM            Claude Code
+ pre-check            runs the task
+```
+
+**Gate**: zero-LLM pre-check (exit 0 = WAKE, exit 1 = SKIP). **Preflight**: GWT attention scoring, task selection from evolution queue, context compression, brain search, episodic recall. **Execute**: Claude Code runs the selected task. **Postflight**: episode encoding, confidence recording, reasoning chain closing, brain storage, performance metrics update.
 
 ### Memory Systems
-- **Episodic** — temporal recall of past task executions with confidence tracking
-- **Procedural** — extracted procedures and step-by-step patterns
-- **Working** — session-level buffer with task-driven reactivation (Baddeley-inspired)
-- **Hebbian** — connection strengthening between co-activated memories
+
+- **Episodic** — temporal recall of past task executions with confidence tracking and failure subclassing
+- **Procedural** — extracted step-by-step procedures and reusable workflows
+- **Working (Cognitive Workspace)** — Baddeley-inspired hierarchical buffers: Active (5 items) / Working (12) / Dormant (30) with task-driven reactivation
+- **Hebbian** — STDP-style connection strengthening between co-activated memories
+- **ACT-R Activation** — power-law decay with frequency-recency retrieval model
 
 ### Cognition
-- **Attention (GWT)** — Global Workspace Theory salience scoring for task selection
+
+- **Attention (GWT)** — Global Workspace Theory salience scoring, codelet competition, attention schema
 - **Retrieval Gate** — 3-tier routing (NO / LIGHT / DEEP) to skip unnecessary memory queries
+- **Confidence** — Bayesian calibration with Brier scoring and prediction tracking
+- **Context Relevance** — section-level relevance scoring with episode tracking
+- **Somatic Markers** — emotional valence tagging on memories
 - **Self-Model** — 7 capability domains with calibrated confidence
-- **Performance Index** — 8-dimension composite score tracking operational health
+- **Performance Index** — 8-dimension composite score (0.0–1.0) tracking operational health
+- **Phi** — IIT-based integrated information metric (consciousness proxy)
 - **Operating Modes** — GE (full autonomy) / Architecture (improve-only) / Passive (user-directed)
+
+### Task Router
+
+14-dimension weighted complexity scorer routes tasks to the optimal model:
+
+| Tier | Model | Cost |
+|------|-------|------|
+| Simple / Medium | MiniMax M2.5 | $0.42/1M tokens |
+| Complex | GLM-5 | $1.32/1M tokens |
+| Vision | Kimi K2.5 | $0.90/1M tokens |
+| Web Search | Gemini 3 Flash | $0.80/1M tokens |
+| Code-heavy | Claude Code (Opus) | via CLI |
+
+Force-route patterns override the scorer: code generation and file editing always go to Claude Code; status checks and summaries go to the cheapest tier.
+
+---
+
+## Cron Schedule (CET)
+
+```mermaid
+gantt
+    title Daily Autonomous Cycle (weekday)
+    dateFormat HH:mm
+    axisFormat %H:%M
+
+    section Execution
+    Autonomous (12x/day)        :crit, 01:00, 30m
+    Morning planning            :08:00, 30m
+    Research (AM)               :10:00, 60m
+    Evolution analysis          :13:00, 60m
+    Implementation sprint       :14:00, 60m
+    Research (PM)               :16:00, 60m
+    Evening assessment          :18:00, 30m
+    Orchestrator sweep          :19:30, 30m
+    Reflection (8-step)         :21:00, 60m
+
+    section Maintenance
+    Backup + verify             :02:00, 45m
+    Dream engine                :02:45, 30m
+    Graph checkpoint + compact  :04:00, 60m
+    ChromaDB vacuum             :05:00, 15m
+    PI refresh                  :05:45, 15m
+    Brain eval (deterministic)  :06:00, 15m
+    Brain eval (LLM-judged)     :06:15, 15m
+
+    section Monitoring
+    Health checks (every 15m)   :milestone, 00:00, 0m
+    Watchdog (every 30m)        :milestone, 00:00, 0m
+    Telegram reports            :09:30, 5m
+    Telegram reports            :22:30, 5m
+```
+
+**40+ cron entries total.** Autonomous evolution runs 12x/day (11 on Wed/Sat, replaced by strategic audit at 17:00). Weekly maintenance (Sundays): AZR self-play reasoning, goal/brain hygiene, data lifecycle, full performance benchmark, CLR benchmark.
+
+All cron scripts acquire mutual-exclusion locks (`/tmp/clarvis_claude_global.lock` for Claude Code spawners, `/tmp/clarvis_maintenance.lock` for the 04:00–05:00 maintenance window).
 
 ---
 
 ## Project Structure
 
 ```
-clarvis/                     # Core Python package (spine)
-├── brain/                   # ClarvisDB: ChromaDB + ONNX vector memory + graph
-├── memory/                  # Episodic, procedural, working, Hebbian memory
-├── cognition/               # GWT attention, confidence, somatic markers
-├── context/                 # Context assembly + MMR compression
-├── metrics/                 # Performance index, trajectory eval, CLR benchmark
+clarvis/                     # Core Python package (spine) — 12 subpackages
+├── brain/                   # ClarvisDB: ChromaDB + ONNX embeddings + SQLite graph
+├── memory/                  # Episodic, procedural, working, Hebbian, SOAR
+├── cognition/               # GWT attention, confidence, somatic markers, reasoning
+├── context/                 # Context assembly (DYCP) + MMR compression + GC
+├── metrics/                 # PI, Phi, self-model, CLR, BEAM, LongMemEval, MemBench
 ├── heartbeat/               # Gate → preflight → execute → postflight pipeline
 ├── runtime/                 # Operating mode control-plane
-├── orch/                    # Task routing and selection
+├── orch/                    # Task router (14-dimension scorer) + PR intake
 ├── adapters/                # Host extraction boundary (adapter pattern)
 ├── learning/                # Meta-learning module
 ├── compat/                  # Host compatibility contracts
 └── cli.py                   # Unified CLI: python3 -m clarvis <cmd>
 
-scripts/                     # Operational scripts (~140 Python/Bash: cron, heartbeat, cognitive)
-packages/                    # Installable packages (clarvis-db, clarvis-cost, clarvis-reasoning)
-tests/                       # Smoke, integration, and unit tests
-website/                     # Public website (Starlette server + static HTML)
-docs/                        # Public website (GitHub Pages) + architecture docs
+scripts/                     # ~150 operational scripts (Python + Bash)
+├── cron_*.sh                # Cron orchestrators (spawn Claude Code with task prompts)
+├── heartbeat_*.py           # Heartbeat pipeline entry points
+├── brain.py                 # Legacy brain API (spine preferred for new code)
+├── cognitive_workspace.py   # Baddeley-inspired working memory
+├── phi_metric.py            # IIT consciousness proxy
+├── self_model.py            # 7 capability domains
+├── project_agent.py         # Multi-project agent orchestrator
+├── clarvis_browser.py       # Dual-engine browser automation
+├── performance_benchmark.py # 8-dimension PI benchmark
+└── ...                      # Research, reflection, maintenance, tools
+
+packages/                    # Installable sub-packages (each has pyproject.toml)
+├── clarvis-db/              # Vector memory with Hebbian learning (v1.0.0)
+├── clarvis-cost/            # Cost tracking + budget alerting (v1.0.0)
+└── clarvis-reasoning/       # Meta-cognitive reasoning assessment (v1.0.0)
+
+skills/                      # 19 OpenClaw skills (brain, browser, search, agents, ...)
+tests/                       # 35+ test files (smoke, integration, unit)
+website/                     # Public site (static HTML + live status API)
+docs/                        # Architecture docs, audits, runbooks
+data/                        # ChromaDB brain, episodes, reasoning chains, benchmarks
+memory/                      # Daily logs, cron digests, evolution queue, research
 ```
 
 ---
@@ -198,18 +348,54 @@ sequenceDiagram
     participant Brain as ClarvisDB
 
     Cron->>Gate: Trigger
+    Gate->>Gate: Zero-LLM pre-check
     Gate->>Pre: WAKE (conditions met)
-    Pre->>Pre: Score attention, select task
-    Pre->>Pre: Build context (brain recall + compress)
+    Pre->>Brain: Search relevant memories
+    Pre->>Pre: GWT attention scoring
+    Pre->>Pre: Select task from queue
+    Pre->>Pre: Compress context (DYCP)
     Pre->>Agent: Execute selected task
-    Agent->>Post: Task complete
+    Agent->>Agent: Run task (Claude Code)
+    Agent->>Post: Task complete + output
     Post->>Brain: Encode episode
     Post->>Brain: Store learnings
-    Post->>Post: Update performance metrics
-    Post->>Post: Record trajectory event
+    Post->>Post: Update PI + trajectory
+    Post->>Post: Close reasoning chain
+    Note over Brain: Episode feeds future<br/>attention scoring +<br/>context retrieval
 ```
 
-Each execution cycle produces an **episode** — a structured record of what was attempted, what happened, and what was learned. Episodes feed back into future task selection (attention scoring) and context assembly (retrieval).
+Each execution cycle produces an **episode** — a structured record of what was attempted, what happened, and what was learned. Episodes feed back into future task selection (attention scoring) and context assembly (retrieval). The cognitive workspace tracks items across sessions with dormant reactivation when they become relevant to new tasks.
+
+---
+
+## Agent Orchestrator
+
+Clarvis can delegate work to specialized project agents running in isolated workspaces:
+
+```
+Clarvis (orchestrator)
+  └── project agents (/opt/clarvis-agents/<name>/)
+        ├── workspace/     # Cloned repo
+        ├── data/brain/    # Lite ChromaDB (5 collections)
+        └── logs/          # Execution logs
+```
+
+Each agent has its own ChromaDB brain (5 collections vs. Clarvis's 10), hard isolation (embedding overlap < 0.05), and returns structured results via A2A protocol: `{status, summary, pr_url, procedures, follow_ups}`.
+
+**Commands**: `project_agent.py create | list | spawn | status | promote | benchmark | destroy`
+
+---
+
+## Browser Stack
+
+Dual-engine browser automation via `scripts/clarvis_browser.py`:
+
+| Engine | Technology | Use Case |
+|--------|-----------|----------|
+| Primary | Agent-Browser v0.15.1 (Rust) | Token-efficient navigation via snapshot/refs (93% fewer tokens) |
+| Fallback | Playwright 1.58.2 (CDP port 18800) | Session persistence, file uploads, JS eval, login flows |
+
+Both engines share auth state through browser-level cookie injection. LLM agent mode available via Gemini Flash through OpenRouter.
 
 ---
 
@@ -217,14 +403,16 @@ Each execution cycle produces an **episode** — a structured record of what was
 
 | Dimension | What It Measures |
 |-----------|------------------|
-| Memory System | ChromaDB + graph health, query speed |
+| Memory System | ChromaDB + graph health, query speed (~270ms avg) |
 | Autonomous Execution | Task completion rate, trajectory quality |
-| Context Relevance | Brief quality, retrieval alignment |
-| Reasoning Chains | Causal reasoning quality |
+| Context Relevance | Brief compression quality, retrieval alignment |
+| Reasoning Chains | Multi-step causal reasoning quality |
 | Code Generation | Test pass rate, syntax health |
 | Self-Reflection | Meta-cognitive assessment quality |
-| Calibration | Prediction accuracy |
+| Calibration | Brier-scored prediction accuracy |
 | Performance Index | Composite 0.0–1.0 score across all dimensions |
+
+**Benchmark adapters**: CLR (architecture health), BEAM (5 extended abilities), LongMemEval (5 long-memory abilities), MemBench (4 quadrants). All in `clarvis/metrics/`.
 
 ---
 
@@ -241,22 +429,23 @@ python3 -m pytest packages/clarvis-db/tests/ -v
 python3 -m pytest tests/test_open_source_smoke.py -v
 ```
 
-CI runs automatically on push and PR to `main` via GitHub Actions.
+Tests use a `tmp_brain()` fixture with fast hash-based embeddings (no ONNX needed) for CI speed. CI runs automatically on push and PR to `main` via GitHub Actions.
 
 ---
 
 ## Current Status
 
-Clarvis is in **Phase 3 — Autonomy Expansion**, targeting open-source readiness by end of March 2026.
+Clarvis is in **Phase 3 — Autonomy Expansion**. Phases 1 (Operational Excellence) and 2 (Learning & Intelligence) are complete.
 
 | Area | Status | Notes |
 |------|--------|-------|
-| Brain (ClarvisDB) | Stable | 10 collections, ~2600 memories, weekly CLR benchmark scoring ~0.82 |
-| Heartbeat Pipeline | Stable | 12x/day autonomous execution via cron |
-| Agent Orchestrator | Active | Multi-project delegation with isolated workspaces |
-| Self-Model & Metrics | Stable | 8-dimension performance index, trajectory evaluation |
-| Context Quality | Improving | Adaptive RAG, recency boost, semantic containment |
-| Website | Active | Static site with live status API, served via Starlette |
+| Brain (ClarvisDB) | Stable (98%) | 10 collections, ~3,800 vectors, ~138k graph edges, PI at 1.0 |
+| Heartbeat Pipeline | Stable (100%) | 12x/day autonomous execution via cron |
+| Agent Orchestrator | Active (91%) | Multi-project delegation with isolated workspaces |
+| Self-Model & Metrics | Stable (100%) | 7 capability domains, 8-dimension PI, CLR/BEAM/LongMemEval adapters |
+| Context Quality | Strong (94%) | DYCP compression, MMR re-ranking, adaptive RAG |
+| Cognitive Workspace | Active (84%) | Baddeley-inspired buffers, 83.5% dormant reuse rate |
+| Website | Active (88%) | Static site with live status API |
 
 See [`ROADMAP.md`](ROADMAP.md) for the full evolution plan.
 
@@ -282,7 +471,7 @@ See [`docs/CLARVIS_MODES_AND_REPOS.md`](docs/CLARVIS_MODES_AND_REPOS.md) for the
 - **Single-host design** — built for a dedicated server with systemd, not containerized
 - **CPU-only embeddings** — ONNX MiniLM on CPU (~270ms avg per brain query via parallel collection search)
 - **Path defaults** — some scripts default to a fixed workspace path (override with `CLARVIS_WORKSPACE` env var)
-- **Test fragmentation** — tests spread across `tests/`, `clarvis/tests/`, `packages/*/tests/`
+- **Test fragmentation** — tests spread across `tests/`, `packages/*/tests/`
 
 See [`docs/OPEN_SOURCE_GAP_AUDIT.md`](docs/OPEN_SOURCE_GAP_AUDIT.md) for a detailed gap analysis.
 
@@ -295,6 +484,7 @@ See [`docs/OPEN_SOURCE_GAP_AUDIT.md`](docs/OPEN_SOURCE_GAP_AUDIT.md) for a detai
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Detailed architecture and package layout |
 | [`docs/LAUNCH_PACKET.md`](docs/LAUNCH_PACKET.md) | Quick orientation for new contributors |
 | [`docs/OPEN_SOURCE_GAP_AUDIT.md`](docs/OPEN_SOURCE_GAP_AUDIT.md) | Gap analysis for public release readiness |
+| [`docs/GRAPH_SQLITE_CUTOVER_2026-03-29.md`](docs/GRAPH_SQLITE_CUTOVER_2026-03-29.md) | Graph backend migration (JSON to SQLite) |
 | [`ROADMAP.md`](ROADMAP.md) | 6-phase evolution plan |
 
 ---
@@ -313,4 +503,4 @@ MIT — see [pyproject.toml](pyproject.toml) for details.
 
 ---
 
-*Last updated: 2026-03-28*
+*Last updated: 2026-03-31*
