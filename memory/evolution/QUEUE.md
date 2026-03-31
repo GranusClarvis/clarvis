@@ -94,10 +94,10 @@ _(Completed items archived.)_
 
 ### P1 — Found in 2026-03-31 evolution scan
 
-- [ ] [REASONING_CHAIN_QUALITY_AUDIT] Audit last 50 reasoning chains in `data/reasoning_chains.jsonl` for quality issues (missing outcomes, stale open chains, low evidence). Close orphans, backfill outcomes, and investigate why capability score dropped from 1.0→0.85. Fix root cause.
-- [ ] [CRON_SCHEDULE_AUDIT_SHELL] Shell/config task: audit system crontab entries against CLAUDE.md schedule table, remove any stale or orphaned entries, verify all lock files clean up properly, and ensure `cron_env.sh` exports match current environment. Output diff of changes. _(Non-Python task)_
+- [x] [REASONING_CHAIN_QUALITY_AUDIT] Chains healthy: 99.6% step outcome fill rate (792 steps), 0 open/orphan chains. Backfilled 3 null step outcomes. Capability score 0.85 is accurate (avg_depth 1.99 diluted by dream engine 2-step chains). No root cause bug — design artifact.
+- [x] [CRON_SCHEDULE_AUDIT_SHELL] Removed stale `cron_graph_soak_manager.sh`. Shifted `cron_brain_eval.sh` 06:00→06:05 to avoid conflict with autonomous. Documented `generate_status_json.py` (05:50) in CLAUDE.md. Cleaned 2 stale lock files. `cron_env.sh` exports verified correct.
 - [ ] [ADAPTIVE_RETRIEVAL_GATE_MVP] Implement CRAG-style evidence scoring gate from today's research (RESEARCH_ADAPTIVE_RETRIEVAL_CONTROL): add a `score_evidence(query, results)` function to `clarvis/brain/` that scores retrieval relevance before injecting into context. Wire into `heartbeat_preflight.py` search step. Threshold: discard results below 0.3 cosine similarity.
-- [ ] [ZOMBIE_GOAL_CLEANUP] Run `goal_hygiene.py` manually and clean up the 5 zombie goals at 0% progress in `data/goals_snapshot.json`. Archive or remove stale goals, update active goal descriptions to reflect current state post-P0 deadline.
+- [x] [ZOMBIE_GOAL_CLEANUP] 5 zombie goals already removed from ChromaDB. Ran full `goal_hygiene.py clean`: deprecated "Reasoning Chains" (100% for 37d), refreshed stale snapshot (was 2026-03-22, now current with 11 goals).
 
 ### Claude Harness Research Program (2026-03-31)
 _Source: `data/external_src/claude-harness-src.zip`. Deep-dive note: `memory/research/claude_harness_architecture_2026-03-31.md`._
