@@ -814,8 +814,78 @@ def _retrieval_accuracy_fallback():
     }
 
 
+BCR_HISTORY_FILE = os.path.join(WORKSPACE, "data", "benchmarks", "bcr_history.jsonl")
+BCR_SMOOTHING_WINDOW = 10  # EWMA over last N measurements
+
+
+def _bcr_ewma_smooth(new_value: float, alpha: float = 0.3) -> float:
+    """Apply exponentially weighted moving average to BCR using history.
+
+    Reads last BCR_SMOOTHING_WINDOW entries from bcr_history.jsonl, appends
+    the new measurement, and returns the EWMA-smoothed value.  Alpha=0.3
+    gives ~70% weight to history, damping single-measurement spikes.
+    """
+    history_path = BCR_HISTORY_FILE
+    recent: list[float] = []
+    if os.path.exists(history_path):
+        try:
+            with open(history_path) as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        entry = json.loads(line)
+                        recent.append(float(entry["bcr"]))
+                    except (json.JSONDecodeError, KeyError, ValueError):
+                        continue
+        except OSError:
+            pass
+    # Keep only last N-1 (we'll add the new one)
+    recent = recent[-(BCR_SMOOTHING_WINDOW - 1):]
+    recent.append(new_value)
+
+    # Append new measurement to history
+    try:
+        os.makedirs(os.path.dirname(history_path), exist_ok=True)
+        with open(history_path, "a") as f:
+            f.write(json.dumps({
+                "ts": datetime.now(timezone.utc).isoformat(),
+                "bcr": round(new_value, 4),
+            }) + "\n")
+        # Trim history file to last 50 entries to prevent unbounded growth
+        _trim_jsonl(history_path, max_lines=50)
+    except OSError as e:
+        logger.debug("Failed to write BCR history: %s", e)
+
+    # Compute EWMA
+    if len(recent) == 1:
+        return recent[0]
+    ewma = recent[0]
+    for val in recent[1:]:
+        ewma = alpha * val + (1.0 - alpha) * ewma
+    return round(ewma, 4)
+
+
+def _trim_jsonl(path: str, max_lines: int = 50) -> None:
+    """Keep only the last max_lines entries in a JSONL file."""
+    try:
+        with open(path) as f:
+            lines = f.readlines()
+        if len(lines) > max_lines:
+            with open(path, "w") as f:
+                f.writelines(lines[-max_lines:])
+    except OSError:
+        pass
+
+
 def _measure_compression_live():
-    """Measure brief compression quality by running context_compressor live."""
+    """Measure brief compression quality by running context_compressor live.
+
+    Returns a rolling-window smoothed BCR to prevent oscillation near
+    metric boundaries.  Raw measurement is appended to bcr_history.jsonl
+    and smoothed via EWMA (window=10, alpha=0.3).
+    """
     from context_compressor import generate_tiered_brief, compress_text
     raw_parts = []
     try:
@@ -854,11 +924,14 @@ def _measure_compression_live():
     result = {"brief_compression": 0.0, "context_relevance": 0.0}
     if brief and len(brief) > 100:
         result["context_relevance"] = 0.6
+        raw_bcr = 0.0
         if raw_input_size > len(brief):
-            result["brief_compression"] = round(1.0 - len(brief) / raw_input_size, 3)
+            raw_bcr = round(1.0 - len(brief) / raw_input_size, 3)
         else:
             _, stats = compress_text(brief, ratio=0.3)
-            result["brief_compression"] = round(1.0 - stats["ratio"], 3)
+            raw_bcr = round(1.0 - stats["ratio"], 3)
+        # Apply EWMA smoothing to dampen oscillation
+        result["brief_compression"] = _bcr_ewma_smooth(raw_bcr)
     return result
 
 

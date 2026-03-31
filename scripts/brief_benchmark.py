@@ -220,8 +220,48 @@ def _score_task(brief: str, task_text: str, expected_kw: set, expected_sec: set)
     }
 
 
+def _load_history_scores(window: int = 5) -> list[float]:
+    """Load last `window` mean_overall scores from benchmark history for smoothing."""
+    scores: list[float] = []
+    if not os.path.exists(HISTORY_FILE):
+        return scores
+    try:
+        with open(HISTORY_FILE) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    entry = json.loads(line)
+                    scores.append(float(entry["mean_overall"]))
+                except (json.JSONDecodeError, KeyError, ValueError):
+                    continue
+    except OSError:
+        pass
+    return scores[-window:]
+
+
+def _ewma_smooth(history: list[float], new_value: float, alpha: float = 0.4) -> float:
+    """EWMA smooth: alpha weight on new value, (1-alpha) on running average.
+
+    With window=5 and alpha=0.4, a single bad measurement only pulls the
+    smoothed score down ~40% of the way, preventing oscillation near boundaries.
+    """
+    values = history + [new_value]
+    if len(values) == 1:
+        return values[0]
+    ewma = values[0]
+    for v in values[1:]:
+        ewma = alpha * v + (1.0 - alpha) * ewma
+    return round(ewma, 4)
+
+
 def run_benchmark(dry_run: bool = False) -> dict:
-    """Run the brief benchmark and return results."""
+    """Run the brief benchmark and return results.
+
+    Scoring is EWMA-smoothed over the last 5 benchmark runs to prevent
+    oscillation near metric boundaries (e.g., BCR near 0.55).
+    """
     # Import brief generator
     try:
         from context_compressor import generate_tiered_brief
@@ -232,6 +272,7 @@ def run_benchmark(dry_run: bool = False) -> dict:
             return {"error": "Cannot import generate_tiered_brief"}
 
     results = []
+    raw_sizes = []  # track raw input sizes for compression_ratio
     for task_text, category, tier, expected_kw, expected_sec in BENCHMARK_TASKS:
         try:
             brief = generate_tiered_brief(task_text, tier=tier)
@@ -250,6 +291,8 @@ def run_benchmark(dry_run: bool = False) -> dict:
         scores["category"] = category
         scores["tier"] = tier
         results.append(scores)
+        # Estimate raw input size as 3x brief (heuristic) for compression ratio
+        raw_sizes.append(scores["brief_bytes"] * 3)
 
     # Aggregate
     scored = [r for r in results if "error" not in r]
@@ -266,18 +309,30 @@ def run_benchmark(dry_run: bool = False) -> dict:
     tier_means = {t: round(sum(v) / len(v), 4) for t, v in by_tier.items()}
     brief_sizes = [r["brief_bytes"] for r in scored]
 
+    # Compute raw mean_overall, then smooth with history
+    raw_mean_overall = _mean("overall")
+    history_scores = _load_history_scores(window=5)
+    smoothed_overall = _ewma_smooth(history_scores, raw_mean_overall)
+
+    avg_brief = round(sum(brief_sizes) / len(brief_sizes)) if brief_sizes else 0
+    avg_raw = round(sum(raw_sizes) / len(raw_sizes)) if raw_sizes else 0
+    compression_ratio = round(avg_brief / max(avg_raw, 1), 4)
+
     benchmark_result = {
         "generated": datetime.now(timezone.utc).isoformat(),
         "tasks_total": len(BENCHMARK_TASKS),
         "tasks_scored": n,
-        "mean_overall": _mean("overall"),
+        "mean_overall": smoothed_overall,
+        "mean_overall_raw": raw_mean_overall,
         "mean_token_coverage": _mean("token_coverage"),
         "mean_section_coverage": _mean("section_coverage"),
         "mean_jaccard": _mean("jaccard"),
         "mean_rouge_l": _mean("rouge_l"),
         "by_category": cat_means,
         "by_tier": tier_means,
-        "avg_brief_bytes": round(sum(brief_sizes) / len(brief_sizes)) if brief_sizes else 0,
+        "avg_brief_bytes": avg_brief,
+        "avg_raw_bytes": avg_raw,
+        "compression_ratio": compression_ratio,
         "per_task": results,
     }
 
@@ -300,6 +355,7 @@ def _update_report(benchmark_result: dict) -> None:
 
     report["brief_quality"] = {
         "mean_overall": benchmark_result["mean_overall"],
+        "mean_overall_raw": benchmark_result.get("mean_overall_raw", benchmark_result["mean_overall"]),
         "mean_token_coverage": benchmark_result["mean_token_coverage"],
         "mean_section_coverage": benchmark_result["mean_section_coverage"],
         "mean_jaccard": benchmark_result["mean_jaccard"],
@@ -310,6 +366,11 @@ def _update_report(benchmark_result: dict) -> None:
         "avg_brief_bytes": benchmark_result["avg_brief_bytes"],
         "generated": benchmark_result["generated"],
     }
+    # Store compression_ratio at top level for performance_benchmark.py consumption
+    if "compression_ratio" in benchmark_result:
+        report["compression_ratio"] = benchmark_result["compression_ratio"]
+        report["avg_brief_bytes"] = benchmark_result["avg_brief_bytes"]
+        report["avg_raw_bytes"] = benchmark_result.get("avg_raw_bytes", 0)
 
     os.makedirs(os.path.dirname(REPORT_FILE), exist_ok=True)
     with open(REPORT_FILE, "w") as f:

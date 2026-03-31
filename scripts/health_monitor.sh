@@ -101,15 +101,16 @@ if [ -f "$PI_CACHE" ]; then
     [ "$PI_AGE" -lt 3600 ] && PI_STALE=false
 fi
 if [ "$PI_STALE" = true ]; then
-    PI_VAL=$(cd /home/agent/.openclaw/workspace && python3 -c "
+    PI_VAL=$(cd /home/agent/.openclaw/workspace && python3 - <<'PYEOF' 2>/dev/null
 import sys; sys.path.insert(0, 'scripts')
 from performance_benchmark import run_quick_benchmark
 try:
     result = run_quick_benchmark()
-    print(f'{result[\"pi_estimate\"][\"pi\"]:.3f}')
+    print(f'{result["pi_estimate"]["pi"]:.3f}')
 except Exception:
     print('error')
-" 2>/dev/null)
+PYEOF
+)
     if [ "$PI_VAL" != "error" ] && [ -n "$PI_VAL" ]; then
         PI_NUM=$(echo "$PI_VAL" | tr -d '[:space:]')
         echo "[$DATE] PI=$PI_NUM" >> "$LOG_DIR"/health.log

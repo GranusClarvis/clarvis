@@ -270,6 +270,79 @@ def _sqlite_health_metrics(store, brain):
     }
 
 
+def _sqlite_nearest_neighbor_edges(store, brain, k=5, sample_per_col=80, dry_run=False):
+    """Create intra-collection edges between nearest neighbors in each collection.
+
+    For each collection, samples up to `sample_per_col` memories, queries
+    ChromaDB for their `k` nearest neighbors within the same collection,
+    and inserts 'nearest_neighbor' edges (INSERT OR IGNORE — no dupes).
+
+    This boosts intra-collection density which is the highest-leverage
+    Phi improvement vector.
+    """
+    now_str = datetime.now(timezone.utc).isoformat()
+    new_edges = 0
+
+    for col_name, col in brain.collections.items():
+        try:
+            count = col.count()
+        except Exception:
+            continue
+        if count < 5:
+            continue
+
+        # Sample IDs: get all, then pick evenly spaced subset
+        try:
+            all_result = col.get(include=[], limit=count)
+            all_ids = all_result["ids"]
+        except Exception:
+            continue
+
+        if len(all_ids) <= sample_per_col:
+            sample_ids = all_ids
+        else:
+            step = len(all_ids) // sample_per_col
+            sample_ids = all_ids[::step][:sample_per_col]
+
+        # Batch query: get embeddings for sample, then query nearest neighbors
+        edges_batch = []
+        for sid in sample_ids:
+            try:
+                # Get this memory's embedding
+                emb_result = col.get(ids=[sid], include=["embeddings"])
+                if emb_result["embeddings"] is None or len(emb_result["embeddings"]) == 0:
+                    continue
+                embedding = emb_result["embeddings"][0]
+
+                # Query k+1 nearest (first result is self)
+                nn_result = col.query(
+                    query_embeddings=[embedding],
+                    n_results=min(k + 1, count),
+                    include=[],
+                )
+                if nn_result["ids"] is None or len(nn_result["ids"]) == 0 or len(nn_result["ids"][0]) == 0:
+                    continue
+
+                for nid in nn_result["ids"][0]:
+                    if nid != sid:
+                        edges_batch.append((
+                            sid, nid, "nearest_neighbor", now_str,
+                            col_name, col_name, 0.8,
+                        ))
+            except Exception:
+                continue
+
+        if edges_batch and not dry_run:
+            store.bulk_add_edges(edges_batch)
+
+        inserted = len(edges_batch)
+        new_edges += inserted
+        if inserted > 0:
+            print(f"  {col_name}: {inserted} nearest-neighbor edges")
+
+    return new_edges
+
+
 def run_compaction_sqlite(brain, dry_run=False):
     """Compaction pipeline using SQL operations on the SQLite graph store."""
     t0 = time.time()
@@ -298,7 +371,11 @@ def run_compaction_sqlite(brain, dry_run=False):
     orphan_nodes = _sqlite_remove_orphan_nodes(store, all_ids, dry_run=dry_run)
     print(f"Orphan nodes removed: {orphan_nodes}")
 
-    # 5. Health metrics
+    # 5. Nearest-neighbor intra-collection edges (boost intra-density)
+    nn_edges = _sqlite_nearest_neighbor_edges(store, brain, dry_run=dry_run)
+    print(f"Nearest-neighbor edges added: {nn_edges}")
+
+    # 6. Health metrics
     metrics = _sqlite_health_metrics(store, brain)
     elapsed = round(time.time() - t0, 1)
     print("\n=== Graph Health ===")
@@ -314,6 +391,7 @@ def run_compaction_sqlite(brain, dry_run=False):
         "duplicates_removed": 0,
         "nodes_backfilled": backfilled,
         "orphan_nodes_removed": orphan_nodes,
+        "nn_edges_added": nn_edges,
         "health": metrics,
         "elapsed_s": elapsed,
     }
