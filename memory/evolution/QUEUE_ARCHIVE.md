@@ -1809,3 +1809,6 @@ _Last archived: 2026-03-27_
 
 ## Archived 2026-03-31
 - [x] [EXTERNAL_CHALLENGE:research-impl-01] Implement Sparse Priming Representations (SPR) for brain memory compression — Done 2026-03-31: `clarvis/brain/spr.py` — encode_spr(), decode_spr(), batch_encode(), CLI. Tested on 20 memories: 0.545 compression ratio (45% savings), 20/20 decode roundtrip. Passthrough for short mems, structured extraction for known formats, general NLP pipeline for free text.
+
+## Archived 2026-03-31
+- [x] [LLM_BRAIN_REVIEW 2026-03-31] [LLM_BRAIN_REVIEW] Create and maintain a single authoritative 'current-priorities' memory in clarvis-goals — Done: refreshed to W14, fixed self-reference bug + ISO week format in priorities_curator.py, pruned 1 stale fragment, verified #1 retrieval rank

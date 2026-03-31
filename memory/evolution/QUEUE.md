@@ -51,7 +51,6 @@ _Queue audited on 2026-03-24 evening. Removed 3 completed items (A5_A7, TEMPORAL
 
 ### Phi / Benchmarking
 
-- [x] [LLM_BRAIN_REVIEW 2026-03-31] [LLM_BRAIN_REVIEW] Create and maintain a single authoritative 'current-priorities' memory in clarvis-goals — Done: refreshed to W14, fixed self-reference bug + ISO week format in priorities_curator.py, pruned 1 stale fragment, verified #1 retrieval rank
 ---
 
 ## P2 — When Idle (Demoted 2026-03-17)

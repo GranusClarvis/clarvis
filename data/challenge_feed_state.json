@@ -2,7 +2,8 @@
   "completed": [
     "coding-challenge-01",
     "bench-context-01",
-    "bench-robustness-01"
+    "bench-robustness-01",
+    "research-impl-01"
   ],
   "injections": [
     {
@@ -22,6 +23,12 @@
       "title": "Chaos test: verify brain recovery after simulated corruption",
       "timestamp": 1774918802.3120468,
       "date": "2026-03-31T01:00:02"
+    },
+    {
+      "id": "research-impl-01",
+      "title": "Implement Sparse Priming Representations (SPR) for brain memory compression",
+      "timestamp": 1774954802.0651228,
+      "date": "2026-03-31T11:00:02"
     }
   ],
   "gh_last_refresh": null
