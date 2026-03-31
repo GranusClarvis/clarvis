@@ -71,3 +71,33 @@ Sprint task: [BRIEF_KEYWORD_COVERAGE] Improve brief token coverage from 36.6% to
 
 ---
 
+### ⚡ Autonomous — 15:05 UTC
+
+I executed evolution task: "[ZOMBIE_GOAL_CLEANUP] Run `goal_hygiene.py` manually and clean up the 5 zombie goals at 0% progress in `data/goals_snaps". Result: success (exit 0, 314s). Output: xports verified correct (PATH, systemd vars, graph backend, thread limits)NEXT: ADAPTIVE_RETRIEVAL_GATE_MVP is next in queue  implement CRAG-style evidence scoring gate for brain s
+
+---
+
+
+### Research — 16:05 UTC
+
+Researched: [HARNESS_PERMISSION_PIPELINE] Study the 5-layer permission gate (Zod → validateInput → rule matching. Result: success (337s). Summary: AML rule engine → hook pipeline (cost gate, rate limiter, path guard) → context-dependent handler (Telegram approval for user-facing, orchestrator delegation for multi-agent). This enables retiring by
+
+---
+
+### ⚡ Autonomous — 17:04 UTC
+
+Completed 3 harness research tasks:
+1. **[HARNESS_CONTEXT_CACHING]**: Added section-level caching to `context_compressor.py` — hash+TTL invalidation for stable sections (scores, queue, related tasks). Tiered brief 381ms→6ms on cache hit (98% reduction). ~1.7M tokens/month savings estimated.
+2. **[HARNESS_CONCURRENT_TOOL_EXEC]**: Added `ThreadPoolExecutor(max_workers=3)` to `heartbeat_preflight.py` — episodic/brain_bridge/introspection stages now run in parallel. Expected ~30-50% retrieval phase speedup. Kill switch: `CLARVIS_PREFLIGHT_PARALLEL=0`.
+3. **[HARNESS_WORKTREE_ISOLATION]**: Added `worktree_create/cleanup/merge_back/list` to `project_agent.py` — git worktree alternative to full clone (1-2s vs 60-120s). Not yet wired into `cmd_spawn` (needs integration test).
+
+Research note: `memory/research/ingested/harness-context-caching-concurrent-worktree.md`
+
+---
+
+### ⚡ Autonomous — 17:08 UTC
+
+I executed evolution task: "[HARNESS_CONTEXT_CACHING] Study section-level system prompt caching (`systemPromptSections.ts`, `SYSTEM_PROMPT_DYNAMIC_B". Result: success (exit 0, 438s). Output: noteNEXT: Wire worktree_create into cmd_spawn with a use_worktree config flag + integration test on star-world-order agent. Also: measure parallel preflight savings on a real heart
+
+---
+

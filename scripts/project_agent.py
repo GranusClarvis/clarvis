@@ -681,6 +681,118 @@ def _sync_and_checkout_work_branch(workspace: Path, base_branch: str, agent: str
 
 
 # =========================================================================
+# WORKTREE ISOLATION — shared git objects, ~100x faster than full clone
+# =========================================================================
+# Inspired by Claude Code harness EnterWorktree/ExitWorktree tools:
+#   - `git worktree add` creates a lightweight checkout sharing .git objects
+#   - No network I/O (objects already fetched), ~1-2s vs ~60-120s clone
+#   - Atomic merge-back: worktree branch merges cleanly or is discarded
+#   - Multiple agents can work on the same repo concurrently (different worktrees)
+#
+# Architecture:
+#   /opt/clarvis-agents/<name>/
+#     workspace/          — main clone (bare or full, used for fetch/push)
+#     worktrees/<task_id>/ — per-task worktree (created, used, cleaned up)
+
+
+def worktree_create(workspace: Path, agent: str, task_id: str,
+                    base_branch: str = "main") -> tuple[Path, str]:
+    """Create a git worktree for an isolated agent task.
+
+    Returns (worktree_path, branch_name).
+    Raises RuntimeError on failure.
+    """
+    branch = f"clarvis/{agent}/{task_id}"
+    worktrees_dir = workspace.parent / "worktrees"
+    worktrees_dir.mkdir(parents=True, exist_ok=True)
+    wt_path = worktrees_dir / task_id
+
+    if wt_path.exists():
+        # Stale worktree from a crashed run — remove it
+        _log(f"Removing stale worktree at {wt_path}")
+        _run_git(workspace, ["worktree", "remove", "--force", str(wt_path)])
+        if wt_path.exists():
+            shutil.rmtree(wt_path, ignore_errors=True)
+
+    # Fetch latest refs
+    _run_git(workspace, ["fetch", "--prune"], timeout=120)
+
+    # Create worktree on a new branch from origin/<base>
+    r = _run_git(workspace, [
+        "worktree", "add", "-B", branch,
+        str(wt_path), f"origin/{base_branch}"
+    ])
+    if r.returncode != 0:
+        raise RuntimeError(f"worktree add failed: {r.stderr.strip()}")
+
+    _log(f"Worktree created: {wt_path} (branch={branch})")
+    return wt_path, branch
+
+
+def worktree_cleanup(workspace: Path, wt_path: Path, branch: str = ""):
+    """Remove a worktree and its branch after task completion.
+
+    Safe to call even if the worktree was already removed.
+    """
+    if wt_path.exists():
+        r = _run_git(workspace, ["worktree", "remove", "--force", str(wt_path)])
+        if r.returncode != 0:
+            _log(f"worktree remove failed, forcing: {r.stderr.strip()}")
+            shutil.rmtree(wt_path, ignore_errors=True)
+    # Prune stale worktree bookkeeping
+    _run_git(workspace, ["worktree", "prune"])
+    # Delete the branch (only if merged or force-clean)
+    if branch:
+        _run_git(workspace, ["branch", "-D", branch])
+    _log(f"Worktree cleaned: {wt_path}")
+
+
+def worktree_merge_back(workspace: Path, wt_path: Path, branch: str,
+                        base_branch: str = "main") -> dict:
+    """Merge worktree branch back into base and push.
+
+    Returns dict with status, merge_commit, conflicts.
+    """
+    # Check if worktree has any changes
+    r = _run_git(wt_path, ["diff", "--stat", f"origin/{base_branch}...HEAD"])
+    if not r.stdout.strip():
+        return {"status": "no_changes", "branch": branch}
+
+    # Try merge in the main workspace
+    _run_git(workspace, ["checkout", base_branch])
+    _run_git(workspace, ["pull", "--ff-only"])
+    r = _run_git(workspace, ["merge", "--no-ff", branch, "-m",
+                              f"Merge {branch} (agent worktree)"])
+    if r.returncode != 0:
+        # Abort the merge
+        _run_git(workspace, ["merge", "--abort"])
+        return {"status": "conflict", "branch": branch, "error": r.stderr.strip()}
+
+    return {"status": "merged", "branch": branch}
+
+
+def worktree_list(workspace: Path) -> list[dict]:
+    """List active worktrees for this agent."""
+    r = _run_git(workspace, ["worktree", "list", "--porcelain"])
+    worktrees = []
+    current = {}
+    for line in r.stdout.strip().splitlines():
+        if line.startswith("worktree "):
+            if current:
+                worktrees.append(current)
+            current = {"path": line.split(" ", 1)[1]}
+        elif line.startswith("HEAD "):
+            current["head"] = line.split(" ", 1)[1]
+        elif line.startswith("branch "):
+            current["branch"] = line.split(" ", 1)[1]
+        elif line == "bare":
+            current["bare"] = True
+    if current:
+        worktrees.append(current)
+    return worktrees
+
+
+# =========================================================================
 # CREATE — scaffold a new project agent
 # =========================================================================
 

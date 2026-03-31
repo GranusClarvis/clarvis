@@ -6,6 +6,8 @@ _Completed items auto-archived to QUEUE_ARCHIVE.md._
 
 ## P0 — 14-Day Delivery Window (Deadline: 2026-03-31)
 
+- [ ] [BENCHMARK_DOUBLE_SMOOTH_FIX] `scripts/brief_benchmark.py` currently reads `mean_overall` from history after `_append_history()` stores the already-smoothed value, causing recursive double-smoothing across runs. Store and smooth against raw scores instead (`mean_overall_raw`) or add a dedicated raw-history field.
+- [ ] [NN_EDGE_INSERT_COUNT_FIX] `scripts/graph_compaction.py` reports `len(edges_batch)` as inserted edge count even though `store.bulk_add_edges()` uses INSERT OR IGNORE. Return/report actual inserted rows (or de-duplicate before insert) so health metrics and compaction output are truthful.
 
 ### Delivery Goal
 Presentable Clarvis by 2026-03-31:
@@ -94,18 +96,12 @@ _(Completed items archived.)_
 
 ### P1 — Found in 2026-03-31 evolution scan
 
-- [x] [REASONING_CHAIN_QUALITY_AUDIT] Chains healthy: 99.6% step outcome fill rate (792 steps), 0 open/orphan chains. Backfilled 3 null step outcomes. Capability score 0.85 is accurate (avg_depth 1.99 diluted by dream engine 2-step chains). No root cause bug — design artifact.
-- [x] [CRON_SCHEDULE_AUDIT_SHELL] Removed stale `cron_graph_soak_manager.sh`. Shifted `cron_brain_eval.sh` 06:00→06:05 to avoid conflict with autonomous. Documented `generate_status_json.py` (05:50) in CLAUDE.md. Cleaned 2 stale lock files. `cron_env.sh` exports verified correct.
 - [ ] [ADAPTIVE_RETRIEVAL_GATE_MVP] Implement CRAG-style evidence scoring gate from today's research (RESEARCH_ADAPTIVE_RETRIEVAL_CONTROL): add a `score_evidence(query, results)` function to `clarvis/brain/` that scores retrieval relevance before injecting into context. Wire into `heartbeat_preflight.py` search step. Threshold: discard results below 0.3 cosine similarity.
-- [x] [ZOMBIE_GOAL_CLEANUP] 5 zombie goals already removed from ChromaDB. Ran full `goal_hygiene.py clean`: deprecated "Reasoning Chains" (100% for 37d), refreshed stale snapshot (was 2026-03-22, now current with 11 goals).
 
 ### Claude Harness Research Program (2026-03-31)
 _Source: `data/external_src/claude-harness-src.zip`. Deep-dive note: `memory/research/claude_harness_architecture_2026-03-31.md`._
 
 #### Architecture & Runtime
-- [ ] [HARNESS_PERMISSION_PIPELINE] Study the 5-layer permission gate (Zod → validateInput → rule matching → hooks → classifier) in detail. Extract a design doc for a Clarvis tool-permission system that replaces `--dangerously-skip-permissions` for user-facing and multi-agent modes. Key files: `src/utils/permissions/permissions.ts`, `src/Tool.ts` lines 362-695.
-- [ ] [HARNESS_CONCURRENT_TOOL_EXEC] Analyze the concurrent/serial tool execution model (`isConcurrencySafe`, `toolOrchestration.ts`). Prototype parallel brain search + episodic recall + working memory lookup in `heartbeat_preflight.py` using `asyncio.gather()`. Measure preflight time reduction.
-- [ ] [HARNESS_CONTEXT_CACHING] Study section-level system prompt caching (`systemPromptSections.ts`, `SYSTEM_PROMPT_DYNAMIC_BOUNDARY`). Design a caching layer for `context_compressor.py` that memoizes stable sections (identity, procedures, goals) and only recomputes dynamic sections (working memory, recent episodes). Estimate token savings.
 
 #### Memory & State
 - [ ] [HARNESS_MEMORY_TAXONOMY] Compare the harness 4-type memory taxonomy (user/feedback/project/reference with frontmatter + MEMORY.md index) against our 10-collection brain. Map: user→identity, feedback→learnings, project→context, reference→infrastructure. Identify gaps — do we need a dedicated "feedback" collection for corrections/confirmations? Write proposal.
@@ -114,7 +110,6 @@ _Source: `data/external_src/claude-harness-src.zip`. Deep-dive note: `memory/res
 
 #### Orchestration & Multi-Agent
 - [ ] [HARNESS_COORDINATOR_MODE] Study coordinator mode (`coordinatorMode.ts`) where coordinator sees only Agent/SendMessage/TaskStop while workers get full tools. Redesign `project_agent.py` spawn flow to use coordinator/worker tool isolation. Prototype: Clarvis heartbeat as coordinator dispatching to specialist workers (research, implementation, maintenance).
-- [ ] [HARNESS_WORKTREE_ISOLATION] Study git worktree isolation for agents (`EnterWorktree`/`ExitWorktree` tools). Evaluate using worktrees for `project_agent.py` spawns instead of full repo clones. Benefits: shared git objects, faster setup, atomic merge-back.
 - [ ] [HARNESS_TASK_BUDGET_STOPPING] Study token budget tracking and diminishing-returns detection (`tokenBudget.ts` — 90% threshold OR <500 tokens/iteration after 3+ loops). Replace fixed timeouts in `spawn_claude.sh` and cron orchestrators with budget-aware stopping. Prototype: parse Claude Code output for token usage, implement early termination.
 
 #### Hooks & Extensibility
@@ -131,6 +126,29 @@ _Source: `data/external_src/claude-harness-src.zip`. Deep-dive note: `memory/res
 #### UX & Portability
 - [ ] [HARNESS_DREAM_DISTILLATION] Study the Dream task (4-stage session-log distillation into structured memory files). Compare against our `dream_engine.py` (counterfactual dreaming). Prototype a "session distillation" nightly job that reviews cron session outputs and distills actionable learnings into brain, complementing the existing counterfactual approach.
 - [ ] [HARNESS_BRIDGE_TRANSPORT] Study the bridge module's hybrid transport (WebSocket reads + HTTP POST writes in `HybridTransport.ts`) and remote control protocol (`bridgeApi.ts`, `bridgeMain.ts`). Evaluate feasibility of a Clarvis remote-control interface accessible from Telegram or web, allowing live session observation and intervention beyond current `/spawn` one-shot model.
+
+### OpenAI Codex Research Program (2026-03-31)
+_Source: `https://github.com/openai/codex` (README reviewed; use for cross-comparison with the Claude harness program and OpenClaw ACP flows)._
+
+#### Product Surface & Runtime Model
+- [ ] [CODEX_RUNTIME_SURFACES] Study Codex surface split: CLI, IDE integration, desktop/app flow, and cloud/web references. Map which surfaces are relevant to Clarvis/OpenClaw and which are redundant. Produce an adoption matrix.
+- [ ] [CODEX_AUTH_AND_ACCOUNT_MODEL] Study Codex auth model (ChatGPT sign-in vs API key) and how user/account state affects local-agent UX. Compare against OpenClaw ACP auth/runtime assumptions. Identify lessons for reducing setup friction in Clarvis agent flows.
+- [ ] [CODEX_RELEASE_AND_DISTRIBUTION] Study Codex distribution model (npm, Homebrew cask, release binaries) and release ergonomics. Evaluate whether Clarvis should package selected subsystems/CLIs in a similar multi-channel way for easier operator adoption.
+
+#### Agent UX & Developer Workflow
+- [ ] [CODEX_LOCAL_AGENT_EXPERIENCE] Analyze the "runs locally on your computer" positioning and likely implications for trust, speed, privacy, and operator ergonomics. Compare against our current spawn/session model. Write a note on where Clarvis should emphasize local control vs remote orchestration.
+- [ ] [CODEX_IDE_INTEGRATION_RESEARCH] Study Codex IDE integration path and compare with OpenClaw thread-bound ACP sessions. Identify what makes IDE attachment compelling and whether we should build a comparable bridge for Clarvis project agents or browser relay workflows.
+- [ ] [CODEX_DESKTOP_APP_PATH] Study the Codex app / desktop experience as a UX pattern. Evaluate whether Clarvis would benefit from a lightweight operator dashboard/app shell vs current chat-first interaction.
+
+#### Architecture Comparison Program
+- [ ] [CODEX_VS_HARNESS_COMPARISON] Cross-compare OpenAI Codex repo vs the downloaded Claude harness across runtime model, tool permissions, memory/state handling, context compaction, multi-agent coordination, packaging, and developer ergonomics. Produce a structured matrix: what Codex does better, what the harness does better, what Clarvis already exceeds.
+- [ ] [CODEX_SESSION_AND_CONTEXT_MODEL] Inspect Codex source in depth for session lifecycle, conversation persistence, context-window management, and recovery semantics. Compare directly to the harness transcript/recovery model and our heartbeat/session history approach.
+- [ ] [CODEX_TOOLING_AND_SANDBOX_REVIEW] Study Codex tool execution, approval model, safety boundaries, and any sandbox/workspace controls present in the source. Compare to harness permission pipeline and Clarvis's current trust-heavy model.
+
+#### Strategic Extraction for Clarvis
+- [ ] [CODEX_PORTABILITY_PATTERN_EXTRACTION] Extract portable ideas from Codex that could materially improve Clarvis operator UX, installation, session handling, or packaging with minimal architectural upheaval.
+- [ ] [CODEX_OPEN_SOURCE_SIGNAL_REVIEW] Study how Codex presents itself as open-source and what that implies for repo layout, docs, contributor flow, and public trust. Compare against our March 31 public-surface goals and identify any repo/readme/docs patterns worth adopting.
+- [ ] [CODEX_CROSS_VENDOR_AGENT_BENCH] Build a cross-vendor research brief from Codex + Claude harness + OpenClaw: converge on a set of best practices for local agent runtimes, permissions, memory, compaction, and orchestration. Output should feed a Clarvis architecture direction memo, not just raw notes.
 
 
 

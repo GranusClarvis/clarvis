@@ -1816,3 +1816,18 @@ _Last archived: 2026-03-27_
 ## Archived 2026-03-31
 - [x] [RESEARCH_ADAPTIVE_RETRIEVAL_CONTROL_2026-03-31] Research: adaptive retrieval control policies for agent memory/RAG — Adaptive-RAG routes by query complexity, CRAG evaluates retrieved evidence before use, and Self-RAG makes retrieval/critique part of generation. Key implementation: gate retrieval, score evidence quality, and critique unsupported claims before final answer. (2026-03-31)
 - [x] [BRIEF_KEYWORD_COVERAGE] Improve brief token coverage from 36.6% toward 70%: tune TF-IDF extraction ratio per task category (code→0.35, maintenance→0.30) and add keyword-pinning for task-critical terms in `context_compressor.py` `compress_text()`. Re-run `brief_benchmark.py` to validate. _(Targets weakest metric: brief compression ratio=0.550)_ (2026-03-31 14:06 UTC)
+
+## Archived 2026-03-31
+- [x] [REASONING_CHAIN_QUALITY_AUDIT] Chains healthy: 99.6% step outcome fill rate (792 steps), 0 open/orphan chains. Backfilled 3 null step outcomes. Capability score 0.85 is accurate (avg_depth 1.99 diluted by dream engine 2-step chains). No root cause bug — design artifact.
+- [x] [CRON_SCHEDULE_AUDIT_SHELL] Removed stale `cron_graph_soak_manager.sh`. Shifted `cron_brain_eval.sh` 06:00→06:05 to avoid conflict with autonomous. Documented `generate_status_json.py` (05:50) in CLAUDE.md. Cleaned 2 stale lock files. `cron_env.sh` exports verified correct.
+- [x] [ZOMBIE_GOAL_CLEANUP] 5 zombie goals already removed from ChromaDB. Ran full `goal_hygiene.py clean`: deprecated "Reasoning Chains" (100% for 37d), refreshed stale snapshot (was 2026-03-22, now current with 11 goals).
+
+## Archived 2026-03-31
+- [x] [HARNESS_PERMISSION_PIPELINE] Study the 5-layer permission gate (Zod → validateInput → rule matching → hooks → classifier) in detail. Extract a design doc for a Clarvis tool-permission system that replaces `--dangerously-skip-permissions` for user-facing and multi-agent modes. Key files: `src/utils/permissions/permissions.ts`, `src/Tool.ts` lines 362-695. _(completed 2026-03-31, artifact: memory/research/runs/2026-03-31-160001/harness-permission-pipeline.md, 5 brain memories stored)_
+
+## Archived 2026-03-31
+- [x] [CODE_VALIDATION 2026-03-31] [CODE_QUALITY_FIX] Fix 4 code validation errors in: scripts/heartbeat_preflight.py, scripts/project_agent.py — task: [HARNESS_CONTEXT_CACHING] Study section-level system prompt caching (`systemProm (2026-03-31 17:08 UTC)
+- [x] [RESEARCH_RETRIEVAL_OPTIMIZATION_ADAPTIVE_CONTROL] Summarized CRAG-style evidence scoring, adaptive retrieval actions, and contextual compression for Clarvis memory/context pipelines. (2026-03-12)
+- [x] [HARNESS_CONCURRENT_TOOL_EXEC] (2026-03-31) Implemented `ThreadPoolExecutor(max_workers=3)` parallel execution in `heartbeat_preflight.py` for episodic/brain_bridge/introspection stages. Env `CLARVIS_PREFLIGHT_PARALLEL=0` to disable. Logs wall vs sequential time + savings.
+- [x] [HARNESS_CONTEXT_CACHING] (2026-03-31) Added section-level caching to `context_compressor.py`: hash+TTL (300s) invalidation for scores, queue, related tasks, completions. Tiered brief 381ms→6ms on cache hit (98% reduction). CLI: `cache-stats`.
+- [x] [HARNESS_WORKTREE_ISOLATION] (2026-03-31) Added `worktree_create/cleanup/merge_back/list` functions to `project_agent.py`. Shared git objects, ~1-2s setup vs ~60-120s clone. Per-task worktree in `<agent>/worktrees/<task_id>/`. Not yet wired into `cmd_spawn` (needs integration test with live agent).
