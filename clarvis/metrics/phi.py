@@ -120,19 +120,24 @@ def _build_adjacency(brain):
     return nodes, adj, edge_list
 
 
-def intra_collection_density(nodes, adj):
-    """Measure 1: Within-collection link density (degree-based).
+def intra_collection_density(nodes, adj, importance_weights=None):
+    """Measure 1: Within-collection link density (degree-based, importance-weighted).
 
-    Uses average degree per collection instead of raw edge density.
-    Raw density = edges / max_pairs is O(n²) in the denominator and drops
-    toward zero for large collections even when connectivity is healthy.
-    Degree-based metric: min(1.0, avg_degree / TARGET_DEGREE) is scale-
-    invariant and reflects actual integration per memory.
+    Uses importance-weighted average degree per collection.  High-importance
+    memories (importance >= 0.8) contribute 2x to the centroid, reducing
+    dilution from low-importance diverse entries.
+
+    Degree-based metric: min(1.0, weighted_avg_degree / TARGET_DEGREE) is
+    scale-invariant and reflects actual integration per memory.
 
     TARGET_DEGREE = 25: each memory should ideally have ~25 same-collection
     neighbors for strong intra-collection integration.  Raised from 10
     (2026-03-29) per strategic audit — 10 was too easy to saturate,
     masking real integration quality differences.
+
+    Args:
+        importance_weights: optional dict mapping memory_id -> importance (0-1).
+            When provided, memories with importance >= 0.8 get 2x weight.
     """
     TARGET_DEGREE = 25
 
@@ -146,13 +151,19 @@ def intra_collection_density(nodes, adj):
     for col, members in col_nodes.items():
         if col == "unknown" or len(members) < 2:
             continue
-        total_links = 0
+        weighted_degree_sum = 0.0
+        weight_sum = 0.0
         for nid in members:
             neighbors_in_col = sum(1 for n in adj.get(nid, set()) if n in members)
-            total_links += neighbors_in_col
-        actual_edges = total_links / 2
-        n = len(members)
-        avg_degree = (actual_edges * 2 / n) if n > 0 else 0
+            # Importance-weighted centroid: high-importance memories (>=0.8) count 2x
+            if importance_weights is not None:
+                imp = importance_weights.get(nid, 0.5)
+                w = 2.0 if imp >= 0.8 else 1.0
+            else:
+                w = 1.0
+            weighted_degree_sum += neighbors_in_col * w
+            weight_sum += w
+        avg_degree = weighted_degree_sum / weight_sum if weight_sum > 0 else 0
         score = min(1.0, avg_degree / TARGET_DEGREE)
         scores.append(score)
         per_collection[col] = round(score, 4)
@@ -361,7 +372,20 @@ def compute_phi(brain=None):
     nodes, adj, edge_list = _build_adjacency(brain)
     stats = brain.stats()
 
-    ic_score, ic_details = intra_collection_density(nodes, adj)
+    # Extract importance weights from ChromaDB metadata for weighted centroid
+    importance_weights = {}
+    for col_name, col in brain.collections.items():
+        try:
+            results = col.get(include=["metadatas"])
+            ids = results.get("ids", [])
+            metas = results.get("metadatas") or []
+            for mid, meta in zip(ids, metas):
+                if meta and "importance" in meta:
+                    importance_weights[mid] = float(meta["importance"])
+        except Exception:
+            pass  # Skip collections that fail metadata fetch
+
+    ic_score, ic_details = intra_collection_density(nodes, adj, importance_weights)
     ic_normalized = ic_score  # Already normalized (degree-based, 0-1)
 
     cc_score, cc_details = cross_collection_integration(nodes, edge_list)
@@ -547,7 +571,20 @@ def decompose_phi(brain_inst=None):
 
     nodes, adj, edge_list = _build_adjacency(brain_inst)
 
-    _, intra_per_col = intra_collection_density(nodes, adj)
+    # Extract importance weights for weighted centroid (same as compute_phi)
+    importance_weights = {}
+    for col_name, col in brain_inst.collections.items():
+        try:
+            results = col.get(include=["metadatas"])
+            ids = results.get("ids", [])
+            metas = results.get("metadatas") or []
+            for mid, meta in zip(ids, metas):
+                if meta and "importance" in meta:
+                    importance_weights[mid] = float(meta["importance"])
+        except Exception:
+            pass
+
+    _, intra_per_col = intra_collection_density(nodes, adj, importance_weights)
     cc_score, cc_details = cross_collection_integration(nodes, edge_list)
     cross_per_pair = cc_details.get("per_pair", {})
     _, semantic_per_pair = semantic_cross_collection(brain_inst)

@@ -1,7 +1,8 @@
 {
   "completed": [
     "coding-challenge-01",
-    "bench-context-01"
+    "bench-context-01",
+    "bench-robustness-01"
   ],
   "injections": [
     {
@@ -15,6 +16,12 @@
       "title": "Measure context window utilization efficiency across 10 heartbeats",
       "timestamp": 1774868401.7807682,
       "date": "2026-03-30T11:00:01"
+    },
+    {
+      "id": "bench-robustness-01",
+      "title": "Chaos test: verify brain recovery after simulated corruption",
+      "timestamp": 1774918802.3120468,
+      "date": "2026-03-31T01:00:02"
     }
   ],
   "gh_last_refresh": null
