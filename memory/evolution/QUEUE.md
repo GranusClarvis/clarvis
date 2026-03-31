@@ -94,6 +94,11 @@ _(Completed items archived.)_
 
 ### P1 — Found in 2026-03-31 evolution scan
 
+- [ ] [REASONING_CHAIN_QUALITY_AUDIT] Audit last 50 reasoning chains in `data/reasoning_chains.jsonl` for quality issues (missing outcomes, stale open chains, low evidence). Close orphans, backfill outcomes, and investigate why capability score dropped from 1.0→0.85. Fix root cause.
+- [ ] [CRON_SCHEDULE_AUDIT_SHELL] Shell/config task: audit system crontab entries against CLAUDE.md schedule table, remove any stale or orphaned entries, verify all lock files clean up properly, and ensure `cron_env.sh` exports match current environment. Output diff of changes. _(Non-Python task)_
+- [ ] [ADAPTIVE_RETRIEVAL_GATE_MVP] Implement CRAG-style evidence scoring gate from today's research (RESEARCH_ADAPTIVE_RETRIEVAL_CONTROL): add a `score_evidence(query, results)` function to `clarvis/brain/` that scores retrieval relevance before injecting into context. Wire into `heartbeat_preflight.py` search step. Threshold: discard results below 0.3 cosine similarity.
+- [ ] [ZOMBIE_GOAL_CLEANUP] Run `goal_hygiene.py` manually and clean up the 5 zombie goals at 0% progress in `data/goals_snapshot.json`. Archive or remove stale goals, update active goal descriptions to reflect current state post-P0 deadline.
+
 
 
 

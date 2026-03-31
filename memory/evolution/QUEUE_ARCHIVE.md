@@ -1812,3 +1812,7 @@ _Last archived: 2026-03-27_
 
 ## Archived 2026-03-31
 - [x] [LLM_BRAIN_REVIEW 2026-03-31] [LLM_BRAIN_REVIEW] Create and maintain a single authoritative 'current-priorities' memory in clarvis-goals — Done: refreshed to W14, fixed self-reference bug + ISO week format in priorities_curator.py, pruned 1 stale fragment, verified #1 retrieval rank
+
+## Archived 2026-03-31
+- [x] [RESEARCH_ADAPTIVE_RETRIEVAL_CONTROL_2026-03-31] Research: adaptive retrieval control policies for agent memory/RAG — Adaptive-RAG routes by query complexity, CRAG evaluates retrieved evidence before use, and Self-RAG makes retrieval/critique part of generation. Key implementation: gate retrieval, score evidence quality, and critique unsupported claims before final answer. (2026-03-31)
+- [x] [BRIEF_KEYWORD_COVERAGE] Improve brief token coverage from 36.6% toward 70%: tune TF-IDF extraction ratio per task category (code→0.35, maintenance→0.30) and add keyword-pinning for task-critical terms in `context_compressor.py` `compress_text()`. Re-run `brief_benchmark.py` to validate. _(Targets weakest metric: brief compression ratio=0.550)_ (2026-03-31 14:06 UTC)
