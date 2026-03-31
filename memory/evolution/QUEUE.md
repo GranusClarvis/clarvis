@@ -82,6 +82,8 @@ _(Completed items archived.)_
 
 ### External Challenges
 
+- [x] [EXTERNAL_CHALLENGE:research-impl-01] Implement Sparse Priming Representations (SPR) for brain memory compression — Done 2026-03-31: `clarvis/brain/spr.py` — encode_spr(), decode_spr(), batch_encode(), CLI. Tested on 20 memories: 0.545 compression ratio (45% savings), 20/20 decode roundtrip. Passthrough for short mems, structured extraction for known formats, general NLP pipeline for free text.
+
 
 
 
@@ -93,8 +95,6 @@ _(Completed items archived.)_
 ### P1 — Found in 2026-03-30 evolution scan
 
 ### P1 — Found in 2026-03-31 evolution scan
-- [x] [STALLED_GOAL_IMPORT_RELIABILITY] 8 subprocess integration tests in `packages/clarvis-db/tests/test_import_reliability.py` — covers spine imports (brain, search, remember, capture), metrics (phi), legacy path, heartbeat, cognition. All pass. Goal "Fix module import reliability" now has regression coverage.
-- [x] [HEALTH_METRIC_JSON_EXPORT] Already implemented (lines 267-343 of health_monitor.sh) — emits `monitoring/health_latest.json` with timestamp, mem_pct, disk_pct, load, gateway_status, phi, pi, brain_count, cron counts. No work needed.
 
 
 
