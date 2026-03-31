@@ -75,7 +75,6 @@ _Design: `docs/ADAPTIVE_RAG_PLAN.md` — 4-phase rollout (GATE → EVAL → RETR
 
 ### Research Sessions
 _(Completed items archived.)_
-- [x] [RESEARCH_PHI_COMPUTATION_APPROX] Research: Phi computation approximations — exact IIT Φ is combinatorially intractable; use calibrated proxies, trend tracking, and topology-aware approximations for operational monitoring. (2026-03-31)
 
 ---
 
@@ -94,9 +93,6 @@ _(Completed items archived.)_
 ### P1 — Found in 2026-03-30 evolution scan
 
 ### P1 — Found in 2026-03-31 evolution scan
-- [x] [BRIEF_COMPRESSION_STABILIZER] EWMA smoothing added to `performance_benchmark.py` (_bcr_ewma_smooth, window=10, alpha=0.3) + `brief_benchmark.py` (history-aware scoring, stores compression_ratio). BCR=0.829 smoothed. _(2026-03-31)_
-- [x] [HEALTH_MONITOR_HEREDOC_FIX] Converted `python3 -c "..."` to heredoc (`python3 - <<'PYEOF'`) in health_monitor.sh — eliminates fragile bash escaping. _(2026-03-31)_
-- [x] [INTRA_DENSITY_NEAREST_NEIGHBOR] Added `_sqlite_nearest_neighbor_edges()` to graph_compaction.py (k=5, 80/col). Intra-density: 0.52→0.5608 (above 0.55 target). _(2026-03-31)_
 - [ ] [STALLED_GOAL_IMPORT_RELIABILITY] Goal "Fix module import reliability" stuck at 0% — add integration test in `packages/clarvis-db/tests/` that exercises `from clarvis.brain import brain, search, remember, capture` and `from clarvis.metrics import phi` from a clean subprocess to catch import regressions.
 - [ ] [HEALTH_METRIC_JSON_EXPORT] Extend `health_monitor.sh` to emit `monitoring/health_latest.json` with structured fields (timestamp, mem_pct, disk_pct, load, pi, brain_ok) so downstream dashboards and alerting can consume metrics without log parsing. _(Bash task, non-Python)_
 

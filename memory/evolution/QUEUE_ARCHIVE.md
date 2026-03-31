@@ -1796,3 +1796,9 @@ _Last archived: 2026-03-27_
 ## Archived 2026-03-31
 - [x] [EXTERNAL_CHALLENGE:bench-robustness-01] Chaos test: verify brain recovery after simulated corruption — 7-test harness in `tests/clarvis/test_chaos_recovery.py` (10%/30% metadata corruption, graph orphans, isolation, optimize-during-store). All green.
 - [x] [PHI_INTRA_DENSITY_WEIGHTING] Boost Phi intra-collection density by importance-weighted centroid — high-importance memories (≥0.8) contribute 2x. Result: intra_density 0.5149→0.5217, Phi 0.7479→0.7492.
+
+## Archived 2026-03-31
+- [x] [RESEARCH_PHI_COMPUTATION_APPROX] Research: Phi computation approximations — exact IIT Φ is combinatorially intractable; use calibrated proxies, trend tracking, and topology-aware approximations for operational monitoring. (2026-03-31)
+- [x] [BRIEF_COMPRESSION_STABILIZER] EWMA smoothing added to `performance_benchmark.py` (_bcr_ewma_smooth, window=10, alpha=0.3) + `brief_benchmark.py` (history-aware scoring, stores compression_ratio). BCR=0.829 smoothed. _(2026-03-31)_
+- [x] [HEALTH_MONITOR_HEREDOC_FIX] Converted `python3 -c "..."` to heredoc (`python3 - <<'PYEOF'`) in health_monitor.sh — eliminates fragile bash escaping. _(2026-03-31)_
+- [x] [INTRA_DENSITY_NEAREST_NEIGHBOR] Added `_sqlite_nearest_neighbor_edges()` to graph_compaction.py (k=5, 80/col). Intra-density: 0.52→0.5608 (above 0.55 target). _(2026-03-31)_
