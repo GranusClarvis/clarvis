@@ -96,7 +96,7 @@ _(Completed items archived.)_
 
 ### P1 — Found in 2026-03-31 evolution scan
 
-- [ ] [ADAPTIVE_RETRIEVAL_GATE_MVP] Implement CRAG-style evidence scoring gate from today's research (RESEARCH_ADAPTIVE_RETRIEVAL_CONTROL): add a `score_evidence(query, results)` function to `clarvis/brain/` that scores retrieval relevance before injecting into context. Wire into `heartbeat_preflight.py` search step. Threshold: discard results below 0.3 cosine similarity.
+- [x] [ADAPTIVE_RETRIEVAL_GATE_MVP] Implement CRAG-style evidence scoring gate from today's research (RESEARCH_ADAPTIVE_RETRIEVAL_CONTROL): add a `score_evidence(query, results)` function to `clarvis/brain/` that scores retrieval relevance before injecting into context. Wire into `heartbeat_preflight.py` search step. Threshold: discard results below 0.3 cosine similarity. _(Done 2026-04-01: `score_evidence()` in `retrieval_eval.py`, wired at §8.5.1 in preflight.)_
 
 ### Claude Harness Research Program (2026-03-31)
 _Source: `data/external_src/claude-harness-src.zip`. Deep-dive note: `memory/research/claude_harness_architecture_2026-03-31.md`._

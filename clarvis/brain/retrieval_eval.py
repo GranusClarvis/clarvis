@@ -264,6 +264,45 @@ def strip_refine(results: list[dict], query: str,
     return refined
 
 
+def score_evidence(query: str, results: list[dict],
+                   threshold: float = 0.3) -> dict:
+    """CRAG-style evidence scoring gate — pre-filters results by cosine similarity.
+
+    Lightweight gate that discards obviously irrelevant results before the
+    heavier composite evaluation pipeline.  Uses ChromaDB's squared-L2
+    distance converted to cosine-like similarity: sim = 1 / (1 + distance).
+
+    A threshold of 0.3 maps to distance ≈ 2.33 — filters out results that
+    share almost no semantic overlap with the query.
+
+    Args:
+        query: The search query (used for logging, not re-embedded).
+        results: List of recall result dicts with 'distance' key.
+        threshold: Minimum semantic similarity to keep (default 0.3).
+
+    Returns:
+        {
+            "kept": list[dict],       # results above threshold
+            "discarded": int,         # count of results removed
+            "scores": list[float],    # similarity score per input result
+            "threshold": float,
+        }
+    """
+    if not results:
+        return {"kept": [], "discarded": 0, "scores": [], "threshold": threshold}
+
+    scores_list = [_semantic_sim(r.get("distance", 2.0)) for r in results]
+    kept = [r for r, s in zip(results, scores_list) if s >= threshold]
+    discarded = len(results) - len(kept)
+
+    return {
+        "kept": kept,
+        "discarded": discarded,
+        "scores": [round(s, 4) for s in scores_list],
+        "threshold": threshold,
+    }
+
+
 def filter_by_score(results: list[dict], scores: list[float],
                     threshold: float = AMBIGUOUS_THRESHOLD) -> list[dict]:
     """Remove individual results whose composite score is below *threshold*.

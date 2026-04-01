@@ -135,6 +135,11 @@ except ImportError:
     gate_classify = None
 
 try:
+    from clarvis.brain.retrieval_eval import score_evidence
+except ImportError:
+    score_evidence = None
+
+try:
     from obligation_tracker import ObligationTracker
 except ImportError:
     ObligationTracker = None
@@ -842,6 +847,23 @@ def _preflight_brain_bridge(result, next_task, _rt, retrieval_tier_info):
     if _recalled_ids:
         result["recalled_memory_ids"] = _recalled_ids
     result["timings"]["knowledge"] = round(time.monotonic() - t85, 3)
+
+    # §8.5.1: Evidence scoring gate — pre-filter by cosine similarity (threshold 0.3)
+    if score_evidence and _raw and isinstance(_raw, list) and len(_raw) > 0:
+        try:
+            t_gate = time.monotonic()
+            gate_out = score_evidence(next_task, _raw, threshold=0.3)
+            n_discarded = gate_out["discarded"]
+            if n_discarded > 0:
+                log(f"Evidence gate: {n_discarded}/{len(_raw)} results discarded (sim < 0.3)")
+                # Replace raw_results in brain_ctx so downstream eval uses filtered set
+                if brain_ctx:
+                    brain_ctx["raw_results"] = gate_out["kept"]
+            result["evidence_gate_discarded"] = n_discarded
+            result["evidence_gate_scores"] = gate_out["scores"]
+            result["timings"]["evidence_gate"] = round(time.monotonic() - t_gate, 3)
+        except Exception as e:
+            log(f"Evidence gate failed (non-fatal): {e}")
 
     # §8.6: Retrieval eval + adaptive retry
     _preflight_retrieval_eval(result, next_task, _rt, brain_ctx)
