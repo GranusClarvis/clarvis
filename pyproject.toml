@@ -6,11 +6,14 @@ build-backend = "setuptools.build_meta"
 name = "clarvis"
 version = "0.1.0"
 description = "Clarvis — dual-layer cognitive agent system"
+readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
+keywords = ["autonomous-agent", "cognitive-architecture", "vector-memory", "self-improving"]
 dependencies = [
     "clarvis-cost",
     "clarvis-reasoning",
+    "typer>=0.9.0",
 ]
 
 [project.scripts]
@@ -18,6 +21,8 @@ clarvis = "clarvis.cli:main"
 
 [project.optional-dependencies]
 brain = ["chromadb>=0.4.0", "onnxruntime>=1.15.0"]
+dev = ["ruff", "pytest"]
+all = ["chromadb>=0.4.0", "onnxruntime>=1.15.0", "ruff", "pytest"]
 
 [tool.setuptools.packages.find]
 include = ["clarvis*"]

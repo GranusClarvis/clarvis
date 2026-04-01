@@ -19,19 +19,31 @@ Clarvis is a cognitive agent system that operates autonomously on a dedicated ho
 git clone https://github.com/GranusClarvis/clarvis.git
 cd clarvis
 
-# Install sub-packages first (not on PyPI, must be installed before root package)
+# Option A: One-command setup (recommended)
+bash scripts/setup.sh            # install all packages + brain
+bash scripts/setup.sh --dev      # also install ruff + pytest
+bash scripts/setup.sh --verify   # install + run verification
+
+# Option B: Manual install
 pip install -e packages/clarvis-cost
 pip install -e packages/clarvis-reasoning
 pip install -e packages/clarvis-db
-
-# Install main package with brain (vector memory) support
 pip install -e ".[brain]"
 
 # Verify installation
 python3 -m clarvis brain health
+bash scripts/verify_install.sh   # full 21-check verification
 ```
 
 **Requirements:** Python 3.10+, pip. Brain features need `chromadb` and `onnxruntime` (installed automatically with `.[brain]`). On a fresh clone, the brain starts empty — memories accumulate through operation.
+
+### Extras
+
+| Extra | What It Installs | When You Need It |
+|-------|-----------------|------------------|
+| `.[brain]` | ChromaDB + ONNX Runtime | Vector memory (most users) |
+| `.[dev]` | Ruff + pytest | Contributing / development |
+| `.[all]` | Brain + dev tools | Full development environment |
 
 ---
 
@@ -466,6 +478,28 @@ See [`docs/CLARVIS_MODES_AND_REPOS.md`](docs/CLARVIS_MODES_AND_REPOS.md) for the
 
 ---
 
+## Troubleshooting
+
+**`ModuleNotFoundError: No module named 'clarvis_cost'` (or `clarvis_reasoning`)**
+Sub-packages must be installed before the root package. Run `bash scripts/setup.sh` or install them manually in order (see Installation above).
+
+**`ModuleNotFoundError: No module named 'chromadb'`**
+Install with brain extras: `pip install -e ".[brain]"`. If you don't need vector memory, the CLI still works for non-brain commands.
+
+**`ModuleNotFoundError: No module named 'typer'`**
+Re-run `pip install -e .` — typer is a declared dependency and should install automatically. If using an older checkout, pull latest and reinstall.
+
+**`brain health` shows 0 memories**
+Normal on a fresh clone. The brain starts empty — memories accumulate through operation. Try: `python3 -c "from clarvis.brain import remember; remember('test', importance=0.5)"` then re-check.
+
+**`CLARVIS_WORKSPACE` warnings**
+Set the env var to your repo root: `export CLARVIS_WORKSPACE=/path/to/clarvis`. Some scripts default to `/home/agent/.openclaw/workspace` if unset.
+
+**Tests fail with import errors**
+Run `bash scripts/verify_install.sh` to identify which component is missing. Ensure all sub-packages are installed.
+
+---
+
 ## Known Limitations
 
 - **Single-host design** — built for a dedicated server with systemd, not containerized
@@ -493,7 +527,7 @@ See [`docs/OPEN_SOURCE_GAP_AUDIT.md`](docs/OPEN_SOURCE_GAP_AUDIT.md) for a detai
 
 Contributions are welcome. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for guidelines.
 
-Quick start: fork, `pip install -e ".[brain]"`, run `python3 -m pytest`, open a PR against `main`.
+Quick start: fork, `bash scripts/setup.sh --dev --verify`, run `python3 -m pytest -m "not slow"`, open a PR against `main`.
 
 ---
 
@@ -503,4 +537,4 @@ MIT — see [pyproject.toml](pyproject.toml) for details.
 
 ---
 
-*Last updated: 2026-03-31*
+*Last updated: 2026-04-01*

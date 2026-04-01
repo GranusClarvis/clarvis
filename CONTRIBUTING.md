@@ -15,14 +15,17 @@ Thank you for your interest in contributing to Clarvis! This guide covers setup,
 git clone https://github.com/GranusClarvis/clarvis.git
 cd clarvis
 
-# Install packages in editable mode
-pip install -e packages/clarvis-db
+# One-command setup (recommended)
+bash scripts/setup.sh --dev --verify
+
+# Or manual install
 pip install -e packages/clarvis-cost
 pip install -e packages/clarvis-reasoning
-pip install -e ".[brain]"
+pip install -e packages/clarvis-db
+pip install -e ".[all]"
 
 # Verify the install
-python3 -c "from clarvis.brain import brain; print('OK')"
+bash scripts/verify_install.sh
 ```
 
 ## Repository Layout
