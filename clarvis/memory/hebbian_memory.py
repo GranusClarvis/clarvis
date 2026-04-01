@@ -34,14 +34,16 @@ Usage:
 
 import json
 import math
+import os
 import sys
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from collections import defaultdict
 
-_SCRIPTS_DIR = "/home/agent/.openclaw/workspace/scripts"
+_WS = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+_SCRIPTS_DIR = os.path.join(_WS, "scripts")
 
-DATA_DIR = Path("/home/agent/.openclaw/workspace/data/hebbian")
+DATA_DIR = Path(_WS) / "data" / "hebbian"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 ACCESS_LOG_FILE = DATA_DIR / "access_log.jsonl"

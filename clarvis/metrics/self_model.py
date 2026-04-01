@@ -19,11 +19,12 @@ from pathlib import Path
 
 from clarvis.brain import brain
 
+_WS = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
 _scripts_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'scripts')
 
-DATA_FILE = "/home/agent/.openclaw/workspace/data/self_model.json"
-META_FILE = "/home/agent/.openclaw/workspace/data/meta_cognition.json"
-CAPABILITY_HISTORY_FILE = "/home/agent/.openclaw/workspace/data/capability_history.json"
+DATA_FILE = os.path.join(_WS, "data", "self_model.json")
+META_FILE = os.path.join(_WS, "data", "meta_cognition.json")
+CAPABILITY_HISTORY_FILE = os.path.join(_WS, "data", "capability_history.json")
 ALERT_THRESHOLD = 0.3  # Alert if any scored capability drops below this
 WEEKLY_REGRESSION_THRESHOLD = 0.10  # Alert if any domain drops >10% week-over-week
 
@@ -380,7 +381,7 @@ def _assess_memory_system():
     # --- Retrieval quality: prefer ground-truth benchmark, fall back to tracker ---
     benchmark_used = False
     try:
-        benchmark_file = Path("/home/agent/.openclaw/workspace/data/retrieval_benchmark/latest.json")
+        benchmark_file = Path(_WS) / "data" / "retrieval_benchmark" / "latest.json"
         if benchmark_file.exists():
             with open(benchmark_file) as f:
                 bench = json.load(f)
@@ -423,7 +424,7 @@ def _get_prediction_outcomes_today(today_str):
 
     Returns (completed, failed, descriptions) tuple.
     """
-    cal_path = "/home/agent/.openclaw/workspace/data/calibration/predictions.jsonl"
+    cal_path = os.path.join(_WS, "data", "calibration", "predictions.jsonl")
     completed = 0
     failed = 0
     descriptions = []
@@ -467,7 +468,7 @@ def _assess_autonomous_execution():
     """
     score = 0.0
     evidence = []
-    log_path = "/home/agent/.openclaw/workspace/memory/cron/autonomous.log"
+    log_path = os.path.join(_WS, "memory", "cron", "autonomous.log")
     now = datetime.now(timezone.utc)
     today = now.strftime("%Y-%m-%d")
     # Use 24h rolling window — prevents score collapse at start of UTC day
@@ -596,7 +597,7 @@ def _code_gen_git_activity():
         result = subprocess.run(
             ["git", "log", "--oneline", "--since=24 hours ago", "--format=%s"],
             capture_output=True, text=True, timeout=10,
-            cwd="/home/agent/.openclaw/workspace"
+            cwd=_WS
         )
         commits = [l.strip() for l in result.stdout.strip().split('\n') if l.strip()]
         if commits:
@@ -615,7 +616,7 @@ def _code_gen_git_activity():
 def _code_gen_heartbeat_outcomes():
     """Heartbeat-recorded code quality outcomes (syntax checks + task success)."""
     try:
-        outcomes_file = Path("/home/agent/.openclaw/workspace/data/code_gen_outcomes.jsonl")
+        outcomes_file = Path(_WS) / "data" / "code_gen_outcomes.jsonl"
         if not outcomes_file.exists():
             return 0.0, [], False
         from datetime import timedelta
@@ -680,7 +681,7 @@ def _assess_code_generation():
 
     # 2. Scripts baseline (+0.10)
     try:
-        scripts = list(Path("/home/agent/.openclaw/workspace/scripts").glob("*.py"))
+        scripts = list(Path(_WS, "scripts").glob("*.py"))
         if len(scripts) >= 5:
             score += 0.10
             evidence.append(f"{len(scripts)} Python scripts (baseline +0.10)")
@@ -713,7 +714,7 @@ def _assess_code_generation():
     except Exception as e:
         # Fallback: quality gate history or py_compile
         try:
-            qg_file = Path("/home/agent/.openclaw/workspace/data/code_quality_history.json")
+            qg_file = Path(_WS) / "data" / "code_quality_history.json"
             if qg_file.exists():
                 with open(qg_file) as f:
                     qg_history = json.load(f)
@@ -742,7 +743,7 @@ def _assess_self_reflection():
 
     # --- Phi metric value (continuous, not binary) ---
     try:
-        phi_path = "/home/agent/.openclaw/workspace/data/phi_history.json"
+        phi_path = os.path.join(_WS, "data", "phi_history.json")
         if os.path.exists(phi_path):
             with open(phi_path) as f:
                 phi_data = json.load(f)
@@ -761,7 +762,7 @@ def _assess_self_reflection():
 
     # --- Prediction calibration quality: Brier score (windowed to last 14 days) ---
     try:
-        cal_path = "/home/agent/.openclaw/workspace/data/calibration/predictions.jsonl"
+        cal_path = os.path.join(_WS, "data", "calibration", "predictions.jsonl")
         if os.path.exists(cal_path):
             from datetime import timezone as _tz
             _now = datetime.now(_tz.utc)
@@ -862,7 +863,7 @@ def _assess_reasoning_chains():
     score = 0.0
     evidence = []
 
-    chains_dir = Path("/home/agent/.openclaw/workspace/data/reasoning_chains")
+    chains_dir = Path(_WS) / "data" / "reasoning_chains"
     today = datetime.now(timezone.utc).strftime("%Y%m%d")
 
     high_quality_count = 0
@@ -927,7 +928,7 @@ def _assess_reasoning_chains():
     else:
         evidence.append("no reasoning chains directory")
 
-    hook_path = Path("/home/agent/.openclaw/workspace/scripts/reasoning_chain_hook.py")
+    hook_path = Path(_WS) / "scripts" / "reasoning_chain_hook.py"
     if hook_path.exists():
         score += 0.05
         evidence.append("reasoning chain hook exists (+0.05)")
@@ -975,7 +976,7 @@ def _assess_learning_feedback():
 
     # --- Calibration: Brier score (windowed to last 14 days) ---
     try:
-        cal_path = "/home/agent/.openclaw/workspace/data/calibration/predictions.jsonl"
+        cal_path = os.path.join(_WS, "data", "calibration", "predictions.jsonl")
         if os.path.exists(cal_path):
             from datetime import timezone as _tz
             _now = datetime.now(_tz.utc)
@@ -1021,7 +1022,7 @@ def _assess_learning_feedback():
         evidence.append(f"calibration error: {e}")
 
     # --- Evolution loop (reduced weight — existence check) ---
-    evo_dir = Path("/home/agent/.openclaw/workspace/data/evolution/failures")
+    evo_dir = Path(_WS) / "data" / "evolution" / "failures"
     if evo_dir.exists():
         failures = list(evo_dir.glob("*.json"))
         if failures:
@@ -1051,13 +1052,13 @@ def _assess_learning_feedback():
         if synth_score > 0:
             score += synth_score
             evidence.append(f"{len(synth_mems)} synthesis memories in brain (+{synth_score:.2f})")
-        elif Path("/home/agent/.openclaw/workspace/scripts/knowledge_synthesis.py").exists():
+        elif Path(_WS) / "scripts" / "knowledge_synthesis.py".exists():
             score += 0.02
             evidence.append("knowledge synthesis script exists (+0.02)")
         else:
             evidence.append("no knowledge synthesis")
     except Exception:
-        if Path("/home/agent/.openclaw/workspace/scripts/knowledge_synthesis.py").exists():
+        if Path(_WS) / "scripts" / "knowledge_synthesis.py".exists():
             score += 0.02
             evidence.append("knowledge synthesis script exists (+0.02)")
 
@@ -1080,7 +1081,7 @@ def _assess_consciousness_metrics():
     phi_val = 0.0
     phi_components = {}
     try:
-        phi_path = Path("/home/agent/.openclaw/workspace/data/phi_history.json")
+        phi_path = Path(_WS) / "data" / "phi_history.json"
         if phi_path.exists():
             with open(phi_path) as f:
                 phi_data = json.load(f)
@@ -1113,7 +1114,7 @@ def _assess_consciousness_metrics():
     except Exception as e:
         # Fall back: check if spotlight state file has items
         try:
-            spotlight_file = Path("/home/agent/.openclaw/workspace/data/attention/spotlight.json")
+            spotlight_file = Path(_WS) / "data" / "attention" / "spotlight.json"
             if spotlight_file.exists():
                 with open(spotlight_file) as f:
                     attn_data = json.load(f)
@@ -1131,7 +1132,7 @@ def _assess_consciousness_metrics():
 
     # --- Working memory freshness (reads from attention spotlight) ---
     try:
-        wm_state_path = Path("/home/agent/.openclaw/workspace/data/attention/spotlight.json")
+        wm_state_path = Path(_WS) / "data" / "attention" / "spotlight.json"
         if wm_state_path.exists():
             with open(wm_state_path) as f:
                 wm_data = json.load(f)
@@ -1247,8 +1248,10 @@ def generate_remediation_tasks(current_scores, previous_snapshot):
     return tasks
 
 
-def inject_tasks_to_queue(tasks, queue_file="/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md"):
+def inject_tasks_to_queue(tasks, queue_file=None):
     """Inject remediation tasks into QUEUE.md under P0 section via shared queue_writer."""
+    if queue_file is None:
+        queue_file = os.path.join(_WS, "memory", "evolution", "QUEUE.md")
     if not tasks:
         return
     try:
@@ -1471,7 +1474,7 @@ def daily_update():
     if regression_tasks:
         # Dedup: don't inject regression tasks for domains already in the queue
         try:
-            queue_file = "/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md"
+            queue_file = os.path.join(_WS, "memory", "evolution", "QUEUE.md")
             with open(queue_file) as f:
                 queue_content = f.read().lower()
             deduped = []

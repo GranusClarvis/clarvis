@@ -382,7 +382,7 @@ def benchmark_hybrid(brain_instance, benchmark_pairs: list[dict], k: int = 3) ->
 
 if __name__ == "__main__":
     import sys
-    sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
+    sys.path.insert(0, os.path.join(os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace"), "scripts"))
 
     logging.basicConfig(level=logging.INFO, format="%(name)s: %(message)s")
 
@@ -488,7 +488,7 @@ if __name__ == "__main__":
                       f"Hybrid P@{k}={q['hybrid']['precision_at_k']:.3f}")
 
         # Save results
-        out_path = "/home/agent/.openclaw/workspace/data/retrieval_benchmark/hybrid_comparison.json"
+        out_path = os.path.join(os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace"), "data", "retrieval_benchmark", "hybrid_comparison.json")
         with open(out_path, "w") as f:
             json.dump(results, f, indent=2)
         print(f"\nResults saved to {out_path}")

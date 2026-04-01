@@ -5,6 +5,7 @@ The old scripts/brain.py is a thin re-export wrapper.
 """
 
 import json
+import os
 import sys
 from typing import Optional
 
@@ -12,7 +13,7 @@ import typer
 
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_enable=False)
 
-WORKSPACE = "/home/agent/.openclaw/workspace"
+WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
 
 
 def _get_brain():

@@ -4,12 +4,13 @@ Delegates to scripts/cost_tracker.py and scripts/budget_alert.py.
 """
 
 import json
+import os
 
 import typer
 
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_enable=False)
 
-WORKSPACE = "/home/agent/.openclaw/workspace"
+WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
 
 
 def _get_tracker():

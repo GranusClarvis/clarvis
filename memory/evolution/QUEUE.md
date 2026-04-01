@@ -81,7 +81,7 @@ _(Completed items archived.)_
 
 ### External Challenges
 
-- [ ] [EXTERNAL_CHALLENGE:research-impl-04] Implement chain-of-thought self-evaluation for episode quality scoring — Build an evaluator that scores episode quality by analyzing the reasoning chain: (1) count reasoning steps, (2) check for backtracking/correction, (3) measure conclusion support (does the output follo
+- [x] [EXTERNAL_CHALLENGE:research-impl-04] Implement chain-of-thought self-evaluation for episode quality scoring — evaluator existed, integrated into postflight §5.02, added 37 tests, fixed hardcoded path, added to metrics __init__
 
 
 
@@ -112,8 +112,8 @@ _Source: Fresh-user perspective audit of clone → install → understand → ru
 - [x] [OSR_CI_PYTHON_MATRIX] Add Python 3.10 to CI test matrix (was only 3.12, but min version is 3.10). Use `.[all]` extra.
 
 #### Remaining — P1
-- [ ] [OSR_HARDCODED_PATH_SWEEP] Systematic sweep of remaining hardcoded `/home/agent/.openclaw/workspace` paths in `clarvis/` spine modules (esp. `cli_brain.py:5`). Convert all to `os.environ.get("CLARVIS_WORKSPACE", ...)` pattern. Target: zero bare hardcoded paths in `clarvis/` package.
-- [ ] [OSR_ADJACENT_AGENT_DOCS] Add a "Compatibility" section to README covering how Clarvis relates to OpenClaw, Hermes Agent, Nano Claw, and other agent frameworks. Clarify what Clarvis needs (gateway, model API), what it doesn't (it's not a framework), and how the subconscious layer runs independently.
+- [x] [OSR_HARDCODED_PATH_SWEEP] Systematic sweep of remaining hardcoded `/home/agent/.openclaw/workspace` paths in `clarvis/` spine modules — converted all 30 files to `os.environ.get("CLARVIS_WORKSPACE", ...)` pattern. Zero bare hardcoded paths remain.
+- [x] [OSR_ADJACENT_AGENT_DOCS] Add a "Compatibility" section to README covering what Clarvis needs, what it isn't, and what works standalone — added between Current Status and Known Limitations.
 - [ ] [OSR_DOCKER_QUICKSTART] Create a minimal `Dockerfile` + `docker-compose.yml` for contributors who want to try Clarvis without setting up a dedicated host. Should run brain health, CLI, and tests. Not for production (production is systemd-native).
 - [ ] [OSR_PYPI_PUBLISH_PREP] Prepare sub-packages for PyPI publication: add CHANGELOG.md to each, verify `python -m build` produces clean wheels, test `pip install` from wheel (not editable) works.
 - [ ] [OSR_ENV_EXAMPLE_COMPLETENESS] Audit `.env.example` — currently only has Telegram vars. Add stubs for `CLARVIS_WORKSPACE`, `OPENROUTER_API_KEY`, and any other vars that scripts reference via `os.environ.get()`.

@@ -4,9 +4,10 @@ Re-exports key functions for spine consumers: global_search, enhanced_local_sear
 Full implementation remains in scripts/ until full migration.
 """
 
+import os
 import sys
 
-_SCRIPTS_DIR = "/home/agent/.openclaw/workspace/scripts"
+_SCRIPTS_DIR = os.path.join(os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace"), "scripts")
 
 
 def _ensure_path():

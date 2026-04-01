@@ -500,6 +500,34 @@ Run `bash scripts/verify_install.sh` to identify which component is missing. Ens
 
 ---
 
+## Compatibility
+
+Clarvis is a **self-contained cognitive agent**, not a framework. It runs on its own dedicated host and manages its own execution lifecycle. Here's how it relates to adjacent projects:
+
+| Component | Role | Required? |
+|-----------|------|-----------|
+| **OpenClaw Gateway** | Routes chat messages (Telegram/Discord) to the conscious layer LLM. Manages skills and cron job sessions. | Yes, for chat. Subconscious layer runs independently via system crontab. |
+| **Claude Code** | Executes code-heavy tasks spawned by heartbeat or cron orchestrators. | Yes, for autonomous execution. Install via `npm install -g @anthropic-ai/claude-code`. |
+| **OpenRouter** | API gateway for multi-model routing (M2.5, GLM-5, Kimi, Gemini). | Yes, for conscious layer and task routing. Not needed for brain-only usage. |
+
+**What Clarvis is not:**
+- Not a framework — you don't build apps on top of it. It *is* the app.
+- Not a library — the `clarvis` package is the agent's spine, not a reusable SDK (though `clarvis-db` is extractable).
+- Not containerized — designed for a systemd-managed host with persistent local storage.
+
+**What Clarvis needs:**
+- A Linux host with Python 3.10+, Node.js (for OpenClaw Gateway), and system crontab access.
+- API keys for OpenRouter (model access) and optionally Telegram (notifications).
+- Claude Code CLI for autonomous code execution (subconscious layer).
+
+**What works standalone (no gateway, no API keys):**
+- `python3 -m clarvis brain` — full brain operations (store, search, health, optimize)
+- `python3 -m clarvis bench` — benchmarks and metrics
+- `python3 -m clarvis mode` — operating mode management
+- All tests (`python3 -m pytest`)
+
+---
+
 ## Known Limitations
 
 - **Single-host design** — built for a dedicated server with systemd, not containerized

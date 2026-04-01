@@ -43,11 +43,12 @@ try:
 except Exception:
     _wm = None
 
-PERF_METRICS_FILE = "/home/agent/.openclaw/workspace/data/performance_metrics.json"
-QUEUE_FILE = "/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md"
-DELIVERY_LOCK_FILE = "/home/agent/.openclaw/workspace/DELIVERY_LOCK.md"
-QUALITY_GATE_FILE = "/home/agent/.openclaw/workspace/data/memory_quality_gate.json"
-EPISODES_FILE = "/home/agent/.openclaw/workspace/data/episodes.json"
+_WS = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+PERF_METRICS_FILE = os.path.join(_WS, "data", "performance_metrics.json")
+QUEUE_FILE = os.path.join(_WS, "memory", "evolution", "QUEUE.md")
+DELIVERY_LOCK_FILE = os.path.join(_WS, "DELIVERY_LOCK.md")
+QUALITY_GATE_FILE = os.path.join(_WS, "data", "memory_quality_gate.json")
+EPISODES_FILE = os.path.join(_WS, "data", "episodes.json")
 
 # Keywords that signal AGI/consciousness relevance (high-value work)
 AGI_KEYWORDS = [

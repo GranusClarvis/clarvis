@@ -14,6 +14,7 @@ Subcommands:
 """
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -21,7 +22,7 @@ import typer
 
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_enable=False)
 
-WORKSPACE = "/home/agent/.openclaw/workspace"
+WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
 
 
 @app.command()

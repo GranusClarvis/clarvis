@@ -22,6 +22,7 @@ like "what caused this failure?" and "what chain of events led here?"
 
 import json
 import math
+import os
 import sys
 import time
 from collections import deque
@@ -30,10 +31,11 @@ from pathlib import Path
 
 from clarvis.brain import brain
 
-_SCRIPTS_DIR = "/home/agent/.openclaw/workspace/scripts"
+_WS = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+_SCRIPTS_DIR = os.path.join(_WS, "scripts")
 
-EPISODES_FILE = Path("/home/agent/.openclaw/workspace/data/episodes.json")
-CAUSAL_LINKS_FILE = Path("/home/agent/.openclaw/workspace/data/causal_links.json")
+EPISODES_FILE = Path(_WS) / "data" / "episodes.json"
+CAUSAL_LINKS_FILE = Path(_WS) / "data" / "causal_links.json"
 
 # Valid causal relationship types
 CAUSAL_RELATIONSHIPS = {

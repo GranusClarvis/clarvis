@@ -39,7 +39,7 @@ from datetime import datetime, timezone, timedelta
 
 from clarvis.brain import brain, PROCEDURES
 
-_SCRIPTS_DIR = "/home/agent/.openclaw/workspace/scripts"
+_SCRIPTS_DIR = os.path.join(os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace"), "scripts")
 
 try:
     if _SCRIPTS_DIR not in sys.path:

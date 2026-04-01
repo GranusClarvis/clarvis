@@ -13,6 +13,7 @@ Canonical spine modules:
   - clarvis.metrics.clr_reports     — CLR robustness reports (length, domain, degradation)
   - clarvis.metrics.beam            — BEAM subset adapter (5 extended abilities)
   - clarvis.metrics.evidence_scoring — Evidence attribution scoring (cross-adapter)
+  - clarvis.metrics.cot_evaluator   — Chain-of-thought self-evaluation for episode quality
 """
 
 from .phi import compute_phi
@@ -22,3 +23,4 @@ from .self_model import assess_all_capabilities as assess, SelfModel
 from .code_validation import validate_python_file, validate_output
 from .quality import compute_code_quality_score, compute_task_quality_score, get_all_quality_metrics
 from .memory_audit import run_full_audit, audit_memory_ratios, audit_archived_vs_active
+from .cot_evaluator import evaluate_cot, score_episode_cot, record_cot_score

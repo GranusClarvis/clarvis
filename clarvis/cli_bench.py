@@ -4,13 +4,14 @@ Delegates to scripts/performance_benchmark.py for actual measurement.
 """
 
 import json
+import os
 import sys
 
 import typer
 
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_enable=False)
 
-WORKSPACE = "/home/agent/.openclaw/workspace"
+WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
 
 
 def _get_benchmark():

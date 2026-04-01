@@ -32,7 +32,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-WORKSPACE = Path("/home/agent/.openclaw/workspace")
+import os
+
+WORKSPACE = Path(os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace"))
 CHAINS_DIR = WORKSPACE / "data" / "reasoning_chains"
 SESSIONS_DIR = CHAINS_DIR / "sessions"
 SESSION_MAP = CHAINS_DIR / "session_map.json"

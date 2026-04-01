@@ -217,6 +217,12 @@ except ImportError:
     record_trajectory_event = None
 
 try:
+    from clarvis.metrics.cot_evaluator import score_episode_cot, record_cot_score
+except ImportError:
+    score_episode_cot = None
+    record_cot_score = None
+
+try:
     from obligation_tracker import ObligationTracker as OT_Postflight
 except ImportError:
     OT_Postflight = None
@@ -288,6 +294,28 @@ def _episode_encode(task, task_section, best_salience, task_status, task_duratio
         record_trajectory_event=record_trajectory_event,
         log=log,
     )
+
+
+def _cot_score(chain_id, _pf_errors):
+    """§5.02 Chain-of-thought self-evaluation for episode quality."""
+    timings = {}
+    t502 = time.monotonic()
+    if score_episode_cot and chain_id:
+        try:
+            result = score_episode_cot(chain_id=chain_id)
+            if result and result.get("num_steps", 0) > 0:
+                record_cot_score(result)
+                issues_str = ", ".join(result.get("issues", [])) or "none"
+                log(f"COT: score={result['cot_score']:.3f} grade={result['cot_grade']} "
+                    f"steps={result['num_steps']} "
+                    f"bt={result['backtracking_detail']['count']} "
+                    f"issues=[{issues_str}]")
+            else:
+                log("COT: no reasoning steps found, skipping")
+        except Exception as e:
+            log(f"CoT scoring failed (non-fatal): {e}")
+    timings["cot_eval"] = round(time.monotonic() - t502, 3)
+    return timings
 
 
 def _confidence_record(task_event, exit_code, task, preflight_data, _pf_errors):
@@ -1831,6 +1859,8 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
     # §5: Episode encoding + trajectory
     timings.update(_episode_encode(ctx["task"], ctx["task_section"], ctx["best_salience"], ctx["task_status"],
                                    task_duration, ctx["error_type"], ctx["output_text"], preflight_data, _pf_errors))
+    # §5.02: Chain-of-thought self-evaluation
+    timings.update(_cot_score(ctx["chain_id"], _pf_errors))
     # §5.05-5.95: Cognitive subsystems
     timings.update(_pf_prompt_predict_cognitive(ctx, _pf_errors))
     # §6-7.35: Broadcast, routing, benchmark, perf

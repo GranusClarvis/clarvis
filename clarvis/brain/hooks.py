@@ -9,12 +9,13 @@ wire up all available hooks. Missing modules are silently skipped.
 """
 
 import logging
+import os
 import sys
 import time
 
 _log = logging.getLogger("clarvis.brain.hooks")
 
-_SCRIPTS_DIR = "/home/agent/.openclaw/workspace/scripts"
+_SCRIPTS_DIR = os.path.join(os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace"), "scripts")
 
 
 def _make_actr_scorer():

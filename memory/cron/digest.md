@@ -58,3 +58,11 @@ I executed evolution task: "[LLM_BRAIN_REVIEW 2026-04-01] [LLM_BRAIN_REVIEW] Mai
 
 ---
 
+
+### Research â€” 10:01 UTC
+
+Researched: [REASONING_FAILURE 2026-04-01] Investigate failure: '[LLM_BRAIN_REVIEW 2026-04-01] [LLM_BRAIN_REVIEW. Result: success (78s). Summary: ” canonical current-priorities updated, 9 stale fragments demoted.
+  RELEVANCE: The existing retry-via-queue mechanism worked as designed. One minor insight: the auto-generated REASONING_FAILURE queue
+
+---
+

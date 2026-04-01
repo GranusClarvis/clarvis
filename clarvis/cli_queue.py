@@ -4,6 +4,7 @@ Wraps scripts/queue_writer.py for task injection and
 reads QUEUE.md directly for display operations.
 """
 
+import os
 import re
 import sys
 from pathlib import Path
@@ -13,7 +14,7 @@ import typer
 
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_enable=False)
 
-WORKSPACE = Path("/home/agent/.openclaw/workspace")
+WORKSPACE = Path(os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace"))
 QUEUE_FILE = WORKSPACE / "memory" / "evolution" / "QUEUE.md"
 QUEUE_ARCHIVE = WORKSPACE / "memory" / "evolution" / "QUEUE_ARCHIVE.md"
 

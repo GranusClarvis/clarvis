@@ -11,8 +11,9 @@ Reference: Corrective Retrieval Augmented Generation (CRAG), Yan et al. 2024.
 
 from __future__ import annotations
 
-import re
 import math
+import os
+import re
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -584,7 +585,7 @@ if __name__ == "__main__":
     import sys
     import json
 
-    sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
+    sys.path.insert(0, os.path.join(os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace"), "scripts"))
 
     if len(sys.argv) < 2:
         print("Usage: python -m clarvis.brain.retrieval_eval <query> [--n N]")

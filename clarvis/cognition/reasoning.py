@@ -4,9 +4,10 @@ Re-exports the reasoner singleton for spine consumers.
 Full implementation remains in scripts/ until full migration.
 """
 
+import os
 import sys
 
-_SCRIPTS_DIR = "/home/agent/.openclaw/workspace/scripts"
+_SCRIPTS_DIR = os.path.join(os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace"), "scripts")
 
 
 def _ensure_path():

@@ -43,7 +43,7 @@ from datetime import datetime, timezone, timedelta
 from clarvis.brain import brain, ALL_COLLECTIONS
 from clarvis.cognition.attention import attention
 
-DATA_DIR = "/home/agent/.openclaw/workspace/data"
+DATA_DIR = os.path.join(os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace"), "data")
 ARCHIVE_DIR = os.path.join(DATA_DIR, "memory_archive")
 ARCHIVE_FILE = os.path.join(ARCHIVE_DIR, "archived_memories.json")
 

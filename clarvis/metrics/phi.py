@@ -26,8 +26,9 @@ except ImportError:
     from brain import get_brain as _legacy_get_brain, ALL_COLLECTIONS
     _spine_get_brain = _legacy_get_brain
 
-PHI_HISTORY_FILE = "/home/agent/.openclaw/workspace/data/phi_history.json"
-PHI_DECOMPOSITION_FILE = "/home/agent/.openclaw/workspace/data/phi_decomposition.json"
+_WS = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+PHI_HISTORY_FILE = os.path.join(_WS, "data", "phi_history.json")
+PHI_DECOMPOSITION_FILE = os.path.join(_WS, "data", "phi_decomposition.json")
 
 # Legacy ID prefixes from early brain bootstrapping
 LEGACY_PREFIX_MAP = {

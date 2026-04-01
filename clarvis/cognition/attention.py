@@ -32,7 +32,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-ATTENTION_DIR = Path("/home/agent/.openclaw/workspace/data/attention")
+ATTENTION_DIR = Path(os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")) / "data" / "attention"
 ATTENTION_DIR.mkdir(parents=True, exist_ok=True)
 SPOTLIGHT_FILE = ATTENTION_DIR / "spotlight.json"
 

@@ -22,7 +22,7 @@ import typer
 
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_enable=False)
 
-WORKSPACE = Path("/home/agent/.openclaw/workspace")
+WORKSPACE = Path(os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace"))
 SCRIPTS = WORKSPACE / "scripts"
 CRON_LOG_DIR = WORKSPACE / "memory" / "cron"
 

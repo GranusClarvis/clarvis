@@ -14,13 +14,14 @@ All functionality now lives in attention.py's AttentionSpotlight.
 """
 
 import json
+import os
 import sys
 from pathlib import Path
 
 from clarvis.cognition.attention import attention, SPOTLIGHT_FILE
 
 # Keep the old state file path for backward-compat reads during transition
-WORKING_MEM_FILE = Path("/home/agent/.openclaw/workspace/data/working_memory_state.json")
+WORKING_MEM_FILE = Path(os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")) / "data" / "working_memory_state.json"
 
 
 def get_buffer():

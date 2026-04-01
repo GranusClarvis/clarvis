@@ -13,6 +13,7 @@ Reference: Adaptive RAG pipeline — GATE → EVAL → RETRY → FEEDBACK (this 
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -52,7 +53,7 @@ REWARD_MAP = {
 }
 
 # Default data directory
-_DEFAULT_DATA_DIR = Path("/home/agent/.openclaw/workspace/data/retrieval_quality")
+_DEFAULT_DATA_DIR = Path(os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")) / "data" / "retrieval_quality"
 
 
 def _default_params() -> dict:

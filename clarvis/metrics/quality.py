@@ -21,7 +21,7 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 
-WORKSPACE = "/home/agent/.openclaw/workspace"
+WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
 
 
 def compute_task_quality_score(days=7):

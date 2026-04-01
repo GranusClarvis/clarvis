@@ -46,6 +46,7 @@ Usage:
 """
 
 import json
+import os
 import re
 import sys
 import time
@@ -54,9 +55,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-_SCRIPTS_DIR = "/home/agent/.openclaw/workspace/scripts"
+_WS = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+_SCRIPTS_DIR = os.path.join(_WS, "scripts")
 
-THOUGHT_LOG = Path("/home/agent/.openclaw/workspace/data/thought_log.jsonl")
+THOUGHT_LOG = Path(_WS) / "data" / "thought_log.jsonl"
 THOUGHT_LOG.parent.mkdir(parents=True, exist_ok=True)
 
 
@@ -656,7 +658,7 @@ class ThoughtProtocol:
 
     def _load_patterns(self):
         """Load decision patterns from disk."""
-        pattern_file = Path("/home/agent/.openclaw/workspace/data/thought_patterns.json")
+        pattern_file = Path(_WS) / "data" / "thought_patterns.json"
         if pattern_file.exists():
             try:
                 data = json.loads(pattern_file.read_text())
@@ -670,7 +672,7 @@ class ThoughtProtocol:
 
     def _save_patterns(self):
         """Persist decision patterns."""
-        pattern_file = Path("/home/agent/.openclaw/workspace/data/thought_patterns.json")
+        pattern_file = Path(_WS) / "data" / "thought_patterns.json"
         data = {}
         for name, rules in self._patterns.items():
             data[name] = [

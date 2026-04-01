@@ -1861,3 +1861,6 @@ _Last archived: 2026-03-27_
 
 ## Archived 2026-04-01
 - [x] [LLM_BRAIN_REVIEW 2026-04-01] [LLM_BRAIN_REVIEW] Maintain a single canonical 'current-priorities' memory in clarvis-goals — DONE 2026-04-01: updated content for W14, demoted 7 stale daily planning fragments + 2 stale context fragments, verified top-hit retrieval across all queries.
+
+## Archived 2026-04-01
+- [x] [REASONING_FAILURE 2026-04-01] Investigate failure: '[LLM_BRAIN_REVIEW 2026-04-01] [LLM_BRAIN_REVIEW] Maintain a single canonical 'cu' failed with exit 1. Check logs and fix root cause. — RESOLVED 2026-04-01: transient OpenRouter API 500 (req_011CZcnhpUoGXji4QKnZGbiC). Task was auto-retried and completed successfully (see QUEUE_ARCHIVE).
