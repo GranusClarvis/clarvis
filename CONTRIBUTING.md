@@ -28,6 +28,19 @@ pip install -e ".[all]"
 bash scripts/verify_install.sh
 ```
 
+## Docker Quickstart (alternative)
+
+If you prefer not to install locally, use Docker:
+
+```bash
+docker compose build
+docker compose run clarvis clarvis brain health   # Brain health check
+docker compose run clarvis pytest -m "not slow"    # Run tests
+docker compose run clarvis                         # Interactive shell
+```
+
+Brain data persists in a Docker volume between runs. This is for development/exploration only — production runs systemd-native.
+
 ## Repository Layout
 
 | Path | What |

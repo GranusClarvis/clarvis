@@ -1,0 +1,17 @@
+# Docker build context exclusions
+.git
+data/clarvisdb/
+data/clarvisdb-local/
+data/browser_sessions/
+data/costs.jsonl
+data/performance_history.jsonl
+data/cognitive_workspace/
+monitoring/
+memory/cron/
+*.egg-info
+__pycache__
+.pytest_cache
+.ruff_cache
+site/
+website/
+website_screenshot.png

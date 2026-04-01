@@ -1877,3 +1877,6 @@ _Last archived: 2026-03-27_
 - [x] [OSR_CI_PYTHON_MATRIX] Add Python 3.10 to CI test matrix (was only 3.12, but min version is 3.10). Use `.[all]` extra.
 - [x] [OSR_HARDCODED_PATH_SWEEP] Systematic sweep of remaining hardcoded `/home/agent/.openclaw/workspace` paths in `clarvis/` spine modules — converted all 30 files to `os.environ.get("CLARVIS_WORKSPACE", ...)` pattern. Zero bare hardcoded paths remain.
 - [x] [OSR_ADJACENT_AGENT_DOCS] Add a "Compatibility" section to README covering what Clarvis needs, what it isn't, and what works standalone — added between Current Status and Known Limitations.
+
+## Archived 2026-04-01
+- [x] [HARNESS_LLM_MEMORY_SELECTION] (2026-04-01) Analyze the Sonnet sideQuery approach for memory selection (`findRelevantMemories.ts` — scans memory dir, sends to Sonnet, picks top 5). Compare against our embedding-only retrieval. Prototype a hybrid: embedding pre-filter → LLM re-rank for heartbeat context injection. Measure recall improvement on known queries.

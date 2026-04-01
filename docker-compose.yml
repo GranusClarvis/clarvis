@@ -1,0 +1,25 @@
+# Clarvis — contributor quickstart
+# NOT for production (production runs systemd-native)
+#
+# Quick start:
+#   docker compose run clarvis clarvis brain health
+#   docker compose run clarvis pytest -m "not slow"
+#   docker compose run clarvis clarvis brain stats
+#
+# Interactive shell:
+#   docker compose run clarvis
+
+services:
+  clarvis:
+    build: .
+    volumes:
+      # Persist brain data between runs
+      - clarvis-data:/app/data
+    environment:
+      - CLARVIS_WORKSPACE=/app
+      - CLARVIS_GRAPH_BACKEND=sqlite
+    stdin_open: true
+    tty: true
+
+volumes:
+  clarvis-data:

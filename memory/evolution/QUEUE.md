@@ -119,7 +119,6 @@ _Source: `data/external_src/claude-harness-src.zip`. Deep-dive note: `memory/res
 #### Architecture & Runtime
 
 #### Memory & State
-- [ ] [HARNESS_LLM_MEMORY_SELECTION] Analyze the Sonnet sideQuery approach for memory selection (`findRelevantMemories.ts` — scans memory dir, sends to Sonnet, picks top 5). Compare against our embedding-only retrieval. Prototype a hybrid: embedding pre-filter → LLM re-rank for heartbeat context injection. Measure recall improvement on known queries.
 
 #### Orchestration & Multi-Agent
 - [ ] [HARNESS_COORDINATOR_MODE] Study coordinator mode (`coordinatorMode.ts`) where coordinator sees only Agent/SendMessage/TaskStop while workers get full tools. Redesign `project_agent.py` spawn flow to use coordinator/worker tool isolation. Prototype: Clarvis heartbeat as coordinator dispatching to specialist workers (research, implementation, maintenance).
@@ -137,6 +136,14 @@ _Source: `data/external_src/claude-harness-src.zip`. Deep-dive note: `memory/res
 #### UX & Portability
 - [ ] [HARNESS_DREAM_DISTILLATION] Study the Dream task (4-stage session-log distillation into structured memory files). Compare against our `dream_engine.py` (counterfactual dreaming). Prototype a "session distillation" nightly job that reviews cron session outputs and distills actionable learnings into brain, complementing the existing counterfactual approach.
 - [ ] [HARNESS_BRIDGE_TRANSPORT] Study the bridge module's hybrid transport (WebSocket reads + HTTP POST writes in `HybridTransport.ts`) and remote control protocol (`bridgeApi.ts`, `bridgeMain.ts`). Evaluate feasibility of a Clarvis remote-control interface accessible from Telegram or web, allowing live session observation and intervention beyond current `/spawn` one-shot model.
+
+### Bloat & Dead-Code Reduction (2026-04-01 scan)
+_Source: System gap scan — bloat score at 0.400 threshold, 72 unused scripts identified._
+
+- [ ] [DEAD_SCRIPT_AUDIT_AND_PURGE] Audit the ~72 scripts in `scripts/` that are never called by any cron job or imported by active code (e.g. `graph_migrate_to_sqlite.py`, `hyperon_atomspace.py`, `marathon_task_selector.py`, `retrieval_experiment.py`). Classify each as active-import / experimental / dead. Archive dead scripts to `scripts/_archived/`, delete truly obsolete ones. Target: remove 30k+ lines of dead code, improve bloat score by 0.05+.
+- [ ] [STALE_DATA_CLEANUP] Remove or compress stale data artifacts: (a) `data/clarvisdb_backup_phase0_*` dirs (112M, from pre-SQLite migration, superseded by 2026-03-29 cutover), (b) `data/clarvisdb/relationships.pre-migration.json` and `relationships.final-pre-cutover.2026-03-29.json` (44M combined, archival-only per CLAUDE.md), (c) `data/external_src/` (9.5M, orphaned — no script reads it). Compress anything worth keeping into `data/archived/`. Target: reclaim 160M+ disk.
+- [ ] [JSONL_ROTATION_POLICY] Implement automatic rotation/GC for unbounded JSONL files (`thought_log.jsonl`, `conflict_log.jsonl`, `task_sizing_log.jsonl`, `router_decisions.jsonl`, `code_gen_outcomes.jsonl`). Add size-based rotation to `cron_cleanup.sh`: gzip files >1M, delete rotated copies >60 days. Also add `/tmp/clarvis_*` stale file cleanup (>7 days) to the same job.
+- [ ] [CRON_EVENING_MISSING_SCRIPT_FIX] Fix `cron_evening.sh` which references `code_quality_gate.py` that does not exist — this causes the evening assessment to fail daily at 18:00. Either create a minimal quality gate script or remove the broken call and log a warning.
 
 ### OpenAI Codex Research Program (2026-03-31)
 _Source: `https://github.com/openai/codex` (README reviewed; use for cross-comparison with the Claude harness program and OpenClaw ACP flows)._
