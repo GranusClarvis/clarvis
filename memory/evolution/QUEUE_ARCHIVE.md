@@ -1849,3 +1849,15 @@ _Last archived: 2026-03-27_
 
 ## Archived 2026-04-01
 - [x] [ADAPTIVE_RETRIEVAL_GATE_MVP] Implement CRAG-style evidence scoring gate from today's research (RESEARCH_ADAPTIVE_RETRIEVAL_CONTROL): add a `score_evidence(query, results)` function to `clarvis/brain/` that scores retrieval relevance before injecting into context. Wire into `heartbeat_preflight.py` search step. Threshold: discard results below 0.3 cosine similarity. _(Done 2026-04-01: `score_evidence()` in `retrieval_eval.py`, wired at §8.5.1 in preflight.)_
+
+## Archived 2026-04-01
+- [x] [RESEARCH_CONSCIOUSNESS_ARCH_PHI_RETRIEVAL] Synthesize consciousness architectures, Phi computation limits, and retrieval optimization into a practical Clarvis retrieval note. (2026-04-01)
+- [x] [EXTERNAL_CHALLENGE:research-impl-02] (2026-04-01) Built `scripts/attention_visualizer.py`. Uses ONNX MiniLM per-token hidden states + cosine sim against result embeddings for gradient-free attribution. Outputs HTML heatmap + terminal summary. Tested: correctly identifies "goals" as top token for goal queries, "claude"/"spawn" for spawn queries.
+- [x] [HARNESS_MEMORY_TAXONOMY] (2026-04-01) Proposal: `docs/MEMORY_TAXONOMY_PROPOSAL.md`. Mapped 4 harness types → 10 Clarvis collections. Key gap: learnings (1244 items) mixes feedback with machine insights. Proposed `clarvis-feedback` collection (~50-80 items) for operator corrections. P1 follow-up.
+- [x] [CODEX_DESKTOP_APP_PATH] (2026-04-01) Evaluation: `memory/research/codex_desktop_app_evaluation_2026-04-01.md`. Verdict: skip desktop app — Clarvis is server-resident + Telegram-first, not local-first. Recommend static HTML dashboard (cron-generated) + richer Telegram reports instead.
+
+## Archived 2026-04-01
+- [x] [HARNESS_SESSION_PERSISTENCE] Study JSONL transcript persistence (`sessionStorage.ts`) and resume flow (`conversationRecovery.ts` — interrupt detection, UUID chain, orphan filtering). Evaluate adding session transcript logging to our heartbeat/cron pipelines for lossless replay and better `conversation_learner.py` input. _(2026-04-01: APPLY — append-only JSONL + raw output persistence in postflight. Note: `memory/research/runs/2026-04-01-073001/harness-session-persistence.md`)_
+
+## Archived 2026-04-01
+- [x] [LLM_BRAIN_REVIEW 2026-04-01] [LLM_BRAIN_REVIEW] Maintain a single canonical 'current-priorities' memory in clarvis-goals — DONE 2026-04-01: updated content for W14, demoted 7 stale daily planning fragments + 2 stale context fragments, verified top-hit retrieval across all queries.

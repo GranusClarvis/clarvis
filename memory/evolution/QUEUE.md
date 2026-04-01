@@ -51,7 +51,7 @@ _Queue audited on 2026-03-24 evening. Removed 3 completed items (A5_A7, TEMPORAL
 
 ### Phi / Benchmarking
 
-- [ ] [LLM_BRAIN_REVIEW 2026-04-01] [LLM_BRAIN_REVIEW] Maintain a single canonical 'current-priorities' memory in clarvis-goals that is updated weekly, replacing stale daily planning fragments — this was already flagged in the LLM brain review on 2026-03-30 but hasn't landed yet — Probe 4 returned zero useful results for a critical operational query. A single authoritative memory would fix this immediately.
+- [ ] [REASONING_FAILURE 2026-04-01] Investigate failure: '[LLM_BRAIN_REVIEW 2026-04-01] [LLM_BRAIN_REVIEW] Maintain a single canonical 'cu' failed with exit 1. Check logs and fix root cause.
 ---
 
 ## P2 — When Idle (Demoted 2026-03-17)
@@ -75,7 +75,6 @@ _Design: `docs/ADAPTIVE_RAG_PLAN.md` — 4-phase rollout (GATE → EVAL → RETR
 
 ### Research Sessions
 _(Completed items archived.)_
-- [x] [RESEARCH_CONSCIOUSNESS_ARCH_PHI_RETRIEVAL] Synthesize consciousness architectures, Phi computation limits, and retrieval optimization into a practical Clarvis retrieval note. (2026-04-01)
 
 ---
 
@@ -83,7 +82,8 @@ _(Completed items archived.)_
 
 ### External Challenges
 
-- [x] [EXTERNAL_CHALLENGE:research-impl-02] (2026-04-01) Built `scripts/attention_visualizer.py`. Uses ONNX MiniLM per-token hidden states + cosine sim against result embeddings for gradient-free attribution. Outputs HTML heatmap + terminal summary. Tested: correctly identifies "goals" as top token for goal queries, "claude"/"spawn" for spawn queries.
+- [ ] [EXTERNAL_CHALLENGE:research-impl-04] Implement chain-of-thought self-evaluation for episode quality scoring — Build an evaluator that scores episode quality by analyzing the reasoning chain: (1) count reasoning steps, (2) check for backtracking/correction, (3) measure conclusion support (does the output follo
+
 
 
 
@@ -99,14 +99,16 @@ _(Completed items archived.)_
 ### P1 — Found in 2026-03-31 evolution scan
 
 
+### Session Persistence Implementation (from HARNESS_SESSION_PERSISTENCE research, 2026-04-01)
+- [ ] [SESSION_TRANSCRIPT_LOGGER] Add JSONL transcript persistence to heartbeat_postflight.py: append metadata to `data/session_transcripts/YYYY-MM-DD.jsonl`, save raw output to `data/session_transcripts/raw/`, add gzip rotation to cron_cleanup.sh (compress >7d, delete >90d).
+- [ ] [CONVERSATION_LEARNER_UPGRADE] Upgrade conversation_learner.py to ingest full session transcripts from `data/session_transcripts/` instead of 200-char snippets from `memory/*.md`. Enable pattern extraction from complete tool-use sequences and prompt-outcome pairs.
+
 ### Claude Harness Research Program (2026-03-31)
 _Source: `data/external_src/claude-harness-src.zip`. Deep-dive note: `memory/research/claude_harness_architecture_2026-03-31.md`._
 
 #### Architecture & Runtime
 
 #### Memory & State
-- [x] [HARNESS_MEMORY_TAXONOMY] (2026-04-01) Proposal: `docs/MEMORY_TAXONOMY_PROPOSAL.md`. Mapped 4 harness types → 10 Clarvis collections. Key gap: learnings (1244 items) mixes feedback with machine insights. Proposed `clarvis-feedback` collection (~50-80 items) for operator corrections. P1 follow-up.
-- [ ] [HARNESS_SESSION_PERSISTENCE] Study JSONL transcript persistence (`sessionStorage.ts`) and resume flow (`conversationRecovery.ts` — interrupt detection, UUID chain, orphan filtering). Evaluate adding session transcript logging to our heartbeat/cron pipelines for lossless replay and better `conversation_learner.py` input.
 - [ ] [HARNESS_LLM_MEMORY_SELECTION] Analyze the Sonnet sideQuery approach for memory selection (`findRelevantMemories.ts` — scans memory dir, sends to Sonnet, picks top 5). Compare against our embedding-only retrieval. Prototype a hybrid: embedding pre-filter → LLM re-rank for heartbeat context injection. Measure recall improvement on known queries.
 
 #### Orchestration & Multi-Agent
@@ -135,7 +137,6 @@ _Source: `https://github.com/openai/codex` (README reviewed; use for cross-compa
 #### Agent UX & Developer Workflow
 - [ ] [CODEX_LOCAL_AGENT_EXPERIENCE] Analyze the "runs locally on your computer" positioning and likely implications for trust, speed, privacy, and operator ergonomics. Compare against our current spawn/session model. Write a note on where Clarvis should emphasize local control vs remote orchestration.
 - [ ] [CODEX_IDE_INTEGRATION_RESEARCH] Study Codex IDE integration path and compare with OpenClaw thread-bound ACP sessions. Identify what makes IDE attachment compelling and whether we should build a comparable bridge for Clarvis project agents or browser relay workflows.
-- [x] [CODEX_DESKTOP_APP_PATH] (2026-04-01) Evaluation: `memory/research/codex_desktop_app_evaluation_2026-04-01.md`. Verdict: skip desktop app — Clarvis is server-resident + Telegram-first, not local-first. Recommend static HTML dashboard (cron-generated) + richer Telegram reports instead.
 
 #### Architecture Comparison Program
 - [ ] [CODEX_TOOLING_AND_SANDBOX_REVIEW] Study Codex tool execution, approval model, safety boundaries, and any sandbox/workspace controls present in the source. Compare to harness permission pipeline and Clarvis's current trust-heavy model.

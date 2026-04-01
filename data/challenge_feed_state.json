@@ -4,7 +4,8 @@
     "bench-context-01",
     "bench-robustness-01",
     "research-impl-01",
-    "research-impl-02"
+    "research-impl-02",
+    "research-impl-04"
   ],
   "injections": [
     {
@@ -36,6 +37,12 @@
       "title": "Implement a simple Transformer attention visualization for brain search",
       "timestamp": 1775005202.161003,
       "date": "2026-04-01T01:00:02"
+    },
+    {
+      "id": "research-impl-04",
+      "title": "Implement chain-of-thought self-evaluation for episode quality scoring",
+      "timestamp": 1775034002.4783607,
+      "date": "2026-04-01T09:00:02"
     }
   ],
   "gh_last_refresh": null
