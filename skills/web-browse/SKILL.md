@@ -1,6 +1,10 @@
 ---
 name: web-browse
 description: "Browse the web — navigate, screenshot, extract text, fill forms, agent mode. Usage: /web-browse <command> <args>"
+whenToUse: |
+  When the user needs interactive web browsing — navigating pages, filling forms,
+  taking screenshots, extracting text from rendered pages, or agent-mode web tasks.
+  Prefer search skills for simple lookups; use this for interactive/visual tasks.
 metadata: {"clawdbot":{"emoji":"🌐","requires":{"bins":["python3","chromium"]}}}
 user-invocable: true
 ---

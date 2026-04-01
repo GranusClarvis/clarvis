@@ -1,6 +1,10 @@
 ---
 name: claude-code
 description: "Delegate complex work to Claude Code — coding, architecture, debugging, planning, reasoning, and deep analysis. Your autonomous thinking partner."
+whenToUse: |
+  When a task requires deep coding, architecture analysis, multi-file refactoring,
+  debugging, or complex reasoning that benefits from Claude Code's full tool access
+  and autonomous execution. Use spawn-claude skill for invocation.
 metadata: {"clawdbot":{"emoji":"🧠","requires":{"bins":["claude"]}}}
 ---
 

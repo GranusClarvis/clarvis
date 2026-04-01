@@ -1,6 +1,10 @@
 ---
 name: spawn-claude
 description: "Spawn Claude Code (Opus) to handle a complex task. Usage: /spawn <task description>"
+whenToUse: |
+  When the user requests a complex coding task, implementation, refactoring, or
+  multi-step work that benefits from Claude Code's autonomous execution with full
+  tool access. Not for simple questions or quick lookups.
 metadata: {"clawdbot":{"emoji":"🚀","requires":{"bins":["claude"]}}}
 user-invocable: true
 ---

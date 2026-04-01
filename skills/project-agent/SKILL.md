@@ -1,6 +1,9 @@
 ---
 name: project-agent
 description: "Manage project agents — spawn tasks, check status, promote results, list agents. Usage: /project-agent <command>"
+whenToUse: |
+  When the user wants to manage project agents — spawn tasks in isolated workspaces,
+  check agent status, promote results to digest, or list/destroy agents.
 metadata: {"clawdbot":{"emoji":"🏗️","requires":{"bins":["claude","python3"]}}}
 user-invocable: true
 ---

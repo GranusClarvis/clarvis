@@ -123,6 +123,14 @@ def brain_preflight_context(task_text, n_knowledge=5, n_goals=5, graph_expand=Fa
                 knowledge = contextual_enrich(knowledge)
             except ImportError:
                 pass  # graceful fallback — no enrichment
+        # Budget enforcement: persist oversized results to disk (harness pattern)
+        if knowledge:
+            try:
+                from clarvis.brain.result_budgeting import budget_results
+                _sid = os.environ.get("CLARVIS_SESSION_ID", f"hb_{int(time.time())}")
+                knowledge = budget_results(knowledge, session_id=_sid)
+            except ImportError:
+                pass  # graceful fallback — no budgeting
         result["raw_results"] = knowledge or []
         if knowledge:
             # Adaptive distance pruning: drop low-relevance hits to prevent

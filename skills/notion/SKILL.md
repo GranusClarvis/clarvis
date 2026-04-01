@@ -1,6 +1,9 @@
 ---
 name: notion
 description: Notion API for creating and managing pages, databases, and blocks.
+whenToUse: |
+  When the user wants to interact with Notion — create pages, query databases,
+  manage blocks, or integrate with Notion workspaces.
 homepage: https://developers.notion.com
 metadata: {"clawdbot":{"emoji":"📝"}}
 ---

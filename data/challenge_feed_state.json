@@ -3,7 +3,8 @@
     "coding-challenge-01",
     "bench-context-01",
     "bench-robustness-01",
-    "research-impl-01"
+    "research-impl-01",
+    "research-impl-02"
   ],
   "injections": [
     {
@@ -29,6 +30,12 @@
       "title": "Implement Sparse Priming Representations (SPR) for brain memory compression",
       "timestamp": 1774954802.0651228,
       "date": "2026-03-31T11:00:02"
+    },
+    {
+      "id": "research-impl-02",
+      "title": "Implement a simple Transformer attention visualization for brain search",
+      "timestamp": 1775005202.161003,
+      "date": "2026-04-01T01:00:02"
     }
   ],
   "gh_last_refresh": null

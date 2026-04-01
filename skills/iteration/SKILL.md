@@ -1,6 +1,9 @@
 ---
 name: iteration
 description: On-demand fast-track of Clarvis research evolution. Use when the user asks for /iteration1, /iteration2, /iteration3, or /iteration4 to run 1–4 back-to-back research cycles like the scheduled research-cycle cron job.
+whenToUse: |
+  When the user asks for /iteration or wants to fast-track research evolution cycles.
+  Runs 1-4 back-to-back research cycles on demand.
 ---
 
 # Iteration (Fast-Track Evolution)

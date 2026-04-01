@@ -1,6 +1,9 @@
 ---
 name: clarvis-cognition
 description: "Query Clarvis cognitive architecture — memory systems, attention, consciousness metrics, capabilities"
+whenToUse: |
+  When the user asks about cognitive state, consciousness metrics (Phi), capability
+  scores, self-model, attention system, or how the brain/cognition works internally.
 metadata: {"clawdbot":{"emoji":"🧠"}}
 user-invocable: false
 ---

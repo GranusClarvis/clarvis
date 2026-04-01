@@ -1,3 +1,13 @@
+---
+name: clarvis-brain
+description: "Unified memory system for Clarvis — search, recall, store, graph traversal, brain health"
+whenToUse: |
+  When the user asks about memory, brain health, or wants to search/recall/store
+  information. Also for graph edges, memory collections, stats, or optimization.
+metadata: {"clawdbot":{"emoji":"🧠"}}
+user-invocable: false
+---
+
 # ClarvisBrain Skill
 
 ## Purpose

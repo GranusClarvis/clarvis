@@ -1,3 +1,13 @@
+---
+name: clarvis-model-router
+description: "Route tasks to optimal model by complexity — M2.5 for simple, GLM-5 for complex, Claude for code-heavy"
+whenToUse: |
+  When deciding which model should handle a task based on complexity. Routes simple
+  tasks to cheap models (M2.5) and complex/code tasks to capable ones (Claude, GLM-5).
+metadata: {"clawdbot":{"emoji":"🔀"}}
+user-invocable: false
+---
+
 # Clarvis Model Router Skill
 
 ## Purpose

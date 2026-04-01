@@ -1835,3 +1835,14 @@ _Last archived: 2026-03-27_
 ## Archived 2026-03-31
 - [x] [BENCHMARK_DOUBLE_SMOOTH_FIX] Fixed: `_append_history()` now stores `mean_overall_raw`; `_load_history_scores()` reads raw field (fallback to smoothed for old entries). Double-smoothing eliminated.
 - [x] [NN_EDGE_INSERT_COUNT_FIX] Fixed: `bulk_add_edges()` now returns actual inserted count via `total_changes` diff; `graph_compaction.py` uses the return value. Verified: dupes correctly report 0.
+
+## Archived 2026-03-31
+- [x] [HARNESS_SKILL_AUTO_SELECTION] Added `whenToUse` field to all 20 SKILL.md files. OpenClaw doesn't auto-select yet (topic-scoped only), but metadata is ready for future M2.5 system-prompt injection. Research note in codex_open_source_signals research.
+- [x] [HARNESS_TOOL_RESULT_BUDGETING] Created `clarvis/brain/result_budgeting.py` (per-result 30K + per-message 100K char limits, disk persistence with 2KB previews). Wired into `brain_bridge.py` recall pipeline. Tested: oversized results correctly persisted to `data/brain_recall/` with preview+pointer.
+- [x] [CODEX_OPEN_SOURCE_SIGNAL_REVIEW] Research note at `memory/research/codex_open_source_signals_2026-03-31.md`. Key gaps: missing CODE_OF_CONDUCT, SECURITY.md, issue templates. 3 adoptable patterns identified. Clarvis strengths: transparency, self-aware metrics, architecture docs.
+
+## Archived 2026-03-31
+- [x] [CODEX_RUNTIME_SURFACES] Study Codex surface split: CLI, IDE integration, desktop/app flow, and cloud/web references. Map which surfaces are relevant to Clarvis/OpenClaw and which are redundant. Produce an adoption matrix. _(Done 2026-03-31. See `memory/research/codex_runtime_surfaces_2026-03-31.md`.)_
+- [x] [CODEX_AUTH_AND_ACCOUNT_MODEL] Study Codex auth model (ChatGPT sign-in vs API key) and how user/account state affects local-agent UX. Compare against OpenClaw ACP auth/runtime assumptions. Identify lessons for reducing setup friction in Clarvis agent flows. _(Done 2026-03-31. See `memory/research/codex_auth_and_account_model_2026-03-31.md`.)_
+- [x] [CODEX_VS_HARNESS_COMPARISON] Cross-compare OpenAI Codex repo vs the downloaded Claude harness across runtime model, tool permissions, memory/state handling, context compaction, multi-agent coordination, packaging, and developer ergonomics. Produce a structured matrix: what Codex does better, what the harness does better, what Clarvis already exceeds. _(Done 2026-03-31. See `memory/research/codex_vs_harness_comparison_2026-03-31.md`.)_
+- [x] [CODEX_SESSION_AND_CONTEXT_MODEL] Inspect Codex source in depth for session lifecycle, conversation persistence, context-window management, and recovery semantics. Compare directly to the harness transcript/recovery model and our heartbeat/session history approach. _(Done 2026-03-31. See `memory/research/codex_session_and_context_model_2026-03-31.md`.)_

@@ -1,6 +1,10 @@
 ---
 name: promise-track
 description: "Record a promise/obligation with smart classification (scope, confidence, emotional dampening). Usage: /promise_track 'description'. Enforces Rule 4: speech = state transition."
+whenToUse: |
+  When Clarvis makes a commitment like "I will do X", "from now on", "I'll handle
+  that automatically", or any promise about future behavior. Auto-invoke to record
+  the directive so the heartbeat pipeline can enforce it.
 metadata: {"clawdbot":{"emoji":"🤝"}}
 user-invocable: true
 ---

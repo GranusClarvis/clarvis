@@ -81,6 +81,8 @@ _(Completed items archived.)_
 
 ### External Challenges
 
+- [ ] [EXTERNAL_CHALLENGE:research-impl-02] Implement a simple Transformer attention visualization for brain search — Build a lightweight attention-weight visualizer that shows which query tokens most influence retrieval results. Use the existing MiniLM embeddings to compute token-level attention scores. Output an HT
+
 
 
 
@@ -112,11 +114,9 @@ _Source: `data/external_src/claude-harness-src.zip`. Deep-dive note: `memory/res
 
 #### Hooks & Extensibility
 - [ ] [HARNESS_HOOK_SYSTEM] Study the 14+ lifecycle hook events (PreToolUse, PostToolUse, PermissionRequest, SessionStart/End, etc.) and their execution model (shell/HTTP/callback, exit code semantics). Design a hook system for Clarvis brain operations: pre/post-search hooks for cost tracking, pre/post-remember hooks for quality gates, session lifecycle hooks for episodic capture.
-- [ ] [HARNESS_SKILL_AUTO_SELECTION] Study `whenToUse` field in skill definitions and how the model auto-selects skills via `SkillTool`. Evaluate adding `whenToUse` metadata to our 19 OpenClaw skills so the conscious layer (M2.5) can auto-invoke them without explicit slash commands.
 
 #### Context & Compaction
 - [ ] [HARNESS_GRADUATED_COMPACTION] Study the 4-tier compaction strategy (microcompact → context collapse → history snip → full autocompact) in `query.ts` and `compact.ts`. Design a graduated compaction pipeline for Clarvis context_compressor that preserves more information at lower tiers before falling back to full LLM summarization.
-- [ ] [HARNESS_TOOL_RESULT_BUDGETING] Study per-tool `maxResultSizeChars` and disk-persistence overflow (`toolResultStorage.ts`). Apply to brain search results: when search returns >8k chars, persist full results to disk and inject preview + pointer into context. Reduces context bloat from large retrievals.
 
 #### Safety & Sandboxing
 - [ ] [HARNESS_SANDBOX_MODEL] Study `@anthropic-ai/sandbox-runtime` adapter (`sandbox-adapter.ts`) — file read/write patterns, network domain allow/deny, process exclusion lists. Evaluate feasibility of sandboxing Claude Code spawns in our cron pipeline beyond the current lockfile model. Assess: can we restrict file writes to `workspace/` only?
@@ -129,8 +129,6 @@ _Source: `data/external_src/claude-harness-src.zip`. Deep-dive note: `memory/res
 _Source: `https://github.com/openai/codex` (README reviewed; use for cross-comparison with the Claude harness program and OpenClaw ACP flows)._
 
 #### Product Surface & Runtime Model
-- [ ] [CODEX_RUNTIME_SURFACES] Study Codex surface split: CLI, IDE integration, desktop/app flow, and cloud/web references. Map which surfaces are relevant to Clarvis/OpenClaw and which are redundant. Produce an adoption matrix.
-- [ ] [CODEX_AUTH_AND_ACCOUNT_MODEL] Study Codex auth model (ChatGPT sign-in vs API key) and how user/account state affects local-agent UX. Compare against OpenClaw ACP auth/runtime assumptions. Identify lessons for reducing setup friction in Clarvis agent flows.
 - [ ] [CODEX_RELEASE_AND_DISTRIBUTION] Study Codex distribution model (npm, Homebrew cask, release binaries) and release ergonomics. Evaluate whether Clarvis should package selected subsystems/CLIs in a similar multi-channel way for easier operator adoption.
 
 #### Agent UX & Developer Workflow
@@ -139,13 +137,10 @@ _Source: `https://github.com/openai/codex` (README reviewed; use for cross-compa
 - [ ] [CODEX_DESKTOP_APP_PATH] Study the Codex app / desktop experience as a UX pattern. Evaluate whether Clarvis would benefit from a lightweight operator dashboard/app shell vs current chat-first interaction.
 
 #### Architecture Comparison Program
-- [ ] [CODEX_VS_HARNESS_COMPARISON] Cross-compare OpenAI Codex repo vs the downloaded Claude harness across runtime model, tool permissions, memory/state handling, context compaction, multi-agent coordination, packaging, and developer ergonomics. Produce a structured matrix: what Codex does better, what the harness does better, what Clarvis already exceeds.
-- [ ] [CODEX_SESSION_AND_CONTEXT_MODEL] Inspect Codex source in depth for session lifecycle, conversation persistence, context-window management, and recovery semantics. Compare directly to the harness transcript/recovery model and our heartbeat/session history approach.
 - [ ] [CODEX_TOOLING_AND_SANDBOX_REVIEW] Study Codex tool execution, approval model, safety boundaries, and any sandbox/workspace controls present in the source. Compare to harness permission pipeline and Clarvis's current trust-heavy model.
 
 #### Strategic Extraction for Clarvis
 - [ ] [CODEX_PORTABILITY_PATTERN_EXTRACTION] Extract portable ideas from Codex that could materially improve Clarvis operator UX, installation, session handling, or packaging with minimal architectural upheaval.
-- [ ] [CODEX_OPEN_SOURCE_SIGNAL_REVIEW] Study how Codex presents itself as open-source and what that implies for repo layout, docs, contributor flow, and public trust. Compare against our March 31 public-surface goals and identify any repo/readme/docs patterns worth adopting.
 - [ ] [CODEX_CROSS_VENDOR_AGENT_BENCH] Build a cross-vendor research brief from Codex + Claude harness + OpenClaw: converge on a set of best practices for local agent runtimes, permissions, memory, compaction, and orchestration. Output should feed a Clarvis architecture direction memo, not just raw notes.
 
 
