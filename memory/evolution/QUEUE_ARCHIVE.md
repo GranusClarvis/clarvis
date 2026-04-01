@@ -1864,3 +1864,16 @@ _Last archived: 2026-03-27_
 
 ## Archived 2026-04-01
 - [x] [REASONING_FAILURE 2026-04-01] Investigate failure: '[LLM_BRAIN_REVIEW 2026-04-01] [LLM_BRAIN_REVIEW] Maintain a single canonical 'cu' failed with exit 1. Check logs and fix root cause. — RESOLVED 2026-04-01: transient OpenRouter API 500 (req_011CZcnhpUoGXji4QKnZGbiC). Task was auto-retried and completed successfully (see QUEUE_ARCHIVE).
+
+## Archived 2026-04-01
+- [x] [EXTERNAL_CHALLENGE:research-impl-04] Implement chain-of-thought self-evaluation for episode quality scoring — evaluator existed, integrated into postflight §5.02, added 37 tests, fixed hardcoded path, added to metrics __init__
+- [x] [OSR_TYPER_DEP] Add `typer>=0.9.0` to root pyproject.toml dependencies — was missing, all CLI modules import it, fresh `pip install -e .` would fail.
+- [x] [OSR_SETUP_SCRIPT] Create `scripts/setup.sh` — one-command install with `--dev`, `--no-brain`, `--verify` flags. Replaces 4-line manual install.
+- [x] [OSR_VERIFY_SCRIPT] Create `scripts/verify_install.sh` — 21-check post-install verification (imports, CLI, brain, sub-packages, smoke tests).
+- [x] [OSR_PYPROJECT_EXTRAS] Add `[dev]` (ruff, pytest) and `[all]` (brain+dev) extras to root pyproject.toml.
+- [x] [OSR_PYPROJECT_METADATA] Add `readme`, `keywords` fields to root pyproject.toml.
+- [x] [OSR_README_TROUBLESHOOTING] Add troubleshooting FAQ section to README.md (6 common issues).
+- [x] [OSR_README_SETUP_REF] Update README + CONTRIBUTING to reference `setup.sh` and `verify_install.sh`.
+- [x] [OSR_CI_PYTHON_MATRIX] Add Python 3.10 to CI test matrix (was only 3.12, but min version is 3.10). Use `.[all]` extra.
+- [x] [OSR_HARDCODED_PATH_SWEEP] Systematic sweep of remaining hardcoded `/home/agent/.openclaw/workspace` paths in `clarvis/` spine modules — converted all 30 files to `os.environ.get("CLARVIS_WORKSPACE", ...)` pattern. Zero bare hardcoded paths remain.
+- [x] [OSR_ADJACENT_AGENT_DOCS] Add a "Compatibility" section to README covering what Clarvis needs, what it isn't, and what works standalone — added between Current Status and Known Limitations.
