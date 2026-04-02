@@ -98,6 +98,7 @@ MEMORY_DELETE_GZ_AFTER_DAYS = 90
 JSONL_TRIM = {
     # --- High-volume operational logs ---
     "data/hebbian/access_log.jsonl": 5000,
+    "data/hebbian/evolution_history.jsonl": 500,
     "data/retrieval_quality/events.jsonl": 2000,
     "data/thought_log.jsonl": 2000,
     "data/router_decisions.jsonl": 2000,

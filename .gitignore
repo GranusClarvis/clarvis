@@ -52,6 +52,8 @@ build/
 *.o
 *.pyc
 __pycache__/
+*.egg-info/
+*.egg
 
 # --- Database files ---
 *.db

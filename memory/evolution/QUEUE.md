@@ -152,15 +152,15 @@ _Source: `data/external_src/claude-harness-src.zip`. Deep-dive note: `memory/res
 ### Bloat & Dead-Code Reduction (2026-04-01 scan)
 _Source: System gap scan — bloat score at 0.400 threshold, 72 unused scripts identified._
 
-- [ ] [DEAD_SCRIPT_AUDIT_AND_PURGE] Audit the ~72 scripts in `scripts/` that are never called by any cron job or imported by active code (e.g. `graph_migrate_to_sqlite.py`, `hyperon_atomspace.py`, `marathon_task_selector.py`, `retrieval_experiment.py`). Classify each as active-import / experimental / dead. Archive dead scripts to `scripts/_archived/`, delete truly obsolete ones. Target: remove 30k+ lines of dead code, improve bloat score by 0.05+.
-- [ ] [STALE_DATA_CLEANUP] Remove or compress stale data artifacts: (a) `data/clarvisdb_backup_phase0_*` dirs (112M, from pre-SQLite migration, superseded by 2026-03-29 cutover), (b) `data/clarvisdb/relationships.pre-migration.json` and `relationships.final-pre-cutover.2026-03-29.json` (44M combined, archival-only per CLAUDE.md), (c) `data/external_src/` (9.5M, orphaned — no script reads it). Compress anything worth keeping into `data/archived/`. Target: reclaim 160M+ disk.
+- [x] [DEAD_SCRIPT_AUDIT_AND_PURGE] _(Completed 2026-04-02)_ Deep audit of all 195 scripts. 10 confirmed dead removed: `attention_visualizer.py`, `backfill_created_epoch.py`, `bench_context_utilization.py`, `brain_research_dedupe.py`, `cron_error_aggregator.sh`, `cron_graph_soak_manager.sh`, `generate_status_page.py`, `oss_readiness_check.sh`, `priorities_curator.py`, `research_crawler.py`. 17 initially flagged scripts were found to be actively imported by heartbeat pipeline — kept.
+- [x] [STALE_DATA_CLEANUP] _(Completed 2026-04-02)_ Compressed `clarvisdb_backup_phase0_*` (112M→archive tarball), gzipped 3 stale relationship JSONs (72M→4M), removed orphaned `claude-harness-src.zip` (9.5M). Total ~190MB reclaimed/compressed.
 
 ### System Gap Scan (2026-04-01 evening)
 _Source: Full system scan — bloat score at 0.400 threshold, data/scripts/monitoring audited._
 
 
-- [ ] [ORPHAN_ZERO_BYTE_DB_PURGE] Remove 5 empty 0-byte database files cluttering `data/`: `synaptic_memory.db`, `brain.db`, `clarvis.db`, `clarvisdb/relationships.db`, and empty `link_lists.bin` in archived chroma dirs. These are remnants of failed migrations/cutover — no script reads them. Also remove `data/clarvisdb_backup_phase0_20260303_120041/` (112 MB, pre-cutover backup superseded by 2026-03-29 SQLite migration). Target: eliminate dead artifacts, improve bloat score.
-- [ ] [HEBBIAN_DATA_GROWTH_AUDIT] Audit the Hebbian memory subsystem data growth: `data/hebbian/access_log.jsonl` is 4.2 MB and growing (largest JSONL in the system), `data/hebbian/coactivation.json` is 7.1 MB. Determine: (a) is Hebbian learning actively used by any cron job or heartbeat path, (b) what is the growth rate, (c) should access_log.jsonl be added to the JSONL rotation policy or should the entire Hebbian subsystem be disabled/archived if unused.
+- [x] [ORPHAN_ZERO_BYTE_DB_PURGE] _(Completed 2026-04-02)_ Removed 4 zero-byte DB files: `brain.db`, `clarvis.db`, `synaptic_memory.db`, `clarvisdb/relationships.db`. Backup dir handled under STALE_DATA_CLEANUP.
+- [x] [HEBBIAN_DATA_GROWTH_AUDIT] _(Completed 2026-04-02)_ Hebbian is actively used by brain hooks, heartbeat preflight, prompt builder, and clarvis-db package. access_log.jsonl already in cleanup_policy.py at 5000-line cap (trims weekly Sunday). coactivation.json at 37k pairs/11MB — bounded by memory count, pruned by evolve(). Added evolution_history.jsonl to trim policy. Growth rate: ~2.6k access_log lines/day. System healthy, no intervention needed.
 
 ### OpenAI Codex Research Program (2026-03-31)
 _Source: `https://github.com/openai/codex` (README reviewed; use for cross-comparison with the Claude harness program and OpenClaw ACP flows)._
@@ -182,8 +182,8 @@ _Source: `https://github.com/openai/codex` (README reviewed; use for cross-compa
 ### Bloat & Hygiene — 2026-04-02 evolution scan
 _Source: Evolution analysis — bloat score at 0.400 threshold, 97MB synaptic store and __pycache__ accumulation unaddressed._
 
-- [ ] [SYNAPTIC_STORE_ARCHIVE] Archive or remove `data/synaptic/` (97 MB) — legacy memory store fully superseded by ClarvisDB SQLite graph since 2026-03-29 cutover. Verify no active script imports from it (`grep -r synaptic scripts/ clarvis/`), then compress to `data/archived/synaptic_2026-04-02.tar.gz` and remove the directory. Target: reclaim 97MB, improve bloat score by ~0.03.
-- [ ] [PYCACHE_GITIGNORE_AND_PURGE] Add `__pycache__/` and `*.pyc` to `.gitignore` if not already present, then `git rm -r --cached` all 20 tracked `__pycache__` directories (442 .pyc files). These are build artifacts that should never be in version control and inflate clone size.
+- [x] [SYNAPTIC_STORE_ARCHIVE] _(Completed 2026-04-02 — NOT archived)_ Audit found synaptic memory is **actively used** by 9+ files: brain hooks, heartbeat preflight, prompt builder, clarvis-db package. The original assessment ("fully superseded by ClarvisDB SQLite graph") was incorrect — synaptic provides spreading-activation and connection-weight features that the graph DB does not replace. 98MB `synapses.db` is live data. No action taken.
+- [x] [PYCACHE_GITIGNORE_AND_PURGE] _(Completed 2026-04-02)_ `__pycache__/` and `*.pyc` were already in `.gitignore`. Added `*.egg-info/` and `*.egg` patterns. Removed 6 tracked `clarvis.egg-info/` files via `git rm --cached`. No tracked `__pycache__` or `.pyc` files found in git index.
 
 ### Non-Python — 2026-04-02 evolution scan
 
