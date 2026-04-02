@@ -103,7 +103,7 @@ _(Completed items archived.)_
 ### P0 — Found in 2026-04-02 evening code review
 
 ### P1 — Found in 2026-04-02 quality audit
-- [ ] [GRAPHRAG_BOOST_VALUE_FIX] Fix `.env.example` CLARVIS_GRAPHRAG_BOOST=1.0 → CLARVIS_GRAPHRAG_BOOST=1 (code checks `!= "1"`, float string silently breaks). Also remove dead OLLAMA_KEEP_ALIVE entry (no script references it).
+- [x] [GRAPHRAG_BOOST_VALUE_FIX] Fix `.env.example` CLARVIS_GRAPHRAG_BOOST=1.0 → CLARVIS_GRAPHRAG_BOOST=1 (code checks `!= "1"`, float string silently breaks). Also remove dead OLLAMA_KEEP_ALIVE entry (no script references it).
 - [ ] [SCORE_EVIDENCE_UNIT_TEST] Add dedicated unit test for `score_evidence()` in `clarvis/brain/retrieval_eval.py` — currently only tested indirectly via adaptive_recall integration path.
 - [ ] [ATTENTION_VISUALIZER_TESTS] Add basic unit tests for `scripts/attention_visualizer.py` — tokenization, ONNX inference, score normalization, HTML generation.
 - [ ] [CONTEXT_COMPRESSOR_DEDUP] Deduplicate keyword-pinning and per-category ratio logic between `scripts/context_compressor.py` and `clarvis/context/compressor.py` — both have identical implementations that will diverge. Extract shared logic or make scripts/ a thin wrapper.
@@ -114,9 +114,13 @@ _Source: Fresh-user perspective audit of clone → install → understand → ru
 #### Completed (2026-04-01)
 
 #### Remaining — P1
-- [ ] [OSR_DOCKER_QUICKSTART] Create a minimal `Dockerfile` + `docker-compose.yml` for contributors who want to try Clarvis without setting up a dedicated host. Should run brain health, CLI, and tests. Not for production (production is systemd-native).
-- [ ] [OSR_PYPI_PUBLISH_PREP] Prepare sub-packages for PyPI publication: add CHANGELOG.md to each, verify `python -m build` produces clean wheels, test `pip install` from wheel (not editable) works.
-- [ ] [OSR_QUICK_DEMO_MODE] Add a `python3 -m clarvis demo` command that runs a self-contained demo (store → search → recall → heartbeat gate) without needing existing data. Good for README walkthroughs and conference demos.
+- [x] [OSR_DOCKER_QUICKSTART] Create a minimal `Dockerfile` + `docker-compose.yml` for contributors who want to try Clarvis without setting up a dedicated host. Should run brain health, CLI, and tests. Not for production (production is systemd-native).
+- [x] [OSR_PYPI_PUBLISH_PREP] Prepare sub-packages for PyPI publication: add CHANGELOG.md to each, verify `python -m build` produces clean wheels, test `pip install` from wheel (not editable) works.
+- [x] [OSR_QUICK_DEMO_MODE] Add a `python3 -m clarvis demo` command that runs a self-contained demo (store → search → recall → heartbeat gate) without needing existing data. Good for README walkthroughs and conference demos.
+
+#### Follow-up — P2
+- [ ] [OSR_PYPI_CHANGELOGS] Add CHANGELOG.md to each sub-package before first PyPI publish.
+- [ ] [OSR_DOCKER_CI] Wire Docker build into CI workflow to catch packaging regressions.
 
 ### Session Persistence Implementation (from HARNESS_SESSION_PERSISTENCE research, 2026-04-01)
 - [ ] [SESSION_TRANSCRIPT_LOGGER] Add JSONL transcript persistence to heartbeat_postflight.py: append metadata to `data/session_transcripts/YYYY-MM-DD.jsonl`, save raw output to `data/session_transcripts/raw/`, add gzip rotation to cron_cleanup.sh (compress >7d, delete >90d).

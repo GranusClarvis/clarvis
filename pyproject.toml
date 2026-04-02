@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Clarvis — dual-layer cognitive agent system"
 readme = "README.md"
 requires-python = ">=3.10"
-license = "MIT"
+license = {text = "MIT"}
 keywords = ["autonomous-agent", "cognitive-architecture", "vector-memory", "self-improving"]
 dependencies = [
     "clarvis-cost",

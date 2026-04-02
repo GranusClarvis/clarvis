@@ -3,6 +3,7 @@
 #
 # Usage:
 #   docker compose up --build
+#   docker compose run clarvis clarvis demo
 #   docker compose run clarvis clarvis brain health
 #   docker compose run clarvis pytest -m "not slow"
 
@@ -18,17 +19,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Install sub-packages first (dependency order matters)
+# Use non-editable installs to validate packaging
 COPY packages/ packages/
 RUN pip install --no-cache-dir \
-    -e packages/clarvis-cost \
-    -e packages/clarvis-reasoning \
-    -e packages/clarvis-db
+    packages/clarvis-cost \
+    packages/clarvis-reasoning \
+    "packages/clarvis-db[all]"
 
 # Install main package with brain + dev extras
 COPY pyproject.toml README.md LICENSE ./
 COPY clarvis/ clarvis/
 COPY tests/ tests/
-RUN pip install --no-cache-dir -e ".[all]"
+RUN pip install --no-cache-dir ".[all]"
 
 # Copy scripts (needed by tests and CLI)
 COPY scripts/ scripts/
@@ -43,5 +45,5 @@ RUN mkdir -p data/clarvisdb data/clarvisdb-local
 # Smoke test: CLI loads without error
 RUN clarvis --help
 
-# Default: interactive shell
-CMD ["bash"]
+# Default: run the self-contained demo
+CMD ["clarvis", "demo"]

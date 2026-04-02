@@ -7,7 +7,7 @@ name = "clarvis-db"
 version = "1.0.0"
 description = "Local vector memory with Hebbian learning, STDP synapses, ChromaDB + ONNX embeddings"
 requires-python = ">=3.10"
-license = "MIT"
+license = {text = "MIT"}
 keywords = ["vector-memory", "hebbian", "stdp", "chromadb", "onnx", "cognitive-architecture"]
 
 [project.optional-dependencies]

@@ -94,17 +94,23 @@ python3 -m clarvis queue                  # Evolution queue management
 ### Demo Walkthrough
 
 ```bash
-# 1. Verify brain is healthy (on fresh clone, starts empty — that's OK)
-python3 -m clarvis brain health
+# One-command demo — stores, searches, recalls, checks CLI health:
+python3 -m clarvis demo
 
-# 2. Store a memory
-python3 -c "from clarvis.brain import remember; print(remember('Hello from Clarvis', importance=0.8))"
+# Or step by step:
+python3 -m clarvis brain health         # 1. Verify brain (starts empty on fresh clone — OK)
+python3 -c "from clarvis.brain import remember; print(remember('Hello from Clarvis', importance=0.8))"  # 2. Store
+python3 -m clarvis brain search "Hello from Clarvis" --n 3   # 3. Recall
+python3 -m clarvis heartbeat gate       # 4. Heartbeat gate
+```
 
-# 3. Recall it
-python3 -m clarvis brain search "Hello from Clarvis" --n 3
+### Docker Quickstart
 
-# 4. Run heartbeat gate (should output {"decision": "wake", ...} or "skip")
-python3 -m clarvis heartbeat gate
+```bash
+docker compose run clarvis              # runs the demo
+docker compose run clarvis clarvis brain health
+docker compose run clarvis pytest -m "not slow"
+docker compose run clarvis bash         # interactive shell
 ```
 
 ### Python API

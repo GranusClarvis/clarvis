@@ -1,13 +1,13 @@
 # Clarvis — contributor quickstart
 # NOT for production (production runs systemd-native)
 #
-# Quick start:
-#   docker compose run clarvis clarvis brain health
-#   docker compose run clarvis pytest -m "not slow"
-#   docker compose run clarvis clarvis brain stats
+# Try it:
+#   docker compose run clarvis                        # run demo
+#   docker compose run clarvis clarvis brain health   # brain health check
+#   docker compose run clarvis pytest -m "not slow"   # run tests
 #
 # Interactive shell:
-#   docker compose run clarvis
+#   docker compose run clarvis bash
 
 services:
   clarvis:

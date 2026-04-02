@@ -74,6 +74,14 @@ Requires:      Docker, Docker Compose
 Best for:      Quick evaluation, CI, isolated testing
 ```
 
+```bash
+# Try Clarvis without installing anything locally:
+docker compose run clarvis              # runs self-contained demo
+docker compose run clarvis clarvis brain health
+docker compose run clarvis pytest -m "not slow"
+docker compose run clarvis bash         # interactive shell
+```
+
 ## Profile Comparison Matrix
 
 | Feature | Standalone | OpenClaw | Full Stack | Docker |
@@ -137,6 +145,17 @@ Output is a clear summary:
 === Results: 18 passed, 0 failed, 2 warnings (of 20 checks) ===
 Installation verified successfully.
 ```
+
+## First Run
+
+After verification passes, try the self-contained demo:
+
+```bash
+clarvis demo            # store → search → recall → CLI health → heartbeat gate
+clarvis demo --verbose  # same, with extra detail
+```
+
+This works on a fresh clone with an empty brain. It is also the default Docker command.
 
 ## Cron Schedule Setup
 
