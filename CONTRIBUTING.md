@@ -15,26 +15,25 @@ Thank you for your interest in contributing to Clarvis! This guide covers setup,
 git clone https://github.com/GranusClarvis/clarvis.git
 cd clarvis
 
-# One-command setup (recommended)
-bash scripts/setup.sh --dev --verify
+# Guided installer (recommended — installs dev extras + runs verification)
+bash scripts/install.sh --profile standalone --dev
 
 # Or manual install
 pip install -e packages/clarvis-cost
 pip install -e packages/clarvis-reasoning
 pip install -e packages/clarvis-db
 pip install -e ".[all]"
-
-# Verify the install
 bash scripts/verify_install.sh
 ```
 
+See [docs/INSTALL.md](docs/INSTALL.md) for the full walkthrough and profile options.
+
 ## Docker Quickstart (alternative)
 
-If you prefer not to install locally, use Docker:
-
 ```bash
+bash scripts/install.sh --profile docker
+# Or manually:
 docker compose build
-docker compose run clarvis clarvis brain health   # Brain health check
 docker compose run clarvis pytest -m "not slow"    # Run tests
 docker compose run clarvis                         # Interactive shell
 ```

@@ -15,27 +15,42 @@ Clarvis is a cognitive agent system that operates autonomously on a dedicated ho
 ## Installation
 
 ```bash
-# Clone the repository
 git clone https://github.com/GranusClarvis/clarvis.git
 cd clarvis
 
-# Option A: One-command setup (recommended)
-bash scripts/setup.sh            # install all packages + brain
-bash scripts/setup.sh --dev      # also install ruff + pytest
-bash scripts/setup.sh --verify   # install + run verification
+# Guided installer (recommended) — interactive profile selection
+bash scripts/install.sh
 
-# Option B: Manual install
+# Or non-interactive with a specific profile
+bash scripts/install.sh --profile standalone      # Python + CLI + brain
+bash scripts/install.sh --profile standalone --dev # + ruff + pytest
+bash scripts/install.sh --profile docker           # Containerized dev/test
+```
+
+The guided installer checks prerequisites, installs packages in the correct dependency order, creates a `.env` from a profile template, and runs verification automatically.
+
+**Requirements:** Python 3.10+, pip. Brain features need `chromadb` and `onnxruntime` (installed automatically). On a fresh clone, the brain starts empty — memories accumulate through operation.
+
+### Installation Profiles
+
+| Profile | What You Get | Extra Requirements |
+|---------|-------------|-------------------|
+| **Standalone** | Python packages + CLI + brain | None |
+| **OpenClaw** | + chat gateway (Telegram/Discord) | Node.js 18+ |
+| **Full Stack** | + cron schedule + systemd service | Linux, Claude Code CLI |
+| **Docker** | Containerized dev/test | Docker + Compose |
+
+See [docs/INSTALL.md](docs/INSTALL.md) for the full walkthrough, profile comparison matrix, and troubleshooting.
+
+### Manual Install (advanced)
+
+```bash
 pip install -e packages/clarvis-cost
 pip install -e packages/clarvis-reasoning
 pip install -e packages/clarvis-db
-pip install -e ".[brain]"
-
-# Verify installation
-python3 -m clarvis brain health
-bash scripts/verify_install.sh   # full 21-check verification
+pip install -e ".[brain]"           # or ".[all]" for brain + dev tools
+bash scripts/verify_install.sh      # verify everything works
 ```
-
-**Requirements:** Python 3.10+, pip. Brain features need `chromadb` and `onnxruntime` (installed automatically with `.[brain]`). On a fresh clone, the brain starts empty — memories accumulate through operation.
 
 ### Extras
 

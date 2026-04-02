@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 # setup.sh — One-command Clarvis install for fresh clones.
+# NOTE: For the full guided installer with profile selection, use:
+#   bash scripts/install.sh
+#
 # Usage: bash scripts/setup.sh
 #   Options:
 #     --dev      Also install dev/test dependencies (ruff, pytest)
