@@ -24,11 +24,6 @@ if [ "$PHI_EXIT" -ne 0 ]; then
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WARN: Phi metric act failed (exit $PHI_EXIT) — continuing anyway" >> "$LOGFILE"
 fi
 
-# === CODE QUALITY GATE: AST + pyflakes audit, auto-fix unused imports ===
-echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running code quality gate (fix mode)..." >> "$LOGFILE"
-CQ_OUTPUT=$(python3 /home/agent/.openclaw/workspace/scripts/code_quality_gate.py fix 2>&1) || true
-echo "$CQ_OUTPUT" >> "$LOGFILE"
-
 # === DAILY CAPABILITY ASSESSMENT + AUTO-REMEDIATION ===
 # Run self_model.py daily update — scores capabilities, tracks diffs, alerts on degradation
 # NEW: domains below 0.4 auto-generate P0 remediation tasks in QUEUE.md (sense-assess-act loop)

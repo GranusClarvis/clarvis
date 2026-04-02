@@ -138,6 +138,43 @@ Output is a clear summary:
 Installation verified successfully.
 ```
 
+## Cron Schedule Setup
+
+For Full Stack deployments, install the cron schedule using presets:
+
+```bash
+# List available presets
+clarvis cron presets
+
+# Preview what would be installed (dry-run, default)
+clarvis cron install recommended
+
+# Apply after reviewing
+clarvis cron install recommended --apply
+
+# Switch presets (replaces existing managed block)
+clarvis cron install full --apply
+
+# Remove all managed cron entries
+clarvis cron remove --apply
+```
+
+**Presets:**
+
+| Preset | Jobs | Description |
+|--------|------|-------------|
+| minimal | 12 | Monitoring + backup + weekly cleanup. No Claude Code spawning. |
+| recommended | 27 | Core daily cycle + maintenance + 4x autonomous/day. |
+| full | 46 | Complete schedule: 12x autonomous, 2x research, all benchmarks. |
+| research | 40 | Extra research + dream engine + benchmarks. |
+
+The installer wraps entries in sentinel comments (`>>> clarvis-managed >>>`) so
+`clarvis cron remove` only removes managed entries — your other crontab lines
+are preserved. A backup is saved to `memory/cron/crontab.backup` before changes.
+
+A reference crontab is also available at `scripts/crontab.reference` for manual
+review or `crontab scripts/crontab.reference` if you prefer direct control.
+
 ## Troubleshooting
 
 | Problem | Fix |

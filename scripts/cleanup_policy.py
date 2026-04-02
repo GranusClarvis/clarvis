@@ -36,6 +36,7 @@ LOG_ROTATION = {
 }
 
 CRON_LOG_ROTATION = {
+    # --- Claude-spawning jobs (larger budgets, bigger logs) ---
     "memory/cron/autonomous.log": 200_000,
     "memory/cron/reflection.log": 200_000,
     "memory/cron/evening.log": 200_000,
@@ -45,13 +46,44 @@ CRON_LOG_ROTATION = {
     "memory/cron/dream.log": 200_000,
     "memory/cron/implementation_sprint.log": 200_000,
     "memory/cron/strategic_audit.log": 200_000,
+    "memory/cron/marathon.log": 200_000,
+    # --- Maintenance / graph ---
     "memory/cron/graph_compaction.log": 200_000,
     "memory/cron/graph_checkpoint.log": 200_000,
+    "memory/cron/graph_verify.log": 200_000,
     "memory/cron/chromadb_vacuum.log": 200_000,
     "memory/cron/backup.log": 200_000,
     "memory/cron/backup_verify.log": 200_000,
+    # --- Orchestration / agents ---
+    "memory/cron/orchestrator.log": 200_000,
+    "memory/cron/spawn_claude.log": 200_000,
+    "memory/cron/project_agents.log": 200_000,
+    # --- Evaluation / benchmarks ---
+    "memory/cron/llm_brain_review.log": 100_000,
+    "memory/cron/brain_eval.log": 100_000,
+    "memory/cron/pi_refresh.log": 100_000,
+    "memory/cron/pi_benchmark.log": 100_000,
+    "memory/cron/clr_benchmark.log": 100_000,
+    # --- Hygiene / cleanup ---
+    "memory/cron/brain_hygiene.log": 100_000,
+    "memory/cron/goal_hygiene.log": 100_000,
+    "memory/cron/data_lifecycle.log": 100_000,
+    "memory/cron/cleanup.log": 100_000,
+    "memory/cron/doctor.log": 100_000,
+    # --- Reports (smaller) ---
     "memory/cron/report_morning.log": 100_000,
     "memory/cron/report_evening.log": 100_000,
+    # --- Misc ---
+    "memory/cron/watchdog.log": 200_000,
+    "memory/cron/absolute_zero.log": 100_000,
+    "memory/cron/relevance_refresh.log": 100_000,
+    "memory/cron/graph_soak_manager.log": 100_000,
+    "memory/cron/monthly_reflection.log": 100_000,
+    "memory/cron/brief_benchmark.log": 100_000,
+    "memory/cron/status_json.log": 100_000,
+    "memory/cron/densify.log": 100_000,
+    "memory/cron/agent_lifecycle.log": 100_000,
+    "memory/cron/graph_migrate.log": 100_000,
 }
 
 MAX_ROTATED_COPIES = 2
@@ -61,17 +93,62 @@ MEMORY_COMPRESS_AFTER_DAYS = 3
 MEMORY_DELETE_GZ_AFTER_DAYS = 90
 
 # JSONL trimming: {relative_path: max_lines_to_keep}
+# Files listed explicitly get their stated cap.
+# Any unlisted .jsonl file >JSONL_AUTO_DISCOVER_BYTES is trimmed to JSONL_AUTO_DISCOVER_LINES.
 JSONL_TRIM = {
+    # --- High-volume operational logs ---
+    "data/hebbian/access_log.jsonl": 5000,
+    "data/retrieval_quality/events.jsonl": 2000,
     "data/thought_log.jsonl": 2000,
     "data/router_decisions.jsonl": 2000,
     "data/code_gen_outcomes.jsonl": 2000,
+    "data/conflict_log.jsonl": 1500,
+    "data/dashboard/events.jsonl": 1500,
+    "data/task_sizing_log.jsonl": 1000,
+    "data/costs.jsonl": 1000,
+    "data/broadcast/broadcast_log.jsonl": 1000,
+    "data/code_validation_outcomes.jsonl": 500,
+    "data/postflight_completeness.jsonl": 500,
+    # --- Analytics / history ---
+    "data/meta_gradient_rl/adaptation_history.jsonl": 1000,
+    "data/self_representation/state_history.jsonl": 500,
+    "data/prompt_optimization/prompt_outcomes.jsonl": 500,
+    "data/research_dispositions.jsonl": 500,
+    "data/retrieval_quality/context_relevance.jsonl": 1000,
+    "data/trajectory_eval/history.jsonl": 500,
+    "data/trajectory_eval/cot_history.jsonl": 500,
+    "data/calibration/predictions.jsonl": 500,
+    "data/cognitive_workspace/reuse_log.jsonl": 1000,
+    "data/retrieval_benchmark/history.jsonl": 500,
+    "data/brief_token_stats.jsonl": 500,
+    "data/attention/schema_history.jsonl": 500,
+    "data/invariants_runs.jsonl": 500,
+    # --- Benchmarks ---
+    "data/benchmarks/brief_v2_benchmark.jsonl": 500,
+    "data/orchestration_benchmarks/star-world-order_history.jsonl": 500,
+    "data/orchestration_benchmarks/clarvis-db_history.jsonl": 500,
+    "data/orchestration_benchmarks/kinkly_history.jsonl": 500,
+    "data/orchestration_benchmarks/star-arena_history.jsonl": 500,
+    "data/orchestration_benchmarks/goat_history.jsonl": 500,
+    "data/orchestrator/scoreboard.jsonl": 500,
+    # --- Smaller / lower volume ---
     "data/performance_history.jsonl": 1000,
     "data/performance_alerts.jsonl": 500,
     "data/latency_trend.jsonl": 1000,
     "data/retrieval_errors.jsonl": 500,
     "data/structural_health_history.jsonl": 500,
     "data/procedure_injection_log.jsonl": 500,
+    "data/obligations_log.jsonl": 500,
+    "data/theory_of_mind/events.jsonl": 500,
+    "data/theory_of_mind/prediction_log.jsonl": 500,
+    "data/directives_log.jsonl": 500,
+    "data/clr_history.jsonl": 500,
+    "data/decisions.jsonl": 500,
 }
+
+# Auto-discover any .jsonl files in data/ not listed above — trim if >500KB.
+JSONL_AUTO_DISCOVER_BYTES = 500_000
+JSONL_AUTO_DISCOVER_LINES = 1000
 
 # Stale lock cleanup
 LOCK_MAX_AGE_SECONDS = 3600  # 1 hour
@@ -329,9 +406,22 @@ def run_cleanup(dry_run: bool = False, verbose: bool = False) -> CleanupReport:
     # 3. Compress old daily memory, delete ancient archives
     compress_old_memory(report, dry_run)
 
-    # 4. Trim JSONL files
+    # 4. Trim JSONL files (explicit list)
     for rel_path, max_lines in JSONL_TRIM.items():
         trim_jsonl(WORKSPACE / rel_path, max_lines, report, dry_run)
+
+    # 4b. Auto-discover unlisted JSONL files above size threshold
+    known_jsonl = {(WORKSPACE / p).resolve() for p in JSONL_TRIM}
+    data_dir = WORKSPACE / "data"
+    if data_dir.exists():
+        for jf in data_dir.rglob("*.jsonl"):
+            if jf.resolve() in known_jsonl:
+                continue
+            try:
+                if jf.stat().st_size > JSONL_AUTO_DISCOVER_BYTES:
+                    trim_jsonl(jf, JSONL_AUTO_DISCOVER_LINES, report, dry_run)
+            except OSError:
+                continue
 
     # 5. Clean stale locks
     clean_stale_locks(report, dry_run)
