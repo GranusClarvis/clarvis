@@ -8,7 +8,6 @@ _Completed items auto-archived to QUEUE_ARCHIVE.md._
 
 
 ### Delivery Goal
-- [x] [STRATEGIC_AUDIT 2026-04-01] [STRATEGIC_AUDIT/metric_integrity] [CLR_OUTCOME_ABLATION_V3] Build v3 ablation harness measuring actual task outcome quality (LLM-judged blind comparison) across 20+ diverse test tasks. Must show non-uniform deltas or confirm modules are redundant. ✅ 2026-04-02: Built `clarvis/metrics/ablation_v3.py` — 24 tasks × 6 categories, LLM blind A/B + offline deterministic mode, post-hoc section stripping, per-category heatmap, uniformity analysis. Result: NON_UNIFORM — decision_context & graph_expansion CRITICAL, working_memory neutral.
 Presentable Clarvis by 2026-03-31:
 - open-source-ready main repo
 - working/public-ready website v0
@@ -52,7 +51,6 @@ _Queue audited on 2026-03-24 evening. Removed 3 completed items (A5_A7, TEMPORAL
 
 ### Phi / Benchmarking
 
-- [ ] [RESEARCH 2026-04-02] [IMPL] [COORDINATOR_PROMPT_TEMPLATES] Create 3 worker prompt templates (research/implementation/maintenance) in scripts/worker_templates/. Wire cron_autonomous.sh to select and prepend template based on preflight worker_type field.
 ---
 
 ## P2 — When Idle (Demoted 2026-03-17)
@@ -76,7 +74,6 @@ _Design: `docs/ADAPTIVE_RAG_PLAN.md` — 4-phase rollout (GATE → EVAL → RETR
 
 ### Research Sessions
 _(Completed items archived.)_
-- [x] [RESEARCH_PHI_SCALABLE_APPROXIMATION_HEURISTICS] Study scalable approximation strategies for integrated information Phi and extract practical lessons for agent-memory/consciousness architectures. (2026-04-02)
 
 ---
 
@@ -103,6 +100,9 @@ _(Completed items archived.)_
 
 ### P1 — Found in 2026-03-31 evolution scan
 
+### P0 — Found in 2026-04-02 evening code review
+- [ ] [VERIFY_INSTALL_ROOT_DISCOVERY_FIX] Fix `scripts/verify_install.sh` so install verification exercises the canonical root pytest discovery path (or curated equivalent), not just `tests/test_open_source_smoke.py`. Current flow can still report green while `clarvis/tests/` or `packages/*/tests/` regress.
+
 ### P1 — Found in 2026-04-02 quality audit
 - [ ] [GRAPHRAG_BOOST_VALUE_FIX] Fix `.env.example` CLARVIS_GRAPHRAG_BOOST=1.0 → CLARVIS_GRAPHRAG_BOOST=1 (code checks `!= "1"`, float string silently breaks). Also remove dead OLLAMA_KEEP_ALIVE entry (no script references it).
 - [ ] [SCORE_EVIDENCE_UNIT_TEST] Add dedicated unit test for `score_evidence()` in `clarvis/brain/retrieval_eval.py` — currently only tested indirectly via adaptive_recall integration path.
@@ -117,7 +117,6 @@ _Source: Fresh-user perspective audit of clone → install → understand → ru
 #### Remaining — P1
 - [ ] [OSR_DOCKER_QUICKSTART] Create a minimal `Dockerfile` + `docker-compose.yml` for contributors who want to try Clarvis without setting up a dedicated host. Should run brain health, CLI, and tests. Not for production (production is systemd-native).
 - [ ] [OSR_PYPI_PUBLISH_PREP] Prepare sub-packages for PyPI publication: add CHANGELOG.md to each, verify `python -m build` produces clean wheels, test `pip install` from wheel (not editable) works.
-- [x] [OSR_ENV_EXAMPLE_COMPLETENESS] Audit `.env.example` — currently only has Telegram vars. Add stubs for `CLARVIS_WORKSPACE`, `OPENROUTER_API_KEY`, and any other vars that scripts reference via `os.environ.get()`. ✅ 2026-04-02: Audited 30 env vars across active codepaths; expanded .env.example from 4 to 7 sections covering workspace, API keys, Telegram, graph backend, model routing, cognitive tuning, browser/Ollama, and thread limits.
 - [ ] [OSR_TEST_CONSOLIDATION_PLAN] Document the test fragmentation (4 locations: `tests/`, `clarvis/tests/`, `packages/*/tests/`) and decide on a consolidation strategy. At minimum: ensure `python3 -m pytest` from root discovers all tests.
 - [ ] [OSR_QUICK_DEMO_MODE] Add a `python3 -m clarvis demo` command that runs a self-contained demo (store → search → recall → heartbeat gate) without needing existing data. Good for README walkthroughs and conference demos.
 
@@ -159,12 +158,10 @@ _Source: System gap scan — bloat score at 0.400 threshold, 72 unused scripts i
 ### System Gap Scan (2026-04-01 evening)
 _Source: Full system scan — bloat score at 0.400 threshold, data/scripts/monitoring audited._
 
-- [x] [INSTALL_VERIFY_NO_BRAIN_FALSE_FAILURE] Fix fresh-clone install verification so `bash scripts/setup.sh --no-brain --verify` does not falsely fail. `verify_install.sh` currently treats `import clarvis.brain` as a mandatory PASS even though setup explicitly advertises a no-brain install mode. _(Done 2026-04-02: verify_install.sh accepts --no-brain, setup.sh passes it through; brain+metrics imports downgraded to warn_check.)_
 - [ ] [VERIFY_TEST_DISCOVERY_GAP] Fix install verification coverage gap: `verify_install.sh` only runs `tests/test_open_source_smoke.py`, so package tests under `clarvis/tests/` and `packages/*/tests/` can silently regress while verification still passes. Make the verifier exercise the canonical root test discovery path or an equivalent curated smoke matrix.
 
 - [ ] [ORPHAN_ZERO_BYTE_DB_PURGE] Remove 5 empty 0-byte database files cluttering `data/`: `synaptic_memory.db`, `brain.db`, `clarvis.db`, `clarvisdb/relationships.db`, and empty `link_lists.bin` in archived chroma dirs. These are remnants of failed migrations/cutover — no script reads them. Also remove `data/clarvisdb_backup_phase0_20260303_120041/` (112 MB, pre-cutover backup superseded by 2026-03-29 SQLite migration). Target: eliminate dead artifacts, improve bloat score.
 - [ ] [REASONING_CHAIN_ROTATION] Implement archival policy for `data/reasoning_chains/` — currently 650+ individual JSON files (1.4 MB) with no rotation. Add to `cron_cleanup.sh`: gzip chains older than 14 days into monthly tarballs under `data/reasoning_chains/archive/`, delete originals. Also add `data_lifecycle.py` integration so Sunday hygiene covers this directory.
-- [x] [CRON_LOG_REFLECTION_CAP] Add size-based rotation to `cron_cleanup.sh` for `memory/cron/*.log` files — `reflection.log` alone is 1.1 MB across 3 rotated copies, `autonomous.log` is 480K+. Current rotation is numeric suffix only with no size cap or max-generations policy. Implement: keep at most 2 rotated copies, gzip .log.2+, delete .log.3+. _(Done 2026-04-02: cleanup_policy.py MAX_ROTATED_COPIES 3→2, rotate_log gzips .log.2→.log.2.gz, purges .log.3+. Tested: reflection.log.2 deleted, .1 gzipped to .2.gz at 90% compression.)_
 - [ ] [HEBBIAN_DATA_GROWTH_AUDIT] Audit the Hebbian memory subsystem data growth: `data/hebbian/access_log.jsonl` is 4.2 MB and growing (largest JSONL in the system), `data/hebbian/coactivation.json` is 7.1 MB. Determine: (a) is Hebbian learning actively used by any cron job or heartbeat path, (b) what is the growth rate, (c) should access_log.jsonl be added to the JSONL rotation policy or should the entire Hebbian subsystem be disabled/archived if unused.
 
 ### OpenAI Codex Research Program (2026-03-31)

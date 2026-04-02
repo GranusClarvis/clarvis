@@ -138,6 +138,16 @@ if proc and proc.get('steps'):
     print(f'PROC_HINT={shlex.quote(hint)}')
 else:
     print(\"PROC_HINT=''\")
+# Worker type classification (for prompt template selection)
+task_text = d.get('task', '')
+pvt = d.get('prompt_variant_task_type', '')
+sys.path.insert(0, '/home/agent/.openclaw/workspace')
+try:
+    from clarvis.heartbeat.worker_validation import classify_worker_type
+    wtype = classify_worker_type(task_text, prompt_variant_task_type=pvt)
+except Exception:
+    wtype = 'general'
+print(f'WORKER_TYPE={shlex.quote(wtype)}')
 # Timings summary
 timings = d.get('timings', {})
 print(f'PF_TOTAL_TIME={shlex.quote(str(timings.get(\"total\", \"?\")))}')
@@ -270,7 +280,7 @@ PY
 )" 2>> "$LOGFILE" || true
 fi
 
-echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] EXECUTING (salience=$BEST_SALIENCE, section=$TASK_SECTION, route=$ROUTE_EXECUTOR tier=$ROUTE_TIER, batch=$BATCH_COUNT): ${NEXT_TASK:0:100}" >> "$LOGFILE"
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] EXECUTING (salience=$BEST_SALIENCE, section=$TASK_SECTION, route=$ROUTE_EXECUTOR tier=$ROUTE_TIER, worker=$WORKER_TYPE, batch=$BATCH_COUNT): ${NEXT_TASK:0:100}" >> "$LOGFILE"
 emit_dashboard_event task_started --task-name "${NEXT_TASK:0:120}" --section cron_autonomous --executor "$ROUTE_EXECUTOR" --salience "$BEST_SALIENCE" --batch-count "$BATCH_COUNT"
 
 # ============================================================================
@@ -285,6 +295,16 @@ EXECUTOR_USED="$ROUTE_EXECUTOR"
 
 COMPRESSED_EPISODES="$EPISODIC_HINTS"
 
+# Load worker template based on WORKER_TYPE from preflight classification
+WORKER_TEMPLATE=""
+WORKER_TEMPLATE_DIR="$SCRIPTS/worker_templates"
+if [ -n "$WORKER_TYPE" ] && [ -f "$WORKER_TEMPLATE_DIR/${WORKER_TYPE}.txt" ]; then
+    WORKER_TEMPLATE=$(cat "$WORKER_TEMPLATE_DIR/${WORKER_TYPE}.txt")
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WORKER_TEMPLATE: loaded ${WORKER_TYPE}.txt" >> "$LOGFILE"
+else
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WORKER_TEMPLATE: none (worker_type=${WORKER_TYPE:-unset})" >> "$LOGFILE"
+fi
+
 # Shared function: build Claude Code prompt and execute
 # Deduplicates the 3 identical prompt blocks below (escalation, fallback, direct)
 run_claude_code() {
@@ -295,7 +315,7 @@ run_claude_code() {
     local _prompt_file
     _prompt_file=$(mktemp --suffix=.txt)
     cat > "$_prompt_file" << ENDPROMPT
-You are Clarvis's executive function.
+${WORKER_TEMPLATE:-You are Clarvis's executive function.}
 
 ${TIME_BUDGET_HINT}
 WEAKEST METRIC: $WEAKEST_METRIC — consider if your task can improve this.
