@@ -20,7 +20,6 @@ import json
 import os
 import sys
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(__file__))
@@ -350,7 +349,7 @@ def _evaluate_candidates(candidate_list, deferred_tasks, pass_name="primary"):
     autosplit_tags = []
 
     for candidate in candidate_list[:_MAX_CANDIDATES]:
-        cand_task = candidate.get("text", "")
+        cand_task = candidate.get("text") or ""
         cand_section = candidate.get("section", "P1")
         cand_salience = candidate.get("salience", 0.0)
         if not cand_task:

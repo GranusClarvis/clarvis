@@ -4,44 +4,44 @@
     "pending_mode": null
   },
   "queue": {
-    "pending": 19,
+    "pending": 33,
     "in_progress": 3,
-    "done": 0
+    "done": 1
   },
   "benchmarks": {
     "clr": {
-      "clr": 0.871,
+      "clr": 0.827,
       "baseline_clr": 0.19,
-      "value_add": 0.681,
+      "value_add": 0.637,
       "gate_pass": true,
       "dimensions": {
-        "memory_quality": 0.985,
+        "memory_quality": 0.983,
         "retrieval_precision": 1.0,
-        "prompt_context": 0.77,
+        "prompt_context": 0.789,
         "task_success": 0.792,
-        "autonomy": 0.705,
-        "efficiency": 0.984,
-        "integration_dynamics": 0.883
+        "autonomy": 0.287,
+        "efficiency": 0.988,
+        "integration_dynamics": 0.875
       },
-      "timestamp": "2026-04-01T05:45:10.783345+00:00"
+      "timestamp": "2026-04-02T05:45:08.979215+00:00"
     },
     "pi": {
       "pi": 1.0,
       "dimensions": 15,
-      "timestamp": "2026-04-01T05:45:01.716869+00:00"
+      "timestamp": "2026-04-02T05:45:01.980987+00:00"
     }
   },
   "brain": {
-    "total_memories": 3088,
+    "total_memories": 3267,
     "collections": 10
   },
   "episodes": {
     "success_rate": 0.818,
-    "total": 390,
+    "total": 395,
     "breakdown": {
-      "success": 319,
+      "success": 323,
       "soft_failure": 45,
-      "failure": 10,
+      "failure": 11,
       "timeout": 16
     }
   },
@@ -68,5 +68,5 @@
       "status": "success"
     }
   ],
-  "updated_at": "2026-04-01T05:50:02.489124+00:00"
+  "updated_at": "2026-04-02T05:50:02.933302+00:00"
 }

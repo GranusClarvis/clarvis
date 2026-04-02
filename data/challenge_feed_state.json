@@ -5,7 +5,9 @@
     "bench-robustness-01",
     "research-impl-01",
     "research-impl-02",
-    "research-impl-04"
+    "research-impl-04",
+    "research-impl-03",
+    "bench-latency-01"
   ],
   "injections": [
     {
@@ -43,6 +45,18 @@
       "title": "Implement chain-of-thought self-evaluation for episode quality scoring",
       "timestamp": 1775034002.4783607,
       "date": "2026-04-01T09:00:02"
+    },
+    {
+      "id": "research-impl-03",
+      "title": "Implement a simple MemoryBank with forgetting curve (Ebbinghaus)",
+      "timestamp": 1775091602.0648954,
+      "date": "2026-04-02T01:00:02"
+    },
+    {
+      "id": "bench-latency-01",
+      "title": "Profile and optimize the 3 slowest brain operations end-to-end",
+      "timestamp": 1775127602.4336274,
+      "date": "2026-04-02T11:00:02"
     }
   ],
   "gh_last_refresh": null

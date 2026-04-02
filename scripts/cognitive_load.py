@@ -352,6 +352,7 @@ def estimate_task_complexity(task_text):
       - signals: list of matched signals
       - recommendation: "proceed" | "warn" | "defer_to_sprint"
     """
+    task_text = task_text or ""
     task_lower = task_text.lower()
     signals = []
     score = 0.0
@@ -442,7 +443,7 @@ def _check_episodic_history(task_text):
         return None
 
     for ep in reversed(episodes):  # Check most recent first
-        ep_task = ep.get("task", "").lower()
+        ep_task = (ep.get("task") or "").lower()
         ep_words = set(re.findall(r'[a-z_]{4,}', ep_task))
         overlap = words & ep_words
         if len(overlap) < 3:

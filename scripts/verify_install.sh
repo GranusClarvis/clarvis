@@ -9,6 +9,18 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 export CLARVIS_WORKSPACE="${CLARVIS_WORKSPACE:-$REPO_ROOT}"
 
+NO_BRAIN=0
+for arg in "$@"; do
+    case "$arg" in
+        --no-brain) NO_BRAIN=1 ;;
+        --help|-h)
+            echo "Usage: bash scripts/verify_install.sh [--no-brain]"
+            echo "  --no-brain  Treat brain imports as optional (warn, not fail)"
+            exit 0
+            ;;
+    esac
+done
+
 PASS=0
 FAIL=0
 WARN=0
@@ -45,11 +57,19 @@ echo ""
 # --- Core imports ---
 echo "Core imports:"
 check "import clarvis" python3 -c "import clarvis"
-check "import clarvis.brain" python3 -c "from clarvis.brain import brain, search, remember, capture"
+if [ "$NO_BRAIN" -eq 1 ]; then
+    warn_check "import clarvis.brain" python3 -c "from clarvis.brain import brain, search, remember, capture"
+else
+    check "import clarvis.brain" python3 -c "from clarvis.brain import brain, search, remember, capture"
+fi
 check "import clarvis.cli" python3 -c "from clarvis.cli import app"
 check "import clarvis.heartbeat" python3 -c "import clarvis.heartbeat"
 check "import clarvis.cognition" python3 -c "import clarvis.cognition"
-check "import clarvis.metrics" python3 -c "import clarvis.metrics"
+if [ "$NO_BRAIN" -eq 1 ]; then
+    warn_check "import clarvis.metrics" python3 -c "import clarvis.metrics"
+else
+    check "import clarvis.metrics" python3 -c "import clarvis.metrics"
+fi
 check "import clarvis.context" python3 -c "import clarvis.context"
 check "import clarvis.runtime" python3 -c "import clarvis.runtime"
 echo ""
@@ -64,7 +84,11 @@ echo ""
 # --- CLI ---
 echo "CLI:"
 check "clarvis --help" python3 -m clarvis --help
-check "clarvis brain --help" python3 -m clarvis brain --help
+if [ "$NO_BRAIN" -eq 1 ]; then
+    warn_check "clarvis brain --help" python3 -m clarvis brain --help
+else
+    check "clarvis brain --help" python3 -m clarvis brain --help
+fi
 check "clarvis mode --help" python3 -m clarvis mode --help
 check "clarvis heartbeat --help" python3 -m clarvis heartbeat --help
 echo ""

@@ -86,5 +86,9 @@ echo "Full verify:   bash scripts/verify_install.sh"
 
 if [ "$VERIFY" -eq 1 ]; then
     echo ""
-    bash "$SCRIPT_DIR/verify_install.sh"
+    if [ "$BRAIN" -eq 0 ]; then
+        bash "$SCRIPT_DIR/verify_install.sh" --no-brain
+    else
+        bash "$SCRIPT_DIR/verify_install.sh"
+    fi
 fi

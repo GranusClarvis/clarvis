@@ -54,7 +54,7 @@ CRON_LOG_ROTATION = {
     "memory/cron/report_evening.log": 100_000,
 }
 
-MAX_ROTATED_COPIES = 3
+MAX_ROTATED_COPIES = 2
 
 # Daily memory: compress after N days, delete .gz after M days
 MEMORY_COMPRESS_AFTER_DAYS = 3
@@ -114,38 +114,81 @@ class CleanupReport:
         return "\n".join(lines)
 
 
+def _rotation_path(filepath: Path, i: int) -> Path:
+    """Return the path for rotation index i (e.g. foo.log.1, foo.log.2)."""
+    if filepath.suffix == ".log":
+        return filepath.with_suffix(f".log.{i}")
+    return Path(str(filepath) + f".{i}")
+
+
+def _remove_with_gz(path: Path, report: CleanupReport, dry_run: bool):
+    """Remove a rotation path and/or its .gz variant, updating the report."""
+    for p in (Path(str(path) + ".gz"), path):
+        if p.exists():
+            sz = p.stat().st_size
+            if not dry_run:
+                p.unlink()
+            report.bytes_freed += sz
+            report.files_removed += 1
+            report.log(f"Deleted oldest rotation: {p.name}")
+
+
 def rotate_log(filepath: Path, max_bytes: int, report: CleanupReport, dry_run: bool):
-    """Rotate a log file if it exceeds max_bytes. Keeps up to MAX_ROTATED_COPIES."""
+    """Rotate a log file if it exceeds max_bytes.
+
+    Keeps up to MAX_ROTATED_COPIES rotated files:
+      .log.1  — most recent rotation (uncompressed for quick inspection)
+      .log.2.gz — older rotation (gzip-compressed)
+    Anything beyond MAX_ROTATED_COPIES is deleted.
+    """
     if not filepath.exists():
         return
     size = filepath.stat().st_size
     if size <= max_bytes:
         return
 
-    # Shift existing rotated files: .3 -> delete, .2 -> .3, .1 -> .2
-    for i in range(MAX_ROTATED_COPIES, 0, -1):
-        src = filepath.with_suffix(f".log.{i}") if filepath.suffix == ".log" else Path(str(filepath) + f".{i}")
-        if i == MAX_ROTATED_COPIES:
-            if src.exists():
-                old_size = src.stat().st_size
-                if not dry_run:
-                    src.unlink()
-                report.bytes_freed += old_size
-                report.files_removed += 1
-                report.log(f"Deleted oldest rotation: {src.name}")
-        else:
-            dst = filepath.with_suffix(f".log.{i+1}") if filepath.suffix == ".log" else Path(str(filepath) + f".{i+1}")
-            if src.exists():
-                if not dry_run:
-                    src.rename(dst)
+    # 1. Purge excessive generations beyond MAX_ROTATED_COPIES
+    for i in range(MAX_ROTATED_COPIES + 1, MAX_ROTATED_COPIES + 5):
+        _remove_with_gz(_rotation_path(filepath, i), report, dry_run)
 
-    # Current -> .1
-    rotated = filepath.with_suffix(f".log.1") if filepath.suffix == ".log" else Path(str(filepath) + ".1")
+    # 2. Delete the oldest kept slot to make room
+    _remove_with_gz(_rotation_path(filepath, MAX_ROTATED_COPIES), report, dry_run)
+
+    # 3. Shift remaining rotations up: .1 -> .2, etc.
+    for i in range(MAX_ROTATED_COPIES - 1, 0, -1):
+        src = _rotation_path(filepath, i)
+        src_gz = Path(str(src) + ".gz")
+        dst = _rotation_path(filepath, i + 1)
+        # Handle both compressed and uncompressed variants
+        if src_gz.exists():
+            if not dry_run:
+                src_gz.rename(Path(str(dst) + ".gz"))
+        elif src.exists():
+            if not dry_run:
+                src.rename(dst)
+
+    # 4. Current -> .1
+    rotated = _rotation_path(filepath, 1)
     if not dry_run:
         filepath.rename(rotated)
         filepath.touch()  # Create empty new log
     report.files_rotated += 1
     report.log(f"Rotated {filepath.name} ({size:,} bytes)")
+
+    # 5. Gzip the oldest kept rotation (.log.2 -> .log.2.gz)
+    oldest = _rotation_path(filepath, MAX_ROTATED_COPIES)
+    oldest_gz = Path(str(oldest) + ".gz")
+    if oldest.exists() and not oldest_gz.exists():
+        orig_sz = oldest.stat().st_size
+        if not dry_run:
+            with open(oldest, "rb") as fin:
+                with gzip.open(oldest_gz, "wb", compresslevel=6) as fout:
+                    fout.write(fin.read())
+            oldest.unlink()
+        gz_sz = oldest_gz.stat().st_size if oldest_gz.exists() and not dry_run else orig_sz // 4
+        report.bytes_freed += orig_sz - gz_sz
+        report.files_compressed += 1
+        report.log(f"Compressed {oldest.name} -> {oldest_gz.name}")
 
 
 def compress_old_memory(report: CleanupReport, dry_run: bool):

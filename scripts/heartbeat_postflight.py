@@ -255,6 +255,9 @@ from clarvis.heartbeat.error_classifier import (  # noqa: F401
 # Episode encoding — canonical implementation in clarvis.heartbeat.episode_encoder
 from clarvis.heartbeat.episode_encoder import episode_encode as _episode_encode_canonical
 
+# Worker-type classification and output validation
+from clarvis.heartbeat.worker_validation import classify_worker_type, validate_worker_output
+
 # Brain storage — canonical implementation in clarvis.heartbeat.brain_store
 from clarvis.heartbeat.brain_store import (
     brain_store as _brain_store_canonical,
@@ -1849,6 +1852,31 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
     ctx = _build_postflight_ctx(exit_code, output_file, preflight_data, task_duration)
     log(f"Recording outcome: {ctx['task_status']} (exit={exit_code}, duration={task_duration}s)")
 
+    # §0.5: Worker-type classification and output validation
+    t_wv = time.monotonic()
+    try:
+        worker_type = classify_worker_type(
+            ctx["task"],
+            task_tag=preflight_data.get("task_tag"),
+            prompt_variant_task_type=preflight_data.get("prompt_variant_task_type", ""),
+        )
+        ctx["worker_type"] = worker_type
+        wv_result = validate_worker_output(worker_type, ctx["output_text"], ctx["task_status"])
+        ctx["worker_validation"] = wv_result
+        if wv_result["downgrade"]:
+            ctx["task_status"] = "partial_success"
+            ctx["error_type"] = ctx.get("error_type") or "output_validation"
+            log(f"Worker validation DOWNGRADE: {worker_type} → partial_success "
+                f"(reasons: {', '.join(wv_result['reasons'])})")
+        else:
+            log(f"Worker type: {worker_type}, validation: {'PASS' if wv_result['validated'] else 'SKIP'}")
+    except Exception as e:
+        log(f"Worker validation failed (non-fatal): {e}")
+        ctx["worker_type"] = "general"
+        ctx["worker_validation"] = {"validated": True, "downgrade": False}
+        _pf_errors.append("worker_validation")
+    timings["worker_validation"] = round(time.monotonic() - t_wv, 3)
+
     # §1-2.7: Confidence, reasoning chain, failure lessons, brain bridge
     timings.update(_confidence_record(ctx["task_event"], exit_code, ctx["task"], preflight_data, _pf_errors))
     timings.update(_reasoning_close(ctx["chain_id"], ctx["task_status"], ctx["task"], exit_code, ctx["output_text"], _pf_errors))
@@ -1887,7 +1915,9 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
 
     return {"status": "ok", "task_status": ctx["task_status"], "timings": timings,
             "completeness": round(completeness, 4), "errors": _pf_errors,
-            "error_type": ctx["error_type"]}
+            "error_type": ctx["error_type"],
+            "worker_type": ctx.get("worker_type", "general"),
+            "worker_validation": ctx.get("worker_validation", {})}
 
 
 

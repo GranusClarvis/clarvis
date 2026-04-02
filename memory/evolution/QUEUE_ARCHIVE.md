@@ -1880,3 +1880,16 @@ _Last archived: 2026-03-27_
 
 ## Archived 2026-04-01
 - [x] [HARNESS_LLM_MEMORY_SELECTION] (2026-04-01) Analyze the Sonnet sideQuery approach for memory selection (`findRelevantMemories.ts` — scans memory dir, sends to Sonnet, picks top 5). Compare against our embedding-only retrieval. Prototype a hybrid: embedding pre-filter → LLM re-rank for heartbeat context injection. Measure recall improvement on known queries.
+
+## Archived 2026-04-01
+- [x] [HARNESS_COORDINATOR_MODE] Study coordinator mode (`coordinatorMode.ts`) where coordinator sees only Agent/SendMessage/TaskStop while workers get full tools. Redesign `project_agent.py` spawn flow to use coordinator/worker tool isolation. Prototype: Clarvis heartbeat as coordinator dispatching to specialist workers (research, implementation, maintenance). _(completed 2026-04-01, note: `memory/research/runs/2026-04-01-160001/harness-coordinator-mode.md`, 5 brain memories stored, APPLY decision — queued 3 implementation items)_
+
+## Archived 2026-04-02
+- [x] (2026-04-02) [RESEARCH 2026-04-01] [HEARTBEAT_COORDINATOR_MODE] Add coordinator dispatch mode to heartbeat pipeline: preflight scores task → selects worker type (research/impl/maintenance) → spawns appropriate worker with tool-restricted prompt → postflight validates A2A result. Coordinator itself is read-only — no file edits, only dispatch and synthesis.
+- [x] [RESEARCH 2026-04-01] [CONCURRENT_SPAWN_SLOTS] Raise project_agent.py concurrent spawn limit from 1 to 3 using existing semaphore infrastructure. Wire worktree isolation (--isolated) as default for implementation workers to prevent file conflicts. (2026-04-02 07:37 UTC)
+- [x] [RESEARCH_2026-04-01_PHI_COMPUTATION] Research Phi computation in IIT: exact complexity, MIP search, and practical approximations. (2026-04-01)
+- [x] [RESEARCH_2026-04-02_RETRIEVAL_OPTIMIZATION] Research retrieval optimization in RAG: hybrid dense+sparse retrieval, contextual chunking, reranking, and query reformulation. (2026-04-02)
+
+## Archived 2026-04-02
+- [x] [RESEARCH 2026-04-02] [IMPL] [COORDINATOR_POSTFLIGHT_VALIDATION] Add worker-type-aware output validation to heartbeat_postflight.py: research must have structured findings, implementation must have file changes + tests, maintenance must have health status. Failed validation → partial_success episode. _(Done 2026-04-02: `clarvis/heartbeat/worker_validation.py`, wired into postflight §0.5)_
+- [x] [RESEARCH 2026-04-02] [IMPL] [COORDINATOR_WORKER_CLASSIFY] Add classify_worker_type() to clarvis/orch/router.py: maps task tag + router scores to WorkerType enum (research/implementation/maintenance). Wire into heartbeat_preflight.py output JSON. (2026-04-02 10:04 UTC)
