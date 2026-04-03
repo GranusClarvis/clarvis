@@ -305,6 +305,15 @@ else
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WORKER_TEMPLATE: none (worker_type=${WORKER_TYPE:-unset})" >> "$LOGFILE"
 fi
 
+# === WORKTREE AUTO-DETECT ===
+# Detect code-modifying tasks and log recommendation. Full worktree isolation
+# requires run_claude_code() restructuring — for now, tag the task for future use.
+WORKTREE_RECOMMENDED="false"
+if echo "$NEXT_TASK" | grep -qiE '(refactor|migrate|rewrite|rename|delete|remove|restructure|move files|split|merge|extract|SPINE_MIGRATION|LEGACY_SCRIPT)'; then
+    WORKTREE_RECOMMENDED="true"
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WORKTREE: code-modifying task detected, isolation recommended" >> "$LOGFILE"
+fi
+
 # Shared function: build Claude Code prompt and execute
 # Deduplicates the 3 identical prompt blocks below (escalation, fallback, direct)
 run_claude_code() {
@@ -555,6 +564,41 @@ print('?')
 " 2>/dev/null || echo "?")
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] POSTFLIGHT: complete in ${PF_POST_TIME}s" >> "$LOGFILE"
 fi
+
+# === TELEGRAM NOTIFICATION (success/failure/timeout) ===
+# Matches spawn_claude.sh pattern — sends task result to Telegram
+python3 - "$TASK_EXIT" "${NEXT_TASK:0:80}" "$EXECUTOR_USED" "$TASK_DURATION" << 'TGEOF' 2>> "$LOGFILE" || true
+import json, urllib.request, urllib.parse, sys, os
+exit_code = int(sys.argv[1])
+task_short = sys.argv[2]
+executor = sys.argv[3] if len(sys.argv) > 3 else "?"
+duration = sys.argv[4] if len(sys.argv) > 4 else "?"
+token = os.environ.get("CLARVIS_TG_BOT_TOKEN", "")
+chat_id = os.environ.get("CLARVIS_TG_CHAT_ID", "")
+if not token or not chat_id:
+    try:
+        with open('/home/agent/.openclaw/openclaw.json') as f:
+            config = json.load(f)
+        if not token:
+            token = config['channels']['telegram']['botToken']
+        if not chat_id:
+            chat_id = str(config['channels']['telegram'].get('chatId', ''))
+    except Exception:
+        sys.exit(0)
+if not token or not chat_id:
+    sys.exit(0)
+emoji = "\u23f0" if exit_code == 124 else ("\u274c" if exit_code != 0 else "\u2705")
+status = "TIMEOUT" if exit_code == 124 else ("FAIL" if exit_code != 0 else "OK")
+msg = f"{emoji} Heartbeat: {status} ({executor}, {duration}s)\n\U0001f4cb {task_short}"
+if len(msg) > 4000:
+    msg = msg[:3997] + "..."
+data = urllib.parse.urlencode({"chat_id": chat_id, "text": msg})
+try:
+    req = urllib.request.Request(f"https://api.telegram.org/bot{token}/sendMessage", data=data.encode())
+    urllib.request.urlopen(req, timeout=10)
+except Exception:
+    pass
+TGEOF
 
 # === GIT HYGIENE AUTO-FIX (obligation enforcement) ===
 # Auto-commit+push if dirty tree >60min and changes are safe (no secrets, no large binaries)

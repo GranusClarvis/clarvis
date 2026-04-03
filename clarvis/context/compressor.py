@@ -430,6 +430,157 @@ def get_latest_scores():
     return scores
 
 
+# ============================================================================
+# Graduated Compaction — PRUNE → SNIP → COMPRESS
+#
+# Three tiers applied in order, cheapest first:
+#   Tier 0 PRUNE:  Drop stale/irrelevant items from sections (zero-cost)
+#   Tier 1 SNIP:   Middle-truncate sections that exceed budget (zero-cost)
+#   Tier 2 COMPRESS: TF-IDF extractive compression (existing, light CPU)
+# ============================================================================
+
+# Staleness thresholds per section type
+_PRUNE_STALE_DAYS = {
+    "episodes": 14,
+    "knowledge": 30,
+    "procedures": 60,
+    "default": 21,
+}
+
+
+def _parse_age_days(item):
+    """Extract age in days from a context item dict or string.
+
+    Looks for ISO dates, 'YYYY-MM-DD' patterns, or 'last_seen: ...' fields.
+    Returns None if no date found.
+    """
+    text = ""
+    if isinstance(item, dict):
+        for key in ("ts", "timestamp", "last_seen", "date", "last_used"):
+            if key in item:
+                text = str(item[key])
+                break
+        if not text:
+            text = str(item.get("document", item.get("text", "")))
+    else:
+        text = str(item)
+
+    # Try ISO date
+    m = re.search(r'(\d{4}-\d{2}-\d{2})', text)
+    if m:
+        try:
+            dt = datetime.strptime(m.group(1), "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            return (datetime.now(timezone.utc) - dt).days
+        except ValueError:
+            pass
+    return None
+
+
+def prune_stale(items, section_type="default", max_age_days=None):
+    """Tier 0 PRUNE — remove items older than staleness threshold.
+
+    Args:
+        items: List of context items (dicts or strings).
+        section_type: Category key for staleness threshold lookup.
+        max_age_days: Override staleness threshold (days).
+
+    Returns:
+        (kept_items, pruned_count)
+    """
+    threshold = max_age_days or _PRUNE_STALE_DAYS.get(section_type, _PRUNE_STALE_DAYS["default"])
+    kept = []
+    pruned = 0
+    for item in items:
+        age = _parse_age_days(item)
+        if age is not None and age > threshold:
+            pruned += 1
+        else:
+            kept.append(item)
+    return kept, pruned
+
+
+def snip_middle(text, budget_chars, ellipsis="\n[...snipped...]\n"):
+    """Tier 1 SNIP — keep head + tail, truncate middle.
+
+    Preserves the first ~40% and last ~40% of text, replacing the
+    middle with an ellipsis marker. Useful for sections where both
+    the beginning (headers, context) and end (latest items) matter.
+
+    Args:
+        text: Input text.
+        budget_chars: Maximum character budget.
+        ellipsis: Marker for snipped region.
+
+    Returns:
+        Snipped text (or original if already within budget).
+    """
+    if len(text) <= budget_chars:
+        return text
+    usable = budget_chars - len(ellipsis)
+    if usable <= 0:
+        return text[:budget_chars]
+    head_len = int(usable * 0.4)
+    tail_len = usable - head_len
+    return text[:head_len] + ellipsis + text[-tail_len:]
+
+
+def graduated_compact(text, budget_chars, section_type="default", items=None):
+    """Apply graduated compaction: PRUNE → SNIP → COMPRESS.
+
+    Args:
+        text: The section text to compact.
+        budget_chars: Target character budget.
+        section_type: Category for staleness thresholds.
+        items: Optional list of structured items (for Tier 0 pruning).
+               If provided, items are pruned first, then rejoined as text.
+
+    Returns:
+        (compacted_text, stats_dict)
+    """
+    stats = {"tier_used": "none", "original_len": len(text), "pruned": 0, "snipped": False}
+
+    working_text = text
+
+    # Tier 0: PRUNE stale items if structured items provided
+    if items is not None:
+        kept, pruned = prune_stale(items, section_type)
+        stats["pruned"] = pruned
+        if pruned > 0:
+            # Rejoin kept items
+            parts = []
+            for item in kept:
+                if isinstance(item, dict):
+                    parts.append(item.get("document", item.get("text", str(item))))
+                else:
+                    parts.append(str(item))
+            working_text = "\n".join(parts)
+            stats["tier_used"] = "prune"
+
+    # Check if within budget after pruning
+    if len(working_text) <= budget_chars:
+        stats["final_len"] = len(working_text)
+        return working_text, stats
+
+    # Tier 1: SNIP middle
+    snipped = snip_middle(working_text, budget_chars)
+    if len(snipped) < len(working_text):
+        stats["snipped"] = True
+        stats["tier_used"] = "snip"
+        working_text = snipped
+
+    # Check if within budget after snipping
+    if len(working_text) <= budget_chars:
+        stats["final_len"] = len(working_text)
+        return working_text, stats
+
+    # Tier 2: COMPRESS via TF-IDF extraction
+    ratio = budget_chars / max(len(working_text), 1)
+    compressed = tfidf_extract(working_text, ratio=min(ratio, 0.5))
+    stats["tier_used"] = "compress"
+    stats["final_len"] = len(compressed)
+    return compressed, stats
+
+
 def generate_tiered_brief(current_task="", tier="standard", episodic_hints=None, knowledge_hints=None):
     """Generate context brief at the specified tier.
 

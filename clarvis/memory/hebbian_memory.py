@@ -107,27 +107,113 @@ class HebbianMemory:
         now = datetime.now(timezone.utc)
         memory_ids = []
 
+        # Log access events (fast, append-only)
         for r in results:
             mem_id = r.get("id")
             if not mem_id:
                 continue
             memory_ids.append(mem_id)
-
-            # 1. Log the access event
             self._log_access(mem_id, query, r.get("collection", ""), caller, now)
 
-            # 2. Strengthen this memory (retrieval = rehearsal)
-            self._strengthen_memory(
-                mem_id,
-                r.get("collection", ""),
-                r.get("metadata", {}),
-                r.get("document", ""),
-                now,
-            )
+        # Batch-strengthen all recalled memories (one get+upsert per collection)
+        self._strengthen_batch(results, now)
 
-        # 3. Hebbian association: co-accessed memories strengthen connections
+        # Hebbian association: co-accessed memories strengthen connections
         if len(memory_ids) >= 2:
             self._update_coactivation(memory_ids, now)
+
+    def _strengthen_batch(self, results, now):
+        """Batch-strengthen recalled memories — one get+upsert per collection.
+
+        Groups results by collection, fetches all IDs in one call, computes
+        updates, then upserts the batch. Reduces ChromaDB round-trips from
+        2*N to 2*C (where C = number of distinct collections, typically 2-4).
+        """
+        try:
+            from clarvis.brain import brain
+
+            # Group by collection
+            by_col: dict[str, list] = {}
+            for r in results:
+                mem_id = r.get("id")
+                col_name = r.get("collection", "")
+                if not mem_id or col_name not in brain.collections:
+                    continue
+                by_col.setdefault(col_name, []).append(r)
+
+            for col_name, col_results in by_col.items():
+                col = brain.collections[col_name]
+                ids = [r["id"] for r in col_results]
+
+                try:
+                    existing = col.get(ids=ids)
+                except Exception:
+                    continue
+                if not existing or not existing.get("ids"):
+                    continue
+
+                # Build lookup
+                meta_lookup = {}
+                doc_lookup = {}
+                for i, eid in enumerate(existing["ids"]):
+                    if existing["metadatas"] and existing["metadatas"][i]:
+                        meta_lookup[eid] = existing["metadatas"][i]
+                    if existing.get("documents") and existing["documents"][i]:
+                        doc_lookup[eid] = existing["documents"][i]
+
+                batch_ids = []
+                batch_docs = []
+                batch_metas = []
+
+                for r in col_results:
+                    mem_id = r["id"]
+                    meta = meta_lookup.get(mem_id)
+                    if not meta:
+                        continue
+                    doc = doc_lookup.get(mem_id, r.get("document", ""))
+
+                    # Update access tracking
+                    access_count = meta.get("access_count", 0)
+                    if isinstance(access_count, str):
+                        try:
+                            access_count = int(access_count)
+                        except ValueError:
+                            access_count = 0
+                    access_count += 1
+
+                    boost = REINFORCEMENT_BASE * (access_count ** (-REINFORCEMENT_DECAY))
+                    current_importance = meta.get("importance", 0.5)
+                    if isinstance(current_importance, str):
+                        try:
+                            current_importance = float(current_importance)
+                        except ValueError:
+                            current_importance = 0.5
+                    new_importance = min(MAX_IMPORTANCE, current_importance + boost)
+
+                    access_times = meta.get("access_times", [])
+                    if isinstance(access_times, str):
+                        try:
+                            access_times = json.loads(access_times)
+                        except (json.JSONDecodeError, ValueError):
+                            access_times = []
+                    access_times.append(now.timestamp())
+                    access_times = access_times[-30:]
+
+                    meta["access_count"] = access_count
+                    meta["last_accessed"] = now.isoformat()
+                    meta["importance"] = round(new_importance, 4)
+                    meta["hebbian_boost"] = round(boost, 6)
+                    meta["access_times"] = json.dumps(access_times)
+
+                    batch_ids.append(mem_id)
+                    batch_docs.append(doc)
+                    batch_metas.append(meta)
+
+                if batch_ids:
+                    col.upsert(ids=batch_ids, documents=batch_docs, metadatas=batch_metas)
+
+        except Exception:
+            pass  # Never let strengthening break the recall flow
 
     def _log_access(self, mem_id, query, collection, caller, now):
         """Append access event to log (append-only for analysis)."""

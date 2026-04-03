@@ -773,11 +773,12 @@ def distill_procedures(session_records: list, dry_run: bool = False) -> int:
         success_rate = len(sessions) / max(total_for_type, len(sessions))
 
         # Format procedure text
+        last_date = sessions[-1].get("date", "unknown")
         proc_text = (
             f"[PROCEDURE:{task_type}] For tasks matching '{task_type}': "
             f"common tool sequence is {' → '.join(core_tools)}. "
             f"Success rate: {success_rate:.0%} across {len(sessions)} sessions. "
-            f"Last seen: {sessions[-1]['date']}."
+            f"Last seen: {last_date}."
         )
 
         # Dedup against existing procedures
@@ -797,7 +798,8 @@ def distill_procedures(session_records: list, dry_run: bool = False) -> int:
                     proc_text,
                     collection=PROCEDURES,
                     importance=0.7,
-                    tags=["procedure", "auto-distilled", task_type.lower()],
+                    tags=["procedure", "auto-distilled", task_type.lower(),
+                          f"usage:{len(sessions)}", f"last:{last_date}"],
                     source="conversation_learner_distill",
                 )
                 print(f"  Stored procedure: {proc_text[:100]}...")

@@ -3,6 +3,7 @@ from .compressor import (  # noqa: F401
     tfidf_extract, mmr_rerank, compress_text,
     compress_queue, compress_episodes, get_latest_scores,
     generate_tiered_brief as _simple_tiered_brief,
+    prune_stale, snip_middle, graduated_compact,
 )
 from .budgets import (  # noqa: F401
     TIER_BUDGETS, get_adjusted_budgets, load_relevance_weights,

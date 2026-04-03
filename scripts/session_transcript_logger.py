@@ -16,6 +16,7 @@ Raw files are rotated by cleanup_policy.py (compress >7d, delete >90d).
 import hashlib
 import json
 import os
+import re
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -35,6 +36,25 @@ RAW_CAP = 200_000
 def _ensure_dirs():
     TRANSCRIPTS_DIR.mkdir(parents=True, exist_ok=True)
     RAW_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _task_slug(task: str, max_len: int = 48) -> str:
+    """Derive a short, filesystem-safe slug from a task title.
+
+    Extracts [BRACKET_TAG] if present, otherwise takes the first few
+    significant words. Result is lowercased, alphanumeric + hyphens.
+    """
+    # Try bracket tag first (e.g. "[SPINE_MIGRATION] ..." or "[EXTERNAL_CHALLENGE:bench-01]")
+    tag_match = re.search(r"\[([A-Za-z0-9_:.-]+)\]", task)
+    if tag_match:
+        slug = tag_match.group(1).lower().replace("_", "-").replace(":", "-")
+    else:
+        # First 5 significant words
+        words = re.findall(r"[a-z0-9]+", task.lower())
+        stop = {"the", "a", "an", "in", "to", "for", "of", "and", "or", "with", "is", "on"}
+        words = [w for w in words if w not in stop][:5]
+        slug = "-".join(words) if words else "task"
+    return slug[:max_len]
 
 
 def log_transcript(
@@ -57,8 +77,10 @@ def log_transcript(
     date_str = now.strftime("%Y-%m-%d")
 
     # Build metadata record
+    slug = _task_slug(task)
     record = {
         "ts": ts,
+        "slug": slug,
         "task": task[:500],
         "status": task_status,
         "exit_code": exit_code,
