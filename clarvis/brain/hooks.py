@@ -15,8 +15,6 @@ import time
 
 _log = logging.getLogger("clarvis.brain.hooks")
 
-_SCRIPTS_DIR = os.path.join(os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace"), "scripts")
-
 
 def _make_actr_scorer():
     """Create an ACT-R scorer hook: fn(results) -> mutates with _actr_score.
@@ -26,9 +24,7 @@ def _make_actr_scorer():
     the distance+importance fallback scorer.
     """
     import os
-    if _SCRIPTS_DIR not in sys.path:
-        sys.path.insert(0, _SCRIPTS_DIR)
-    from actr_activation import actr_score
+    from clarvis.brain.actr_activation import actr_score
 
     def scorer(results):
         if os.environ.get("CLARVIS_ACTR_RECALL") != "1":
@@ -58,9 +54,7 @@ def _make_attention_booster():
 
 def _make_retrieval_quality_observer():
     """Create a retrieval quality observer hook."""
-    if _SCRIPTS_DIR not in sys.path:
-        sys.path.insert(0, _SCRIPTS_DIR)
-    from retrieval_quality import tracker
+    from clarvis.brain.retrieval_quality import tracker
 
     def observer(query, results, *, caller=None, rate_limit_mono=0, last_mono=0):
         if caller and query:
@@ -80,9 +74,7 @@ def _make_hebbian_observer():
 
 def _make_synaptic_observer():
     """Create a synaptic memory observer hook (rate-limited)."""
-    if _SCRIPTS_DIR not in sys.path:
-        sys.path.insert(0, _SCRIPTS_DIR)
-    from synaptic_memory import synaptic
+    from clarvis.memory.synaptic_memory import synaptic
 
     def observer(query, results, *, caller=None, rate_limit_mono=0, last_mono=0):
         if (rate_limit_mono - last_mono) >= 5.0:

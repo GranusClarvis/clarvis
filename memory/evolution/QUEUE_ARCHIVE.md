@@ -3,6 +3,27 @@
 _Completed items archived from QUEUE.md to reduce token footprint._
 _Last archived: 2026-04-03_
 
+### Archived 2026-04-03 (auto-archive)
+- [x] [SPINE_PROXY_REPLACEMENT] _(2026-04-03: Moved full implementations from scripts/ into spine for all 5 modules: clarvis_reasoning→clarvis/cognition/reasoning.py, somatic_markers→clarvis/cognition/somatic_markers.py, soar_engine→clarvis/memory/soar.py, meta_learning→clarvis/learning/meta_learning.py, graphrag_communities→clarvis/brain/graphrag.py. Scripts converted to BRIDGE wrappers. All imports verified.)_
+- [x] [SPINE_HOOK_DEPS_MIGRATE] _(2026-04-03: Migrated all 3 hook deps into spine: actr_activation→clarvis/brain/actr_activation.py, retrieval_quality→clarvis/brain/retrieval_quality.py, synaptic_memory→clarvis/memory/synaptic_memory.py. Updated hooks.py to import from spine. Scripts converted to BRIDGE wrappers. 7/7 hooks register successfully.)_
+- [x] [QUEUE_AUTO_ARCHIVE] _(2026-04-03: Created `scripts/queue_auto_archive.py` — finds [x] items in QUEUE.md, moves them to QUEUE_ARCHIVE.md with dated headers. Supports --dry-run, --status. Lockfile + backup safety. Run: `python3 scripts/queue_auto_archive.py`)_
+- [x] [CRON_CANONICAL_ENTRYPOINTS] _(2026-04-03: All 8 Python cron entries now use canonical `python3 -m clarvis` paths. Migrated final 3: dream_engine→`clarvis maintenance dream`, brief_benchmark→`clarvis bench brief`, generate_status_json→`clarvis maintenance status-json`. Zero `python3 scripts/` entries remain in crontab. ~40 shell-script entries unchanged — bash orchestrators, not candidates.)_
+
+
+### Archived 2026-04-03 (auto-archive)
+- [x] [OSR_GIT_HISTORY_SCRUB] _(2026-04-03: Comprehensive git history scan using git-filter-repo confirmed clean. Patterns checked: sk-or-v1-*, sk-ant-*, ghp_*, ghu_*, AKIA*, xox*, bot*:AA*. All matches are documentation placeholders, regex patterns, or test fixtures. No real secrets in history. No BFG run needed.)_
+- [x] [PROMPT_DUAL_PATH_UNIFY] _(2026-04-03: prompt_builder.get_context_brief() now delegates to generate_tiered_brief() as its core — both paths use the same primacy/recency optimized assembly. prompt_builder adds extras: goals, synaptic, attention, capabilities, queue. Tests pass: 17/17.)_
+- [x] [CONTEXT_DUPLICATE_RECALL] _(2026-04-03: Removed duplicate introspect_for_task + brain.recall for IDs in prompt_builder. Heartbeat_preflight: synaptic spread now reuses recalled_memory_ids from brain_bridge in sequential path. Parallel path: duplicate is hidden by parallelism, so acceptable.)_
+- [x] [CRON_RESEARCH_CONTEXT_DOWNGRADE] _(2026-04-03: Switched cron_research.sh line 232 from `context_compressor.py brief` to `prompt_builder.py context-brief --task "$RESEARCH_TASK" --tier standard`.)_
+- [x] [CONTEXT_SUPPLEMENTARY_DEDUP] _(2026-04-03: Added `tiered_brief_used` flag to heartbeat_preflight. When tiered brief is active, supplementary append skips: working_memory, failure_avoidance, procedures — all already in the tiered brief.)_
+- [x] [CRON_EVOLUTION_BARE_CONTEXT] _(2026-04-03: Added `prompt_builder.py context-brief --task "strategic evolution analysis" --tier full` call to cron_evolution.sh. Brain introspection + episodic + failure patterns now injected into evolution prompt.)_
+- [x] [CRON_IMPLEMENTATION_CONTEXT_DOWNGRADE] _(2026-04-03: Verified already uses heartbeat_preflight.py as primary path (line 69). Only falls back to context_compressor on failure. Queue description was outdated.)_
+- [x] [PROMPT_QUALITY_EVAL_MATRIX] _(2026-04-03: Created `scripts/prompt_quality_eval.py` — static eval matrix across 10 task types × 4 routes. Checks: section coverage, priority coverage, ordering score, duplication. Results in `data/prompt_eval/eval_results.json`.)_
+- [x] [CONTEXT_BUDGET_QUALITY_POLICY] _(2026-04-03: Created `data/prompt_eval/context_budget_policy.json` with 9 task classes, each with section priorities [0-1] and tier defaults. Wired into `assembly.py:generate_tiered_brief()` — policy weights merge with empirical weights via geometric mean.)_
+- [x] [PROMPT_ROUTE_GOLDEN_FIXTURES] _(2026-04-03: Created `tests/test_prompt_route_golden.py` — 17 tests covering tiered brief, prompt_builder, and budget policy integration. Golden snapshots in `data/prompt_eval/golden/`. Tests: section presence, ordering, no-duplication, golden drift.)_
+- [x] [PROMPT_TASKSET_CURATION] _(2026-04-03: Created `data/prompt_eval/taskset.json` — 10 representative tasks across 9 work classes with expected_context_needs, failure_modes, and priority_sections per task.)_
+
+
 ### Archived 2026-04-03 (Deep Audit Cleanup)
 - [x] [EXTERNAL_CHALLENGE:coding-challenge-02] (2026-04-03) Built minimal DAG task scheduler with dependency resolution — `scripts/dag_scheduler.py` (~526 lines). Asyncio parallel execution, Kahn topo sort, DFS cycle detection, timeout handling, failure cascade.
 - [x] [EXTERNAL_CHALLENGE:bench-latency-01] (2026-04-03) Profiled 3 slowest brain operations — cProfile profiler at `scripts/brain_profiler.py`. Findings: decay_importance=48s (lock contention), store+auto_link=1.5s (ONNX re-init), recall=0.4s (Hebbian hook). Report: `data/brain_profile_report.txt`.
