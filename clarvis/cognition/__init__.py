@@ -22,3 +22,12 @@ from .context_relevance import (
     get_suppressed_sections,
     refresh_weights,
 )
+from .attention import (  # noqa: F401
+    AttentionSpotlight, AttentionCodelet, CodeletCompetition,
+    AttentionSchema, AttentionItem,
+    get_attention, get_codelet_competition, get_attention_schema,
+)
+from .intrinsic_assessment import (  # noqa: F401
+    assess_recent, detect_failure_patterns, generate_autocurriculum,
+    inject_autocurriculum, full_assessment,
+)

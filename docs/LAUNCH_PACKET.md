@@ -50,14 +50,14 @@ tests/                       # Smoke, integration, and unit tests
 
 | Capability | Status | Details |
 |---|---|---|
-| **Vector memory** | Production | 10 ChromaDB collections, 3400+ memories, ONNX MiniLM embeddings |
-| **Graph memory** | Production | 134k+ edges, dual backend (JSON + SQLite+WAL) |
+| **Vector memory** | Production | 10 ChromaDB collections, 3800+ memories, ONNX MiniLM embeddings |
+| **Graph memory** | Production | 138k+ edges, SQLite+WAL backend (JSON retained as archival snapshot only) |
 | **Episodic memory** | Production | Temporal recall, confidence tracking, dream consolidation |
 | **Attention (GWT)** | Production | Global Workspace Theory salience scoring, spotlight |
 | **Operating modes** | Production | GE (full autonomy) / Architecture (improve-only) / Passive (user-only) |
 | **Heartbeat pipeline** | Production | Gate → preflight → execute → postflight, 12x/day |
 | **Self-model** | Production | 7 capability domains, calibrated confidence |
-| **Retrieval gate** | Production | 3-tier brain query policy (saves ~7.5s per skipped query) |
+| **Retrieval gate** | Production | 3-tier brain query policy (saves ~270ms avg per skipped query) |
 | **Agent orchestration** | Beta | Spawn project agents in isolated workspaces |
 | **Browser integration** | Beta | Agent-Browser + Playwright CDP, session persistence |
 | **Cost tracking** | Production | Real API usage via OpenRouter, budget alerts |
@@ -99,13 +99,12 @@ from clarvis.context.assembly import generate_tiered_brief
 
 ## Known Limitations
 
-1. **Hardcoded paths**: 146+ files reference `/home/agent/.openclaw/workspace` — most use env var fallback (`CLARVIS_WORKSPACE`) but not all
-2. **No CI/CD**: No GitHub Actions workflows yet — tests run locally only
-3. **Single-host**: Designed for a dedicated NUC server with systemd — not containerized
-4. **CPU-only embeddings**: ONNX MiniLM on CPU, ~7.5s per full brain query (10 collections)
-5. **Telegram integration**: Bot token and chat ID need env var migration for public release
-6. **Personal identity**: Some docs contain operator-specific identity data
-7. **Test fragmentation**: Tests across 4 directories (`tests/`, `clarvis/tests/`, `scripts/tests/`, `packages/*/tests/`)
+1. **Hardcoded paths**: Many files reference `/home/agent/.openclaw/workspace` — most use env var fallback (`CLARVIS_WORKSPACE`) but not all
+2. **Single-host**: Designed for a dedicated NUC server with systemd — Docker available but not primary deployment
+3. **CPU-only embeddings**: ONNX MiniLM on CPU, ~270ms avg per brain query (optimized with parallel collection queries)
+4. **Telegram integration**: Bot token and chat ID need env var migration for public release
+5. **Personal identity**: Some docs contain operator-specific identity data
+6. **CI**: GitHub Actions CI exists (Gitleaks, Ruff, pytest on Python 3.10/3.12, Docker build), but coverage is minimal
 
 ## Architecture Principles
 

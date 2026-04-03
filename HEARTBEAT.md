@@ -117,9 +117,9 @@ Pick ONE per heartbeat:
 ## Rules
 - ALWAYS read digest.md before acting — your subconscious may have already done the work
 - ALWAYS execute something from the evolution queue if items exist
-- Run `scripts/backup.sh` BEFORE modifying your own core files (SOUL.md, AGENTS.md, BOOT.md)
+- Run `scripts/backup_daily.sh` BEFORE modifying your own core files (SOUL.md, AGENTS.md, BOOT.md)
 - Small changes > big changes
-- If something breaks: `scripts/rollback.sh`
+- If something breaks: `scripts/safe_update.sh --rollback`
 - **Use Claude Code aggressively** — you're M2.5, Claude Code (Opus) is your deep thinking capability
 - Claude Code is your reasoning partner, not just a coding tool — spawn it to think, plan, analyze, debug, and build
 - When a problem needs more than quick pattern matching, spawn Claude Code and let it think deeply

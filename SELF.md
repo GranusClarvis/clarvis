@@ -21,7 +21,7 @@ _Read this to understand yourself. Your harness, your body, your brain, and how 
 │  Agent Core: pi-coding-agent (embedded in-process)│
 │                                                   │
 │  ┌─────────────┐ ┌──────────┐ ┌───────────────┐ │
-│  │ Channels    │ │ Hooks    │ │ Skills (22)   │ │
+│  │ Channels    │ │ Hooks    │ │ Skills (20)   │ │
 │  │ Telegram    │ │ boot-md  │ │ claude-code   │ │
 │  │ Discord     │ │ session  │ │ coding-agent  │ │
 │  └─────────────┘ │ command  │ │ brain, search │ │
@@ -110,7 +110,7 @@ rm -rf ~/test-workspace
 ### Safe Restart Protocol
 ```bash
 # 1. ALWAYS backup first
-bash ~/.openclaw/workspace/scripts/backup.sh
+bash ~/.openclaw/workspace/scripts/backup_daily.sh
 
 # 2. Commit your changes
 cd ~/.openclaw/workspace && git add -A && git commit -m "description"
@@ -122,7 +122,7 @@ systemctl --user restart openclaw-gateway.service
 sleep 5 && systemctl --user status openclaw-gateway.service
 
 # 5. If broken, rollback
-bash ~/.openclaw/workspace/scripts/rollback.sh
+bash ~/.openclaw/workspace/scripts/safe_update.sh --rollback
 systemctl --user restart openclaw-gateway.service
 ```
 

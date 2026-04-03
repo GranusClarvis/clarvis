@@ -359,7 +359,7 @@ packages/                    # Installable sub-packages (each has pyproject.toml
 ├── clarvis-cost/            # Cost tracking + budget alerting (v1.0.0)
 └── clarvis-reasoning/       # Meta-cognitive reasoning assessment (v1.0.0)
 
-skills/                      # 19 OpenClaw skills (brain, browser, search, agents, ...)
+skills/                      # 20 OpenClaw skills (brain, browser, search, agents, ...)
 tests/                       # 35+ test files (smoke, integration, unit)
 website/                     # Public site (static HTML + live status API)
 docs/                        # Architecture docs, audits, runbooks

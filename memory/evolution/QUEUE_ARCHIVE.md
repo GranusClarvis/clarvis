@@ -1,7 +1,29 @@
 # Evolution Queue — Archive
 
 _Completed items archived from QUEUE.md to reduce token footprint._
-_Last archived: 2026-03-27_
+_Last archived: 2026-04-03_
+
+### Archived 2026-04-03 (Deep Audit Cleanup)
+- [x] [EXTERNAL_CHALLENGE:coding-challenge-02] (2026-04-03) Built minimal DAG task scheduler with dependency resolution — `scripts/dag_scheduler.py` (~526 lines). Asyncio parallel execution, Kahn topo sort, DFS cycle detection, timeout handling, failure cascade.
+- [x] [EXTERNAL_CHALLENGE:bench-latency-01] (2026-04-03) Profiled 3 slowest brain operations — cProfile profiler at `scripts/brain_profiler.py`. Findings: decay_importance=48s (lock contention), store+auto_link=1.5s (ONNX re-init), recall=0.4s (Hebbian hook). Report: `data/brain_profile_report.txt`.
+- [x] [EXTERNAL_CHALLENGE:research-impl-03] (2026-04-03) Implemented MemoryBank with Ebbinghaus forgetting curve — `scripts/memory_bank.py` (~280 lines). Spaced repetition, forgetting threshold, CLI demo.
+- [x] [OSR_PYPI_CHANGELOGS] (2026-04-03) Added CHANGELOG.md to clarvis-db, clarvis-cost, clarvis-reasoning.
+- [x] [OSR_DOCKER_CI] (2026-04-03) Added `docker` job to CI workflow — builds image, runs 3 smoke tests.
+- [x] [CONTEXT_COMPRESSOR_FULL_MIGRATION] (2026-04-03) Closed — scripts/context_compressor.py is the intended orchestration layer over spine primitives. Docstring updated.
+- [x] [CONVERSATION_LEARNER_DEDUP] (2026-04-03) 3-layer dedup in `store_insights()`: normalized substring match, embedding similarity (0.18 threshold), procedure dedup (top-5 recall, 0.20 threshold).
+- [x] [BUDGET_TRACKING_JSON_OUTPUT] (2026-04-03) Closed — functionality already exists (`budget_alert.py --json`, `cost_tracker.py api`).
+- [x] [GRADUATED_COMPACTION_PROTOTYPE] (2026-04-03) Added `prune_stale()`, `snip_middle()`, `graduated_compact()` to `clarvis/context/compressor.py`.
+- [x] [CRON_TELEGRAM_NOTIFY] (2026-04-03) Added Telegram notification to `cron_autonomous.sh` on task completion.
+- [x] [WORKTREE_AUTO_ENABLE] (2026-04-03) Partial — detection logic added, full worktree isolation deferred.
+- [x] [DECAY_LOCK_CONTENTION] (2026-04-03) Closed — 48s is architectural (sequential collection iteration over 3400+ memories), not a quick fix.
+- [x] [STORE_ONNX_REINIT] (2026-04-03) Closed — ONNX is singleton-cached; "12 reinit" was 12 queries to already-loaded model.
+- [x] [RECALL_HEBBIAN_HOOK] (2026-04-03) `_strengthen_batch()` groups by collection, one get+upsert per collection. 50 Hebbian tests pass.
+- [x] [OSR_BUNDLE5_UNCOMMITTED] (2026-04-03) Closed — already committed in Bundle 10.
+- [x] [CRON_HEALTH_DASHBOARD_HTML] (2026-04-03) Static health dashboard at `website/static/health.html`.
+- [x] [SESSION_SLUG_NAMING] (2026-04-03) `_task_slug()` extracts bracket tags, adds `slug` field to JSONL records.
+- [x] [MEMORY_USAGE_TRACKING] (2026-04-03) Usage count and last-used date encoded in procedure tags.
+- [x] [CLARVIS_MCP_SERVER_DESIGN] (2026-04-03) Design doc at `docs/MCP_SERVER_DESIGN.md` — 5 tools, stdio transport, 3-phase build plan.
+- [x] [LEGACY_SCRIPT_WRAPPER_REDUCTION] (2026-04-03) Closed — only `brain.py` was a thin wrapper candidate; all other scripts have substantial standalone logic.
 
 ### Archived 2026-03-27 (Research: Load Scaling)
 - [x] [LOAD_SCALING_OPTIMIZE] (2026-03-27) Profiled recall telemetry: n=1→n=10 difference is ~1.5ms (noise, not real degradation). Fixed `benchmark_load_scaling()`: 9 samples (was 5), 5ms absolute noise floor, 25ms effective base. Metric now stable at 0%. Research note: `memory/research/load_scaling_optimize_2026-03-27.md`.
