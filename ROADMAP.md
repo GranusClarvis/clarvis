@@ -171,13 +171,13 @@ Clarvis should grow into:
 - [x] Failure amplifier (9 scanners for soft failures)
 - [x] 153+ episodes, Hebbian co-activation tracking
 
-### 5.5 Cognitive Workspace — 75%
+### 5.5 Cognitive Workspace — 85%
 - [x] Baddeley-inspired hierarchical buffer management (Agarwal 2025)
 - [x] Three tiered buffers: Active (cap 5), Working (cap 12), Dormant (cap 30)
 - [x] Task-driven dormant reactivation (~53% memory reuse)
 - [x] Demotion cascade: active → working → dormant → evict
 - [ ] Reuse rate optimization (target 58.6%)
-- [ ] Cross-session workspace persistence
+- [x] Cross-session workspace persistence
 
 ---
 

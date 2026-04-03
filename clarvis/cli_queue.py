@@ -104,3 +104,37 @@ def archive():
     from queue_writer import archive_completed
     count = archive_completed()
     print(f"Archived {count} completed task(s).")
+
+
+# ---------------------------------------------------------------------------
+# Queue Engine v2 commands (sidecar state management)
+# ---------------------------------------------------------------------------
+
+@app.command("engine-stats")
+def engine_stats():
+    """Show queue engine health metrics (sidecar state)."""
+    import json as _json
+    from clarvis.orch.queue_engine import engine
+    s = engine.stats()
+    print(_json.dumps(s, indent=2))
+
+
+@app.command("engine-select")
+def engine_select():
+    """Select the next eligible task via the queue engine."""
+    import json as _json
+    from clarvis.orch.queue_engine import engine
+    task = engine.select_next()
+    if task:
+        print(_json.dumps(task, indent=2, default=str))
+    else:
+        print("No eligible tasks.")
+
+
+@app.command("engine-reconcile")
+def engine_reconcile():
+    """Reconcile QUEUE.md with sidecar state and show all tasks."""
+    from clarvis.orch.queue_engine import engine
+    tasks, _ = engine.reconcile()
+    for t in tasks:
+        print(f"[{t['tag']}] state={t['state']} attempts={t['attempts']} priority={t['priority']}")

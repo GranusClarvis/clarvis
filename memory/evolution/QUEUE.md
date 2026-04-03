@@ -17,6 +17,9 @@ _(Cron lock system, auto-recovery, and monitoring all confirmed healthy. No open
 
 ### SWO / Clarvis Brand Integration (2026-04-03)
 
+### Queue Architecture v2 (2026-04-03 design + pressure test)
+- [ ] [QUEUE_RUN_RECORDS] Add first-class task run records linked by task id / run id so queue items map cleanly to executions, outputs, durations, tests, and artifacts. This is the missing execution-history layer needed to avoid reconstructing outcomes from logs/digests/text similarity.
+
 ### Context/Prompt Pipeline (2026-04-03 deep audit, refined 2026-04-03 second-opinion audit)
 
 ---
@@ -38,7 +41,6 @@ _(Cron lock system, auto-recovery, and monitoring all confirmed healthy. No open
 _Design: `docs/ADAPTIVE_RAG_PLAN.md` — 4-phase rollout (GATE → EVAL → RETRY → FEEDBACK). Each phase independently useful. Demoted: not needed for delivery._
 
 ### Roadmap Gaps (2026-04-03 audit — items from ROADMAP.md with no queue entry)
-- [ ] [ROADMAP_WORKSPACE_PERSISTENCE] Cross-session workspace persistence (ROADMAP Phase 5.5).
 
 ---
 
@@ -53,7 +55,6 @@ _Design: `docs/ADAPTIVE_RAG_PLAN.md` — 4-phase rollout (GATE → EVAL → RETR
 
 ### External Challenges
 
-- [ ] [EXTERNAL_CHALLENGE:bench-retrieval-01] Implement BEIR-style retrieval benchmark for ClarvisDB — Create a retrieval benchmark using 50+ query-document pairs with known relevance labels. Measure nDCG@10, MAP, and Recall@k. Compare ClarvisDB's MiniLM embeddings against BM25 baseline on the same que
 
 ### Bloat Reduction (2026-04-03 evolution analysis)
 - [ ] [BLOAT_AGGRESSIVE_DEDUP_PRUNE] Run targeted dedup+prune on `clarvis-learnings` (1459 items, 41% of brain) and `clarvis-memories` (612 items). Goal: reduce total_memories below 3000. Use `brain_hygiene.py run` + similarity scan on the two largest collections. Validate retrieval quality doesn't regress via `performance_benchmark.py`.

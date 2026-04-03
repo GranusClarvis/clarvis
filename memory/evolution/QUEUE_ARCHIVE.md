@@ -2064,3 +2064,10 @@ _Last archived: 2026-04-03_
 
 ## Archived 2026-04-03
 - [x] [OSS_PII_SANITIZE] _(2026-04-03)_ Sanitized: USER.md (tz/location→placeholders), SOUL.md (git email→noreply), WEBSITE_V0_RELEASE_RUNBOOK.md (hardcoded path→env var, email pattern→placeholder), golden_qa.json (creator names→generic). `data/` already gitignored.
+
+## Archived 2026-04-03
+- [x] [ROADMAP_WORKSPACE_PERSISTENCE] Cross-session workspace persistence — session boundary detection, stale active demotion, cumulative reuse stats. _(Done 2026-04-03)_
+- [x] [EXTERNAL_CHALLENGE:bench-retrieval-01] Implement BEIR-style retrieval benchmark for ClarvisDB — `scripts/beir_benchmark.py`: 55 queries, graded relevance (0-3), nDCG@10/MAP/Recall@k, BM25 baseline comparison. First run: ClarvisDB nDCG@10=0.875, BM25=0.919. _(Done 2026-04-03)_
+
+## Archived 2026-04-03
+- [x] [QUEUE_ENGINE_V2] Implement Queue Engine v2 using the sidecar model from `docs/QUEUE_V2_PRESSURE_TEST_2026-04-03.md`: keep `QUEUE.md` human-editable, add runtime sidecar state (attempts, failure reason, timestamps, state), simplify scoring first, then add explicit state transitions, `stats()` observability, and pipeline integration in phases. (done 2026-04-03 — sidecar model in clarvis/orch/queue_engine.py, 24 tests pass, CLI wired)
