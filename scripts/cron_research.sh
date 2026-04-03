@@ -458,9 +458,8 @@ print(f'Lesson recorded: [{lesson.decision}] {lesson.topic[:60]}')
 # Log cost estimate (Claude Code research sessions ~5k input, ~2k output tokens per minute)
 python3 -c "
 import sys, os
-sys.path.insert(0, os.path.join('$SCRIPTS', '..', 'packages', 'clarvis-cost'))
 try:
-    from clarvis_cost.core import CostTracker, estimate_tokens
+    from clarvis.orch.cost_tracker import CostTracker, estimate_tokens
     COST_LOG = os.path.join('$SCRIPTS', '..', 'data', 'costs.jsonl')
     ct = CostTracker(COST_LOG)
     # Rough estimate: ~5k input + ~2k output tokens per minute of research

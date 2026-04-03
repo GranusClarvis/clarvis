@@ -50,15 +50,8 @@ if [ "$PY_MAJOR" -lt 3 ] || { [ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -lt 10 ]; }
     exit 1
 fi
 
-# Step 1: Install sub-packages (must be before root package)
-echo "[1/3] Installing sub-packages..."
-pip install -e packages/clarvis-cost -q
-pip install -e packages/clarvis-reasoning -q
-pip install -e packages/clarvis-db -q
-echo "  OK: clarvis-cost, clarvis-reasoning, clarvis-db"
-
-# Step 2: Install main package
-echo "[2/3] Installing main package..."
+# Step 1: Install main package (sub-packages migrated into spine)
+echo "[1/2] Installing main package..."
 if [ "$BRAIN" -eq 1 ] && [ "$DEV" -eq 1 ]; then
     pip install -e ".[all]" -q
     echo "  OK: clarvis[all] (brain + dev)"
@@ -74,7 +67,7 @@ else
 fi
 
 # Step 3: Set CLARVIS_WORKSPACE if not set
-echo "[3/3] Environment..."
+echo "[2/2] Environment..."
 if [ -z "${CLARVIS_WORKSPACE:-}" ]; then
     echo "  Tip: export CLARVIS_WORKSPACE=\"$REPO_ROOT\""
     echo "  (Add to your shell profile for persistence)"

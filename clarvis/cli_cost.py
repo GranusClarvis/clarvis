@@ -16,7 +16,7 @@ WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace
 def _get_tracker():
     """Lazy-import CostTracker."""
     import os
-    from clarvis_cost.core import CostTracker
+    from clarvis.orch.cost_tracker import CostTracker
     cost_log = os.path.join(WORKSPACE, "data", "costs.jsonl")
     return CostTracker(cost_log)
 

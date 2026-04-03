@@ -216,13 +216,7 @@ if [ -f "$(python3 -c 'import sysconfig; print(sysconfig.get_path("stdlib"))')/E
     warn "PEP 668 detected — using --break-system-packages"
 fi
 
-echo "  [1/3] Sub-packages (dependency order)..."
-pip install $PIP_EXTRA -e packages/clarvis-cost -q 2>&1 | grep -v "already satisfied" || true
-pip install $PIP_EXTRA -e packages/clarvis-reasoning -q 2>&1 | grep -v "already satisfied" || true
-pip install $PIP_EXTRA -e packages/clarvis-db -q 2>&1 | grep -v "already satisfied" || true
-ok "clarvis-cost, clarvis-reasoning, clarvis-db"
-
-echo "  [2/3] Main package..."
+echo "  [1/2] Main package..."
 if [ "$BRAIN" -eq 1 ] && [ "$DEV" -eq 1 ]; then
     pip install $PIP_EXTRA -e ".[all]" -q 2>&1 | grep -v "already satisfied" || true
     ok "clarvis[all] (brain + dev)"
@@ -238,7 +232,7 @@ else
 fi
 
 # ── Step 5: Environment setup ────────────────────────────────────────────
-echo "  [3/3] Environment..."
+echo "  [2/2] Environment..."
 
 # Create .env if it doesn't exist
 if [ ! -f "$REPO_ROOT/.env" ]; then

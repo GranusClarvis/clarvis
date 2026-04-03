@@ -26,10 +26,8 @@ import json
 import os
 import sys
 
-# Add clarvis-cost package to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'packages', 'clarvis-cost'))
-
-from clarvis_cost.core import CostTracker, analyze_savings, import_router_decisions
+# Spine module — migrated from packages/clarvis-cost
+from clarvis.orch.cost_tracker import CostTracker, analyze_savings, import_router_decisions
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), '..', 'data')
 COST_LOG = os.path.join(DATA_DIR, 'costs.jsonl')

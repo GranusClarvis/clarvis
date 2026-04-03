@@ -53,9 +53,6 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e packages/clarvis-cost
-          pip install -e packages/clarvis-reasoning
-          pip install -e packages/clarvis-db
           pip install -e ".[all]"
 
       - name: Basic import check
@@ -63,12 +60,9 @@ jobs:
         env:
           CLARVIS_WORKSPACE: ${{ github.workspace }}
 
-      - name: Verify wheel builds (all 4 packages)
+      - name: Verify wheel build
         run: |
           pip install build
-          python -m build packages/clarvis-cost --outdir /tmp/dist
-          python -m build packages/clarvis-reasoning --outdir /tmp/dist
-          python -m build packages/clarvis-db --outdir /tmp/dist
           python -m build . --outdir /tmp/dist
 
       - name: Run full test suite

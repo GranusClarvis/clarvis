@@ -64,12 +64,12 @@ spine_rc=0
 ) || spine_rc=$?
 report "spine (clarvis --help + brain stats)" $spine_rc
 
-# --- 4. pytest: run package tests ---
+# --- 4. pytest: run spine tests ---
 echo ""
-echo "--- pytest (clarvis-db) ---"
+echo "--- pytest (spine) ---"
 pytest_rc=0
-python3 -m pytest "$WORKSPACE/packages/clarvis-db/tests/" -q --tb=short 2>&1 | tail -10 || pytest_rc=$?
-report "pytest (clarvis-db)" $pytest_rc
+python3 -m pytest "$WORKSPACE/tests/" -q --tb=short -m "not slow" 2>&1 | tail -10 || pytest_rc=$?
+report "pytest (spine)" $pytest_rc
 
 # --- 5. pytest: CLI tests ---
 echo ""

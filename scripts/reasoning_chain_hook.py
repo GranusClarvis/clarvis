@@ -26,10 +26,9 @@ sys.path.insert(0, os.path.dirname(__file__))
 from reasoning_chains import create_chain, add_step, complete_step, find_related_chains, list_chains
 from brain import brain
 
-try:
-    from clarvis_reasoning import reasoner as cr_reasoner
-except ImportError:
-    cr_reasoner = None
+# clarvis-reasoning package removed — spine module is canonical
+# (clarvis.cognition.reasoning provides the full reasoning engine)
+cr_reasoner = None
 
 try:
     from retrieval_experiment import smart_recall

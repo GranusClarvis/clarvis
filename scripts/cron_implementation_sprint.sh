@@ -173,9 +173,8 @@ SUMMARY=$(tail -c 500 "$TASK_OUTPUT_FILE" 2>/dev/null | tail -5)
 # Log cost estimate
 python3 -c "
 import sys, os
-sys.path.insert(0, os.path.join('$SCRIPTS', '..', 'packages', 'clarvis-cost'))
 try:
-    from clarvis_cost.core import CostTracker
+    from clarvis.orch.cost_tracker import CostTracker
     COST_LOG = os.path.join('$SCRIPTS', '..', 'data', 'costs.jsonl')
     ct = CostTracker(COST_LOG)
     duration_min = max(1, $TASK_DURATION // 60)

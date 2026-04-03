@@ -11,8 +11,6 @@ requires-python = ">=3.10"
 license = {text = "MIT"}
 keywords = ["autonomous-agent", "cognitive-architecture", "vector-memory", "self-improving"]
 dependencies = [
-    "clarvis-cost",
-    "clarvis-reasoning",
     "typer>=0.9.0",
 ]
 

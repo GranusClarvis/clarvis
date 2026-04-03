@@ -83,11 +83,9 @@ check "import clarvis.context" python3 -c "import clarvis.context"
 check "import clarvis.runtime" python3 -c "import clarvis.runtime"
 echo ""
 
-# ── Sub-packages ──────────────────────────────────────────────────────────
-echo "Sub-packages:"
-check "import clarvis_db" python3 -c "import clarvis_db"
-check "import clarvis_cost" python3 -c "import clarvis_cost"
-check "import clarvis_reasoning" python3 -c "import clarvis_reasoning"
+# ── Spine cost module (migrated from sub-packages) ───────────────────────
+echo "Spine modules:"
+check "import clarvis.orch.cost_tracker" python3 -c "from clarvis.orch.cost_tracker import CostTracker"
 echo ""
 
 # ── CLI ───────────────────────────────────────────────────────────────────

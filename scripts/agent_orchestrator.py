@@ -606,7 +606,7 @@ def _default_ci_pipeline() -> list[dict]:
             "name": "tests",
             "tasks": [
                 {
-                    "task": "Run clarvis-db tests: cd workspace/packages/clarvis-db && python3 -m pytest tests/ -v",
+                    "task": "Run spine tests: cd workspace && python3 -m pytest tests/ -v -m 'not slow'",
                     "timeout": 600,
                     "isolated": False,
                 },

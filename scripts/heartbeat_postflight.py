@@ -232,10 +232,9 @@ try:
 except ImportError:
     DE_Postflight = None
 
-# Cost tracking
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'packages', 'clarvis-cost'))
+# Cost tracking — spine module
 try:
-    from clarvis_cost.core import CostTracker, estimate_tokens
+    from clarvis.orch.cost_tracker import CostTracker, estimate_tokens
     COST_LOG = os.path.join(os.path.dirname(__file__), '..', 'data', 'costs.jsonl')
     cost_tracker = CostTracker(COST_LOG)
 except ImportError:
@@ -910,7 +909,7 @@ def _pf_self_test(ctx, _pf_errors):
             selftest_result["code_modified"] = True
 
             pytest_proc = subprocess.run(
-                ["python3", "-m", "pytest", "packages/clarvis-db/tests/", "-q", "--tb=short"],
+                ["python3", "-m", "pytest", "tests/", "-q", "--tb=short", "-m", "not slow"],
                 cwd=WORKSPACE, capture_output=True, text=True, timeout=60)
             selftest_result["pytest_exit"] = pytest_proc.returncode
             selftest_result["pytest_summary"] = pytest_proc.stdout.strip().split('\n')[-1] if pytest_proc.stdout.strip() else ""
@@ -990,7 +989,7 @@ def _capture_pytest_results(selftest_result, WORKSPACE):
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "passed": _passed, "failed": _failed, "errors": 0, "total": _passed + _failed,
         "pytest_exit_code": selftest_result.get("pytest_exit", -1),
-        "test_suites": ["packages/clarvis-db/tests/"], "source": "postflight_self_test",
+        "test_suites": ["tests/"], "source": "postflight_self_test",
     }
     _test_results_path = os.path.join(WORKSPACE, "data", "test_results.json")
     with open(_test_results_path, 'w') as _tf:
@@ -1009,7 +1008,7 @@ def _refresh_stale_test_results(WORKSPACE):
         return
     import subprocess as _sp74
     _pr = _sp74.run(
-        ["python3", "-m", "pytest", "packages/clarvis-db/tests/", "-q", "--tb=no"],
+        ["python3", "-m", "pytest", "tests/", "-q", "--tb=no", "-m", "not slow"],
         cwd=WORKSPACE, capture_output=True, text=True, timeout=60)
     import re as _re74b
     _m = _re74b.search(r'(\d+) passed', _pr.stdout)
@@ -1021,7 +1020,7 @@ def _refresh_stale_test_results(WORKSPACE):
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "passed": _p, "failed": _f, "errors": 0, "total": _p + _f,
             "pytest_exit_code": _pr.returncode,
-            "test_suites": ["packages/clarvis-db/tests/"], "source": "postflight_stale_refresh",
+            "test_suites": ["tests/"], "source": "postflight_stale_refresh",
         }, _tf, indent=2)
     log(f"Refreshed stale test results: {_p} passed, {_f} failed")
 

@@ -211,11 +211,15 @@ def test_no_secrets_in_python_source(pattern):
 
 @pytest.mark.parametrize("pkg", ["clarvis-db", "clarvis-cost", "clarvis-reasoning"])
 def test_package_pyproject_valid(pkg):
-    """Each package has a parseable pyproject.toml with name and version."""
+    """Each legacy package has a parseable pyproject.toml with name and version.
+
+    Note: packages are deprecated — clarvis-cost migrated to clarvis.orch.cost_tracker,
+    clarvis-reasoning to clarvis.cognition.reasoning, clarvis-db to clarvis.brain.
+    """
     import tomllib
     toml_path = os.path.join(WORKSPACE, "packages", pkg, "pyproject.toml")
     if not os.path.exists(toml_path):
-        pytest.skip(f"{pkg}/pyproject.toml not found")
+        pytest.skip(f"{pkg}/pyproject.toml not found (package may have been removed)")
     with open(toml_path, "rb") as f:
         data = tomllib.load(f)
     project = data.get("project", {})
