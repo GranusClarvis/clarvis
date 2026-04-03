@@ -132,24 +132,28 @@ _Source: Fresh-user perspective audit of clone → install → understand → ru
 _Source: `data/external_src/claude-harness-src.zip`. Deep-dive note: `memory/research/claude_harness_architecture_2026-03-31.md`._
 
 #### Architecture & Runtime
+- [x] [HARNESS_TASK_BUDGET_STOPPING] _(Completed 2026-04-03)_ Verdict: **prototype next**. Harness has in-process token tracking (inapplicable to subprocess model). Phase 1: switch to `--output-format json` for per-task token accounting. Phase 2: cost-per-task moving average with anomaly detection. Phase 3: output growth rate monitoring in execution_monitor (defer). Design: `memory/research/harness_runtime_architecture_2026-04-03.md` §1.
+- [x] [HARNESS_SANDBOX_MODEL] _(Completed 2026-04-03)_ Verdict: **defer**. True OS-level sandboxing impractical (same UID, no root for cgroups/netns). Current 3-tier lock system + worktree isolation sufficient. Two small wins: auto-enable worktree for code-modifying tasks, add post-execution file-diff check. Design: §4.
 
 #### Memory & State
+- [x] [HARNESS_DREAM_DISTILLATION] _(Completed 2026-04-03)_ Verdict: **adopted**. Added `distill_procedures()` to `conversation_learner.py` — groups successful sessions by task type, extracts common tool-use sequences, stores as procedures in `clarvis-procedures` (importance=0.7). Rule-based, no LLM cost. Wired into existing reflection pipeline. Design: §5.
 
 #### Orchestration & Multi-Agent
-- [ ] [HARNESS_TASK_BUDGET_STOPPING] Study token budget tracking and diminishing-returns detection (`tokenBudget.ts` — 90% threshold OR <500 tokens/iteration after 3+ loops). Replace fixed timeouts in `spawn_claude.sh` and cron orchestrators with budget-aware stopping. Prototype: parse Claude Code output for token usage, implement early termination.
 
 #### Hooks & Extensibility
-- [ ] [HARNESS_HOOK_SYSTEM] Study the 14+ lifecycle hook events (PreToolUse, PostToolUse, PermissionRequest, SessionStart/End, etc.) and their execution model (shell/HTTP/callback, exit code semantics). Design a hook system for Clarvis brain operations: pre/post-search hooks for cost tracking, pre/post-remember hooks for quality gates, session lifecycle hooks for episodic capture.
+- [x] [HARNESS_HOOK_SYSTEM] _(Completed 2026-04-03)_ Verdict: **adopted**. Added 4 brain operation phases to HookRegistry: `BRAIN_PRE_STORE`, `BRAIN_POST_STORE`, `BRAIN_PRE_SEARCH`, `BRAIN_POST_SEARCH`. Wired into `clarvis/brain/__init__.py` `remember()` and `search()` with lazy import and silent failure. Enables cost tracking, quality gates, audit logging. All 9 existing hook tests pass. Design: §2.
 
 #### Context & Compaction
-- [ ] [HARNESS_GRADUATED_COMPACTION] Study the 4-tier compaction strategy (microcompact → context collapse → history snip → full autocompact) in `query.ts` and `compact.ts`. Design a graduated compaction pipeline for Clarvis context_compressor that preserves more information at lower tiers before falling back to full LLM summarization.
-
-#### Safety & Sandboxing
-- [ ] [HARNESS_SANDBOX_MODEL] Study `@anthropic-ai/sandbox-runtime` adapter (`sandbox-adapter.ts`) — file read/write patterns, network domain allow/deny, process exclusion lists. Evaluate feasibility of sandboxing Claude Code spawns in our cron pipeline beyond the current lockfile model. Assess: can we restrict file writes to `workspace/` only?
+- [x] [HARNESS_GRADUATED_COMPACTION] _(Completed 2026-04-03)_ Verdict: **prototype next**. Designed 3-tier graduated pipeline: Tier 0 PRUNE (DyCP + staleness, zero LLM) → Tier 1 SNIP (truncate middles, zero LLM) → Tier 2 COMPRESS (existing TF-IDF + MMR). Harness's microcompact/collapse tiers don't apply (Clarvis assembles fresh, no message history). Design: §3.
 
 #### UX & Portability
-- [ ] [HARNESS_DREAM_DISTILLATION] Study the Dream task (4-stage session-log distillation into structured memory files). Compare against our `dream_engine.py` (counterfactual dreaming). Prototype a "session distillation" nightly job that reviews cron session outputs and distills actionable learnings into brain, complementing the existing counterfactual approach.
-- [ ] [HARNESS_BRIDGE_TRANSPORT] Study the bridge module's hybrid transport (WebSocket reads + HTTP POST writes in `HybridTransport.ts`) and remote control protocol (`bridgeApi.ts`, `bridgeMain.ts`). Evaluate feasibility of a Clarvis remote-control interface accessible from Telegram or web, allowing live session observation and intervention beyond current `/spawn` one-shot model.
+- [x] [HARNESS_BRIDGE_TRANSPORT] _(Completed 2026-04-03)_ Verdict: **defer**. Polling latency (4h between digest reads) not causing real problems. Telegram delivery covers urgent results. Designed future `clarvis-bridge` asyncio server (~200 LOC) with socket activation if needed. Immediate win: add Telegram notifications to `cron_autonomous.sh`. Design: §6.
+
+#### Follow-up tasks from Bundle 8 research
+- [ ] [BUDGET_TRACKING_JSON_OUTPUT] Switch `run_claude_monitored()` to `--output-format json`, parse final token usage, write to progress file for postflight cost accounting.
+- [ ] [GRADUATED_COMPACTION_PROTOTYPE] Implement Tier 0 PRUNE (staleness-based item drop within sections) and Tier 1 SNIP (middle truncation) in `context_compressor.py` before existing Tier 2 COMPRESS.
+- [ ] [CRON_TELEGRAM_NOTIFY] Add Telegram notification to `cron_autonomous.sh` on task completion (success/failure/timeout), matching `spawn_claude.sh` pattern.
+- [ ] [WORKTREE_AUTO_ENABLE] In `cron_autonomous.sh`, auto-detect code-modifying tasks and enable `--isolated` worktree mode.
 
 ### Bloat & Dead-Code Reduction (2026-04-01 scan)
 _Source: System gap scan — bloat score at 0.400 threshold, 72 unused scripts identified._

@@ -26,8 +26,15 @@ class HookPhase:
     """Lifecycle phases where hooks can run."""
     PREFLIGHT = "preflight"
     POSTFLIGHT = "postflight"
+    # Brain operation hooks — fire around brain.remember() and brain.search()
+    BRAIN_PRE_STORE = "brain_pre_store"
+    BRAIN_POST_STORE = "brain_post_store"
+    BRAIN_PRE_SEARCH = "brain_pre_search"
+    BRAIN_POST_SEARCH = "brain_post_search"
 
-    ALL = (PREFLIGHT, POSTFLIGHT)
+    ALL = (PREFLIGHT, POSTFLIGHT,
+           BRAIN_PRE_STORE, BRAIN_POST_STORE,
+           BRAIN_PRE_SEARCH, BRAIN_POST_SEARCH)
 
 
 class HookRegistry:

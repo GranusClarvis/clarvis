@@ -699,6 +699,117 @@ def print_report(patterns: dict, insights: list):
     print()
 
 
+# Tool-use patterns in Claude Code output for procedure extraction
+_TOOL_RE = re.compile(
+    r'\b(Read|Edit|Write|Grep|Glob|Bash|Agent|TodoWrite)\s+tool\b',
+    re.IGNORECASE,
+)
+
+
+def distill_procedures(session_records: list, dry_run: bool = False) -> int:
+    """Distill reusable procedures from successful session transcripts.
+
+    Groups successful sessions by task keywords, extracts common tool-use
+    sequences, and stores as procedures in clarvis-procedures. Rule-based
+    (no LLM cost).
+
+    Returns count of procedures stored.
+    """
+    from brain import PROCEDURES
+
+    # Group successful sessions by task type keywords
+    type_groups: dict[str, list] = {}
+    for rec in session_records:
+        if rec["status"] != "success":
+            continue
+        # Extract primary task keyword (first bracket tag or first 2 significant words)
+        task = rec["task"]
+        tag_match = re.search(r'\[(\w+)', task)
+        if tag_match:
+            key = tag_match.group(1).upper()
+        else:
+            words = [w for w in re.findall(r'[a-z]+', task.lower())
+                     if w not in ("the", "a", "an", "in", "to", "for", "of", "and", "or", "with")]
+            key = "_".join(words[:2]).upper() if len(words) >= 2 else "GENERAL"
+        type_groups.setdefault(key, []).append(rec)
+
+    stored = 0
+    # Only distill groups with ≥3 successes (enough data for a pattern)
+    for task_type, sessions in type_groups.items():
+        if len(sessions) < 3:
+            continue
+
+        # Extract tool-use sequences from each session's output
+        sequences = []
+        for rec in sessions:
+            output = rec.get("output", "")
+            tools_found = _TOOL_RE.findall(output)
+            if tools_found:
+                # Normalize: deduplicate consecutive same-tool uses
+                deduped = [tools_found[0]]
+                for t in tools_found[1:]:
+                    if t.lower() != deduped[-1].lower():
+                        deduped.append(t)
+                sequences.append(deduped)
+
+        if len(sequences) < 2:
+            continue
+
+        # Find the most common tool sequence (longest common prefix across sequences)
+        common_tools = Counter()
+        for seq in sequences:
+            for tool in seq:
+                common_tools[tool.capitalize()] += 1
+
+        # Build procedure: tools used in >50% of sessions, ordered by frequency
+        threshold = len(sequences) * 0.5
+        core_tools = [t for t, c in common_tools.most_common() if c >= threshold]
+        if not core_tools:
+            continue
+
+        # Compute success rate for this task type
+        total_for_type = sum(1 for r in session_records
+                             if re.search(rf'\b{re.escape(task_type)}\b', r["task"], re.IGNORECASE))
+        success_rate = len(sessions) / max(total_for_type, len(sessions))
+
+        # Format procedure text
+        proc_text = (
+            f"[PROCEDURE:{task_type}] For tasks matching '{task_type}': "
+            f"common tool sequence is {' → '.join(core_tools)}. "
+            f"Success rate: {success_rate:.0%} across {len(sessions)} sessions. "
+            f"Last seen: {sessions[-1]['date']}."
+        )
+
+        # Dedup against existing procedures
+        try:
+            existing = brain.recall(proc_text[:200], n=3, collections=[PROCEDURES])
+            if any(e.get("distance", 1.0) < 0.15 for e in existing):
+                continue  # already have a very similar procedure
+        except Exception:
+            pass
+
+        if dry_run:
+            print(f"  [DRY RUN] Would store procedure: {proc_text[:120]}...")
+            stored += 1
+        else:
+            try:
+                brain.store(
+                    proc_text,
+                    collection=PROCEDURES,
+                    importance=0.7,
+                    tags=["procedure", "auto-distilled", task_type.lower()],
+                    source="conversation_learner_distill",
+                )
+                print(f"  Stored procedure: {proc_text[:100]}...")
+                stored += 1
+            except Exception as e:
+                logger.error("Failed to store procedure: %s — %s", task_type, e)
+
+    if stored:
+        print(f"\n  Distilled {stored} procedures from {len(type_groups)} task groups")
+    return stored
+
+
 def run(dry_run=False, report_only=False):
     """Main entry point: analyze transcripts and store learnings."""
     print("=== Conversation Learner ===\n")
@@ -743,7 +854,15 @@ def run(dry_run=False, report_only=False):
         stored = 0
     print(f"\n{'[DRY RUN] Would store' if dry_run else 'Stored'} {stored} new insights to brain (collection=autonomous-learning)")
 
-    return {'stored': stored, 'insights': len(insights)}
+    # Distill reusable procedures from successful sessions
+    proc_stored = 0
+    if session_records:
+        try:
+            proc_stored = distill_procedures(session_records, dry_run=dry_run)
+        except Exception as e:
+            logger.error("distill_procedures crashed: %s", e)
+
+    return {'stored': stored + proc_stored, 'insights': len(insights), 'procedures': proc_stored}
 
 
 if __name__ == '__main__':

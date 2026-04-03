@@ -292,6 +292,21 @@ def _detect_and_resolve_conflicts(text, category, importance):
     return resolved_ids, len(contradictions)
 
 
+def _run_brain_hooks(phase, context):
+    """Fire brain operation hooks if the hook registry is available.
+
+    Lazy-imports the registry to avoid circular imports (brain is loaded
+    before heartbeat in many scripts). Failures are silently ignored —
+    hooks must never block brain operations.
+    """
+    try:
+        from clarvis.heartbeat.hooks import registry
+        if registry.hooks_for(phase):
+            registry.run(phase, context)
+    except Exception:
+        pass  # hooks are advisory, never block brain ops
+
+
 def _detect_category(text):
     """Auto-detect collection from text content."""
     tl = text.lower()
@@ -329,16 +344,35 @@ def remember(text, importance=0.9, category=None):
     Pre-storage conflict detection: queries existing memories for contradictions.
     If a highly similar memory exists with conflicting content, the old memory
     is superseded (temporal precedence) and a conflict is logged.
+
+    Fires BRAIN_PRE_STORE / BRAIN_POST_STORE hooks for cost tracking and quality gates.
     """
     if category is None:
         category = _detect_category(text)
     tags = _detect_tags(text)
 
+    # --- Brain hooks: pre-store ---
+    _run_brain_hooks("brain_pre_store", {
+        "op": "remember", "text": text, "importance": importance,
+        "category": category, "tags": tags,
+    })
+
     # --- Conflict detection (pre-storage) ---
     _detect_and_resolve_conflicts(text, category, importance)
 
-    return brain.store(text, collection=category, importance=importance,
-                       tags=tags or None, source="manual")
+    t0 = time.time()
+    result = brain.store(text, collection=category, importance=importance,
+                         tags=tags or None, source="manual")
+    elapsed = time.time() - t0
+
+    # --- Brain hooks: post-store ---
+    _run_brain_hooks("brain_post_store", {
+        "op": "remember", "text": text[:200], "importance": importance,
+        "category": category, "elapsed_s": round(elapsed, 4),
+        "result_id": result.get("id") if isinstance(result, dict) else None,
+    })
+
+    return result
 
 
 def capture(text):
@@ -584,10 +618,27 @@ def search(query, n=5, min_importance=None, collections=None, since_days=None,
     since_days: If set, only return memories created within the last N days.
     recency_weight: Float 0.0-1.0. Blend recency into ranking (0=pure semantic,
                     1=heavily recency-biased). Useful for 'recent' queries.
+
+    Fires BRAIN_PRE_SEARCH / BRAIN_POST_SEARCH hooks for cost tracking and audit.
     """
-    return brain.recall(query, n=n, min_importance=min_importance,
-                        collections=collections, since_days=since_days,
-                        recency_weight=recency_weight)
+    _run_brain_hooks("brain_pre_search", {
+        "op": "search", "query": query, "n": n,
+        "collections": collections, "since_days": since_days,
+    })
+
+    t0 = time.time()
+    results = brain.recall(query, n=n, min_importance=min_importance,
+                           collections=collections, since_days=since_days,
+                           recency_weight=recency_weight)
+    elapsed = time.time() - t0
+
+    _run_brain_hooks("brain_post_search", {
+        "op": "search", "query": query[:200], "n": n,
+        "result_count": len(results) if isinstance(results, list) else 0,
+        "elapsed_s": round(elapsed, 4),
+    })
+
+    return results
 
 
 def synthesize(query, n=10, collections=None):
