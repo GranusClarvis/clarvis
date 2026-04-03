@@ -24,6 +24,14 @@ _(P0 delivery window 2026-03-31 completed. Reset for next sprint.)_
 
 ### Execution Reliability (2026-04-03 cron failure follow-up)
 
+### SWO / Clarvis Brand Integration (2026-04-03)
+- [ ] [SWO_CLARVIS_BRAND_AUDIT] Audit Clarvis public-facing branding, naming treatment, color system, and visual identity against Star World Order. Decide what stays Clarvis-native vs what must adopt SWO language.
+- [ ] [SWO_CLARVIS_DESIGN_BRIEF] Create a concrete design brief for "Clarvis as a Star World Order feature": palette, typography, UI motifs, icon/avatar direction, copy tone, and examples of correct/incorrect usage.
+- [ ] [SWO_CLARVIS_NAMING_ARCHITECTURE] Define naming architecture so Clarvis keeps its strong product name while fitting under SWO (e.g. "Clarvis by Star World Order" / "SWO Clarvis" / section naming rules). Include guidance for feature names and dashboard terminology.
+- [ ] [SWO_CLARVIS_TOKEN_ALIGNMENT] Inspect the Star World Order repo design tokens/components and map Clarvis onto them. Identify reusable tokens, missing variants, and what must be added for visual consistency.
+- [ ] [SWO_CLARVIS_LANDING_CONCEPT] Produce a concrete landing/page concept for Clarvis inside SWO: page structure, CTA hierarchy, screenshots/mock sections, and how to explain Clarvis as an SWO capability without losing the Clarvis identity.
+- [ ] [SWO_CLARVIS_COPY_PASS] Rewrite public-facing Clarvis copy into an SWO-aligned but non-cringe voice: cosmic/order framing where helpful, while preserving clarity and product credibility.
+
 ### Context/Prompt Pipeline (2026-04-03 deep audit, refined 2026-04-03 second-opinion audit)
 - [~] [PROMPT_LLM_REVIEW_BENCH] _(2026-04-03: Static eval framework built. LLM-judged scoring designed but not yet implemented — needs OpenRouter integration for cost-effective evaluation. Framework ready in `prompt_quality_eval.py`.)_
 
