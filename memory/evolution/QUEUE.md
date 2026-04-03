@@ -172,18 +172,24 @@ _Source: Full system scan — bloat score at 0.400 threshold, data/scripts/monit
 _Source: `https://github.com/openai/codex` (README reviewed; use for cross-comparison with the Claude harness program and OpenClaw ACP flows)._
 
 #### Product Surface & Runtime Model
-- [ ] [CODEX_RELEASE_AND_DISTRIBUTION] Study Codex distribution model (npm, Homebrew cask, release binaries) and release ergonomics. Evaluate whether Clarvis should package selected subsystems/CLIs in a similar multi-channel way for easier operator adoption.
+- [x] [CODEX_RELEASE_AND_DISTRIBUTION] _(Completed 2026-04-03)_ Verdict: **defer**. Codex multi-channel (npm+brew+binary) is for distributed developer tools. Clarvis is a deployed system — existing PyPI/Docker paths sufficient. Detail: `memory/research/codex_comparative_bundle9_2026-04-03.md` §1.
 
 #### Agent UX & Developer Workflow
-- [ ] [CODEX_LOCAL_AGENT_EXPERIENCE] Analyze the "runs locally on your computer" positioning and likely implications for trust, speed, privacy, and operator ergonomics. Compare against our current spawn/session model. Write a note on where Clarvis should emphasize local control vs remote orchestration.
-- [ ] [CODEX_IDE_INTEGRATION_RESEARCH] Study Codex IDE integration path and compare with OpenClaw thread-bound ACP sessions. Identify what makes IDE attachment compelling and whether we should build a comparable bridge for Clarvis project agents or browser relay workflows.
+- [x] [CODEX_LOCAL_AGENT_EXPERIENCE] _(Completed 2026-04-03)_ Verdict: **adopt one win**. Clarvis already local-first. Real gap: no secret redaction at brain storage boundary. Queued `BRAIN_SECRET_REDACTION` as P1. Detail: §2.
+- [x] [CODEX_IDE_INTEGRATION_RESEARCH] _(Completed 2026-04-03)_ Verdict: **defer IDE, P2 MCP server**. IDE extension is wrong UX model (Clarvis uses Telegram, not editor). MCP server exposing brain ops would add composability. Queued `CLARVIS_MCP_SERVER_DESIGN` as P2. Detail: §3.
 
 #### Architecture Comparison Program
-- [ ] [CODEX_TOOLING_AND_SANDBOX_REVIEW] Study Codex tool execution, approval model, safety boundaries, and any sandbox/workspace controls present in the source. Compare to harness permission pipeline and Clarvis's current trust-heavy model.
+- [x] [CODEX_TOOLING_AND_SANDBOX_REVIEW] _(Completed 2026-04-03)_ Verdict: **defer sandbox, adopt redaction**. OS-level sandbox still impractical (no root, single operator). Codex's Starlark policy engine and Guardian subagent are wrong fit for Clarvis's task-spawning model. Defense at storage boundary (secret redaction) is the right pattern. Detail: §4.
 
 #### Strategic Extraction for Clarvis
-- [ ] [CODEX_PORTABILITY_PATTERN_EXTRACTION] Extract portable ideas from Codex that could materially improve Clarvis operator UX, installation, session handling, or packaging with minimal architectural upheaval.
-- [ ] [CODEX_CROSS_VENDOR_AGENT_BENCH] Build a cross-vendor research brief from Codex + Claude harness + OpenClaw: converge on a set of best practices for local agent runtimes, permissions, memory, compaction, and orchestration. Output should feed a Clarvis architecture direction memo, not just raw notes.
+- [x] [CODEX_PORTABILITY_PATTERN_EXTRACTION] _(Completed 2026-04-03)_ Extracted: (1) two-phase memory consolidation with usage ranking → queued `MEMORY_USAGE_TRACKING`, (2) session slug naming → queued `SESSION_SLUG_NAMING`, (3) ghost snapshots → already covered by worktree, (4) notify command → already queued as `CRON_TELEGRAM_NOTIFY`. Detail: §5.
+- [x] [CODEX_CROSS_VENDOR_AGENT_BENCH] _(Completed 2026-04-03)_ Produced architecture direction memo comparing Codex × Claude Harness × OpenClaw × Clarvis across 10 dimensions. Key finding: Clarvis's unique position (autonomous cognitive agent, not developer tool) means extracting storage-boundary defenses and usage-ranked consolidation, NOT TUI/IDE/sandbox/policy-engine. 5 concrete next moves identified. Detail: §6.
+
+#### Follow-up from Codex Research (Bundle 9)
+- [x] [BRAIN_SECRET_REDACTION] _(Completed 2026-04-03)_ Added `clarvis/brain/secret_redaction.py` — 9 regex patterns (AWS, OpenAI, OpenRouter, Bearer, generic API key, private key, GitHub token, Telegram token). Auto-registered as BRAIN_PRE_STORE hook (priority 5). Mutates context text before storage, logs warnings. 15 tests in `tests/clarvis/test_secret_redaction.py`. Also fixed `remember()` to read back mutated text from hook context.
+- [ ] [SESSION_SLUG_NAMING] **(P2)** In `session_transcript_logger.py`, derive a slug from task title and include in JSONL metadata. Improves transcript browsability.
+- [ ] [MEMORY_USAGE_TRACKING] **(P2)** Add `usage_count` and `last_used` metadata to procedures in `distill_procedures()`. On consolidation, rank by usage, deduplicate near-duplicates (cosine > 0.92). ~50 lines in `conversation_learner.py`.
+- [ ] [CLARVIS_MCP_SERVER_DESIGN] **(P2)** Design doc for minimal MCP server exposing `brain search`, `brain remember`, `heartbeat run`, `spawn task`. Python, ~200 LOC. Makes Clarvis composable with external tools/agents.
 
 ### Bloat & Hygiene — 2026-04-02 evolution scan
 _Source: Evolution analysis — bloat score at 0.400 threshold, 97MB synaptic store and __pycache__ accumulation unaddressed._

@@ -352,10 +352,13 @@ def remember(text, importance=0.9, category=None):
     tags = _detect_tags(text)
 
     # --- Brain hooks: pre-store ---
-    _run_brain_hooks("brain_pre_store", {
+    # Hook may mutate ctx["text"] (e.g. secret redaction), so read it back.
+    _pre_ctx = {
         "op": "remember", "text": text, "importance": importance,
         "category": category, "tags": tags,
-    })
+    }
+    _run_brain_hooks("brain_pre_store", _pre_ctx)
+    text = _pre_ctx["text"]
 
     # --- Conflict detection (pre-storage) ---
     _detect_and_resolve_conflicts(text, category, importance)
@@ -654,3 +657,14 @@ def global_search(query, level="C1", top_k=5):
     """GraphRAG-style global search over community summaries."""
     from clarvis.brain.graphrag import global_search as _gs
     return _gs(query, level=level, top_k=top_k)
+
+
+# --- Auto-register brain hooks ---
+# Secret redaction runs at priority 5 (before all other pre-store hooks).
+# Lazy import + silent failure: hooks never block brain operations.
+try:
+    from clarvis.heartbeat.hooks import registry as _hook_registry
+    from clarvis.brain.secret_redaction import register as _register_secret_redaction
+    _register_secret_redaction(_hook_registry)
+except Exception:
+    pass
