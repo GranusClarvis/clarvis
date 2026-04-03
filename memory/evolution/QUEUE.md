@@ -81,6 +81,8 @@ _(Completed items archived.)_
 
 ### External Challenges
 
+- [ ] [EXTERNAL_CHALLENGE:coding-challenge-02] Build a minimal DAG task scheduler with dependency resolution — Implement a task scheduler that takes a DAG of tasks with dependencies, topologically sorts them, and executes independent tasks in parallel using asyncio. Include cycle detection, timeout handling, a
+
 - [ ] [EXTERNAL_CHALLENGE:bench-latency-01] Profile and optimize the 3 slowest brain operations end-to-end — Use cProfile to profile the top 3 slowest brain operations (likely: store with graph update, multi-collection search, batch decay). For each, create a flamegraph-style report, identify the bottleneck,
 
 - [ ] [EXTERNAL_CHALLENGE:research-impl-03] Implement a simple MemoryBank with forgetting curve (Ebbinghaus) — Build a memory bank that models Ebbinghaus forgetting curves. Each memory has a retention strength that decays exponentially. Implement spaced repetition: memories that are recalled get strength boost
@@ -103,10 +105,6 @@ _(Completed items archived.)_
 ### P0 — Found in 2026-04-02 evening code review
 
 ### P1 — Found in 2026-04-02 quality audit
-- [x] [GRAPHRAG_BOOST_VALUE_FIX] Fix `.env.example` CLARVIS_GRAPHRAG_BOOST=1.0 → CLARVIS_GRAPHRAG_BOOST=1 (code checks `!= "1"`, float string silently breaks). Also remove dead OLLAMA_KEEP_ALIVE entry (no script references it).
-- [x] [SCORE_EVIDENCE_UNIT_TEST] Add dedicated unit test for `score_evidence()` in `clarvis/brain/retrieval_eval.py` — 10 tests covering empty, threshold, boundary, identity, missing distance (2026-04-02)
-- [x] [ATTENTION_VISUALIZER_TESTS] N/A — `scripts/attention_visualizer.py` was deleted in commit 5745f39 (repo hygiene, 2026-04-02). Dead code, no tests needed (2026-04-02)
-- [x] [CONTEXT_COMPRESSOR_DEDUP] Deduped: scripts/context_compressor.py now imports 10 shared primitives from clarvis.context.compressor (constants, helpers, mmr_rerank, tfidf_extract). compress_text kept local due to different default ratio (0.25 vs 0.30) (2026-04-02)
 - [ ] [CONTEXT_COMPRESSOR_FULL_MIGRATION] Complete migration: scripts/context_compressor.py still has ~1300 lines of scripts-only logic (caching, health compression, advanced brief, wire tasks). Consider migrating remaining unique features to clarvis.context or deprecating the scripts version.
 
 ### Open-Source Readiness — Fresh-Clone Install Audit (2026-04-01)
@@ -115,39 +113,28 @@ _Source: Fresh-user perspective audit of clone → install → understand → ru
 #### Completed (2026-04-01)
 
 #### Remaining — P1
-- [x] [OSR_DOCKER_QUICKSTART] Create a minimal `Dockerfile` + `docker-compose.yml` for contributors who want to try Clarvis without setting up a dedicated host. Should run brain health, CLI, and tests. Not for production (production is systemd-native).
-- [x] [OSR_PYPI_PUBLISH_PREP] Prepare sub-packages for PyPI publication: add CHANGELOG.md to each, verify `python -m build` produces clean wheels, test `pip install` from wheel (not editable) works.
-- [x] [OSR_QUICK_DEMO_MODE] Add a `python3 -m clarvis demo` command that runs a self-contained demo (store → search → recall → heartbeat gate) without needing existing data. Good for README walkthroughs and conference demos.
 
 #### Follow-up — P2
 - [ ] [OSR_PYPI_CHANGELOGS] Add CHANGELOG.md to each sub-package before first PyPI publish.
 - [ ] [OSR_DOCKER_CI] Wire Docker build into CI workflow to catch packaging regressions.
 
 ### Session Persistence Implementation (from HARNESS_SESSION_PERSISTENCE research, 2026-04-01)
-- [x] [SESSION_TRANSCRIPT_LOGGER] Add JSONL transcript persistence to heartbeat_postflight.py: append metadata to `data/session_transcripts/YYYY-MM-DD.jsonl`, save raw output to `data/session_transcripts/raw/`, add gzip rotation to cron_cleanup.sh (compress >7d, delete >90d). _(Done 2026-04-03: `scripts/session_transcript_logger.py`, hooked as §9.5 in postflight, rotation in `cleanup_policy.py`)_
-- [x] [CONVERSATION_LEARNER_UPGRADE] Upgrade conversation_learner.py to ingest full session transcripts from `data/session_transcripts/` instead of 200-char snippets from `memory/*.md`. Enable pattern extraction from complete tool-use sequences and prompt-outcome pairs. _(Done 2026-04-03: `load_session_transcripts()` + `extract_session_patterns()` added, merged into main pipeline)_
 - [ ] [CONVERSATION_LEARNER_DEDUP] Deduplicate insights across memory/*.md and session_transcript sources — currently both sources can produce overlapping success/failure entries. Low priority, monitor for noise first.
 
 ### Claude Harness Research Program (2026-03-31)
 _Source: `data/external_src/claude-harness-src.zip`. Deep-dive note: `memory/research/claude_harness_architecture_2026-03-31.md`._
 
 #### Architecture & Runtime
-- [x] [HARNESS_TASK_BUDGET_STOPPING] _(Completed 2026-04-03)_ Verdict: **prototype next**. Harness has in-process token tracking (inapplicable to subprocess model). Phase 1: switch to `--output-format json` for per-task token accounting. Phase 2: cost-per-task moving average with anomaly detection. Phase 3: output growth rate monitoring in execution_monitor (defer). Design: `memory/research/harness_runtime_architecture_2026-04-03.md` §1.
-- [x] [HARNESS_SANDBOX_MODEL] _(Completed 2026-04-03)_ Verdict: **defer**. True OS-level sandboxing impractical (same UID, no root for cgroups/netns). Current 3-tier lock system + worktree isolation sufficient. Two small wins: auto-enable worktree for code-modifying tasks, add post-execution file-diff check. Design: §4.
 
 #### Memory & State
-- [x] [HARNESS_DREAM_DISTILLATION] _(Completed 2026-04-03)_ Verdict: **adopted**. Added `distill_procedures()` to `conversation_learner.py` — groups successful sessions by task type, extracts common tool-use sequences, stores as procedures in `clarvis-procedures` (importance=0.7). Rule-based, no LLM cost. Wired into existing reflection pipeline. Design: §5.
 
 #### Orchestration & Multi-Agent
 
 #### Hooks & Extensibility
-- [x] [HARNESS_HOOK_SYSTEM] _(Completed 2026-04-03)_ Verdict: **adopted**. Added 4 brain operation phases to HookRegistry: `BRAIN_PRE_STORE`, `BRAIN_POST_STORE`, `BRAIN_PRE_SEARCH`, `BRAIN_POST_SEARCH`. Wired into `clarvis/brain/__init__.py` `remember()` and `search()` with lazy import and silent failure. Enables cost tracking, quality gates, audit logging. All 9 existing hook tests pass. Design: §2.
 
 #### Context & Compaction
-- [x] [HARNESS_GRADUATED_COMPACTION] _(Completed 2026-04-03)_ Verdict: **prototype next**. Designed 3-tier graduated pipeline: Tier 0 PRUNE (DyCP + staleness, zero LLM) → Tier 1 SNIP (truncate middles, zero LLM) → Tier 2 COMPRESS (existing TF-IDF + MMR). Harness's microcompact/collapse tiers don't apply (Clarvis assembles fresh, no message history). Design: §3.
 
 #### UX & Portability
-- [x] [HARNESS_BRIDGE_TRANSPORT] _(Completed 2026-04-03)_ Verdict: **defer**. Polling latency (4h between digest reads) not causing real problems. Telegram delivery covers urgent results. Designed future `clarvis-bridge` asyncio server (~200 LOC) with socket activation if needed. Immediate win: add Telegram notifications to `cron_autonomous.sh`. Design: §6.
 
 #### Follow-up tasks from Bundle 8 research
 - [ ] [BUDGET_TRACKING_JSON_OUTPUT] Switch `run_claude_monitored()` to `--output-format json`, parse final token usage, write to progress file for postflight cost accounting.
@@ -158,35 +145,24 @@ _Source: `data/external_src/claude-harness-src.zip`. Deep-dive note: `memory/res
 ### Bloat & Dead-Code Reduction (2026-04-01 scan)
 _Source: System gap scan — bloat score at 0.400 threshold, 72 unused scripts identified._
 
-- [x] [DEAD_SCRIPT_AUDIT_AND_PURGE] _(Completed 2026-04-02)_ Deep audit of all 195 scripts. 10 confirmed dead removed: `attention_visualizer.py`, `backfill_created_epoch.py`, `bench_context_utilization.py`, `brain_research_dedupe.py`, `cron_error_aggregator.sh`, `cron_graph_soak_manager.sh`, `generate_status_page.py`, `oss_readiness_check.sh`, `priorities_curator.py`, `research_crawler.py`. 17 initially flagged scripts were found to be actively imported by heartbeat pipeline — kept.
-- [x] [STALE_DATA_CLEANUP] _(Completed 2026-04-02)_ Compressed `clarvisdb_backup_phase0_*` (112M→archive tarball), gzipped 3 stale relationship JSONs (72M→4M), removed orphaned `claude-harness-src.zip` (9.5M). Total ~190MB reclaimed/compressed.
 
 ### System Gap Scan (2026-04-01 evening)
 _Source: Full system scan — bloat score at 0.400 threshold, data/scripts/monitoring audited._
 
 
-- [x] [ORPHAN_ZERO_BYTE_DB_PURGE] _(Completed 2026-04-02)_ Removed 4 zero-byte DB files: `brain.db`, `clarvis.db`, `synaptic_memory.db`, `clarvisdb/relationships.db`. Backup dir handled under STALE_DATA_CLEANUP.
-- [x] [HEBBIAN_DATA_GROWTH_AUDIT] _(Completed 2026-04-02)_ Hebbian is actively used by brain hooks, heartbeat preflight, prompt builder, and clarvis-db package. access_log.jsonl already in cleanup_policy.py at 5000-line cap (trims weekly Sunday). coactivation.json at 37k pairs/11MB — bounded by memory count, pruned by evolve(). Added evolution_history.jsonl to trim policy. Growth rate: ~2.6k access_log lines/day. System healthy, no intervention needed.
 
 ### OpenAI Codex Research Program (2026-03-31)
 _Source: `https://github.com/openai/codex` (README reviewed; use for cross-comparison with the Claude harness program and OpenClaw ACP flows)._
 
 #### Product Surface & Runtime Model
-- [x] [CODEX_RELEASE_AND_DISTRIBUTION] _(Completed 2026-04-03)_ Verdict: **defer**. Codex multi-channel (npm+brew+binary) is for distributed developer tools. Clarvis is a deployed system — existing PyPI/Docker paths sufficient. Detail: `memory/research/codex_comparative_bundle9_2026-04-03.md` §1.
 
 #### Agent UX & Developer Workflow
-- [x] [CODEX_LOCAL_AGENT_EXPERIENCE] _(Completed 2026-04-03)_ Verdict: **adopt one win**. Clarvis already local-first. Real gap: no secret redaction at brain storage boundary. Queued `BRAIN_SECRET_REDACTION` as P1. Detail: §2.
-- [x] [CODEX_IDE_INTEGRATION_RESEARCH] _(Completed 2026-04-03)_ Verdict: **defer IDE, P2 MCP server**. IDE extension is wrong UX model (Clarvis uses Telegram, not editor). MCP server exposing brain ops would add composability. Queued `CLARVIS_MCP_SERVER_DESIGN` as P2. Detail: §3.
 
 #### Architecture Comparison Program
-- [x] [CODEX_TOOLING_AND_SANDBOX_REVIEW] _(Completed 2026-04-03)_ Verdict: **defer sandbox, adopt redaction**. OS-level sandbox still impractical (no root, single operator). Codex's Starlark policy engine and Guardian subagent are wrong fit for Clarvis's task-spawning model. Defense at storage boundary (secret redaction) is the right pattern. Detail: §4.
 
 #### Strategic Extraction for Clarvis
-- [x] [CODEX_PORTABILITY_PATTERN_EXTRACTION] _(Completed 2026-04-03)_ Extracted: (1) two-phase memory consolidation with usage ranking → queued `MEMORY_USAGE_TRACKING`, (2) session slug naming → queued `SESSION_SLUG_NAMING`, (3) ghost snapshots → already covered by worktree, (4) notify command → already queued as `CRON_TELEGRAM_NOTIFY`. Detail: §5.
-- [x] [CODEX_CROSS_VENDOR_AGENT_BENCH] _(Completed 2026-04-03)_ Produced architecture direction memo comparing Codex × Claude Harness × OpenClaw × Clarvis across 10 dimensions. Key finding: Clarvis's unique position (autonomous cognitive agent, not developer tool) means extracting storage-boundary defenses and usage-ranked consolidation, NOT TUI/IDE/sandbox/policy-engine. 5 concrete next moves identified. Detail: §6.
 
 #### Follow-up from Codex Research (Bundle 9)
-- [x] [BRAIN_SECRET_REDACTION] _(Completed 2026-04-03)_ Added `clarvis/brain/secret_redaction.py` — 9 regex patterns (AWS, OpenAI, OpenRouter, Bearer, generic API key, private key, GitHub token, Telegram token). Auto-registered as BRAIN_PRE_STORE hook (priority 5). Mutates context text before storage, logs warnings. 15 tests in `tests/clarvis/test_secret_redaction.py`. Also fixed `remember()` to read back mutated text from hook context.
 - [ ] [SESSION_SLUG_NAMING] **(P2)** In `session_transcript_logger.py`, derive a slug from task title and include in JSONL metadata. Improves transcript browsability.
 - [ ] [MEMORY_USAGE_TRACKING] **(P2)** Add `usage_count` and `last_used` metadata to procedures in `distill_procedures()`. On consolidation, rank by usage, deduplicate near-duplicates (cosine > 0.92). ~50 lines in `conversation_learner.py`.
 - [ ] [CLARVIS_MCP_SERVER_DESIGN] **(P2)** Design doc for minimal MCP server exposing `brain search`, `brain remember`, `heartbeat run`, `spawn task`. Python, ~200 LOC. Makes Clarvis composable with external tools/agents.
@@ -194,8 +170,6 @@ _Source: `https://github.com/openai/codex` (README reviewed; use for cross-compa
 ### Bloat & Hygiene — 2026-04-02 evolution scan
 _Source: Evolution analysis — bloat score at 0.400 threshold, 97MB synaptic store and __pycache__ accumulation unaddressed._
 
-- [x] [SYNAPTIC_STORE_ARCHIVE] _(Completed 2026-04-02 — NOT archived)_ Audit found synaptic memory is **actively used** by 9+ files: brain hooks, heartbeat preflight, prompt builder, clarvis-db package. The original assessment ("fully superseded by ClarvisDB SQLite graph") was incorrect — synaptic provides spreading-activation and connection-weight features that the graph DB does not replace. 98MB `synapses.db` is live data. No action taken.
-- [x] [PYCACHE_GITIGNORE_AND_PURGE] _(Completed 2026-04-02)_ `__pycache__/` and `*.pyc` were already in `.gitignore`. Added `*.egg-info/` and `*.egg` patterns. Removed 6 tracked `clarvis.egg-info/` files via `git rm --cached`. No tracked `__pycache__` or `.pyc` files found in git index.
 
 ### Non-Python — 2026-04-02 evolution scan
 
@@ -205,15 +179,9 @@ _Source: Evolution analysis — bloat score at 0.400 threshold, 97MB synaptic st
 _Source: Ruthless audit of all 5 open-source readiness bundles._
 
 #### Fixed in this audit
-- [x] [OSR_SMOKE_TEST_HARDCODED_PATH] Fixed `tests/test_open_source_smoke.py` line 22: replaced hardcoded `/home/agent/.openclaw/workspace` fallback with `os.path.dirname(os.path.dirname(os.path.abspath(__file__)))` — breaks on fresh clones without `CLARVIS_WORKSPACE` set. (2026-04-03)
-- [x] [OSR_GITLEAKS_STALE_PATH] Removed `scripts/oss_readiness_check.sh` from `.gitleaks.toml` allowlist — script was deleted in Bundle 4 but path kept in allowlist. (2026-04-03)
 
 #### P1 — Should fix before public release
-- [x] [OSR_INSTALL_SHELL_QUOTING] Fixed: `$VERIFY_ARGS` now properly quoted with conditional dispatch (empty vs non-empty). (2026-04-03)
-- [x] [OSR_INSTALL_DEAD_PEP668_CHECK] Fixed: removed dead PEP 668 detection branch (lines 214-216 always fell through to `true`). Working check retained. (2026-04-03)
-- [x] [OSR_DOCS_STALE_SCRIPT_REFS] Fixed: annotated deleted `cron_graph_soak_manager.sh` (3 refs in SPINE_USAGE_AUDIT.md) and `generate_status_page.py` (decomposition_audit) as deleted with commit refs. (2026-04-03)
 - [ ] [OSR_BUNDLE5_UNCOMMITTED] Bundle 5 changes (context_compressor dedup + score_evidence tests) are uncommitted: `scripts/context_compressor.py` (294 lines removed) and `tests/clarvis/test_retrieval_eval.py` (75 lines added). These need to be committed to actually ship.
-- [x] [OSR_BUILD_ISOLATION] Root cause: PEP 668 `EXTERNALLY-MANAGED` marker on Ubuntu 24.04+ — `python-build` can't install setuptools into isolated venv. Added wheel build verification step to CI (where `actions/setup-python` provides clean Python without PEP 668). Documented `--no-isolation` workaround in INSTALL.md troubleshooting. (2026-04-03)
 
 
 

@@ -7,7 +7,8 @@
     "research-impl-02",
     "research-impl-04",
     "research-impl-03",
-    "bench-latency-01"
+    "bench-latency-01",
+    "coding-challenge-02"
   ],
   "injections": [
     {
@@ -57,6 +58,12 @@
       "title": "Profile and optimize the 3 slowest brain operations end-to-end",
       "timestamp": 1775127602.4336274,
       "date": "2026-04-02T11:00:02"
+    },
+    {
+      "id": "coding-challenge-02",
+      "title": "Build a minimal DAG task scheduler with dependency resolution",
+      "timestamp": 1775178002.175801,
+      "date": "2026-04-03T01:00:02"
     }
   ],
   "gh_last_refresh": null
