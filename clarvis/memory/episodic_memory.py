@@ -319,9 +319,9 @@ class EpisodicMemory:
         if not candidates:
             return 0
 
-        new_words = set(new_episode["task"].lower().split())
-        new_section = new_episode["section"]
-        new_outcome = new_episode["outcome"]
+        new_words = set((new_episode.get("task") or "").lower().split())
+        new_section = new_episode.get("section")
+        new_outcome = new_episode.get("outcome")
         links_created = 0
         linked_ids = set()
 
@@ -332,7 +332,7 @@ class EpisodicMemory:
             if prior_id in linked_ids:
                 continue
 
-            prior_words = set(prior["task"].lower().split())
+            prior_words = set((prior.get("task") or "").lower().split())
             raw_overlap = len(new_words & prior_words) / max(1, len(new_words | prior_words))
             kw_overlap = self._keyword_overlap(new_episode["task"], prior["task"])
             overlap = max(raw_overlap, kw_overlap)
@@ -827,14 +827,15 @@ class EpisodicMemory:
             outcome_counts[o] = outcome_counts.get(o, 0) + 1
 
             # Action verb extraction
-            words = ep["task"].split()
+            _task = ep.get("task") or ""
+            words = _task.split()
             verb = words[0].lower().strip("[]()") if words else ""
             if verb:
                 bucket = success_actions if o == "success" else failure_actions
                 bucket[verb] = bucket.get(verb, 0) + 1
 
             # Domain classification
-            task_lower = ep["task"].lower()
+            task_lower = _task.lower()
             matched = [d for d, kws in self._DOMAIN_KEYWORDS.items()
                        if any(kw in task_lower for kw in kws)]
             if not matched:

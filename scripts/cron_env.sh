@@ -93,6 +93,14 @@ run_claude_monitored() {
         _owns_prompt_file=1
     fi
 
+    # Validate prompt is non-empty
+    if [ ! -s "$_prompt_file" ]; then
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] PROMPT_GUARD: prompt file is empty — aborting Claude invocation" >> "$_logfile"
+        [ "$_owns_prompt_file" -eq 1 ] && rm -f "$_prompt_file"
+        MONITORED_EXIT=1
+        return 1
+    fi
+
     # Launch Claude Code in background, feeding prompt via stdin (not argv)
     timeout "$_timeout" env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \
         /home/agent/.local/bin/claude -p \

@@ -132,19 +132,21 @@ if not os.path.exists(tracker_file) and not os.path.exists(archive_file):
 
     WEAKEST_METRIC=$(get_weakest_metric)
     DISC_PROMPT_FILE=$(mktemp --suffix=.txt)
-    cat > "$DISC_PROMPT_FILE" << ENDDISC
+    {
+        cat <<'STATIC_HEADER'
 You are Clarvis's research strategist. Identify 3-5 HIGH-VALUE research topics.
 QUEUE: memory/evolution/QUEUE.md is the task backlog.
-WEAKEST METRIC: $WEAKEST_METRIC — at least 1 topic MUST relate to improving this.
-CONTEXT: $CONTEXT_BRIEF_DISC
-
-ALREADY RESEARCHED (do NOT duplicate): $ALREADY_RESEARCHED
-IN QUEUE: $QUEUE_RESEARCH
-
+STATIC_HEADER
+        printf 'WEAKEST METRIC: %s — at least 1 topic MUST relate to improving this.\n' "$WEAKEST_METRIC"
+        printf 'CONTEXT: %s\n\n' "$CONTEXT_BRIEF_DISC"
+        printf 'ALREADY RESEARCHED (do NOT duplicate): %s\n' "$ALREADY_RESEARCHED"
+        printf 'IN QUEUE: %s\n\n' "$QUEUE_RESEARCH"
+        cat <<'STATIC_FOOTER'
 PRIORITIES: autonomous execution, AGI architecture, consciousness/IIT, open-source tools, self-improvement.
 ACTION: Search web, add 3-5 topics via: python3 scripts/queue_writer.py add "Research: [topic]" --priority P1 --source research_discovery
 OUTPUT FORMAT (mandatory): TOPICS ADDED: <count>. Then list each topic on its own line.
-ENDDISC
+STATIC_FOOTER
+    } > "$DISC_PROMPT_FILE"
 
     # Category: research (1800s) — matches spawn_claude.sh --category=research
     run_claude_monitored 1800 "$DISC_OUTPUT_FILE" "$DISC_PROMPT_FILE" "$LOGFILE"

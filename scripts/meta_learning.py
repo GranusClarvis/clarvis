@@ -116,7 +116,7 @@ class MetaLearner:
         }
 
         for ep in episodes:
-            task_lower = ep.get("task", "").lower()
+            task_lower = (ep.get("task") or "").lower()
             words = task_lower.split()
             first_verb = words[0].strip("[]()") if words else ""
 
@@ -211,7 +211,7 @@ class MetaLearner:
 
         domain_effort = defaultdict(lambda: defaultdict(int))
         for ep in episodes:
-            task_lower = ep.get("task", "").lower()
+            task_lower = (ep.get("task") or "").lower()
             date = ep.get("timestamp", "")[:10]
             for domain, keywords in DOMAIN_KEYWORDS.items():
                 if any(kw in task_lower for kw in keywords):
@@ -338,7 +338,7 @@ class MetaLearner:
             # Find common task context words
             task_words = defaultdict(int)
             for ep in episodes_in_cluster:
-                for word in ep["task"].lower().split():
+                for word in (ep.get("task") or "").lower().split():
                     if len(word) > 3:
                         task_words[word] += 1
             common_context = sorted(task_words.items(), key=lambda x: x[1], reverse=True)[:5]
@@ -890,7 +890,7 @@ class MetaLearner:
             "suggested_approach": None,
         }
 
-        task_lower = task_text.lower()
+        task_lower = (task_text or "").lower()
 
         # Check strategy effectiveness
         strategies = self._analysis.get("strategies", {})

@@ -34,6 +34,8 @@ def _load_episodes():
 
 def _extract_action_verb(task_text):
     """Extract the leading action verb from a task description."""
+    if not task_text:
+        return ""
     words = task_text.strip().split()
     if not words:
         return ""

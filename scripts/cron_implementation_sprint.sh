@@ -111,7 +111,8 @@ TASK_OUTPUT_FILE=$(mktemp)
 TASK_START=$SECONDS
 PROMPT_FILE=$(mktemp --suffix=.txt)
 
-cat > "$PROMPT_FILE" << ENDPROMPT
+{
+    cat <<'STATIC_HEADER'
 You are Clarvis's executive function running an IMPLEMENTATION SPRINT.
 
 TIME BUDGET: You have ~25 minutes. Focus on completing this task fully.
@@ -119,22 +120,25 @@ AVOID THESE FAILURE PATTERNS:
 - AVOID: [shallow_reasoning] Multi-step tasks need multi-step reasoning
 - AVOID: [long_duration] Stay focused, complete the smallest viable increment
 
-${CONTEXT_BRIEF:+CONTEXT:
-$CONTEXT_BRIEF}
-
-${EPISODIC_HINTS:+EPISODIC HINTS:
-$EPISODIC_HINTS}
-
-${PROC_HINT:+$PROC_HINT}
-
-TASK: $IMPL_TASK
-
+STATIC_HEADER
+    if [ -n "$CONTEXT_BRIEF" ]; then
+        printf 'CONTEXT:\n%s\n\n' "$CONTEXT_BRIEF"
+    fi
+    if [ -n "$EPISODIC_HINTS" ]; then
+        printf 'EPISODIC HINTS:\n%s\n\n' "$EPISODIC_HINTS"
+    fi
+    if [ -n "$PROC_HINT" ]; then
+        printf '%s\n\n' "$PROC_HINT"
+    fi
+    printf 'TASK: %s\n\n' "$IMPL_TASK"
+    cat <<'STATIC_FOOTER'
 INSTRUCTIONS:
 - This is a DEDICATED IMPLEMENTATION slot — focus on writing code, editing configs, updating protocols.
 - Do the work. Be concrete. Test your changes.
 - If the task is too large, do the most impactful part and note what remains.
 - When done, output a summary listing what you did, comma-separated.
-ENDPROMPT
+STATIC_FOOTER
+} > "$PROMPT_FILE"
 
 run_claude_monitored 1500 "$TASK_OUTPUT_FILE" "$PROMPT_FILE" "$LOGFILE"
 TASK_EXIT=$MONITORED_EXIT

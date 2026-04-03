@@ -331,7 +331,7 @@ def _compute_strategy_gradients(tau, tau_prime, params):
     strategy_returns = defaultdict(list)
 
     for ep in tau_prime:
-        task_lower = ep.get("task", "").lower()
+        task_lower = (ep.get("task") or "").lower()
         outcome = ep.get("outcome", "failure")
         reward = 1.0 if outcome == "success" else (0.3 if outcome == "timeout" else 0.0)
 
@@ -476,7 +476,7 @@ def update_option_values(options: dict, episodes: list, gamma: float) -> dict:
         current_step_idx = 0
 
         for ep in episodes:
-            task_lower = ep.get("task", "").lower()
+            task_lower = (ep.get("task") or "").lower()
 
             if current_step_idx < len(steps):
                 step = steps[current_step_idx]
@@ -589,7 +589,7 @@ def build_transfer_matrix(episodes: list) -> dict:
     # Classify episodes by domain
     domain_episodes = defaultdict(list)
     for ep in episodes:
-        task_lower = ep.get("task", "").lower()
+        task_lower = (ep.get("task") or "").lower()
         for domain, keywords in DOMAIN_KEYWORDS.items():
             if any(kw in task_lower for kw in keywords):
                 domain_episodes[domain].append(ep)

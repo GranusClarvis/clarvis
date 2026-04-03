@@ -93,21 +93,25 @@ if [ -z "$AUDIT_SKIPPED" ]; then
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running evening audit..." >> "$LOGFILE"
     WEAKEST_METRIC=$(get_weakest_metric)
     EVENING_PROMPT_FILE=$(mktemp)
-    cat > "$EVENING_PROMPT_FILE" << ENDPROMPT
+    {
+        cat <<'STATIC'
 You are Clarvis's evening auditor.
 QUEUE: Check memory/evolution/QUEUE.md — note any stale or blocked tasks.
-WEAKEST METRIC: $WEAKEST_METRIC — flag if today's work helped or hurt this.
-
+STATIC
+        printf 'WEAKEST METRIC: %s — flag if today'\''s work helped or hurt this.\n\n' "$WEAKEST_METRIC"
+        cat <<'STATIC2'
 STEPS:
 1. Run git status + git log --oneline -10 to see today's changes.
 2. Scan memory/cron/*.log for errors (grep -i 'error\|fail\|warn' in last 100 lines).
 3. If a bug is found, fix it (1 fix max). If no bugs, skip.
 
 OUTPUT FORMAT (mandatory): "AUDIT: pass|issues_found — <1 sentence>. FIXES: <count>. METRIC_IMPACT: improved|neutral|degraded."
-ENDPROMPT
+STATIC2
+    } > "$EVENING_PROMPT_FILE"
     timeout 1200 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \
-        /home/agent/.local/bin/claude -p "$(cat "$EVENING_PROMPT_FILE")" \
-        --dangerously-skip-permissions --model claude-opus-4-6 >> "$LOGFILE" 2>&1
+        /home/agent/.local/bin/claude -p \
+        --dangerously-skip-permissions --model claude-opus-4-6 \
+        < "$EVENING_PROMPT_FILE" >> "$LOGFILE" 2>&1
     rm -f "$EVENING_PROMPT_FILE"
 fi
 

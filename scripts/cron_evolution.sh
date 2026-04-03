@@ -61,14 +61,15 @@ echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] CONTEXT: compressed_queue=${#COMPRESSED_QU
 # ============================================================================
 WEAKEST_METRIC=$(get_weakest_metric)
 EVO_PROMPT_FILE=$(mktemp)
-cat > "$EVO_PROMPT_FILE" << ENDPROMPT
+{
+    cat <<'STATIC_HEADER'
 You are Clarvis's strategic evolution engine.
 
 QUEUE: Read memory/evolution/QUEUE.md — the authoritative task backlog.
-WEAKEST METRIC: $WEAKEST_METRIC — at least one new task MUST target this.
-
-STEPS:
-1. Review the compressed queue below — what's pending ($PENDING_COUNT items)?
+STATIC_HEADER
+    printf 'WEAKEST METRIC: %s — at least one new task MUST target this.\n\n' "$WEAKEST_METRIC"
+    printf 'STEPS:\n1. Review the compressed queue below — what'\''s pending (%s items)?\n' "$PENDING_COUNT"
+    cat <<'STATIC_STEPS'
 2. Check data/plans/, skills/, HEARTBEAT.md, ROADMAP.md for gaps.
 3. Assess Phi trend and capability scores from health data below.
 
@@ -77,12 +78,12 @@ ACTION (MANDATORY if <5 pending tasks):
 - Format: - [ ] <concrete, actionable task>
 - At least 1 task targeting the weakest metric. At least 1 non-Python task.
 
-$COMPRESSED_QUEUE
-
-$COMPRESSED_HEALTH
-
+STATIC_STEPS
+    printf '%s\n\n%s\n\n' "$COMPRESSED_QUEUE" "$COMPRESSED_HEALTH"
+    cat <<'STATIC_FOOTER'
 OUTPUT FORMAT (mandatory): Start with "ANALYSIS: <1-sentence verdict>". Then "TASKS ADDED: <count>". Then list each task.
-ENDPROMPT
+STATIC_FOOTER
+} > "$EVO_PROMPT_FILE"
 
 EVO_OUTPUT_FILE=$(mktemp)
 run_claude_monitored 1200 "$EVO_OUTPUT_FILE" "$EVO_PROMPT_FILE" "$LOGFILE"

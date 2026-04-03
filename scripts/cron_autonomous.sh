@@ -169,17 +169,24 @@ if [ "$PF_STATUS" = "queue_empty" ] || [ "$PF_STATUS" = "no_tasks" ]; then
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Queue empty — spawning task generation..." >> "$LOGFILE"
     COMPRESSOR="$SCRIPTS/context_compressor.py"
     REPLENISH_CONTEXT=$(python3 "$COMPRESSOR" brief 2>> "$LOGFILE")
-    timeout 1200 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT /home/agent/.local/bin/claude -p \
-        "You are Clarvis's evolution engine. The evolution queue (memory/evolution/QUEUE.md) is EMPTY.
-WEAKEST METRIC: $WEAKEST_METRIC — at least one new task MUST target this.
-
-Recent state: $REPLENISH_CONTEXT
-
+    REPLENISH_PROMPT=$(mktemp --suffix=.txt)
+    {
+        cat <<'STATIC'
+You are Clarvis's evolution engine. The evolution queue (memory/evolution/QUEUE.md) is EMPTY.
+STATIC
+        printf 'WEAKEST METRIC: %s — at least one new task MUST target this.\n\n' "$WEAKEST_METRIC"
+        printf 'Recent state: %s\n\n' "$REPLENISH_CONTEXT"
+        cat <<'STATIC2'
 Scan the system for gaps: scripts/, skills/, HEARTBEAT.md, AGENTS.md, openclaw.json, crontab, data/plans/.
 Add 3-5 NEW unchecked tasks to QUEUE.md under '## NEW ITEMS'. Format: - [ ] <task>
 Rules: no duplicates, at least 1 non-Python task, at least 1 targeting the weakest metric.
-OUTPUT FORMAT (mandatory): TASKS ADDED: <count>. Then list each task on its own line." \
-        --dangerously-skip-permissions >> "$LOGFILE" 2>&1
+OUTPUT FORMAT (mandatory): TASKS ADDED: <count>. Then list each task on its own line.
+STATIC2
+    } > "$REPLENISH_PROMPT"
+    timeout 1200 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT /home/agent/.local/bin/claude -p \
+        --dangerously-skip-permissions --model claude-opus-4-6 \
+        < "$REPLENISH_PROMPT" >> "$LOGFILE" 2>&1
+    rm -f "$REPLENISH_PROMPT"
 
     # Also inject one external challenge alongside self-generated tasks
     python3 "$SCRIPTS/external_challenge_feed.py" inject >> "$LOGFILE" 2>&1 || true
@@ -320,21 +327,21 @@ run_claude_code() {
     local _timeout="$1"
     local _output_file="$2"
 
-    # Build prompt via file (shell-safe, avoids heredoc expansion issues)
+    # Build prompt via printf (shell-safe — no heredoc expansion of $, `, {})
     local _prompt_file
     _prompt_file=$(mktemp --suffix=.txt)
-    cat > "$_prompt_file" << ENDPROMPT
-${WORKER_TEMPLATE:-You are Clarvis's executive function.}
-
-${TIME_BUDGET_HINT}
-WEAKEST METRIC: $WEAKEST_METRIC — consider if your task can improve this.
-QUEUE: Read memory/evolution/QUEUE.md for task backlog. Mark your task [x] when done.
-${CONTEXT_BRIEF}
-${PROC_HINT:+
-PROCEDURAL HINT: $PROC_HINT}
-
-TASKS (execute in order; if a task is already done/obsolete, mark it [x] with a brief note in QUEUE.md):
-$(printf '%s\n' "$BATCH_TASKS" | nl -w2 -s'. ')
+    {
+        printf '%s\n\n' "${WORKER_TEMPLATE:-You are Clarvis executive function.}"
+        printf '%s\n' "$TIME_BUDGET_HINT"
+        printf 'WEAKEST METRIC: %s — consider if your task can improve this.\n' "$WEAKEST_METRIC"
+        printf 'QUEUE: Read memory/evolution/QUEUE.md for task backlog. Mark your task [x] when done.\n'
+        printf '%s\n' "$CONTEXT_BRIEF"
+        if [ -n "$PROC_HINT" ]; then
+            printf '\nPROCEDURAL HINT: %s\n' "$PROC_HINT"
+        fi
+        printf '\nTASKS (execute in order; if a task is already done/obsolete, mark it [x] with a brief note in QUEUE.md):\n'
+        printf '%s\n' "$BATCH_TASKS" | nl -w2 -s'. '
+        cat <<'STATIC_BLOCK'
 
 Do the work. Be concrete. Write code, edit configs, update protocols — whatever fits. Test it.
 Rules:
@@ -342,13 +349,22 @@ Rules:
 - If you can finish 2-3 tasks safely within the time budget, do so.
 - After each task, update QUEUE.md (mark [x]) before moving to the next.
 OUTPUT FORMAT (mandatory): Start with "RESULT: success|partial|fail — <what changed>". Then list each task with status. End with "NEXT: <suggested follow-up or none>".
-ENDPROMPT
+STATIC_BLOCK
+    } > "$_prompt_file"
+
+    # Validate prompt is non-empty before invoking Claude
+    if [ ! -s "$_prompt_file" ]; then
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] PROMPT_GUARD: prompt file is empty — aborting Claude invocation" >> "$LOGFILE"
+        rm -f "$_prompt_file"
+        return 1
+    fi
 
     # Start Claude Code in background for progress monitoring
+    # Feed prompt via stdin (not argv) to avoid shell expansion of prompt content
     timeout "$_timeout" env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \
-        /home/agent/.local/bin/claude -p "$(cat "$_prompt_file")" \
+        /home/agent/.local/bin/claude -p \
         --dangerously-skip-permissions --model claude-opus-4-6 \
-        > "$_output_file" 2>&1 &
+        < "$_prompt_file" > "$_output_file" 2>&1 &
     local _claude_pid=$!
 
     # Pattern 9: Commitment & Reconsideration — monitor for stalled execution

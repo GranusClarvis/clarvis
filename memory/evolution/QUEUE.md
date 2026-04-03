@@ -6,6 +6,7 @@ _Completed items auto-archived to QUEUE_ARCHIVE.md._
 
 ## P0 — Current Sprint
 
+- [ ] [LLM_BRAIN_REVIEW 2026-04-03] [LLM_BRAIN_REVIEW] Delete or archive the two 'Clarvis demo memory' entries (stored 2026-04-02) that contain no useful content — These zero-content memories appear in results for probes 6 and 8, displacing potentially useful results. They are pure noise.
 _(P0 delivery window 2026-03-31 completed. Reset for next sprint.)_
 
 ### Open-Source Release Blockers (2026-04-03 deep audit)
@@ -24,9 +25,7 @@ _(P0 delivery window 2026-03-31 completed. Reset for next sprint.)_
 - [ ] [SPINE_COGNITIVE_WORKSPACE] Migrate `scripts/cognitive_workspace.py` (Baddeley working memory model) to `clarvis/memory/cognitive_workspace.py`. Core module used by preflight, postflight, and context_compressor — has no spine presence at all.
 
 ### Documentation Accuracy (2026-04-03 deep audit)
-- [x] [DOCS_LAUNCH_PACKET_REFRESH] Fixed 4 stale claims in `docs/LAUNCH_PACKET.md`: removed "No CI/CD" (CI exists), updated "~7.5s" → "~270ms", fixed graph backend desc, updated memory/edge counts. _(Fixed 2026-04-03.)_
 - [ ] [DOCS_GAP_AUDIT_REFRESH] Update `docs/OPEN_SOURCE_GAP_AUDIT.md` — marks LICENSE, CONTRIBUTING.md, and CI as missing but all exist now.
-- [x] [DOCS_MISSING_SCRIPTS_REF] Fixed: SELF.md and HEARTBEAT.md references to `backup.sh`/`rollback.sh` updated to `backup_daily.sh`/`safe_update.sh --rollback`. AGENTS.md had no such references. _(Fixed 2026-04-03.)_
 
 ### Code Quality (2026-04-03 deep audit)
 - [ ] [DEAD_CODE_KNOWLEDGE_SYNTHESIS] Consolidate `scripts/knowledge_synthesis.py` — completely different implementation from `clarvis/context/knowledge_synthesis.py`. The scripts version is imported only by one test. Either remove or unify.
@@ -34,6 +33,13 @@ _(P0 delivery window 2026-03-31 completed. Reset for next sprint.)_
 
 ### Queue Process (2026-04-03 deep audit)
 - [ ] [QUEUE_AUTO_ARCHIVE] The queue header says "auto-archived" but archival is manual and 7+ days stale. Either implement a script that moves [x] items to QUEUE_ARCHIVE.md, or change the header to reflect manual cadence.
+
+### Execution Reliability (2026-04-03 cron failure follow-up)
+- [x] [CRON_AUTONOMOUS_PROMPT_ASSEMBLY_FIX] Fixed 2026-04-03: replaced unquoted heredocs with printf+quoted-heredoc pattern across 6 scripts; switched prompt delivery from `-p "$(cat)"` to stdin `< file`; added PROMPT_GUARD empty-file check.
+- [x] [AUTOMATION_INSIGHTS_NONNULL_GUARD] Fixed 2026-04-03: null-guarded `_extract_action_verb()` in automation_insights.py + null-guarded `.lower()` calls in meta_learning.py, meta_gradient_rl.py, episodic_memory.py. Also repaired null-task episode #394 in episodes.json.
+- [x] [CLAUDE_ROUTE_PARITY_AUDIT] Fixed 2026-04-03: audited all 10 Claude-spawning scripts. Fixed unquoted heredocs in cron_autonomous, cron_evening, cron_evolution, cron_implementation_sprint, cron_research. Added PROMPT_GUARD to cron_env.sh run_claude_monitored().
+- [x] [CLAUDE_SPAWN_SMOKE_MATRIX] Done 2026-04-03: `scripts/smoke_test_prompt_assembly.sh` — 5-section test covering syntax, unquoted heredoc detection, prompt-guard presence, prompt assembly simulation with special chars, Python null-safety.
+- [ ] [MONTHLY_REFLECTION_HEREDOC_FIX] `cron_monthly_reflection.sh` line 67 still uses unquoted `<< ENDDYNAMIC` for variable injection. Low risk (simple vars) but should be migrated to printf pattern for consistency.
 
 ---
 
