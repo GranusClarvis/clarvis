@@ -4,7 +4,7 @@ import pytest
 from unittest.mock import MagicMock
 from clarvis.brain.retrieval_eval import (
     score_result, classify_batch, strip_refine, evaluate_retrieval,
-    filter_by_score,
+    filter_by_score, score_evidence,
     _keyword_overlap, _semantic_sim, _recency_score,
     _extract_keywords, _rewrite_query, adaptive_recall,
     CORRECT, AMBIGUOUS, INCORRECT, AMBIGUOUS_THRESHOLD,
@@ -46,6 +46,79 @@ class TestSemanticSim:
 
     def test_negative_distance(self):
         assert _semantic_sim(-1.0) == 0.0
+
+
+class TestScoreEvidence:
+    """Tests for score_evidence() — CRAG-style pre-filter gate."""
+
+    def test_empty_results(self):
+        out = score_evidence("any query", [])
+        assert out == {"kept": [], "discarded": 0, "scores": [], "threshold": 0.3}
+
+    def test_all_kept_above_threshold(self):
+        results = [_make_result(distance=0.1), _make_result(distance=0.5)]
+        out = score_evidence("test", results)
+        assert len(out["kept"]) == 2
+        assert out["discarded"] == 0
+        assert len(out["scores"]) == 2
+        # distance=0.1 → sim ≈ 0.909, distance=0.5 → sim ≈ 0.667
+        assert all(s >= 0.3 for s in out["scores"])
+
+    def test_discards_distant_results(self):
+        results = [
+            _make_result(distance=0.1),   # sim ≈ 0.909 → kept
+            _make_result(distance=10.0),  # sim ≈ 0.091 → discarded
+        ]
+        out = score_evidence("test", results)
+        assert len(out["kept"]) == 1
+        assert out["discarded"] == 1
+
+    def test_all_discarded(self):
+        results = [_make_result(distance=10.0), _make_result(distance=20.0)]
+        out = score_evidence("test", results)
+        assert len(out["kept"]) == 0
+        assert out["discarded"] == 2
+
+    def test_missing_distance_uses_default(self):
+        """Results without 'distance' key default to 2.0 → sim ≈ 0.333."""
+        result = {"document": "no distance", "metadata": {}, "id": "x"}
+        out = score_evidence("test", [result])
+        # 1/(1+2.0) ≈ 0.333 which is >= 0.3 threshold
+        assert len(out["kept"]) == 1
+        assert abs(out["scores"][0] - 0.3333) < 0.01
+
+    def test_custom_threshold(self):
+        results = [_make_result(distance=1.0)]  # sim = 0.5
+        out_low = score_evidence("test", results, threshold=0.4)
+        out_high = score_evidence("test", results, threshold=0.6)
+        assert len(out_low["kept"]) == 1
+        assert len(out_high["kept"]) == 0
+
+    def test_threshold_echoed(self):
+        out = score_evidence("q", [], threshold=0.42)
+        assert out["threshold"] == 0.42
+
+    def test_scores_rounded_to_4_decimals(self):
+        results = [_make_result(distance=0.3)]
+        out = score_evidence("test", results)
+        score_str = str(out["scores"][0])
+        # At most 4 decimal places
+        if '.' in score_str:
+            assert len(score_str.split('.')[1]) <= 4
+
+    def test_preserves_result_identity(self):
+        """Kept results should be the same objects as input."""
+        r = _make_result(distance=0.1)
+        out = score_evidence("test", [r])
+        assert out["kept"][0] is r
+
+    def test_boundary_exactly_at_threshold(self):
+        """A result with sim exactly at threshold should be kept (>=)."""
+        # threshold=0.3 → need distance where 1/(1+d) = 0.3 → d = 7/3 ≈ 2.333
+        d = 7.0 / 3.0
+        results = [_make_result(distance=d)]
+        out = score_evidence("test", results, threshold=0.3)
+        assert len(out["kept"]) == 1
 
 
 class TestKeywordOverlap:

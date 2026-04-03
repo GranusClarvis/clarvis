@@ -19,7 +19,8 @@ import re
 import pytest
 
 WORKSPACE = os.environ.get(
-    "CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace"
+    "CLARVIS_WORKSPACE",
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
 )
 
 
