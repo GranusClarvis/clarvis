@@ -124,8 +124,9 @@ _Source: Fresh-user perspective audit of clone → install → understand → ru
 - [ ] [OSR_DOCKER_CI] Wire Docker build into CI workflow to catch packaging regressions.
 
 ### Session Persistence Implementation (from HARNESS_SESSION_PERSISTENCE research, 2026-04-01)
-- [ ] [SESSION_TRANSCRIPT_LOGGER] Add JSONL transcript persistence to heartbeat_postflight.py: append metadata to `data/session_transcripts/YYYY-MM-DD.jsonl`, save raw output to `data/session_transcripts/raw/`, add gzip rotation to cron_cleanup.sh (compress >7d, delete >90d).
-- [ ] [CONVERSATION_LEARNER_UPGRADE] Upgrade conversation_learner.py to ingest full session transcripts from `data/session_transcripts/` instead of 200-char snippets from `memory/*.md`. Enable pattern extraction from complete tool-use sequences and prompt-outcome pairs.
+- [x] [SESSION_TRANSCRIPT_LOGGER] Add JSONL transcript persistence to heartbeat_postflight.py: append metadata to `data/session_transcripts/YYYY-MM-DD.jsonl`, save raw output to `data/session_transcripts/raw/`, add gzip rotation to cron_cleanup.sh (compress >7d, delete >90d). _(Done 2026-04-03: `scripts/session_transcript_logger.py`, hooked as §9.5 in postflight, rotation in `cleanup_policy.py`)_
+- [x] [CONVERSATION_LEARNER_UPGRADE] Upgrade conversation_learner.py to ingest full session transcripts from `data/session_transcripts/` instead of 200-char snippets from `memory/*.md`. Enable pattern extraction from complete tool-use sequences and prompt-outcome pairs. _(Done 2026-04-03: `load_session_transcripts()` + `extract_session_patterns()` added, merged into main pipeline)_
+- [ ] [CONVERSATION_LEARNER_DEDUP] Deduplicate insights across memory/*.md and session_transcript sources — currently both sources can produce overlapping success/failure entries. Low priority, monitor for noise first.
 
 ### Claude Harness Research Program (2026-03-31)
 _Source: `data/external_src/claude-harness-src.zip`. Deep-dive note: `memory/research/claude_harness_architecture_2026-03-31.md`._

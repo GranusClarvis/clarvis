@@ -145,6 +145,9 @@ JSONL_TRIM = {
     "data/directives_log.jsonl": 500,
     "data/clr_history.jsonl": 500,
     "data/decisions.jsonl": 500,
+    # --- Session transcripts ---
+    # Daily JSONL files are under data/session_transcripts/ and handled by
+    # compress_old_transcripts() below, but auto-discover may catch very large ones.
 }
 
 # Auto-discover any .jsonl files in data/ not listed above — trim if >500KB.
@@ -392,6 +395,71 @@ def clean_screenshots(report: CleanupReport, dry_run: bool):
             continue
 
 
+TRANSCRIPT_DIR = WORKSPACE / "data" / "session_transcripts"
+TRANSCRIPT_RAW_DIR = TRANSCRIPT_DIR / "raw"
+TRANSCRIPT_COMPRESS_AFTER_DAYS = 7
+TRANSCRIPT_DELETE_GZ_AFTER_DAYS = 90
+TRANSCRIPT_RAW_DELETE_AFTER_DAYS = 14
+
+
+def compress_old_transcripts(report: CleanupReport, dry_run: bool):
+    """Compress session transcript JSONL files older than 7 days, delete .gz after 90 days.
+    Also delete raw output files older than 14 days."""
+    if not TRANSCRIPT_DIR.exists():
+        return
+
+    # Compress old JSONL files
+    cutoff = datetime.now(timezone.utc) - timedelta(days=TRANSCRIPT_COMPRESS_AFTER_DAYS)
+    cutoff_str = cutoff.strftime("%Y-%m-%d")
+    for f in sorted(TRANSCRIPT_DIR.glob("????-??-??.jsonl")):
+        date_match = re.match(r"(\d{4}-\d{2}-\d{2})\.jsonl$", f.name)
+        if not date_match or date_match.group(1) >= cutoff_str:
+            continue
+        gz_path = f.with_suffix(".jsonl.gz")
+        if gz_path.exists():
+            continue
+        original_size = f.stat().st_size
+        if not dry_run:
+            with open(f, "rb") as fin:
+                with gzip.open(gz_path, "wb", compresslevel=9) as fout:
+                    fout.write(fin.read())
+            f.unlink()
+        report.files_compressed += 1
+        report.bytes_freed += original_size
+        report.log(f"Compressed transcript {f.name} ({original_size:,} bytes)")
+
+    # Delete very old compressed transcripts
+    delete_cutoff = datetime.now(timezone.utc) - timedelta(days=TRANSCRIPT_DELETE_GZ_AFTER_DAYS)
+    delete_str = delete_cutoff.strftime("%Y-%m-%d")
+    for f in sorted(TRANSCRIPT_DIR.glob("????-??-??.jsonl.gz")):
+        date_match = re.match(r"(\d{4}-\d{2}-\d{2})\.jsonl\.gz$", f.name)
+        if not date_match or date_match.group(1) >= delete_str:
+            continue
+        size = f.stat().st_size
+        if not dry_run:
+            f.unlink()
+        report.files_removed += 1
+        report.bytes_freed += size
+        report.log(f"Deleted old transcript archive: {f.name}")
+
+    # Delete old raw output files
+    if TRANSCRIPT_RAW_DIR.exists():
+        raw_cutoff = time.time() - (TRANSCRIPT_RAW_DELETE_AFTER_DAYS * 86400)
+        for f in TRANSCRIPT_RAW_DIR.iterdir():
+            if not f.is_file():
+                continue
+            try:
+                if f.stat().st_mtime < raw_cutoff:
+                    size = f.stat().st_size
+                    if not dry_run:
+                        f.unlink()
+                    report.files_removed += 1
+                    report.bytes_freed += size
+                    report.log(f"Deleted old raw transcript: {f.name}")
+            except OSError:
+                continue
+
+
 def run_cleanup(dry_run: bool = False, verbose: bool = False) -> CleanupReport:
     """Execute the full cleanup policy."""
     report = CleanupReport()
@@ -406,6 +474,9 @@ def run_cleanup(dry_run: bool = False, verbose: bool = False) -> CleanupReport:
 
     # 3. Compress old daily memory, delete ancient archives
     compress_old_memory(report, dry_run)
+
+    # 3b. Compress old session transcripts, delete old raw files
+    compress_old_transcripts(report, dry_run)
 
     # 4. Trim JSONL files (explicit list)
     for rel_path, max_lines in JSONL_TRIM.items():

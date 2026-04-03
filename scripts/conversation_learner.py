@@ -20,13 +20,19 @@ Usage:
 import sys
 import os
 import re
+import json
+import gzip
 import logging
 from collections import Counter
+from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from brain import brain, AUTONOMOUS_LEARNING
 
 logger = logging.getLogger(__name__)
+
+WORKSPACE = Path(os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace"))
+TRANSCRIPTS_DIR = WORKSPACE / "data" / "session_transcripts"
 
 
 # === Pattern extraction regexes ===
@@ -103,6 +109,204 @@ def load_transcripts() -> list:
             })
 
     return transcripts
+
+
+def load_session_transcripts() -> list:
+    """Load structured session transcripts from data/session_transcripts/.
+
+    Returns list of dicts with keys: task, status, exit_code, duration_s,
+    output (full text from raw file or inline tail), date, error_type, worker_type.
+    """
+    if not TRANSCRIPTS_DIR.exists():
+        return []
+
+    records = []
+    # Read both plain .jsonl and compressed .jsonl.gz (recent history)
+    jsonl_files = sorted(TRANSCRIPTS_DIR.glob("????-??-??.jsonl"))
+    gz_files = sorted(TRANSCRIPTS_DIR.glob("????-??-??.jsonl.gz"))
+
+    for jf in list(gz_files) + list(jsonl_files):
+        try:
+            opener = gzip.open if jf.suffix == ".gz" else open
+            with opener(jf, "rt", encoding="utf-8", errors="replace") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        rec = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+
+                    # Resolve full output: prefer raw file, fall back to inline tail
+                    output = rec.get("output_tail", "")
+                    raw_name = rec.get("raw_file")
+                    if raw_name:
+                        raw_path = TRANSCRIPTS_DIR / "raw" / raw_name
+                        if raw_path.exists():
+                            try:
+                                output = raw_path.read_text(encoding="utf-8", errors="replace")
+                            except OSError:
+                                pass
+
+                    records.append({
+                        "task": rec.get("task", ""),
+                        "status": rec.get("status", "unknown"),
+                        "exit_code": rec.get("exit_code", -1),
+                        "duration_s": rec.get("duration_s", 0),
+                        "output": output,
+                        "date": rec.get("ts", "")[:10],
+                        "error_type": rec.get("error_type"),
+                        "worker_type": rec.get("worker_type", "general"),
+                        "section": rec.get("section", "P1"),
+                    })
+        except (OSError, UnicodeDecodeError) as e:
+            logger.warning("Failed to read transcript %s: %s", jf.name, e)
+
+    return records
+
+
+def extract_session_patterns(session_records: list) -> dict:
+    """Extract structured patterns from session transcript records.
+
+    Complements the regex-based extract_patterns() with structured data:
+    task-outcome correlations, error-type distributions, duration outliers,
+    and richer output-based pattern extraction.
+    """
+    patterns = {
+        "successes": [],
+        "failures": [],
+        "questions": [],
+        "insights": [],
+        "approaches": [],
+        "bug_types": Counter(),
+        "recurring_themes": Counter(),
+        "tools_used": Counter(),
+        "systems_touched": Counter(),
+    }
+
+    error_types = Counter()
+    durations_by_status = {"success": [], "failure": [], "timeout": [], "crash": []}
+    worker_outcomes = Counter()
+
+    for rec in session_records:
+        task = rec["task"]
+        status = rec["status"]
+        output = rec["output"]
+        date = rec["date"]
+
+        # Track error type distribution
+        if rec["error_type"]:
+            error_types[rec["error_type"]] += 1
+            patterns["bug_types"][rec["error_type"]] += 1
+
+        # Track worker type outcomes
+        worker_outcomes[f"{rec['worker_type']}:{status}"] += 1
+
+        # Track duration by status
+        if status in durations_by_status and rec["duration_s"] > 0:
+            durations_by_status[status].append(rec["duration_s"])
+
+        # Extract richer patterns from full output
+        combined = f"{task}\n{output}"
+
+        # Successes with full context
+        if status == "success":
+            patterns["successes"].append({
+                "text": task[:300],
+                "date": date,
+                "source": "session_transcript",
+            })
+
+        # Failures with full error context
+        if status in ("failure", "crash", "timeout"):
+            error_snippet = output[-500:] if output else task
+            patterns["failures"].append({
+                "text": f"{task[:150]} — {error_snippet[:150]}",
+                "date": date,
+                "source": "session_transcript",
+            })
+
+        # Extract patterns from full output text using existing regexes
+        for pat in INSIGHT_PATTERNS:
+            for match in pat.finditer(combined):
+                text = match.group(1).strip()
+                if 10 < len(text) < 300:
+                    patterns["insights"].append({
+                        "text": text,
+                        "date": date,
+                        "source": "session_transcript",
+                    })
+
+        # Extract tool/system mentions from full output
+        tool_names = re.findall(
+            r'\b(brain\.py|attention\.py|working_memory\.py|phi_metric\.py|'
+            r'procedural_memory\.py|reasoning_chain|knowledge_synthesis|'
+            r'self_model\.py|clarvis_confidence|evolution_loop|'
+            r'task_selector|cron_\w+\.sh|claude\s+code|chromadb)\b',
+            combined, re.IGNORECASE
+        )
+        for tool in tool_names:
+            patterns["tools_used"][tool.lower()] += 1
+
+        system_names = re.findall(
+            r'\b(brain|attention|working.memory|phi|procedural|reasoning|'
+            r'synthesis|self.model|confidence|evolution|dashboard|'
+            r'consolidation|retrieval)\b',
+            combined, re.IGNORECASE
+        )
+        for sys_name in system_names:
+            patterns["systems_touched"][sys_name.lower()] += 1
+
+    # Synthesize structural insights from session metadata
+    total = len(session_records)
+    if total > 0:
+        n_success = sum(1 for r in session_records if r["status"] == "success")
+        n_fail = sum(1 for r in session_records if r["status"] in ("failure", "crash"))
+        n_timeout = sum(1 for r in session_records if r["status"] == "timeout")
+
+        if total >= 3:
+            patterns["insights"].append({
+                "text": f"Session transcript stats: {n_success}/{total} success, "
+                        f"{n_fail} failures, {n_timeout} timeouts",
+                "date": session_records[-1]["date"] if session_records else "",
+                "source": "session_transcript_meta",
+            })
+
+        # Flag error types that recur
+        for etype, count in error_types.most_common(3):
+            if count >= 2:
+                patterns["insights"].append({
+                    "text": f"Recurring error type '{etype}' seen {count} times in session transcripts",
+                    "date": session_records[-1]["date"],
+                    "source": "session_transcript_meta",
+                })
+
+        # Flag duration outliers
+        for status_key, durations in durations_by_status.items():
+            if len(durations) >= 3:
+                avg = sum(durations) / len(durations)
+                if avg > 900 and status_key == "success":
+                    patterns["insights"].append({
+                        "text": f"Successful tasks averaging {avg:.0f}s — consider splitting complex tasks",
+                        "date": session_records[-1]["date"],
+                        "source": "session_transcript_meta",
+                    })
+
+    return patterns
+
+
+def _merge_patterns(base: dict, extra: dict) -> dict:
+    """Merge two pattern dicts, combining lists and Counters."""
+    merged = {}
+    for key in base:
+        if isinstance(base[key], list):
+            merged[key] = base[key] + extra.get(key, [])
+        elif isinstance(base[key], Counter):
+            merged[key] = base[key] + extra.get(key, Counter())
+        else:
+            merged[key] = base[key]
+    return merged
 
 
 def extract_patterns(transcripts: list) -> dict:
@@ -499,15 +703,27 @@ def run(dry_run=False, report_only=False):
     """Main entry point: analyze transcripts and store learnings."""
     print("=== Conversation Learner ===\n")
 
-    # Load
+    # Load memory/*.md transcripts (legacy source)
     transcripts = load_transcripts()
-    print(f"Loaded {len(transcripts)} transcripts from memory/")
-    if not transcripts:
+    print(f"Loaded {len(transcripts)} memory transcripts from memory/")
+
+    # Load structured session transcripts (richer source)
+    session_records = load_session_transcripts()
+    print(f"Loaded {len(session_records)} session transcript records from data/session_transcripts/")
+
+    if not transcripts and not session_records:
         print("No transcripts found. Nothing to learn.")
         return {'stored': 0, 'insights': 0}
 
-    # Extract
-    patterns = extract_patterns(transcripts)
+    # Extract patterns from both sources and merge
+    patterns = extract_patterns(transcripts) if transcripts else {
+        'successes': [], 'failures': [], 'questions': [], 'insights': [],
+        'approaches': [], 'bug_types': Counter(), 'recurring_themes': Counter(),
+        'tools_used': Counter(), 'systems_touched': Counter(),
+    }
+    if session_records:
+        session_patterns = extract_session_patterns(session_records)
+        patterns = _merge_patterns(patterns, session_patterns)
 
     # Synthesize
     insights = synthesize_insights(patterns)

@@ -421,6 +421,30 @@ def _digest_write_fn(task, task_status, exit_code, task_duration, output_text, _
     return timings
 
 
+def _transcript_log(ctx, _pf_errors):
+    """§9.5 Session transcript persistence (JSONL + raw output)."""
+    timings = {}
+    t = time.monotonic()
+    try:
+        from session_transcript_logger import log_transcript
+        log_transcript(
+            task=ctx["task"],
+            task_status=ctx["task_status"],
+            exit_code=ctx["exit_code"],
+            task_duration=ctx["task_duration"],
+            output_text=ctx["output_text"],
+            error_type=ctx.get("error_type"),
+            worker_type=ctx.get("worker_type", "general"),
+            task_section=ctx.get("task_section", "P1"),
+            chain_id=ctx.get("chain_id"),
+        )
+    except Exception as e:
+        logging.debug("Transcript log failed (non-fatal): %s", e)
+        _pf_errors.append("transcript_log")
+    timings["transcript_log"] = round(time.monotonic() - t, 3)
+    return timings
+
+
 def _build_postflight_ctx(exit_code, output_file, preflight_data, task_duration):
     """Build shared context dict for postflight helpers."""
     WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
@@ -1905,8 +1929,9 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
     # §7.5-8.5: Cost, evolution, synthesis
     timings.update(_pf_cost_and_budget(ctx, _pf_errors))
     timings.update(_pf_evolution_synthesis(ctx, _pf_errors))
-    # §9-13: Digest, queue, cleanup, finalize
+    # §9-13: Digest, transcript, queue, cleanup, finalize
     timings.update(_digest_write_fn(ctx["task"], ctx["task_status"], exit_code, task_duration, ctx["output_text"], _pf_errors))
+    timings.update(_transcript_log(ctx, _pf_errors))
     timings.update(_pf_finalize(ctx, _pf_errors))
 
     timings["total"] = round(time.monotonic() - t0, 3)
