@@ -54,7 +54,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-DATA_DIR = Path("/home/agent/.openclaw/workspace/data/reasoning_chains")
+import os as _os
+_WS = _os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+DATA_DIR = Path(_WS) / "data" / "reasoning_chains"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 SESSIONS_DIR = DATA_DIR / "sessions"
 SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
@@ -713,7 +715,7 @@ class ClarvisReasoner:
             evidence.append("active today (+0.15)")
 
         # Hook exists (minimal)
-        hook = Path("/home/agent/.openclaw/workspace/scripts/reasoning_chain_hook.py")
+        hook = Path(_WS) / "scripts" / "reasoning_chain_hook.py"
         if hook.exists():
             score += 0.05
             evidence.append("reasoning hook exists (+0.05)")

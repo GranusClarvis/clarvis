@@ -17,7 +17,7 @@ Before starting the server for the first time:
 From repo root:
 
 ```bash
-CLARVIS_WORKSPACE=/home/agent/.openclaw/workspace ./scripts/start_website_v0.sh 18800
+CLARVIS_WORKSPACE="${CLARVIS_WORKSPACE}" ./scripts/start_website_v0.sh 18800
 ```
 
 Endpoints:
@@ -48,7 +48,7 @@ data = sys.stdin.read()
 checks = [
     ('telegram_token', r'[0-9]+:AA[A-Za-z0-9_-]{30,}'),
     ('chat_id', r'<CHAT_ID_PATTERN>'),
-    ('email', r'clarvis420'),
+    ('email', r'<OPERATOR_EMAIL_PATTERN>'),
     ('home_path', r'/home/agent'),
     ('api_key', r'sk-or-v1'),
 ]

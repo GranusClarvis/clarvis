@@ -39,7 +39,9 @@ from pathlib import Path
 
 from clarvis.brain import brain, AUTONOMOUS_LEARNING
 
-DATA_DIR = Path("/home/agent/.openclaw/workspace/data/meta_learning")
+import os as _os
+_WS = _os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+DATA_DIR = Path(_WS) / "data" / "meta_learning"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 ANALYSIS_FILE = DATA_DIR / "analysis.json"
@@ -49,11 +51,11 @@ INJECTION_HISTORY_FILE = DATA_DIR / "injection_history.json"
 MAX_INJECTIONS_PER_CYCLE = 2
 
 # Paths to data sources
-EPISODES_FILE = Path("/home/agent/.openclaw/workspace/data/episodes.json")
-CAPABILITY_HISTORY_FILE = Path("/home/agent/.openclaw/workspace/data/capability_history.json")
-HEBBIAN_ACCESS_LOG = Path("/home/agent/.openclaw/workspace/data/hebbian/access_log.jsonl")
-AUTONOMOUS_LOG = Path("/home/agent/.openclaw/workspace/memory/cron/autonomous.log")
-REASONING_CHAINS_DIR = Path("/home/agent/.openclaw/workspace/data/reasoning_chains")
+EPISODES_FILE = Path(_WS) / "data" / "episodes.json"
+CAPABILITY_HISTORY_FILE = Path(_WS) / "data" / "capability_history.json"
+HEBBIAN_ACCESS_LOG = Path(_WS) / "data" / "hebbian" / "access_log.jsonl"
+AUTONOMOUS_LOG = Path(_WS) / "memory" / "cron" / "autonomous.log"
+REASONING_CHAINS_DIR = Path(_WS) / "data" / "reasoning_chains"
 
 
 class MetaLearner:
@@ -422,7 +424,7 @@ class MetaLearner:
                 )
 
         # Analyze retrieval quality data if available
-        rq_dir = Path("/home/agent/.openclaw/workspace/data/retrieval_quality")
+        rq_dir = Path(_WS) / "data" / "retrieval_quality"
         if rq_dir.exists():
             try:
                 events_file = rq_dir / "events.jsonl"

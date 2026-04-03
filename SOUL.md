@@ -245,7 +245,7 @@ You have full GitHub access via SSH and the `gh` CLI, authenticated as **GranusC
 ### How It Works
 - **SSH key:** `~/.ssh/id_ed25519` — authenticates git push/pull/clone operations
 - **gh CLI:** Authenticated via token — manages repos, issues, PRs, releases, and GitHub API calls
-- **Git identity:** `Clarvis <clarvis@granuslabs.com>`
+- **Git identity:** `Clarvis <noreply@clarvis.local>`
 - **Protocol:** SSH (`git@github.com:...`) — always use SSH URLs, never HTTPS
 
 ### What You Can Do

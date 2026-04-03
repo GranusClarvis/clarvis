@@ -83,9 +83,9 @@ What needs improvement (already tracked above):
 - [ ] Telegram token rotated
 - [ ] All secrets moved to env vars
 - [ ] ChromaDB purged of credentials
-- [ ] Personal identity docs removed/anonymized
+- [x] Personal identity docs removed/anonymized (2026-04-03: USER.md, SOUL.md, WEBSITE_V0_RELEASE_RUNBOOK.md sanitized)
 - [x] LICENSE + CONTRIBUTING.md added
 - [ ] scripts/deprecated/ deleted
 - [x] GitHub Actions CI added
-- [ ] golden_qa.json sanitized
+- [x] golden_qa.json sanitized (2026-04-03: creator names replaced with generic terms; file is also gitignored via `data/`)
 - [ ] README.md updated for external users

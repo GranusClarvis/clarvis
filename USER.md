@@ -3,8 +3,8 @@
 - **Name:** <operator>
 - **Call him:** <operator-alias> (or sir, when being cheeky)
 - **Pronouns:** he/him
-- **Timezone:** CET (Central Europe)
-- **Location:** Germany/Austria region
+- **Timezone:** <operator-tz>
+- **Location:** <operator-region>
 
 ## Who He Is
 

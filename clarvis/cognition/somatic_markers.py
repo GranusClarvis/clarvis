@@ -43,7 +43,9 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-MARKERS_FILE = Path("/home/agent/.openclaw/workspace/data/somatic_markers.json")
+import os as _os
+_WS = _os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+MARKERS_FILE = Path(_WS) / "data" / "somatic_markers.json"
 
 # Emotion dimensions for somatic markers
 # Each maps to a decision signal: approach (+) or avoid (-)
@@ -369,7 +371,7 @@ class SomaticMarkerSystem:
         Returns count of new markers created.
         """
         if episodes_file is None:
-            episodes_file = Path("/home/agent/.openclaw/workspace/data/episodes.json")
+            episodes_file = Path(_WS) / "data" / "episodes.json"
 
         if not episodes_file.exists():
             return 0

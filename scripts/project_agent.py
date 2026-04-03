@@ -1891,6 +1891,53 @@ def cmd_spawn_with_retry(name: str, task: str, timeout: int = 1200,
     return result
 
 
+def cmd_spawn_parallel(tasks: list[dict], timeout: int = 1200) -> dict:
+    """Spawn multiple agent tasks in parallel, respecting concurrency limits.
+
+    Each entry in tasks should be: {"agent": "<name>", "task": "<description>"}
+    Optionally: {"agent": ..., "task": ..., "timeout": 900, "context": "..."}
+
+    Uses ThreadPoolExecutor bounded by MAX_PARALLEL_AGENT_CLAUDE.
+    Returns aggregated results keyed by agent name.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    if not tasks:
+        return {"error": "No tasks provided", "results": {}}
+
+    max_workers = min(len(tasks), MAX_PARALLEL_AGENT_CLAUDE)
+    results = {}
+    _log(f"spawn_parallel: {len(tasks)} tasks, max_workers={max_workers}")
+
+    def _run_one(entry):
+        name = entry["agent"]
+        task = entry["task"]
+        t = entry.get("timeout", timeout)
+        ctx = entry.get("context", "")
+        return name, cmd_spawn(name, task, t, ctx)
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(_run_one, t): t for t in tasks}
+        for future in as_completed(futures):
+            entry = futures[future]
+            try:
+                name, result = future.result()
+                results[name] = result
+            except Exception as e:
+                results[entry["agent"]] = {"error": str(e)}
+
+    succeeded = sum(1 for r in results.values()
+                    if not r.get("error") and not _is_task_failure(r))
+    _log(f"spawn_parallel complete: {succeeded}/{len(tasks)} succeeded")
+
+    return {
+        "total": len(tasks),
+        "succeeded": succeeded,
+        "failed": len(tasks) - succeeded,
+        "results": results,
+    }
+
+
 # =========================================================================
 # PROMOTE — pull results back to Clarvis
 # =========================================================================
@@ -3418,6 +3465,14 @@ def main():
     lp.add_argument("--budget", type=float, default=LOOP_MAX_BUDGET_USD,
                     help=f"Max budget in USD (default: {LOOP_MAX_BUDGET_USD})")
 
+    # spawn-parallel
+    spp = sub.add_parser("spawn-parallel",
+                         help="Spawn tasks on multiple agents in parallel")
+    spp.add_argument("--tasks", required=True,
+                     help='JSON array: [{"agent":"name","task":"desc"}, ...]')
+    spp.add_argument("--timeout", type=int, default=1200,
+                     help="Default timeout per task")
+
     # auto-qa
     aqp = sub.add_parser("auto-qa", help="Auto-generate golden QA from successful tasks")
     aqp.add_argument("name")
@@ -3466,6 +3521,14 @@ def main():
     elif args.command == "loop":
         result = run_task_loop(args.name, args.task, args.timeout,
                                args.max_sessions, args.budget)
+    elif args.command == "spawn-parallel":
+        try:
+            task_list = json.loads(args.tasks)
+        except json.JSONDecodeError as e:
+            result = {"error": f"Invalid JSON for --tasks: {e}"}
+            print(json.dumps(result, indent=2, default=str))
+            return
+        result = cmd_spawn_parallel(task_list, args.timeout)
     elif args.command == "auto-qa":
         result = cmd_auto_golden_qa(args.name)
     elif args.command == "ci-check":

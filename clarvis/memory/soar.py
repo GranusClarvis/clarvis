@@ -38,7 +38,9 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-DATA_DIR = Path("/home/agent/.openclaw/workspace/data/soar")
+import os as _os
+_WS = _os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+DATA_DIR = Path(_WS) / "data" / "soar"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 GOAL_STACK_FILE = DATA_DIR / "goal_stack.json"
 CHUNKS_FILE = DATA_DIR / "chunks.json"

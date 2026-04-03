@@ -59,7 +59,8 @@ import sys
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
-DB_DIR = Path("/home/agent/.openclaw/workspace/data/synaptic")
+_WS = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+DB_DIR = Path(_WS) / "data" / "synaptic"
 DB_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = DB_DIR / "synapses.db"
 STATS_FILE = DB_DIR / "stats.json"
@@ -402,7 +403,7 @@ class SynapticMemory:
         Returns:
             Dict with evolution statistics.
         """
-        access_log = Path("/home/agent/.openclaw/workspace/data/hebbian/access_log.jsonl")
+        access_log = Path(_WS) / "data" / "hebbian" / "access_log.jsonl"
         if not access_log.exists():
             return {"error": "No access log found", "potentiated": 0, "depressed": 0}
 

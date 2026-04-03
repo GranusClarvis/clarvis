@@ -28,7 +28,8 @@ import sys
 from datetime import datetime, timezone
 from collections import defaultdict
 
-DATA_DIR = "/home/agent/.openclaw/workspace/data/retrieval_quality"
+_WS = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+DATA_DIR = os.path.join(_WS, "data", "retrieval_quality")
 EVENTS_FILE = os.path.join(DATA_DIR, "events.jsonl")
 REPORT_FILE = os.path.join(DATA_DIR, "report.json")
 os.makedirs(DATA_DIR, exist_ok=True)
