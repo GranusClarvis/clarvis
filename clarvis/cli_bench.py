@@ -156,6 +156,38 @@ def weakest():
         print("unknown")
 
 
+@app.command(name="brief")
+def brief(
+    dry_run: bool = typer.Option(False, "--dry-run", help="Run without updating report files"),
+    json_output: bool = typer.Option(False, "--json", help="Output raw JSON"),
+):
+    """Brief quality benchmark — measures context brief quality.
+
+    Replaces: python3 scripts/brief_benchmark.py [--dry-run] [--json]
+    """
+    sys.path.insert(0, f"{WORKSPACE}/scripts")
+    import brief_benchmark as bb
+
+    result = bb.run_benchmark(dry_run=dry_run)
+
+    if json_output:
+        print(json.dumps(result, indent=2))
+    else:
+        if "error" in result:
+            typer.echo(f"ERROR: {result['error']}")
+            raise typer.Exit(1)
+
+        print(f"Brief Benchmark: {result['tasks_scored']}/{result['tasks_total']} tasks scored")
+        print(f"  Overall:  {result['mean_overall']:.3f}")
+        print(f"  Tokens:   {result['mean_token_coverage']:.3f}")
+        print(f"  Sections: {result['mean_section_coverage']:.3f}")
+        print(f"  Jaccard:  {result['mean_jaccard']:.3f}")
+        print(f"  ROUGE-L:  {result['mean_rouge_l']:.3f}")
+        print(f"  By category: {result['by_category']}")
+        print(f"  By tier:     {result['by_tier']}")
+        print(f"  Avg brief:   {result['avg_brief_bytes']} bytes")
+
+
 @app.command(name="golden-qa")
 def golden_qa(verbose: bool = typer.Option(False, "--verbose", "-v", help="Show per-query results")):
     """Run golden QA retrieval benchmark (P@1, P@3, MRR)."""

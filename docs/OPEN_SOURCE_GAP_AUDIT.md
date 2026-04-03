@@ -19,7 +19,7 @@ Most use `os.environ.get("CLARVIS_WORKSPACE", "/home/agent/...")` pattern (parti
 **Fix**: Verify all files support env var fallback. Document required env vars.
 
 ### 4. Personal Identity in Docs
-"Patrick"/"Inverse" in USER.md, SOUL.md, MEMORY.md, HEARTBEAT.md, CLAUDE.md.
+"<operator>"/"<operator-alias>" in USER.md, SOUL.md, MEMORY.md, HEARTBEAT.md, CLAUDE.md.
 
 **Fix**: Move personal docs out of public repo or anonymize.
 
@@ -28,16 +28,15 @@ Most use `os.environ.get("CLARVIS_WORKSPACE", "/home/agent/...")` pattern (parti
 ## HIGH (Should Fix Before Release)
 
 ### 5. Missing Root Files
-- [ ] `LICENSE` file (standalone, not just in pyproject.toml)
-- [ ] `CONTRIBUTING.md`
+- [x] `LICENSE` file — added (standalone + `packages/clarvis-db/LICENSE`)
+- [x] `CONTRIBUTING.md` — added
 - [ ] `CHANGELOG.md`
 
 ### 6. Deprecated Scripts (32 files)
 `scripts/deprecated/` — dead code, potential secret surface. Delete before release.
 
-### 7. No CI/CD
-No `.github/workflows/`. External PRs won't be validated.
-Add: test.yml (pytest), lint.yml (black/flake8).
+### 7. CI/CD — ADDED 2026-04-03
+`.github/workflows/ci.yml` exists. External PRs are now validated.
 
 ### 8. Tracked Data File
 `data/golden_qa.json` contains identity terms. Sanitize or .gitignore.
@@ -85,8 +84,8 @@ What needs improvement (already tracked above):
 - [ ] All secrets moved to env vars
 - [ ] ChromaDB purged of credentials
 - [ ] Personal identity docs removed/anonymized
-- [ ] LICENSE + CONTRIBUTING.md added
+- [x] LICENSE + CONTRIBUTING.md added
 - [ ] scripts/deprecated/ deleted
-- [ ] GitHub Actions CI added
+- [x] GitHub Actions CI added
 - [ ] golden_qa.json sanitized
 - [ ] README.md updated for external users

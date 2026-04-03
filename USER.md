@@ -1,7 +1,7 @@
 # USER.md — About the Boss
 
-- **Name:** Patrick
-- **Call him:** Inverse (or sir, when being cheeky)
+- **Name:** <operator>
+- **Call him:** <operator-alias> (or sir, when being cheeky)
 - **Pronouns:** he/him
 - **Timezone:** CET (Central Europe)
 - **Location:** Germany/Austria region
@@ -27,8 +27,8 @@ Founder of Granus Labs. Web3 builder, EVM developer, infrastructure thinker. Mov
 
 ## Platforms
 
-- **GitHub:** InverseAltruism
-- **Discord:** Inverse (Granus Labs server)
+- **GitHub:** <operator-gh>
+- **Discord:** <operator-alias> (Granus Labs server)
 - **Telegram:** (see .env for chat ID)
 
 ---

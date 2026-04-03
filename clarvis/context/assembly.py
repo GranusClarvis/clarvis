@@ -487,7 +487,7 @@ def get_workspace_context(current_task, tier="standard"):
     Returns structured context string, or empty string if workspace is empty.
     """
     try:
-        from cognitive_workspace import workspace
+        from clarvis.memory.cognitive_workspace import workspace
         stats = workspace.stats()
         if stats["total_items"] == 0:
             return ""
@@ -1266,6 +1266,71 @@ def get_recommended_procedures(current_task, max_procs=2):
 
 
 
+def _classify_task_class(task_text):
+    """Classify a task into a budget-policy task class.
+
+    Returns one of the keys from data/prompt_eval/context_budget_policy.json.
+    """
+    if not task_text:
+        return "code_implementation"
+    t = task_text.lower()
+    if any(kw in t for kw in ("research", "investigate", "paper", "compare", "survey")):
+        return "research_synthesis"
+    if any(kw in t for kw in ("remove dead", "cleanup", "prune dead", "delete unused")):
+        return "repo_cleanup"
+    if any(kw in t for kw in ("migrate", "move", "refactor", "rename across", "replace proxy")):
+        return "migration_refactor"
+    if any(kw in t for kw in ("fix", "bug", "crash", "error", "broken", "fails")):
+        return "bugfix_debug"
+    if any(kw in t for kw in ("doc", "readme", "claude.md", "update table", "schedule table")):
+        return "documentation"
+    if any(kw in t for kw in ("cron", "logrotate", "systemd", "monitoring", "shell")):
+        return "infra_cron"
+    if any(kw in t for kw in ("brain", "dedup", "retrieval", "chromadb", "memory")):
+        return "memory_brain"
+    if any(kw in t for kw in ("evolution", "strategic", "queue analysis", "gap", "roadmap")):
+        return "strategic_evolution"
+    return "code_implementation"
+
+
+_BUDGET_POLICY_CACHE = {}
+_BUDGET_POLICY_MTIME = 0
+
+
+def _load_budget_policy():
+    """Load task-class context budget policy from data file."""
+    global _BUDGET_POLICY_CACHE, _BUDGET_POLICY_MTIME
+    import json
+    policy_path = os.path.join(
+        os.path.dirname(__file__), "..", "..", "data", "prompt_eval", "context_budget_policy.json")
+    policy_path = os.path.normpath(policy_path)
+    try:
+        mtime = os.path.getmtime(policy_path)
+        if mtime == _BUDGET_POLICY_MTIME and _BUDGET_POLICY_CACHE:
+            return _BUDGET_POLICY_CACHE
+        with open(policy_path) as f:
+            data = json.load(f)
+        _BUDGET_POLICY_CACHE = data.get("task_classes", {})
+        _BUDGET_POLICY_MTIME = mtime
+        return _BUDGET_POLICY_CACHE
+    except Exception:
+        return {}
+
+
+def _get_policy_section_weights(task_text):
+    """Get section priority weights from budget policy based on task class.
+
+    Merges policy weights with empirical section relevance weights.
+    Policy weights act as priors; empirical data adjusts within the range.
+    """
+    policy = _load_budget_policy()
+    if not policy:
+        return {}
+    task_class = _classify_task_class(task_text)
+    class_config = policy.get(task_class, {})
+    return class_config.get("section_priorities", {})
+
+
 def _estimate_task_complexity(task_text):
     """Estimate task complexity from text: 'simple', 'medium', or 'complex'.
 
@@ -1456,7 +1521,21 @@ def generate_tiered_brief(
     """
     queue_file = queue_file or QUEUE_FILE
     budget = get_adjusted_budgets(tier)
-    section_weights = load_section_relevance_weights()
+    empirical_weights = load_section_relevance_weights()
+    policy_weights = _get_policy_section_weights(current_task)
+    # Merge: policy weights are priors, empirical data adjusts.
+    # If both exist for a section, geometric mean preserves both signals.
+    section_weights = {}
+    all_sections = set(list(empirical_weights.keys()) + list(policy_weights.keys()))
+    for sec in all_sections:
+        emp = empirical_weights.get(sec)
+        pol = policy_weights.get(sec)
+        if emp is not None and pol is not None:
+            section_weights[sec] = round((emp * pol) ** 0.5, 3)  # geometric mean
+        elif pol is not None:
+            section_weights[sec] = round(pol, 3)
+        elif emp is not None:
+            section_weights[sec] = round(emp, 3)
 
     beginning = _build_brief_beginning(current_task, tier, budget, knowledge_hints, section_weights)
     middle = _build_brief_middle(current_task, tier, budget, queue_file, section_weights)

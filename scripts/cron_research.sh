@@ -228,8 +228,8 @@ echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Run dir: $RUN_DIR (novelty=$NOVELTY_TIER)"
 # Pre-compute weakest metric for prompt injection
 WEAKEST_METRIC=$(get_weakest_metric)
 
-# Generate a minimal context brief
-CONTEXT_BRIEF=$(python3 "$SCRIPTS/context_compressor.py" brief 2>> "$LOGFILE")
+# Generate task-aware context brief (prompt_builder has brain introspection + tiered assembly)
+CONTEXT_BRIEF=$(python3 "$SCRIPTS/prompt_builder.py" context-brief --task "$RESEARCH_TASK" --tier standard 2>> "$LOGFILE")
 
 # Inject cross-run lessons (MetaClaw-inspired pattern)
 PAST_LESSONS=$(python3 "$SCRIPTS/research_lesson_store.py" inject 2>/dev/null || echo "")

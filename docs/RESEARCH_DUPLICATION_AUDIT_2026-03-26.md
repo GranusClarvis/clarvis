@@ -1,7 +1,7 @@
 # Research Duplication Audit — 2026-03-26
 
 ## Why this exists
-Inverse flagged that Clarvis had re-researched the same IIT/Phi approximation topic many times and was likely polluting memory rather than learning. This audit records the concrete duplicate cluster, root causes, canonical keep-set, and immediate fixes.
+The operator flagged that Clarvis had re-researched the same IIT/Phi approximation topic many times and was likely polluting memory rather than learning. This audit records the concrete duplicate cluster, root causes, canonical keep-set, and immediate fixes.
 
 ## Root causes found
 

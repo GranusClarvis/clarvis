@@ -40,7 +40,7 @@ import sys; sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
 from brain import brain, search, remember, capture
 stats = brain.stats()
 ```
-If total_memories decreased since last check → alert Inverse immediately.
+If total_memories decreased since last check → alert the operator immediately.
 
 ### 2. Read Your Subconscious — What Did You Do While Sleeping?
 Your cron scripts (Claude Code Opus) run autonomously throughout the day — they ARE your subconscious mind. Before acting, read what they produced:
@@ -86,7 +86,7 @@ Read `memory/evolution/QUEUE.md`. Pick the highest priority uncompleted task.
   Or use `/spawn [task]` which routes through spawn_claude.sh with auto context injection.
   Then mark "in progress" in the queue with date.
   **NEVER use `sessions_spawn` WITHOUT `runtime: "acp"` — that spawns M2.5, not Claude Code.**
-- **Queue empty?** → Add 2-3 new tasks. Think about: What's my weakest capability? What broke recently? What would make me smarter? What would help Inverse?
+- **Queue empty?** → Add 2-3 new tasks. Think about: What's my weakest capability? What broke recently? What would make me smarter? What would help the operator?
 
 ### 4. Goal Progress (15 seconds)
 ```python
@@ -112,7 +112,7 @@ Pick ONE per heartbeat:
 ### 7. Report
 - If you did real work: brief log to `memory/YYYY-MM-DD.md`
 - If nothing needed: `HEARTBEAT_OK`
-- If something urgent: alert Inverse via the channel
+- If something urgent: alert the operator via the channel
 
 ## Rules
 - ALWAYS read digest.md before acting — your subconscious may have already done the work
@@ -156,7 +156,7 @@ The queue should NEVER have 0 pending tasks for more than 1 heartbeat cycle. Thr
 2. **cron_evolution.sh** — strategic task generation at 13:00
 3. **cron_reflection.sh** — lesson-driven task generation at 21:00
 
-If all three fail, something is fundamentally broken — alert Inverse.
+If all three fail, something is fundamentally broken — alert the operator.
 
 ## Your Cognitive Architecture (Reference)
 

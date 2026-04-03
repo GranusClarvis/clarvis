@@ -20,7 +20,7 @@ A specially tuned memory system for an agentic AI. Not just vector storage - a t
 
 ### 3. Graph Relationships
 - Facts aren't isolated
-- "Inverse" connects to "Patrick", "Granus Labs", "prefers direct"
+- "operator" connects to "Granus Labs", "prefers direct"
 - Build reasoning chains, not just isolated memories
 
 ### 4. Hybrid Retrieval

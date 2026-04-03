@@ -273,7 +273,7 @@ def _is_pid_clarvis(pid: int) -> bool:
 # We intentionally do NOT use the global Clarvis Claude lock for project agents.
 # Agents are repo-isolated under /home/agent/agents/<name>/ and may run in parallel.
 #
-# Policy (Inverse directive 2026-03-07):
+# Policy (operator directive 2026-03-07):
 # - Each agent may run at most 1 Claude session at a time (per-agent lock).
 # - Up to MAX_PARALLEL_AGENT_CLAUDE agents may run Claude concurrently.
 # - Clarvis core cron scripts still use /tmp/clarvis_claude_global.lock.

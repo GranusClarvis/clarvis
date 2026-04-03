@@ -348,7 +348,7 @@ Phase 6:        scripts/ becomes thin wrappers only (like brain.py is today)
 
 ---
 
-## 8. Questions for Inverse
+## 8. Questions for Operator
 
 1. **Package absorption**: Should `clarvis-db`, `clarvis-cost`, `clarvis-reasoning` (in `packages/`) be absorbed into the main `clarvis` package as submodules? This would eliminate 3 separate `pyproject.toml` files and unify the import surface. Or do you want them to remain standalone for potential external use?
 

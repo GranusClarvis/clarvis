@@ -51,10 +51,10 @@ BENCHMARK_PAIRS = [
     {
         "id": "B01",
         "query": "Who created Clarvis?",
-        "expected_substrings": ["patrick", "inverse", "granus"],
+        "expected_substrings": ["operator", "granus"],
         "expected_collections": [IDENTITY],
         "category": "identity",
-        "gold_evidence": "Clarvis was created by Patrick (known as Inverse/GranusClarvis). Patrick is the sole creator and operator of the Clarvis cognitive agent system.",
+        "gold_evidence": "Clarvis was created by the operator (GranusClarvis). The operator is the sole creator and maintainer of the Clarvis cognitive agent system.",
     },
     {
         "id": "B02",
@@ -187,7 +187,7 @@ BENCHMARK_PAIRS = [
         "expected_substrings": ["cet", "timezone"],
         "expected_collections": [PREFERENCES],
         "category": "preferences",
-        "gold_evidence": "Timezone: CET (Central European Time). All cron schedules in CET. Patrick is in CET timezone.",
+        "gold_evidence": "Timezone: CET (Central European Time). All cron schedules in CET. The operator is in CET timezone.",
     },
     # --- Context & episodic ---
     {

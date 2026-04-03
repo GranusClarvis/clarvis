@@ -120,3 +120,96 @@ def graph_compaction(
     if dry_run:
         print("=== DRY RUN (no changes) ===\n")
     gc.run_compaction(dry_run=dry_run)
+
+
+# --- dream -------------------------------------------------------------------
+
+@app.command("dream")
+def dream_cmd(
+    mode: str = typer.Argument("sleep", help="dream | rethink | sleep | stats | insights"),
+    n: int = typer.Argument(10, help="Number of episodes (for dream/rethink/sleep)"),
+):
+    """Counterfactual dreaming engine — mental simulation of alternative outcomes.
+
+    Replaces: python3 scripts/dream_engine.py <mode> [n]
+    """
+    _ensure_scripts_path()
+    import json as _json
+    import dream_engine as de
+
+    if mode == "dream":
+        result = de.dream(n)
+        print(_json.dumps(result, indent=2))
+    elif mode == "rethink":
+        result = de.rethink_memory(n)
+        print(_json.dumps(result, indent=2))
+    elif mode == "sleep":
+        print("=== SLEEP CYCLE: Phase 1 — Counterfactual Dreaming ===")
+        dream_result = de.dream(n)
+        print("\n=== SLEEP CYCLE: Phase 2 — Rethink Memory ===")
+        rethink_result = de.rethink_memory(n * 2)
+        print("\n=== SLEEP CYCLE COMPLETE ===")
+        print(f"  Dreams: {dream_result.get('insights_generated', 0)} insights")
+        print(f"  Rethink: {rethink_result.get('learnings', 0)} learned patterns")
+    elif mode == "stats":
+        stats = de.get_stats()
+        print(_json.dumps(stats, indent=2))
+    elif mode == "insights":
+        insights = de.list_insights()
+        if not insights:
+            print("No dream insights found yet.")
+        else:
+            for ins in insights:
+                print(f"  [{ins['created']}] (imp={ins['importance']:.2f}) {ins['text']}")
+    else:
+        typer.echo(f"Unknown mode: {mode}. Use dream | rethink | sleep | stats | insights.")
+        raise typer.Exit(1)
+
+
+# --- status-json --------------------------------------------------------------
+
+@app.command("status-json")
+def status_json():
+    """Generate public status.json snapshot for dashboards.
+
+    Replaces: python3 scripts/generate_status_json.py
+    """
+    _ensure_scripts_path()
+    import generate_status_json as gs
+
+    gs.main()
+
+
+# --- brief-benchmark ----------------------------------------------------------
+
+@app.command("brief-benchmark")
+def brief_benchmark(
+    dry_run: bool = typer.Option(False, "--dry-run", help="Run without updating report files"),
+    json_output: bool = typer.Option(False, "--json", help="Output raw JSON"),
+):
+    """Brief quality benchmark — measures context brief quality.
+
+    Replaces: python3 scripts/brief_benchmark.py [--dry-run] [--json]
+    """
+    _ensure_scripts_path()
+    import json as _json
+    import brief_benchmark as bb
+
+    result = bb.run_benchmark(dry_run=dry_run)
+
+    if json_output:
+        print(_json.dumps(result, indent=2))
+    else:
+        if "error" in result:
+            typer.echo(f"ERROR: {result['error']}")
+            raise typer.Exit(1)
+
+        print(f"Brief Benchmark: {result['tasks_scored']}/{result['tasks_total']} tasks scored")
+        print(f"  Overall:  {result['mean_overall']:.3f}")
+        print(f"  Tokens:   {result['mean_token_coverage']:.3f}")
+        print(f"  Sections: {result['mean_section_coverage']:.3f}")
+        print(f"  Jaccard:  {result['mean_jaccard']:.3f}")
+        print(f"  ROUGE-L:  {result['mean_rouge_l']:.3f}")
+        print(f"  By category: {result['by_category']}")
+        print(f"  By tier:     {result['by_tier']}")
+        print(f"  Avg brief:   {result['avg_brief_bytes']} bytes")

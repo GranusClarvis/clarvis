@@ -63,17 +63,15 @@ Use sections: ## Episode Trends, ## Script Audit, ## ROADMAP Gaps, ## Cron Effic
 IMPORTANT: Write the full report to the file specified — do not just print it to stdout.
 ENDPROMPT
 
-# Append dynamic context
-cat >> "$PROMPT_FILE" << ENDDYNAMIC
-
-## Dynamic Context
-- Month: ${MONTH_TAG}
-- Weakest metric: ${WEAKEST_METRIC}
-- Output file: Write your report to \`${OUTPUT_FILE}\`
-
-Do the work. Be thorough but concise. This report guides the next month of evolution.
-OUTPUT FORMAT (mandatory): Start with "RESULT: success|partial|fail — <summary>". Then confirm the output file was written.
-ENDDYNAMIC
+# Append dynamic context (printf pattern — no unquoted heredoc)
+{
+    printf '\n## Dynamic Context\n'
+    printf '- Month: %s\n' "$MONTH_TAG"
+    printf '- Weakest metric: %s\n' "$WEAKEST_METRIC"
+    printf '- Output file: Write your report to `%s`\n' "$OUTPUT_FILE"
+    printf '\nDo the work. Be thorough but concise. This report guides the next month of evolution.\n'
+    printf 'OUTPUT FORMAT (mandatory): Start with "RESULT: success|partial|fail — <summary>". Then confirm the output file was written.\n'
+} >> "$PROMPT_FILE"
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Spawning Claude Code for monthly reflection..." >> "$LOGFILE"
 

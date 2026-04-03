@@ -853,7 +853,7 @@ def _get_workspace_context(current_task, tier="standard"):
     or empty string if workspace is empty (triggering spotlight fallback).
     """
     try:
-        from cognitive_workspace import workspace
+        from clarvis.memory.cognitive_workspace import workspace
         stats = workspace.stats()
         if stats["total_items"] == 0:
             return ""

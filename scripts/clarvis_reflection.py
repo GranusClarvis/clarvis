@@ -85,7 +85,7 @@ def generate_queue_tasks(lessons, content):
         ('attention.py', 'Wire attention.py into daily execution — use salience scoring in cron_autonomous task selection'),
         ('working_memory.py', 'Make working_memory.py persistent across sessions — save/load spotlight buffer to disk'),
         ('reasoning_chains.py', 'Integrate reasoning_chains.py into heartbeat — log a reasoning chain for each evolution task'),
-        ('knowledge_synthesis.py', 'Run knowledge_synthesis.py in daily reflection — find new cross-domain connections'),
+        # knowledge_synthesis.py is already wired into cron_reflection.sh step 3
         ('clarvis_confidence.py', 'Review prediction outcomes — check calibration curve and adjust confidence thresholds'),
         ('self_model.py', 'Run self-assessment — update capability model based on today\'s successes and failures'),
     ]

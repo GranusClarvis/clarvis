@@ -1978,3 +1978,48 @@ _Last archived: 2026-04-03_
 - [x] [OSR_INSTALL_DEAD_PEP668_CHECK] Fixed: removed dead PEP 668 detection branch (lines 214-216 always fell through to `true`). Working check retained. (2026-04-03)
 - [x] [OSR_DOCS_STALE_SCRIPT_REFS] Fixed: annotated deleted `cron_graph_soak_manager.sh` (3 refs in SPINE_USAGE_AUDIT.md) and `generate_status_page.py` (decomposition_audit) as deleted with commit refs. (2026-04-03)
 - [x] [OSR_BUILD_ISOLATION] Root cause: PEP 668 `EXTERNALLY-MANAGED` marker on Ubuntu 24.04+ — `python-build` can't install setuptools into isolated venv. Added wheel build verification step to CI (where `actions/setup-python` provides clean Python without PEP 668). Documented `--no-isolation` workaround in INSTALL.md troubleshooting. (2026-04-03)
+
+## Archived 2026-04-03
+- [x] [DOCS_LAUNCH_PACKET_REFRESH] Fixed 4 stale claims in `docs/LAUNCH_PACKET.md`: removed "No CI/CD" (CI exists), updated "~7.5s" → "~270ms", fixed graph backend desc, updated memory/edge counts. _(Fixed 2026-04-03.)_
+- [x] [DOCS_MISSING_SCRIPTS_REF] Fixed: SELF.md and HEARTBEAT.md references to `backup.sh`/`rollback.sh` updated to `backup_daily.sh`/`safe_update.sh --rollback`. AGENTS.md had no such references. _(Fixed 2026-04-03.)_
+
+## Archived 2026-04-03
+- [x] [LLM_BRAIN_REVIEW 2026-04-03] Done 2026-04-03: Deleted 9 'Clarvis demo memory' entries (not 2 — there were 9 including evolved variants) from clarvis-memories collection via direct ChromaDB delete. Verified 0 remaining.
+- [x] [OSR_MEMORY_DIR_PURGE] Done 2026-04-03: Added `memory/` to `.gitignore`, ran `git rm -r --cached memory/` (241 files removed from index, still on disk). History scrub with `git filter-repo` still needed before public push (separate task: OSR_GIT_HISTORY_SCRUB).
+- [x] [DEAD_CODE_KNOWLEDGE_SYNTHESIS] Done 2026-04-03: NOT dead code — scripts/ version is batch synthesis (cron_reflection.sh step 3, stores insights), spine version is query-time (context briefs, read-only). Complementary, not duplicates. Fixed Path precedence bug in self_model.py, removed stale "unwired" entry in clarvis_reflection.py, added distinguishing docstrings.
+- [x] [CRON_AUTONOMOUS_PROMPT_ASSEMBLY_FIX] Fixed 2026-04-03: replaced unquoted heredocs with printf+quoted-heredoc pattern across 6 scripts; switched prompt delivery from `-p "$(cat)"` to stdin `< file`; added PROMPT_GUARD empty-file check.
+- [x] [AUTOMATION_INSIGHTS_NONNULL_GUARD] Fixed 2026-04-03: null-guarded `_extract_action_verb()` in automation_insights.py + null-guarded `.lower()` calls in meta_learning.py, meta_gradient_rl.py, episodic_memory.py. Also repaired null-task episode #394 in episodes.json.
+- [x] [CLAUDE_ROUTE_PARITY_AUDIT] Fixed 2026-04-03: audited all 10 Claude-spawning scripts. Fixed unquoted heredocs in cron_autonomous, cron_evening, cron_evolution, cron_implementation_sprint, cron_research. Added PROMPT_GUARD to cron_env.sh run_claude_monitored().
+- [x] [CLAUDE_SPAWN_SMOKE_MATRIX] Done 2026-04-03: `scripts/smoke_test_prompt_assembly.sh` — 5-section test covering syntax, unquoted heredoc detection, prompt-guard presence, prompt assembly simulation with special chars, Python null-safety.
+- [x] [RESEARCH_RETRIEVAL_ROUTING_QUERY_ADAPTATION] (2026-04-03) Researched hierarchical retrieval policy design across Adaptive-RAG, AT-RAG, SR-RAG, and RAGRouter; summary in `memory/research/retrieval_routing_and_query_adaptation_2026-04-03.md`.
+
+## Archived 2026-04-03
+- [x] [OSR_PII_ANONYMIZE] Anonymize personal identity in committed files. "Patrick"/"Inverse"/"InverseAltruism" appears in USER.md, SOUL.md, AGENTS.md, HEARTBEAT.md, IDENTITY.md, MEMORY.md, and 24+ other tracked files. Replace with configurable placeholders or gitignore the identity files. _(2026-04-03: replaced all PII with <operator>/<operator-alias>/<operator-gh> placeholders across 25+ files — core docs, benchmarks, scripts, skills, CLAUDE.md)_
+- [x] [OSR_SECRETS_IN_DOCS] Remove wallet address from SOUL.md, internal IPs from SELF.md/IDENTITY.md, bot handles from IDENTITY.md. These are in committed files and would be public on release. _(2026-04-03: wallet→<see-env>, IP→<local-network>, bot handles→<see-env>, chat_id removed from CLAUDE.md)_
+- [x] [SPINE_COGNITIVE_WORKSPACE] Migrate `scripts/cognitive_workspace.py` (Baddeley working memory model) to `clarvis/memory/cognitive_workspace.py`. Core module used by preflight, postflight, and context_compressor — has no spine presence at all. _(2026-04-03: migrated to spine, scripts/ converted to BRIDGE wrapper, 4 callers updated to spine import)_
+
+## Archived 2026-04-03
+- [x] [DOCS_GAP_AUDIT_REFRESH] Updated `docs/OPEN_SOURCE_GAP_AUDIT.md` — marked LICENSE, CONTRIBUTING.md, and CI as present. _(Done 2026-04-03)_
+- [x] [MONTHLY_REFLECTION_HEREDOC_FIX] `cron_monthly_reflection.sh` line 67 — migrated unquoted heredoc to printf pattern. _(Done 2026-04-03)_
+
+## Archived 2026-04-03
+- [x] [CRON_CANONICAL_REMAINING] Add 3 remaining CLI commands to `cli_maintenance.py` for: `dream_engine.py` → `clarvis maintenance dream`, `brief_benchmark.py` → `clarvis bench brief`, `generate_status_json.py` → `clarvis maintenance status-json`. _(2026-04-03: All 3 commands added + `clarvis bench brief` alias. Crontab migration deferred — existing direct python3 paths still work.)_
+- [x] [ROADMAP_CLONE_TEST_VERIFY] Implement clone → test → verify for code changes (ROADMAP Phase 3.2). _(2026-04-03: `scripts/clone_test_verify.py` — worktree lifecycle + pytest + ruff + baseline comparison. Wired into `spawn_claude.sh --isolated`. 17 tests.)_
+
+## Archived 2026-04-03
+- [x] [CONTEXT_SECTION_ORDERING] The heartbeat_preflight context_brief appends sections in code-execution order (brain_goals → brain_context → working_memory → world_model → failure_avoidance → procedures → synaptic → attention → gwt → introspection), NOT in Claude-optimal order. Primacy effect means Claude weights early context most heavily. Reorder to: TASK first → decision context → procedures → relevant knowledge → failure avoidance → supplementary. The prompt_builder path already does this correctly. (2026-04-03 14:05 UTC)
+- [x] [WORKER_TEMPLATE_COVERAGE] _(2026-04-03: Already resolved — `general.txt` exists with full protocol guidance including read-before-modify, test, mark queue, and output format rules.)_
+- [x] [SPAWN_LOCK_RACE] _(2026-04-03: Fixed — removed parent lock write at line 214, worker now solely owns lock lifecycle. No more race between parent and worker.)_
+
+## Archived 2026-04-03 (Context/Prompt Pipeline Bundle)
+- [x] [OSR_GIT_HISTORY_SCRUB] Git history secret scan: comprehensive regex scan (sk-or-v1-*, sk-ant-*, ghp_*, AKIA*, bot*:AA*) confirmed clean. All matches are placeholders/regex/tests. No BFG run needed.
+- [x] [PROMPT_DUAL_PATH_UNIFY] prompt_builder.get_context_brief() now delegates to generate_tiered_brief() as core. Both paths use primacy/recency optimized assembly.
+- [x] [CONTEXT_DUPLICATE_RECALL] Removed duplicate introspect_for_task + brain.recall in prompt_builder. Synaptic spread reuses recalled_memory_ids from brain_bridge.
+- [x] [CRON_RESEARCH_CONTEXT_DOWNGRADE] cron_research.sh switched from context_compressor.py brief to prompt_builder.py context-brief --task --tier standard.
+- [x] [CONTEXT_SUPPLEMENTARY_DEDUP] Added tiered_brief_used flag — supplementary append skips working_memory, failure_avoidance, procedures when tiered brief active.
+- [x] [CRON_EVOLUTION_BARE_CONTEXT] cron_evolution.sh now gets prompt_builder context-brief --tier full (brain introspection + episodic + failures).
+- [x] [CRON_IMPLEMENTATION_CONTEXT_DOWNGRADE] Verified already uses heartbeat_preflight.py. Queue description was outdated.
+- [x] [PROMPT_QUALITY_EVAL_MATRIX] Created scripts/prompt_quality_eval.py — static eval matrix across 10 tasks × 4 routes.
+- [x] [CONTEXT_BUDGET_QUALITY_POLICY] Created data/prompt_eval/context_budget_policy.json — 9 task classes with section priorities. Wired into generate_tiered_brief via geometric mean merge.
+- [x] [PROMPT_ROUTE_GOLDEN_FIXTURES] Created tests/test_prompt_route_golden.py — 17 tests + golden snapshots.
+- [x] [PROMPT_TASKSET_CURATION] Created data/prompt_eval/taskset.json — 10 tasks across 9 work classes.

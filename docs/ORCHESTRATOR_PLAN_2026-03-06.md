@@ -854,8 +854,8 @@ if (existing) {
 | **27-table SQLite schema** | Massively over-engineered for our use case. We have 5 agents, not 13. Our flat-file approach (agent.json + JSONL logs) is sufficient and easier to debug/backup. Only add SQLite if we hit performance limits on JSONL. |
 | **Multi-round review consensus meetings** | claw-empire has planning meetings → review meetings → revision rounds → re-review. Our review loop is: human reads PR on GitHub → approves/rejects. Meeting simulation adds complexity with no value for a single-user system. |
 | **Workflow packs (6 task profiles)** | Each pack has its own input schema, prompt preset, QA rules, output template, routing keywords, cost profile. We have one workflow: decompose → spawn → verify → promote. Template proliferation adds maintenance burden. |
-| **i18n (4 languages in every table)** | Single user (Patrick), single language (English). Adding `name_ko/ja/zh` columns to everything is pure bloat. |
-| **CEO WASD movement in PixiJS** | Fun but pointless for a read-only monitoring dashboard. Our CEO (Patrick) interacts via Telegram, not a game controller. |
+| **i18n (4 languages in every table)** | Single user (operator), single language (English). Adding `name_ko/ja/zh` columns to everything is pure bloat. |
+| **CEO WASD movement in PixiJS** | Fun but pointless for a read-only monitoring dashboard. Our CEO interacts via Telegram, not a game controller. |
 | **OAuth multi-account rotation with failure tracking** | claw-empire tracks multiple OAuth accounts per provider with priority, failure counts, and auto-swap. We use a single OpenRouter API key. Unnecessary complexity. |
 
 ### 12.6 Dashboard Architecture Recommendation

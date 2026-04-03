@@ -120,7 +120,7 @@ except ImportError:
     SomaticMarkerSystem = None
 
 try:
-    from cognitive_workspace import workspace as cog_workspace
+    from clarvis.memory.cognitive_workspace import workspace as cog_workspace
 except ImportError:
     cog_workspace = None
 
@@ -920,7 +920,7 @@ def _preflight_retrieval_eval(result, next_task, _rt, brain_ctx):
         result["retrieval_verdict"] = "ERROR"
 
 
-def _preflight_introspection_synaptic(result, next_task):
+def _preflight_introspection_synaptic(result, next_task, recalled_memory_ids=None):
     """§8.7+8.8+8.9: Brain introspection, synaptic spread, failure avoidance."""
     # §8.7: Brain introspection
     t87 = time.monotonic()
@@ -945,7 +945,7 @@ def _preflight_introspection_synaptic(result, next_task):
     synaptic_associations = ""
     if SynapticMemory:
         try:
-            synaptic_associations = _run_synaptic_spread(next_task, introspection_text)
+            synaptic_associations = _run_synaptic_spread(next_task, introspection_text, recalled_memory_ids)
         except Exception as e:
             log(f"Synaptic spreading activation failed: {e}")
     result["synaptic_associations"] = synaptic_associations
@@ -960,11 +960,18 @@ def _preflight_introspection_synaptic(result, next_task):
     return introspection_text, synaptic_associations, failure_avoidance
 
 
-def _run_synaptic_spread(next_task, introspection_text):
-    """Run synaptic spreading activation from recalled memory seeds."""
+def _run_synaptic_spread(next_task, introspection_text, recalled_memory_ids=None):
+    """Run synaptic spreading activation from recalled memory seeds.
+
+    Uses pre-recalled IDs from brain_bridge when available, avoiding a
+    duplicate brain.recall() call (CONTEXT_DUPLICATE_RECALL fix).
+    """
     sm = SynapticMemory()
     recalled_ids = []
-    if introspect_for_task and introspection_text:
+    # Prefer IDs already recalled by brain_bridge (§8.5) to avoid duplicate recall
+    if recalled_memory_ids:
+        recalled_ids = [mid["id"] for mid in recalled_memory_ids if mid.get("id")]
+    elif introspect_for_task and introspection_text:
         try:
             from brain import get_brain, LEARNINGS
             b_syn = get_brain()
@@ -1050,6 +1057,7 @@ def _preflight_generate_brief(result, next_task, knowledge_hints, compressed_epi
                                           episodic_hints=compressed_episodes,
                                           knowledge_hints=knowledge_hints)
             log(f"Tiered brief ({brief_tier}): {len(brief)} bytes")
+            result["tiered_brief_used"] = True
             return brief
         except Exception as e:
             log(f"Tiered brief failed, falling back to legacy: {e}")
@@ -1072,7 +1080,9 @@ def _preflight_append_supplementary(context_brief, result, brain_goals, brain_co
         context_brief += f"\nBRAIN GOALS (active objectives):\n{brain_goals[:500]}\n"
     if brain_context and "brain_context" not in _suppressed_sections:
         context_brief += f"\nBRAIN CONTEXT: {brain_context[:200]}\n"
-    if brain_working_memory and "working_memory" not in _suppressed_sections:
+    # NOTE: working_memory is already included in the tiered brief (spotlight/workspace section).
+    # Only append if tiered brief was NOT used (legacy fallback path).
+    if brain_working_memory and "working_memory" not in _suppressed_sections and not result.get("tiered_brief_used"):
         context_brief += f"\nWORKING MEMORY (recent activity):\n{brain_working_memory[:300]}\n"
 
     wm_p = result.get("wm_p_success")
@@ -1085,10 +1095,14 @@ def _preflight_append_supplementary(context_brief, result, brain_goals, brain_co
             wm_hint += " (low — tread carefully, check prior failures)"
         context_brief += f"\n{wm_hint}\n"
 
-    if failure_avoidance and "failure_avoidance" not in _suppressed_sections:
+    # NOTE: failure_avoidance is already included in the tiered brief (via build_decision_context).
+    # Only append if tiered brief was NOT used (legacy fallback path).
+    if failure_avoidance and "failure_avoidance" not in _suppressed_sections and not result.get("tiered_brief_used"):
         context_brief += f"\n{failure_avoidance}\n"
 
-    if procs_for_injection:
+    # NOTE: procedures are already included in the tiered brief (via get_recommended_procedures).
+    # Only append if tiered brief was NOT used (legacy fallback path).
+    if procs_for_injection and not result.get("tiered_brief_used"):
         rec_lines = ["Recommended approach (from procedural memory):"]
         for idx, proc in enumerate(procs_for_injection[:2]):
             steps = proc.get("steps", [])
@@ -1406,8 +1420,10 @@ def run_preflight(dry_run=False):
         similar_episodes, failure_episodes = _preflight_episodic(result, next_task, _rt)
         knowledge_hints, brain_goals, brain_context, brain_working_memory, _ = \
             _preflight_brain_bridge(result, next_task, _rt, retrieval_tier_info)
+        # Pass recalled IDs to avoid duplicate brain.recall in synaptic spread
         introspection_text, synaptic_associations, failure_avoidance = \
-            _preflight_introspection_synaptic(result, next_task)
+            _preflight_introspection_synaptic(result, next_task,
+                                              recalled_memory_ids=result.get("recalled_memory_ids"))
     # §9: Task routing / classification
     t9 = time.monotonic()
     if classify_task:

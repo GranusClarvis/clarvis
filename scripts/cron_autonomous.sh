@@ -308,6 +308,9 @@ WORKER_TEMPLATE_DIR="$SCRIPTS/worker_templates"
 if [ -n "$WORKER_TYPE" ] && [ -f "$WORKER_TEMPLATE_DIR/${WORKER_TYPE}.txt" ]; then
     WORKER_TEMPLATE=$(cat "$WORKER_TEMPLATE_DIR/${WORKER_TYPE}.txt")
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WORKER_TEMPLATE: loaded ${WORKER_TYPE}.txt" >> "$LOGFILE"
+elif [ -f "$WORKER_TEMPLATE_DIR/general.txt" ]; then
+    WORKER_TEMPLATE=$(cat "$WORKER_TEMPLATE_DIR/general.txt")
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WORKER_TEMPLATE: loaded general.txt (fallback for worker_type=${WORKER_TYPE:-unset})" >> "$LOGFILE"
 else
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WORKER_TEMPLATE: none (worker_type=${WORKER_TYPE:-unset})" >> "$LOGFILE"
 fi

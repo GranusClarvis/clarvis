@@ -58,9 +58,9 @@ MEMBENCH_TASKS: list[dict[str, Any]] = [
         "id": "MF01",
         "quadrant": "participation-factual",
         "query": "Who is Clarvis's creator?",
-        "expected_substrings": ["patrick", "inverse", "granus"],
+        "expected_substrings": ["operator", "granus"],
         "collections": ["clarvis-identity"],
-        "gold_evidence": "Clarvis was created by Patrick (Inverse/GranusClarvis).",
+        "gold_evidence": "Clarvis was created by the operator (GranusClarvis).",
         "temporal_hint": "early",
     },
     {

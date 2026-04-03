@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
 """
-Knowledge Synthesis — Find cross-domain connections between memories
+Knowledge Synthesis — Batch cross-domain connection finder (reflection pipeline).
 
 Scans all brain collections, finds connections that span collection boundaries,
 and creates synthesized insights about non-obvious relationships.
+
+NOTE: This is the *batch* synthesis module, run by cron_reflection.sh step 3.
+It stores new cross-domain insights into the brain.
+The *query-time* module is clarvis/context/knowledge_synthesis.py — that one
+synthesizes knowledge for context briefs without storing anything.
 """
 
 import sys

@@ -1,234 +1,214 @@
 # Monthly Structural Reflection — April 2026
 
-**Period:** 2026-03-02 to 2026-04-01
+_Generated: 2026-04-03 | Window: 2026-03-04 to 2026-04-03_
 
 ## Executive Summary
 
-March was a strong operational month: 247 episodes logged with a 92.7% success rate, up from prior baseline. Brain performance is excellent (259ms avg query, all PI dimensions passing). The major incident was a clustered auth failure on March 25 (5 of 6 total failures were 401 errors — an API key issue, not a capability gap). Timeouts remain the primary loss mode (4.9%), concentrated on complex research and infrastructure tasks. The script codebase has grown to 112 Python files (67k lines) with 37 shell scripts; several large scripts (>1000 lines) are ripe for decomposition or spine migration. The ROADMAP is broadly accurate but several percentage claims are stale. Key recommendation: focus April on script consolidation and reducing timeout rates on complex tasks.
+The past 30 days show a system executing at **89% episode success rate** (205/230 episodes) with strong brain performance (254ms avg query, all PI dimensions passing) but significant structural concerns: the autonomous log reveals a **67.7% heartbeat success rate** (44/65 runs) with 21.5% timeouts and 10.8% crashes, plus **23 days with no logged heartbeat data** (log rotation gap). The `scripts/` directory has ballooned to 141 files / 65,350 lines with at least 12 large scripts (400+ lines) that are completely dead code — never imported and never in crontab. The bloat score sits at exactly the 0.40 threshold, the weakest metric in the system. Prediction calibration is severely miscalibrated: all 100 predictions use confidence=0.90 but only 69% resolve correctly (Brier 0.2568). ROADMAP percentages are broadly accurate but several specific claims are outdated. The cognitive workspace reuse rate (88.8%) has far exceeded the 58.6% target listed in ROADMAP, and graph edges are 127.6k (not 109k). Key priority: reduce script bloat and fix the confidence calibration monoculture.
 
 ---
 
 ## Episode Trends
 
-### Success/Failure Rates (n=247)
+### 30-Day Episode Summary (n=230)
 
 | Outcome | Count | Rate |
 |---------|-------|------|
-| Success | 229 | 92.7% |
-| Timeout | 12 | 4.9% |
-| Failure | 6 | 2.4% |
-| Partial | 0 | 0.0% |
+| Success | 205 | 89.1% |
+| Timeout | 11 | 4.8% |
+| Failure | 7 | 3.0% |
+| Crash | 7 | 3.0% |
 
-### Weekly Trend
+**Success rate is healthy at 89.1%**, above the PI target of 85%.
 
-| Week | Success | Timeout | Failure | Rate |
-|------|---------|---------|---------|------|
-| W10 | 57 | 3 | 0 | 95% |
-| W11 | 50 | 5 | 1 | 89% |
-| W12 | 36 | 0 | 0 | 100% |
-| W13 | 63 | 2 | 5 | 90% |
-| W14 | 23 | 2 | 0 | 92% |
+### Success Distribution by Category
 
-**Observations:**
-- W12 was a perfect week (36/36 success). W11 was the weakest (89%) due to timeout clustering.
-- W13 dip was entirely caused by the March 25 auth incident (5 failures from 401 errors).
-- Success rate is trending stable at 90-95% — healthy range.
+| Category | Count | Notes |
+|----------|-------|-------|
+| Feature/other | 92 | Broadest category — queue items, new capabilities |
+| Bugfix | 29 | Healthy fix rate |
+| Research | 28 | Research ingestion pipeline active |
+| Maintenance | 25 | Cleanup, queue hygiene |
+| Benchmark | 23 | PI, CLR, brain eval work |
+| Migration | 8 | Spine migrations continuing |
 
-### Failure Analysis
+### Failure Patterns
 
-**Auth Failure Cluster (March 25):** 5 of 6 failures were `401 authentication_error`. This was a systemic API key issue, not a capability problem. Affected tasks: cron error aggregator, semantic cross-collection boost, OSS readiness check, episodic memory bugfix, and a reasoning failure investigation. All were system-type failures.
+**Timeouts (11):** Clustered around complex multi-step tasks — `GRAPH_STORAGE_UPGRADE` (2x), research-heavy tasks, and infrastructure rewiring. These are legitimately hard tasks hitting the 1500s ceiling.
 
-**Sole Capability Failure:** `PHI_EMERGENCY_COMPACTION` (March 11) — tagged `partial-success`. Phi declined 0.764→0.628 and the recovery task didn't fully resolve it. This was a genuine capability challenge.
+**Crashes (7):** Recent spike (April 1-3) with 7 crashes, including instant-fail detections (1s exits). Several `OSR_*` tasks (open-source readiness) and test-writing tasks crashed. The crash guard is correctly classifying these but the root cause appears to be malformed task prompts or missing prerequisites.
 
-### Timeout Patterns (12 episodes, 4.9%)
+**Failures (7):** Distributed across semantic work, phi recovery, and shell scripting tasks. No single dominant failure mode.
 
-Timeouts cluster in two categories:
-1. **Research tasks** (4/12): External repo analysis, discovery research — these naturally take longer
-2. **Complex infrastructure** (8/12): Graph cutover (2x), retrieval RL, semantic bridge, consolidation, retrieval hardening, harness comparison, memory selection
+**Key pattern:** Failures are NOT clustered — they're distributed across 23 distinct task prefixes. This suggests no systemic capability gap, but rather that ~11% of tasks are inherently beyond single-heartbeat scope.
 
-All timeouts hit the 1500-1800s ceiling. Duration mean across all episodes: 411s, with 6.5% exceeding 1200s.
+### Prediction Calibration
 
-**Root cause:** Complex tasks are allocated the same timeout as routine work. Research and infrastructure tasks need either longer timeouts or better task decomposition in preflight.
+**Critical issue:** All 100 predictions in the 30-day window use **confidence=0.90** — a monoculture. Actual accuracy is 69%, yielding Brier score 0.2568. The system is systematically overconfident by ~21 percentage points.
 
-### Quality Metrics
+| Confidence Bucket | Predictions | Actual Accuracy | Gap |
+|-------------------|-------------|-----------------|-----|
+| 0.90 | 100 | 69% | -21% |
 
-| Metric | Value |
-|--------|-------|
-| Mean valence | 0.517 |
-| Context relevance | 0.845 |
-| Noise ratio | 0.155 |
-| Postflight completeness | 1.000 (perfect) |
-| Section distribution | P0: 121, P1: 90, P2: 35 |
+**Recommendation:** The prediction system needs variance in confidence assignment. A well-calibrated system at 0.90 confidence should see ~90% accuracy. Either the confidence model is broken (always outputs 0.90) or the resolution criteria are too strict.
 
-Context relevance at 0.845 is strong. Noise ratio 0.155 is acceptable but could improve. Postflight completeness at 1.0 indicates the pipeline is mature.
+### Reasoning Chains
+
+344 active chain files + 0 archived (461 total sessions per meta). Chain depth is shallow (2-3 steps) for recent chains. Quality scores are not being recorded in recent chain files (all show `q=?`), suggesting the quality scoring pipeline may have broken during recent refactoring.
 
 ---
 
 ## Script Audit
 
-### Scale
+### Overview
 
-- **112 Python scripts** in `scripts/` (59,640 lines total)
-- **37 Shell scripts** in `scripts/`
-- **91 spine modules** in `clarvis/`
+- **141 scripts** in `scripts/` totaling **65,350 lines**
+- **30+ scripts** exceed 300 lines
+- **12 scripts** (7,893 lines total) are completely dead — zero imports, not in crontab
 
-### Oversized Scripts (>1000 lines, single-file)
+### Dead Code (Zero Imports, Not in Crontab)
 
-| Script | Lines | Assessment |
-|--------|-------|------------|
-| `project_agent.py` | 3,492 | Far too large. Should be decomposed into create/spawn/benchmark/migrate submodules |
-| `heartbeat_postflight.py` | 1,885 | Core pipeline, complex but coherent. Consider extracting episode encoding logic |
-| `context_compressor.py` | 1,811 | Has spine equivalent at `clarvis/context/compressor.py` — check if scripts version is still the active one |
-| `performance_benchmark.py` | 1,675 | Stable but large. Metrics collection could split from reporting |
-| `heartbeat_preflight.py` | 1,453 | Core pipeline, actively maintained |
-| `directive_engine.py` | 1,406 | Policy engine — complex but self-contained |
-| `clarvis_browser.py` | 1,226 | Two engines (agent-browser + Playwright) — natural split point |
-| `meta_learning.py` | 1,148 | **Spine inversion**: 1148 lines in scripts, only 20 in spine. Spine stub is not the real module |
-| `browser_agent.py` | 1,083 | Playwright CDP engine — could merge with clarvis_browser |
-| `world_models.py` | 1,065 | Cognitive architecture module |
-| `tool_maker.py` | 1,022 | LATM pipeline |
-| `meta_gradient_rl.py` | 1,022 | RL module — assess if actively used |
+| Script | Lines | Status |
+|--------|-------|--------|
+| `absolute_zero.py` | 1,014 | Called via `cron_absolute_zero.sh` indirectly — verify |
+| `agent_orchestrator.py` | 763 | Superseded by `project_agent.py`? |
+| `ast_surgery.py` | 964 | Research prototype, never integrated |
+| `cleanup_policy.py` | 540 | May be called by `cron_cleanup.sh` indirectly |
+| `conversation_learner.py` | 911 | Large but orphaned |
+| `dashboard_server.py` | 488 | Web dashboard — standalone runner |
+| `graph_cutover.py` | 430 | Historical — cutover completed 2026-03-29 |
+| `llm_brain_review.py` | 663 | Called by `cron_llm_brain_review.sh` indirectly |
+| `orchestration_benchmark.py` | 468 | Standalone benchmark runner |
+| `prompt_builder.py` | 543 | Orphaned |
+| `research_novelty.py` | 554 | Orphaned |
+| `research_to_queue.py` | 557 | Orphaned |
+
+Note: Some "dead" scripts may be called indirectly via shell wrappers — `absolute_zero.py`, `llm_brain_review.py`, and `cleanup_policy.py` should be verified before removal.
+
+### Oversized Scripts (Top 10)
+
+| Script | Lines | Concern |
+|--------|-------|---------|
+| `project_agent.py` | 3,492 | God object — agent CRUD, spawning, benchmarking, brain seeding, promotion all in one |
+| `heartbeat_postflight.py` | 1,970 | 48 stages — should be decomposed into pipeline modules |
+| `performance_benchmark.py` | 1,675 | Benchmark + PI + history + alerts + integration all bundled |
+| `context_compressor.py` | 1,546 | Multiple compression strategies in one file |
+| `heartbeat_preflight.py` | 1,475 | Attention, routing, context assembly, cognitive load all mixed |
+| `directive_engine.py` | 1,406 | Only 2 imports — possible over-engineering |
+| `clarvis_browser.py` | 1,226 | Dual-engine browser — reasonable given scope |
+| `meta_learning.py` | 1,148 | 4 imports — may be research prototype |
+| `browser_agent.py` | 1,083 | Playwright wrapper — reasonable |
+| `world_models.py` | 1,065 | 6 imports — active but large |
 
 ### Spine Migration Status
 
-Several scripts have been migrated to spine with thin wrappers left in `scripts/`:
-- `attention.py` (19 lines → `clarvis/cognition/attention.py` 1268 lines) — done
-- `episodic_memory.py` (18 lines → `clarvis/memory/episodic_memory.py` 1241 lines) — done
-- `working_memory.py` (12 lines → `clarvis/memory/working_memory.py` 87 lines) — done
-- `procedural_memory.py` (17 lines → `clarvis/memory/procedural_memory.py` 1131 lines) — done
-- `hebbian_memory.py` (12 lines → `clarvis/memory/hebbian_memory.py` 875 lines) — done
+The `clarvis/` spine has modules for: brain, heartbeat, cognition, context, metrics, memory, learning, runtime, orch, adapters. Good coverage, but many large scripts in `scripts/` have NOT been migrated:
+- `project_agent.py` → should map to `clarvis/orch/`
+- `performance_benchmark.py` → should map to `clarvis/metrics/`
+- `cognitive_workspace.py` → should map to `clarvis/cognition/`
+- `context_compressor.py` → partially in `clarvis/context/` already
 
-**Spine inversion (needs fix):** `meta_learning.py` has 1148 lines in `scripts/` but only a 20-line stub in `clarvis/learning/meta_learning.py`. The spine module is not the real implementation.
+### Duplicated Logic
 
-### Not-Yet-Migrated Large Scripts
-
-These scripts have no spine equivalent and are >500 lines:
-- `project_agent.py` (3,492) — candidate for `clarvis/orch/project_agent/`
-- `directive_engine.py` (1,406) — candidate for `clarvis/cognition/directives.py`
-- `world_models.py` (1,065) — candidate for `clarvis/cognition/world_models.py`
-- `tool_maker.py` (1,022) — candidate for `clarvis/learning/tool_maker.py`
-- `dream_engine.py` (742) — candidate for `clarvis/cognition/dream.py`
-- `cognitive_workspace.py` (708) — candidate for `clarvis/cognition/workspace.py`
-
-### Duplication Concerns
-
-- `context_compressor.py` (scripts, 1811 lines) vs `clarvis/context/compressor.py` — need to verify which is actively imported
-- `soar_engine.py` (scripts, 827 lines) vs `clarvis/memory/soar.py` — check if both are in use
-- `clarvis_reasoning.py` (scripts, 926 lines) vs `clarvis/cognition/reasoning.py` — same concern
+- `agent_orchestrator.py` (763 lines) vs `project_agent.py` (3,492 lines) — likely superseded
+- `brain.py` (313 lines, 145 imports) vs `clarvis/brain/` spine — dual-path still active
+- `research_novelty.py` + `research_to_queue.py` — orphaned research pipeline
 
 ---
 
 ## ROADMAP Gaps
 
-### Accuracy Assessment
+### Claims vs Reality
 
-| ROADMAP Claim | Actual State | Update Needed? |
-|---------------|-------------|----------------|
-| Brain 98% | Brain healthy: 3085 memories, 117k edges, 259ms avg query. 285 dups flagged. | Accurate |
-| Heartbeat Evolution 100% | Pipeline fully operational, postflight completeness 1.0 | Accurate |
-| Self-Awareness 94% | Phi 0.7347 (ROADMAP says 0.8304) — **stale** | Update Phi to 0.7347 |
-| Performance Index 100% | PI metrics all passing, but PI value reads as 0 in history | Verify PI calculation |
-| Cognitive Workspace 84% | Reuse rate 83.5% (memory says exceeded 58.6% target). ROADMAP still says "~53% reuse" and has unchecked items | Update reuse to 83.5%, check items |
-| Session Continuity 86% | "not meaningfully advanced this week" — stale for a month now | Consider if still 86% |
-| Agent Orchestrator 91% | Benchmark scripts added per ROADMAP. star-world-order active | Accurate |
-| Context Quality 94% | Brief compression 0.550 (matches target of 0.55 exactly) | Borderline — at target, not above |
-
-### Specific Updates Needed
-
-1. **Phase 5.5 Cognitive Workspace (75%):** ROADMAP says "~53% memory reuse" but actual is 83.5%. The "Reuse rate optimization (target 58.6%)" checkbox should be marked complete. Update to ~85%.
-
-2. **Self-Awareness Phi:** ROADMAP current state table says "Phi 0.8304" but latest measurement is 0.7347. This is a significant decline that should be acknowledged.
-
-3. **Phase 4.3 Knowledge Synthesis:** Claims "109k+ cross-collection graph edges" — actual is 117,100. Update count.
-
-4. **Phase 5.4 Episodic Memory:** Claims "153+ episodes" — actual is 362 episodes (390 total, 362 in episodes collection). Update count.
-
-5. **Brain stats:** ROADMAP architecture section says "3400+ memories, 106k+ graph edges" — actual is 3085 memories (decreased due to optimization/pruning), 117,100 edges. Memories decreased, edges increased.
+| ROADMAP Claim | Actual | Action |
+|---------------|--------|--------|
+| Brain: "3400+ memories" | 3,438 | Accurate ✓ |
+| Graph: "106k+ edges" | 127,579 | **Outdated** — update to 127k+ |
+| Reasoning: "300+ quality chains" | 344 active files | Accurate ✓ |
+| Episodes: "153+ episodes" | 402 | **Outdated** — update to 400+ |
+| Workspace reuse: "~53%" and target 58.6% | 88.8% | **Severely outdated** — target exceeded by 30pp |
+| Phase 5.5 Cognitive Workspace: 75% | Should be 90%+ given reuse rate | **Update needed** |
+| Phase 5.4 Episodic Memory: 93% → "153+ episodes" | 402 episodes | Update count claim |
+| PI: "hit 1.0000" | Current PI at threshold (bloat=0.40) | Verify and possibly downgrade |
+| Phase 2: "95% COMPLETE" | All items checked | Mark 100% complete |
+| Phase 3.1 Confidence Gating: 70% | Calibration is broken (Brier 0.2568) | May need downgrade |
 
 ### Stalled Items
 
-- **Tiered action levels (3.1):** Not enforced — no progress visible
-- **Clone → test → verify (3.2):** Not implemented
-- **Proactive research on emerging tools (3.3):** Research cron exists but no systematic tool evaluation
-- **Multi-agent parallel execution (3.4):** Not started
-- **Memory evolution A-Mem (5.1):** Not implemented
-- **Cross-session workspace persistence (5.5):** Not started
+- **Phase 3.2**: "Clone → test → verify for code changes" and "Gate promotion of improvements" — no evidence of progress
+- **Phase 3.3**: "Proactive research on emerging tools" and "Autonomous code review of own scripts" — no progress
+- **Phase 5.1**: "Memory evolution (A-Mem style)" — still unimplemented
+- **Phase 5.2**: "Can explain reasoning process" — still partial
+- **Autonomy Track A.1-A.4**: Minimal progress beyond foundation; browser sessions still break periodically
+
+### Suggested ROADMAP Updates
+
+1. Phase 2 → 100% COMPLETE
+2. Phase 4 → 75% (accounting for broken quality scoring in chains)
+3. Phase 5.5 Cognitive Workspace → 90% (reuse rate 88.8%, far exceeding target)
+4. Update numerical claims: episodes 400+, graph edges 127k+
+5. Phase 3.1 Confidence Gating: add note about calibration monoculture issue
 
 ---
 
 ## Cron Efficiency
 
-### Schedule Overview
+### Autonomous Heartbeat Performance
 
-48 active crontab entries. 12 autonomous slots/day (11 on Wed/Sat), plus dedicated morning, evolution, research (2x), implementation, evening, and reflection slots.
+**Critical data gap:** Log rotation truncated March data. Only 4 days of April data (21 runs) plus Week 10 data (43 runs) are available in current logs. **23 of 31 days have zero heartbeat log data.**
 
-### March Run Counts
+| Period | Runs | Success | Timeout | Crash | Success Rate |
+|--------|------|---------|---------|-------|-------------|
+| 2026-W10 (Mar 4-7) | 43 | 31 | 12 | 0 | 72% |
+| 2026-W14 (Apr 1-3) | 22 | 13 | 2 | 7 | 59% |
+| **30-day total** | **65** | **44** | **14** | **7** | **67.7%** |
 
-| Cron Job | March Entries | Expected (~30 days) | Assessment |
-|----------|--------------|---------------------|------------|
-| autonomous | 1,041 | ~360 (12/day) | **High** — includes preflight/postflight log lines per run |
-| research | 345 | ~60 (2/day) | High — multi-line per run |
-| morning | 230 | ~30 | High — multi-line per run |
-| evolution | 191 | ~30 | High — multi-line per run |
-| evening | 108 | ~30 | Normal |
-| reflection | 12 | ~4-5 (weekly) | **Low** — may indicate skipped runs or terse output |
+### Issues
 
-### Timeout Analysis
+1. **Log rotation destroys analysis data.** The truncation at the top of `autonomous.log` (`[TRUNCATED 2026-04-02]`) wipes 3 weeks of data. This makes monthly reflection impossible for most of the window.
 
-From the autonomous log sample (500 lines from March 30-31):
-- **47 timeout mentions** across 2 days — high rate
-- **14 deferred/skipped** — gate suppressions during conversations
-- **10 gate-skipped** — heartbeat suppression working correctly
+2. **Timeout rate 21.5%** is high. Complex tasks (score≥0.60) get 1500s timeouts but still hit the ceiling. The task sizing → timeout mapping may need adjustment.
 
-### Efficiency Concerns
+3. **Crash spike in April** (7 crashes in 3 days) — driven by instant-fail exits (1s duration). These are wasted heartbeat slots that produce no useful work.
 
-1. **Autonomous log truncation:** The log starts with "[TRUNCATED 2026-03-31] Older entries archived" — full 30-day history is not available for analysis. Only 2 days of data visible in the log.
+4. **Episode success (89%) vs heartbeat success (68%) discrepancy**: Episodes are recorded per-task and include non-heartbeat work. The heartbeat pipeline has a ~20% overhead failure rate that episodes don't fully capture.
 
-2. **Reflection low count (12):** Weekly reflection should produce ~4-5 entries. 12 entries for a month is reasonable if counting runs rather than log lines, but should verify no silent failures.
+### Schedule Observations
 
-3. **Timeout clustering in research/infrastructure:** Research tasks and complex infrastructure work consistently hit timeout ceilings. The 1500s timeout may be too short for discovery-class tasks.
-
-4. **CLR autonomy dip:** On March 29, CLR autonomy dimension dropped to 0.397 (from typical 0.796-0.836). Single-day anomaly, recovered to 0.804 by March 31.
-
-5. **Brief compression at boundary:** 0.550 exactly matches the 0.55 target — no margin. Any degradation will breach target.
-
-### Schedule Recommendations
-
-- The 12x/day autonomous schedule appears well-utilized (92.7% success rate)
-- No evidence of consistently empty/wasted slots
-- Wed/Sat strategic audit replacement is working (no timeout or failure reports from those slots)
+- 12 autonomous slots/day is aggressive given the ~68% success rate — effectively ~8 productive runs/day
+- The 02:45 dream engine and AZR (Sunday 03:00) slots appear functional
+- Maintenance window (04:00-05:00) is well-structured with shared lock
+- Evening/morning report slots (09:30, 22:30) are lightweight and appropriate
 
 ---
 
 ## Recommendations
 
-### P0 — Fix This Month
+### P0: Fix Prediction Calibration Monoculture
+**Files:** `scripts/heartbeat_postflight.py` (world model recording), `scripts/clarvis_confidence.py`
+**Issue:** All predictions use confidence=0.90 regardless of task complexity, producing Brier score 0.2568 (should be <0.10 for well-calibrated 0.90 predictions). The system is systematically overconfident by ~21 percentage points.
+**Action:** Audit the confidence assignment path in postflight. Implement variance based on task complexity tier (simple→0.95, complex→0.70, research→0.60). Add calibration bucket tracking to the PI dashboard.
 
-**1. Investigate PI calculation (performance_history.jsonl shows PI=0)**
-- File: `scripts/performance_benchmark.py`, `data/performance_history.jsonl`
-- The performance_history.jsonl records show `pi=0` for all recent entries, yet performance_metrics.json shows all dimensions passing. Either the PI composite calculation is broken or the field name changed. ROADMAP claims PI=1.0000 — verify this is real, not a reporting artifact.
+### P1: Script Bloat Reduction — Remove Dead Code
+**Files:** `scripts/ast_surgery.py`, `scripts/agent_orchestrator.py`, `scripts/graph_cutover.py`, `scripts/prompt_builder.py`, `scripts/research_novelty.py`, `scripts/research_to_queue.py`, `scripts/conversation_learner.py`
+**Issue:** 12 scripts totaling ~7,900 lines are never imported and not in crontab. The bloat score (0.40) is at the critical threshold.
+**Action:** Archive confirmed dead scripts to `scripts/archive/` (verify shell wrappers first for `absolute_zero.py`, `llm_brain_review.py`, `cleanup_policy.py`). Target: reduce scripts/ to <130 files and <60k lines.
 
-**2. Fix meta_learning spine inversion**
-- Files: `scripts/meta_learning.py` (1148 lines), `clarvis/learning/meta_learning.py` (20 lines)
-- The spine module is a stub while the real implementation lives in scripts. Either migrate the implementation to the spine or make the spine import properly from scripts. This is the only remaining spine inversion.
+### P1: Fix Autonomous Log Retention
+**Files:** `scripts/cron_cleanup.sh` (log rotation), `memory/cron/autonomous.log`
+**Issue:** Log rotation truncates March data, leaving 23/31 days of the analysis window invisible. Monthly reflection cannot function without 30 days of data.
+**Action:** Increase autonomous.log retention to 60 days (2 full monthly reflection windows). Move the truncation marker to a separate `.log.1` file instead of destructive in-place truncation.
 
-### P1 — Plan This Month
+### P2: Decompose `project_agent.py` (3,492 lines)
+**Files:** `scripts/project_agent.py`
+**Issue:** Single file handling agent CRUD, spawning, brain seeding, benchmarking, promotion, migration, and destruction. At 3,492 lines it's the largest script by far and violates single-responsibility.
+**Action:** Split into `clarvis/orch/` submodules: `agent_crud.py`, `agent_spawn.py`, `agent_brain.py`, `agent_benchmark.py`. Keep `project_agent.py` as thin CLI wrapper.
 
-**3. Decompose project_agent.py (3,492 lines)**
-- File: `scripts/project_agent.py`
-- At 3.5k lines, this is the largest script by far. Split into submodules under `clarvis/orch/`: agent creation, spawning, benchmarking, migration, promotion. Each subcommand should be its own module.
-
-**4. Add task complexity-aware timeouts**
-- Files: `scripts/heartbeat_preflight.py`, cron orchestrator scripts
-- Research and infrastructure tasks timeout at 12x the rate of routine work. Preflight already classifies task complexity — use this to set dynamic timeouts (e.g., COMPLEX/RESEARCH → 2400s, STANDARD → 1200s).
-
-### P2 — Backlog
-
-**5. Update ROADMAP stale metrics**
-- File: `ROADMAP.md`
-- Update: Phi 0.8304 → 0.7347, cognitive workspace reuse 53% → 83.5%, episode count 153 → 362, graph edges 106k → 117k, memories 3400 → 3085. Mark cognitive workspace reuse target as complete.
+### P2: Update ROADMAP Numerical Claims
+**Files:** `ROADMAP.md`
+**Issue:** Multiple claims are stale — episodes (153→402), graph edges (106k→127k), workspace reuse (53%→88.8%), Phase 5.5 percentage (75%→90%).
+**Action:** Batch-update all numerical claims in a single commit. Mark Phase 2 as 100% complete. Add note about confidence calibration issue under Phase 3.1.
 
 ---
 
-_Generated: 2026-04-01T03:30:00+02:00 by monthly structural reflection (cron_monthly_reflection.sh)_
-_Weakest metric at generation time: Brief Compression Ratio = 0.550 (target: 0.55)_
+_End of monthly structural reflection. Next reflection: 2026-05-01._

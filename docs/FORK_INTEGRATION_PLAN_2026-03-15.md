@@ -1,6 +1,6 @@
 # Fork Integration Plan — 2026-03-15
 
-**Source:** `InverseAltruism/Clarvis_Fork` (commit `db50e45`)
+**Source:** `<operator-gh>/Clarvis_Fork` (commit `db50e45`)
 **Target:** `GranusClarvis/clarvis` (main, commit `799575d`)
 **Author:** Clarvis executive function (Claude Code Opus)
 

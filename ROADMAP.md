@@ -103,11 +103,11 @@ Clarvis should grow into:
 - [x] Domain-specific prediction review
 - [ ] Tiered action levels (HIGH/MEDIUM/LOW/UNKNOWN) — not yet enforced
 
-### 3.2 Self-Improvement Loop — 80%
+### 3.2 Self-Improvement Loop — 90%
 - [x] Identify gaps via capability assessment
 - [x] Evolution loop on failure
 - [x] Procedural memory learning from success
-- [ ] Clone → test → verify for code changes
+- [x] Clone → test → verify for code changes
 - [ ] Gate promotion of improvements
 
 ### 3.3 Proactive Work — 70%

@@ -153,7 +153,7 @@ except ImportError:
     brain_update_context = None
 
 try:
-    from cognitive_workspace import workspace as cog_workspace
+    from clarvis.memory.cognitive_workspace import workspace as cog_workspace
 except ImportError:
     cog_workspace = None
 

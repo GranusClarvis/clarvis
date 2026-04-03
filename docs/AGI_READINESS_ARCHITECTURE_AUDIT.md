@@ -289,7 +289,7 @@ Estimated total session token reduction for Clarvis: **5-15%** (vs RTK's adverti
 
 ### Recommendation: **Borrow Patterns**
 
-1. **Install for interactive sessions** — If Patrick uses Claude Code interactively, RTK saves tokens there. Won't interfere with cron sessions.
+1. **Install for interactive sessions** — If the operator uses Claude Code interactively, RTK saves tokens there. Won't interfere with cron sessions.
 2. **Borrow test output compression** — For project_agent.py spawned sessions running tests on external repos, a Python-based test output filter (inspired by RTK's pytest module) would improve signal-to-noise.
 3. **Ignore as core dependency** — Not worth the Rust binary dependency for 5-15% savings on an already-optimized system.
 4. **Watch the project** — At this growth rate, it may add features (non-Bash tool interception, Python library mode) that increase its value.

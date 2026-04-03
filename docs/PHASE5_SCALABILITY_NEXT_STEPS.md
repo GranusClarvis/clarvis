@@ -208,7 +208,7 @@ Complete the long-stalled ACT-R wiring: `actr_activation.py` power-law decay sco
 
 ---
 
-## 5. Decision Points for Inverse
+## 5. Decision Points for Operator
 
 ### 1. Cron cutover timeline
 The `clarvis cron run <job>` wrapper exists and `cron_reflection.sh` is piloting (7-day soak ends 2026-03-11). **Decision needed:** After soak, should we cut over all 12 cron scripts at once, or one-per-week? Risk of batch cutover is low (wrappers call the same scripts), but a staged approach catches edge cases.

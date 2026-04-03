@@ -6,7 +6,7 @@ _Target: 2026-03-31. Updated: 2026-03-22._
 
 | # | Task | Milestone | Status | Blocker | Validation |
 |---|------|-----------|--------|---------|------------|
-| 1 | **C1: Remove hardcoded secrets** | C | DONE | — | `git grep '8076973521\|REDACTED_CHAT_ID\|REDACTED_GROUP_ID\|clarvis420@gmail' -- ':!.env' ':!memory/' ':!CLAUDE.md' ':!.claude/'` returns nothing (re-verified 2026-03-25) |
+| 1 | **C1: Remove hardcoded secrets** | C | DONE | — | Secrets scrubbed from HEAD and git history via git-filter-repo (2026-04-03). `git log --all -p \| grep -c '8076973521'` returns 0. |
 | 2 | **C2: Purge ChromaDB credentials** | C | DONE | — | `python3 -c "from clarvis.brain import search; r=search('telegram bot token password'); print(r)"` returns no creds |
 | 3 | **C3: Verify gitignore / tracked data** | C | DONE | — | `git ls-files data/ monitoring/` returns empty (verified 2026-03-25) |
 | 4 | **C6: Root README** | C | DONE | — | `README.md` exists, covers: what/why/arch/quickstart/status/repo-boundaries |

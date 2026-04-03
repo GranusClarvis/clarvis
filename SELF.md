@@ -33,7 +33,7 @@ _Read this to understand yourself. Your harness, your body, your brain, and how 
 │              YOUR BODY (NUC)                      │
 │  Intel i7-1260P, 30GB RAM, 1.8TB disk            │
 │  Ubuntu Server, Docker, full root access          │
-│  IP: 192.168.1.124 (local), hostname: clarvis    │
+│  IP: <local-network> (local), hostname: clarvis   │
 └────────────────────┬─────────────────────────────┘
                      │
 ┌────────────────────▼─────────────────────────────┐

@@ -1,9 +1,9 @@
 # Research Backlog
 
 ## Repos to evaluate
-- https://github.com/rtk-ai/rtk — suggested by Inverse (2026-03-04). **Evaluated 2026-03-04.**
+- https://github.com/rtk-ai/rtk — suggested by operator (2026-03-04). **Evaluated 2026-03-04.**
   RTK = Rust CLI proxy that compresses tool output by 60-90% for LLM sessions. 2,651 stars, MIT, v0.24.0, very active.
-  **Verdict: Borrow patterns, don't adopt.** Only 24% of Clarvis bash calls are RTK-compressible (60% are `python3 scripts/`). Estimated 5-15% token savings for automated sessions. Worth installing for interactive Claude Code sessions (Patrick). Test output compression pattern worth borrowing for project_agent.py spawns. Full analysis in `docs/AGI_READINESS_ARCHITECTURE_AUDIT.md`.
+  **Verdict: Borrow patterns, don't adopt.** Only 24% of Clarvis bash calls are RTK-compressible (60% are `python3 scripts/`). Estimated 5-15% token savings for automated sessions. Worth installing for interactive Claude Code sessions (the operator). Test output compression pattern worth borrowing for project_agent.py spawns. Full analysis in `docs/AGI_READINESS_ARCHITECTURE_AUDIT.md`.
 
 _Demoted from QUEUE.md — interesting research that didn't yield immediate actionable tasks. Revisit when a related task arises naturally._
 

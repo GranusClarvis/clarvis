@@ -106,7 +106,7 @@ These stay independent — they're library packages, not part of the spine CLI.
 - [x] Add `--dry-run` flag to `clarvis cron run`
 - [x] Add deprecation warnings to `scripts/brain.py`, `scripts/performance_benchmark.py`, `scripts/queue_writer.py`
 - [x] Cron pilot proposal documented in `docs/RUNBOOK.md` §13 (candidate: `cron_reflection.sh`)
-- [ ] Wait for Inverse approval to edit crontab
+- [ ] Wait for operator approval to edit crontab
 - [ ] Soak pilot entry for 7 days — compare output/success rate
 - Gate: 7 consecutive days with no regressions before migrating more
 
@@ -184,7 +184,7 @@ The `clarvis cron run <job>` command would:
 
 **Risk**: Cron scripts do significant shell-level work (lock files, trap EXIT, timeout). Reimplementing in Python must be exact. Consider keeping the shell wrapper for Claude Code spawning and only migrating the prompt-building and post-processing.
 
-## 8. Decisions (Inverse confirmed)
+## 8. Decisions (operator confirmed)
 
 These decisions are now locked in as the canonical direction:
 

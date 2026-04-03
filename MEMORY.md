@@ -91,7 +91,7 @@ _Curated knowledge. Distilled wisdom. Updated regularly._
 - Discord bot token: in openclaw.json
 
 ## Human Notes
-- Patrick prefers "Inverse"
+- The operator prefers their alias
 - Timezone: CET
 - Hates fluff, loves directness
 - Security-conscious but pragmatic
@@ -168,13 +168,13 @@ CLARVIS_OLLAMA_MODEL=qwen3-vl:4b
 
 ## Intelligence Quality Track - Smarter, Not Just Faster
 
-**Priority tweak (2026-03-03, Inverse directive):** Consciousness research stays valuable, but primary focus should shift toward building the best-in-class **agent memory/brain** (high-quality retrieval + structure + learning) that exceeds typical vector-DB-centric approaches. Do **not** trade memory quality for "consciousness progress theater" or speed-only optimizations.
+**Priority tweak (2026-03-03, operator directive):** Consciousness research stays valuable, but primary focus should shift toward building the best-in-class **agent memory/brain** (high-quality retrieval + structure + learning) that exceeds typical vector-DB-centric approaches. Do **not** trade memory quality for "consciousness progress theater" or speed-only optimizations.
 
-**Added: 2026-02-26 | Refined: 2026-02-27 (Inverse directive)**
+**Added: 2026-02-26 | Refined: 2026-02-27 (operator directive)**
 
 Critical long-term goal: Clarvis must grow SMARTER as he evolves - not lighter, not smaller, not just faster. The brain should expand with meaningful connections and accurate recall. Speed is one metric among many, but NEVER the optimization target at the expense of intelligence.
 
-### Core Principles (from Inverse)
+### Core Principles (from operator)
 1. **Correct connections** - Are semantic links in ClarvisDB meaningful and accurate?
 2. **Success/Accuracy** - Are retrieved memories actually relevant and useful?
 3. **Quality over quantity** - Don't slim down the brain for speed; grow it with purpose
@@ -328,7 +328,7 @@ Critical long-term goal: Clarvis must grow SMARTER as he evolves - not lighter, 
 ### Active Agents
 | Agent | Repo | Branch | Tasks | Successes | PRs | Score |
 |-------|------|--------|-------|-----------|-----|-------|
-| star-world-order | InverseAltruism/Star-World-Order | dev | 1 | 1 | 0 | 0.75 |
+| star-world-order | <operator-gh>/Star-World-Order | dev | 1 | 1 | 0 | 0.75 |
 
 ### Key Commands
 ```bash

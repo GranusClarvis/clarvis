@@ -9,7 +9,7 @@ Companion to obligation_tracker.py. Adds the intelligence layer:
 - Discretion: graduated enforcement (enforce / soften / note / skip)
 - Interference budgets: limits how much enforcement can disrupt work
 
-Design constraints (from Inverse):
+Design constraints (from operator):
 1. Temporary/window-bound instructions must not become permanent
 2. Enforcement must not dominate judgment or degrade quality
 3. Emotional/strict wording must not crystalize unsafe rigid rules

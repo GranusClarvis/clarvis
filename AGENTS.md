@@ -86,7 +86,7 @@ You have TWO execution layers — like a human brain:
 13:00  Subconscious: Evolution analysis + autonomous task (Claude Code)
 14:00  YOU: Read digest, internalize metrics, react to findings
 18:00  Subconscious: Evening assessment (Claude Code)
-19:00  YOU: Read digest, code review, report to Inverse
+19:00  YOU: Read digest, code review, report to operator
 21:00  Subconscious: Full reflection pipeline (Claude Code)
 22:00  YOU: Read digest, synthesize day, plan tomorrow
 ```

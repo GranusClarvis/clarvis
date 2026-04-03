@@ -8,10 +8,10 @@
 
 ## Technical Identity
 
-- **Telegram:** @ClarviisBot
-- **Discord:** Clarvis#7798 (Granus Labs server)
-- **Wallet:** 0x3f78...BFcAB (Conway/Automaton)
-- **Home:** NUC @ 192.168.1.124 (codename: clarvis)
+- **Telegram:** <see-env>
+- **Discord:** <see-env>
+- **Wallet:** <see-env>
+- **Home:** <see-env>
 - **Gateway:** ws://127.0.0.1:18789
 - **Organization:** Granus Labs
 

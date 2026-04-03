@@ -78,14 +78,14 @@ These files use `/home/agent/.openclaw/workspace` without `os.environ.get()` fal
 
 | Status | File | Line | Content | Fix |
 |--------|------|------|---------|-----|
-| [ ] | `USER.md` | 3-4 | Real name "Patrick", alias "Inverse" | Anonymize or exclude from public repo |
-| [ ] | `USER.md` | 30 | GitHub username `InverseAltruism` | Anonymize |
+| [ ] | `USER.md` | 3-4 | Real name "<operator>", alias "<operator-alias>" | Anonymize or exclude from public repo |
+| [ ] | `USER.md` | 30 | GitHub username `<operator-gh>` | Anonymize |
 | [x] | `USER.md` | 31 | Discord IDs removed | Done 2026-03-22 |
 | [x] | `USER.md` | 32 | Telegram ID removed | Done 2026-03-22 |
 | [x] | `scripts/universal_web_agent.py` | 17 | Email replaced with placeholder | Done 2026-03-22 |
 | [x] | `docs/OPEN_SOURCE_GAP_AUDIT.md` | 18 | Email + password redacted | Done 2026-03-22 |
-| [ ] | `SOUL.md` | — | References to "Inverse" as creator | Anonymize or parameterize |
-| [ ] | `AGENTS.md` | 19 | "report to Inverse" | Anonymize |
+| [ ] | `SOUL.md` | — | References to "<operator-alias>" as creator | Anonymize or parameterize |
+| [ ] | `AGENTS.md` | 19 | "report to operator" | Anonymize |
 
 ---
 
@@ -95,7 +95,7 @@ These files use `/home/agent/.openclaw/workspace` without `os.environ.get()` fal
 |--------|------|---------|-----|
 | [~] | `docs/OPEN_SOURCE_READINESS_AUDIT.md` | Entire file documents sensitive patterns | Keep as internal reference; exclude from public build |
 | [~] | `docs/OPEN_SOURCE_GAP_AUDIT.md` | Entire file documents sensitive patterns | Same |
-| [~] | `MEMORY.md` | References to "Patrick", "InverseAltruism" | Anonymize for public |
+| [~] | `MEMORY.md` | References to "<operator>", "<operator-gh>" | Anonymize for public |
 | [~] | Localhost ports `18789`, `11434` | In docs/scripts | Acceptable (loopback only) |
 
 ---

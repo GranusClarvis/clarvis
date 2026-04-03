@@ -144,13 +144,21 @@ def _get_episodic_recall(task=None, limit=3):
         return ""
 
 
-def _get_synaptic_associations(task, recalled_ids):
+def _get_synaptic_associations(task, recalled_ids=None):
     """Neural spreading activation via synaptic network.
 
     Takes memory IDs from brain introspection recall and spreads activation
     through the STDP synaptic network to find strongly connected memories
     that weren't directly retrieved by vector search.
     """
+    if not recalled_ids:
+        # Lightweight recall to get seed IDs for spreading (only in full tier)
+        try:
+            from brain import brain as _brain_syn
+            _results = _brain_syn.recall(task, n=5, caller="synaptic_seeds")
+            recalled_ids = [r.get("id", "") for r in _results if r.get("id")]
+        except Exception:
+            pass
     if not recalled_ids:
         return ""
     try:
@@ -326,14 +334,15 @@ def _extract_recalled_ids(introspection_text):
 def get_context_brief(tier="standard", task=None):
     """Build a context brief for Claude Code prompts using the full brain.
 
-    This is the core function — every Claude Code spawn should call this
-    to get task-aware context from the brain's vector DB, semantic graph,
-    synaptic network, episodic memory, and attention system.
+    Uses generate_tiered_brief() as the canonical core (primacy/recency
+    optimized, task-class-aware budgets) and enriches with extras that
+    the tiered brief doesn't cover: brain introspection, goals, synaptic
+    spreading, attention spotlight, capability scores, and compressed queue.
 
     Tiers:
         minimal  — Goals + working context only (~200 tokens)
-        standard — Introspection + goals + episodes + failures + queue (~1K tokens)
-        full     — Everything: introspection + synaptic + attention + capabilities (~2K tokens)
+        standard — Tiered brief + introspection + goals + queue (~1K tokens)
+        full     — Everything: tiered brief + synaptic + attention + caps (~2K tokens)
 
     Args:
         tier: Context depth level.
@@ -344,72 +353,59 @@ def get_context_brief(tier="standard", task=None):
     """
     t0 = time.monotonic()
     sections = []
-    recalled_ids = []
 
-    # === 1. BRAIN INTROSPECTION (the heavyweight) ===
-    # Domain detection → targeted vector recall → graph traversal →
-    # goal alignment → identity/preferences → infrastructure → meta-awareness
-    if task and tier != "minimal":
-        introspection = _introspect_for_task(task, tier)
-        if introspection:
-            sections.append(introspection)
-            # Try to get recalled memory IDs for synaptic spreading
-            try:
-                from brain_introspect import introspect_for_task as _raw_introspect
-                _raw_introspect(task, budget=tier)
-                # Extract IDs from the raw domain_knowledge recall
-                # (introspect stores results but doesn't expose IDs in formatted output)
-                # We do a lightweight follow-up recall just for IDs
-                from brain import brain
-                id_results = brain.recall(task, n=5, caller="prompt_builder_ids",
-                                          cross_collection_expand=True)
-                recalled_ids = [r.get("id", "") for r in id_results if r.get("id")]
-            except Exception:
-                pass
+    # === CORE: Tiered brief (primacy/recency optimized) ===
+    # Includes: decision context, failure patterns, working memory/spotlight,
+    # related tasks, completions, procedures, episodic lessons, reasoning scaffold
+    try:
+        from clarvis.context.assembly import generate_tiered_brief
+        knowledge_hints = ""
+        if task and tier != "minimal":
+            introspection = _introspect_for_task(task, tier)
+            if introspection:
+                knowledge_hints = introspection
+        tiered = generate_tiered_brief(
+            current_task=task or "", tier=tier,
+            knowledge_hints=knowledge_hints)
+        if tiered and tiered.strip():
+            sections.append(tiered)
+    except Exception:
+        # Fallback: if tiered brief fails, use individual section builders
+        if task and tier != "minimal":
+            introspection = _introspect_for_task(task, tier)
+            if introspection:
+                sections.append(introspection)
+        if tier in ("standard", "full"):
+            failures = _get_failure_patterns(task=task, limit=3)
+            if failures:
+                sections.append(failures)
 
-    # === 2. ACTIVE GOALS ===
+    # === EXTRAS: sections not covered by tiered brief ===
+
+    # Active goals
     goals = _get_brain_goals(limit=5 if tier != "minimal" else 2)
     if goals:
         sections.append(goals)
 
-    # === 3. WORKING CONTEXT ===
-    context = _get_brain_context()
-    if context:
-        sections.append(context)
-
-    # === 4. EPISODIC MEMORY (with causal chains) ===
-    if tier in ("standard", "full"):
-        episodes = _get_episodic_recall(task=task, limit=3)
-        if episodes:
-            sections.append(episodes)
-
-    # === 5. SYNAPTIC SPREADING ACTIVATION ===
-    # Uses STDP synapse weights to find neurally-connected memories
-    # that vector search might miss
+    # Synaptic spreading (full tier only — expensive)
     if tier == "full" and task:
-        synaptic = _get_synaptic_associations(task, recalled_ids)
+        synaptic = _get_synaptic_associations(task)
         if synaptic:
             sections.append(synaptic)
 
-    # === 6. FAILURE AVOIDANCE (somatic markers + brain search) ===
-    if tier in ("standard", "full"):
-        failures = _get_failure_patterns(task=task, limit=3)
-        if failures:
-            sections.append(failures)
-
-    # === 7. ATTENTION SPOTLIGHT ===
+    # Attention spotlight (full tier only)
     if tier == "full":
         spotlight = _get_attention_spotlight(task=task, limit=5)
         if spotlight:
             sections.append(spotlight)
 
-    # === 8. CAPABILITY SCORES ===
+    # Capability scores (full tier only)
     if tier == "full":
         caps = _get_capability_scores()
         if caps:
             sections.append(caps)
 
-    # === 9. COMPRESSED QUEUE ===
+    # Compressed queue (standard + full)
     if tier in ("standard", "full"):
         queue = _get_compressed_queue(tier)
         if queue:

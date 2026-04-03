@@ -679,7 +679,7 @@ def seed_defaults(tracker: ObligationTracker):
     tracker.record_obligation(
         label="Git hygiene: commit and push useful work",
         description=(
-            "Standing instruction from Inverse: commit and push useful work without prompting. "
+            "Standing instruction from operator: commit and push useful work without prompting. "
             "Detect dirty tree age >60min, unpushed commits, ahead-of-origin state. "
             "If fully autonomous commit/push is not safe, escalate to queue instead of ignoring."
         ),

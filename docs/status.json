@@ -4,47 +4,47 @@
     "pending_mode": null
   },
   "queue": {
-    "pending": 16,
+    "pending": 15,
     "in_progress": 3,
-    "done": 0
+    "done": 1
   },
   "benchmarks": {
     "clr": {
-      "clr": 0.827,
+      "clr": 0.841,
       "baseline_clr": 0.19,
-      "value_add": 0.637,
+      "value_add": 0.651,
       "gate_pass": true,
       "dimensions": {
-        "memory_quality": 0.983,
-        "retrieval_precision": 1.0,
-        "prompt_context": 0.789,
-        "task_success": 0.792,
-        "autonomy": 0.287,
-        "efficiency": 0.988,
-        "integration_dynamics": 0.875
+        "memory_quality": 0.98,
+        "retrieval_precision": 0.978,
+        "prompt_context": 0.762,
+        "task_success": 0.789,
+        "autonomy": 0.512,
+        "efficiency": 0.987,
+        "integration_dynamics": 0.863
       },
-      "timestamp": "2026-04-02T05:45:08.979215+00:00"
+      "timestamp": "2026-04-03T05:45:09.222288+00:00"
     },
     "pi": {
       "pi": 1.0,
       "dimensions": 15,
-      "timestamp": "2026-04-02T05:45:01.980987+00:00"
+      "timestamp": "2026-04-03T05:45:02.203383+00:00"
     }
   },
   "phi": {
-    "current": 0.7432,
-    "timestamp": "2026-04-01T18:00:03.223102+00:00"
+    "current": 0.7414,
+    "timestamp": "2026-04-03T06:30:00.829960+00:00"
   },
   "bloat_score": 0.4,
   "brain": {
-    "total_memories": 3382,
+    "total_memories": 3501,
     "collections": 10
   },
   "episodes": {
-    "success_rate": 0.812,
-    "total": 398,
+    "success_rate": 0.805,
+    "total": 405,
     "breakdown": {
-      "success": 323,
+      "success": 326,
       "soft_failure": 45,
       "failure": 11,
       "timeout": 16
@@ -53,25 +53,25 @@
   "uptime_since": "2026-02-18 12:20:37",
   "recent_completions": [
     {
-      "tag": "LOAD_SCALING_OPTIMIZE",
+      "tag": "ROADMAP_CLONE_TEST_VERIFY",
       "status": "success"
     },
     {
-      "tag": "BENCHMARK_LOAD_NOISE_FLOOR",
+      "tag": "OSR_PYPI_CHANGELOGS",
       "status": "success"
     },
     {
-      "tag": "A5_A7_RUNTIME_MODE_AND_CLI_FINISH",
+      "tag": "OSR_DOCKER_CI",
       "status": "success"
     },
     {
-      "tag": "TEMPORAL_RETRIEVAL_FIX",
+      "tag": "CONTEXT_COMPRESSOR_FULL_MIGRATION",
       "status": "success"
     },
     {
-      "tag": "P0_BACKFILL_CREATED_EPOCH_SENTINEL_FIX",
+      "tag": "CONVERSATION_LEARNER_DEDUP",
       "status": "success"
     }
   ],
-  "updated_at": "2026-04-03T01:06:53.984402+00:00"
+  "updated_at": "2026-04-03T11:56:04.180935+00:00"
 }

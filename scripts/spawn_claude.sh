@@ -188,6 +188,16 @@ if [ "$ISOLATED" = "true" ] && [ -n "$WORKTREE_PATH" ]; then
     git -C "$WORKTREE_PATH" add -A 2>/dev/null || true
     git -C "$WORKTREE_PATH" commit -m "Agent work: ${TASK:0:60}" 2>/dev/null || true
     echo "[\$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] ISOLATED: changes committed to $WORKTREE_BRANCH" >> "\$LOGFILE"
+
+    # === Clone-Test-Verify gate (ROADMAP Phase 3.2) ===
+    # Run tests in the worktree before deciding to keep or reject changes
+    VERIFY_JSON=\$(python3 /home/agent/.openclaw/workspace/scripts/clone_test_verify.py verify "$WORKTREE_PATH" 2>/dev/null || echo '{"safe_to_promote": false}')
+    SAFE=\$(echo "\$VERIFY_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin).get('safe_to_promote', False))" 2>/dev/null || echo "False")
+    if [ "\$SAFE" = "True" ]; then
+      echo "[\$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] VERIFY: PASS — worktree $WORKTREE_BRANCH safe to promote" >> "\$LOGFILE"
+    else
+      echo "[\$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] VERIFY: FAIL — worktree $WORKTREE_BRANCH has test failures (changes preserved for review)" >> "\$LOGFILE"
+    fi
   else
     echo "[\$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] ISOLATED: no changes, removing worktree" >> "\$LOGFILE"
     git -C /home/agent/.openclaw/workspace worktree remove --force "$WORKTREE_PATH" 2>/dev/null || true
@@ -201,7 +211,8 @@ chmod +x "$WORKER_SCRIPT"
 nohup "$WORKER_SCRIPT" >/dev/null 2>&1 &
 WORKER_PID=$!
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] Worker detached pid=$WORKER_PID" >> "/home/agent/.openclaw/workspace/memory/cron/spawn_claude.log"
-echo "$WORKER_PID $(date -u +%Y-%m-%dT%H:%M:%S)" > /tmp/clarvis_claude_global.lock
+# Note: global lock is written by the worker (line ~132) which also owns cleanup.
+# Do NOT write it here — that causes a race between parent and worker.
 
 # Parent exits immediately; detached worker handles Claude, Telegram delivery, and cleanup.
 exit 0

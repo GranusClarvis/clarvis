@@ -336,7 +336,7 @@ To migrate one cron entry (after 7-day soak with no regressions):
 
 4. **If regression**: revert to old entry, investigate, fix, retry.
 
-**Important**: Do NOT edit crontab without explicit approval from Inverse.
+**Important**: Do NOT edit crontab without explicit approval from the operator.
 
 ---
 

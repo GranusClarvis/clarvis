@@ -8,7 +8,8 @@
     "research-impl-04",
     "research-impl-03",
     "bench-latency-01",
-    "coding-challenge-02"
+    "coding-challenge-02",
+    "bench-retrieval-01"
   ],
   "injections": [
     {
@@ -64,6 +65,12 @@
       "title": "Build a minimal DAG task scheduler with dependency resolution",
       "timestamp": 1775178002.175801,
       "date": "2026-04-03T01:00:02"
+    },
+    {
+      "id": "bench-retrieval-01",
+      "title": "Implement BEIR-style retrieval benchmark for ClarvisDB",
+      "timestamp": 1775206802.4161005,
+      "date": "2026-04-03T09:00:02"
     }
   ],
   "gh_last_refresh": null

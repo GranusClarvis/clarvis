@@ -60,6 +60,10 @@ echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] CONTEXT: compressed_queue=${#COMPRESSED_QU
 # CLAUDE CODE ANALYSIS (the actual expensive part — this is the core work)
 # ============================================================================
 WEAKEST_METRIC=$(get_weakest_metric)
+
+# Generate task-aware context brief (brain introspection + episodic + failure patterns)
+EVO_CONTEXT_BRIEF=$(python3 "$SCRIPTS/prompt_builder.py" context-brief --task "strategic evolution analysis" --tier full 2>> "$LOGFILE" || echo "")
+
 EVO_PROMPT_FILE=$(mktemp)
 {
     cat <<'STATIC_HEADER'
@@ -80,6 +84,9 @@ ACTION (MANDATORY if <5 pending tasks):
 
 STATIC_STEPS
     printf '%s\n\n%s\n\n' "$COMPRESSED_QUEUE" "$COMPRESSED_HEALTH"
+    if [ -n "$EVO_CONTEXT_BRIEF" ]; then
+        printf 'CONTEXT (brain introspection + episodic + failures):\n%s\n\n' "$EVO_CONTEXT_BRIEF"
+    fi
     cat <<'STATIC_FOOTER'
 OUTPUT FORMAT (mandatory): Start with "ANALYSIS: <1-sentence verdict>". Then "TASKS ADDED: <count>". Then list each task.
 STATIC_FOOTER

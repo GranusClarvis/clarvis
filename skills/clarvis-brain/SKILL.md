@@ -49,7 +49,7 @@ from brain import brain, search, remember, capture
 results = search("what do I know about X")
 
 # High-importance store
-remember("Inverse hates verbose responses", importance=0.9)
+remember("The operator hates verbose responses", importance=0.9)
 
 # Auto-capture (assess importance, store if >= 0.6)
 capture("important insight from conversation")

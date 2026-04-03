@@ -1052,13 +1052,13 @@ def _assess_learning_feedback():
         if synth_score > 0:
             score += synth_score
             evidence.append(f"{len(synth_mems)} synthesis memories in brain (+{synth_score:.2f})")
-        elif Path(_WS) / "scripts" / "knowledge_synthesis.py".exists():
+        elif (Path(_WS) / "scripts" / "knowledge_synthesis.py").exists():
             score += 0.02
             evidence.append("knowledge synthesis script exists (+0.02)")
         else:
             evidence.append("no knowledge synthesis")
     except Exception:
-        if Path(_WS) / "scripts" / "knowledge_synthesis.py".exists():
+        if (Path(_WS) / "scripts" / "knowledge_synthesis.py").exists():
             score += 0.02
             evidence.append("knowledge synthesis script exists (+0.02)")
 
