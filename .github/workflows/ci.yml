@@ -65,8 +65,8 @@ jobs:
           pip install build
           python -m build . --outdir /tmp/dist
 
-      - name: Run full test suite
-        run: python3 -m pytest packages/ tests/ -v --tb=short -m "not slow"
+      - name: Run spine test suite
+        run: python3 -m pytest tests/ -v --tb=short -m "not slow"
         env:
           CLARVIS_WORKSPACE: ${{ github.workspace }}
 
@@ -86,4 +86,4 @@ jobs:
         run: docker run --rm clarvis:ci-${{ github.sha }} python3 -c "from clarvis.brain import brain; print('brain import OK')"
 
       - name: Smoke test — pytest (fast)
-        run: docker run --rm clarvis:ci-${{ github.sha }} python3 -m pytest packages/ tests/ -x -q -m "not slow"
+        run: docker run --rm clarvis:ci-${{ github.sha }} python3 -m pytest tests/ -x -q -m "not slow"

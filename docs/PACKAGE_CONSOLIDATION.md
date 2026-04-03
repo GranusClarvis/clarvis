@@ -1,34 +1,42 @@
 # Package Consolidation Plan
 
-_Created 2026-03-17. Tracks consolidation of `packages/` into the `clarvis/` spine module._
+_Created 2026-03-17. Updated 2026-04-03 (second pass complete)._
 
 ## Status Summary
 
-| Package | LOC | Status | Action | Done |
-|---------|-----|--------|--------|------|
-| clarvis-db | 1,554 | **DEPRECATED** | Spine (`clarvis.brain`) is canonical. Adapter bridge removed. | Yes |
-| clarvis-cost | 978 | **LIVE** | Migrate `core.py` + `optimizer.py` → `clarvis/cost/`. | Deferred |
-| clarvis-reasoning | 404 | **INCOMPLETE** | Engine (926L) still in `scripts/clarvis_reasoning.py`. Complete migration to spine. | Deferred |
+| Package | LOC | Status | Spine Equivalent | Safe to Delete? |
+|---------|-----|--------|------------------|-----------------|
+| clarvis-db | 1,554 | **DEPRECATED** | `clarvis.brain` | Yes — zero external imports |
+| clarvis-cost | 978 | **DEPRECATED** | `clarvis.orch.cost_tracker` | Yes — zero external imports |
+| clarvis-reasoning | 404 | **DEPRECATED** | `clarvis.cognition.reasoning` | Yes — zero external imports |
 
-## Completed (2026-03-17)
+All three packages have **zero runtime imports** from outside their own `packages/` directories.
+The spine provides all functionality. Packages are retained only for potential standalone publishing.
 
-### clarvis-db → Deprecated
+## Completed
+
+### Pass 1 (2026-03-17): clarvis-db → Deprecated
 - Removed `clarvis_db` / `clarvis_p` bridge imports from `clarvis/adapters/openclaw.py`
 - Adapter now imports directly from spine: `clarvis.brain`, `clarvis.context.assembly`
 - Added `packages/clarvis-db/DEPRECATED.md` with migration instructions
-- Package preserved for standalone publishing if needed, but not used in Clarvis runtime
 
-## Deferred
+### Pass 2 (2026-04-03): All Three Packages Deprecated
+- **clarvis-cost**: Added DEPRECATED.md. Spine equivalent `clarvis.orch.cost_tracker` confirmed canonical — `scripts/cost_tracker.py` and `heartbeat_postflight.py` both import from spine.
+- **clarvis-reasoning**: Added DEPRECATED.md. Spine equivalent `clarvis.cognition.reasoning` confirmed canonical — `scripts/clarvis_reasoning.py` is a bridge re-exporting from spine.
+- **Dockerfile**: Removed standalone package installs; spine `pip install ".[all]"` provides everything.
+- **CI**: Decoupled package tests from spine test suite; CI now runs `tests/` only.
+- **pyproject.toml**: `testpaths` updated from `["packages", "tests"]` to `["tests"]`.
+- **Docstring fix**: `clarvis/cognition/reasoning.py` usage example updated to spine import path.
 
-### clarvis-cost → Spine Migration (P2)
-- **Why defer**: Package is actively used and stable. Migration changes import paths in 4+ files.
-- **Plan**: Move `core.py` (582L) + `optimizer.py` (244L) into `clarvis/cost/`. Update imports in `heartbeat_postflight.py`, `cost_tracker.py`, cron scripts, `cli_cost.py`.
-- **Risk**: Low. Pure refactor, no logic changes.
+## Deletion Safety Assessment
 
-### clarvis-reasoning → Complete + Migrate (P2)
-- **Why defer**: The package only has validation functions (404L). The real engine (`ClarvisReasoner`, 926L) is still in `scripts/clarvis_reasoning.py`. Migration requires moving both halves together.
-- **Plan**: Merge scripts engine + package validation into `clarvis/cognition/reasoning/`. Fix `reasoning_chain_hook.py` imports.
-- **Risk**: Medium. Multiple import paths to update, engine has side effects.
+All three packages can be safely deleted from the monorepo. Evidence:
+1. `grep -r 'from clarvis_cost\|from clarvis_db\|from clarvis_reasoning'` returns only self-referential hits inside `packages/`.
+2. No spine code, no scripts, no cron jobs import from any package.
+3. All bridge scripts (`scripts/cost_tracker.py`, `scripts/clarvis_reasoning.py`) import from spine.
+4. Dockerfile and CI no longer depend on package installs.
+
+**Recommendation**: Delete `packages/` when ready, or keep for standalone PyPI publishing.
 
 ## Principles
 

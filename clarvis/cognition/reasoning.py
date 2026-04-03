@@ -12,7 +12,7 @@ Goes beyond simple thought logging to provide:
 This is the "standalone reasoning engine" that can be used by any Clarvis subsystem.
 
 Usage:
-    from clarvis_reasoning import reasoner
+    from clarvis.cognition.reasoning import reasoner
 
     # Start a reasoning session for a task
     session = reasoner.begin("Implement user auth system")

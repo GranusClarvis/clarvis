@@ -18,19 +18,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Install sub-packages first (dependency order matters)
-# Use non-editable installs to validate packaging
-COPY packages/ packages/
-RUN pip install --no-cache-dir \
-    packages/clarvis-cost \
-    packages/clarvis-reasoning \
-    "packages/clarvis-db[all]"
-
-# Install main package with brain + dev extras
+# Install main package with brain + dev extras (spine provides all runtime functionality)
 COPY pyproject.toml README.md LICENSE ./
 COPY clarvis/ clarvis/
 COPY tests/ tests/
 RUN pip install --no-cache-dir ".[all]"
+
+# Copy deprecated packages (tests only, not runtime dependencies)
+COPY packages/ packages/
 
 # Copy scripts (needed by tests and CLI)
 COPY scripts/ scripts/
