@@ -1,5 +1,7 @@
 # Spine & Scripts Architecture Audit
 
+> **ERRATA (2026-04-03):** Some classifications in this audit were corrected in `docs/SPINE_CLEANUP_PLAN.md` — 8 scripts initially classified as dead/unused are actually production-wired via heartbeat, and 4 confirmed-dead scripts have since been deleted. See the cleanup plan for authoritative status.
+
 **Date:** 2026-03-23
 **Auditor:** Claude Code Opus (executive function)
 **Scope:** clarvis/, scripts/, docs/, website/, skills/, packages/, data/, cron wiring

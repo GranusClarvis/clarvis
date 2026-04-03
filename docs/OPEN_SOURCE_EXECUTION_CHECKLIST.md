@@ -15,30 +15,30 @@
 
 - [x] Create `docs/DO_NOT_TOUCH_REGISTRY.md` from "Do Not Touch Yet" section
 - [x] Create this execution checklist (`docs/OPEN_SOURCE_EXECUTION_CHECKLIST.md`)
-- [ ] Add `# BRIDGE:` header comment to each of the 8 thin wrapper scripts:
-  - [ ] `scripts/attention.py` — callers: heartbeat_preflight, heartbeat_postflight, 13+ others
-  - [ ] `scripts/clarvis_confidence.py` — callers: heartbeat_preflight, heartbeat_postflight, 2 others
-  - [ ] `scripts/episodic_memory.py` — callers: heartbeat_preflight, dream_engine, 10+ others
-  - [ ] `scripts/hebbian_memory.py` — callers: cron_reflection.sh
-  - [ ] `scripts/memory_consolidation.py` — callers: brain.py CLI, cron_reflection.sh, 1 other
-  - [ ] `scripts/procedural_memory.py` — callers: heartbeat_preflight, heartbeat_postflight, 2 others
-  - [ ] `scripts/thought_protocol.py` — callers: reasoning_chain_hook, 1 other
-  - [ ] `scripts/working_memory.py` — callers: safe_update.sh (existence check)
-- [ ] Add `# STATUS: confirmed-dead, no production callers` to 4 dead scripts (if not already deleted):
+- [x] Add `# BRIDGE:` header comment to each of the 8 thin wrapper scripts: _(verified 2026-04-03, all present)_
+  - [x] `scripts/attention.py` — callers: heartbeat_preflight, heartbeat_postflight, 13+ others
+  - [x] `scripts/clarvis_confidence.py` — callers: heartbeat_preflight, heartbeat_postflight, 2 others
+  - [x] `scripts/episodic_memory.py` — callers: heartbeat_preflight, dream_engine, 10+ others
+  - [x] `scripts/hebbian_memory.py` — callers: cron_reflection.sh
+  - [x] `scripts/memory_consolidation.py` — callers: brain.py CLI, cron_reflection.sh, 1 other
+  - [x] `scripts/procedural_memory.py` — callers: heartbeat_preflight, heartbeat_postflight, 2 others
+  - [x] `scripts/thought_protocol.py` — callers: reasoning_chain_hook, 1 other
+  - [x] `scripts/working_memory.py` — callers: safe_update.sh (existence check)
+- [x] Add `# STATUS: confirmed-dead, no production callers` to 4 dead scripts — all DELETED in Phase 1 _(verified 2026-04-03)_
   - [x] `scripts/universal_web_agent.py` — DELETED in Phase 1
   - [x] `scripts/public_feed.py` — DELETED in Phase 1
   - [x] `scripts/retrieval_quality_report.py` — DELETED in Phase 1
   - [x] `scripts/generate_dashboard.py` — DELETED in Phase 1
-- [ ] Add `# STATUS: production-wired via heartbeat` to 8 misclassified scripts:
-  - [ ] `scripts/cognitive_load.py`
-  - [ ] `scripts/workspace_broadcast.py`
-  - [ ] `scripts/hyperon_atomspace.py`
-  - [ ] `scripts/somatic_markers.py`
-  - [ ] `scripts/automation_insights.py`
-  - [ ] `scripts/theory_of_mind.py`
-  - [ ] `scripts/actr_activation.py`
-  - [ ] `scripts/brain_bridge.py`
-- [ ] Add ERRATA section to top of `docs/SPINE_USAGE_AUDIT.md` linking to SPINE_CLEANUP_PLAN.md
+- [x] Add `# STATUS: production-wired via heartbeat` to 8 misclassified scripts: _(verified 2026-04-03, all present)_
+  - [x] `scripts/cognitive_load.py`
+  - [x] `scripts/workspace_broadcast.py`
+  - [x] `scripts/hyperon_atomspace.py`
+  - [x] `scripts/somatic_markers.py`
+  - [x] `scripts/automation_insights.py`
+  - [x] `scripts/theory_of_mind.py`
+  - [x] `scripts/actr_activation.py`
+  - [x] `scripts/brain_bridge.py`
+- [x] Add ERRATA section to top of `docs/SPINE_USAGE_AUDIT.md` linking to SPINE_CLEANUP_PLAN.md _(done 2026-04-03)_
 - [ ] Archive completed one-time docs to `docs/archive/`:
   - [ ] Identify candidates: `REFACTOR_COMPLETION_PLAN.md`, `POST_MIGRATION_GAP_REPORT.md`, etc.
   - [ ] `mkdir -p docs/archive && git mv docs/<file> docs/archive/`

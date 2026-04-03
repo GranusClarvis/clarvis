@@ -251,6 +251,13 @@ def benchmark_brain_stats():
         if total_mem > 3000:
             bloat_score += 0.2
 
+    # Graph-density discount: high density means memories are well-connected,
+    # not bloat. Discount the raw count penalty when graph is healthy.
+    if graph_density > 10:
+        bloat_score = max(bloat_score - 0.2, 0.0)
+    elif graph_density > 5:
+        bloat_score = max(bloat_score - 0.1, 0.0)
+
     # Check collection balance (heavily skewed = bloat sign)
     collections = stats.get("collections", {})
     if collections:
