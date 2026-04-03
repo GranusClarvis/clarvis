@@ -23,6 +23,7 @@ def _register_subcommands():
     from clarvis.cli_brain import app as brain_app
     from clarvis.cli_bench import app as bench_app
     from clarvis.cli_cognition import app as cognition_app
+    from clarvis.cli_context import app as context_app
     from clarvis.cli_cost import app as cost_app
     from clarvis.cli_cron import app as cron_app
     from clarvis.cli_demo import app as demo_app
@@ -34,6 +35,7 @@ def _register_subcommands():
     app.add_typer(brain_app, name="brain", help="ClarvisDB brain operations.")
     app.add_typer(bench_app, name="bench", help="Performance benchmarks.")
     app.add_typer(cognition_app, name="cognition", help="Cognition: context relevance, weights.")
+    app.add_typer(context_app, name="context", help="Context compression and garbage collection.")
     app.add_typer(cost_app, name="cost", help="Cost tracking and budget monitoring.")
     app.add_typer(cron_app, name="cron", help="Cron job inspection and execution.")
     app.add_typer(demo_app, name="demo", help="Self-contained demo (no data needed).")

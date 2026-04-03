@@ -27,6 +27,7 @@ EPISODES_FILE = DATA_DIR / "episodes.json"
 QUEUE_FILE = MEMORY_DIR / "evolution" / "QUEUE.md"
 QUEUE_ARCHIVE = MEMORY_DIR / "evolution" / "QUEUE_ARCHIVE.md"
 MODE_FILE = DATA_DIR / "runtime_mode.json"
+PHI_HISTORY_FILE = DATA_DIR / "phi_history.json"
 
 # Output locations
 DOCS_DIR = WORKSPACE / "docs"
@@ -160,6 +161,31 @@ def recent_completions(queue_path: Path, archive_path: Path, limit: int = 5) -> 
     return completions[:limit]
 
 
+def get_phi_payload() -> dict | None:
+    """Extract latest phi value from phi_history.json."""
+    try:
+        data = json.loads(PHI_HISTORY_FILE.read_text())
+        if isinstance(data, list) and data:
+            latest = data[-1]
+            return {
+                "current": latest.get("phi"),
+                "timestamp": latest.get("timestamp"),
+            }
+    except (OSError, json.JSONDecodeError):
+        pass
+    return None
+
+
+def get_bloat_score(pi_raw: dict | None) -> float | None:
+    """Extract bloat_score from performance metrics."""
+    if pi_raw:
+        metrics = pi_raw.get("metrics", {})
+        bs = metrics.get("bloat_score")
+        if bs is not None:
+            return bs
+    return None
+
+
 def get_mode() -> dict:
     data = read_json(MODE_FILE)
     if data:
@@ -176,6 +202,9 @@ def generate() -> dict:
     episodes = get_episode_stats()
     mode = get_mode()
 
+    phi = get_phi_payload()
+    bloat = get_bloat_score(pi_raw)
+
     payload = {
         "mode": mode,
         "queue": queue,
@@ -183,6 +212,8 @@ def generate() -> dict:
             "clr": get_clr_payload(clr_raw) if clr_raw else None,
             "pi": get_pi_payload(pi_raw) if pi_raw else None,
         },
+        "phi": phi,
+        "bloat_score": bloat,
         "brain": brain,
         "episodes": episodes,
         "uptime_since": get_uptime(),

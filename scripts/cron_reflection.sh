@@ -46,7 +46,7 @@ WEAKEST_METRIC=$(get_weakest_metric)
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] QUEUE: $QUEUE_PENDING pending, $QUEUE_DONE completed. Weakest: $WEAKEST_METRIC" >> "$LOGFILE"
 
 # Step 0.5: Context window GC
-run_step "context_gc" python3 /home/agent/.openclaw/workspace/scripts/context_compressor.py gc
+run_step "context_gc" python3 -m clarvis context gc
 
 # Step 1: Memory optimization (decay stale memories)
 run_step "brain_optimize" python3 -m clarvis brain optimize

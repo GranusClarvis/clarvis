@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clarvis Health Dashboard</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,monospace;background:#0d1117;color:#c9d1d9;min-height:100vh;padding:20px}
+h1{font-size:1.4rem;color:#58a6ff;margin-bottom:4px}
+.subtitle{font-size:.75rem;color:#484f58;margin-bottom:20px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:20px}
+.card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px}
+.card h2{font-size:.85rem;color:#8b949e;text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px}
+.big-number{font-size:2.8rem;font-weight:700;line-height:1}
+.big-number.green{color:#3fb950}
+.big-number.yellow{color:#d29922}
+.big-number.red{color:#f85149}
+.label{font-size:.7rem;color:#484f58;margin-top:4px}
+.bar-row{display:flex;align-items:center;margin:6px 0;font-size:.8rem}
+.bar-row .dim-name{width:110px;color:#8b949e;flex-shrink:0;text-align:right;padding-right:10px}
+.bar-row .bar-bg{flex:1;height:18px;background:#21262d;border-radius:3px;overflow:hidden;position:relative}
+.bar-row .bar-fill{height:100%;border-radius:3px;transition:width .3s}
+.bar-row .bar-val{position:absolute;right:6px;top:1px;font-size:.7rem;color:#c9d1d9}
+.stacked-bar{display:flex;height:24px;border-radius:4px;overflow:hidden;margin-top:8px}
+.stacked-bar div{display:flex;align-items:center;justify-content:center;font-size:.65rem;color:#0d1117;font-weight:600;min-width:20px}
+.legend{display:flex;gap:12px;margin-top:8px;flex-wrap:wrap}
+.legend span{font-size:.7rem;display:flex;align-items:center;gap:4px}
+.legend span::before{content:'';width:10px;height:10px;border-radius:2px;display:inline-block}
+.l-success::before{background:#3fb950}.l-soft::before{background:#d29922}.l-fail::before{background:#f85149}.l-timeout::before{background:#8b949e}
+.stat-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #21262d;font-size:.85rem}
+.stat-row:last-child{border-bottom:none}
+.stat-val{color:#58a6ff;font-weight:600}
+.ts{font-size:.7rem;color:#484f58;text-align:right;margin-top:12px}
+.error{color:#f85149;padding:40px;text-align:center}
+@media(max-width:600px){.big-number{font-size:2rem}.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<h1>Clarvis Health Dashboard</h1>
+<div class="subtitle" id="updated">Loading...</div>
+<div class="grid" id="dashboard"></div>
+<div class="ts" id="refresh-note"></div>
+
+<script>
+function clr(v){return v>=0.8?'green':v>=0.6?'yellow':'red'}
+function pct(v){return Math.round((v||0)*100)}
+function fmt(v,d){return v!=null?Number(v).toFixed(d!=null?d:3):'--'}
+function barColor(v){return v>=0.9?'#3fb950':v>=0.7?'#58a6ff':v>=0.5?'#d29922':'#f85149'}
+
+function render(d){
+  var pi=d.benchmarks&&d.benchmarks.pi?d.benchmarks.pi:{};
+  var clrD=d.benchmarks&&d.benchmarks.clr?d.benchmarks.clr:{};
+  var ep=d.episodes||{};
+  var br=d.brain||{};
+  var q=d.queue||{};
+  var phi=d.phi||{};
+  var piVal=pi.pi!=null?pi.pi:null;
+  var clrVal=clrD.clr!=null?clrD.clr:null;
+  var bloat=d.bloat_score!=null?d.bloat_score:null;
+
+  var html='';
+
+  // Row 1: PI + CLR + Phi
+  html+='<div class="card"><h2>Performance Index</h2>';
+  html+='<div class="big-number '+clr(piVal)+'">'+fmt(piVal,2)+'</div>';
+  html+='<div class="label">PI score ('+((pi.dimensions||0))+' dimensions)</div></div>';
+
+  html+='<div class="card"><h2>CLR Score</h2>';
+  html+='<div class="big-number '+clr(clrVal)+'">'+fmt(clrVal,3)+'</div>';
+  html+='<div class="label">Value add: '+fmt(clrD.value_add,3)+' | Gate: '+(clrD.gate_pass?'PASS':'FAIL')+'</div></div>';
+
+  html+='<div class="card"><h2>Phi (Integration)</h2>';
+  var phiVal=phi.current!=null?phi.current:null;
+  html+='<div class="big-number '+clr(phiVal)+'">'+fmt(phiVal,4)+'</div>';
+  html+='<div class="label">Consciousness integration proxy</div></div>';
+
+  // Row 2: Episodes + Brain + Queue
+  html+='<div class="card"><h2>Episode Success Rate</h2>';
+  html+='<div class="big-number '+clr(ep.success_rate)+'">'+pct(ep.success_rate)+'%</div>';
+  html+='<div class="label">'+ep.total+' total episodes</div>';
+  var bd=ep.breakdown||{};
+  var tot=ep.total||1;
+  html+='<div class="stacked-bar">';
+  html+='<div style="width:'+pct(bd.success/tot)+'%;background:#3fb950">'+bd.success+'</div>';
+  html+='<div style="width:'+pct(bd.soft_failure/tot)+'%;background:#d29922">'+bd.soft_failure+'</div>';
+  html+='<div style="width:'+pct(bd.failure/tot)+'%;background:#f85149">'+bd.failure+'</div>';
+  html+='<div style="width:'+pct(bd.timeout/tot)+'%;background:#8b949e">'+bd.timeout+'</div>';
+  html+='</div>';
+  html+='<div class="legend"><span class="l-success">Success</span><span class="l-soft">Soft fail</span><span class="l-fail">Failure</span><span class="l-timeout">Timeout</span></div>';
+  html+='</div>';
+
+  html+='<div class="card"><h2>Brain</h2>';
+  html+='<div class="stat-row"><span>Memories</span><span class="stat-val">'+br.total_memories+'</span></div>';
+  html+='<div class="stat-row"><span>Collections</span><span class="stat-val">'+br.collections+'</span></div>';
+  if(bloat!=null){html+='<div class="stat-row"><span>Bloat score</span><span class="stat-val">'+fmt(bloat,1)+'</span></div>';}
+  html+='</div>';
+
+  html+='<div class="card"><h2>Queue</h2>';
+  html+='<div class="stat-row"><span>Pending</span><span class="stat-val">'+q.pending+'</span></div>';
+  html+='<div class="stat-row"><span>In progress</span><span class="stat-val">'+q.in_progress+'</span></div>';
+  html+='<div class="stat-row"><span>Done</span><span class="stat-val">'+q.done+'</span></div>';
+  html+='</div>';
+
+  // Row 3: CLR Dimensions
+  var dims=clrD.dimensions||{};
+  var dk=Object.keys(dims);
+  if(dk.length){
+    html+='<div class="card" style="grid-column:1/-1"><h2>CLR Dimension Breakdown</h2>';
+    dk.forEach(function(k){
+      var v=dims[k]||0;
+      html+='<div class="bar-row"><span class="dim-name">'+k.replace(/_/g,' ')+'</span>';
+      html+='<div class="bar-bg"><div class="bar-fill" style="width:'+pct(v)+'%;background:'+barColor(v)+'"></div>';
+      html+='<span class="bar-val">'+fmt(v,3)+'</span></div></div>';
+    });
+    html+='</div>';
+  }
+
+  // Row 4: Uptime + Mode + Completions
+  html+='<div class="card"><h2>System</h2>';
+  html+='<div class="stat-row"><span>Mode</span><span class="stat-val">'+(d.mode&&d.mode.mode||'--')+'</span></div>';
+  html+='<div class="stat-row"><span>Uptime since</span><span class="stat-val">'+(d.uptime_since||'--')+'</span></div>';
+  html+='</div>';
+
+  var rc=d.recent_completions||[];
+  if(rc.length){
+    html+='<div class="card"><h2>Recent Completions</h2>';
+    rc.forEach(function(c){
+      html+='<div class="stat-row"><span>'+c.tag+'</span><span class="stat-val" style="color:#3fb950">'+c.status+'</span></div>';
+    });
+    html+='</div>';
+  }
+
+  document.getElementById('dashboard').innerHTML=html;
+  var ts=d.updated_at?new Date(d.updated_at).toLocaleString():'unknown';
+  document.getElementById('updated').textContent='Last updated: '+ts;
+  document.getElementById('refresh-note').textContent='Auto-refreshes every 60s. Data generated by 05:50 CET cron job.';
+}
+
+function load(){
+  fetch('status.json?_='+Date.now())
+    .then(function(r){if(!r.ok)throw new Error(r.status);return r.json()})
+    .then(render)
+    .catch(function(e){document.getElementById('dashboard').innerHTML='<div class="error">Failed to load status.json: '+e.message+'</div>';});
+}
+
+load();
+setInterval(load,60000);
+</script>
+</body>
+</html>
