@@ -19,9 +19,6 @@ cd clarvis
 bash scripts/install.sh --profile standalone --dev
 
 # Or manual install
-pip install -e packages/clarvis-cost
-pip install -e packages/clarvis-reasoning
-pip install -e packages/clarvis-db
 pip install -e ".[all]"
 bash scripts/verify_install.sh
 ```
@@ -91,7 +88,6 @@ Legacy `scripts/` imports (`from brain import ...`) still work but should not be
 python3 -m pytest
 
 # Specific suites
-python3 -m pytest packages/clarvis-db/tests/ -v    # clarvis-db
 python3 -m pytest clarvis/tests/ -v                 # spine tests
 python3 -m pytest tests/test_open_source_smoke.py -v # smoke tests
 

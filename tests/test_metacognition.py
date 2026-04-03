@@ -1,8 +1,11 @@
-"""Tests for clarvis_reasoning.metacognition — quality checks, coherence, Brier score."""
+"""Tests for clarvis.cognition.metacognition — quality checks, coherence, Brier score.
+
+Migrated from packages/clarvis-reasoning/tests/test_metacognition.py.
+"""
 
 import pytest
 
-from clarvis_reasoning.metacognition import (
+from clarvis.cognition.metacognition import (
     brier_score,
     check_step_quality,
     compute_coherence,
@@ -14,7 +17,7 @@ from clarvis_reasoning.metacognition import (
 )
 
 
-# ── check_step_quality ──────────────────────────────────────────────
+# ── check_step_quality ────────────────���─────────────────────────────
 
 class TestCheckStepQuality:
     def test_good_step_no_flags(self):
@@ -83,7 +86,7 @@ class TestCheckStepQuality:
         assert "shallow" not in flags
 
 
-# ── compute_coherence ───────────────────────────────────────────────
+# ── compute_coherence ────────────────���──────────────────────────────
 
 class TestComputeCoherence:
     def test_empty_list(self):
@@ -164,7 +167,6 @@ class TestEvaluateSession:
         assert result["quality_score"] <= GRADE_SHALLOW
 
     def test_no_prediction_flagged(self):
-        # no_prediction is flagged when BOTH predicted and actual are empty
         steps = [
             self._make_step("Analysis done.", "evidence here", 0.7),
             self._make_step("Conclusion reached.", "more evidence", 0.8),
@@ -188,7 +190,6 @@ class TestEvaluateSession:
 
 class TestBrierScore:
     def test_perfect_calibration(self):
-        # Confident predictions that all come true
         predictions = [
             ("outcome_a", 1.0, "outcome_a"),
             ("outcome_b", 1.0, "outcome_b"),
@@ -197,7 +198,6 @@ class TestBrierScore:
         assert score == 0.0
 
     def test_worst_calibration(self):
-        # Fully confident but always wrong
         predictions = [
             ("outcome_a", 1.0, "outcome_b"),
             ("outcome_b", 1.0, "outcome_a"),
@@ -206,7 +206,6 @@ class TestBrierScore:
         assert score == 1.0
 
     def test_random_calibration(self):
-        # 50% confidence, half right half wrong
         predictions = [
             ("a", 0.5, "a"),
             ("b", 0.5, "c"),
@@ -222,21 +221,19 @@ class TestBrierScore:
 
     def test_mixed_calibration(self):
         predictions = [
-            ("a", 0.9, "a"),  # correct, high conf → low error
-            ("b", 0.1, "c"),  # wrong, low conf → low error
-            ("c", 0.8, "d"),  # wrong, high conf → high error
+            ("a", 0.9, "a"),
+            ("b", 0.1, "c"),
+            ("c", 0.8, "d"),
         ]
         score = brier_score(predictions)
         assert 0.0 < score < 1.0
 
     def test_single_correct_prediction(self):
         score = brier_score([("x", 0.7, "x")])
-        # (0.7 - 1.0)^2 = 0.09
         assert score == pytest.approx(0.09, abs=0.01)
 
     def test_single_wrong_prediction(self):
         score = brier_score([("x", 0.7, "y")])
-        # (0.7 - 0.0)^2 = 0.49
         assert score == pytest.approx(0.49, abs=0.01)
 
 
@@ -292,7 +289,6 @@ class TestDiagnoseSessions:
         assert "grade_distribution" in result
 
     def test_recommendations_generated(self):
-        # Sessions with no predictions → should trigger recommendation
         sessions = [
             self._make_session(
                 steps=[self._step("Step.", "ev", 0.5)],
@@ -301,7 +297,6 @@ class TestDiagnoseSessions:
             for _ in range(5)
         ]
         result = diagnose_sessions(sessions)
-        # With short steps and no predictions, should get recommendations
         assert isinstance(result.get("recommendations", []), list)
 
     def test_calibration_stats(self):
@@ -318,7 +313,7 @@ class TestDiagnoseSessions:
         result = diagnose_sessions(sessions)
         if "calibration" in result:
             cal = result["calibration"]
-            assert "brier" in cal or "accuracy" in cal
+            assert "brier_score" in cal or "accuracy" in cal
 
 
 # ── Grade Constants ─────────────────────────────────────────────────

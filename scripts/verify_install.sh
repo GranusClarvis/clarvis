@@ -162,16 +162,16 @@ if python3 -m pytest --version >/dev/null 2>&1; then
         FAIL=$((FAIL + 1))
     fi
 
-    # Run package tests (import reliability, basic functionality)
+    # Run spine module tests (cost_tracker, cost_optimizer, metacognition)
     PKG_TEST_RESULT=0
-    for pkg_test_dir in packages/*/tests; do
-        if [ -d "$pkg_test_dir" ]; then
-            pkg_name=$(basename "$(dirname "$pkg_test_dir")")
-            if python3 -m pytest "$pkg_test_dir" -q --tb=line --no-header -m "not slow" 2>&1 | tail -1 | grep -qE "passed|no tests ran"; then
-                echo "  PASS  $pkg_name tests"
+    for spine_test in tests/test_cost_tracker.py tests/test_cost_optimizer.py tests/test_metacognition.py; do
+        if [ -f "$spine_test" ]; then
+            test_name=$(basename "$spine_test" .py)
+            if python3 -m pytest "$spine_test" -q --tb=line --no-header -m "not slow" 2>&1 | tail -1 | grep -qE "passed|no tests ran"; then
+                echo "  PASS  $test_name"
                 PASS=$((PASS + 1))
             else
-                echo "  FAIL  $pkg_name tests"
+                echo "  FAIL  $test_name"
                 FAIL=$((FAIL + 1))
                 PKG_TEST_RESULT=1
             fi

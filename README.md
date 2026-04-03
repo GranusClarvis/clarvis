@@ -45,9 +45,6 @@ See [docs/INSTALL.md](docs/INSTALL.md) for the full walkthrough, profile compari
 ### Manual Install (advanced)
 
 ```bash
-pip install -e packages/clarvis-cost
-pip install -e packages/clarvis-reasoning
-pip install -e packages/clarvis-db
 pip install -e ".[brain]"           # or ".[all]" for brain + dev tools
 bash scripts/verify_install.sh      # verify everything works
 ```
@@ -455,8 +452,8 @@ Both engines share auth state through browser-level cookie injection. LLM agent 
 # Run all tests
 python3 -m pytest
 
-# Package tests (clarvis-db)
-python3 -m pytest packages/clarvis-db/tests/ -v
+# Spine module tests (cost tracking, optimizer, metacognition)
+python3 -m pytest tests/test_cost_tracker.py tests/test_cost_optimizer.py tests/test_metacognition.py -v
 
 # Open-source readiness smoke tests
 python3 -m pytest tests/test_open_source_smoke.py -v
@@ -489,13 +486,11 @@ See [`ROADMAP.md`](ROADMAP.md) for the full evolution plan.
 Clarvis follows a **main-harness + selective-extraction** strategy:
 
 - **`clarvis/`** (this repo) — the operational center: runtime, orchestration, memory, cron, identity, and public surface
-- **`packages/clarvis-db`** — standalone vector-memory library (strongest extraction candidate for a separate public repo)
-- **`packages/clarvis-cost`** — cost tracking and budget alerting
-- **`packages/clarvis-reasoning`** — meta-cognitive reasoning quality assessment
+  - `clarvis/brain/` — vector memory (ChromaDB + ONNX embeddings)
+  - `clarvis/orch/` — cost tracking, task routing, queue engine
+  - `clarvis/cognition/` — reasoning, metacognition, attention, confidence
 
-Each package has its own `pyproject.toml` and can be installed independently. The main `clarvis` spine module imports from them but they have no upward dependencies.
-
-See [`docs/CLARVIS_MODES_AND_REPOS.md`](docs/CLARVIS_MODES_AND_REPOS.md) for the extraction strategy.
+All functionality is consolidated in the `clarvis` spine module. The former standalone packages (`clarvis-db`, `clarvis-cost`, `clarvis-reasoning`) have been fully migrated and removed.
 
 ---
 

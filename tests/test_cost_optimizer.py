@@ -1,11 +1,14 @@
-"""Tests for clarvis_cost.optimizer — caching, budget planning, waste detection."""
+"""Tests for clarvis.orch.cost_optimizer — caching, budget planning, waste detection.
+
+Migrated from packages/clarvis-cost/tests/test_optimizer.py.
+"""
 
 import json
 import time
 
 import pytest
 
-from clarvis_cost.optimizer import (
+from clarvis.orch.cost_optimizer import (
     ContextBudgetPlanner,
     PromptCache,
     compression_ratio_report,
@@ -75,8 +78,6 @@ class TestContextBudgetPlanner:
 
     def test_over_budget_detection(self):
         planner = ContextBudgetPlanner(max_context=100)  # tiny context
-        # Default budget for unknown component is 2000 tokens;
-        # need text that estimates > 2000 tokens (~7600+ chars at 3.8 chars/token)
         big_text = "word " * 5000
         result = planner.allocate({"big": big_text})
         assert result["big"]["over_budget"] is True

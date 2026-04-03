@@ -18,7 +18,8 @@ _(Cron lock system, auto-recovery, and monitoring all confirmed healthy. No open
 ### SWO / Clarvis Brand Integration (2026-04-03)
 
 ### Queue Architecture v2 (2026-04-03 design + pressure test)
-- [ ] [QUEUE_RUN_RECORDS] Add first-class task run records linked by task id / run id so queue items map cleanly to executions, outputs, durations, tests, and artifacts. This is the missing execution-history layer needed to avoid reconstructing outcomes from logs/digests/text similarity.
+- [ ] [QUEUE_ENGINE_V2] Implement Queue Engine V2 as a **spine subsystem** (preferred location: `clarvis/queue/`, not `clarvis/orch/`). Follow the sidecar model from `docs/QUEUE_V2_PRESSURE_TEST_2026-04-03.md`: keep `QUEUE.md` human-editable, add runtime sidecar state for attempts/failures/timestamps/state, simplify scoring first, then add explicit state transitions, `stats()` observability, and phased pipeline integration. See also `docs/QUEUE_ARCHITECTURE_REVIEW_2026-04-03.md`.
+- [ ] [QUEUE_RUN_RECORDS] Add first-class task run records linked by task id / run id so queue items map cleanly to executions, outputs, durations, tests, and artifacts. This is the missing execution-history layer needed to avoid reconstructing outcomes from logs/digests/text similarity. Build this as part of Queue Engine V2, but keep it separately visible because it is the key observability layer.
 
 ### Context/Prompt Pipeline (2026-04-03 deep audit, refined 2026-04-03 second-opinion audit)
 
@@ -30,13 +31,13 @@ _(Cron lock system, auto-recovery, and monitoring all confirmed healthy. No open
 - [~] [SPINE_MIGRATION_WAVE3_ORCH] Migrate orchestrator logic from `scripts/` into `clarvis/orch/`. _(Phase 1 done 2026-03-10. Phase 2: scoreboard.py migrated 2026-04-03. Remaining: `pr_factory.py` (905L), `project_agent.py` (3492L), `agent_orchestrator.py` (763L), `orchestration_benchmark.py` (468L). All actively called from cron — large, not trivially wrappable. 2/4 already import clarvis.orch spine modules; the other 2 are standalone. Parking — each is a multi-hour refactor with risk.)_
 - [ ] [SPINE_REMAINING_LIBRARY_MODULES] ~20 scripts with reusable library logic still in scripts/: cognitive_load, brain_bridge, workspace_broadcast, theory_of_mind, temporal_self, world_models, causal_model, reasoning_chains, failure_amplifier, parameter_evolution, tool_maker, etc. Each is a separate migration task. Low priority — spine is functional without these.
 
-### Package Consolidation — Remaining Phases (2026-04-03, first pass done)
-- [ ] [PKG_COST_OPTIMIZER_MIGRATE] Migrate `packages/clarvis-cost/clarvis_cost/optimizer.py` (PromptCache, ContextBudgetPlanner, detect_prompt_waste, compression_ratio_report) into spine. Currently unused by runtime but has useful utilities. Candidate location: `clarvis/orch/cost_optimizer.py`. Low urgency — optimizer.py has internal `from clarvis_cost.core` imports that need updating.
-- [ ] [PKG_COST_TESTS_MIGRATE] Migrate the 72 passing tests from `packages/clarvis-cost/tests/` into `tests/` to validate spine's `clarvis.orch.cost_tracker`. Currently these tests validate the old package — adapt to import from spine. Tests are valuable; package directory is not.
-- [ ] [PKG_CLARVIS_DB_DELETE] Delete `packages/clarvis-db/` directory. Evidence: 0 runtime imports, deprecated since 2026-03-17, fully superseded by `clarvis.brain`. All install/CI/test references removed in 2026-04-03 consolidation pass. Remove cleanup_policy.py reference to `clarvis-db_history.jsonl`. Update docs: README, CONTRIBUTING, ARCHITECTURE, CONSOLIDATION_PLAN, and ~20 doc files that mention clarvis-db.
-- [ ] [PKG_CLARVIS_REASONING_DELETE] Delete `packages/clarvis-reasoning/` directory. Evidence: only import was broken (missing `reasoner` export), fully superseded by `clarvis.cognition.reasoning`. All install/CI references removed in 2026-04-03 consolidation pass. Update docs that mention clarvis-reasoning.
-- [ ] [PKG_COST_PACKAGE_DELETE] Delete `packages/clarvis-cost/` directory after optimizer and tests are migrated. Evidence: all 5 runtime importers now use `clarvis.orch.cost_tracker`. Backward-compat shim no longer needed once tests migrated. Update docs.
-- [ ] [PKG_DOCS_BULK_UPDATE] Bulk-update ~40 doc files that reference `packages/clarvis-db`, `clarvis-cost`, `clarvis-reasoning` as active packages. Update to reflect spine-only architecture. Low priority — docs are informational, not functional.
+### Package Consolidation — COMPLETED (2026-04-03)
+- [x] [PKG_COST_OPTIMIZER_MIGRATE] _(Done 2026-04-03)_ Migrated optimizer.py → `clarvis/orch/cost_optimizer.py`. Imports updated from `clarvis_cost.core` → `clarvis.orch.cost_tracker`.
+- [x] [PKG_COST_TESTS_MIGRATE] _(Done 2026-04-03)_ 90 tests migrated to spine: `tests/test_cost_tracker.py` (38), `tests/test_cost_optimizer.py` (12), `tests/test_metacognition.py` (40). All pass.
+- [x] [PKG_CLARVIS_DB_DELETE] _(Done 2026-04-03)_ Deleted `packages/clarvis-db/`. Zero runtime imports confirmed.
+- [x] [PKG_CLARVIS_REASONING_DELETE] _(Done 2026-04-03)_ Deleted `packages/clarvis-reasoning/`. Metacognition functions migrated to `clarvis/cognition/metacognition.py`.
+- [x] [PKG_COST_PACKAGE_DELETE] _(Done 2026-04-03)_ Deleted `packages/clarvis-cost/`. All migrated to spine.
+- [~] [PKG_DOCS_BULK_UPDATE] _(Partially done 2026-04-03)_ README, CONTRIBUTING, CLAUDE.md, verify_install.sh updated. ~20 architecture/planning docs still reference packages historically — low priority, informational only.
 
 ### Benchmarking
 - CLR Benchmark implementation from fork: `clarvis/metrics/clr.py` (672 lines, schema v1.0 frozen, 6 dimensions).

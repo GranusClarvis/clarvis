@@ -1,8 +1,11 @@
 """
 Pure meta-cognitive primitives for reasoning quality assessment.
 
+Migrated from packages/clarvis-reasoning/clarvis_reasoning/metacognition.py into the spine.
+The canonical import is now: from clarvis.cognition.metacognition import check_step_quality
+
 No side effects, no storage dependencies. These functions can be
-used independently of the ReasoningStore.
+used independently of the ClarvisReasoner.
 
 Implements:
 - Step quality checking (shallow, circular, unsupported, hedging)

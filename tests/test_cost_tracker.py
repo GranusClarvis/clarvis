@@ -1,4 +1,7 @@
-"""Tests for clarvis_cost.core — cost tracking, estimation, budget checks."""
+"""Tests for clarvis.orch.cost_tracker — cost tracking, estimation, budget checks.
+
+Migrated from packages/clarvis-cost/tests/test_core.py.
+"""
 
 import json
 import os
@@ -7,13 +10,14 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from clarvis_cost.core import (
+from clarvis.orch.cost_tracker import (
     CostEntry,
     CostTracker,
     analyze_savings,
     estimate_cost,
     estimate_tokens,
     get_pricing,
+    import_router_decisions,
     MODEL_PRICING,
 )
 
@@ -80,11 +84,8 @@ class TestEstimateTokens:
         assert long > short
 
     def test_json_content_has_density_bonus(self):
-        plain = estimate_tokens("name value data items")
         json_text = '{"name": "value", "data": [1, 2, 3]}'
         json_tokens = estimate_tokens(json_text)
-        # JSON should get a density multiplier; same-length JSON ≥ plain
-        # (not guaranteed char-for-char, but the multiplier should apply)
         assert json_tokens > 0
 
 
@@ -209,7 +210,6 @@ class TestCostTrackerBudgetCheck:
         assert result["remaining"] > 0
 
     def test_budget_exceeded(self, tracker):
-        # Log enough to exceed budget
         for _ in range(50):
             tracker.log("claude-opus-4-6", 100_000, 50_000)
         result = tracker.budget_check(daily_budget=0.01)
@@ -260,9 +260,7 @@ class TestCostTrackerRoutingEffectiveness:
         assert result["total_calls"] == 0
 
     def test_routing_categorization(self, tracker):
-        # cheap model
         tracker.log("minimax/MiniMax-M1", 1000, 500, source="router")
-        # expensive model
         tracker.log("claude-opus-4-6", 1000, 500, source="direct")
         result = tracker.routing_effectiveness(days=7)
         assert result["total_calls"] == 2
@@ -296,7 +294,6 @@ class TestAnalyzeSavings:
         assert isinstance(result["suggestions"], list)
 
     def test_analyze_source_concentration(self, tracker):
-        # One source dominates > 50%
         for _ in range(10):
             tracker.log("claude-opus-4-6", 5000, 2000, source="dominant_source")
         tracker.log("claude-opus-4-6", 100, 50, source="other")
@@ -323,7 +320,6 @@ class TestAnalyzeSavings:
         assert "router_fallback_rate" in result
 
     def test_analyze_high_output_ratio(self, tracker):
-        # High output/input ratio
         for _ in range(10):
             tracker.log("claude-opus-4-6", 100, 5000, source="gen")
         result = analyze_savings(tracker)
@@ -334,12 +330,10 @@ class TestAnalyzeSavings:
 
 class TestImportRouterDecisions:
     def test_import_missing_file(self, tracker):
-        from clarvis_cost.core import import_router_decisions
         count = import_router_decisions("/nonexistent/path.jsonl", tracker)
         assert count == 0
 
     def test_import_creates_entries(self, tracker, tmp_path):
-        from clarvis_cost.core import import_router_decisions
         router_log = str(tmp_path / "router.jsonl")
         with open(router_log, "w") as f:
             f.write(json.dumps({
@@ -358,7 +352,6 @@ class TestImportRouterDecisions:
         assert len(entries) == 2
 
     def test_import_skips_duplicates(self, tracker, tmp_path):
-        from clarvis_cost.core import import_router_decisions
         router_log = str(tmp_path / "router.jsonl")
         with open(router_log, "w") as f:
             f.write(json.dumps({
@@ -366,7 +359,6 @@ class TestImportRouterDecisions:
                 "executor": "gemini",
                 "task": "task a",
             }) + "\n")
-        # Import twice
         count1 = import_router_decisions(router_log, tracker)
         count2 = import_router_decisions(router_log, tracker)
         assert count1 == 1
@@ -385,5 +377,4 @@ class TestEstimateTokensEdgeCases:
         long_text = "This is a longer text to test model family token estimation differences across providers " * 10
         t1 = estimate_tokens(long_text, model="claude-opus-4-6")
         t2 = estimate_tokens(long_text, model="gemini-2.0-flash")
-        # Different char-per-token ratios should give different results
         assert t1 != t2

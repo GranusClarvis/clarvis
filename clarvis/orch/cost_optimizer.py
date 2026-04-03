@@ -1,6 +1,9 @@
 """
 Token optimizer — concrete strategies for reducing API costs.
 
+Migrated from packages/clarvis-cost/clarvis_cost/optimizer.py into the spine.
+The canonical import is now: from clarvis.orch.cost_optimizer import PromptCache
+
 Provides:
   - Prompt deduplication (detect repeated content across calls)
   - Caching layer for repeated queries
@@ -138,7 +141,7 @@ class ContextBudgetPlanner:
         Returns:
             {name: {"tokens": int, "budget": int, "over_budget": bool, "action": str}}
         """
-        from clarvis_cost.core import estimate_tokens
+        from clarvis.orch.cost_tracker import estimate_tokens
 
         result = {}
         total_used = 0
@@ -229,7 +232,7 @@ def detect_prompt_waste(prompt: str) -> Dict:
 
 def compression_ratio_report(raw_text: str, compressed_text: str) -> Dict:
     """Measure compression effectiveness."""
-    from clarvis_cost.core import estimate_tokens
+    from clarvis.orch.cost_tracker import estimate_tokens
 
     raw_tokens = estimate_tokens(raw_text)
     comp_tokens = estimate_tokens(compressed_text)
