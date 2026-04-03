@@ -252,6 +252,195 @@ def run_eval_matrix():
 
 
 # ---------------------------------------------------------------------------
+# LLM-Judged Evaluation
+# ---------------------------------------------------------------------------
+
+LLM_RESULTS_PATH = os.path.join(WORKSPACE, "data/prompt_eval/llm_review_results.json")
+
+# Evaluation model — cheap, fast, good at structured scoring
+LLM_EVAL_MODEL = "minimax/minimax-m2.5"
+
+LLM_EVAL_RUBRIC = """\
+You are evaluating the quality of an AI agent's context brief for a specific task.
+
+TASK:
+{task_text}
+
+TASK CLASS: {task_class}
+EXPECTED CONTEXT NEEDS: {expected_needs}
+KNOWN FAILURE MODES: {failure_modes}
+
+CONTEXT BRIEF TO EVALUATE:
+---
+{brief}
+---
+
+Score each dimension 1-5 (1=poor, 5=excellent). Respond with ONLY valid JSON, no markdown fences.
+
+Dimensions:
+- task_fit: Does the brief contain information directly relevant to THIS specific task?
+- relevance: Is the included context useful, or is it generic filler?
+- completeness: Are the expected context needs (listed above) adequately covered?
+- ordering: Are the most important sections placed early (primacy) or late (recency)?
+- noise: How much irrelevant or duplicated content is present? (5=no noise, 1=mostly noise)
+- execution_usefulness: If an AI agent received this brief, how likely is it to succeed at the task?
+
+Output format:
+{{"task_fit": N, "relevance": N, "completeness": N, "ordering": N, "noise": N, "execution_usefulness": N, "rationale": "one sentence"}}
+"""
+
+
+def _get_openrouter_key() -> str | None:
+    """Resolve OpenRouter API key from env or auth profile."""
+    key = os.environ.get("OPENROUTER_API_KEY")
+    if key:
+        return key
+    auth_file = "/home/agent/.openclaw/agents/main/agent/auth-profiles.json"
+    try:
+        with open(auth_file) as f:
+            auth = json.load(f)
+        return auth.get("profiles", {}).get("openrouter:default", {}).get("key")
+    except (FileNotFoundError, json.JSONDecodeError, KeyError):
+        return None
+
+
+def _llm_score_brief(task: dict, brief: str, api_key: str) -> dict | None:
+    """Send a single brief to LLM evaluator and return parsed scores."""
+    import requests
+
+    prompt = LLM_EVAL_RUBRIC.format(
+        task_text=task["task_text"],
+        task_class=task["class"],
+        expected_needs=", ".join(task.get("expected_context_needs", [])),
+        failure_modes=", ".join(task.get("failure_modes", [])),
+        brief=brief[:8000],  # Cap brief length to stay within budget
+    )
+
+    try:
+        resp = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={
+                "model": LLM_EVAL_MODEL,
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 300,
+                "temperature": 0.0,
+            },
+            timeout=30,
+        )
+        resp.raise_for_status()
+
+        content = resp.json()["choices"][0]["message"]["content"].strip()
+        # Strip markdown fences if present
+        if content.startswith("```"):
+            content = content.split("\n", 1)[1] if "\n" in content else content[3:]
+            if content.endswith("```"):
+                content = content[:-3]
+            content = content.strip()
+        return json.loads(content)
+    except Exception as e:
+        print(f"  LLM eval error: {e}")
+        return None
+
+
+def run_llm_review(dry_run: bool = False) -> dict:
+    """Run LLM-judged evaluation across all tasks and routes.
+
+    Args:
+        dry_run: If True, generate briefs and rubrics but skip API calls.
+                 Useful for validating the pipeline without spending tokens.
+    """
+    api_key = None
+    if not dry_run:
+        api_key = _get_openrouter_key()
+        if not api_key:
+            print("ERROR: No OpenRouter API key found.")
+            print("Set OPENROUTER_API_KEY env var or configure auth-profiles.json.")
+            print("Use 'llm-review --dry-run' to validate the pipeline without API calls.")
+            sys.exit(1)
+
+    tasks = load_taskset()
+    results = {
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "type": "llm_review",
+        "model": LLM_EVAL_MODEL,
+        "evaluations": [],
+    }
+
+    total_calls = 0
+    for task in tasks:
+        task_text = task["task_text"]
+        task_results = {"task_id": task["id"], "task_class": task["class"], "routes": {}}
+
+        for route_name, generator, tier in [
+            ("tiered_brief_standard", _generate_via_tiered_brief, "standard"),
+            ("tiered_brief_full", _generate_via_tiered_brief, "full"),
+            ("prompt_builder_standard", _generate_via_prompt_builder, "standard"),
+            ("prompt_builder_full", _generate_via_prompt_builder, "full"),
+        ]:
+            brief = generator(task_text, tier)
+            if brief.startswith("[ERROR"):
+                task_results["routes"][route_name] = {"error": brief}
+                continue
+
+            if dry_run:
+                print(f"  [dry-run] {task['id']} / {route_name}: brief={len(brief)} chars")
+                scores = {"task_fit": 0, "relevance": 0, "completeness": 0,
+                          "ordering": 0, "noise": 0, "execution_usefulness": 0,
+                          "rationale": "dry-run placeholder", "brief_chars": len(brief)}
+                task_results["routes"][route_name] = scores
+                continue
+
+            print(f"  Scoring {task['id']} / {route_name}...")
+            scores = _llm_score_brief(task, brief, api_key)
+            total_calls += 1
+
+            if scores:
+                # Validate score ranges
+                dims = ["task_fit", "relevance", "completeness", "ordering", "noise", "execution_usefulness"]
+                for d in dims:
+                    if d in scores and isinstance(scores[d], (int, float)):
+                        scores[d] = max(1, min(5, int(scores[d])))
+
+                scores["brief_chars"] = len(brief)
+                task_results["routes"][route_name] = scores
+            else:
+                task_results["routes"][route_name] = {"error": "LLM scoring failed"}
+
+        results["evaluations"].append(task_results)
+
+    # Aggregate by route
+    agg = {}
+    dims = ["task_fit", "relevance", "completeness", "ordering", "noise", "execution_usefulness"]
+    for eval_item in results["evaluations"]:
+        for route, scores in eval_item["routes"].items():
+            if "error" in scores:
+                continue
+            if route not in agg:
+                agg[route] = {d: [] for d in dims}
+            for d in dims:
+                if d in scores:
+                    agg[route][d].append(scores[d])
+
+    aggregate = {}
+    for route, vals in agg.items():
+        route_agg = {}
+        for d in dims:
+            if vals[d]:
+                route_agg[f"mean_{d}"] = round(sum(vals[d]) / len(vals[d]), 2)
+        # Composite: average of all dimension means
+        means = [v for k, v in route_agg.items() if k.startswith("mean_")]
+        route_agg["composite"] = round(sum(means) / len(means), 2) if means else 0.0
+        route_agg["n_tasks"] = len(vals[dims[0]])
+        aggregate[route] = route_agg
+
+    results["aggregate"] = aggregate
+    results["total_llm_calls"] = total_calls
+
+    return results
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
@@ -261,11 +450,11 @@ def main():
         sys.exit(1)
 
     cmd = sys.argv[1]
+    os.makedirs(os.path.dirname(RESULTS_PATH), exist_ok=True)
 
     if cmd in ("matrix", "full"):
         print("Running static eval matrix...")
         results = run_eval_matrix()
-        os.makedirs(os.path.dirname(RESULTS_PATH), exist_ok=True)
         with open(RESULTS_PATH, "w") as f:
             json.dump(results, f, indent=2)
         print(f"Results: {RESULTS_PATH}")
@@ -276,15 +465,21 @@ def main():
                   f"ordering={scores['mean_ordering']:.1%} "
                   f"dupes={scores['duplicate_count']}")
 
-    if cmd == "llm-review":
-        print("LLM review bench not yet implemented — requires OpenRouter integration.")
-        print("Design: generate prompts from each route for taskset tasks,")
-        print("then have evaluator model score: task-fit, relevance, completeness,")
-        print("ordering, duplication/noise, and likely execution usefulness.")
-        sys.exit(0)
-
-    if cmd == "full":
-        print("\n(LLM review skipped — static matrix only for now)")
+    if cmd in ("llm-review", "full"):
+        dry_run = "--dry-run" in sys.argv
+        print(f"\nRunning LLM-judged review{'  [DRY RUN]' if dry_run else ''}...")
+        llm_results = run_llm_review(dry_run=dry_run)
+        with open(LLM_RESULTS_PATH, "w") as f:
+            json.dump(llm_results, f, indent=2)
+        print(f"Results: {LLM_RESULTS_PATH}")
+        print(f"Total LLM calls: {llm_results['total_llm_calls']}")
+        print("\nAggregate scores by route (1-5 scale):")
+        for route, scores in llm_results["aggregate"].items():
+            print(f"  {route}: composite={scores['composite']:.1f} "
+                  f"fit={scores.get('mean_task_fit', 0):.1f} "
+                  f"useful={scores.get('mean_execution_usefulness', 0):.1f} "
+                  f"noise={scores.get('mean_noise', 0):.1f} "
+                  f"(n={scores['n_tasks']})")
 
 
 if __name__ == "__main__":

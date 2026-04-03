@@ -1,0 +1,1937 @@
+{
+  "timestamp": "2026-04-03T15:44:17Z",
+  "type": "static_matrix",
+  "evaluations": [
+    {
+      "task_id": "impl_spine_migration",
+      "task_class": "code_implementation",
+      "routes": {
+        "tiered_brief_standard": {
+          "task_id": "impl_spine_migration",
+          "task_class": "code_implementation",
+          "coverage": 0.0,
+          "priority_coverage": 0.5,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 0.83,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.025,
+              "episodic": 0.55
+            }
+          },
+          "density": {
+            "total_lines": 40,
+            "content_lines": 38,
+            "density": 0.95,
+            "total_chars": 3262
+          },
+          "section_presence": {
+            "procedures": false,
+            "failure_patterns": false,
+            "architecture": false,
+            "code_templates": false,
+            "decision_context": true,
+            "failure_avoidance": true,
+            "wire_guidance": false
+          },
+          "brief_chars": 3262
+        },
+        "tiered_brief_full": {
+          "task_id": "impl_spine_migration",
+          "task_class": "code_implementation",
+          "coverage": 0.0,
+          "priority_coverage": 0.5,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 0.83,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.02127659574468085,
+              "episodic": 0.5319148936170213
+            }
+          },
+          "density": {
+            "total_lines": 47,
+            "content_lines": 45,
+            "density": 0.96,
+            "total_chars": 3792
+          },
+          "section_presence": {
+            "procedures": false,
+            "failure_patterns": false,
+            "architecture": false,
+            "code_templates": false,
+            "decision_context": true,
+            "failure_avoidance": true,
+            "wire_guidance": false
+          },
+          "brief_chars": 3792
+        },
+        "prompt_builder_standard": {
+          "task_id": "impl_spine_migration",
+          "task_class": "code_implementation",
+          "coverage": 0.0,
+          "priority_coverage": 0.5,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 0.83,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.01639344262295082,
+              "episodic": 0.4098360655737705
+            }
+          },
+          "density": {
+            "total_lines": 61,
+            "content_lines": 55,
+            "density": 0.9,
+            "total_chars": 4270
+          },
+          "section_presence": {
+            "procedures": false,
+            "failure_patterns": false,
+            "architecture": false,
+            "code_templates": false,
+            "decision_context": true,
+            "failure_avoidance": true,
+            "wire_guidance": false
+          },
+          "brief_chars": 4270
+        },
+        "prompt_builder_full": {
+          "task_id": "impl_spine_migration",
+          "task_class": "code_implementation",
+          "coverage": 0.0,
+          "priority_coverage": 0.5,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 0.83,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.010416666666666666,
+              "episodic": 0.3229166666666667
+            }
+          },
+          "density": {
+            "total_lines": 96,
+            "content_lines": 87,
+            "density": 0.91,
+            "total_chars": 6912
+          },
+          "section_presence": {
+            "procedures": false,
+            "failure_patterns": false,
+            "architecture": false,
+            "code_templates": false,
+            "decision_context": true,
+            "failure_avoidance": true,
+            "wire_guidance": false
+          },
+          "brief_chars": 6912
+        }
+      }
+    },
+    {
+      "task_id": "impl_new_feature",
+      "task_class": "code_implementation",
+      "routes": {
+        "tiered_brief_standard": {
+          "task_id": "impl_new_feature",
+          "task_class": "code_implementation",
+          "coverage": 0.33,
+          "priority_coverage": 1.0,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 0.83,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.02857142857142857,
+              "episodic": 0.6
+            }
+          },
+          "density": {
+            "total_lines": 35,
+            "content_lines": 33,
+            "density": 0.94,
+            "total_chars": 2673
+          },
+          "section_presence": {
+            "architecture": false,
+            "existing_code_patterns": false,
+            "related_tasks": true,
+            "decision_context": true,
+            "knowledge": true
+          },
+          "brief_chars": 2673
+        },
+        "tiered_brief_full": {
+          "task_id": "impl_new_feature",
+          "task_class": "code_implementation",
+          "coverage": 0.33,
+          "priority_coverage": 1.0,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 0.83,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.022222222222222223,
+              "episodic": 0.5333333333333333
+            }
+          },
+          "density": {
+            "total_lines": 45,
+            "content_lines": 43,
+            "density": 0.96,
+            "total_chars": 3257
+          },
+          "section_presence": {
+            "architecture": false,
+            "existing_code_patterns": false,
+            "related_tasks": true,
+            "decision_context": true,
+            "knowledge": true
+          },
+          "brief_chars": 3257
+        },
+        "prompt_builder_standard": {
+          "task_id": "impl_new_feature",
+          "task_class": "code_implementation",
+          "coverage": 0.33,
+          "priority_coverage": 1.0,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 0.83,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.017857142857142856,
+              "episodic": 0.44642857142857145
+            }
+          },
+          "density": {
+            "total_lines": 56,
+            "content_lines": 50,
+            "density": 0.89,
+            "total_chars": 3704
+          },
+          "section_presence": {
+            "architecture": false,
+            "existing_code_patterns": false,
+            "related_tasks": true,
+            "decision_context": true,
+            "knowledge": true
+          },
+          "brief_chars": 3704
+        },
+        "prompt_builder_full": {
+          "task_id": "impl_new_feature",
+          "task_class": "code_implementation",
+          "coverage": 0.33,
+          "priority_coverage": 1.0,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 0.83,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.010869565217391304,
+              "episodic": 0.32608695652173914
+            }
+          },
+          "density": {
+            "total_lines": 92,
+            "content_lines": 83,
+            "density": 0.9,
+            "total_chars": 6321
+          },
+          "section_presence": {
+            "architecture": false,
+            "existing_code_patterns": false,
+            "related_tasks": true,
+            "decision_context": true,
+            "knowledge": true
+          },
+          "brief_chars": 6321
+        }
+      }
+    },
+    {
+      "task_id": "bugfix_cron",
+      "task_class": "bugfix_debug",
+      "routes": {
+        "tiered_brief_standard": {
+          "task_id": "bugfix_cron",
+          "task_class": "bugfix_debug",
+          "coverage": 0.25,
+          "priority_coverage": 1.0,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 1.0,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.06666666666666667,
+              "episodic": 0.7111111111111111
+            }
+          },
+          "density": {
+            "total_lines": 45,
+            "content_lines": 43,
+            "density": 0.96,
+            "total_chars": 3213
+          },
+          "section_presence": {
+            "failure_patterns": false,
+            "episodic_lessons": true,
+            "procedures": false,
+            "infra_knowledge": false,
+            "failure_avoidance": true,
+            "decision_context": true
+          },
+          "brief_chars": 3213
+        },
+        "tiered_brief_full": {
+          "task_id": "bugfix_cron",
+          "task_class": "bugfix_debug",
+          "coverage": 0.25,
+          "priority_coverage": 1.0,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 1.0,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.05660377358490566,
+              "episodic": 0.6415094339622641
+            }
+          },
+          "density": {
+            "total_lines": 53,
+            "content_lines": 51,
+            "density": 0.96,
+            "total_chars": 3878
+          },
+          "section_presence": {
+            "failure_patterns": false,
+            "episodic_lessons": true,
+            "procedures": false,
+            "infra_knowledge": false,
+            "failure_avoidance": true,
+            "decision_context": true
+          },
+          "brief_chars": 3878
+        },
+        "prompt_builder_standard": {
+          "task_id": "bugfix_cron",
+          "task_class": "bugfix_debug",
+          "coverage": 0.25,
+          "priority_coverage": 1.0,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 0.83,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.045454545454545456,
+              "episodic": 0.5303030303030303
+            }
+          },
+          "density": {
+            "total_lines": 66,
+            "content_lines": 60,
+            "density": 0.91,
+            "total_chars": 4238
+          },
+          "section_presence": {
+            "failure_patterns": false,
+            "episodic_lessons": true,
+            "procedures": false,
+            "infra_knowledge": false,
+            "failure_avoidance": true,
+            "decision_context": true
+          },
+          "brief_chars": 4238
+        },
+        "prompt_builder_full": {
+          "task_id": "bugfix_cron",
+          "task_class": "bugfix_debug",
+          "coverage": 0.5,
+          "priority_coverage": 1.0,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 0.83,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.029411764705882353,
+              "episodic": 0.39215686274509803
+            }
+          },
+          "density": {
+            "total_lines": 102,
+            "content_lines": 93,
+            "density": 0.91,
+            "total_chars": 7134
+          },
+          "section_presence": {
+            "failure_patterns": false,
+            "episodic_lessons": true,
+            "procedures": true,
+            "infra_knowledge": false,
+            "failure_avoidance": true,
+            "decision_context": true
+          },
+          "brief_chars": 7134
+        }
+      }
+    },
+    {
+      "task_id": "cleanup_dead_code",
+      "task_class": "repo_cleanup",
+      "routes": {
+        "tiered_brief_standard": {
+          "task_id": "cleanup_dead_code",
+          "task_class": "repo_cleanup",
+          "coverage": 0.5,
+          "priority_coverage": 1.0,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 0.83,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.043478260869565216,
+              "episodic": 0.5217391304347826
+            }
+          },
+          "density": {
+            "total_lines": 23,
+            "content_lines": 21,
+            "density": 0.91,
+            "total_chars": 2013
+          },
+          "section_presence": {
+            "related_tasks": true,
+            "completions": false,
+            "decision_context": true
+          },
+          "brief_chars": 2013
+        },
+        "tiered_brief_full": {
+          "task_id": "cleanup_dead_code",
+          "task_class": "repo_cleanup",
+          "coverage": 0.5,
+          "priority_coverage": 1.0,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 0.83,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.030303030303030304,
+              "episodic": 0.45454545454545453
+            }
+          },
+          "density": {
+            "total_lines": 33,
+            "content_lines": 31,
+            "density": 0.94,
+            "total_chars": 2838
+          },
+          "section_presence": {
+            "related_tasks": true,
+            "completions": false,
+            "decision_context": true
+          },
+          "brief_chars": 2838
+        },
+        "prompt_builder_standard": {
+          "task_id": "cleanup_dead_code",
+          "task_class": "repo_cleanup",
+          "coverage": 0.5,
+          "priority_coverage": 1.0,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 0.83,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.023255813953488372,
+              "episodic": 0.3488372093023256
+            }
+          },
+          "density": {
+            "total_lines": 43,
+            "content_lines": 37,
+            "density": 0.86,
+            "total_chars": 3005
+          },
+          "section_presence": {
+            "related_tasks": true,
+            "completions": false,
+            "decision_context": true
+          },
+          "brief_chars": 3005
+        },
+        "prompt_builder_full": {
+          "task_id": "cleanup_dead_code",
+          "task_class": "repo_cleanup",
+          "coverage": 0.5,
+          "priority_coverage": 1.0,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 0.83,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.0125,
+              "episodic": 0.25
+            }
+          },
+          "density": {
+            "total_lines": 80,
+            "content_lines": 71,
+            "density": 0.89,
+            "total_chars": 5932
+          },
+          "section_presence": {
+            "related_tasks": true,
+            "completions": false,
+            "decision_context": true
+          },
+          "brief_chars": 5932
+        }
+      }
+    },
+    {
+      "task_id": "docs_update",
+      "task_class": "documentation",
+      "routes": {
+        "tiered_brief_standard": {
+          "task_id": "docs_update",
+          "task_class": "documentation",
+          "coverage": 0.0,
+          "priority_coverage": 0.0,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 0.83,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.043478260869565216,
+              "episodic": 0.5217391304347826
+            }
+          },
+          "density": {
+            "total_lines": 23,
+            "content_lines": 21,
+            "density": 0.91,
+            "total_chars": 1652
+          },
+          "section_presence": {
+            "working_context": false,
+            "completions": false,
+            "working_memory": false
+          },
+          "brief_chars": 1652
+        },
+        "tiered_brief_full": {
+          "task_id": "docs_update",
+          "task_class": "documentation",
+          "coverage": 0.0,
+          "priority_coverage": 0.0,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 0.83,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.030303030303030304,
+              "episodic": 0.48484848484848486
+            }
+          },
+          "density": {
+            "total_lines": 33,
+            "content_lines": 31,
+            "density": 0.94,
+            "total_chars": 2420
+          },
+          "section_presence": {
+            "working_context": false,
+            "completions": false,
+            "working_memory": false
+          },
+          "brief_chars": 2420
+        },
+        "prompt_builder_standard": {
+          "task_id": "docs_update",
+          "task_class": "documentation",
+          "coverage": 0.0,
+          "priority_coverage": 0.0,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 0.83,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.023255813953488372,
+              "episodic": 0.32558139534883723
+            }
+          },
+          "density": {
+            "total_lines": 43,
+            "content_lines": 37,
+            "density": 0.86,
+            "total_chars": 2604
+          },
+          "section_presence": {
+            "working_context": false,
+            "completions": false,
+            "working_memory": false
+          },
+          "brief_chars": 2604
+        },
+        "prompt_builder_full": {
+          "task_id": "docs_update",
+          "task_class": "documentation",
+          "coverage": 0.0,
+          "priority_coverage": 0.0,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 0.83,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.013513513513513514,
+              "episodic": 0.2702702702702703
+            }
+          },
+          "density": {
+            "total_lines": 74,
+            "content_lines": 66,
+            "density": 0.89,
+            "total_chars": 4897
+          },
+          "section_presence": {
+            "working_context": false,
+            "completions": false,
+            "working_memory": false
+          },
+          "brief_chars": 4897
+        }
+      }
+    },
+    {
+      "task_id": "research_rag",
+      "task_class": "research_synthesis",
+      "routes": {
+        "tiered_brief_standard": {
+          "task_id": "research_rag",
+          "task_class": "research_synthesis",
+          "coverage": 0.33,
+          "priority_coverage": 0.67,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 1.0,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.029411764705882353,
+              "episodic": 0.6470588235294118
+            }
+          },
+          "density": {
+            "total_lines": 34,
+            "content_lines": 32,
+            "density": 0.94,
+            "total_chars": 2798
+          },
+          "section_presence": {
+            "knowledge": true,
+            "brain_stats": false,
+            "existing_research": false,
+            "episodic_lessons": true,
+            "attention_spotlight": false
+          },
+          "brief_chars": 2798
+        },
+        "tiered_brief_full": {
+          "task_id": "research_rag",
+          "task_class": "research_synthesis",
+          "coverage": 0.33,
+          "priority_coverage": 0.67,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 0.83,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.022727272727272728,
+              "episodic": 0.5909090909090909
+            }
+          },
+          "density": {
+            "total_lines": 44,
+            "content_lines": 42,
+            "density": 0.95,
+            "total_chars": 3417
+          },
+          "section_presence": {
+            "knowledge": true,
+            "brain_stats": false,
+            "existing_research": false,
+            "episodic_lessons": true,
+            "attention_spotlight": false
+          },
+          "brief_chars": 3417
+        },
+        "prompt_builder_standard": {
+          "task_id": "research_rag",
+          "task_class": "research_synthesis",
+          "coverage": 0.33,
+          "priority_coverage": 0.67,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 0.83,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.017857142857142856,
+              "episodic": 0.4642857142857143
+            }
+          },
+          "density": {
+            "total_lines": 56,
+            "content_lines": 50,
+            "density": 0.89,
+            "total_chars": 4055
+          },
+          "section_presence": {
+            "knowledge": true,
+            "brain_stats": false,
+            "existing_research": false,
+            "episodic_lessons": true,
+            "attention_spotlight": false
+          },
+          "brief_chars": 4055
+        },
+        "prompt_builder_full": {
+          "task_id": "research_rag",
+          "task_class": "research_synthesis",
+          "coverage": 0.33,
+          "priority_coverage": 0.67,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 0.83,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.010416666666666666,
+              "episodic": 0.34375
+            }
+          },
+          "density": {
+            "total_lines": 96,
+            "content_lines": 87,
+            "density": 0.91,
+            "total_chars": 6828
+          },
+          "section_presence": {
+            "knowledge": true,
+            "brain_stats": false,
+            "existing_research": false,
+            "episodic_lessons": true,
+            "attention_spotlight": false
+          },
+          "brief_chars": 6828
+        }
+      }
+    },
+    {
+      "task_id": "migration_refactor",
+      "task_class": "migration_refactor",
+      "routes": {
+        "tiered_brief_standard": {
+          "task_id": "migration_refactor",
+          "task_class": "migration_refactor",
+          "coverage": 0.25,
+          "priority_coverage": 0.75,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 1.0,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.3235294117647059,
+              "episodic": 0.6470588235294118
+            }
+          },
+          "density": {
+            "total_lines": 34,
+            "content_lines": 32,
+            "density": 0.94,
+            "total_chars": 3245
+          },
+          "section_presence": {
+            "procedures": true,
+            "failure_patterns": false,
+            "architecture": false,
+            "wire_guidance": false,
+            "failure_avoidance": true,
+            "decision_context": true
+          },
+          "brief_chars": 3245
+        },
+        "tiered_brief_full": {
+          "task_id": "migration_refactor",
+          "task_class": "migration_refactor",
+          "coverage": 0.25,
+          "priority_coverage": 0.75,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 0.83,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.2619047619047619,
+              "episodic": 0.5952380952380952
+            }
+          },
+          "density": {
+            "total_lines": 42,
+            "content_lines": 40,
+            "density": 0.95,
+            "total_chars": 3825
+          },
+          "section_presence": {
+            "procedures": true,
+            "failure_patterns": false,
+            "architecture": false,
+            "wire_guidance": false,
+            "failure_avoidance": true,
+            "decision_context": true
+          },
+          "brief_chars": 3825
+        },
+        "prompt_builder_standard": {
+          "task_id": "migration_refactor",
+          "task_class": "migration_refactor",
+          "coverage": 0.25,
+          "priority_coverage": 0.75,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 0.83,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.2,
+              "episodic": 0.45454545454545453
+            }
+          },
+          "density": {
+            "total_lines": 55,
+            "content_lines": 49,
+            "density": 0.89,
+            "total_chars": 4322
+          },
+          "section_presence": {
+            "procedures": true,
+            "failure_patterns": false,
+            "architecture": false,
+            "wire_guidance": false,
+            "failure_avoidance": true,
+            "decision_context": true
+          },
+          "brief_chars": 4322
+        },
+        "prompt_builder_full": {
+          "task_id": "migration_refactor",
+          "task_class": "migration_refactor",
+          "coverage": 0.25,
+          "priority_coverage": 0.75,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 0.83,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.12222222222222222,
+              "episodic": 0.3333333333333333
+            }
+          },
+          "density": {
+            "total_lines": 90,
+            "content_lines": 81,
+            "density": 0.9,
+            "total_chars": 7026
+          },
+          "section_presence": {
+            "procedures": true,
+            "failure_patterns": false,
+            "architecture": false,
+            "wire_guidance": false,
+            "failure_avoidance": true,
+            "decision_context": true
+          },
+          "brief_chars": 7026
+        }
+      }
+    },
+    {
+      "task_id": "infra_cron_hardening",
+      "task_class": "infra_cron",
+      "routes": {
+        "tiered_brief_standard": {
+          "task_id": "infra_cron_hardening",
+          "task_class": "infra_cron",
+          "coverage": 0.0,
+          "priority_coverage": 0.5,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 1.0,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.08333333333333333,
+              "episodic": 0.6666666666666666
+            }
+          },
+          "density": {
+            "total_lines": 36,
+            "content_lines": 34,
+            "density": 0.94,
+            "total_chars": 2449
+          },
+          "section_presence": {
+            "infra_knowledge": false,
+            "working_context": false,
+            "decision_context": true,
+            "working_memory": false
+          },
+          "brief_chars": 2449
+        },
+        "tiered_brief_full": {
+          "task_id": "infra_cron_hardening",
+          "task_class": "infra_cron",
+          "coverage": 0.0,
+          "priority_coverage": 0.5,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 1.0,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.06666666666666667,
+              "episodic": 0.6222222222222222
+            }
+          },
+          "density": {
+            "total_lines": 45,
+            "content_lines": 43,
+            "density": 0.96,
+            "total_chars": 3082
+          },
+          "section_presence": {
+            "infra_knowledge": false,
+            "working_context": false,
+            "decision_context": true,
+            "working_memory": false
+          },
+          "brief_chars": 3082
+        },
+        "prompt_builder_standard": {
+          "task_id": "infra_cron_hardening",
+          "task_class": "infra_cron",
+          "coverage": 0.0,
+          "priority_coverage": 0.5,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 0.83,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.05172413793103448,
+              "episodic": 0.5
+            }
+          },
+          "density": {
+            "total_lines": 58,
+            "content_lines": 52,
+            "density": 0.9,
+            "total_chars": 3475
+          },
+          "section_presence": {
+            "infra_knowledge": false,
+            "working_context": false,
+            "decision_context": true,
+            "working_memory": false
+          },
+          "brief_chars": 3475
+        },
+        "prompt_builder_full": {
+          "task_id": "infra_cron_hardening",
+          "task_class": "infra_cron",
+          "coverage": 0.0,
+          "priority_coverage": 0.5,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 0.83,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.03125,
+              "episodic": 0.3645833333333333
+            }
+          },
+          "density": {
+            "total_lines": 96,
+            "content_lines": 87,
+            "density": 0.91,
+            "total_chars": 6408
+          },
+          "section_presence": {
+            "infra_knowledge": false,
+            "working_context": false,
+            "decision_context": true,
+            "working_memory": false
+          },
+          "brief_chars": 6408
+        }
+      }
+    },
+    {
+      "task_id": "brain_maintenance",
+      "task_class": "memory_brain",
+      "routes": {
+        "tiered_brief_standard": {
+          "task_id": "brain_maintenance",
+          "task_class": "memory_brain",
+          "coverage": 0.0,
+          "priority_coverage": 0.5,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 0.83,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.047619047619047616,
+              "episodic": 0.5714285714285714
+            }
+          },
+          "density": {
+            "total_lines": 21,
+            "content_lines": 19,
+            "density": 0.9,
+            "total_chars": 1758
+          },
+          "section_presence": {
+            "brain_stats": false,
+            "procedures": false,
+            "failure_patterns": false,
+            "metrics": false,
+            "failure_avoidance": true,
+            "decision_context": true
+          },
+          "brief_chars": 1758
+        },
+        "tiered_brief_full": {
+          "task_id": "brain_maintenance",
+          "task_class": "memory_brain",
+          "coverage": 0.0,
+          "priority_coverage": 0.5,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 0.83,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.03333333333333333,
+              "episodic": 0.4666666666666667
+            }
+          },
+          "density": {
+            "total_lines": 30,
+            "content_lines": 28,
+            "density": 0.93,
+            "total_chars": 2351
+          },
+          "section_presence": {
+            "brain_stats": false,
+            "procedures": false,
+            "failure_patterns": false,
+            "metrics": false,
+            "failure_avoidance": true,
+            "decision_context": true
+          },
+          "brief_chars": 2351
+        },
+        "prompt_builder_standard": {
+          "task_id": "brain_maintenance",
+          "task_class": "memory_brain",
+          "coverage": 0.0,
+          "priority_coverage": 0.5,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 0.83,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.023809523809523808,
+              "episodic": 0.35714285714285715
+            }
+          },
+          "density": {
+            "total_lines": 42,
+            "content_lines": 36,
+            "density": 0.86,
+            "total_chars": 2799
+          },
+          "section_presence": {
+            "brain_stats": false,
+            "procedures": false,
+            "failure_patterns": false,
+            "metrics": false,
+            "failure_avoidance": true,
+            "decision_context": true
+          },
+          "brief_chars": 2799
+        },
+        "prompt_builder_full": {
+          "task_id": "brain_maintenance",
+          "task_class": "memory_brain",
+          "coverage": 0.0,
+          "priority_coverage": 0.5,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 0.83,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.012658227848101266,
+              "episodic": 0.24050632911392406
+            }
+          },
+          "density": {
+            "total_lines": 79,
+            "content_lines": 70,
+            "density": 0.89,
+            "total_chars": 5573
+          },
+          "section_presence": {
+            "brain_stats": false,
+            "procedures": false,
+            "failure_patterns": false,
+            "metrics": false,
+            "failure_avoidance": true,
+            "decision_context": true
+          },
+          "brief_chars": 5573
+        }
+      }
+    },
+    {
+      "task_id": "evolution_analysis",
+      "task_class": "strategic_evolution",
+      "routes": {
+        "tiered_brief_standard": {
+          "task_id": "evolution_analysis",
+          "task_class": "strategic_evolution",
+          "coverage": 0.0,
+          "priority_coverage": 0.25,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 1.0,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.075,
+              "episodic": 0.625
+            }
+          },
+          "density": {
+            "total_lines": 40,
+            "content_lines": 38,
+            "density": 0.95,
+            "total_chars": 2778
+          },
+          "section_presence": {
+            "goals": false,
+            "metrics": false,
+            "queue_state": false,
+            "completions": false,
+            "capability_scores": false,
+            "related_tasks": true
+          },
+          "brief_chars": 2778
+        },
+        "tiered_brief_full": {
+          "task_id": "evolution_analysis",
+          "task_class": "strategic_evolution",
+          "coverage": 0.0,
+          "priority_coverage": 0.25,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 0.83,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.06521739130434782,
+              "episodic": 0.5869565217391305
+            }
+          },
+          "density": {
+            "total_lines": 46,
+            "content_lines": 44,
+            "density": 0.96,
+            "total_chars": 3298
+          },
+          "section_presence": {
+            "goals": false,
+            "metrics": false,
+            "queue_state": false,
+            "completions": false,
+            "capability_scores": false,
+            "related_tasks": true
+          },
+          "brief_chars": 3298
+        },
+        "prompt_builder_standard": {
+          "task_id": "evolution_analysis",
+          "task_class": "strategic_evolution",
+          "coverage": 0.2,
+          "priority_coverage": 0.5,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 0.83,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.05084745762711865,
+              "episodic": 0.4745762711864407
+            }
+          },
+          "density": {
+            "total_lines": 59,
+            "content_lines": 53,
+            "density": 0.9,
+            "total_chars": 3635
+          },
+          "section_presence": {
+            "goals": true,
+            "metrics": false,
+            "queue_state": false,
+            "completions": false,
+            "capability_scores": false,
+            "related_tasks": true
+          },
+          "brief_chars": 3635
+        },
+        "prompt_builder_full": {
+          "task_id": "evolution_analysis",
+          "task_class": "strategic_evolution",
+          "coverage": 0.2,
+          "priority_coverage": 0.5,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 0.83,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.031914893617021274,
+              "episodic": 0.3404255319148936
+            }
+          },
+          "density": {
+            "total_lines": 94,
+            "content_lines": 85,
+            "density": 0.9,
+            "total_chars": 6440
+          },
+          "section_presence": {
+            "goals": true,
+            "metrics": false,
+            "queue_state": false,
+            "completions": false,
+            "capability_scores": false,
+            "related_tasks": true
+          },
+          "brief_chars": 6440
+        }
+      }
+    },
+    {
+      "task_id": "benchmark_clr",
+      "task_class": "benchmarking",
+      "routes": {
+        "tiered_brief_standard": {
+          "task_id": "benchmark_clr",
+          "task_class": "benchmarking",
+          "coverage": 0.25,
+          "priority_coverage": 0.5,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 1.0,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.07894736842105263,
+              "episodic": 0.6842105263157895
+            }
+          },
+          "density": {
+            "total_lines": 38,
+            "content_lines": 36,
+            "density": 0.95,
+            "total_chars": 2681
+          },
+          "section_presence": {
+            "metrics": false,
+            "procedures": false,
+            "episodic_lessons": true,
+            "goals": false,
+            "decision_context": true
+          },
+          "brief_chars": 2681
+        },
+        "tiered_brief_full": {
+          "task_id": "benchmark_clr",
+          "task_class": "benchmarking",
+          "coverage": 0.5,
+          "priority_coverage": 0.75,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 1.0,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.061224489795918366,
+              "episodic": 0.6122448979591837
+            }
+          },
+          "density": {
+            "total_lines": 49,
+            "content_lines": 47,
+            "density": 0.96,
+            "total_chars": 3407
+          },
+          "section_presence": {
+            "metrics": false,
+            "procedures": true,
+            "episodic_lessons": true,
+            "goals": false,
+            "decision_context": true
+          },
+          "brief_chars": 3407
+        },
+        "prompt_builder_standard": {
+          "task_id": "benchmark_clr",
+          "task_class": "benchmarking",
+          "coverage": 0.5,
+          "priority_coverage": 0.5,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 0.83,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.05172413793103448,
+              "episodic": 0.5
+            }
+          },
+          "density": {
+            "total_lines": 58,
+            "content_lines": 52,
+            "density": 0.9,
+            "total_chars": 3703
+          },
+          "section_presence": {
+            "metrics": false,
+            "procedures": false,
+            "episodic_lessons": true,
+            "goals": true,
+            "decision_context": true
+          },
+          "brief_chars": 3703
+        },
+        "prompt_builder_full": {
+          "task_id": "benchmark_clr",
+          "task_class": "benchmarking",
+          "coverage": 0.75,
+          "priority_coverage": 0.75,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 0.83,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.031578947368421054,
+              "episodic": 0.35789473684210527
+            }
+          },
+          "density": {
+            "total_lines": 95,
+            "content_lines": 86,
+            "density": 0.91,
+            "total_chars": 6387
+          },
+          "section_presence": {
+            "metrics": false,
+            "procedures": true,
+            "episodic_lessons": true,
+            "goals": true,
+            "decision_context": true
+          },
+          "brief_chars": 6387
+        }
+      }
+    },
+    {
+      "task_id": "agent_spawn",
+      "task_class": "agent_orchestration",
+      "routes": {
+        "tiered_brief_standard": {
+          "task_id": "agent_spawn",
+          "task_class": "agent_orchestration",
+          "coverage": 0.5,
+          "priority_coverage": 0.75,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 1.0,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.08571428571428572,
+              "episodic": 0.6857142857142857
+            }
+          },
+          "density": {
+            "total_lines": 35,
+            "content_lines": 33,
+            "density": 0.94,
+            "total_chars": 2494
+          },
+          "section_presence": {
+            "procedures": false,
+            "architecture": false,
+            "episodic_lessons": true,
+            "related_tasks": true,
+            "decision_context": true,
+            "failure_avoidance": true
+          },
+          "brief_chars": 2494
+        },
+        "tiered_brief_full": {
+          "task_id": "agent_spawn",
+          "task_class": "agent_orchestration",
+          "coverage": 0.5,
+          "priority_coverage": 0.75,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 0.83,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.06818181818181818,
+              "episodic": 0.5909090909090909
+            }
+          },
+          "density": {
+            "total_lines": 44,
+            "content_lines": 42,
+            "density": 0.95,
+            "total_chars": 3192
+          },
+          "section_presence": {
+            "procedures": false,
+            "architecture": false,
+            "episodic_lessons": true,
+            "related_tasks": true,
+            "decision_context": true,
+            "failure_avoidance": true
+          },
+          "brief_chars": 3192
+        },
+        "prompt_builder_standard": {
+          "task_id": "agent_spawn",
+          "task_class": "agent_orchestration",
+          "coverage": 0.5,
+          "priority_coverage": 0.75,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 0.83,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.05454545454545454,
+              "episodic": 0.4727272727272727
+            }
+          },
+          "density": {
+            "total_lines": 55,
+            "content_lines": 49,
+            "density": 0.89,
+            "total_chars": 3469
+          },
+          "section_presence": {
+            "procedures": false,
+            "architecture": false,
+            "episodic_lessons": true,
+            "related_tasks": true,
+            "decision_context": true,
+            "failure_avoidance": true
+          },
+          "brief_chars": 3469
+        },
+        "prompt_builder_full": {
+          "task_id": "agent_spawn",
+          "task_class": "agent_orchestration",
+          "coverage": 0.5,
+          "priority_coverage": 0.75,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 0.83,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.03333333333333333,
+              "episodic": 0.32222222222222224
+            }
+          },
+          "density": {
+            "total_lines": 90,
+            "content_lines": 81,
+            "density": 0.9,
+            "total_chars": 6125
+          },
+          "section_presence": {
+            "procedures": false,
+            "architecture": false,
+            "episodic_lessons": true,
+            "related_tasks": true,
+            "decision_context": true,
+            "failure_avoidance": true
+          },
+          "brief_chars": 6125
+        }
+      }
+    },
+    {
+      "task_id": "brand_creative",
+      "task_class": "brand_creative",
+      "routes": {
+        "tiered_brief_standard": {
+          "task_id": "brand_creative",
+          "task_class": "brand_creative",
+          "coverage": 0.67,
+          "priority_coverage": 0.75,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 0.83,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.041666666666666664,
+              "episodic": 0.5
+            }
+          },
+          "density": {
+            "total_lines": 24,
+            "content_lines": 22,
+            "density": 0.92,
+            "total_chars": 2026
+          },
+          "section_presence": {
+            "knowledge": true,
+            "related_tasks": true,
+            "goals": false,
+            "decision_context": true
+          },
+          "brief_chars": 2026
+        },
+        "tiered_brief_full": {
+          "task_id": "brand_creative",
+          "task_class": "brand_creative",
+          "coverage": 0.67,
+          "priority_coverage": 0.75,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 0.83,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.027777777777777776,
+              "episodic": 0.4166666666666667
+            }
+          },
+          "density": {
+            "total_lines": 36,
+            "content_lines": 34,
+            "density": 0.94,
+            "total_chars": 2901
+          },
+          "section_presence": {
+            "knowledge": true,
+            "related_tasks": true,
+            "goals": false,
+            "decision_context": true
+          },
+          "brief_chars": 2901
+        },
+        "prompt_builder_standard": {
+          "task_id": "brand_creative",
+          "task_class": "brand_creative",
+          "coverage": 1.0,
+          "priority_coverage": 1.0,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 0.83,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.021739130434782608,
+              "episodic": 0.34782608695652173
+            }
+          },
+          "density": {
+            "total_lines": 46,
+            "content_lines": 40,
+            "density": 0.87,
+            "total_chars": 3148
+          },
+          "section_presence": {
+            "knowledge": true,
+            "related_tasks": true,
+            "goals": true,
+            "decision_context": true
+          },
+          "brief_chars": 3148
+        },
+        "prompt_builder_full": {
+          "task_id": "brand_creative",
+          "task_class": "brand_creative",
+          "coverage": 1.0,
+          "priority_coverage": 1.0,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 0.83,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.011627906976744186,
+              "episodic": 0.2441860465116279
+            }
+          },
+          "density": {
+            "total_lines": 86,
+            "content_lines": 77,
+            "density": 0.9,
+            "total_chars": 6241
+          },
+          "section_presence": {
+            "knowledge": true,
+            "related_tasks": true,
+            "goals": true,
+            "decision_context": true
+          },
+          "brief_chars": 6241
+        }
+      }
+    },
+    {
+      "task_id": "reflection_evening",
+      "task_class": "reflection",
+      "routes": {
+        "tiered_brief_standard": {
+          "task_id": "reflection_evening",
+          "task_class": "reflection",
+          "coverage": 0.2,
+          "priority_coverage": 0.25,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 1.0,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.029411764705882353,
+              "episodic": 0.6764705882352942
+            }
+          },
+          "density": {
+            "total_lines": 34,
+            "content_lines": 32,
+            "density": 0.94,
+            "total_chars": 2611
+          },
+          "section_presence": {
+            "completions": false,
+            "metrics": false,
+            "goals": false,
+            "episodic_lessons": true,
+            "capability_scores": false
+          },
+          "brief_chars": 2611
+        },
+        "tiered_brief_full": {
+          "task_id": "reflection_evening",
+          "task_class": "reflection",
+          "coverage": 0.2,
+          "priority_coverage": 0.25,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 1.0,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.024390243902439025,
+              "episodic": 0.6341463414634146
+            }
+          },
+          "density": {
+            "total_lines": 41,
+            "content_lines": 39,
+            "density": 0.95,
+            "total_chars": 3185
+          },
+          "section_presence": {
+            "completions": false,
+            "metrics": false,
+            "goals": false,
+            "episodic_lessons": true,
+            "capability_scores": false
+          },
+          "brief_chars": 3185
+        },
+        "prompt_builder_standard": {
+          "task_id": "reflection_evening",
+          "task_class": "reflection",
+          "coverage": 0.4,
+          "priority_coverage": 0.5,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 0.83,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.01818181818181818,
+              "episodic": 0.4727272727272727
+            }
+          },
+          "density": {
+            "total_lines": 55,
+            "content_lines": 49,
+            "density": 0.89,
+            "total_chars": 3640
+          },
+          "section_presence": {
+            "completions": false,
+            "metrics": false,
+            "goals": true,
+            "episodic_lessons": true,
+            "capability_scores": false
+          },
+          "brief_chars": 3640
+        },
+        "prompt_builder_full": {
+          "task_id": "reflection_evening",
+          "task_class": "reflection",
+          "coverage": 0.4,
+          "priority_coverage": 0.5,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 0.83,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.011494252873563218,
+              "episodic": 0.3333333333333333
+            }
+          },
+          "density": {
+            "total_lines": 87,
+            "content_lines": 78,
+            "density": 0.9,
+            "total_chars": 6011
+          },
+          "section_presence": {
+            "completions": false,
+            "metrics": false,
+            "goals": true,
+            "episodic_lessons": true,
+            "capability_scores": false
+          },
+          "brief_chars": 6011
+        }
+      }
+    },
+    {
+      "task_id": "self_awareness_calibration",
+      "task_class": "self_awareness",
+      "routes": {
+        "tiered_brief_standard": {
+          "task_id": "self_awareness_calibration",
+          "task_class": "self_awareness",
+          "coverage": 0.25,
+          "priority_coverage": 0.5,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 1.0,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.11428571428571428,
+              "episodic": 0.7142857142857143
+            }
+          },
+          "density": {
+            "total_lines": 35,
+            "content_lines": 33,
+            "density": 0.94,
+            "total_chars": 2822
+          },
+          "section_presence": {
+            "metrics": false,
+            "procedures": false,
+            "architecture": false,
+            "episodic_lessons": true,
+            "decision_context": true,
+            "failure_avoidance": true
+          },
+          "brief_chars": 2822
+        },
+        "tiered_brief_full": {
+          "task_id": "self_awareness_calibration",
+          "task_class": "self_awareness",
+          "coverage": 0.5,
+          "priority_coverage": 0.75,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 1.0,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.08695652173913043,
+              "episodic": 0.6304347826086957
+            }
+          },
+          "density": {
+            "total_lines": 46,
+            "content_lines": 44,
+            "density": 0.96,
+            "total_chars": 3574
+          },
+          "section_presence": {
+            "metrics": false,
+            "procedures": true,
+            "architecture": false,
+            "episodic_lessons": true,
+            "decision_context": true,
+            "failure_avoidance": true
+          },
+          "brief_chars": 3574
+        },
+        "prompt_builder_standard": {
+          "task_id": "self_awareness_calibration",
+          "task_class": "self_awareness",
+          "coverage": 0.25,
+          "priority_coverage": 0.5,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 0.83,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.06779661016949153,
+              "episodic": 0.4915254237288136
+            }
+          },
+          "density": {
+            "total_lines": 59,
+            "content_lines": 53,
+            "density": 0.9,
+            "total_chars": 4087
+          },
+          "section_presence": {
+            "metrics": false,
+            "procedures": false,
+            "architecture": false,
+            "episodic_lessons": true,
+            "decision_context": true,
+            "failure_avoidance": true
+          },
+          "brief_chars": 4087
+        },
+        "prompt_builder_full": {
+          "task_id": "self_awareness_calibration",
+          "task_class": "self_awareness",
+          "coverage": 0.75,
+          "priority_coverage": 1.0,
+          "duplicates": {},
+          "has_duplicates": false,
+          "ordering": {
+            "ordering_score": 0.83,
+            "section_positions": {
+              "decision_context": 0.0,
+              "failure_avoidance": 0.0425531914893617,
+              "episodic": 0.3829787234042553
+            }
+          },
+          "density": {
+            "total_lines": 94,
+            "content_lines": 85,
+            "density": 0.9,
+            "total_chars": 6724
+          },
+          "section_presence": {
+            "metrics": true,
+            "procedures": true,
+            "architecture": false,
+            "episodic_lessons": true,
+            "decision_context": true,
+            "failure_avoidance": true
+          },
+          "brief_chars": 6724
+        }
+      }
+    }
+  ],
+  "aggregate": {
+    "by_route": {
+      "tiered_brief_standard": {
+        "mean_coverage": 0.235,
+        "mean_priority_coverage": 0.595,
+        "mean_ordering": 0.932,
+        "duplicate_count": 0,
+        "n_tasks": 15
+      },
+      "tiered_brief_full": {
+        "mean_coverage": 0.269,
+        "mean_priority_coverage": 0.628,
+        "mean_ordering": 0.887,
+        "duplicate_count": 0,
+        "n_tasks": 15
+      },
+      "prompt_builder_standard": {
+        "mean_coverage": 0.301,
+        "mean_priority_coverage": 0.645,
+        "mean_ordering": 0.83,
+        "duplicate_count": 0,
+        "n_tasks": 15
+      },
+      "prompt_builder_full": {
+        "mean_coverage": 0.367,
+        "mean_priority_coverage": 0.695,
+        "mean_ordering": 0.83,
+        "duplicate_count": 0,
+        "n_tasks": 15
+      }
+    },
+    "by_class": {}
+  }
+}

@@ -25,15 +25,16 @@ _(P0 delivery window 2026-03-31 completed. Reset for next sprint.)_
 ### Execution Reliability (2026-04-03 cron failure follow-up)
 
 ### SWO / Clarvis Brand Integration (2026-04-03)
-- [ ] [SWO_CLARVIS_BRAND_AUDIT] Audit Clarvis public-facing branding, naming treatment, color system, and visual identity against Star World Order. Decide what stays Clarvis-native vs what must adopt SWO language.
-- [ ] [SWO_CLARVIS_DESIGN_BRIEF] Create a concrete design brief for "Clarvis as a Star World Order feature": palette, typography, UI motifs, icon/avatar direction, copy tone, and examples of correct/incorrect usage.
-- [ ] [SWO_CLARVIS_NAMING_ARCHITECTURE] Define naming architecture so Clarvis keeps its strong product name while fitting under SWO (e.g. "Clarvis by Star World Order" / "SWO Clarvis" / section naming rules). Include guidance for feature names and dashboard terminology.
-- [ ] [SWO_CLARVIS_TOKEN_ALIGNMENT] Inspect the Star World Order repo design tokens/components and map Clarvis onto them. Identify reusable tokens, missing variants, and what must be added for visual consistency.
-- [ ] [SWO_CLARVIS_LANDING_CONCEPT] Produce a concrete landing/page concept for Clarvis inside SWO: page structure, CTA hierarchy, screenshots/mock sections, and how to explain Clarvis as an SWO capability without losing the Clarvis identity.
-- [ ] [SWO_CLARVIS_COPY_PASS] Rewrite public-facing Clarvis copy into an SWO-aligned but non-cringe voice: cosmic/order framing where helpful, while preserving clarity and product credibility.
+- [x] [SWO_CLARVIS_BRAND_AUDIT] _(2026-04-03: Complete. Gap analysis, verdict, and what-stays/what-adopts decisions in `docs/SWO_CLARVIS_BRAND_INTEGRATION.md` §1.)_
+- [x] [SWO_CLARVIS_DESIGN_BRIEF] _(2026-04-03: Complete. Palette, typography rules, UI motifs, icon direction, copy tone, correct/incorrect usage in `docs/SWO_CLARVIS_BRAND_INTEGRATION.md` §2.)_
+- [x] [SWO_CLARVIS_NAMING_ARCHITECTURE] _(2026-04-03: Complete. Hierarchy, naming rules, feature naming, dashboard terminology in `docs/SWO_CLARVIS_BRAND_INTEGRATION.md` §3.)_
+- [x] [SWO_CLARVIS_TOKEN_ALIGNMENT] _(2026-04-03: Complete. Token mapping, reusable/divergent/missing tokens, component class mapping, constellation categorization in `docs/SWO_CLARVIS_BRAND_INTEGRATION.md` §4.)_
+- [x] [SWO_CLARVIS_LANDING_CONCEPT] _(2026-04-03: Complete. `/intelligence` page wireframe, CTA hierarchy, section priorities in `docs/SWO_CLARVIS_BRAND_INTEGRATION.md` §5.)_
+- [x] [SWO_CLARVIS_COPY_PASS] _(2026-04-03: Complete. Rewritten hero, subtitle, problem/approach, 6 feature cards, attribution line, voice guidelines in `docs/SWO_CLARVIS_BRAND_INTEGRATION.md` §6.)_
 
 ### Context/Prompt Pipeline (2026-04-03 deep audit, refined 2026-04-03 second-opinion audit)
-- [~] [PROMPT_LLM_REVIEW_BENCH] _(2026-04-03: Static eval framework built. LLM-judged scoring designed but not yet implemented — needs OpenRouter integration for cost-effective evaluation. Framework ready in `prompt_quality_eval.py`.)_
+- [x] [PROMPT_LLM_REVIEW_BENCH] _(2026-04-03: LLM-judged scoring fully implemented in `prompt_quality_eval.py`. Uses OpenRouter M2.5 as evaluator, 6-dimension rubric (task_fit, relevance, completeness, ordering, noise, execution_usefulness), per-route aggregation. `--dry-run` mode for pipeline validation. Blocked on live run: OpenRouter key expired (401). Ready to run once key is refreshed.)_
+- [x] [PROMPT_TASKSET_CURATION] _(2026-04-03: Expanded taskset from 10→15 tasks covering 5 new classes: benchmarking, agent_orchestration, brand_creative, reflection, self_awareness. Version bumped to 1.1. All routes validated via static matrix.)_
 
 ---
 
