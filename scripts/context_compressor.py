@@ -1,20 +1,29 @@
 #!/usr/bin/env python3
 """
-Context Compressor — Summarize old context instead of full history
+Context Compressor — Orchestration layer over clarvis.context.compressor
 
-Reduces token consumption by:
-1. compress_queue() — strips completed tasks from QUEUE.md, keeps only pending + last 5 completions
-2. compress_health() — summarizes multi-line health data into compact key=value format
-3. compress_episodes() — trims episodic recall to essentials (outcome, lesson, not full text)
-4. generate_context_brief() — one-shot compressed context for Claude Code prompts
+Architecture:
+  Spine (clarvis.context.compressor) — canonical, stateless compression primitives
+      (TF-IDF, MMR, graduated compaction, basic queue/episode compression)
+  This file (scripts/) — orchestration layer that imports spine primitives and adds:
+      - Section-level MD5 caching with TTL (saves ~30-40% brief generation time)
+      - Health data compression (multi-line → compact key=value)
+      - Decision context building (success criteria, failure patterns, wire guidance)
+      - Quality-optimized brief assembly (primacy/recency positioning, tiered budgets)
+      - Queue archival and log rotation (GC)
+  This layering is intentional — scripts/ orchestrators are NOT migration candidates.
+  See QUEUE.md [CONTEXT_COMPRESSOR_FULL_MIGRATION] for the architectural decision.
 
-SAVINGS ESTIMATE:
-  QUEUE.md: 48KB → ~4KB (85% reduction)
-  Health data: ~8KB → ~1KB (87% reduction)
-  Per heartbeat: ~15K tokens → ~2K tokens saved
+Public API:
+  compress_queue()          — strips completed tasks, keeps pending + last N completions
+  compress_health()         — summarizes health data into compact format
+  compress_episodes()       — trims episodic recall to essentials
+  generate_tiered_brief()   — quality-optimized context brief for Claude Code prompts
+  archive_completed()       — move old completed tasks to archive
+  gc()                      — full garbage collection (archive + log rotation)
 
 Usage:
-    from context_compressor import compress_queue, compress_health, generate_context_brief
+    from context_compressor import compress_queue, compress_health, generate_tiered_brief
 
     # CLI
     python3 context_compressor.py queue          # compressed queue

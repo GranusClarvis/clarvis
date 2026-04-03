@@ -595,32 +595,67 @@ def synthesize_insights(patterns: dict) -> list:
     return insights
 
 
+def _normalize_for_dedup(text: str) -> str:
+    """Normalize text for dedup comparison: strip examples, lowercase, collapse whitespace."""
+    core = text.split(' | Examples:')[0]
+    return re.sub(r'\s+', ' ', core.lower().strip())[:120]
+
+
+def _load_existing_texts(*collections) -> set:
+    """Load normalized texts from one or more brain collections for dedup."""
+    existing = set()
+    for coll in collections:
+        try:
+            entries = brain.get(coll, n=500)
+            for e in entries:
+                doc = e.get('document', '')
+                existing.add(_normalize_for_dedup(doc))
+        except Exception as exc:
+            logger.warning("Dedup: could not load collection %s: %s", coll, exc)
+    return existing
+
+
+def _is_semantically_duplicate(text: str, collection: str, threshold: float = 0.18) -> bool:
+    """Check if text is semantically too close to an existing entry via embedding distance."""
+    try:
+        hits = brain.recall(text[:300], n=3, collections=[collection])
+        return any(h.get("distance", 1.0) < threshold for h in hits)
+    except Exception:
+        return False
+
+
 def store_insights(insights: list, dry_run: bool = False) -> int:
-    """Store structured insights in brain with collection='autonomous-learning'."""
+    """Store structured insights in brain with collection='autonomous-learning'.
+
+    Dedup strategy (3 layers):
+      1. Normalized substring match against existing entries (fast, exact-ish)
+      2. Cross-collection check against clarvis-learnings (prevents overlap with reflection)
+      3. Embedding similarity check for near-duplicates (semantic, slower)
+    """
     stored = 0
     failed = 0
+    skipped_dedup = 0
 
-    # Check for existing autonomous-learning entries to avoid duplicates
-    existing_texts = set()
+    # Layer 1: Load normalized texts from both autonomous-learning AND clarvis-learnings
     try:
-        existing = brain.get(AUTONOMOUS_LEARNING, n=200)
-        for e in existing:
-            doc = e.get('document', '')
-            # Strip examples suffix before dedup
-            doc_core = doc.split(' | Examples:')[0]
-            norm = re.sub(r'\s+', ' ', doc_core.lower().strip())[:80]
-            existing_texts.add(norm)
-    except Exception as e:
-        logger.error("Failed to load existing learnings for dedup: %s", e)
-        # Continue without dedup — better to store duplicates than lose insights
+        from brain import LEARNINGS
+    except ImportError:
+        LEARNINGS = "clarvis-learnings"
+    existing_texts = _load_existing_texts(AUTONOMOUS_LEARNING, LEARNINGS)
 
     for insight in insights:
         text = f"[{insight['type']}] {insight['insight']}"
 
-        # Skip if similar entry already exists (ignore examples suffix)
+        # Layer 1: normalized substring match
         text_core = text.split(' | Examples:')[0]
-        normalized = re.sub(r'\s+', ' ', text_core.lower().strip())[:80]
+        normalized = _normalize_for_dedup(text)
         if normalized in existing_texts:
+            skipped_dedup += 1
+            continue
+
+        # Layer 2: semantic similarity check (embedding distance)
+        if _is_semantically_duplicate(text, AUTONOMOUS_LEARNING, threshold=0.18):
+            skipped_dedup += 1
             continue
 
         importance = insight.get('importance', 0.6)
@@ -648,6 +683,8 @@ def store_insights(insights: list, dry_run: bool = False) -> int:
                 logger.error("Failed to store insight: %s — %s", text[:80], e)
                 failed += 1
 
+    if skipped_dedup:
+        print(f"  Dedup: skipped {skipped_dedup} duplicate/near-duplicate insights")
     if failed:
         logger.warning("Learning pipeline: %d/%d insights failed to store", failed, failed + stored)
     return stored
@@ -781,11 +818,11 @@ def distill_procedures(session_records: list, dry_run: bool = False) -> int:
             f"Last seen: {last_date}."
         )
 
-        # Dedup against existing procedures
+        # Dedup against existing procedures (top-5, relaxed threshold)
         try:
-            existing = brain.recall(proc_text[:200], n=3, collections=[PROCEDURES])
-            if any(e.get("distance", 1.0) < 0.15 for e in existing):
-                continue  # already have a very similar procedure
+            existing = brain.recall(proc_text[:300], n=5, collections=[PROCEDURES])
+            if any(e.get("distance", 1.0) < 0.20 for e in existing):
+                continue  # already have a similar procedure
         except Exception:
             pass
 

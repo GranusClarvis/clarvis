@@ -75,3 +75,21 @@ jobs:
         run: python3 -m pytest packages/ tests/ -v --tb=short -m "not slow"
         env:
           CLARVIS_WORKSPACE: ${{ github.workspace }}
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t clarvis:ci-${{ github.sha }} .
+
+      - name: Smoke test — CLI loads
+        run: docker run --rm clarvis:ci-${{ github.sha }} clarvis --help
+
+      - name: Smoke test — brain import
+        run: docker run --rm clarvis:ci-${{ github.sha }} python3 -c "from clarvis.brain import brain; print('brain import OK')"
+
+      - name: Smoke test — pytest (fast)
+        run: docker run --rm clarvis:ci-${{ github.sha }} python3 -m pytest packages/ tests/ -x -q -m "not slow"

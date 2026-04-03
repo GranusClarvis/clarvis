@@ -90,7 +90,7 @@ _(Completed items archived.)_
 ### P0 — Found in 2026-04-02 evening code review
 
 ### P1 — Found in 2026-04-02 quality audit
-- [ ] [CONTEXT_COMPRESSOR_FULL_MIGRATION] Complete migration: scripts/context_compressor.py still has ~1300 lines of scripts-only logic (caching, health compression, advanced brief, wire tasks). Consider migrating remaining unique features to clarvis.context or deprecating the scripts version. _(2026-04-03 audit: scripts version is a thin wrapper over spine + adds section caching and health compression. Not a migration blocker — it's the intended architecture. Demote to P2.)_
+- [x] [CONTEXT_COMPRESSOR_FULL_MIGRATION] _(Closed 2026-04-03: Architectural review confirms scripts/context_compressor.py is the intended orchestration layer over clarvis.context.compressor spine primitives. Scripts version adds caching, health compression, wire guidance, brief assembly — these are orchestration features, not migration candidates. Docstring updated to document the layering. No further action needed.)_
 
 ### Open-Source Readiness — Fresh-Clone Install Audit (2026-04-01)
 _Source: Fresh-user perspective audit of clone → install → understand → run path._
@@ -101,10 +101,10 @@ _Source: Fresh-user perspective audit of clone → install → understand → ru
 
 #### Follow-up — P2
 - [x] [OSR_PYPI_CHANGELOGS] Add CHANGELOG.md to each sub-package before first PyPI publish. _(Completed 2026-04-03: CHANGELOG.md added to clarvis-db, clarvis-cost, clarvis-reasoning.)_
-- [ ] [OSR_DOCKER_CI] Wire Docker build into CI workflow to catch packaging regressions.
+- [x] [OSR_DOCKER_CI] Wire Docker build into CI workflow to catch packaging regressions. _(Completed 2026-04-03: Added `docker` job to `.github/workflows/ci.yml` — builds image, runs 3 smoke tests: CLI help, brain import, fast pytest. Catches Dockerfile/packaging/dependency regressions.)_
 
 ### Session Persistence Implementation (from HARNESS_SESSION_PERSISTENCE research, 2026-04-01)
-- [ ] [CONVERSATION_LEARNER_DEDUP] Deduplicate insights across memory/*.md and session_transcript sources — currently both sources can produce overlapping success/failure entries. Low priority, monitor for noise first.
+- [x] [CONVERSATION_LEARNER_DEDUP] Deduplicate insights across memory/*.md and session_transcript sources. _(Completed 2026-04-03: 3-layer dedup in `store_insights()`: (1) normalized substring match against 500 entries from both `autonomous-learning` AND `clarvis-learnings` collections, (2) embedding similarity check (threshold 0.18), (3) procedure dedup widened to top-5 recall with 0.20 threshold. Prevents cross-module overlap with reflection pipeline.)_
 
 ### Claude Harness Research Program (2026-03-31)
 _Source: `data/external_src/claude-harness-src.zip`. Deep-dive note: `memory/research/claude_harness_architecture_2026-03-31.md`._
@@ -150,7 +150,7 @@ _Source: `https://github.com/openai/codex` (README reviewed; use for cross-compa
 #### Follow-up from Codex Research (Bundle 9)
 - [x] [SESSION_SLUG_NAMING] **(P2)** In `session_transcript_logger.py`, derive a slug from task title and include in JSONL metadata. _(Completed 2026-04-03: `_task_slug()` extracts bracket tags or significant words, adds `slug` field to JSONL records.)_
 - [x] [MEMORY_USAGE_TRACKING] **(P2)** Add `usage_count` and `last_used` metadata to procedures in `distill_procedures()`. _(Completed 2026-04-03: usage count and last-used date encoded in procedure tags (`usage:N`, `last:YYYY-MM-DD`). Stored via brain.store API.)_
-- [ ] [CLARVIS_MCP_SERVER_DESIGN] **(P2)** Design doc for minimal MCP server exposing `brain search`, `brain remember`, `heartbeat run`, `spawn task`. Python, ~200 LOC. Makes Clarvis composable with external tools/agents.
+- [x] [CLARVIS_MCP_SERVER_DESIGN] **(P2)** Design doc for minimal MCP server. _(Completed 2026-04-03: Full design doc at `docs/MCP_SERVER_DESIGN.md` — 5 tools (brain_search, brain_remember, brain_stats, heartbeat_status, task_spawn), stdio transport, auth/safety model, implementation sketch, 3-phase build plan. ~200 LOC estimated for v0.)_
 
 ### Bloat & Hygiene — 2026-04-02 evolution scan
 _Source: Evolution analysis — bloat score at 0.400 threshold, 97MB synaptic store and __pycache__ accumulation unaddressed._
