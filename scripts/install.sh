@@ -211,9 +211,6 @@ info "Installing Python packages..."
 
 # Detect PEP 668 externally-managed environment
 PIP_EXTRA=""
-if python3 -c "import sysconfig; exit(0 if (sysconfig.get_path('stdlib') / 'EXTERNALLY-MANAGED').exists() if hasattr(sysconfig.get_path('stdlib'), '__class__') else False)" 2>/dev/null; then
-    true  # Can't detect this way
-fi
 if [ -f "$(python3 -c 'import sysconfig; print(sysconfig.get_path("stdlib"))')/EXTERNALLY-MANAGED" ]; then
     PIP_EXTRA="--break-system-packages"
     warn "PEP 668 detected — using --break-system-packages"
@@ -307,7 +304,11 @@ if [ "$BRAIN" -eq 0 ]; then
     VERIFY_ARGS="--no-brain"
 fi
 
-bash "$SCRIPT_DIR/verify_install.sh" $VERIFY_ARGS
+if [ -n "$VERIFY_ARGS" ]; then
+    bash "$SCRIPT_DIR/verify_install.sh" "$VERIFY_ARGS"
+else
+    bash "$SCRIPT_DIR/verify_install.sh"
+fi
 
 echo ""
 echo -e "${BOLD}╔═══════════════════════════════════════╗${RESET}"

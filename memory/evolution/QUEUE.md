@@ -198,11 +198,11 @@ _Source: Ruthless audit of all 5 open-source readiness bundles._
 - [x] [OSR_GITLEAKS_STALE_PATH] Removed `scripts/oss_readiness_check.sh` from `.gitleaks.toml` allowlist — script was deleted in Bundle 4 but path kept in allowlist. (2026-04-03)
 
 #### P1 — Should fix before public release
-- [ ] [OSR_INSTALL_SHELL_QUOTING] `scripts/install.sh` line 310: `$VERIFY_ARGS` is unquoted in `bash "$SCRIPT_DIR/verify_install.sh" $VERIFY_ARGS`. Safe with current values but violates defensive shell patterns. Quote it.
-- [ ] [OSR_INSTALL_DEAD_PEP668_CHECK] `scripts/install.sh` lines 214-216: PEP 668 detection has a dead branch (always falls through to `true`). Real check is on line 217. Remove dead code.
-- [ ] [OSR_DOCS_STALE_SCRIPT_REFS] `docs/SPINE_USAGE_AUDIT.md` references `cron_graph_soak_manager.sh` 3 times as "Core live" (lines 248, 482, 631). Script was deleted in Bundle 4. `docs/decomposition_audit_2026-03-29.md` references `generate_status_page.py` (lines 144, 146). Both docs need updating or a disclaimer that they are point-in-time snapshots.
+- [x] [OSR_INSTALL_SHELL_QUOTING] Fixed: `$VERIFY_ARGS` now properly quoted with conditional dispatch (empty vs non-empty). (2026-04-03)
+- [x] [OSR_INSTALL_DEAD_PEP668_CHECK] Fixed: removed dead PEP 668 detection branch (lines 214-216 always fell through to `true`). Working check retained. (2026-04-03)
+- [x] [OSR_DOCS_STALE_SCRIPT_REFS] Fixed: annotated deleted `cron_graph_soak_manager.sh` (3 refs in SPINE_USAGE_AUDIT.md) and `generate_status_page.py` (decomposition_audit) as deleted with commit refs. (2026-04-03)
 - [ ] [OSR_BUNDLE5_UNCOMMITTED] Bundle 5 changes (context_compressor dedup + score_evidence tests) are uncommitted: `scripts/context_compressor.py` (294 lines removed) and `tests/clarvis/test_retrieval_eval.py` (75 lines added). These need to be committed to actually ship.
-- [ ] [OSR_BUILD_ISOLATION] `python -m build` (with isolation) fails for all 4 packages. Only `--no-isolation` works. CI should either use `--no-isolation` or pre-install build deps. Document the constraint.
+- [x] [OSR_BUILD_ISOLATION] Root cause: PEP 668 `EXTERNALLY-MANAGED` marker on Ubuntu 24.04+ — `python-build` can't install setuptools into isolated venv. Added wheel build verification step to CI (where `actions/setup-python` provides clean Python without PEP 668). Documented `--no-isolation` workaround in INSTALL.md troubleshooting. (2026-04-03)
 
 
 

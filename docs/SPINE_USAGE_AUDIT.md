@@ -245,7 +245,7 @@ The heartbeat pipeline (`heartbeat_preflight.py` + `heartbeat_postflight.py`, 3,
 | cron_graph_compaction.sh (25L) | **Core live** | Daily 04:30 |
 | cron_graph_verify.sh (60L) | **Core live** | Daily 04:45 |
 | cron_chromadb_vacuum.sh (101L) | **Core live** | Daily 05:00 |
-| cron_graph_soak_manager.sh (120L) | **Core live** | Daily 05:05 |
+| ~~cron_graph_soak_manager.sh~~ | ~~Core live~~ | _(Deleted 2026-04-02, commit 5745f39)_ |
 | cron_pi_refresh.sh (36L) | **Core live** | Daily 05:45 |
 | graph_compaction.py (416L) | **Core live** | Called by cron_graph_compaction.sh |
 | graph_cutover.py (430L) | **Core live** | Manual JSON→SQLite migration tool |
@@ -479,7 +479,7 @@ scripts/                          # Operational scripts (curated)
   cron_graph_compaction.sh
   cron_graph_verify.sh
   cron_chromadb_vacuum.sh
-  cron_graph_soak_manager.sh
+  # cron_graph_soak_manager.sh — deleted 2026-04-02
   cron_pi_refresh.sh
   cron_brain_eval.sh
   cron_llm_brain_review.sh
@@ -628,7 +628,7 @@ experimental/                     # Moved from scripts/ — research prototypes
 ## Appendix A: Cron Schedule (Actual, from crontab -l)
 
 52 entries total. Schedule matches CLAUDE.md with these additions not in CLAUDE.md:
-- `05:05` daily — cron_graph_soak_manager.sh
+- ~~`05:05` daily — cron_graph_soak_manager.sh~~ _(deleted 2026-04-02)_
 - `06:00` daily — cron_brain_eval.sh (deterministic)
 - `06:15` daily — cron_llm_brain_review.sh (LLM-judged)
 - `02:40` daily — clarvis cognition context-relevance refresh

@@ -141,7 +141,7 @@ All 10 extractions are keep. Clean pipeline decomposition.
 
 ---
 
-#### 5. `scripts/generate_status_page.py` — `render_html()` 200→30 lines
+#### 5. `scripts/generate_status_page.py` — `render_html()` 200→30 lines _(script deleted 2026-04-02, commit 5745f39)_
 **Commit**: 90c0a3a
 
 | Helper Extracted | Lines | Quality | Verdict |

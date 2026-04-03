@@ -205,6 +205,7 @@ review or `crontab scripts/crontab.reference` if you prefer direct control.
 | Pytest import errors | Run `bash scripts/verify_install.sh` to diagnose |
 | OpenClaw gateway won't start | Check Node.js version (`node -v` >= 18), check `openclaw.json` |
 | Docker build fails | Ensure Docker daemon running, check disk space |
+| `python -m build` fails (PEP 668) | On PEP 668 systems (Ubuntu 24.04+), use `python -m build --no-isolation`. CI uses `actions/setup-python` where isolation works. |
 
 ## Upgrading
 
