@@ -4,47 +4,47 @@
     "pending_mode": null
   },
   "queue": {
-    "pending": 15,
-    "in_progress": 3,
-    "done": 1
+    "pending": 0,
+    "in_progress": 2,
+    "done": 11
   },
   "benchmarks": {
     "clr": {
-      "clr": 0.841,
+      "clr": 0.869,
       "baseline_clr": 0.19,
-      "value_add": 0.651,
+      "value_add": 0.679,
       "gate_pass": true,
       "dimensions": {
-        "memory_quality": 0.98,
-        "retrieval_precision": 0.978,
-        "prompt_context": 0.762,
-        "task_success": 0.789,
-        "autonomy": 0.512,
-        "efficiency": 0.987,
-        "integration_dynamics": 0.863
+        "memory_quality": 0.99,
+        "retrieval_precision": 1.0,
+        "prompt_context": 0.741,
+        "task_success": 0.785,
+        "autonomy": 0.774,
+        "efficiency": 0.985,
+        "integration_dynamics": 0.847
       },
-      "timestamp": "2026-04-03T05:45:09.222288+00:00"
+      "timestamp": "2026-04-04T05:45:16.896504+00:00"
     },
     "pi": {
       "pi": 1.0,
       "dimensions": 15,
-      "timestamp": "2026-04-03T05:45:02.203383+00:00"
+      "timestamp": "2026-04-04T05:45:02.379122+00:00"
     }
   },
   "phi": {
-    "current": 0.7414,
-    "timestamp": "2026-04-03T06:30:00.829960+00:00"
+    "current": 0.7415,
+    "timestamp": "2026-04-03T18:00:04.129105+00:00"
   },
-  "bloat_score": 0.4,
+  "bloat_score": 0.0,
   "brain": {
-    "total_memories": 3501,
+    "total_memories": 2982,
     "collections": 10
   },
   "episodes": {
     "success_rate": 0.805,
-    "total": 405,
+    "total": 411,
     "breakdown": {
-      "success": 326,
+      "success": 331,
       "soft_failure": 45,
       "failure": 11,
       "timeout": 16
@@ -53,25 +53,25 @@
   "uptime_since": "2026-02-18 12:20:37",
   "recent_completions": [
     {
-      "tag": "ROADMAP_CLONE_TEST_VERIFY",
+      "tag": "QUEUE_ENGINE_V2",
       "status": "success"
     },
     {
-      "tag": "OSR_PYPI_CHANGELOGS",
+      "tag": "QUEUE_RUN_RECORDS",
       "status": "success"
     },
     {
-      "tag": "OSR_DOCKER_CI",
+      "tag": "QUEUE_V2_SOAK",
       "status": "success"
     },
     {
-      "tag": "CONTEXT_COMPRESSOR_FULL_MIGRATION",
+      "tag": "PKG_COST_OPTIMIZER_MIGRATE",
       "status": "success"
     },
     {
-      "tag": "CONVERSATION_LEARNER_DEDUP",
+      "tag": "PKG_COST_TESTS_MIGRATE",
       "status": "success"
     }
   ],
-  "updated_at": "2026-04-03T11:56:04.180935+00:00"
+  "updated_at": "2026-04-04T05:50:03.159828+00:00"
 }

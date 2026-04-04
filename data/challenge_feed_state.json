@@ -9,7 +9,8 @@
     "research-impl-03",
     "bench-latency-01",
     "coding-challenge-02",
-    "bench-retrieval-01"
+    "bench-retrieval-01",
+    "bench-reasoning-01"
   ],
   "injections": [
     {
@@ -71,6 +72,12 @@
       "title": "Implement BEIR-style retrieval benchmark for ClarvisDB",
       "timestamp": 1775206802.4161005,
       "date": "2026-04-03T09:00:02"
+    },
+    {
+      "id": "bench-reasoning-01",
+      "title": "Solve 5 ARC-AGI-style pattern completion puzzles programmatically",
+      "timestamp": 1775282401.841426,
+      "date": "2026-04-04T06:00:01"
     }
   ],
   "gh_last_refresh": null
