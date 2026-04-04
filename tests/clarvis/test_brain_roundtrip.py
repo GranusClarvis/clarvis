@@ -123,6 +123,7 @@ def test_actr_scorer_boosts_recent_and_frequent(tmp_brain):
     """
     import sys, os
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "scripts"))
+    import _paths  # noqa: F401,E402
     from actr_activation import actr_score
 
     now_ts = time.time()

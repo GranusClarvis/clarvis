@@ -457,6 +457,7 @@ class TestClassifyError:
     @pytest.fixture(autouse=True)
     def _import_classify(self):
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import _paths  # noqa: F401,E402
         from heartbeat_postflight import _classify_error
         self._classify_error = _classify_error
 
@@ -1154,6 +1155,7 @@ class TestMarkTaskInQueue:
     @pytest.fixture(autouse=True)
     def _import(self):
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import _paths  # noqa: F401,E402
         from heartbeat_postflight import _mark_task_in_queue
         self._mark = _mark_task_in_queue
 
@@ -1261,6 +1263,7 @@ class TestComputeCompleteness:
     @pytest.fixture(autouse=True)
     def _import(self):
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import _paths  # noqa: F401,E402
         from heartbeat_postflight import _compute_completeness
         self._compute = _compute_completeness
 

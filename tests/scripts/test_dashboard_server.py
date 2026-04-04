@@ -11,6 +11,7 @@ from unittest.mock import patch
 import pytest
 
 sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
+import _paths  # noqa: F401,E402
 
 from dashboard_server import parse_queue, read_locks, build_state
 

@@ -10,6 +10,7 @@ from unittest.mock import patch
 import pytest
 
 sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
+import _paths  # noqa: F401,E402
 
 from clarvis.orch.pr_rules import build_pr_rules_section, PR_CLASSES
 from project_agent import (

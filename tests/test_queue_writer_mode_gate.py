@@ -34,6 +34,7 @@ def _load_modules(monkeypatch, tmp_path):
     scripts_dir = Path(__file__).resolve().parent.parent / "scripts"
     if str(scripts_dir) not in sys.path:
         sys.path.insert(0, str(scripts_dir))
+    import _paths  # noqa: F401
     import queue_writer as queue_writer_module
     queue_writer_module = importlib.reload(queue_writer_module)
 

@@ -3,6 +3,7 @@
 import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "scripts"))
+import _paths  # noqa: F401,E402
 
 from execution_monitor import count_checkpoints
 

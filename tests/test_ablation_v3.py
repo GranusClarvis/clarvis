@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 
 # Ensure workspace scripts are importable
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+import _paths  # noqa: F401,E402
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 
