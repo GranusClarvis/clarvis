@@ -1,4 +1,4 @@
-"""Tests for clarvis.orch.queue_engine — sidecar-based queue state management."""
+"""Tests for clarvis.queue.engine — sidecar-based queue state management."""
 
 import json
 import os
@@ -8,11 +8,9 @@ import time
 
 import pytest
 
-# Ensure imports work
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "clarvis", "orch"))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from clarvis.orch.queue_engine import QueueEngine, parse_queue, _extract_tag
+from clarvis.queue.engine import QueueEngine, parse_queue, _extract_tag, STUCK_RUNNING_HOURS
 
 
 # ---------------------------------------------------------------------------
@@ -211,6 +209,47 @@ class TestStateTransitions:
 # ---------------------------------------------------------------------------
 # Selection tests
 # ---------------------------------------------------------------------------
+
+class TestRankedEligible:
+    def test_returns_sorted_list(self, engine):
+        eligible = engine.ranked_eligible()
+        assert isinstance(eligible, list)
+        assert len(eligible) == 4  # all 4 tasks are pending/eligible
+        # Should be sorted by score descending
+        scores = [t["score"] for t in eligible]
+        assert scores == sorted(scores, reverse=True)
+
+    def test_p0_tasks_rank_first(self, engine):
+        eligible = engine.ranked_eligible()
+        assert eligible[0]["priority"] == "P0"
+
+    def test_excludes_running_and_deferred(self, engine):
+        engine.reconcile()
+        engine.mark_running("URGENT_FIX")
+        engine.defer("CLEANUP", "not needed")
+        eligible = engine.ranked_eligible()
+        tags = [t["tag"] for t in eligible]
+        assert "URGENT_FIX" not in tags
+        assert "CLEANUP" not in tags
+        assert len(eligible) == 2  # DEPLOY_PREP and ENGINE_V2
+
+    def test_excludes_backoff(self, engine):
+        engine.reconcile()
+        engine.mark_running("URGENT_FIX")
+        engine.mark_failed("URGENT_FIX", "temp error")
+        eligible = engine.ranked_eligible()
+        tags = [t["tag"] for t in eligible]
+        assert "URGENT_FIX" not in tags
+
+    def test_empty_queue(self, tmp_path):
+        queue_file = str(tmp_path / "QUEUE.md")
+        sidecar_file = str(tmp_path / "queue_state.json")
+        runs_file = str(tmp_path / "queue_runs.jsonl")
+        with open(queue_file, "w") as f:
+            f.write("# Empty queue\n## P0\n---\n")
+        eng = QueueEngine(queue_file=queue_file, sidecar_file=sidecar_file, runs_file=runs_file)
+        assert eng.ranked_eligible() == []
+
 
 class TestSelectNext:
     def test_selects_highest_priority(self, engine):
@@ -411,3 +450,158 @@ class TestSoakCheck:
         assert report["verdict"] == "PASS"
         assert report["checks"]["total_runs"] == 1
         assert report["checks"]["dangling_runs"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Stuck-run recovery tests
+# ---------------------------------------------------------------------------
+
+class TestStuckRunRecovery:
+    def test_recover_stuck_running_task(self, engine):
+        """Tasks stuck in 'running' beyond threshold are auto-recovered."""
+        engine.reconcile()
+        engine.mark_running("URGENT_FIX")
+
+        # Manually backdate the updated_at to simulate a stuck task
+        sidecar = engine._load()
+        from datetime import timedelta
+        old_time = (datetime.now(timezone.utc) - timedelta(hours=4)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        sidecar["URGENT_FIX"]["updated_at"] = old_time
+        engine._save(sidecar)
+
+        recovered = engine.recover_stuck(threshold_hours=3)
+        assert "URGENT_FIX" in recovered
+        state = engine.get_task_state("URGENT_FIX")
+        assert state["state"] == "failed"
+        assert "auto-recovered" in state["failure_reason"]
+
+    def test_reconcile_auto_recovers_stuck(self, engine):
+        """Reconcile automatically recovers tasks stuck in 'running'."""
+        engine.reconcile()
+        engine.mark_running("DEPLOY_PREP")
+
+        # Backdate
+        sidecar = engine._load()
+        from datetime import timedelta
+        old_time = (datetime.now(timezone.utc) - timedelta(hours=5)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        sidecar["DEPLOY_PREP"]["updated_at"] = old_time
+        engine._save(sidecar)
+
+        tasks, _ = engine.reconcile()
+        by_tag = {t["tag"]: t for t in tasks}
+        assert by_tag["DEPLOY_PREP"]["state"] == "failed"
+        assert "auto-recovered" in by_tag["DEPLOY_PREP"]["failure_reason"]
+
+    def test_no_recovery_within_threshold(self, engine):
+        """Tasks running within threshold are NOT recovered."""
+        engine.reconcile()
+        engine.mark_running("URGENT_FIX")
+        # Just started — should not be recovered
+        recovered = engine.recover_stuck(threshold_hours=3)
+        assert recovered == []
+        state = engine.get_task_state("URGENT_FIX")
+        assert state["state"] == "running"
+
+    def test_recovered_task_becomes_eligible(self, engine):
+        """After stuck recovery, a P1 task eventually becomes eligible for selection again."""
+        engine.reconcile()
+        # Use ENGINE_V2 (P1, max retries=2) so it's still retryable after 1 attempt
+        engine.mark_running("ENGINE_V2")
+
+        sidecar = engine._load()
+        from datetime import timedelta
+        old_time = (datetime.now(timezone.utc) - timedelta(hours=4)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        sidecar["ENGINE_V2"]["updated_at"] = old_time
+        engine._save(sidecar)
+
+        engine.recover_stuck(threshold_hours=3)
+        state = engine.get_task_state("ENGINE_V2")
+        assert state["state"] == "failed"
+        # Clear skip_until so it's immediately eligible
+        sidecar = engine._load()
+        sidecar["ENGINE_V2"]["skip_until"] = 0
+        engine._save(sidecar)
+
+        # ENGINE_V2 is P1 with 1 attempt, max=2, so it should be eligible
+        eligible_tags = []
+        tasks, _ = engine.reconcile()
+        for t in tasks:
+            if t["state"] in ("pending", "failed"):
+                eligible_tags.append(t["tag"])
+        assert "ENGINE_V2" in eligible_tags
+
+
+# ---------------------------------------------------------------------------
+# External run record tests
+# ---------------------------------------------------------------------------
+
+class TestExternalRun:
+    def test_start_external_known_tag(self, engine):
+        """External run with a tag that exists in QUEUE.md creates a full run record."""
+        run_id = engine.start_external_run("[URGENT_FIX] Fix critical bug", source="manual_spawn")
+        assert run_id is not None
+        assert run_id.startswith("URGENT_FIX-")
+        # Task should be running in sidecar
+        state = engine.get_task_state("URGENT_FIX")
+        assert state["state"] == "running"
+
+    def test_start_external_unknown_tag(self, engine):
+        """External run with a tag NOT in QUEUE.md creates an ad-hoc run record."""
+        engine.reconcile()
+        run_id = engine.start_external_run("[ADHOC_TASK] Something not in queue", source="manual_spawn")
+        assert run_id is not None
+        assert run_id.startswith("ADHOC_TASK-")
+        # Should NOT be in sidecar
+        state = engine.get_task_state("ADHOC_TASK")
+        assert state is None
+        # But should have a run record
+        runs = engine.get_runs("ADHOC_TASK")
+        assert len(runs) == 1
+        assert runs[0]["source"] == "manual_spawn"
+        assert runs[0]["ad_hoc"] is True
+
+    def test_start_external_no_tag(self, engine):
+        """External run with no [TAG] returns None."""
+        run_id = engine.start_external_run("Fix something without a tag", source="manual_spawn")
+        assert run_id is None
+
+    def test_external_full_lifecycle(self, engine):
+        """Full external lifecycle: start → end with success."""
+        run_id = engine.start_external_run("[DEPLOY_PREP] Prepare deployment", source="manual_spawn")
+        assert run_id is not None
+
+        ok = engine.end_run(run_id, "success", exit_code=0, duration_s=120.0)
+        assert ok
+
+        state = engine.get_task_state("DEPLOY_PREP")
+        assert state["state"] == "succeeded"
+
+        runs = engine.get_runs("DEPLOY_PREP")
+        assert len(runs) == 1
+        assert runs[0]["outcome"] == "success"
+        assert runs[0]["duration_s"] == 120.0
+
+    def test_external_ad_hoc_end_run(self, engine):
+        """Ad-hoc external run can be ended even though tag isn't in sidecar."""
+        engine.reconcile()
+        run_id = engine.start_external_run("[ONEOFF_TASK] One-time task", source="manual_spawn")
+        assert run_id is not None
+
+        ok = engine.end_run(run_id, "success", exit_code=0, duration_s=60.0)
+        assert ok
+
+        runs = engine.get_runs("ONEOFF_TASK")
+        assert len(runs) == 1
+        assert runs[0]["outcome"] == "success"
+
+    def test_run_source_field(self, engine):
+        """Run records include the source field."""
+        engine.reconcile()
+        run_id = engine.start_run("URGENT_FIX", source="cron_research")
+        runs = engine.get_runs("URGENT_FIX")
+        assert len(runs) == 1
+        assert runs[0]["source"] == "cron_research"
+
+
+# Need these imports for the recovery tests
+from datetime import datetime, timezone

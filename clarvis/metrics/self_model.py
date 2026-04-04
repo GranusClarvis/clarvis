@@ -1255,7 +1255,7 @@ def inject_tasks_to_queue(tasks, queue_file=None):
     if not tasks:
         return
     try:
-        from clarvis.orch.queue_writer import add_tasks
+        from clarvis.queue.writer import add_tasks
         added = add_tasks(tasks, priority="P0", source="self-model")
         if added:
             print(f"  Injected {len(added)} remediation tasks into QUEUE.md")

@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
-DEPRECATED: Core logic moved to clarvis.orch.queue_writer (spine migration 2026-04-04).
+DEPRECATED: Core logic moved to clarvis.queue.writer (spine migration 2026-04-04).
 This wrapper delegates to the spine module for backward compatibility.
 
-New code should use: from clarvis.orch.queue_writer import add_task, add_tasks
+New code should use: from clarvis.queue.writer import add_task, add_tasks
 """
 
 import sys
 
 # Re-export all public API from spine module
-from clarvis.orch.queue_writer import (  # noqa: F401
+from clarvis.queue.writer import (  # noqa: F401
     add_task,
     add_tasks,
     add_task as addTask,

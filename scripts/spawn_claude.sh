@@ -113,6 +113,16 @@ CATEGORY_TAG="${CATEGORY:+(category=$CATEGORY)}"
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] Spawning with ${TIMEOUT}s timeout ${CATEGORY_TAG}..." >> "$LOGFILE"
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] Task: ${TASK:0:100}..." >> "$LOGFILE"
 
+# Queue V2: register external run if task has a [TAG]
+QUEUE_RUN_ID=$(python3 -c "
+from clarvis.queue.engine import engine
+rid = engine.start_external_run('''${TASK//\'/\'\\\'\'}''', source='manual_spawn')
+print(rid or '')
+" 2>/dev/null || echo "")
+if [ -n "$QUEUE_RUN_ID" ]; then
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] Queue V2: started run $QUEUE_RUN_ID" >> "$LOGFILE"
+fi
+
 # Acquire global Claude lock — prevent concurrent Claude Code spawns
 SPAWN_LOGFILE="/tmp/spawn_claude_$$.log"
 acquire_global_claude_lock "$SPAWN_LOGFILE"
@@ -136,7 +146,10 @@ cleanup() {
 trap cleanup EXIT
 unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT 2>/dev/null || true
 RESULT=0
+START_EPOCH=\$(date +%s)
 run_claude_monitored "$TIMEOUT" "$OUTPUT_FILE" "$PROMPT_FILE" "/home/agent/.openclaw/workspace/memory/cron/spawn_claude.log" || RESULT=\$MONITORED_EXIT
+END_EPOCH=\$(date +%s)
+DURATION=\$(( END_EPOCH - START_EPOCH ))
 rm -f "$PROMPT_FILE"
 LOGFILE="/home/agent/.openclaw/workspace/memory/cron/spawn_claude.log"
 if [ \$RESULT -eq 124 ]; then
@@ -147,6 +160,13 @@ elif [ \$RESULT -ne 0 ]; then
   echo "[\$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] FAILED exit=\$RESULT" >> "\$LOGFILE"
 else
   echo "[\$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] Completed successfully" >> "\$LOGFILE"
+fi
+# Queue V2: close run record if one was started
+if [ -n "$QUEUE_RUN_ID" ]; then
+  python3 -c "
+from clarvis.queue.engine import engine
+engine.end_run('$QUEUE_RUN_ID', outcome='success' if \$RESULT == 0 else ('timeout' if \$RESULT == 124 else 'failure'), exit_code=\$RESULT, duration_s=\$DURATION)
+" 2>/dev/null && echo "[\$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] Queue V2: ended run $QUEUE_RUN_ID (\$RESULT)" >> "\$LOGFILE" || true
 fi
 tail -c 2000 "$OUTPUT_FILE" >> "\$LOGFILE" 2>/dev/null || true
 if [ "$SEND_TG" = "true" ]; then

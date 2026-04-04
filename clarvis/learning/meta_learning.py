@@ -812,7 +812,7 @@ class MetaLearner:
             Number of tasks injected.
         """
         try:
-            from clarvis.orch.queue_writer import add_tasks
+            from clarvis.queue.writer import add_tasks
         except ImportError:
             return 0
 

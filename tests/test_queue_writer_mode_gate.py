@@ -27,14 +27,23 @@ def _load_modules(monkeypatch, tmp_path):
     import clarvis.runtime.mode as mode_module
     mode_module = importlib.reload(mode_module)
 
+    # Reload the canonical module first, then the shim
+    import clarvis.queue.writer as canonical_writer
+    canonical_writer = importlib.reload(canonical_writer)
+
     scripts_dir = Path(__file__).resolve().parent.parent / "scripts"
     if str(scripts_dir) not in sys.path:
         sys.path.insert(0, str(scripts_dir))
     import queue_writer as queue_writer_module
     queue_writer_module = importlib.reload(queue_writer_module)
 
-    queue_writer_module.QUEUE_FILE = str(tmp_path / "memory" / "evolution" / "QUEUE.md")
-    queue_writer_module.STATE_FILE = str(tmp_path / "data" / "queue_writer_state.json")
+    # Patch both the canonical module and the shim
+    queue_file = str(tmp_path / "memory" / "evolution" / "QUEUE.md")
+    state_file = str(tmp_path / "data" / "queue_writer_state.json")
+    canonical_writer.QUEUE_FILE = queue_file
+    canonical_writer.STATE_FILE = state_file
+    queue_writer_module.QUEUE_FILE = queue_file
+    queue_writer_module.STATE_FILE = state_file
     return mode_module, queue_writer_module
 
 

@@ -242,7 +242,7 @@ except ImportError:
 
 # Queue engine v2 — sidecar state + run records
 try:
-    from clarvis.orch.queue_engine import engine as queue_engine
+    from clarvis.queue.engine import engine as queue_engine
 except ImportError:
     queue_engine = None
 

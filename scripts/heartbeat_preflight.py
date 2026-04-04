@@ -84,7 +84,7 @@ except ImportError:
     classify_task = None
 
 try:
-    from clarvis.orch.queue_engine import engine as queue_engine
+    from clarvis.queue.engine import engine as queue_engine
 except ImportError:
     queue_engine = None
 
@@ -416,7 +416,40 @@ def _preflight_attention(result):
 
 
 def _gather_candidates(codelet_result):
-    """Build ranked candidate list from queue parser or fallback grep."""
+    """Build ranked candidate list via Queue Engine V2 (primary) or legacy fallback.
+
+    V2 path: queue_engine.ranked_eligible() reconciles QUEUE.md + sidecar,
+    filters eligible tasks (pending/retryable, not in backoff/deferred/running),
+    scores them, and returns them ranked.
+
+    Legacy fallback: only used when queue_engine is unavailable (import failed).
+    """
+    # --- Primary path: Queue Engine V2 ---
+    if queue_engine:
+        try:
+            eligible = queue_engine.ranked_eligible()
+            if not eligible:
+                # Distinguish empty queue from all-filtered
+                from clarvis.queue.engine import parse_queue as _pq
+                md_tasks = _pq()
+                if not md_tasks:
+                    return [], "queue_empty"
+                return [], "all_filtered_by_v2"
+
+            # Map to the format _evaluate_candidates expects
+            candidates = []
+            for task in eligible:
+                candidates.append({
+                    "text": task["text"],
+                    "section": task["priority"],
+                    "salience": task.get("score", 0.0),
+                })
+            log(f"Queue V2: {len(candidates)} eligible candidate(s) from {len(eligible)} ranked")
+            return candidates, None
+        except Exception as e:
+            log(f"Queue V2 ranked_eligible failed, falling back to legacy: {e}")
+
+    # --- Legacy fallback (only if queue_engine import failed) ---
     candidates = []
     if parse_tasks and score_tasks:
         try:
@@ -425,7 +458,7 @@ def _gather_candidates(codelet_result):
                 return candidates, "queue_empty"
             candidates = score_tasks(tasks, codelet_result=codelet_result)
         except Exception as e:
-            log(f"Task selector failed: {e}")
+            log(f"Legacy task selector failed: {e}")
     if not candidates:
         try:
             import re
@@ -437,9 +470,10 @@ def _gather_candidates(codelet_result):
                         if len(candidates) >= 10:
                             break
             if candidates:
-                log(f"Fallback: {len(candidates)} unchecked tasks found")
+                log(f"Legacy fallback: {len(candidates)} unchecked tasks found")
         except Exception as e:
-            log(f"Fallback task search failed: {e}")
+            log(f"Legacy fallback task search failed: {e}")
+
     return candidates, None
 
 

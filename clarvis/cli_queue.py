@@ -1,7 +1,6 @@
 """clarvis queue — evolution queue management.
 
-Wraps scripts/queue_writer.py for task injection and
-reads QUEUE.md directly for display operations.
+Wraps clarvis.queue (engine + writer) for CLI operations.
 """
 
 import os
@@ -88,7 +87,7 @@ def add(
     source: str = typer.Option("cli", "--source", "-s", help="Source identifier"),
 ):
     """Add a task to the evolution queue."""
-    from clarvis.orch.queue_writer import add_task
+    from clarvis.queue.writer import add_task
     added = add_task(task, priority=priority, source=source)
     if added:
         print(f"Added to {priority}: {task}")
@@ -99,7 +98,7 @@ def add(
 @app.command()
 def archive():
     """Archive completed tasks from QUEUE.md to QUEUE_ARCHIVE.md."""
-    from clarvis.orch.queue_writer import archive_completed
+    from clarvis.queue.writer import archive_completed
     count = archive_completed()
     print(f"Archived {count} completed task(s).")
 
@@ -112,7 +111,7 @@ def archive():
 def engine_stats():
     """Show queue engine health metrics (sidecar state)."""
     import json as _json
-    from clarvis.orch.queue_engine import engine
+    from clarvis.queue.engine import engine
     s = engine.stats()
     print(_json.dumps(s, indent=2))
 
@@ -121,7 +120,7 @@ def engine_stats():
 def engine_select():
     """Select the next eligible task via the queue engine."""
     import json as _json
-    from clarvis.orch.queue_engine import engine
+    from clarvis.queue.engine import engine
     task = engine.select_next()
     if task:
         print(_json.dumps(task, indent=2, default=str))
@@ -132,7 +131,7 @@ def engine_select():
 @app.command("engine-reconcile")
 def engine_reconcile():
     """Reconcile QUEUE.md with sidecar state and show all tasks."""
-    from clarvis.orch.queue_engine import engine
+    from clarvis.queue.engine import engine
     tasks, _ = engine.reconcile()
     for t in tasks:
         print(f"[{t['tag']}] state={t['state']} attempts={t['attempts']} priority={t['priority']}")
@@ -141,7 +140,7 @@ def engine_reconcile():
 @app.command("runs")
 def runs(tag: str = typer.Argument(None, help="Task tag to filter by"), limit: int = 20):
     """Show run records (task execution history)."""
-    from clarvis.orch.queue_engine import engine
+    from clarvis.queue.engine import engine
     if tag:
         records = engine.get_runs(tag, limit=limit)
     else:
@@ -159,15 +158,45 @@ def runs(tag: str = typer.Argument(None, help="Task tag to filter by"), limit: i
 def run_stats_cmd():
     """Show run record summary statistics."""
     import json as _json
-    from clarvis.orch.queue_engine import engine
+    from clarvis.queue.engine import engine
     print(_json.dumps(engine.run_stats(), indent=2))
+
+
+@app.command("start-external")
+def start_external(
+    task: str = typer.Argument(..., help="Task text (must contain [TAG])"),
+    source: str = typer.Option("manual", "--source", "-s", help="Source identifier"),
+):
+    """Start an external run record for a manual/operator-spawned task."""
+    from clarvis.queue.engine import engine
+    run_id = engine.start_external_run(task, source=source)
+    if run_id:
+        print(run_id)
+    else:
+        print("NO_TAG (task text must contain [TAG] to create a run record)")
+
+
+@app.command("end-external")
+def end_external(
+    run_id: str = typer.Argument(..., help="Run ID from start-external"),
+    exit_code: int = typer.Option(0, "--exit-code", "-e", help="Process exit code"),
+    duration: float = typer.Option(None, "--duration", "-d", help="Duration in seconds"),
+):
+    """End an external run record with outcome based on exit code."""
+    from clarvis.queue.engine import engine
+    outcome = "success" if exit_code == 0 else ("timeout" if exit_code == 124 else "failure")
+    ok = engine.end_run(run_id, outcome, exit_code=exit_code, duration_s=duration)
+    if ok:
+        print(f"Run {run_id} ended: {outcome}")
+    else:
+        print(f"FAIL: run_id {run_id} not found")
 
 
 @app.command("soak")
 def soak_cmd():
     """Run soak readiness check — validates queue engine v2 for production cutover."""
     import json as _json
-    from clarvis.orch.queue_engine import engine
+    from clarvis.queue.engine import engine
     report = engine.soak_check()
     print(_json.dumps(report, indent=2))
     if report["verdict"] == "PASS":
