@@ -88,8 +88,7 @@ def add(
     source: str = typer.Option("cli", "--source", "-s", help="Source identifier"),
 ):
     """Add a task to the evolution queue."""
-    sys.path.insert(0, str(WORKSPACE / "scripts"))
-    from queue_writer import add_task
+    from clarvis.orch.queue_writer import add_task
     added = add_task(task, priority=priority, source=source)
     if added:
         print(f"Added to {priority}: {task}")
@@ -100,8 +99,7 @@ def add(
 @app.command()
 def archive():
     """Archive completed tasks from QUEUE.md to QUEUE_ARCHIVE.md."""
-    sys.path.insert(0, str(WORKSPACE / "scripts"))
-    from queue_writer import archive_completed
+    from clarvis.orch.queue_writer import archive_completed
     count = archive_completed()
     print(f"Archived {count} completed task(s).")
 

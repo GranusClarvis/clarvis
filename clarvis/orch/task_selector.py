@@ -38,7 +38,7 @@ except Exception:
     thought_proto = None
 
 try:
-    from world_models import get_world_model
+    from world_models import get_world_model  # scripts/ (pending spine migration)
     _wm = get_world_model()
 except Exception:
     _wm = None

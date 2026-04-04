@@ -104,7 +104,7 @@ def brain_store(task, task_status, exit_code, output_text, error_type,
             task_key = task[:80]
             if retry_data.get(task_key, 0) < 2:
                 try:
-                    from queue_writer import add_task
+                    from clarvis.orch.queue_writer import add_task
                     followup = (f"Investigate failure: '{task[:80]}' failed with "
                                 f"exit {exit_code}. Check logs and fix root cause.")
                     if add_task(followup, priority="P1", source="reasoning_failure"):

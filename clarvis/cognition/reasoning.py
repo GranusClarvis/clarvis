@@ -454,7 +454,7 @@ class ClarvisReasoner:
         Returns the interventional query result, or None if SCM unavailable.
         """
         try:
-            from causal_model import build_task_scm
+            from causal_model import build_task_scm  # scripts/ (pending spine migration)
             scm = build_task_scm()
             return scm.interventional_query(target, {treatment: treatment_val})
         except Exception:
