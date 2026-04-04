@@ -316,12 +316,13 @@ else
 fi
 
 # === WORKTREE AUTO-DETECT ===
-# Detect code-modifying tasks and log recommendation. Full worktree isolation
-# requires run_claude_code() restructuring — for now, tag the task for future use.
+# Detect code-modifying tasks and enable --worktree isolation via Claude Code CLI.
+# This gives the spawned agent an isolated git worktree so changes don't collide
+# with concurrent heartbeats or the operator's working tree.
 WORKTREE_RECOMMENDED="false"
-if echo "$NEXT_TASK" | grep -qiE '(refactor|migrate|rewrite|rename|delete|remove|restructure|move files|split|merge|extract|SPINE_MIGRATION|LEGACY_SCRIPT)'; then
+if echo "$NEXT_TASK" | grep -qiE '(refactor|migrate|rewrite|rename|delete|remove|restructure|move files|split|merge|extract|consolidat|SPINE_MIGRATION|LEGACY_SCRIPT|PKG_)'; then
     WORKTREE_RECOMMENDED="true"
-    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WORKTREE: code-modifying task detected, isolation recommended" >> "$LOGFILE"
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WORKTREE: code-modifying task detected, enabling --worktree isolation" >> "$LOGFILE"
 fi
 
 # Shared function: build Claude Code prompt and execute
@@ -362,11 +363,20 @@ STATIC_BLOCK
         return 1
     fi
 
+    # Build optional flags
+    local _extra_flags=""
+    if [ "$WORKTREE_RECOMMENDED" = "true" ]; then
+        _extra_flags="--worktree"
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WORKTREE: passing --worktree to Claude Code" >> "$LOGFILE"
+    fi
+
     # Start Claude Code in background for progress monitoring
     # Feed prompt via stdin (not argv) to avoid shell expansion of prompt content
+    # shellcheck disable=SC2086  # _extra_flags intentionally word-split
     timeout "$_timeout" env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \
         /home/agent/.local/bin/claude -p \
         --dangerously-skip-permissions --model claude-opus-4-6 \
+        $_extra_flags \
         < "$_prompt_file" > "$_output_file" 2>&1 &
     local _claude_pid=$!
 

@@ -376,3 +376,38 @@ class TestRunRecords:
         assert engine.recent_runs() == []
         stats = engine.run_stats()
         assert stats["total_runs"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Soak check tests
+# ---------------------------------------------------------------------------
+
+class TestSoakCheck:
+    def test_soak_clean_state(self, engine):
+        """Soak check passes on a clean, reconciled engine."""
+        engine.reconcile()
+        report = engine.soak_check()
+        assert report["verdict"] == "PASS"
+        assert report["failures"] == []
+        assert report["checks"]["sidecar_loads"] is True
+        assert report["checks"]["sidecar_entries"] >= 4
+
+    def test_soak_detects_invalid_state(self, engine):
+        """Soak check flags entries with invalid states."""
+        engine.reconcile()
+        sidecar = engine._load()
+        sidecar["URGENT_FIX"]["state"] = "bogus"
+        engine._save(sidecar)
+        report = engine.soak_check()
+        assert report["verdict"] == "FAIL"
+        assert any("state issues" in f for f in report["failures"])
+
+    def test_soak_after_full_lifecycle(self, engine):
+        """Soak check passes after a complete start→succeed lifecycle."""
+        engine.reconcile()
+        run_id = engine.start_run("URGENT_FIX")
+        engine.end_run(run_id, "success", exit_code=0, duration_s=42.0)
+        report = engine.soak_check()
+        assert report["verdict"] == "PASS"
+        assert report["checks"]["total_runs"] == 1
+        assert report["checks"]["dangling_runs"] == 0

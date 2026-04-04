@@ -163,3 +163,18 @@ def run_stats_cmd():
     import json as _json
     from clarvis.orch.queue_engine import engine
     print(_json.dumps(engine.run_stats(), indent=2))
+
+
+@app.command("soak")
+def soak_cmd():
+    """Run soak readiness check — validates queue engine v2 for production cutover."""
+    import json as _json
+    from clarvis.orch.queue_engine import engine
+    report = engine.soak_check()
+    print(_json.dumps(report, indent=2))
+    if report["verdict"] == "PASS":
+        print("\nSoak check PASSED — ready for selector cutover.")
+    else:
+        print(f"\nSoak check FAILED — {len(report['failures'])} issue(s):")
+        for f in report["failures"]:
+            print(f"  - {f}")

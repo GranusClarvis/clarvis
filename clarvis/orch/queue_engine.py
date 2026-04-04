@@ -530,6 +530,118 @@ class QueueEngine:
         sidecar = self._load()
         return sidecar.get(tag)
 
+    # -- soak readiness check --
+
+    def soak_check(self) -> dict:
+        """Validate production readiness of queue engine v2.
+
+        Checks:
+        1. Sidecar file integrity (loads, valid JSON, no corruption)
+        2. QUEUE.md ↔ sidecar consistency (no orphan/missing entries)
+        3. State machine validity (no impossible states)
+        4. Run records integrity (JSONL parseable, no dangling runs)
+        5. Stats sanity (no negative counts, no stuck tasks)
+
+        Returns dict with verdict ('PASS'/'FAIL'), checks, failures.
+        """
+        checks = {}
+        failures = []
+
+        # 1. Sidecar integrity
+        try:
+            sidecar = self._load()
+            checks["sidecar_loads"] = True
+            checks["sidecar_entries"] = len(sidecar)
+        except Exception as e:
+            checks["sidecar_loads"] = False
+            failures.append(f"sidecar load failed: {e}")
+
+        # 2. QUEUE.md ↔ sidecar sync
+        try:
+            md_tasks = parse_queue(self.queue_file)
+            md_tags = {t["tag"] for t in md_tasks}
+            sidecar_active_tags = {
+                tag for tag, entry in sidecar.items()
+                if entry.get("state") not in ("succeeded", "removed")
+            }
+
+            # Pending in QUEUE.md but not in sidecar = reconcile will fix, but flag it
+            missing_in_sidecar = md_tags - set(sidecar.keys())
+            orphan_in_sidecar = sidecar_active_tags - md_tags
+
+            checks["md_tasks"] = len(md_tasks)
+            checks["missing_in_sidecar"] = list(missing_in_sidecar)
+            checks["orphan_in_sidecar"] = list(orphan_in_sidecar)
+
+            if missing_in_sidecar:
+                failures.append(f"tags in QUEUE.md but not sidecar: {missing_in_sidecar}")
+            # Orphans are expected (completed items removed from queue) — only flag active ones
+            if orphan_in_sidecar:
+                failures.append(f"active sidecar entries not in QUEUE.md: {orphan_in_sidecar}")
+        except Exception as e:
+            failures.append(f"sync check failed: {e}")
+
+        # 3. State machine validity
+        valid_states = {"pending", "running", "failed", "deferred", "succeeded", "removed"}
+        bad_states = []
+        for tag, entry in sidecar.items():
+            state = entry.get("state", "")
+            if state not in valid_states:
+                bad_states.append(f"{tag}={state}")
+            # Running for >4h without a run record = stuck
+            if state == "running":
+                updated = entry.get("updated_at", "")
+                if updated:
+                    try:
+                        dt = datetime.fromisoformat(updated.replace("Z", "+00:00"))
+                        age_h = (datetime.now(timezone.utc) - dt).total_seconds() / 3600
+                        if age_h > 4:
+                            bad_states.append(f"{tag} stuck running for {age_h:.1f}h")
+                    except (ValueError, TypeError):
+                        pass
+
+        checks["invalid_states"] = bad_states
+        if bad_states:
+            failures.append(f"state issues: {bad_states}")
+
+        # 4. Run records integrity
+        try:
+            runs = _load_runs(limit=1000, runs_file=self.runs_file)
+            checks["total_runs"] = len(runs)
+            dangling = [r for r in runs if r.get("outcome") == "running"]
+            checks["dangling_runs"] = len(dangling)
+            if dangling:
+                # Only flag if dangling for >4h
+                for r in dangling:
+                    started = r.get("started_at", "")
+                    if started:
+                        try:
+                            dt = datetime.fromisoformat(started.replace("Z", "+00:00"))
+                            age_h = (datetime.now(timezone.utc) - dt).total_seconds() / 3600
+                            if age_h > 4:
+                                failures.append(f"dangling run {r.get('run_id')} running for {age_h:.1f}h")
+                        except (ValueError, TypeError):
+                            pass
+        except Exception as e:
+            failures.append(f"run records check failed: {e}")
+
+        # 5. Stats sanity
+        try:
+            stats = self.stats()
+            checks["stats"] = stats
+            for key in ("pending", "running", "failed", "deferred", "total"):
+                if stats.get(key, 0) < 0:
+                    failures.append(f"negative count: {key}={stats[key]}")
+        except Exception as e:
+            failures.append(f"stats check failed: {e}")
+
+        return {
+            "verdict": "PASS" if not failures else "FAIL",
+            "checks": checks,
+            "failures": failures,
+            "timestamp": _now_iso(),
+        }
+
     # -- run records --
 
     def start_run(self, tag: str) -> str:
@@ -770,10 +882,20 @@ def _cli():
     elif cmd == "run-stats":
         print(json.dumps(engine.run_stats(), indent=2))
 
+    elif cmd == "soak":
+        report = engine.soak_check()
+        print(json.dumps(report, indent=2))
+        if report["verdict"] == "PASS":
+            print("\n✅ Soak check PASSED — ready for selector cutover.")
+        else:
+            print(f"\n❌ Soak check FAILED — {len(report['failures'])} issue(s):")
+            for f in report["failures"]:
+                print(f"  - {f}")
+
     else:
         print("Usage: queue_engine.py {stats|select|state TAG|mark-running TAG|"
               "mark-succeeded TAG [ann]|mark-failed TAG [reason]|reset TAG|"
-              "reconcile|runs TAG|recent-runs|run-stats}")
+              "reconcile|runs TAG|recent-runs|run-stats|soak}")
 
 
 if __name__ == "__main__":

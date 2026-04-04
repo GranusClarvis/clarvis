@@ -20,6 +20,7 @@ _(Cron lock system, auto-recovery, and monitoring all confirmed healthy. No open
 ### Queue Architecture v2 (2026-04-03 design + pressure test)
 - [x] [QUEUE_ENGINE_V2] _(Done 2026-04-04)_ Queue Engine V2 implemented at `clarvis/orch/queue_engine.py`: sidecar state model (`data/queue_state.json`), 5-state machine (pending/running/succeeded/failed/deferred), simplified 3-factor scorer, `stats()` observability, atomic writes, run records. Wired into heartbeat preflight (`start_run`) and postflight (`end_run` + `mark_succeeded`/`mark_failed`). 30 tests pass. CLI: `clarvis queue engine-stats`, `clarvis queue runs`, `clarvis queue run-stats`.
 - [x] [QUEUE_RUN_RECORDS] _(Done 2026-04-04)_ First-class run records added to Queue Engine V2: `start_run(tag)` → run_id, `end_run(run_id, outcome, ...)`, `get_runs(tag)`, `recent_runs()`, `run_stats()`. Stored in `data/queue_runs.jsonl` (append-only JSONL). Wired into heartbeat pipeline — preflight starts run, postflight ends it with outcome/duration/error. CLI: `clarvis queue runs [TAG]`, `clarvis queue run-stats`.
+- [x] [QUEUE_V2_SOAK] _(Done 2026-04-04)_ Soak readiness check added: `clarvis queue soak` / `queue_engine.py soak`. Validates 5 dimensions: sidecar integrity, QUEUE.md↔sidecar sync, state machine validity, run record integrity, stats sanity. Fixed sidecar consistency (completed items were still marked pending). 3 soak tests added (33 total pass). Current verdict: PASS.
 
 ### Context/Prompt Pipeline (2026-04-03 deep audit, refined 2026-04-03 second-opinion audit)
 
@@ -54,7 +55,7 @@ _Design: `docs/ADAPTIVE_RAG_PLAN.md` — 4-phase rollout (GATE → EVAL → RETR
 ---
 
 ## Partial Items (tracked, not actively worked)
-- [~] [WORKTREE_AUTO_ENABLE] In `cron_autonomous.sh`, auto-detect code-modifying tasks and enable `--isolated` worktree mode. _(Partial 2026-04-03: detection logic added. Full worktree isolation requires restructuring — follow-up needed.)_
+- [x] [WORKTREE_AUTO_ENABLE] _(Done 2026-04-04)_ In `cron_autonomous.sh`, auto-detect code-modifying tasks and pass `--worktree` to Claude Code CLI for git worktree isolation. Detection regex expanded (consolidat, PKG_). `run_claude_code()` now conditionally passes `--worktree` flag. bash -n validated.
 
 ---
 
@@ -66,7 +67,7 @@ _Design: `docs/ADAPTIVE_RAG_PLAN.md` — 4-phase rollout (GATE → EVAL → RETR
 
 
 ### Bloat Reduction (2026-04-03 evolution analysis)
-- [ ] [BLOAT_AGGRESSIVE_DEDUP_PRUNE] Run targeted dedup+prune on `clarvis-learnings` (1459 items, 41% of brain) and `clarvis-memories` (612 items). Goal: reduce total_memories below 3000. Use `brain_hygiene.py run` + similarity scan on the two largest collections. Validate retrieval quality doesn't regress via `performance_benchmark.py`.
+- [x] [BLOAT_AGGRESSIVE_DEDUP_PRUNE] _(Done 2026-04-04)_ Ran `optimize-full`: decayed 2306, pruned 53 low-importance, removed 539 duplicates, cleaned 73 noise, archived 2. Total 3605→2938 (below 3000 target). 5-query retrieval validation: top-3 distances identical, no regression.
 
 ### Cron Hardening (2026-04-03 evolution analysis)
 
