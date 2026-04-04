@@ -159,7 +159,7 @@ class TestCLI:
 
     def test_cli_status(self):
         proc = subprocess.run(
-            ["python3", "scripts/clone_test_verify.py", "status"],
+            ["python3", "scripts/tools/clone_test_verify.py", "status"],
             capture_output=True, text=True, timeout=15,
             cwd=str(WORKSPACE),
         )
@@ -167,7 +167,7 @@ class TestCLI:
 
     def test_cli_unknown_command(self):
         proc = subprocess.run(
-            ["python3", "scripts/clone_test_verify.py", "bogus"],
+            ["python3", "scripts/tools/clone_test_verify.py", "bogus"],
             capture_output=True, text=True, timeout=10,
             cwd=str(WORKSPACE),
         )
@@ -175,7 +175,7 @@ class TestCLI:
 
     def test_cli_help(self):
         proc = subprocess.run(
-            ["python3", "scripts/clone_test_verify.py"],
+            ["python3", "scripts/tools/clone_test_verify.py"],
             capture_output=True, text=True, timeout=10,
             cwd=str(WORKSPACE),
         )

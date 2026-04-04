@@ -64,7 +64,7 @@ def test_mode_gate_in_task_selector():
 
 def test_mode_gate_in_heartbeat_preflight():
     """heartbeat_preflight.py contains mode compliance gate (Gate 4)."""
-    preflight_path = os.path.join(WORKSPACE, "scripts", "heartbeat_preflight.py")
+    preflight_path = os.path.join(WORKSPACE, "scripts", "pipeline", "heartbeat_preflight.py")
     with open(preflight_path) as f:
         content = f.read()
     assert "is_task_allowed_for_mode" in content, \
@@ -84,7 +84,7 @@ def test_mode_gate_in_heartbeat_gate():
 
 def test_mode_gate_in_queue_writer():
     """queue_writer.py gates task injection by mode."""
-    qw_path = os.path.join(WORKSPACE, "scripts", "queue_writer.py")
+    qw_path = os.path.join(WORKSPACE, "scripts", "evolution", "queue_writer.py")
     with open(qw_path) as f:
         content = f.read()
     assert "should_allow_auto_task_injection" in content, \

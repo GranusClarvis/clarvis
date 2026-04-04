@@ -961,7 +961,7 @@ class TestWorkspaceDefined:
         """
         import ast
         src_path = os.path.join(
-            os.path.dirname(__file__), "..", "scripts", "heartbeat_postflight.py"
+            os.path.dirname(__file__), "..", "scripts", "pipeline", "heartbeat_postflight.py"
         )
         with open(src_path) as f:
             source = f.read()
@@ -993,7 +993,7 @@ class TestWorkspaceDefined:
     def test_workspace_used_in_path_construction(self):
         """os.path.join calls for test_results.json in §7.41 must use WORKSPACE."""
         src_path = os.path.join(
-            os.path.dirname(__file__), "..", "scripts", "heartbeat_postflight.py"
+            os.path.dirname(__file__), "..", "scripts", "pipeline", "heartbeat_postflight.py"
         )
         with open(src_path) as f:
             lines = f.readlines()
