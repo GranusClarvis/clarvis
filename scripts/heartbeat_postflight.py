@@ -240,6 +240,12 @@ try:
 except ImportError:
     cost_tracker = None
 
+# Queue engine v2 — sidecar state + run records
+try:
+    from clarvis.orch.queue_engine import engine as queue_engine
+except ImportError:
+    queue_engine = None
+
 _import_time = time.monotonic() - start_import
 log = lambda msg: print(f"[{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S')}] POSTFLIGHT: {msg}", file=sys.stderr)
 
@@ -485,6 +491,7 @@ def _build_postflight_ctx(exit_code, output_file, preflight_data, task_duration)
         "proc_id": preflight_data.get("procedure_id"),
         "task_event": preflight_data.get("prediction_event", ""),
         "route_executor": preflight_data.get("route_executor", "claude"),
+        "queue_run_id": preflight_data.get("queue_run_id"),
         "output_text": output_text,
         "task_status": task_status,
         "error_type": error_type,
@@ -1722,22 +1729,53 @@ def _pf_evolution_synthesis(ctx, _pf_errors):
 
 
 def _pf_queue_update(ctx, _pf_errors):
-    """§10 Queue update — mark task complete or handle timeout retry."""
+    """§10 Queue update — mark task complete or handle timeout retry.
+
+    Dual-path: legacy queue_writer (marks [x] in QUEUE.md) + queue engine v2
+    (sidecar state + run records for observability).
+    """
     task = ctx["task"]
     exit_code = ctx["exit_code"]
     preflight_data = ctx["preflight_data"]
+    task_status = ctx["task_status"]
 
     if not task or task == "unknown":
         return
+
+    # --- Queue Engine v2: end run record + sidecar state ---
+    task_tag = None
+    if isinstance(preflight_data, dict):
+        task_tag = preflight_data.get("task_tag")
+    run_id = ctx.get("queue_run_id")
+
+    if queue_engine and task_tag:
+        try:
+            if run_id:
+                queue_engine.end_run(
+                    run_id=run_id,
+                    outcome=task_status,
+                    exit_code=exit_code,
+                    error=ctx.get("error_evidence", ""),
+                    duration_s=ctx.get("task_duration"),
+                )
+                log(f"Queue engine: ended run {run_id} ({task_status})")
+            else:
+                # No run_id from preflight — just update sidecar state directly
+                if task_status == "success":
+                    queue_engine.mark_succeeded(task_tag, datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
+                else:
+                    queue_engine.mark_failed(task_tag, ctx.get("error_evidence", task_status))
+                log(f"Queue engine: marked [{task_tag}] {task_status} (no run_id)")
+        except Exception as e:
+            log(f"Queue engine update failed (non-fatal): {e}")
+
+    # --- Legacy path: queue_writer marks [x] in QUEUE.md ---
     try:
         if exit_code == 0:
             timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
             task_for_marking = task
-            try:
-                if isinstance(preflight_data, dict) and preflight_data.get("task_tag"):
-                    task_for_marking = f"[{preflight_data['task_tag']}]"
-            except Exception as e:
-                logging.debug("Extracting task_tag from preflight_data failed: %s", e)
+            if task_tag:
+                task_for_marking = f"[{task_tag}]"
             result_mark = _mark_task_in_queue(task_for_marking, timestamp, ctx["QUEUE_FILE"], ctx["QUEUE_ARCHIVE"])
             if result_mark == "marked":
                 log("Marked task complete in QUEUE.md")

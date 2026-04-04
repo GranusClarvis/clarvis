@@ -28,12 +28,14 @@ import json
 import os
 import re
 import time
+import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
 _WS = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
 QUEUE_FILE = os.path.join(_WS, "memory", "evolution", "QUEUE.md")
 SIDECAR_FILE = os.path.join(_WS, "data", "queue_state.json")
+RUNS_FILE = os.path.join(_WS, "data", "queue_runs.jsonl")
 
 # Max retries per priority before moving to deferred
 MAX_RETRIES = {"P0": 3, "P1": 2, "P2": 1}
@@ -151,9 +153,11 @@ def _default_entry(tag: str, priority: str) -> dict:
 class QueueEngine:
     """Sidecar-based queue engine for evolution task management."""
 
-    def __init__(self, queue_file: str = QUEUE_FILE, sidecar_file: str = SIDECAR_FILE):
+    def __init__(self, queue_file: str = QUEUE_FILE, sidecar_file: str = SIDECAR_FILE,
+                 runs_file: str = RUNS_FILE):
         self.queue_file = queue_file
         self.sidecar_file = sidecar_file
+        self.runs_file = runs_file
         self._lock_path = self.queue_file + ".lock"
 
     # -- locking --
@@ -526,6 +530,175 @@ class QueueEngine:
         sidecar = self._load()
         return sidecar.get(tag)
 
+    # -- run records --
+
+    def start_run(self, tag: str) -> str:
+        """Start a run record for a task. Returns run_id.
+
+        Also calls mark_running() to transition state.
+        """
+        run_id = f"{tag}-{uuid.uuid4().hex[:8]}"
+        self.mark_running(tag)
+        record = {
+            "run_id": run_id,
+            "tag": tag,
+            "started_at": _now_iso(),
+            "ended_at": None,
+            "duration_s": None,
+            "outcome": "running",
+            "error": None,
+            "exit_code": None,
+        }
+        _append_run(record, self.runs_file)
+        return run_id
+
+    def end_run(self, run_id: str, outcome: str, exit_code: int = 0,
+                error: str = "", duration_s: float = None) -> bool:
+        """End a run record by run_id. Also calls mark_succeeded/mark_failed.
+
+        outcome: 'success', 'failure', 'timeout', 'crash'
+        Returns True if the run record was found and updated.
+        """
+        now = _now_iso()
+        tag = run_id.rsplit("-", 1)[0] if "-" in run_id else run_id
+        # Extract tag properly (everything before the last -hexchars)
+        parts = run_id.split("-")
+        if len(parts) >= 2:
+            tag = "-".join(parts[:-1])
+
+        # Update the run record in-place (find last matching run_id)
+        updated = _update_run(run_id, {
+            "ended_at": now,
+            "duration_s": round(duration_s, 2) if duration_s else None,
+            "outcome": outcome,
+            "exit_code": exit_code,
+            "error": error[:500] if error else None,
+        }, self.runs_file)
+
+        # Update sidecar state
+        if outcome == "success":
+            self.mark_succeeded(tag, now)
+        elif outcome in ("failure", "timeout", "crash"):
+            self.mark_failed(tag, error or outcome)
+
+        return updated
+
+    def get_runs(self, tag: str, limit: int = 20) -> list[dict]:
+        """Get run records for a specific task tag, most recent first."""
+        runs = _load_runs(runs_file=self.runs_file)
+        matching = [r for r in runs if r.get("tag") == tag]
+        return list(reversed(matching[-limit:]))
+
+    def recent_runs(self, limit: int = 20) -> list[dict]:
+        """Get the most recent run records across all tasks."""
+        runs = _load_runs(runs_file=self.runs_file)
+        return list(reversed(runs[-limit:]))
+
+    def run_stats(self) -> dict:
+        """Run record summary statistics."""
+        runs = _load_runs(runs_file=self.runs_file)
+        now = datetime.now(timezone.utc)
+        day_ago = now.timestamp() - 86400
+
+        total = len(runs)
+        recent = [r for r in runs if _parse_ts(r.get("started_at")) > day_ago]
+        outcomes = {}
+        durations = []
+        for r in recent:
+            o = r.get("outcome", "unknown")
+            outcomes[o] = outcomes.get(o, 0) + 1
+            if r.get("duration_s"):
+                durations.append(r["duration_s"])
+
+        return {
+            "total_runs": total,
+            "runs_24h": len(recent),
+            "outcomes_24h": outcomes,
+            "avg_duration_24h": round(sum(durations) / len(durations), 1) if durations else None,
+            "success_rate_24h": round(
+                outcomes.get("success", 0) / len(recent), 3
+            ) if recent else None,
+        }
+
+
+# ---------------------------------------------------------------------------
+# Run record persistence (append-only JSONL)
+# ---------------------------------------------------------------------------
+
+def _append_run(record: dict, runs_file: str = RUNS_FILE) -> None:
+    """Append a run record to the JSONL file."""
+    os.makedirs(os.path.dirname(runs_file), exist_ok=True)
+    with open(runs_file, "a") as f:
+        f.write(json.dumps(record, default=str) + "\n")
+
+
+def _load_runs(limit: int = 500, runs_file: str = RUNS_FILE) -> list[dict]:
+    """Load recent run records (tail of JSONL file)."""
+    if not os.path.exists(runs_file):
+        return []
+    records = []
+    try:
+        with open(runs_file) as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    try:
+                        records.append(json.loads(line))
+                    except json.JSONDecodeError:
+                        continue
+    except OSError:
+        return []
+    return records[-limit:]
+
+
+def _update_run(run_id: str, updates: dict, runs_file: str = RUNS_FILE) -> bool:
+    """Update a run record in the JSONL file by rewriting matching line.
+
+    Only updates the last occurrence of run_id (the active run).
+    """
+    if not os.path.exists(runs_file):
+        return False
+    try:
+        with open(runs_file) as f:
+            lines = f.readlines()
+    except OSError:
+        return False
+
+    # Find last line with matching run_id
+    target_idx = None
+    for i in range(len(lines) - 1, -1, -1):
+        try:
+            rec = json.loads(lines[i])
+            if rec.get("run_id") == run_id:
+                target_idx = i
+                break
+        except (json.JSONDecodeError, ValueError):
+            continue
+
+    if target_idx is None:
+        return False
+
+    rec = json.loads(lines[target_idx])
+    rec.update(updates)
+    lines[target_idx] = json.dumps(rec, default=str) + "\n"
+
+    tmp = runs_file + ".tmp"
+    with open(tmp, "w") as f:
+        f.writelines(lines)
+    os.rename(tmp, runs_file)
+    return True
+
+
+def _parse_ts(iso_str: str) -> float:
+    """Parse ISO timestamp to epoch seconds. Returns 0 on failure."""
+    if not iso_str:
+        return 0
+    try:
+        dt = datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
+        return dt.timestamp()
+    except (ValueError, TypeError):
+        return 0
+
 
 # Module-level singleton
 engine = QueueEngine()
@@ -583,8 +756,24 @@ def _cli():
         for t in tasks:
             print(f"[{t['tag']}] state={t['state']} attempts={t['attempts']} priority={t['priority']}")
 
+    elif cmd == "runs" and len(args) > 1:
+        runs = engine.get_runs(args[1])
+        for r in runs:
+            print(json.dumps(r, indent=2))
+
+    elif cmd == "recent-runs":
+        runs = engine.recent_runs()
+        for r in runs:
+            dur = f"{r['duration_s']}s" if r.get("duration_s") else "?"
+            print(f"[{r['tag']}] {r['outcome']} ({dur}) run={r['run_id']}")
+
+    elif cmd == "run-stats":
+        print(json.dumps(engine.run_stats(), indent=2))
+
     else:
-        print("Usage: queue_engine.py {stats|select|state TAG|mark-running TAG|mark-succeeded TAG [ann]|mark-failed TAG [reason]|reset TAG|reconcile}")
+        print("Usage: queue_engine.py {stats|select|state TAG|mark-running TAG|"
+              "mark-succeeded TAG [ann]|mark-failed TAG [reason]|reset TAG|"
+              "reconcile|runs TAG|recent-runs|run-stats}")
 
 
 if __name__ == "__main__":

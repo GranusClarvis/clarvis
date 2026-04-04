@@ -1,5 +1,10 @@
 # Structure & Integrity Audit — 2026-03-04
 
+> **Note (2026-04-03):** The `packages/` directory (clarvis-db, clarvis-cost, clarvis-reasoning) has been
+> consolidated into the `clarvis/` spine module. References to standalone packages below are historical.
+> See `clarvis/brain/`, `clarvis/orch/cost_tracker.py`, `clarvis/cognition/metacognition.py`.
+
+
 Post-spine migration audit. Brutally honest assessment of system integrity, scalability, and gaps.
 
 ## TL;DR

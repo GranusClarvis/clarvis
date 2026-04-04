@@ -18,8 +18,8 @@ _(Cron lock system, auto-recovery, and monitoring all confirmed healthy. No open
 ### SWO / Clarvis Brand Integration (2026-04-03)
 
 ### Queue Architecture v2 (2026-04-03 design + pressure test)
-- [ ] [QUEUE_ENGINE_V2] Implement Queue Engine V2 as a **spine subsystem** (preferred location: `clarvis/queue/`, not `clarvis/orch/`). Follow the sidecar model from `docs/QUEUE_V2_PRESSURE_TEST_2026-04-03.md`: keep `QUEUE.md` human-editable, add runtime sidecar state for attempts/failures/timestamps/state, simplify scoring first, then add explicit state transitions, `stats()` observability, and phased pipeline integration. See also `docs/QUEUE_ARCHITECTURE_REVIEW_2026-04-03.md`.
-- [ ] [QUEUE_RUN_RECORDS] Add first-class task run records linked by task id / run id so queue items map cleanly to executions, outputs, durations, tests, and artifacts. This is the missing execution-history layer needed to avoid reconstructing outcomes from logs/digests/text similarity. Build this as part of Queue Engine V2, but keep it separately visible because it is the key observability layer.
+- [x] [QUEUE_ENGINE_V2] _(Done 2026-04-04)_ Queue Engine V2 implemented at `clarvis/orch/queue_engine.py`: sidecar state model (`data/queue_state.json`), 5-state machine (pending/running/succeeded/failed/deferred), simplified 3-factor scorer, `stats()` observability, atomic writes, run records. Wired into heartbeat preflight (`start_run`) and postflight (`end_run` + `mark_succeeded`/`mark_failed`). 30 tests pass. CLI: `clarvis queue engine-stats`, `clarvis queue runs`, `clarvis queue run-stats`.
+- [x] [QUEUE_RUN_RECORDS] _(Done 2026-04-04)_ First-class run records added to Queue Engine V2: `start_run(tag)` → run_id, `end_run(run_id, outcome, ...)`, `get_runs(tag)`, `recent_runs()`, `run_stats()`. Stored in `data/queue_runs.jsonl` (append-only JSONL). Wired into heartbeat pipeline — preflight starts run, postflight ends it with outcome/duration/error. CLI: `clarvis queue runs [TAG]`, `clarvis queue run-stats`.
 
 ### Context/Prompt Pipeline (2026-04-03 deep audit, refined 2026-04-03 second-opinion audit)
 
@@ -37,7 +37,7 @@ _(Cron lock system, auto-recovery, and monitoring all confirmed healthy. No open
 - [x] [PKG_CLARVIS_DB_DELETE] _(Done 2026-04-03)_ Deleted `packages/clarvis-db/`. Zero runtime imports confirmed.
 - [x] [PKG_CLARVIS_REASONING_DELETE] _(Done 2026-04-03)_ Deleted `packages/clarvis-reasoning/`. Metacognition functions migrated to `clarvis/cognition/metacognition.py`.
 - [x] [PKG_COST_PACKAGE_DELETE] _(Done 2026-04-03)_ Deleted `packages/clarvis-cost/`. All migrated to spine.
-- [~] [PKG_DOCS_BULK_UPDATE] _(Partially done 2026-04-03)_ README, CONTRIBUTING, CLAUDE.md, verify_install.sh updated. ~20 architecture/planning docs still reference packages historically — low priority, informational only.
+- [x] [PKG_DOCS_BULK_UPDATE] _(Done 2026-04-04)_ README, CONTRIBUTING, CLAUDE.md, verify_install.sh updated. Deprecation notices added to 11 key architecture/planning docs (ARCHITECTURE.md, CONSOLIDATION_PLAN.md, INSTALL.md, etc.). Remaining historical references are informational only.
 
 ### Benchmarking
 - CLR Benchmark implementation from fork: `clarvis/metrics/clr.py` (672 lines, schema v1.0 frozen, 6 dimensions).

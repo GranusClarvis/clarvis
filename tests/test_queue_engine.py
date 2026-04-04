@@ -47,17 +47,18 @@ def tmp_queue(tmp_path):
     """Create a temporary QUEUE.md and sidecar for testing."""
     queue_file = str(tmp_path / "QUEUE.md")
     sidecar_file = str(tmp_path / "queue_state.json")
+    runs_file = str(tmp_path / "queue_runs.jsonl")
 
     with open(queue_file, "w") as f:
         f.write(SAMPLE_QUEUE)
 
-    return queue_file, sidecar_file
+    return queue_file, sidecar_file, runs_file
 
 
 @pytest.fixture
 def engine(tmp_queue):
-    queue_file, sidecar_file = tmp_queue
-    return QueueEngine(queue_file=queue_file, sidecar_file=sidecar_file)
+    queue_file, sidecar_file, runs_file = tmp_queue
+    return QueueEngine(queue_file=queue_file, sidecar_file=sidecar_file, runs_file=runs_file)
 
 
 # ---------------------------------------------------------------------------
@@ -66,7 +67,7 @@ def engine(tmp_queue):
 
 class TestParseQueue:
     def test_parse_basic(self, tmp_queue):
-        queue_file, _ = tmp_queue
+        queue_file, *_ = tmp_queue
         tasks = parse_queue(queue_file)
         tags = [t["tag"] for t in tasks]
         assert "URGENT_FIX" in tags
@@ -77,7 +78,7 @@ class TestParseQueue:
         assert "DONE_TASK" not in tags
 
     def test_priorities(self, tmp_queue):
-        queue_file, _ = tmp_queue
+        queue_file, *_ = tmp_queue
         tasks = parse_queue(queue_file)
         by_tag = {t["tag"]: t for t in tasks}
         assert by_tag["URGENT_FIX"]["priority"] == "P0"
@@ -128,7 +129,7 @@ class TestReconcile:
         assert by_tag["URGENT_FIX"]["attempts"] == 1
 
     def test_stale_entries_marked_removed(self, engine, tmp_queue):
-        queue_file, _ = tmp_queue
+        queue_file, *_ = tmp_queue
         engine.reconcile()
 
         # Remove a task from QUEUE.md
@@ -155,7 +156,7 @@ class TestStateTransitions:
         assert state["last_run"] is not None
 
     def test_mark_succeeded(self, engine, tmp_queue):
-        queue_file, _ = tmp_queue
+        queue_file, *_ = tmp_queue
         engine.reconcile()
         engine.mark_running("URGENT_FIX")
         assert engine.mark_succeeded("URGENT_FIX", "done 2026-04-03")
@@ -237,9 +238,10 @@ class TestSelectNext:
     def test_returns_none_when_empty(self, tmp_path):
         queue_file = str(tmp_path / "QUEUE.md")
         sidecar_file = str(tmp_path / "queue_state.json")
+        runs_file = str(tmp_path / "queue_runs.jsonl")
         with open(queue_file, "w") as f:
             f.write("# Empty queue\n## P0\n---\n")
-        eng = QueueEngine(queue_file=queue_file, sidecar_file=sidecar_file)
+        eng = QueueEngine(queue_file=queue_file, sidecar_file=sidecar_file, runs_file=runs_file)
         assert eng.select_next() is None
 
 
@@ -274,24 +276,103 @@ class TestStats:
 
 class TestSidecarPersistence:
     def test_sidecar_survives_reload(self, tmp_queue):
-        queue_file, sidecar_file = tmp_queue
-        eng1 = QueueEngine(queue_file=queue_file, sidecar_file=sidecar_file)
+        queue_file, sidecar_file, runs_file = tmp_queue
+        eng1 = QueueEngine(queue_file=queue_file, sidecar_file=sidecar_file, runs_file=runs_file)
         eng1.reconcile()
         eng1.mark_running("URGENT_FIX")
 
         # New engine instance reads same sidecar
-        eng2 = QueueEngine(queue_file=queue_file, sidecar_file=sidecar_file)
+        eng2 = QueueEngine(queue_file=queue_file, sidecar_file=sidecar_file, runs_file=runs_file)
         state = eng2.get_task_state("URGENT_FIX")
         assert state["state"] == "running"
 
     def test_corrupt_sidecar_recovers(self, tmp_queue):
-        queue_file, sidecar_file = tmp_queue
+        queue_file, sidecar_file, runs_file = tmp_queue
         # Write corrupt JSON
         with open(sidecar_file, "w") as f:
             f.write("{corrupt json")
 
-        eng = QueueEngine(queue_file=queue_file, sidecar_file=sidecar_file)
+        eng = QueueEngine(queue_file=queue_file, sidecar_file=sidecar_file, runs_file=runs_file)
         tasks, sidecar = eng.reconcile()
         # Should recover by creating fresh entries
         assert len(tasks) == 4
         assert all(t["state"] == "pending" for t in tasks)
+
+
+# ---------------------------------------------------------------------------
+# Run record tests
+# ---------------------------------------------------------------------------
+
+class TestRunRecords:
+    def test_start_and_end_run(self, engine):
+        engine.reconcile()
+        run_id = engine.start_run("URGENT_FIX")
+        assert run_id.startswith("URGENT_FIX-")
+        assert len(run_id) > len("URGENT_FIX-")
+
+        # Task should be running
+        state = engine.get_task_state("URGENT_FIX")
+        assert state["state"] == "running"
+
+        # End the run
+        ok = engine.end_run(run_id, "success", exit_code=0, duration_s=42.5)
+        assert ok
+
+        # Task should be succeeded
+        state = engine.get_task_state("URGENT_FIX")
+        assert state["state"] == "succeeded"
+
+    def test_end_run_failure(self, engine):
+        engine.reconcile()
+        run_id = engine.start_run("ENGINE_V2")
+        ok = engine.end_run(run_id, "failure", exit_code=1, error="import error", duration_s=10.0)
+        assert ok
+
+        state = engine.get_task_state("ENGINE_V2")
+        assert state["state"] == "failed"
+        assert "import error" in state["failure_reason"]
+
+    def test_get_runs(self, engine):
+        engine.reconcile()
+        run_id1 = engine.start_run("URGENT_FIX")
+        engine.end_run(run_id1, "failure", exit_code=1, duration_s=5.0)
+
+        # Reset and run again
+        engine.reset("URGENT_FIX")
+        run_id2 = engine.start_run("URGENT_FIX")
+        engine.end_run(run_id2, "success", exit_code=0, duration_s=30.0)
+
+        runs = engine.get_runs("URGENT_FIX")
+        assert len(runs) == 2
+        # Most recent first
+        assert runs[0]["outcome"] == "success"
+        assert runs[1]["outcome"] == "failure"
+
+    def test_recent_runs(self, engine):
+        engine.reconcile()
+        run_id1 = engine.start_run("URGENT_FIX")
+        engine.end_run(run_id1, "success", exit_code=0, duration_s=10.0)
+        run_id2 = engine.start_run("ENGINE_V2")
+        engine.end_run(run_id2, "success", exit_code=0, duration_s=20.0)
+
+        recent = engine.recent_runs()
+        assert len(recent) >= 2
+        # Most recent first
+        assert recent[0]["tag"] == "ENGINE_V2"
+
+    def test_run_stats(self, engine):
+        engine.reconcile()
+        run_id = engine.start_run("URGENT_FIX")
+        engine.end_run(run_id, "success", exit_code=0, duration_s=15.0)
+
+        stats = engine.run_stats()
+        assert stats["total_runs"] >= 1
+        assert stats["runs_24h"] >= 1
+        assert stats["success_rate_24h"] > 0
+
+    def test_runs_file_not_exists(self, engine):
+        """Run queries work even when JSONL doesn't exist yet."""
+        assert engine.get_runs("NONEXISTENT") == []
+        assert engine.recent_runs() == []
+        stats = engine.run_stats()
+        assert stats["total_runs"] == 0

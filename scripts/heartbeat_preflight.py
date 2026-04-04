@@ -84,6 +84,11 @@ except ImportError:
     classify_task = None
 
 try:
+    from clarvis.orch.queue_engine import engine as queue_engine
+except ImportError:
+    queue_engine = None
+
+try:
     from world_models import predict_task_outcome as wm_predict
 except ImportError:
     wm_predict = None
@@ -500,6 +505,16 @@ def _preflight_select_task(result, codelet_result, t0):
         result["task_tag"] = m.group(1) if m else None
     except Exception:
         result["task_tag"] = None
+
+    # Queue Engine v2: start a run record for this task
+    result["queue_run_id"] = None
+    if queue_engine and result["task_tag"]:
+        try:
+            result["queue_run_id"] = queue_engine.start_run(result["task_tag"])
+            log(f"Queue engine: started run {result['queue_run_id']}")
+        except Exception as e:
+            log(f"Queue engine start_run failed (non-fatal): {e}")
+
     result["task_section"] = task_section
     result["task_salience"] = round(best_salience, 4)
     result["timings"]["task_selection"] = round(time.monotonic() - t2, 3)

@@ -1,5 +1,10 @@
 # Clarvis — Launch Packet
 
+> **Note (2026-04-03):** The `packages/` directory (clarvis-db, clarvis-cost, clarvis-reasoning) has been
+> consolidated into the `clarvis/` spine module. References to standalone packages below are historical.
+> See `clarvis/brain/`, `clarvis/orch/cost_tracker.py`, `clarvis/cognition/metacognition.py`.
+
+
 ## What Is Clarvis?
 
 Clarvis is a **dual-layer cognitive agent system** — an AI that runs autonomously on a dedicated server, continuously learning, reasoning, and evolving.

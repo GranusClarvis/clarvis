@@ -138,3 +138,28 @@ def engine_reconcile():
     tasks, _ = engine.reconcile()
     for t in tasks:
         print(f"[{t['tag']}] state={t['state']} attempts={t['attempts']} priority={t['priority']}")
+
+
+@app.command("runs")
+def runs(tag: str = typer.Argument(None, help="Task tag to filter by"), limit: int = 20):
+    """Show run records (task execution history)."""
+    from clarvis.orch.queue_engine import engine
+    if tag:
+        records = engine.get_runs(tag, limit=limit)
+    else:
+        records = engine.recent_runs(limit=limit)
+    if not records:
+        print("No run records found.")
+        return
+    for r in records:
+        dur = f"{r['duration_s']}s" if r.get("duration_s") else "?"
+        err = f" err={r['error'][:60]}" if r.get("error") else ""
+        print(f"[{r['tag']}] {r['outcome']} ({dur}) run={r['run_id']}{err}")
+
+
+@app.command("run-stats")
+def run_stats_cmd():
+    """Show run record summary statistics."""
+    import json as _json
+    from clarvis.orch.queue_engine import engine
+    print(_json.dumps(engine.run_stats(), indent=2))

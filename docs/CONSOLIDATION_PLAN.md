@@ -1,5 +1,10 @@
 # Consolidation Plan — Repo Boundaries
 
+> **Note (2026-04-03):** The `packages/` directory (clarvis-db, clarvis-cost, clarvis-reasoning) has been
+> consolidated into the `clarvis/` spine module. References to standalone packages below are historical.
+> See `clarvis/brain/`, `clarvis/orch/cost_tracker.py`, `clarvis/cognition/metacognition.py`.
+
+
 _One-pager summary. Full details: [REPO_CONSOLIDATION_PLAN.md](./REPO_CONSOLIDATION_PLAN.md)_
 _Status: DECIDED (2026-03-16). Updated 2026-03-28._
 

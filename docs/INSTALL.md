@@ -1,5 +1,10 @@
 # Clarvis Installation Guide
 
+> **Note (2026-04-03):** The `packages/` directory (clarvis-db, clarvis-cost, clarvis-reasoning) has been
+> consolidated into the `clarvis/` spine module. References to standalone packages below are historical.
+> See `clarvis/brain/`, `clarvis/orch/cost_tracker.py`, `clarvis/cognition/metacognition.py`.
+
+
 Complete walkthrough for installing and verifying Clarvis on a fresh machine.
 
 ## Prerequisites

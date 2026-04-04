@@ -1,5 +1,10 @@
 # Open-Source Readiness Audit — 2026-03-16
 
+> **Note (2026-04-03):** The `packages/` directory (clarvis-db, clarvis-cost, clarvis-reasoning) has been
+> consolidated into the `clarvis/` spine module. References to standalone packages below are historical.
+> See `clarvis/brain/`, `clarvis/orch/cost_tracker.py`, `clarvis/cognition/metacognition.py`.
+
+
 ## Status: NOT READY — 3 blockers, 6 medium, 4 low
 
 ## CRITICAL (Must fix before any public exposure)
