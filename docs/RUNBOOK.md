@@ -21,7 +21,7 @@ python3 -m clarvis heartbeat run > /tmp/heartbeat_context.txt
 cat /tmp/heartbeat_context.txt  # review the prompt
 source scripts/cron_env.sh
 timeout 1200 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \
-  /home/agent/.local/bin/claude -p "$(cat /tmp/heartbeat_context.txt)" \
+  claude -p "$(cat /tmp/heartbeat_context.txt)" \
   --dangerously-skip-permissions --model claude-opus-4-6 > /tmp/claude_output.txt 2>&1
 
 # 4. Postflight (episode encoding, metrics)
@@ -292,7 +292,7 @@ cat > /tmp/claude_task.txt << 'ENDPROMPT'
 Task description here.
 ENDPROMPT
 timeout 1200 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \
-  /home/agent/.local/bin/claude -p "$(cat /tmp/claude_task.txt)" \
+  claude -p "$(cat /tmp/claude_task.txt)" \
   --dangerously-skip-permissions --model claude-opus-4-6 > /tmp/claude_output.txt 2>&1
 cat /tmp/claude_output.txt
 ```
@@ -326,8 +326,8 @@ To migrate one cron entry (after 7-day soak with no regressions):
 1. **Add parallel crontab entry** (do NOT remove the old one yet):
    ```
    # PILOT: clarvis CLI wrapper (added YYYY-MM-DD, soak 7 days)
-   # 0 21 * * * /home/agent/.openclaw/workspace/scripts/cron_reflection.sh >> .../reflection.log 2>&1
-   0 21 * * * cd /home/agent/.openclaw/workspace && python3 -m clarvis cron run reflection >> /home/agent/.openclaw/workspace/memory/cron/reflection.log 2>&1
+   # 0 21 * * * $CLARVIS_WORKSPACE/scripts/cron_reflection.sh >> .../reflection.log 2>&1
+   0 21 * * * cd $CLARVIS_WORKSPACE && python3 -m clarvis cron run reflection >> $CLARVIS_WORKSPACE/memory/cron/reflection.log 2>&1
    ```
 
 2. **Monitor for 7 days**: compare `reflection.log` output, check for errors.

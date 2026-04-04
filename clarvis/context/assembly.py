@@ -37,7 +37,7 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 WORKSPACE = os.environ.get(
-    "CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace"
+    "CLARVIS_WORKSPACE", os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 )
 SCRIPTS = os.path.join(WORKSPACE, "scripts")
 QUEUE_FILE = os.path.join(WORKSPACE, "memory/evolution/QUEUE.md")

@@ -17,11 +17,12 @@ CLI:
 import json
 import statistics
 import sys
+import os
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-WORKSPACE = Path("/home/agent/.openclaw/workspace")
+WORKSPACE = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")))
 BUDGET_FILE = WORKSPACE / "data" / "perf_budget.json"
 TREND_FILE = WORKSPACE / "data" / "latency_trend.jsonl"
 

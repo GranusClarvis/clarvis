@@ -48,6 +48,7 @@ Usage:
 
 import json
 import sys
+import os
 import time
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
@@ -56,7 +57,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import _paths  # noqa: F401 — registers all script subdirs on sys.path
 
-DATA_DIR = Path("/home/agent/.openclaw/workspace/data/self_representation")
+DATA_DIR = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))) / "data/self_representation"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 STATE_FILE = DATA_DIR / "latent_state.json"
@@ -156,7 +157,7 @@ def _encode_knowledge_density():
 def _encode_procedural_fluency():
     """Compute procedural fluency from procedure count and success rate."""
     try:
-        proc_file = Path("/home/agent/.openclaw/workspace/data/procedural_memory.json")
+        proc_file = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))) / "data/procedural_memory.json"
         if proc_file.exists():
             procs = json.loads(proc_file.read_text())
             if isinstance(procs, list) and procs:
@@ -193,7 +194,7 @@ def _encode_episodic_richness():
 def _encode_integration():
     """Compute integration dimension from Phi metric."""
     try:
-        phi_file = Path("/home/agent/.openclaw/workspace/data/phi_history.json")
+        phi_file = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))) / "data/phi_history.json"
         if phi_file.exists():
             phi_data = json.loads(phi_file.read_text())
             if isinstance(phi_data, list) and phi_data:
@@ -208,7 +209,7 @@ def _encode_integration():
 def _encode_adaptability():
     """Compute adaptability from meta-gradient adaptation trend."""
     try:
-        adapt_file = Path("/home/agent/.openclaw/workspace/data/meta_gradient_rl/adaptation_history.jsonl")
+        adapt_file = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))) / "data/meta_gradient_rl/adaptation_history.jsonl"
         if adapt_file.exists():
             lines = [l.strip() for l in adapt_file.read_text().strip().split("\n") if l.strip()]
             recent_adaptations = lines[-10:]
@@ -228,7 +229,7 @@ def _encode_adaptability():
 def _encode_prediction_accuracy():
     """Compute prediction accuracy from calibration data."""
     try:
-        cal_file = Path("/home/agent/.openclaw/workspace/data/calibration/predictions.jsonl")
+        cal_file = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))) / "data/calibration/predictions.jsonl"
         if cal_file.exists():
             lines = [l.strip() for l in cal_file.read_text().strip().split("\n") if l.strip()]
             recent = lines[-20:]
@@ -408,7 +409,7 @@ def check_consistency():
 
     # --- Procedural view: procedure success rates per domain ---
     try:
-        proc_file = Path("/home/agent/.openclaw/workspace/data/procedural_memory.json")
+        proc_file = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))) / "data/procedural_memory.json"
         if proc_file.exists():
             procs = json.loads(proc_file.read_text())
             if isinstance(procs, list):

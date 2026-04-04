@@ -6,81 +6,81 @@
 # Scripts reorganized into subdirectories: cron/, pipeline/, brain_mem/, cognition/,
 # metrics/, evolution/, agents/, infra/, tools/, hooks/
 
-@reboot /home/agent/.npm-global/bin/pm2 resurrect
-@reboot sleep 10 && /home/agent/.openclaw/browser/start-chromium.sh start >> /tmp/openclaw-browser-boot.log 2>&1
+@reboot $HOME/.npm-global/bin/pm2 resurrect
+@reboot sleep 10 && ${OPENCLAW_HOME:-$HOME/.openclaw}/browser/start-chromium.sh start >> /tmp/openclaw-browser-boot.log 2>&1
 
 # === Nightly (02:00-02:45) ===
-0 2 * * * /home/agent/.openclaw/workspace/scripts/infra/backup_daily.sh >> /home/agent/.openclaw/workspace/memory/cron/backup.log 2>&1
-30 2 * * * /home/agent/.openclaw/workspace/scripts/infra/backup_verify.sh >> /home/agent/.openclaw/workspace/memory/cron/backup_verify.log 2>&1
-45 2 * * * . /home/agent/.openclaw/workspace/scripts/cron/cron_env.sh && timeout 900 python3 /home/agent/.openclaw/workspace/scripts/cognition/dream_engine.py dream >> /home/agent/.openclaw/workspace/memory/cron/dream.log 2>&1
-0 3 * * 0 /home/agent/.openclaw/workspace/scripts/cron/cron_absolute_zero.sh >> /home/agent/.openclaw/workspace/memory/cron/absolute_zero.log 2>&1
+0 2 * * * $CLARVIS_WORKSPACE/scripts/infra/backup_daily.sh >> $CLARVIS_WORKSPACE/memory/cron/backup.log 2>&1
+30 2 * * * $CLARVIS_WORKSPACE/scripts/infra/backup_verify.sh >> $CLARVIS_WORKSPACE/memory/cron/backup_verify.log 2>&1
+45 2 * * * . $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh && timeout 900 python3 $CLARVIS_WORKSPACE/scripts/cognition/dream_engine.py dream >> $CLARVIS_WORKSPACE/memory/cron/dream.log 2>&1
+0 3 * * 0 $CLARVIS_WORKSPACE/scripts/cron/cron_absolute_zero.sh >> $CLARVIS_WORKSPACE/memory/cron/absolute_zero.log 2>&1
 
 # === Maintenance window (04:00-05:00, shared maintenance lock) ===
-0 4 * * * /home/agent/.openclaw/workspace/scripts/cron/cron_graph_checkpoint.sh >> /home/agent/.openclaw/workspace/memory/cron/graph_checkpoint.log 2>&1
-30 4 * * * /home/agent/.openclaw/workspace/scripts/cron/cron_graph_compaction.sh >> /home/agent/.openclaw/workspace/memory/cron/graph_compaction.log 2>&1
-45 4 * * * /home/agent/.openclaw/workspace/scripts/cron/cron_graph_verify.sh >> /home/agent/.openclaw/workspace/memory/cron/graph_verify.log 2>&1
-0 5 * * * /home/agent/.openclaw/workspace/scripts/cron/cron_chromadb_vacuum.sh >> /home/agent/.openclaw/workspace/memory/cron/chromadb_vacuum.log 2>&1
+0 4 * * * $CLARVIS_WORKSPACE/scripts/cron/cron_graph_checkpoint.sh >> $CLARVIS_WORKSPACE/memory/cron/graph_checkpoint.log 2>&1
+30 4 * * * $CLARVIS_WORKSPACE/scripts/cron/cron_graph_compaction.sh >> $CLARVIS_WORKSPACE/memory/cron/graph_compaction.log 2>&1
+45 4 * * * $CLARVIS_WORKSPACE/scripts/cron/cron_graph_verify.sh >> $CLARVIS_WORKSPACE/memory/cron/graph_verify.log 2>&1
+0 5 * * * $CLARVIS_WORKSPACE/scripts/cron/cron_chromadb_vacuum.sh >> $CLARVIS_WORKSPACE/memory/cron/chromadb_vacuum.log 2>&1
 
 # === Morning cycle (06:00-09:30) ===
-0 6 * * * /home/agent/.openclaw/workspace/scripts/cron/cron_autonomous.sh >> /home/agent/.openclaw/workspace/memory/cron/autonomous.log 2>&1
-0 7 * * * /home/agent/.openclaw/workspace/scripts/cron/cron_autonomous.sh >> /home/agent/.openclaw/workspace/memory/cron/autonomous.log 2>&1
-0 8 * * * /home/agent/.openclaw/workspace/scripts/cron/cron_morning.sh >> /home/agent/.openclaw/workspace/memory/cron/morning.log 2>&1
-0 9 * * * /home/agent/.openclaw/workspace/scripts/cron/cron_autonomous.sh >> /home/agent/.openclaw/workspace/memory/cron/autonomous.log 2>&1
-30 9 * * * /home/agent/.openclaw/workspace/scripts/cron/cron_report_morning.sh >> /home/agent/.openclaw/workspace/memory/cron/report_morning.log 2>&1
+0 6 * * * $CLARVIS_WORKSPACE/scripts/cron/cron_autonomous.sh >> $CLARVIS_WORKSPACE/memory/cron/autonomous.log 2>&1
+0 7 * * * $CLARVIS_WORKSPACE/scripts/cron/cron_autonomous.sh >> $CLARVIS_WORKSPACE/memory/cron/autonomous.log 2>&1
+0 8 * * * $CLARVIS_WORKSPACE/scripts/cron/cron_morning.sh >> $CLARVIS_WORKSPACE/memory/cron/morning.log 2>&1
+0 9 * * * $CLARVIS_WORKSPACE/scripts/cron/cron_autonomous.sh >> $CLARVIS_WORKSPACE/memory/cron/autonomous.log 2>&1
+30 9 * * * $CLARVIS_WORKSPACE/scripts/cron/cron_report_morning.sh >> $CLARVIS_WORKSPACE/memory/cron/report_morning.log 2>&1
 
 # === Midday cycle (10:00-13:00) ===
-0 10 * * * /home/agent/.openclaw/workspace/scripts/cron/cron_research.sh >> /home/agent/.openclaw/workspace/memory/cron/research.log 2>&1
-0 11 * * * /home/agent/.openclaw/workspace/scripts/cron/cron_autonomous.sh >> /home/agent/.openclaw/workspace/memory/cron/autonomous.log 2>&1
-0 12 * * * /home/agent/.openclaw/workspace/scripts/cron/cron_autonomous.sh >> /home/agent/.openclaw/workspace/memory/cron/autonomous.log 2>&1
-0 13 * * * /home/agent/.openclaw/workspace/scripts/cron/cron_evolution.sh >> /home/agent/.openclaw/workspace/memory/cron/evolution.log 2>&1
+0 10 * * * $CLARVIS_WORKSPACE/scripts/cron/cron_research.sh >> $CLARVIS_WORKSPACE/memory/cron/research.log 2>&1
+0 11 * * * $CLARVIS_WORKSPACE/scripts/cron/cron_autonomous.sh >> $CLARVIS_WORKSPACE/memory/cron/autonomous.log 2>&1
+0 12 * * * $CLARVIS_WORKSPACE/scripts/cron/cron_autonomous.sh >> $CLARVIS_WORKSPACE/memory/cron/autonomous.log 2>&1
+0 13 * * * $CLARVIS_WORKSPACE/scripts/cron/cron_evolution.sh >> $CLARVIS_WORKSPACE/memory/cron/evolution.log 2>&1
 
 # === Afternoon cycle (14:00-18:00, formerly clustered — now spread) ===
-0 14 * * * /home/agent/.openclaw/workspace/scripts/cron/cron_implementation_sprint.sh >> /home/agent/.openclaw/workspace/memory/cron/implementation_sprint.log 2>&1
-0 15 * * * /home/agent/.openclaw/workspace/scripts/cron/cron_autonomous.sh >> /home/agent/.openclaw/workspace/memory/cron/autonomous.log 2>&1
-0 16 * * * /home/agent/.openclaw/workspace/scripts/cron/cron_research.sh >> /home/agent/.openclaw/workspace/memory/cron/research.log 2>&1
-0 17 * * 0,1,2,4,5 /home/agent/.openclaw/workspace/scripts/cron/cron_autonomous.sh >> /home/agent/.openclaw/workspace/memory/cron/autonomous.log 2>&1
-0 17 * * 3,6 /home/agent/.openclaw/workspace/scripts/cron/cron_strategic_audit.sh >> /home/agent/.openclaw/workspace/memory/cron/strategic_audit.log 2>&1
-0 18 * * * /home/agent/.openclaw/workspace/scripts/cron/cron_evening.sh >> /home/agent/.openclaw/workspace/memory/cron/evening.log 2>&1
+0 14 * * * $CLARVIS_WORKSPACE/scripts/cron/cron_implementation_sprint.sh >> $CLARVIS_WORKSPACE/memory/cron/implementation_sprint.log 2>&1
+0 15 * * * $CLARVIS_WORKSPACE/scripts/cron/cron_autonomous.sh >> $CLARVIS_WORKSPACE/memory/cron/autonomous.log 2>&1
+0 16 * * * $CLARVIS_WORKSPACE/scripts/cron/cron_research.sh >> $CLARVIS_WORKSPACE/memory/cron/research.log 2>&1
+0 17 * * 0,1,2,4,5 $CLARVIS_WORKSPACE/scripts/cron/cron_autonomous.sh >> $CLARVIS_WORKSPACE/memory/cron/autonomous.log 2>&1
+0 17 * * 3,6 $CLARVIS_WORKSPACE/scripts/cron/cron_strategic_audit.sh >> $CLARVIS_WORKSPACE/memory/cron/strategic_audit.log 2>&1
+0 18 * * * $CLARVIS_WORKSPACE/scripts/cron/cron_evening.sh >> $CLARVIS_WORKSPACE/memory/cron/evening.log 2>&1
 
 # === Evening cycle (19:00-23:00) ===
-0 19 * * * /home/agent/.openclaw/workspace/scripts/cron/cron_autonomous.sh >> /home/agent/.openclaw/workspace/memory/cron/autonomous.log 2>&1
-0 20 * * * /home/agent/.openclaw/workspace/scripts/cron/cron_autonomous.sh >> /home/agent/.openclaw/workspace/memory/cron/autonomous.log 2>&1
-0 21 * * * /home/agent/.openclaw/workspace/scripts/cron/cron_reflection.sh >> /home/agent/.openclaw/workspace/memory/cron/reflection.log 2>&1
-0 22 * * * /home/agent/.openclaw/workspace/scripts/cron/cron_autonomous.sh >> /home/agent/.openclaw/workspace/memory/cron/autonomous.log 2>&1
-30 22 * * * /home/agent/.openclaw/workspace/scripts/cron/cron_report_evening.sh >> /home/agent/.openclaw/workspace/memory/cron/report_evening.log 2>&1
-0 23 * * * /home/agent/.openclaw/workspace/scripts/cron/cron_autonomous.sh >> /home/agent/.openclaw/workspace/memory/cron/autonomous.log 2>&1
+0 19 * * * $CLARVIS_WORKSPACE/scripts/cron/cron_autonomous.sh >> $CLARVIS_WORKSPACE/memory/cron/autonomous.log 2>&1
+0 20 * * * $CLARVIS_WORKSPACE/scripts/cron/cron_autonomous.sh >> $CLARVIS_WORKSPACE/memory/cron/autonomous.log 2>&1
+0 21 * * * $CLARVIS_WORKSPACE/scripts/cron/cron_reflection.sh >> $CLARVIS_WORKSPACE/memory/cron/reflection.log 2>&1
+0 22 * * * $CLARVIS_WORKSPACE/scripts/cron/cron_autonomous.sh >> $CLARVIS_WORKSPACE/memory/cron/autonomous.log 2>&1
+30 22 * * * $CLARVIS_WORKSPACE/scripts/cron/cron_report_evening.sh >> $CLARVIS_WORKSPACE/memory/cron/report_evening.log 2>&1
+0 23 * * * $CLARVIS_WORKSPACE/scripts/cron/cron_autonomous.sh >> $CLARVIS_WORKSPACE/memory/cron/autonomous.log 2>&1
 
 # === Overnight ===
-0 1 * * * /home/agent/.openclaw/workspace/scripts/cron/cron_autonomous.sh >> /home/agent/.openclaw/workspace/memory/cron/autonomous.log 2>&1
+0 1 * * * $CLARVIS_WORKSPACE/scripts/cron/cron_autonomous.sh >> $CLARVIS_WORKSPACE/memory/cron/autonomous.log 2>&1
 
 # === Continuous monitoring ===
-*/15 * * * * /home/agent/.openclaw/workspace/scripts/infra/health_monitor.sh >> /home/agent/.openclaw/workspace/monitoring/health.log 2>&1
-*/30 * * * * /home/agent/.openclaw/workspace/scripts/cron/cron_watchdog.sh >> /home/agent/.openclaw/workspace/monitoring/watchdog.log 2>&1
+*/15 * * * * $CLARVIS_WORKSPACE/scripts/infra/health_monitor.sh >> $CLARVIS_WORKSPACE/monitoring/health.log 2>&1
+*/30 * * * * $CLARVIS_WORKSPACE/scripts/cron/cron_watchdog.sh >> $CLARVIS_WORKSPACE/monitoring/watchdog.log 2>&1
 
 # === Weekly goal hygiene (Sunday 05:10, before brain_hygiene) ===
-10 5 * * 0 cd /home/agent/.openclaw/workspace && python3 scripts/hooks/goal_hygiene.py clean >> memory/cron/goal_hygiene.log 2>&1
+10 5 * * 0 cd ${OPENCLAW_HOME:-$HOME/.openclaw}/workspace && python3 scripts/hooks/goal_hygiene.py clean >> memory/cron/goal_hygiene.log 2>&1
 # === Weekly brain hygiene (Sunday 05:15, after vacuum, before cleanup) ===
-15 5 * * 0 cd /home/agent/.openclaw/workspace && python3 scripts/brain_mem/brain_hygiene.py run >> memory/cron/brain_hygiene.log 2>&1
+15 5 * * 0 cd ${OPENCLAW_HOME:-$HOME/.openclaw}/workspace && python3 scripts/brain_mem/brain_hygiene.py run >> memory/cron/brain_hygiene.log 2>&1
 # === Weekly data lifecycle (Sunday 05:20, after brain_hygiene) ===
-20 5 * * 0 cd /home/agent/.openclaw/workspace && python3 scripts/infra/data_lifecycle.py >> memory/cron/data_lifecycle.log 2>&1
+20 5 * * 0 cd ${OPENCLAW_HOME:-$HOME/.openclaw}/workspace && python3 scripts/infra/data_lifecycle.py >> memory/cron/data_lifecycle.log 2>&1
 # === Weekly cleanup (Sunday 05:30, after maintenance window) ===
-30 5 * * 0 /home/agent/.openclaw/workspace/scripts/cron/cron_cleanup.sh >> /home/agent/.openclaw/workspace/memory/cron/cleanup.log 2>&1
-45 5 * * * /home/agent/.openclaw/workspace/scripts/cron/cron_pi_refresh.sh >> /home/agent/.openclaw/workspace/memory/cron/pi_refresh.log 2>&1
+30 5 * * 0 $CLARVIS_WORKSPACE/scripts/cron/cron_cleanup.sh >> $CLARVIS_WORKSPACE/memory/cron/cleanup.log 2>&1
+45 5 * * * $CLARVIS_WORKSPACE/scripts/cron/cron_pi_refresh.sh >> $CLARVIS_WORKSPACE/memory/cron/pi_refresh.log 2>&1
 
 # === Daily brain quality evaluation (06:00 deterministic, 06:15 LLM-judged) ===
-5 6 * * * /home/agent/.openclaw/workspace/scripts/cron/cron_brain_eval.sh >> /home/agent/.openclaw/workspace/memory/cron/brain_eval.log 2>&1
-15 6 * * * /home/agent/.openclaw/workspace/scripts/cron/cron_llm_brain_review.sh >> /home/agent/.openclaw/workspace/memory/cron/llm_brain_review.log 2>&1
-30 19 * * * /home/agent/.openclaw/workspace/scripts/cron/cron_orchestrator.sh >> /home/agent/.openclaw/workspace/memory/cron/orchestrator.log 2>&1
+5 6 * * * $CLARVIS_WORKSPACE/scripts/cron/cron_brain_eval.sh >> $CLARVIS_WORKSPACE/memory/cron/brain_eval.log 2>&1
+15 6 * * * $CLARVIS_WORKSPACE/scripts/cron/cron_llm_brain_review.sh >> $CLARVIS_WORKSPACE/memory/cron/llm_brain_review.log 2>&1
+30 19 * * * $CLARVIS_WORKSPACE/scripts/cron/cron_orchestrator.sh >> $CLARVIS_WORKSPACE/memory/cron/orchestrator.log 2>&1
 
 # === Monthly structural reflection (1st of month) ===
-30 3 1 * * /home/agent/.openclaw/workspace/scripts/cron/cron_monthly_reflection.sh >> /home/agent/.openclaw/workspace/memory/cron/monthly_reflection.log 2>&1
-45 3 1 * * . /home/agent/.openclaw/workspace/scripts/cron/cron_env.sh && python3 /home/agent/.openclaw/workspace/scripts/metrics/brief_benchmark.py >> /home/agent/.openclaw/workspace/memory/cron/brief_benchmark.log 2>&1
+30 3 1 * * $CLARVIS_WORKSPACE/scripts/cron/cron_monthly_reflection.sh >> $CLARVIS_WORKSPACE/memory/cron/monthly_reflection.log 2>&1
+45 3 1 * * . $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh && python3 $CLARVIS_WORKSPACE/scripts/metrics/brief_benchmark.py >> $CLARVIS_WORKSPACE/memory/cron/brief_benchmark.log 2>&1
 
 # === Weekly PI benchmark (Sunday 06:00, after maintenance) ===
-0 6 * * 0 . /home/agent/.openclaw/workspace/scripts/cron/cron_env.sh && python3 /home/agent/.openclaw/workspace/scripts/metrics/performance_benchmark.py record >> /home/agent/.openclaw/workspace/memory/cron/pi_benchmark.log 2>&1
-40 2 * * * . /home/agent/.openclaw/workspace/scripts/cron/cron_env.sh && python3 -m clarvis cognition context-relevance refresh >> /home/agent/.openclaw/workspace/memory/cron/relevance_refresh.log 2>&1
+0 6 * * 0 . $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh && python3 $CLARVIS_WORKSPACE/scripts/metrics/performance_benchmark.py record >> $CLARVIS_WORKSPACE/memory/cron/pi_benchmark.log 2>&1
+40 2 * * * . $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh && python3 -m clarvis cognition context-relevance refresh >> $CLARVIS_WORKSPACE/memory/cron/relevance_refresh.log 2>&1
 # === Weekly CLR benchmark (Sunday 06:30, after PI benchmark) ===
-30 6 * * 0 /home/agent/.openclaw/workspace/scripts/cron/cron_clr_benchmark.sh >> /home/agent/.openclaw/workspace/memory/cron/clr_benchmark.log 2>&1
+30 6 * * 0 $CLARVIS_WORKSPACE/scripts/cron/cron_clr_benchmark.sh >> $CLARVIS_WORKSPACE/memory/cron/clr_benchmark.log 2>&1
 
 # === Status JSON generation (daily at 05:50, before brain eval) ===
-50 5 * * * . /home/agent/.openclaw/workspace/scripts/cron/cron_env.sh && python3 /home/agent/.openclaw/workspace/scripts/infra/generate_status_json.py >> /home/agent/.openclaw/workspace/memory/cron/status_json.log 2>&1
+50 5 * * * . $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh && python3 $CLARVIS_WORKSPACE/scripts/infra/generate_status_json.py >> $CLARVIS_WORKSPACE/memory/cron/status_json.log 2>&1

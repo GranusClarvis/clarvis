@@ -29,7 +29,7 @@ from datetime import datetime, timezone
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import _paths  # noqa: F401 — registers all script subdirs on sys.path
 
-DATA_DIR = "/home/agent/.openclaw/workspace/data/parameter_evolution"
+DATA_DIR = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "data/parameter_evolution")
 HISTORY_FILE = os.path.join(DATA_DIR, "history.jsonl")
 CURRENT_FILE = os.path.join(DATA_DIR, "current_params.json")
 os.makedirs(DATA_DIR, exist_ok=True)
@@ -88,7 +88,7 @@ PARAM_GROUPS = {
 
 def analyze_retrieval_events():
     """Analyze all retrieval events to understand distance distributions."""
-    events_file = "/home/agent/.openclaw/workspace/data/retrieval_quality/events.jsonl"
+    events_file = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "data/retrieval_quality/events.jsonl")
     if not os.path.exists(events_file):
         return {"error": "no events file"}
 
@@ -151,7 +151,7 @@ def analyze_retrieval_events():
 
 def analyze_benchmark_results():
     """Load latest benchmark and extract per-query distance data for hits/misses."""
-    latest_file = "/home/agent/.openclaw/workspace/data/retrieval_benchmark/latest.json"
+    latest_file = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "data/retrieval_benchmark/latest.json")
     if not os.path.exists(latest_file):
         return {"error": "no benchmark data"}
 
@@ -426,7 +426,7 @@ def grid_search():
 
 def apply_recall_sort_weights(semantic_w, importance_w):
     """Update brain.py recall sort weights."""
-    brain_path = "/home/agent/.openclaw/workspace/scripts/brain.py"
+    brain_path = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "scripts/brain.py")
     with open(brain_path) as f:
         content = f.read()
 
@@ -454,7 +454,7 @@ def apply_recall_sort_weights(semantic_w, importance_w):
 
 def apply_smart_recall_params(collection_boost, max_distance):
     """Update retrieval_experiment.py smart_recall parameters."""
-    exp_path = "/home/agent/.openclaw/workspace/scripts/retrieval_experiment.py"
+    exp_path = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "scripts/retrieval_experiment.py")
     with open(exp_path) as f:
         content = f.read()
 
@@ -498,7 +498,7 @@ def apply_smart_recall_params(collection_boost, max_distance):
 
 def apply_attention_weights(w_imp, w_rec, w_rel, w_acc, w_bst):
     """Update attention.py salience weights."""
-    attn_path = "/home/agent/.openclaw/workspace/scripts/attention.py"
+    attn_path = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "scripts/attention.py")
     with open(attn_path) as f:
         content = f.read()
 
@@ -521,7 +521,7 @@ def apply_attention_weights(w_imp, w_rec, w_rel, w_acc, w_bst):
 
 def apply_procedural_threshold(threshold):
     """Update procedural_memory.py match threshold."""
-    proc_path = "/home/agent/.openclaw/workspace/scripts/procedural_memory.py"
+    proc_path = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "scripts/procedural_memory.py")
     with open(proc_path) as f:
         content = f.read()
 
@@ -631,7 +631,7 @@ def run_evolution(dry_run=False):
 
     # Gather fitness signals: retrieval hit rate + capability scores
     fitness_signals = {}
-    retrieval_report = "/home/agent/.openclaw/workspace/data/retrieval_quality/report.json"
+    retrieval_report = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "data/retrieval_quality/report.json")
     if os.path.exists(retrieval_report):
         try:
             with open(retrieval_report) as f:
@@ -641,7 +641,7 @@ def run_evolution(dry_run=False):
         except (json.JSONDecodeError, KeyError):
             pass
 
-    capability_file = "/home/agent/.openclaw/workspace/data/capability_history.json"
+    capability_file = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "data/capability_history.json")
     if os.path.exists(capability_file):
         try:
             with open(capability_file) as f:
@@ -689,7 +689,7 @@ def run_evolution(dry_run=False):
         json.dump(history_entry["applied"], f, indent=2)
 
     # Also write to data/parameter_history.json (consolidated view)
-    param_history_file = "/home/agent/.openclaw/workspace/data/parameter_history.json"
+    param_history_file = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "data/parameter_history.json")
     param_history = []
     if os.path.exists(param_history_file):
         try:

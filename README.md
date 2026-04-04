@@ -509,7 +509,7 @@ Re-run `pip install -e .` — typer is a declared dependency and should install 
 Normal on a fresh clone. The brain starts empty — memories accumulate through operation. Try: `python3 -c "from clarvis.brain import remember; remember('test', importance=0.5)"` then re-check.
 
 **`CLARVIS_WORKSPACE` warnings**
-Set the env var to your repo root: `export CLARVIS_WORKSPACE=/path/to/clarvis`. Some scripts default to `/home/agent/.openclaw/workspace` if unset.
+Set the env var to your repo root: `export CLARVIS_WORKSPACE=/path/to/clarvis`. Some scripts default to `$CLARVIS_WORKSPACE` if unset.
 
 **Tests fail with import errors**
 Run `bash scripts/verify_install.sh` to identify which component is missing. Ensure all sub-packages are installed.

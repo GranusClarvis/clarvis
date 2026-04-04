@@ -16,7 +16,7 @@ import shutil
 from datetime import datetime, timezone, timedelta
 
 WORKSPACE = os.environ.get(
-    "CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace"
+    "CLARVIS_WORKSPACE", os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 )
 QUEUE_FILE = os.path.join(WORKSPACE, "memory/evolution/QUEUE.md")
 QUEUE_ARCHIVE = os.path.join(WORKSPACE, "memory/evolution/QUEUE_ARCHIVE.md")

@@ -2,7 +2,7 @@
 # Absolute Zero Reasoner — weekly self-play reasoning session
 # Schedule: Sunday 03:00 UTC (between dream_engine and maintenance window)
 # No Claude Code spawning — lightweight Python-only (ChromaDB brain access).
-source /home/agent/.openclaw/workspace/scripts/cron/cron_env.sh
+source $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh
 
 LOCKFILE="/tmp/clarvis_absolute_zero.lock"
 
@@ -18,5 +18,5 @@ echo "$$ $(date -u +%Y-%m-%dT%H:%M:%S)" > "$LOCKFILE"
 trap 'rm -f "$LOCKFILE"' EXIT
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === AZR weekly session started ==="
-python3 /home/agent/.openclaw/workspace/scripts/cognition/absolute_zero.py run 5
+python3 $CLARVIS_WORKSPACE/scripts/cognition/absolute_zero.py run 5
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === AZR weekly session finished ==="

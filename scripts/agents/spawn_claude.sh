@@ -14,8 +14,8 @@
 set -euo pipefail
 
 # Source cron env for proper PATH, HOME, env cleanup
-source /home/agent/.openclaw/workspace/scripts/cron/cron_env.sh
-source /home/agent/.openclaw/workspace/scripts/cron/lock_helper.sh
+source $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh
+source $CLARVIS_WORKSPACE/scripts/cron/lock_helper.sh
 
 TASK="${1:-}"
 TIMEOUT="${2:-1200}"
@@ -58,19 +58,19 @@ fi
 
 PROMPT_FILE="/tmp/claude_prompt_$$.txt"
 OUTPUT_FILE="/tmp/claude_output_$$.txt"
-LOGFILE="/home/agent/.openclaw/workspace/memory/cron/spawn_claude.log"
-WORK_DIR="/home/agent/.openclaw/workspace"
+LOGFILE="$CLARVIS_WORKSPACE/memory/cron/spawn_claude.log"
+WORK_DIR="$CLARVIS_WORKSPACE"
 WORKTREE_PATH=""
 WORKTREE_BRANCH=""
 
 # === Worktree Isolation ===
 if [ "$ISOLATED" = "true" ]; then
     AGENT_ID="spawn-$(date +%m%d%H%M)-$$"
-    WORKTREE_PATH="/home/agent/.openclaw/workspace/.claude/worktrees/$AGENT_ID"
+    WORKTREE_PATH="$CLARVIS_WORKSPACE/.claude/worktrees/$AGENT_ID"
     WORKTREE_BRANCH="agent/$AGENT_ID"
-    mkdir -p /home/agent/.openclaw/workspace/.claude/worktrees
+    mkdir -p $CLARVIS_WORKSPACE/.claude/worktrees
 
-    git -C /home/agent/.openclaw/workspace worktree add -b "$WORKTREE_BRANCH" "$WORKTREE_PATH" HEAD 2>> "$LOGFILE"
+    git -C $CLARVIS_WORKSPACE worktree add -b "$WORKTREE_BRANCH" "$WORKTREE_PATH" HEAD 2>> "$LOGFILE"
     if [ $? -eq 0 ]; then
         WORK_DIR="$WORKTREE_PATH"
         echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] ISOLATED: worktree=$WORKTREE_PATH branch=$WORKTREE_BRANCH" >> "$LOGFILE"
@@ -82,7 +82,7 @@ if [ "$ISOLATED" = "true" ]; then
 fi
 
 # Get context brief from prompt builder (enriches prompt with brain, goals, episodes)
-SCRIPTS_DIR="/home/agent/.openclaw/workspace/scripts"
+SCRIPTS_DIR="$CLARVIS_WORKSPACE/scripts"
 CONTEXT_BRIEF=$(python3 "$SCRIPTS_DIR/tools/prompt_builder.py" context-brief --task "$TASK" --tier standard 2>/dev/null || echo "")
 
 # Write prompt to file using Python (shell-safe; avoids quoting issues)
@@ -137,7 +137,7 @@ WORKER_SCRIPT="/tmp/spawn_claude_worker_$$.sh"
 cat > "$WORKER_SCRIPT" <<EOF
 #!/bin/bash
 set -euo pipefail
-source /home/agent/.openclaw/workspace/scripts/cron/cron_env.sh
+source $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh
 GLOBAL_LOCK="/tmp/clarvis_claude_global.lock"
 echo "\$\$ \$(date -u +%Y-%m-%dT%H:%M:%S)" > "\$GLOBAL_LOCK"
 cleanup() {
@@ -147,11 +147,11 @@ trap cleanup EXIT
 unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT 2>/dev/null || true
 RESULT=0
 START_EPOCH=\$(date +%s)
-run_claude_monitored "$TIMEOUT" "$OUTPUT_FILE" "$PROMPT_FILE" "/home/agent/.openclaw/workspace/memory/cron/spawn_claude.log" || RESULT=\$MONITORED_EXIT
+run_claude_monitored "$TIMEOUT" "$OUTPUT_FILE" "$PROMPT_FILE" "$CLARVIS_WORKSPACE/memory/cron/spawn_claude.log" || RESULT=\$MONITORED_EXIT
 END_EPOCH=\$(date +%s)
 DURATION=\$(( END_EPOCH - START_EPOCH ))
 rm -f "$PROMPT_FILE"
-LOGFILE="/home/agent/.openclaw/workspace/memory/cron/spawn_claude.log"
+LOGFILE="$CLARVIS_WORKSPACE/memory/cron/spawn_claude.log"
 if [ \$RESULT -eq 124 ]; then
   echo "[spawn_claude] TIMEOUT after ${TIMEOUT}s" >> "$OUTPUT_FILE"
   echo "[\$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] TIMEOUT after ${TIMEOUT}s" >> "\$LOGFILE"
@@ -179,7 +179,7 @@ chat_id = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4] else os.environ.get("
 topic_id = sys.argv[5] if len(sys.argv) > 5 and sys.argv[5] else ""
 token = os.environ.get("CLARVIS_TG_BOT_TOKEN", "")
 if not token:
-    with open('/home/agent/.openclaw/openclaw.json') as f:
+    with open('${OPENCLAW_HOME:-$HOME/.openclaw}/openclaw.json') as f:
         config = json.load(f)
     token = config['channels']['telegram']['botToken']
 status = "TIMEOUT" if exit_code == 124 else ("FAIL" if exit_code != 0 else "OK")
@@ -211,7 +211,7 @@ if [ "$ISOLATED" = "true" ] && [ -n "$WORKTREE_PATH" ]; then
 
     # === Clone-Test-Verify gate (ROADMAP Phase 3.2) ===
     # Run tests in the worktree before deciding to keep or reject changes
-    VERIFY_JSON=\$(python3 /home/agent/.openclaw/workspace/scripts/tools/clone_test_verify.py verify "$WORKTREE_PATH" 2>/dev/null || echo '{"safe_to_promote": false}')
+    VERIFY_JSON=\$(python3 $CLARVIS_WORKSPACE/scripts/tools/clone_test_verify.py verify "$WORKTREE_PATH" 2>/dev/null || echo '{"safe_to_promote": false}')
     SAFE=\$(echo "\$VERIFY_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin).get('safe_to_promote', False))" 2>/dev/null || echo "False")
     if [ "\$SAFE" = "True" ]; then
       echo "[\$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] VERIFY: PASS — worktree $WORKTREE_BRANCH safe to promote" >> "\$LOGFILE"
@@ -220,8 +220,8 @@ if [ "$ISOLATED" = "true" ] && [ -n "$WORKTREE_PATH" ]; then
     fi
   else
     echo "[\$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] ISOLATED: no changes, removing worktree" >> "\$LOGFILE"
-    git -C /home/agent/.openclaw/workspace worktree remove --force "$WORKTREE_PATH" 2>/dev/null || true
-    git -C /home/agent/.openclaw/workspace branch -D "$WORKTREE_BRANCH" 2>/dev/null || true
+    git -C $CLARVIS_WORKSPACE worktree remove --force "$WORKTREE_PATH" 2>/dev/null || true
+    git -C $CLARVIS_WORKSPACE branch -D "$WORKTREE_BRANCH" 2>/dev/null || true
   fi
 fi
 rm -f "$OUTPUT_FILE"
@@ -230,7 +230,7 @@ EOF
 chmod +x "$WORKER_SCRIPT"
 nohup "$WORKER_SCRIPT" >/dev/null 2>&1 &
 WORKER_PID=$!
-echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] Worker detached pid=$WORKER_PID" >> "/home/agent/.openclaw/workspace/memory/cron/spawn_claude.log"
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] Worker detached pid=$WORKER_PID" >> "$CLARVIS_WORKSPACE/memory/cron/spawn_claude.log"
 # Note: global lock is written by the worker (line ~132) which also owns cleanup.
 # Do NOT write it here — that causes a race between parent and worker.
 

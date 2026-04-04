@@ -354,7 +354,7 @@ class TestEdgeDecayCLI:
         result = subprocess.run(
             [sys.executable, "-m", "clarvis", "brain", "edge-decay", "--help"],
             capture_output=True, text=True,
-            cwd="/home/agent/.openclaw/workspace",
+            cwd=os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")),
         )
         assert result.returncode == 0
         assert "half-life" in result.stdout or "Decay" in result.stdout

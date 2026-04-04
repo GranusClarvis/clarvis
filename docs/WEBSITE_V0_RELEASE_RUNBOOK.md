@@ -49,7 +49,7 @@ checks = [
     ('telegram_token', r'[0-9]+:AA[A-Za-z0-9_-]{30,}'),
     ('chat_id', r'<CHAT_ID_PATTERN>'),
     ('email', r'<OPERATOR_EMAIL_PATTERN>'),
-    ('home_path', r'/home/agent'),
+    ('home_path', r'~'),
     ('api_key', r'sk-or-v1'),
 ]
 clean = True

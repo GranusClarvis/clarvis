@@ -19,7 +19,7 @@ from pathlib import Path
 
 from clarvis.brain import brain
 
-_WS = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+_WS = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 _scripts_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'scripts')
 
 DATA_FILE = os.path.join(_WS, "data", "self_model.json")

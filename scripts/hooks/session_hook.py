@@ -18,7 +18,7 @@ import _paths  # noqa: F401 — registers all script subdirs on sys.path
 from brain import brain
 from clarvis.cognition.attention import attention
 
-DATA_DIR = Path("/home/agent/.openclaw/workspace/data")
+DATA_DIR = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))) / "data"
 SESSION_STATE_FILE = DATA_DIR / "session_state.json"
 
 

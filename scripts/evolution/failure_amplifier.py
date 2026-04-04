@@ -21,6 +21,7 @@ import hashlib
 import json
 import re
 import sys
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -28,10 +29,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import _paths  # noqa: F401 — registers all script subdirs on sys.path
 from brain import brain
 
-AUTONOMOUS_LOG = Path("/home/agent/.openclaw/workspace/memory/cron/autonomous.log")
-CHAINS_DIR = Path("/home/agent/.openclaw/workspace/data/reasoning_chains")
-EPISODES_FILE = Path("/home/agent/.openclaw/workspace/data/episodes.json")
-AMPLIFIER_STATE = Path("/home/agent/.openclaw/workspace/data/failure_amplifier_state.json")
+AUTONOMOUS_LOG = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))) / "memory/cron/autonomous.log"
+CHAINS_DIR = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))) / "data/reasoning_chains"
+EPISODES_FILE = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))) / "data/episodes.json"
+AMPLIFIER_STATE = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))) / "data/failure_amplifier_state.json"
 
 
 def load_state():

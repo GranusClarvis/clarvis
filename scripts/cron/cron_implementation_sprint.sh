@@ -9,10 +9,10 @@
 # so episodes, reasoning chains, and metrics are properly recorded.
 # =============================================================================
 
-source /home/agent/.openclaw/workspace/scripts/cron/cron_env.sh
-source /home/agent/.openclaw/workspace/scripts/cron/lock_helper.sh
+source $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh
+source $CLARVIS_WORKSPACE/scripts/cron/lock_helper.sh
 LOGFILE="memory/cron/implementation_sprint.log"
-SCRIPTS="/home/agent/.openclaw/workspace/scripts"
+SCRIPTS="$CLARVIS_WORKSPACE/scripts"
 QUEUE_FILE="memory/evolution/QUEUE.md"
 
 # Prevent nested Claude sessions

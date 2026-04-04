@@ -55,7 +55,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-_WS = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+_WS = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 _SCRIPTS_DIR = os.path.join(_WS, "scripts")
 
 THOUGHT_LOG = Path(_WS) / "data" / "thought_log.jsonl"

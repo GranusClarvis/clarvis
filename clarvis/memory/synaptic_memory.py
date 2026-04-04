@@ -59,7 +59,7 @@ import sys
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
-_WS = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+_WS = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 DB_DIR = Path(_WS) / "data" / "synaptic"
 DB_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = DB_DIR / "synapses.db"

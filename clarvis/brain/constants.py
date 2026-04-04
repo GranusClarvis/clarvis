@@ -4,7 +4,7 @@ import os
 import re
 
 # Single database location
-_WS = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+_WS = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 DATA_DIR = os.path.join(_WS, "data", "clarvisdb")
 LOCAL_DATA_DIR = os.path.join(_WS, "data", "clarvisdb-local")
 os.makedirs(DATA_DIR, exist_ok=True)

@@ -30,7 +30,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any
 
-WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 DATA_DIR = os.path.join(WORKSPACE, "data", "benchmarks")
 BEAM_FILE = os.path.join(DATA_DIR, "beam_latest.json")
 BEAM_HISTORY = os.path.join(DATA_DIR, "beam_history.jsonl")

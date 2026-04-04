@@ -1291,7 +1291,7 @@ def _preflight_auth_check(result):
     try:
         import subprocess
         check = subprocess.run(
-            ["/home/agent/.local/bin/claude", "--version"],
+            [os.environ.get("CLAUDE_BIN", os.path.expanduser("~/.local/bin/claude")), "--version"],
             capture_output=True, text=True, timeout=10
         )
         # If claude CLI works, auth is likely fine (it validates on startup)

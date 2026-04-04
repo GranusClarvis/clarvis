@@ -17,7 +17,7 @@ Backend is selected via `CLARVIS_GRAPH_BACKEND` environment variable (`json` or 
 ### Step 1: Safe Migration
 
 ```bash
-cd /home/agent/.openclaw/workspace
+cd $CLARVIS_WORKSPACE
 
 # Safe mode: snapshots JSON, migrates, verifies parity
 python3 scripts/graph_migrate_to_sqlite.py --safe
@@ -132,7 +132,7 @@ Look at `sample_mismatched` in the output. Common causes:
 ```bash
 python3 -c "
 from clarvis.brain.graph_store_sqlite import GraphStoreSQLite
-s = GraphStoreSQLite('/home/agent/.openclaw/workspace/data/clarvisdb/graph.db')
+s = GraphStoreSQLite('$CLARVIS_WORKSPACE/data/clarvisdb/graph.db')
 print('integrity:', s.integrity_check())
 print('stats:', s.stats())
 "

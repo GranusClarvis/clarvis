@@ -34,7 +34,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-_WS = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+_WS = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 QUEUE_FILE = os.path.join(_WS, "memory", "evolution", "QUEUE.md")
 SIDECAR_FILE = os.path.join(_WS, "data", "queue_state.json")
 RUNS_FILE = os.path.join(_WS, "data", "queue_runs.jsonl")

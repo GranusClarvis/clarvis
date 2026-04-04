@@ -26,7 +26,7 @@ import json
 import fcntl
 from datetime import datetime, timezone
 
-WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 DIGEST_FILE = os.path.join(WORKSPACE, "memory", "cron", "digest.md")
 DIGEST_STATE = os.path.join(WORKSPACE, "data", "digest_state.json")
 

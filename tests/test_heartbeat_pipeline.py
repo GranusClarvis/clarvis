@@ -12,7 +12,7 @@ import pytest
 
 # Ensure scripts/ is importable
 sys.path.insert(0, os.path.join(
-    os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace"),
+    os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")),
     "scripts",
 ))
 

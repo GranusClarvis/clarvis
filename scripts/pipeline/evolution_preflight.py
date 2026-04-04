@@ -206,7 +206,7 @@ def run():
     # 11. Pending count
     try:
         import re
-        queue_file = "/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md"
+        queue_file = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "memory/evolution/QUEUE.md")
         with open(queue_file) as f:
             result["pending_count"] = sum(1 for line in f if re.match(r'^- \[ \]', line))
     except Exception:

@@ -104,7 +104,7 @@ from clarvis.context.assembly import generate_tiered_brief
 
 ## Known Limitations
 
-1. **Hardcoded paths**: Many files reference `/home/agent/.openclaw/workspace` — most use env var fallback (`CLARVIS_WORKSPACE`) but not all
+1. **Hardcoded paths**: Many files reference `$CLARVIS_WORKSPACE` — most use env var fallback (`CLARVIS_WORKSPACE`) but not all
 2. **Single-host**: Designed for a dedicated NUC server with systemd — Docker available but not primary deployment
 3. **CPU-only embeddings**: ONNX MiniLM on CPU, ~270ms avg per brain query (optimized with parallel collection queries)
 4. **Telegram integration**: Bot token and chat ID need env var migration for public release

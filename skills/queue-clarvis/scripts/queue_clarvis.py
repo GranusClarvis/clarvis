@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 
 
-ROOT = Path("/home/agent/.openclaw/workspace")
+ROOT = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")))
 QUEUE_PATH = ROOT / "memory/evolution/QUEUE.md"
 QUEUE_ARCHIVE_PATH = ROOT / "memory/evolution/QUEUE_ARCHIVE.md"
 

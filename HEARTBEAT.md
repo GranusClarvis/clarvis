@@ -19,7 +19,7 @@ Each heartbeat during active conversation re-sends the entire session context (~
 **If no active conversation, run the gate. Do NOT load brain, read digest, check queue, or do ANYTHING before running the gate.**
 
 ```bash
-python3 /home/agent/.openclaw/workspace/scripts/heartbeat_gate.py 2>/dev/null
+python3 $CLARVIS_WORKSPACE/scripts/heartbeat_gate.py 2>/dev/null
 ```
 
 **Read the JSON output.** If `"decision": "skip"`:
@@ -36,7 +36,7 @@ If `"decision": "wake"`:
 
 ### 1. Brain Check (10 seconds)
 ```python
-import sys; sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
+import sys; sys.path.insert(0, "$CLARVIS_WORKSPACE/scripts")
 from brain import brain, search, remember, capture
 stats = brain.stats()
 ```
@@ -60,7 +60,7 @@ cat memory/cron/digest.md
 
 First, build enriched prompt:
 ```
-exec: python3 /home/agent/.openclaw/workspace/scripts/prompt_builder.py build --task "Investigate this finding: [paste digest excerpt]" --tier standard
+exec: python3 $CLARVIS_WORKSPACE/scripts/prompt_builder.py build --task "Investigate this finding: [paste digest excerpt]" --tier standard
 ```
 Then spawn Claude Code via ACP with the enriched prompt:
 ```
@@ -146,7 +146,7 @@ Check `memory/cron/autonomous.log` — if last 2 entries are "No pending tasks" 
    Read QUEUE.md, scripts/, and today's memory. Add 5 concrete new tasks to QUEUE.md.
    Focus on: wiring unwired scripts, building feedback loops, making capabilities persistent.
    ENDPROMPT
-   cd /home/agent/.openclaw/workspace && timeout 1200 claude -p "$(cat /tmp/claude_task.txt)" \
+   cd $CLARVIS_WORKSPACE && timeout 1200 claude -p "$(cat /tmp/claude_task.txt)" \
      --dangerously-skip-permissions --model claude-opus-4-6 --output-format json
    ```
 

@@ -36,7 +36,7 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import _paths  # noqa: F401 — registers all script subdirs on sys.path
 
-WORKSPACE = "/home/agent/.openclaw/workspace"
+WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 SOMATIC_FILE = os.path.join(WORKSPACE, "data/somatic_markers.json")
 
 

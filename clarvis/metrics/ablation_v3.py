@@ -32,7 +32,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 RESULTS_FILE = os.path.join(WORKSPACE, "data/ablation_v3_results.json")
 HISTORY_FILE = os.path.join(WORKSPACE, "data/ablation_v3_history.jsonl")
 MAX_HISTORY = 100
@@ -301,7 +301,7 @@ def _get_api_key() -> str | None:
         from clarvis.orch.cost_api import get_api_key
         return get_api_key()
     except Exception:
-        auth_path = "/home/agent/.openclaw/agents/main/agent/auth-profiles.json"
+        auth_path = os.path.join(os.environ.get("OPENCLAW_HOME", os.path.expanduser("~/.openclaw")), "agents/main/agent/auth-profiles.json")
         try:
             with open(auth_path) as f:
                 data = json.load(f)

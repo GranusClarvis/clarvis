@@ -20,7 +20,7 @@ from typing import Dict, List, Optional, Tuple
 # === CONFIGURATION ===
 
 WORKSPACE = os.environ.get(
-    "CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace"
+    "CLARVIS_WORKSPACE", os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 )
 DATA_DIR = os.path.join(WORKSPACE, "data")
 STATE_FILE = os.path.join(DATA_DIR, "heartbeat_gate_state.json")
@@ -32,7 +32,7 @@ WATCHED_FILES = [
 
 WATCHED_DIRS = [
     os.path.join(WORKSPACE, "memory/cron"),
-    "/home/agent/.openclaw/delivery-queue",
+    "~/.openclaw/delivery-queue",
 ]
 
 MAX_CONSECUTIVE_SKIPS = 4
@@ -78,7 +78,7 @@ def _today_memory_file() -> str:
 
 
 def _cron_runs_fingerprint() -> Optional[Dict]:
-    return _dir_fingerprint("/home/agent/.openclaw/cron/runs")
+    return _dir_fingerprint("~/.openclaw/cron/runs")
 
 
 def get_context_relevance() -> Optional[float]:

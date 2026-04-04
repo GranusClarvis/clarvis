@@ -2,7 +2,7 @@
 
 _Last updated: 2026-03-04. Living document._
 
-Where persistent data lives in the workspace. All paths relative to `/home/agent/.openclaw/workspace/`.
+Where persistent data lives in the workspace. All paths relative to `$CLARVIS_WORKSPACE/`.
 
 ---
 

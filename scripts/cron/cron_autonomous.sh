@@ -6,10 +6,10 @@
 # with 2 batched Python processes (heartbeat_preflight.py + heartbeat_postflight.py).
 # Savings: ~7-8s per heartbeat from eliminated cold-starts + reduced disk I/O.
 
-source /home/agent/.openclaw/workspace/scripts/cron/cron_env.sh
-source /home/agent/.openclaw/workspace/scripts/cron/lock_helper.sh
+source $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh
+source $CLARVIS_WORKSPACE/scripts/cron/lock_helper.sh
 LOGFILE="memory/cron/autonomous.log"
-SCRIPTS="/home/agent/.openclaw/workspace/scripts"
+SCRIPTS="$CLARVIS_WORKSPACE/scripts"
 
 # Belt-and-suspenders: forcibly remove Claude Code nesting guard env vars.
 # cron_env.sh already does this, but if invoked from within a claude session
@@ -40,7 +40,7 @@ fi
 DAILY_MEM="memory/$(date -u +%Y-%m-%d).md"
 if [ ! -f "$DAILY_MEM" ]; then
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Bootstrapping daily memory file..." >> "$LOGFILE"
-    python3 /home/agent/.openclaw/workspace/scripts/tools/daily_memory_log.py >> "$LOGFILE" 2>&1 || true
+    python3 $CLARVIS_WORKSPACE/scripts/tools/daily_memory_log.py >> "$LOGFILE" 2>&1 || true
 fi
 
 # Pre-compute weakest metric for prompt injection
@@ -59,7 +59,7 @@ echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Heartbeat starting (optimized batched 
 PREFLIGHT_FILE=$(mktemp --suffix=.json)
 
 # === PRE-EXECUTION VALIDATION: Queue file sanity check ===
-QUEUE_FILE="/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md"
+QUEUE_FILE="$CLARVIS_WORKSPACE/memory/evolution/QUEUE.md"
 if [ ! -f "$QUEUE_FILE" ]; then
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] CRASH_GUARD: Queue file missing ($QUEUE_FILE) — creating empty" >> "$LOGFILE"
     mkdir -p "$(dirname "$QUEUE_FILE")"
@@ -141,7 +141,7 @@ else:
 # Worker type classification (for prompt template selection)
 task_text = d.get('task', '')
 pvt = d.get('prompt_variant_task_type', '')
-sys.path.insert(0, '/home/agent/.openclaw/workspace')
+sys.path.insert(0, '$CLARVIS_WORKSPACE')
 try:
     from clarvis.heartbeat.worker_validation import classify_worker_type
     wtype = classify_worker_type(task_text, prompt_variant_task_type=pvt)
@@ -183,7 +183,7 @@ Rules: no duplicates, at least 1 non-Python task, at least 1 targeting the weake
 OUTPUT FORMAT (mandatory): TASKS ADDED: <count>. Then list each task on its own line.
 STATIC2
     } > "$REPLENISH_PROMPT"
-    timeout 1200 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT /home/agent/.local/bin/claude -p \
+    timeout 1200 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT ${CLAUDE_BIN:-$(command -v claude || echo "$HOME/.local/bin/claude")} -p \
         --dangerously-skip-permissions --model claude-opus-4-6 \
         < "$REPLENISH_PROMPT" >> "$LOGFILE" 2>&1
     rm -f "$REPLENISH_PROMPT"
@@ -223,10 +223,10 @@ BATCH_COUNT=1
 if [ "$ROUTE_EXECUTOR" = "claude" ]; then
     eval "$(NEXT_TASK="$NEXT_TASK" python3 - <<'PY'
 import os, re, shlex, sys
-sys.path.insert(0,'/home/agent/.openclaw/workspace/scripts/cognition')
+sys.path.insert(0,'$CLARVIS_WORKSPACE/scripts/cognition')
 from cognitive_load import estimate_task_complexity
 
-QUEUE_FILE = '/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md'
+QUEUE_FILE = '$CLARVIS_WORKSPACE/memory/evolution/QUEUE.md'
 
 next_task = os.environ.get('NEXT_TASK', '').strip()
 if not next_task:
@@ -374,7 +374,7 @@ STATIC_BLOCK
     # Feed prompt via stdin (not argv) to avoid shell expansion of prompt content
     # shellcheck disable=SC2086  # _extra_flags intentionally word-split
     timeout "$_timeout" env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \
-        /home/agent/.local/bin/claude -p \
+        ${CLAUDE_BIN:-$(command -v claude || echo "$HOME/.local/bin/claude")} -p \
         --dangerously-skip-permissions --model claude-opus-4-6 \
         $_extra_flags \
         < "$_prompt_file" > "$_output_file" 2>&1 &
@@ -410,7 +410,7 @@ esac
 # This is applied later when EXECUTOR_USED changes to "claude" after escalation.
 
 # Check if this task previously timed out (from retry tracker)
-RETRY_FILE="/home/agent/.openclaw/workspace/data/task_retries.json"
+RETRY_FILE="$CLARVIS_WORKSPACE/data/task_retries.json"
 PREV_TIMEOUTS=0
 if [ -f "$RETRY_FILE" ]; then
     PREV_TIMEOUTS=$(python3 -c "
@@ -606,7 +606,7 @@ token = os.environ.get("CLARVIS_TG_BOT_TOKEN", "")
 chat_id = os.environ.get("CLARVIS_TG_CHAT_ID", "")
 if not token or not chat_id:
     try:
-        with open('/home/agent/.openclaw/openclaw.json') as f:
+        with open('${OPENCLAW_HOME:-$HOME/.openclaw}/openclaw.json') as f:
             config = json.load(f)
         if not token:
             token = config['channels']['telegram']['botToken']

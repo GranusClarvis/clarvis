@@ -27,10 +27,10 @@ from collections import defaultdict
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import _paths  # noqa: F401 — registers all script subdirs on sys.path
 
-CAPABILITY_HISTORY = "/home/agent/.openclaw/workspace/data/capability_history.json"
-PHI_HISTORY = "/home/agent/.openclaw/workspace/data/phi_history.json"
-MEMORY_DIR = "/home/agent/.openclaw/workspace/memory"
-NARRATIVE_FILE = "/home/agent/.openclaw/workspace/data/growth_narrative.json"
+CAPABILITY_HISTORY = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "data/capability_history.json")
+PHI_HISTORY = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "data/phi_history.json")
+MEMORY_DIR = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "memory")
+NARRATIVE_FILE = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "data/growth_narrative.json")
 
 
 def load_json(path):

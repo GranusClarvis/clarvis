@@ -27,7 +27,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any
 
-WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 DATA_DIR = os.path.join(WORKSPACE, "data", "benchmarks")
 LONGMEMEVAL_FILE = os.path.join(DATA_DIR, "longmemeval_latest.json")
 LONGMEMEVAL_HISTORY = os.path.join(DATA_DIR, "longmemeval_history.jsonl")

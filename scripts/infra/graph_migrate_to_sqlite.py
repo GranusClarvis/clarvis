@@ -10,7 +10,7 @@ Usage:
     python3 scripts/graph_migrate_to_sqlite.py --dry-run        # Show what would be migrated
 
 Environment:
-    CLARVIS_WORKSPACE — workspace root (default: /home/agent/.openclaw/workspace)
+    CLARVIS_WORKSPACE — workspace root (default: os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")))
 """
 
 import argparse
@@ -20,7 +20,7 @@ import random
 import sys
 import time
 
-WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 sys.path.insert(0, os.path.join(WORKSPACE, "scripts"))
 import _paths  # noqa: F401 — registers all script subdirs on sys.path
 sys.path.insert(0, WORKSPACE)

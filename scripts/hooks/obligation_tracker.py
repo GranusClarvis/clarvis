@@ -40,7 +40,7 @@ import time
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
-WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 OBLIGATIONS_FILE = os.path.join(WORKSPACE, "data", "obligations.json")
 OBLIGATIONS_LOG = os.path.join(WORKSPACE, "data", "obligations_log.jsonl")
 QUEUE_FILE = os.path.join(WORKSPACE, "memory", "evolution", "QUEUE.md")
@@ -703,7 +703,7 @@ def seed_defaults(tracker: ObligationTracker):
         check_command=(
             "python3 -c \""
             "import json, os; "
-            "f=os.path.join(os.environ.get('CLARVIS_WORKSPACE','/home/agent/.openclaw/workspace'),'data','obligations_log.jsonl'); "
+            "f=os.path.join(os.environ.get('CLARVIS_WORKSPACE',os.path.expanduser('~/.openclaw/workspace')),'data','obligations_log.jsonl'); "
             "lines=open(f).readlines()[-50:] if os.path.exists(f) else []; "
             "promises=[l for l in lines if 'promise_detected' in l]; "
             "print(f'{len(promises)} promises detected in last 50 log entries'); "

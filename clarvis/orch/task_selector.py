@@ -43,7 +43,7 @@ try:
 except Exception:
     _wm = None
 
-_WS = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+_WS = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 PERF_METRICS_FILE = os.path.join(_WS, "data", "performance_metrics.json")
 QUEUE_FILE = os.path.join(_WS, "memory", "evolution", "QUEUE.md")
 DELIVERY_LOCK_FILE = os.path.join(_WS, "DELIVERY_LOCK.md")

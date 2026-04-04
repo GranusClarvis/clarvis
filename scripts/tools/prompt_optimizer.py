@@ -31,7 +31,7 @@ import random
 import sys
 from datetime import datetime, timezone
 
-DATA_DIR = "/home/agent/.openclaw/workspace/data/prompt_optimization"
+DATA_DIR = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "data/prompt_optimization")
 OUTCOMES_FILE = os.path.join(DATA_DIR, "prompt_outcomes.jsonl")
 STATS_FILE = os.path.join(DATA_DIR, "variant_stats.json")
 

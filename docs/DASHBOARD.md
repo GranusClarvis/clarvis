@@ -75,7 +75,7 @@ The dashboard health endpoint (`/health`) is checked by `health_monitor.sh` ever
 ## Manual Start (without systemd)
 
 ```bash
-cd /home/agent/.openclaw/workspace/scripts
+cd $CLARVIS_WORKSPACE/scripts
 python3 dashboard_server.py                  # default port 18799
 python3 dashboard_server.py --port 18791     # custom port
 ```

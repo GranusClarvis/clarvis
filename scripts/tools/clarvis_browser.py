@@ -68,15 +68,15 @@ logger = logging.getLogger(__name__)
 CDP_PORT = int(os.environ.get("CLARVIS_CDP_PORT", "18800"))
 AGENT_BROWSER_BIN = os.environ.get(
     "AGENT_BROWSER_BIN",
-    shutil.which("agent-browser") or "/home/agent/.npm-global/bin/agent-browser"
+    shutil.which("agent-browser") or "~/.npm-global/bin/agent-browser"
 )
 SCREENSHOT_DIR = Path("/tmp/clarvis-screenshots")
-SESSION_DIR = Path("/home/agent/.openclaw/workspace/data/browser_sessions")
+SESSION_DIR = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))) / "data/browser_sessions"
 DEFAULT_SESSION_FILE = SESSION_DIR / "default_session.json"
 
 # Agent LLM config for browser-use agent mode
 AGENT_MODEL = os.environ.get("CLARVIS_AGENT_MODEL", "google/gemini-2.5-flash")
-AUTH_JSON = Path("/home/agent/.openclaw/agents/main/agent/auth.json")
+AUTH_JSON = Path(os.path.join(os.environ.get("OPENCLAW_HOME", os.path.expanduser("~/.openclaw")), "agents/main/agent/auth.json"))
 
 # Timeouts
 DEFAULT_TIMEOUT_MS = 25000

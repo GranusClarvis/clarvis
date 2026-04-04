@@ -23,7 +23,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any
 
-WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 DATA_DIR = os.path.join(WORKSPACE, "data", "benchmarks")
 EVIDENCE_FILE = os.path.join(DATA_DIR, "evidence_scoring_latest.json")
 

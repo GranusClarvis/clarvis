@@ -48,7 +48,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import _paths  # noqa: F401 — registers all script subdirs on sys.path
 
 # Directories
-DATA_DIR = Path("/home/agent/.openclaw/workspace/data/evolution")
+DATA_DIR = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))) / "data/evolution"
 FAILURES_DIR = DATA_DIR / "failures"
 FIXES_DIR = DATA_DIR / "fixes"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -467,7 +467,7 @@ class EvolutionLoop:
             try:
                 result = subprocess.run(
                     cmd, shell=True, capture_output=True, text=True, timeout=120,
-                    cwd="/home/agent/.openclaw/workspace"
+                    cwd=os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
                 )
                 return {
                     "success": result.returncode == 0,
@@ -489,7 +489,7 @@ class EvolutionLoop:
         except ImportError:
             # Fallback: direct write with file locking
             import fcntl
-            queue_path = Path("/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md")
+            queue_path = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))) / "memory/evolution/QUEUE.md"
             if not queue_path.exists():
                 return
             lock_path = str(queue_path) + ".lock"
@@ -531,7 +531,7 @@ def run_with_evolution(command: str, component: str, context: str = "",
     try:
         result = subprocess.run(
             command, shell=True, capture_output=True, text=True,
-            timeout=timeout, cwd="/home/agent/.openclaw/workspace"
+            timeout=timeout, cwd=os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
         )
 
         if result.returncode == 0:

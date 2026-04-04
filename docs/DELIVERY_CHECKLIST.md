@@ -62,7 +62,7 @@ Core architecture and APIs should be stable. No breaking changes after this mile
 | C7 | Add LICENSE file at repo root | DONE | Root `LICENSE` file present. `packages/clarvis-db/` also has MIT LICENSE (added 2026-03-23 during C11 extraction plan). |
 | C8 | Add CONTRIBUTING.md | DONE | Root `CONTRIBUTING.md` present. |
 | C9 | Basic CI workflow (lint + test) | DONE | CI runs lint + clarvis-db tests + spine tests + open-source smoke + 4 root-level unit tests (25 tests). Updated 2026-03-24. |
-| C10 | Hardcoded paths audit | LOW | 630+ `/home/agent` occurrences. Most have env var fallback. Document as deployment-specific. |
+| C10 | Hardcoded paths audit | LOW | 630+ `~` occurrences. Most have env var fallback. Document as deployment-specific. |
 | C11 | `clarvis-db` extraction to separate repo | DONE | Extraction plan created 2026-03-23 with scrubbed public-facing boundaries and gate notes. |
 
 **Remaining work:** C5 (test consolidation) is the only structural gap — CI now covers the intended suite. C10 (hardcoded paths) is documented, not blocking. One final authoritative sweep (C_OPEN_SOURCE_READINESS_SWEEP) remains.

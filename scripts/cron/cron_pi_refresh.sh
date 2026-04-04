@@ -5,8 +5,8 @@
 #
 # Schedule: 05:45 daily (after maintenance window, before autonomous 06:00)
 
-source /home/agent/.openclaw/workspace/scripts/cron/cron_env.sh
-source /home/agent/.openclaw/workspace/scripts/cron/lock_helper.sh
+source $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh
+source $CLARVIS_WORKSPACE/scripts/cron/lock_helper.sh
 
 LOGFILE="memory/cron/pi_refresh.log"
 

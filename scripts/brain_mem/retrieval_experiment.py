@@ -381,7 +381,7 @@ def run_experiment():
     }
 
     # Save results
-    results_dir = "/home/agent/.openclaw/workspace/data/experiments"
+    results_dir = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "data/experiments")
     os.makedirs(results_dir, exist_ok=True)
     results_file = os.path.join(results_dir, "retrieval_quality_experiment.json")
     with open(results_file, "w") as f:

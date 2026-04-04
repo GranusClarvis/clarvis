@@ -40,7 +40,7 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from collections import defaultdict
 
-_WS = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+_WS = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 _SCRIPTS_DIR = os.path.join(_WS, "scripts")
 
 DATA_DIR = Path(_WS) / "data" / "hebbian"

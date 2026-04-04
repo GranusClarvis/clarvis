@@ -34,7 +34,7 @@ from typing import Any
 
 import os
 
-WORKSPACE = Path(os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace"))
+WORKSPACE = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")))
 CHAINS_DIR = WORKSPACE / "data" / "reasoning_chains"
 SESSIONS_DIR = CHAINS_DIR / "sessions"
 SESSION_MAP = CHAINS_DIR / "session_map.json"

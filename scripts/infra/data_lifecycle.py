@@ -22,7 +22,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-WORKSPACE = Path("/home/agent/.openclaw/workspace")
+WORKSPACE = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")))
 CHAINS_DIR = WORKSPACE / "data" / "reasoning_chains"
 CHAINS_SESSIONS_DIR = CHAINS_DIR / "sessions"
 SESSIONS_DIR = WORKSPACE / "data" / "sessions"

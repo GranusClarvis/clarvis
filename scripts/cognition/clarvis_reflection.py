@@ -14,7 +14,7 @@ from brain import brain
 def get_today_memory():
     """Read today's memory file"""
     today = datetime.now().strftime("%Y-%m-%d")
-    path = f"/home/agent/.openclaw/workspace/memory/{today}.md"
+    path = fos.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "memory/{today}.md")
     
     if not os.path.exists(path):
         return None
@@ -54,7 +54,7 @@ def store_lessons(lessons):
 
 def count_pending_tasks():
     """Count unchecked tasks in QUEUE.md"""
-    queue_path = "/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md"
+    queue_path = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "memory/evolution/QUEUE.md")
     if not os.path.exists(queue_path):
         return 0
     with open(queue_path) as f:
@@ -81,7 +81,7 @@ def generate_queue_tasks(lessons, content):
                 topics_today.add(keyword)
 
     # Check what scripts exist but might not be wired in
-    scripts_dir = "/home/agent/.openclaw/workspace/scripts"
+    scripts_dir = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "scripts")
     unwired_candidates = [
         ('attention.py', 'Wire attention.py into daily execution — use salience scoring in cron_autonomous task selection'),
         ('working_memory.py', 'Make working_memory.py persistent across sessions — save/load spotlight buffer to disk'),
@@ -144,7 +144,7 @@ def add_tasks_to_queue(tasks):
         return len(added)
     except ImportError:
         # Fallback: direct write
-        queue_path = "/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md"
+        queue_path = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "memory/evolution/QUEUE.md")
         if not os.path.exists(queue_path):
             return 0
         with open(queue_path) as f:

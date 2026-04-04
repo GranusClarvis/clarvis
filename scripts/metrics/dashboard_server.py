@@ -40,14 +40,14 @@ from sse_starlette.sse import EventSourceResponse
 
 # ── Paths ──────────────────────────────────────────────────────────────
 
-WORKSPACE = Path("/home/agent/.openclaw/workspace")
+WORKSPACE = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")))
 QUEUE_FILE = WORKSPACE / "memory" / "evolution" / "QUEUE.md"
 DIGEST_FILE = WORKSPACE / "memory" / "cron" / "digest.md"
 EVENTS_FILE = WORKSPACE / "data" / "dashboard" / "events.jsonl"
 SCOREBOARD_FILE = WORKSPACE / "data" / "orchestration_scoreboard.jsonl"
 STATIC_DIR = Path(__file__).parent / "dashboard_static"
 LOCK_DIR = Path("/tmp")
-AGENTS_DIR = Path("/home/agent/agents")
+AGENTS_DIR = Path("~/agents")
 
 # ── Config ─────────────────────────────────────────────────────────────
 

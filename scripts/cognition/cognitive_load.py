@@ -21,10 +21,11 @@ Usage:
 import json
 import re
 import sys
+import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-BASE = Path("/home/agent/.openclaw/workspace")
+BASE = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")))
 CRON_LOG_DIR = BASE / "memory" / "cron"
 QUEUE_PATH = BASE / "memory" / "evolution" / "QUEUE.md"
 HISTORY_PATH = BASE / "data" / "cognitive_load_history.json"

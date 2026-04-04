@@ -17,7 +17,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-WORKSPACE = Path(os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace"))
+WORKSPACE = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")))
 SNAPSHOT_DIR = WORKSPACE / "data" / "brain_hygiene"
 SNAPSHOT_FILE = SNAPSHOT_DIR / "health_history.jsonl"
 LATEST_FILE = SNAPSHOT_DIR / "latest_health.json"

@@ -2,8 +2,8 @@
 # Monthly structural reflection — runs 1st of month at 03:30
 # Analyzes 30-day episode trends, identifies structural changes needed,
 # proposes ROADMAP updates, writes output to memory/cron/monthly_reflection_YYYY-MM.md
-source /home/agent/.openclaw/workspace/scripts/cron/cron_env.sh
-source /home/agent/.openclaw/workspace/scripts/cron/lock_helper.sh
+source $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh
+source $CLARVIS_WORKSPACE/scripts/cron/lock_helper.sh
 
 LOGFILE="memory/cron/monthly_reflection.log"
 MONTH_TAG=$(date -u +%Y-%m)
@@ -77,7 +77,7 @@ echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Spawning Claude Code for monthly reflectio
 
 TASK_OUTPUT=$(mktemp)
 timeout 1800 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \
-    /home/agent/.local/bin/claude -p "$(cat "$PROMPT_FILE")" \
+    ${CLAUDE_BIN:-$(command -v claude || echo "$HOME/.local/bin/claude")} -p "$(cat "$PROMPT_FILE")" \
     --dangerously-skip-permissions --model claude-opus-4-6 \
     > "$TASK_OUTPUT" 2>&1
 TASK_EXIT=$?
@@ -97,7 +97,7 @@ fi
 
 # === DIGEST: Write first-person summary for M2.5 agent ===
 SUMMARY=$(tail -c 300 "$TASK_OUTPUT" 2>/dev/null | tr '\n' ' ' | sed 's/[^a-zA-Z0-9 _.,:;=+\-\/()@#%]//g' | tail -c 250)
-python3 /home/agent/.openclaw/workspace/scripts/tools/digest_writer.py reflection \
+python3 $CLARVIS_WORKSPACE/scripts/tools/digest_writer.py reflection \
     "MONTHLY REFLECTION (${MONTH_TAG}): ${SUMMARY}" \
     >> "$LOGFILE" 2>&1 || true
 

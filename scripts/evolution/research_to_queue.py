@@ -29,7 +29,7 @@ import re
 import sys
 from datetime import datetime, timezone
 
-WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 INGESTED_DIR = os.path.join(WORKSPACE, "memory", "research", "ingested")
 QUEUE_FILE = os.path.join(WORKSPACE, "memory", "evolution", "QUEUE.md")
 ARCHIVE_FILE = os.path.join(WORKSPACE, "memory", "evolution", "QUEUE_ARCHIVE.md")

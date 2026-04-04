@@ -129,7 +129,7 @@ _SECTION_IMPORTANCE_DEFAULTS: dict[str, float] = {
 _DEFAULT_IMPORTANCE = 0.12  # fallback for unknown sections
 
 # Data paths
-_WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+_WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 RELEVANCE_FILE = os.path.join(_WORKSPACE, "data", "retrieval_quality", "context_relevance.jsonl")
 WEIGHTS_FILE = os.path.join(_WORKSPACE, "data", "retrieval_quality", "section_weights.json")
 

@@ -25,72 +25,72 @@ Two browser engines are available, each with different strengths:
 
 ### goto — Navigate to a URL
 ```bash
-python3 /home/agent/.openclaw/workspace/scripts/clarvis_browser.py goto <url>
+python3 $CLARVIS_WORKSPACE/scripts/clarvis_browser.py goto <url>
 ```
 
 ### screenshot — Capture a page screenshot
 ```bash
-python3 /home/agent/.openclaw/workspace/scripts/clarvis_browser.py screenshot [url] [/tmp/screenshot.png]
+python3 $CLARVIS_WORKSPACE/scripts/clarvis_browser.py screenshot [url] [/tmp/screenshot.png]
 # With element annotations:
-python3 /home/agent/.openclaw/workspace/scripts/clarvis_browser.py screenshot <url> /tmp/s.png --annotate
+python3 $CLARVIS_WORKSPACE/scripts/clarvis_browser.py screenshot <url> /tmp/s.png --annotate
 ```
 
 ### snapshot — Get page elements with clickable refs
 ```bash
-python3 /home/agent/.openclaw/workspace/scripts/clarvis_browser.py snapshot
+python3 $CLARVIS_WORKSPACE/scripts/clarvis_browser.py snapshot
 # Interactive mode:
-python3 /home/agent/.openclaw/workspace/scripts/clarvis_browser.py snapshot -i
+python3 $CLARVIS_WORKSPACE/scripts/clarvis_browser.py snapshot -i
 ```
 Returns elements like `@e1 [button] "Submit"` — use refs with click/fill commands.
 
 ### click — Click an element by ref
 ```bash
-python3 /home/agent/.openclaw/workspace/scripts/clarvis_browser.py click @e2
+python3 $CLARVIS_WORKSPACE/scripts/clarvis_browser.py click @e2
 ```
 
 ### fill — Fill a form field by ref
 ```bash
-python3 /home/agent/.openclaw/workspace/scripts/clarvis_browser.py fill @e3 "user@example.com"
+python3 $CLARVIS_WORKSPACE/scripts/clarvis_browser.py fill @e3 "user@example.com"
 ```
 
 ### text — Extract text from an element
 ```bash
-python3 /home/agent/.openclaw/workspace/scripts/clarvis_browser.py text @e1
+python3 $CLARVIS_WORKSPACE/scripts/clarvis_browser.py text @e1
 ```
 
 ### markdown — Extract page content as clean markdown
 ```bash
-python3 /home/agent/.openclaw/workspace/scripts/clarvis_browser.py markdown [url]
+python3 $CLARVIS_WORKSPACE/scripts/clarvis_browser.py markdown [url]
 ```
 
 ### search — Web search via browser
 ```bash
-python3 /home/agent/.openclaw/workspace/scripts/clarvis_browser.py search "query terms"
+python3 $CLARVIS_WORKSPACE/scripts/clarvis_browser.py search "query terms"
 ```
 
 ### agent — LLM-driven autonomous browsing
 ```bash
-python3 /home/agent/.openclaw/workspace/scripts/clarvis_browser.py agent "Find the latest Python release date"
+python3 $CLARVIS_WORKSPACE/scripts/clarvis_browser.py agent "Find the latest Python release date"
 # Or with BrowserAgent for auth-heavy tasks:
-python3 /home/agent/.openclaw/workspace/scripts/browser_agent.py agent "Log in and check notifications"
+python3 $CLARVIS_WORKSPACE/scripts/browser_agent.py agent "Log in and check notifications"
 ```
 
 ### upload — Upload a file
 ```bash
-python3 /home/agent/.openclaw/workspace/scripts/browser_agent.py upload /path/to/file.png [css-selector]
+python3 $CLARVIS_WORKSPACE/scripts/browser_agent.py upload /path/to/file.png [css-selector]
 ```
 
 ### status — Check browser connection
 ```bash
-python3 /home/agent/.openclaw/workspace/scripts/clarvis_browser.py status
+python3 $CLARVIS_WORKSPACE/scripts/clarvis_browser.py status
 ```
 
 ### Session management
 ```bash
-python3 /home/agent/.openclaw/workspace/scripts/browser_agent.py save-session [path]
-python3 /home/agent/.openclaw/workspace/scripts/browser_agent.py session-info [path]
+python3 $CLARVIS_WORKSPACE/scripts/browser_agent.py save-session [path]
+python3 $CLARVIS_WORKSPACE/scripts/browser_agent.py session-info [path]
 # Auto-save session on exit:
-python3 /home/agent/.openclaw/workspace/scripts/browser_agent.py --persist navigate <url>
+python3 $CLARVIS_WORKSPACE/scripts/browser_agent.py --persist navigate <url>
 ```
 
 ## Execution Steps
@@ -104,7 +104,7 @@ python3 /home/agent/.openclaw/workspace/scripts/browser_agent.py --persist navig
 
 ## Rules
 
-- **Always use full paths**: `python3 /home/agent/.openclaw/workspace/scripts/clarvis_browser.py`
+- **Always use full paths**: `python3 $CLARVIS_WORKSPACE/scripts/clarvis_browser.py`
 - **CDP port is 18800** — Chromium must be running (snap-managed)
 - **Session cookies**: stored in `data/browser_sessions/default_session.json`
 - **For login flows**: use `BrowserAgent` directly (single tab, cookies persist within session)
@@ -142,7 +142,7 @@ User: `/web-browse screenshot https://github.com/trending`
 Response: "Taking a screenshot of GitHub Trending..."
 
 ```bash
-python3 /home/agent/.openclaw/workspace/scripts/clarvis_browser.py screenshot https://github.com/trending /tmp/github_trending.png
+python3 $CLARVIS_WORKSPACE/scripts/clarvis_browser.py screenshot https://github.com/trending /tmp/github_trending.png
 ```
 
 Then show the screenshot to the user.

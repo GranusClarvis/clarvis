@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 DATA_DIR = Path(WORKSPACE) / "data"
 MODE_FILE = DATA_DIR / "runtime_mode.json"
 MODE_HISTORY_FILE = DATA_DIR / "runtime_mode_history.jsonl"

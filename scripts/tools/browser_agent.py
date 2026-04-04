@@ -59,7 +59,7 @@ logger = logging.getLogger(__name__)
 CDP_PORT = int(os.environ.get("CLARVIS_CDP_PORT", "18800"))
 CDP_URL = f"http://127.0.0.1:{CDP_PORT}"
 SCREENSHOT_DIR = Path("/tmp/clarvis-screenshots")
-SESSION_DIR = Path("/home/agent/.openclaw/workspace/data/browser_sessions")
+SESSION_DIR = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))) / "data/browser_sessions"
 DEFAULT_SESSION_FILE = SESSION_DIR / "default_session.json"
 
 OLLAMA_BASE = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434")
@@ -68,7 +68,7 @@ OLLAMA_MODEL = os.environ.get("CLARVIS_OLLAMA_MODEL", "qwen3-vl:4b")
 # Agent LLM config — model used for browser-use agent reasoning
 # Override with env vars; defaults to cost-efficient Gemini Flash via OpenRouter
 AGENT_MODEL = os.environ.get("CLARVIS_AGENT_MODEL", "google/gemini-2.5-flash")
-AUTH_JSON = Path("/home/agent/.openclaw/agents/main/agent/auth.json")
+AUTH_JSON = Path(os.path.join(os.environ.get("OPENCLAW_HOME", os.path.expanduser("~/.openclaw")), "agents/main/agent/auth.json"))
 
 
 # ---------------------------------------------------------------------------

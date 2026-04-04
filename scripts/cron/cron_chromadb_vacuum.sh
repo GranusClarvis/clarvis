@@ -3,12 +3,12 @@
 # Reclaims space from daily prune/consolidate fragmentation.
 # Targets: ChromaDB (chroma.sqlite3) + Synaptic memory (synapses.db)
 # VACUUM requires exclusive lock; runs after graph compaction (04:30) completes.
-source /home/agent/.openclaw/workspace/scripts/cron/cron_env.sh
-source /home/agent/.openclaw/workspace/scripts/cron/lock_helper.sh
+source $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh
+source $CLARVIS_WORKSPACE/scripts/cron/lock_helper.sh
 
-DB_PATH="/home/agent/.openclaw/workspace/data/clarvisdb/chroma.sqlite3"
-SYNAPTIC_DB="/home/agent/.openclaw/workspace/data/synaptic/synapses.db"
-LOGFILE="/home/agent/.openclaw/workspace/memory/cron/chromadb_vacuum.log"
+DB_PATH="$CLARVIS_WORKSPACE/data/clarvisdb/chroma.sqlite3"
+SYNAPTIC_DB="$CLARVIS_WORKSPACE/data/synaptic/synapses.db"
+LOGFILE="$CLARVIS_WORKSPACE/memory/cron/chromadb_vacuum.log"
 
 # Arm script-level timeout (600s = 10 min) — kills script and releases locks on hang
 set_script_timeout 600 "$LOGFILE"
@@ -70,7 +70,7 @@ if [ -f "$SYNAPTIC_DB" ]; then
 fi
 
 # --- Hebbian access log rotation (keep last 7 days) ---
-ACCESS_LOG="/home/agent/.openclaw/workspace/data/hebbian/access_log.jsonl"
+ACCESS_LOG="$CLARVIS_WORKSPACE/data/hebbian/access_log.jsonl"
 if [ -f "$ACCESS_LOG" ]; then
     LINES_BEFORE=$(wc -l < "$ACCESS_LOG")
     CUTOFF=$(date -u -d "7 days ago" +%Y-%m-%dT%H:%M:%S 2>/dev/null || date -u +%Y-%m-%dT%H:%M:%S)

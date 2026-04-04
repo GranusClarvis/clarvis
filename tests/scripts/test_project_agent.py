@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
+sys.path.insert(0, os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "scripts"))
 import _paths  # noqa: F401,E402
 
 from unittest.mock import patch, MagicMock

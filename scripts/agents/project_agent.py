@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Project Agent Manager — create, spawn, communicate with isolated project agents.
 
-Each project agent lives in /home/agent/agents/<name>/ with:
+Each project agent lives in ~/agents/<name>/ with:
   workspace/  — cloned repo (the agent's working directory)
   data/       — ChromaDB brain (vector + graph), episodes, metrics
   memory/     — daily logs, procedures, summaries promoted to Clarvis
@@ -45,9 +45,9 @@ from pathlib import Path
 from typing import Optional
 
 AGENTS_ROOT_PRIMARY = Path("/opt/clarvis-agents")  # preferred (needs sudo once)
-AGENTS_ROOT_FALLBACK = Path("/home/agent/agents")  # fallback (always writable)
-CLARVIS_WORKSPACE = Path("/home/agent/.openclaw/workspace")
-CLAUDE_BIN = "/home/agent/.local/bin/claude"
+AGENTS_ROOT_FALLBACK = Path("~/agents")  # fallback (always writable)
+CLARVIS_WORKSPACE = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")))
+CLAUDE_BIN = os.environ.get("CLAUDE_BIN", os.path.expanduser("~/.local/bin/claude"))
 CRON_ENV = CLARVIS_WORKSPACE / "scripts" / "cron_env.sh"
 LOGFILE = CLARVIS_WORKSPACE / "memory" / "cron" / "project_agents.log"
 
@@ -271,7 +271,7 @@ def _is_pid_clarvis(pid: int) -> bool:
 # ── Claude concurrency controls ───────────────────────────────────────
 #
 # We intentionally do NOT use the global Clarvis Claude lock for project agents.
-# Agents are repo-isolated under /home/agent/agents/<name>/ and may run in parallel.
+# Agents are repo-isolated under ~/agents/<name>/ and may run in parallel.
 #
 # Policy (operator directive 2026-03-07):
 # - Each agent may run at most 1 Claude session at a time (per-agent lock).
@@ -931,7 +931,7 @@ Status: success=done, partial=incomplete, failed=error, blocked=external dep.
 ## Brain Usage
 Store learnings about this repo:
 ```python
-import sys; sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
+import sys; sys.path.insert(0, os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "scripts"))
 from lite_brain import LiteBrain
 brain = LiteBrain("{agent_dir}/data/brain")
 brain.store("insight about this repo", "project-learnings")

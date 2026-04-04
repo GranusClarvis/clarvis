@@ -31,7 +31,7 @@ PREVIEW_SIZE = 2_000            # Preview bytes when persisting
 
 # Persistence directory
 _DATA_ROOT = Path(os.environ.get(
-    "CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace"
+    "CLARVIS_WORKSPACE", os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 )) / "data" / "brain_recall"
 
 

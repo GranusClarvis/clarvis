@@ -16,7 +16,7 @@ import os
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 
-WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 AUDIT_FILE = os.path.join(WORKSPACE, "data/memory_audit.json")
 AUDIT_HISTORY = os.path.join(WORKSPACE, "data/memory_audit_history.jsonl")
 MAX_HISTORY = 200

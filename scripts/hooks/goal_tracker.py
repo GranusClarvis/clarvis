@@ -22,8 +22,8 @@ import _paths  # noqa: F401 — registers all script subdirs on sys.path
 from brain import brain
 from self_model import assess_all_capabilities
 
-QUEUE_FILE = "/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md"
-TRACKER_STATE_FILE = "/home/agent/.openclaw/workspace/data/goal_tracker_state.json"
+QUEUE_FILE = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "memory/evolution/QUEUE.md")
+TRACKER_STATE_FILE = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "data/goal_tracker_state.json")
 STALL_HOURS = 24
 
 # Map goals to capability domains they depend on.

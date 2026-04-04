@@ -26,7 +26,7 @@ except ImportError:
     from brain import get_brain as _legacy_get_brain, ALL_COLLECTIONS
     _spine_get_brain = _legacy_get_brain
 
-_WS = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+_WS = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 PHI_HISTORY_FILE = os.path.join(_WS, "data", "phi_history.json")
 PHI_DECOMPOSITION_FILE = os.path.join(_WS, "data", "phi_decomposition.json")
 

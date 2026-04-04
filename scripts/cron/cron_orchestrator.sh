@@ -7,7 +7,7 @@
 # No Claude Code spawning — lightweight, runs in ~30-60s.
 #
 # Crontab: 19:30 daily (after evening 18:00, before reflection 21:00)
-#   30 19 * * * /home/agent/.openclaw/workspace/scripts/cron_orchestrator.sh
+#   30 19 * * * $CLARVIS_WORKSPACE/scripts/cron_orchestrator.sh
 #
 # === Pipeline ===
 # 1. Promote: scan each agent's output for results to surface to Clarvis
@@ -54,8 +54,8 @@
 #    → cron_env.sh must set PATH correctly. Verify: bash -x cron_env.sh
 # =============================================================================
 
-source /home/agent/.openclaw/workspace/scripts/cron/cron_env.sh
-source /home/agent/.openclaw/workspace/scripts/cron/lock_helper.sh
+source $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh
+source $CLARVIS_WORKSPACE/scripts/cron/lock_helper.sh
 
 SCRIPTS="$CLARVIS_WORKSPACE/scripts"
 LOGFILE="memory/cron/orchestrator.log"

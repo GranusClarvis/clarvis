@@ -27,7 +27,7 @@ import time
 from dataclasses import asdict, dataclass, field
 from typing import Optional
 
-WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 STORE_PATH = os.path.join(WORKSPACE, "data", "research_lessons.jsonl")
 
 VALID_DECISIONS = {"APPLY", "ARCHIVE", "DISCARD"}

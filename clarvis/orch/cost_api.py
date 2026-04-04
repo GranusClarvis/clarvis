@@ -15,7 +15,7 @@ import urllib.request
 import urllib.error
 from typing import Dict, Optional
 
-AUTH_FILE = "/home/agent/.openclaw/agents/main/agent/auth-profiles.json"
+AUTH_FILE = os.path.join(os.environ.get("OPENCLAW_HOME", os.path.expanduser("~/.openclaw")), "agents/main/agent/auth-profiles.json")
 OPENROUTER_BASE = "https://openrouter.ai/api/v1"
 
 _cached_key: Optional[str] = None

@@ -6,6 +6,7 @@ Shows brain stats, goal progress, and evolution velocity in real-time.
 
 import json
 import sys
+import os
 from datetime import datetime
 from pathlib import Path
 
@@ -14,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import _paths  # noqa: F401 — registers all script subdirs on sys.path
 from brain import brain
 
-DASHBOARD_DIR = Path("/home/agent/.openclaw/workspace/data/dashboard")
+DASHBOARD_DIR = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))) / "data/dashboard"
 DASHBOARD_DIR.mkdir(parents=True, exist_ok=True)
 
 def get_brain_stats():
@@ -50,7 +51,7 @@ def get_evolution_velocity():
 
 def get_reasoning_chains():
     """Count active reasoning chains."""
-    chains_dir = Path("/home/agent/.openclaw/workspace/data/reasoning_chains")
+    chains_dir = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))) / "data/reasoning_chains"
     if chains_dir.exists():
         chains = list(chains_dir.glob("chain_*.json"))
         return len(chains)

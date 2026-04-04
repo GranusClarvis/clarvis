@@ -39,7 +39,7 @@ from datetime import datetime, timezone, timedelta
 
 from clarvis.brain import brain, PROCEDURES
 
-_SCRIPTS_DIR = os.path.join(os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace"), "scripts")
+_SCRIPTS_DIR = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "scripts")
 
 try:
     if _SCRIPTS_DIR not in sys.path:
@@ -91,7 +91,7 @@ CODE_TEMPLATES = {
             "sys.path.insert(0, os.path.dirname(__file__)) for local imports",
             "Try/except import brain: from brain import brain, LEARNINGS (with fallback)",
             "Try/except import optional deps (attention, episodic_memory, etc.)",
-            "Define DATA_FILE = Path('/home/agent/.openclaw/workspace/data/<name>.json')",
+            "Define DATA_FILE = Path(WORKSPACE) / 'data/<name>.json'",
             "Define constants/thresholds at module level",
             "Implement core logic (class or functions based on complexity)",
             "Add _load_state()/_save_state() helpers using json.dump(obj, f, indent=2, default=str)",
@@ -176,7 +176,7 @@ CODE_TEMPLATES = {
                            "spawn claude", "cron_*.sh"],
         "scaffold": [
             "Add shebang: #!/usr/bin/env bash, set -euo pipefail",
-            "Source environment: source /home/agent/.openclaw/workspace/scripts/cron_env.sh",
+            "Source environment: source $CLARVIS_WORKSPACE/scripts/cron_env.sh",
             "Add lockfile: LOCKFILE=/tmp/clarvis_<name>.lock with trap 'rm -f $LOCKFILE' EXIT",
             "Check lock: [ -f $LOCKFILE ] && check_stale_lock || create lock",
             "Build task prompt: write to /tmp/clarvis_<name>_prompt.txt",

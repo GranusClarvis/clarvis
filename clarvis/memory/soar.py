@@ -39,7 +39,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import os as _os
-_WS = _os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+_WS = _os.environ.get("CLARVIS_WORKSPACE", _os.path.expanduser("~/.openclaw/workspace"))
 DATA_DIR = Path(_WS) / "data" / "soar"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 GOAL_STACK_FILE = DATA_DIR / "goal_stack.json"

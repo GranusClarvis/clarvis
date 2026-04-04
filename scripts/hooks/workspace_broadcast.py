@@ -41,7 +41,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import _paths  # noqa: F401 — registers all script subdirs on sys.path
 
 # Data persistence
-BROADCAST_DIR = Path("/home/agent/.openclaw/workspace/data/broadcast")
+BROADCAST_DIR = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))) / "data/broadcast"
 BROADCAST_DIR.mkdir(parents=True, exist_ok=True)
 BROADCAST_LOG = BROADCAST_DIR / "broadcast_log.jsonl"
 BROADCAST_STATE = BROADCAST_DIR / "last_broadcast.json"

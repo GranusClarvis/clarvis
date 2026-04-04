@@ -48,6 +48,7 @@ Integration:
 import json
 import math
 import sys
+import os
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -56,14 +57,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import _paths  # noqa: F401 — registers all script subdirs on sys.path
 from brain import brain, AUTONOMOUS_LEARNING
 
-DATA_DIR = Path("/home/agent/.openclaw/workspace/data/meta_gradient_rl")
+DATA_DIR = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))) / "data/meta_gradient_rl"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 PARAMS_FILE = DATA_DIR / "meta_params.json"
 OPTIONS_FILE = DATA_DIR / "options.json"
 TRANSFER_FILE = DATA_DIR / "transfer_matrix.json"
 HISTORY_FILE = DATA_DIR / "adaptation_history.jsonl"
-EPISODES_FILE = Path("/home/agent/.openclaw/workspace/data/episodes.json")
+EPISODES_FILE = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))) / "data/episodes.json"
 
 # Meta-learning rate (β in Xu et al.)
 META_LR = 0.05

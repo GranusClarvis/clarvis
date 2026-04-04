@@ -33,7 +33,7 @@ MIN_OUTPUT_BYTES = 50  # below this = "no meaningful output"
 # Number of consecutive idle polls (no CPU, no children) before declaring stall
 IDLE_POLLS_FOR_STALL = 3  # 3 × 15s = 45s of confirmed process inactivity
 
-LOG_FILE = Path("/home/agent/.openclaw/workspace/data/reconsider_log.jsonl")
+LOG_FILE = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))) / "data/reconsider_log.jsonl"
 
 # Progress marker patterns (things Claude Code outputs that indicate forward progress)
 CHECKPOINT_PATTERNS = [

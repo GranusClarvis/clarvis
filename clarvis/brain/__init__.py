@@ -224,7 +224,7 @@ recall = lambda query, n=5: [r["document"] for r in brain.recall(query, n=n)]
 _conflict_log = logging.getLogger("clarvis.brain.conflicts")
 
 _CONFLICT_LOG_PATH = os.path.join(
-    os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace"),
+    os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")),
     "data", "conflict_log.jsonl",
 )
 

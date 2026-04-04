@@ -52,7 +52,7 @@ import time
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
-WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 DIRECTIVES_FILE = os.path.join(WORKSPACE, "data", "directives.json")
 DIRECTIVES_LOG = os.path.join(WORKSPACE, "data", "directives_log.jsonl")
 
@@ -303,7 +303,7 @@ def _llm_classify_fallback(text, rule_result):
 
         api_key = os.environ.get("OPENROUTER_API_KEY")
         if not api_key:
-            auth_file = "/home/agent/.openclaw/agents/main/agent/auth-profiles.json"
+            auth_file = os.path.join(os.environ.get("OPENCLAW_HOME", os.path.expanduser("~/.openclaw")), "agents/main/agent/auth-profiles.json")
             try:
                 with open(auth_file) as f:
                     auth = json.load(f)

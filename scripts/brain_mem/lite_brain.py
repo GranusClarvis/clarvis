@@ -5,7 +5,7 @@ A stripped-down version of brain.py for project agents. Uses the same
 ChromaDB + ONNX stack but with fewer collections and no cross-agent leakage.
 
 Each project agent gets its own data directory at:
-  /home/agent/agents/<name>/data/brain/
+  ~/agents/<name>/data/brain/
 
 Collections (6 vs Clarvis's 10):
   project-learnings   — what the agent learned about this repo
@@ -17,7 +17,7 @@ Collections (6 vs Clarvis's 10):
 
 Usage (from a project agent's scripts/):
     from lite_brain import LiteBrain
-    brain = LiteBrain("/home/agent/agents/my-project/data/brain")
+    brain = LiteBrain("~/agents/my-project/data/brain")
     brain.store("npm run build is the build command", "project-procedures")
     results = brain.recall("how to build")
 

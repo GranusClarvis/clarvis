@@ -2,7 +2,7 @@
 # File-hygiene cleanup — weekly Sunday 05:30 UTC
 # Rotates logs, compresses old memory, trims JSONL, prunes stale locks.
 # No Claude Code spawning — lightweight Python-only.
-source /home/agent/.openclaw/workspace/scripts/cron/cron_env.sh
+source $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh
 
 LOCKFILE="/tmp/clarvis_cleanup.lock"
 
@@ -18,5 +18,5 @@ echo "$$ $(date -u +%Y-%m-%dT%H:%M:%S)" > "$LOCKFILE"
 trap 'rm -f "$LOCKFILE"' EXIT
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Weekly cleanup started ==="
-python3 /home/agent/.openclaw/workspace/scripts/infra/cleanup_policy.py
+python3 $CLARVIS_WORKSPACE/scripts/infra/cleanup_policy.py
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Weekly cleanup finished ==="

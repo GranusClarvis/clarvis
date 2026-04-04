@@ -59,7 +59,7 @@ from clarvis.metrics.benchmark import (  # noqa: E402
 )
 
 # === PATHS ===
-WORKSPACE = "/home/agent/.openclaw/workspace"
+WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 METRICS_FILE = os.path.join(WORKSPACE, "data/performance_metrics.json")
 HISTORY_FILE = os.path.join(WORKSPACE, "data/performance_history.jsonl")
 ALERTS_FILE = os.path.join(WORKSPACE, "data/performance_alerts.jsonl")

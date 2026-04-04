@@ -50,8 +50,8 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import _paths  # noqa: F401 — registers all script subdirs on sys.path
 
-SCRIPTS_DIR = Path("/home/agent/.openclaw/workspace/scripts")
-DATA_DIR = Path("/home/agent/.openclaw/workspace/data/ast_surgery")
+SCRIPTS_DIR = Path(os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "scripts"))
+DATA_DIR = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))) / "data/ast_surgery"
 HISTORY_FILE = DATA_DIR / "history.jsonl"
 LATEST_FILE = DATA_DIR / "latest.json"
 PROPOSALS_FILE = DATA_DIR / "proposals.json"
@@ -562,7 +562,7 @@ def run_retrieval_benchmark():
             cwd=str(SCRIPTS_DIR),
         )
         # Parse latest.json for results
-        latest = Path("/home/agent/.openclaw/workspace/data/retrieval_benchmark/latest.json")
+        latest = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))) / "data/retrieval_benchmark/latest.json"
         if latest.exists():
             with open(latest) as f:
                 data = json.load(f)

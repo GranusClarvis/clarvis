@@ -106,7 +106,7 @@ Schema:
 - **No private memory dumps** — no brain search results, no episodic content
 - **No secret-bearing config** — no API keys, tokens, chat IDs, email addresses
 - **No raw cron command strings** — expose only schedule summary, not commands
-- **No internal file paths** — no `/home/agent/...` paths in any payload
+- **No internal file paths** — no `~/...` paths in any payload
 - **No task descriptions** — only tag names and counts (descriptions may contain IP)
 - **No switch_history in mode** — only current mode + updated_at (history may reveal strategy)
 - **No active_tasks detail** — only counts (task descriptions may contain IP)

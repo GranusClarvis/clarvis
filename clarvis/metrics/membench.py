@@ -32,7 +32,7 @@ from typing import Any
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "scripts"))
 
-WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 DATA_DIR = os.path.join(WORKSPACE, "data", "benchmarks")
 MEMBENCH_FILE = os.path.join(DATA_DIR, "membench_latest.json")
 MEMBENCH_HISTORY = os.path.join(DATA_DIR, "membench_history.jsonl")

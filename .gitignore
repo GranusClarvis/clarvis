@@ -78,6 +78,7 @@ docker-compose.override.yml
 data/
 monitoring/
 memory/
+MEMORY.md
 
 # --- Agent worktrees (managed by agent_lifecycle.py) ---
 .claude/worktrees/

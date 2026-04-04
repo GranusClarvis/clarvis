@@ -10,9 +10,9 @@
 #   ./cron_watchdog.sh --alert   # Also send Telegram alert on failures
 # =============================================================================
 
-source /home/agent/.openclaw/workspace/scripts/cron/cron_env.sh
+source $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh
 
-LOG_DIR="/home/agent/.openclaw/workspace/memory/cron"
+LOG_DIR="$CLARVIS_WORKSPACE/memory/cron"
 WATCHDOG_LOG="$LOG_DIR/watchdog.log"
 NOW=$(date +%s)
 ALERT_MODE=false
@@ -57,7 +57,7 @@ check_job() {
 # --- Check each job ---
 # Job name, log file, max hours since last output (interval + grace)
 check_job "autonomous"      "$LOG_DIR/autonomous.log"      6    # max gap ~5h (23:00→01:00+06:00), grace 1h
-check_job "health_monitor"  "/home/agent/.openclaw/workspace/monitoring/health.log" 1  # every 15m, grace 45m
+check_job "health_monitor"  "$CLARVIS_WORKSPACE/monitoring/health.log" 1  # every 15m, grace 45m
 check_job "morning_report"  "$LOG_DIR/report_morning.log"  26   # daily at 10:00, grace 2h
 check_job "evening_report"  "$LOG_DIR/report_evening.log"  26   # daily at 22:00, grace 2h
 check_job "morning_plan"    "$LOG_DIR/morning.log"          26   # daily at 08:00, grace 2h
@@ -116,7 +116,7 @@ fi
 
 # --- Working memory health check ---
 # Verify attention spotlight has active items (target: 3+)
-WM_FILE="/home/agent/.openclaw/workspace/data/attention/spotlight.json"
+WM_FILE="$CLARVIS_WORKSPACE/data/attention/spotlight.json"
 if [ -f "$WM_FILE" ]; then
     WM_ACTIVE=$(python3 -c "
 import json
@@ -130,8 +130,8 @@ print(active)
         REPORT="${REPORT}WARN    working_memory — only ${WM_ACTIVE} active items (target: 3+)\n"
         # Auto-seed if completely empty
         if [ "$WM_ACTIVE" -eq 0 ]; then
-            python3 /home/agent/.openclaw/workspace/scripts/cognition/attention.py add "System watchdog: working memory was empty, seeded" 0.6 >> "$WATCHDOG_LOG" 2>&1
-            python3 /home/agent/.openclaw/workspace/scripts/cognition/attention.py add "Active evolution: $(date -u +%Y-%m-%d) heartbeat cycle running" 0.5 >> "$WATCHDOG_LOG" 2>&1
+            python3 $CLARVIS_WORKSPACE/scripts/cognition/attention.py add "System watchdog: working memory was empty, seeded" 0.6 >> "$WATCHDOG_LOG" 2>&1
+            python3 $CLARVIS_WORKSPACE/scripts/cognition/attention.py add "Active evolution: $(date -u +%Y-%m-%d) heartbeat cycle running" 0.5 >> "$WATCHDOG_LOG" 2>&1
             REPORT="${REPORT}REPAIR  working_memory — seeded 2 items to prevent empty state\n"
         fi
     else
@@ -158,7 +158,7 @@ echo "=============================="
 # --- Auto-recovery: Run cron_doctor if failures detected ---
 if [ "$FAILURES" -gt 0 ]; then
   echo "[$TIMESTAMP] Running cron_doctor.py recover..." >> "$WATCHDOG_LOG"
-  DOCTOR_SCRIPT="/home/agent/.openclaw/workspace/scripts/cron/cron_doctor.py"
+  DOCTOR_SCRIPT="$CLARVIS_WORKSPACE/scripts/cron/cron_doctor.py"
   DOCTOR_OUTPUT=$(python3 "$DOCTOR_SCRIPT" recover 2>&1)
   DOCTOR_EXIT=$?
   echo "$DOCTOR_OUTPUT"
@@ -178,7 +178,7 @@ if [ "$FAILURES" -gt 0 ]; then
   # Brief pause to let re-runs produce output
   sleep 2
   recheck_job "$LOG_DIR/autonomous.log" 4
-  recheck_job "/home/agent/.openclaw/workspace/monitoring/health.log" 1
+  recheck_job "$CLARVIS_WORKSPACE/monitoring/health.log" 1
   recheck_job "$LOG_DIR/report_morning.log" 26
   recheck_job "$LOG_DIR/report_evening.log" 26
   recheck_job "$LOG_DIR/morning.log" 26
@@ -216,7 +216,7 @@ import json, urllib.request, urllib.parse, os
 try:
     token = os.environ.get("CLARVIS_TG_BOT_TOKEN", "")
     if not token:
-        with open('/home/agent/.openclaw/openclaw.json') as f:
+        with open('${OPENCLAW_HOME:-$HOME/.openclaw}/openclaw.json') as f:
             config = json.load(f)
         token = config['channels']['telegram']['botToken']
     chat_id = os.environ.get("CLARVIS_TG_CHAT_ID", "")

@@ -48,13 +48,13 @@ from datetime import datetime, timezone, timedelta
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import _paths  # noqa: F401 — registers all script subdirs on sys.path
 
-QUEUE_FILE = "/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md"
-QUEUE_ARCHIVE = "/home/agent/.openclaw/workspace/memory/evolution/QUEUE_ARCHIVE.md"
-BRIEF_FILE = "/home/agent/.openclaw/workspace/data/context_brief.txt"
-CAPABILITY_HISTORY = "/home/agent/.openclaw/workspace/data/capability_history.json"
-PHI_HISTORY = "/home/agent/.openclaw/workspace/data/phi_history.json"
-MEMORY_DIR = "/home/agent/.openclaw/workspace/memory"
-CRON_LOG_DIR = "/home/agent/.openclaw/workspace/memory/cron"
+QUEUE_FILE = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "memory/evolution/QUEUE.md")
+QUEUE_ARCHIVE = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "memory/evolution/QUEUE_ARCHIVE.md")
+BRIEF_FILE = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "data/context_brief.txt")
+CAPABILITY_HISTORY = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "data/capability_history.json")
+PHI_HISTORY = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "data/phi_history.json")
+MEMORY_DIR = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "memory")
+CRON_LOG_DIR = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "memory/cron")
 LOG_MAX_BYTES = 100_000  # 100KB cap per cron log
 
 
@@ -707,7 +707,7 @@ def _detect_wire_task(task_text):
     return True, source, target
 
 
-_WIRE_SCRIPTS = "/home/agent/.openclaw/workspace/scripts"
+_WIRE_SCRIPTS = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "scripts")
 
 _WIRE_KNOWN_TARGETS = {
     "cron_reflection.sh": {

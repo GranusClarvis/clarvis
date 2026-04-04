@@ -6,11 +6,11 @@
 # metrics collection with 1 batched evolution_preflight.py process.
 # Savings: ~3s from eliminated cold-starts + reduced disk I/O.
 
-source /home/agent/.openclaw/workspace/scripts/cron/cron_env.sh
-source /home/agent/.openclaw/workspace/scripts/cron/lock_helper.sh
+source $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh
+source $CLARVIS_WORKSPACE/scripts/cron/lock_helper.sh
 
 LOGFILE="memory/cron/evolution.log"
-SCRIPTS="/home/agent/.openclaw/workspace/scripts"
+SCRIPTS="$CLARVIS_WORKSPACE/scripts"
 
 # Acquire locks: local + global Claude
 acquire_local_lock "/tmp/clarvis_evolution.lock" "$LOGFILE" 3600

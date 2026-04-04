@@ -23,7 +23,7 @@ from datetime import datetime, timezone
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import _paths  # noqa: F401 — registers all script subdirs on sys.path
 
-WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 REPORT_FILE = os.path.join(WORKSPACE, "data", "benchmarks", "brief_v2_report.json")
 HISTORY_FILE = os.path.join(WORKSPACE, "data", "benchmarks", "brief_benchmark_history.jsonl")
 

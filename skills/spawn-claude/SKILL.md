@@ -28,20 +28,20 @@ Takes the user's task description and launches Claude Code (Opus 4.6) via the `c
 
 ```bash
 # PREFERRED: Use spawn_claude.sh (handles env, full paths, logging, TG delivery)
-/home/agent/.openclaw/workspace/scripts/spawn_claude.sh "{user's task description here}" 1200
+$CLARVIS_WORKSPACE/scripts/spawn_claude.sh "{user's task description here}" 1200
 # Add --no-tg to skip Telegram delivery
 # Add --isolated to run in git worktree isolation (safe for experimental changes)
-/home/agent/.openclaw/workspace/scripts/spawn_claude.sh "{task}" 1200 --isolated
+$CLARVIS_WORKSPACE/scripts/spawn_claude.sh "{task}" 1200 --isolated
 # Deliver output to a specific Telegram topic thread (e.g. Claude Code topic):
-/home/agent/.openclaw/workspace/scripts/spawn_claude.sh "{task}" 1200 --topic=2 --chat=${CLARVIS_TG_GROUP_ID}
+$CLARVIS_WORKSPACE/scripts/spawn_claude.sh "{task}" 1200 --topic=2 --chat=${CLARVIS_TG_GROUP_ID}
 # Combine flags:
-/home/agent/.openclaw/workspace/scripts/spawn_claude.sh "{task}" 1200 --no-tg --isolated
+$CLARVIS_WORKSPACE/scripts/spawn_claude.sh "{task}" 1200 --no-tg --isolated
 ```
 
 ### Topic-Aware Delivery
 When spawning from the Claude Code topic (thread 2), always include topic flags:
 ```bash
-/home/agent/.openclaw/workspace/scripts/spawn_claude.sh "{task}" 1200 --topic=2 --chat=${CLARVIS_TG_GROUP_ID}
+$CLARVIS_WORKSPACE/scripts/spawn_claude.sh "{task}" 1200 --topic=2 --chat=${CLARVIS_TG_GROUP_ID}
 ```
 
 ### Agent Lifecycle Manager (advanced)

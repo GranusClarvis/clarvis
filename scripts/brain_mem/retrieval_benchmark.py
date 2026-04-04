@@ -30,7 +30,7 @@ except ImportError:
     smart_recall = None
 
 # === DATA PATHS ===
-DATA_DIR = "/home/agent/.openclaw/workspace/data/retrieval_benchmark"
+DATA_DIR = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "data/retrieval_benchmark")
 HISTORY_FILE = os.path.join(DATA_DIR, "history.jsonl")
 LATEST_FILE = os.path.join(DATA_DIR, "latest.json")
 os.makedirs(DATA_DIR, exist_ok=True)
@@ -627,7 +627,7 @@ def print_report(report: dict):
 
 
 GOLDEN_QA_FILE = os.path.join(
-    "/home/agent/.openclaw/workspace/data/benchmarks", "golden_qa_results.json"
+    os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "data/benchmarks"), "golden_qa_results.json"
 )
 
 

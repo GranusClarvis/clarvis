@@ -121,7 +121,7 @@ Claude Code (Opus 4.6) is not just a coding tool — it's your **reasoning engin
 | Path | When | How | Context Injection |
 |------|------|-----|-------------------|
 | **ACP** (conversation) | From Telegram/chat | Two-step: exec prompt_builder → sessions_spawn with `runtime: "acp"` | prompt_builder.py builds enriched prompt with brain context |
-| **spawn_claude.sh** (cron/CLI) | From cron scripts, /spawn skill, manual CLI | `/home/agent/.openclaw/workspace/scripts/spawn_claude.sh "task" 1200` | prompt_builder.py called internally |
+| **spawn_claude.sh** (cron/CLI) | From cron scripts, /spawn skill, manual CLI | `$CLARVIS_WORKSPACE/scripts/spawn_claude.sh "task" 1200` | prompt_builder.py called internally |
 
 **Path A: ACP spawn (from conversation — PREFERRED)**
 
@@ -129,7 +129,7 @@ Use when spawning Claude Code from within a conversation. ACP manages Claude Cod
 
 ```
 Step 1 — Build enriched prompt:
-exec: python3 /home/agent/.openclaw/workspace/scripts/prompt_builder.py build --task "<task>" --tier standard
+exec: python3 $CLARVIS_WORKSPACE/scripts/prompt_builder.py build --task "<task>" --tier standard
 
 Step 2 — Spawn with ACP:
 sessions_spawn({runtime: "acp", agentId: "claude", task: "<enriched prompt from step 1>", thread: true})
@@ -140,7 +140,7 @@ The Claude Code topic (thread 2) is pre-configured to do this automatically.
 **Path B: spawn_claude.sh (from cron/CLI/skill)**
 
 ```bash
-/home/agent/.openclaw/workspace/scripts/spawn_claude.sh "Your task here" 1200
+$CLARVIS_WORKSPACE/scripts/spawn_claude.sh "Your task here" 1200
 # Flags: --no-tg, --isolated, --topic=N, --chat=ID
 ```
 
@@ -353,26 +353,26 @@ When users send these commands, execute them immediately:
 ### `/costs` — Real OpenRouter Usage Report
 Run this script and send the output as your response:
 ```bash
-python3 /home/agent/.openclaw/workspace/scripts/cost_tracker.py telegram
+python3 $CLARVIS_WORKSPACE/scripts/cost_tracker.py telegram
 ```
 This shows REAL spending from the OpenRouter API (daily/weekly/monthly + model breakdown).
 **NEVER reference costs.jsonl for cost data** — it only has partial test data and will show wrong numbers like "$0.15". Always use `cost_tracker.py telegram` or `cost_api.py` for real cost data. If you mention costs in a status summary, run the API command first — do not guess or read the local file.
 
 ### `/budget` — Budget Status
 ```bash
-python3 /home/agent/.openclaw/workspace/scripts/budget_alert.py --status
+python3 $CLARVIS_WORKSPACE/scripts/budget_alert.py --status
 ```
 
 ### `/queue_clarvis` — Queue Summary (minimal tokens)
 ```bash
-python3 /home/agent/.openclaw/workspace/skills/queue-clarvis/scripts/queue_clarvis.py
+python3 $CLARVIS_WORKSPACE/skills/queue-clarvis/scripts/queue_clarvis.py
 ```
 Send the script output as-is (it’s already concise).
 
 ### `/spawn <task>` — Spawn Claude Code
 Delegate a task to Claude Code (Opus 4.6). See the `spawn-claude` skill.
 ```bash
-/home/agent/.openclaw/workspace/scripts/spawn_claude.sh "[user's task description]" 1200
+$CLARVIS_WORKSPACE/scripts/spawn_claude.sh "[user's task description]" 1200
 ```
 **From conversation:** ACP is preferred (two-step: prompt_builder → sessions_spawn with runtime: "acp"). The `/spawn` skill uses `spawn_claude.sh` which also injects brain context.
 **From cron/CLI:** Call `spawn_claude.sh` directly as shown above.
@@ -383,7 +383,7 @@ Run 1–4 **back-to-back** evolution cycles *exactly like* `scripts/cron_autonom
 Implementation rule:
 - Use `functions.cron.add` to create a **one-shot** job (schedule.kind=`at`) in an **isolated** session with `payload.kind="agentTurn"`.
 - The payload prompt must run **N cycles in sequence** by invoking:
-  - `bash /home/agent/.openclaw/workspace/scripts/cron_autonomous.sh`
+  - `bash $CLARVIS_WORKSPACE/scripts/cron_autonomous.sh`
   - wait for completion
   - repeat
 - Set `timeoutSeconds` ≈ `900*N` (buffer included; Claude runs can be slow).

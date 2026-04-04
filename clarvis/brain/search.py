@@ -1,5 +1,7 @@
+import os
 """Brain search operations — recall, query routing, embedding cache, synthesis.
 
+import os
 Belief revision filtering:
   - Superseded memories (status='superseded') are excluded from recall by default.
   - Low-confidence memories (confidence < 0.3) are deprioritized.

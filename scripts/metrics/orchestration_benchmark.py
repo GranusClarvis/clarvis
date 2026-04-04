@@ -27,7 +27,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 WORKSPACE = Path(os.environ.get("CLARVIS_WORKSPACE",
-                                "/home/agent/.openclaw/workspace"))
+                                os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))))
 SCRIPTS = WORKSPACE / "scripts"
 DATA_DIR = WORKSPACE / "data" / "orchestration_benchmarks"
 
@@ -53,7 +53,7 @@ import _paths  # noqa: F401 — registers all script subdirs on sys.path
 def _get_agent_dir(name: str) -> Path:
     """Resolve agent directory (same logic as project_agent.py)."""
     primary = Path("/opt/clarvis-agents") / name
-    fallback = Path("/home/agent/agents") / name
+    fallback = Path("~/agents") / name
     if primary.exists():
         return primary
     return fallback
@@ -415,7 +415,7 @@ def run_all() -> list[dict]:
     except ImportError:
         # Fallback: scan agent directories
         agents = []
-        for root in [Path("/opt/clarvis-agents"), Path("/home/agent/agents")]:
+        for root in [Path("/opt/clarvis-agents"), Path("~/agents")]:
             if root.exists():
                 for d in sorted(root.iterdir()):
                     cfg = d / "configs" / "config.json"

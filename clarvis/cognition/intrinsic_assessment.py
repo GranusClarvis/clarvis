@@ -24,7 +24,7 @@ from pathlib import Path
 
 _log = logging.getLogger("clarvis.cognition.intrinsic_assessment")
 
-WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 EPISODES_PATH = os.path.join(WORKSPACE, "data", "episodes.json")
 ASSESSMENT_PATH = os.path.join(WORKSPACE, "data", "intrinsic_assessment.json")
 AUTOCURRICULUM_PATH = os.path.join(WORKSPACE, "data", "autocurriculum.json")

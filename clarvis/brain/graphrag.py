@@ -33,7 +33,7 @@ import time
 from collections import Counter, defaultdict
 from pathlib import Path
 
-_WS = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+_WS = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 DATA_DIR = Path(_WS) / "data" / "clarvisdb"
 COMMUNITIES_FILE = DATA_DIR / "communities.json"
 SUMMARIES_FILE = DATA_DIR / "community_summaries.json"

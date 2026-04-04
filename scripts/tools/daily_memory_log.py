@@ -18,7 +18,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-WORKSPACE = Path(os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace"))
+WORKSPACE = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")))
 MEMORY_DIR = WORKSPACE / "memory"
 DIGEST_FILE = MEMORY_DIR / "cron" / "digest.md"
 DIGEST_STATE = WORKSPACE / "data" / "digest_state.json"

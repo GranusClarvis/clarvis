@@ -16,7 +16,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 TRAJECTORY_HISTORY = Path(WORKSPACE) / "data" / "trajectory_eval" / "history.jsonl"
 
 TRAJECTORY_SCHEMA_VERSION = "1.0"

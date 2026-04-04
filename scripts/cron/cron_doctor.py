@@ -27,7 +27,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-WORKSPACE = Path("/home/agent/.openclaw/workspace")
+WORKSPACE = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")))
 sys.path.insert(0, str(WORKSPACE / "scripts"))
 import _paths  # noqa: F401 — registers all script subdirs on sys.path
 LOG_DIR = WORKSPACE / "memory" / "cron"
@@ -479,7 +479,7 @@ def _rerun_job(job_name: str, result: dict) -> dict:
             capture_output=True, text=True,
             timeout=timeout,
             cwd=str(WORKSPACE),
-            env={**os.environ, "HOME": "/home/agent"},
+            env={**os.environ, "HOME": "~"},
         )
         result["success"] = proc.returncode == 0
         result["exit_code"] = proc.returncode

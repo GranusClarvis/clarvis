@@ -30,7 +30,7 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any
 
-WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 CLR_FILE = os.path.join(WORKSPACE, "data/clr_benchmark.json")
 CLR_HISTORY = os.path.join(WORKSPACE, "data/clr_history.jsonl")
 MAX_HISTORY = 400

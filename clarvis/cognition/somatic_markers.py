@@ -44,7 +44,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import os as _os
-_WS = _os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+_WS = _os.environ.get("CLARVIS_WORKSPACE", _os.path.expanduser("~/.openclaw/workspace"))
 MARKERS_FILE = Path(_WS) / "data" / "somatic_markers.json"
 
 # Emotion dimensions for somatic markers

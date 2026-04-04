@@ -15,7 +15,7 @@ When the user sends `/queue_clarvis`, run the local summarizer script and return
 ## Command
 
 ```bash
-python3 /home/agent/.openclaw/workspace/skills/queue-clarvis/scripts/queue_clarvis.py
+python3 $CLARVIS_WORKSPACE/skills/queue-clarvis/scripts/queue_clarvis.py
 ```
 
 ## Notes

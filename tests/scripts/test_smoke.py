@@ -4,11 +4,12 @@ Smoke tests for critical Clarvis pipeline scripts.
 Run: python3 -m pytest scripts/tests/test_smoke.py -v
 """
 import sys
+import os
 import time
 import importlib
 import pytest
 
-sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
+sys.path.insert(0, os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "scripts"))
 import _paths  # noqa: F401,E402
 
 # ── Critical pipeline scripts that must always import cleanly ──

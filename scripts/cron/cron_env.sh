@@ -5,12 +5,12 @@
 # Source this at the top of every cron script to get the full interactive PATH
 # and environment that scripts need (python3, claude, openclaw, npm, etc.)
 #
-# Usage: source /home/agent/.openclaw/workspace/scripts/cron/cron_env.sh
+# Usage: source $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh
 # =============================================================================
 
-export HOME="/home/agent"
-export PATH="/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:/usr/local/bin:/home/agent/.local/bin:/usr/bin:/bin:/home/agent/.npm-global/bin:/home/agent/go/bin:/home/agent/.cargo/bin"
-export NODE_PATH="/home/agent/.npm-global/lib/node_modules"
+export HOME="${HOME:-$HOME}"
+export PATH="/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:/usr/local/bin:$HOME/.local/bin:/usr/bin:/bin:$HOME/.npm-global/bin:$HOME/go/bin:$HOME/.cargo/bin"
+export NODE_PATH="$HOME/.npm-global/lib/node_modules"
 export LANG="en_US.UTF-8"
 
 # Prevent "nested Claude Code session" errors when cron scripts are
@@ -22,7 +22,7 @@ export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}"
 
 # Workspace (defined early — other sections reference $CLARVIS_WORKSPACE)
-export CLARVIS_WORKSPACE="/home/agent/.openclaw/workspace"
+export CLARVIS_WORKSPACE="${CLARVIS_WORKSPACE:-$HOME/.openclaw/workspace}"
 
 # Ensure all script subdirs are on Python path (belt-and-suspenders with _paths.py)
 export PYTHONPATH="$CLARVIS_WORKSPACE/scripts${PYTHONPATH:+:$PYTHONPATH}"
@@ -31,8 +31,8 @@ export PYTHONPATH="$CLARVIS_WORKSPACE/scripts${PYTHONPATH:+:$PYTHONPATH}"
 # Secrets loaded from .env file (not tracked). See .env.example for required vars.
 if [ -f "$CLARVIS_WORKSPACE/.env" ]; then
     set -a; . "$CLARVIS_WORKSPACE/.env"; set +a
-elif [ -f "/home/agent/.openclaw/workspace/.env" ]; then
-    set -a; . "/home/agent/.openclaw/workspace/.env"; set +a
+elif [ -f "$CLARVIS_WORKSPACE/.env" ]; then
+    set -a; . "$CLARVIS_WORKSPACE/.env"; set +a
 fi
 export CLARVIS_TG_BOT_TOKEN="${CLARVIS_TG_BOT_TOKEN:-}"
 export CLARVIS_TG_CHAT_ID="${CLARVIS_TG_CHAT_ID:-}"
@@ -106,7 +106,7 @@ run_claude_monitored() {
 
     # Launch Claude Code in background, feeding prompt via stdin (not argv)
     timeout "$_timeout" env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \
-        /home/agent/.local/bin/claude -p \
+        ${CLAUDE_BIN:-$(command -v claude || echo "$HOME/.local/bin/claude")} -p \
         --dangerously-skip-permissions --model claude-opus-4-6 \
         < "$_prompt_file" > "$_output_file" 2>&1 &
     local _claude_pid=$!

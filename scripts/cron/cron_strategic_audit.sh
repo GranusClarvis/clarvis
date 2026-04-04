@@ -5,8 +5,8 @@
 # module utilization, build-vs-consolidate decision, and autonomy progress.
 # Writes findings to digest + directly modifies QUEUE.md priorities.
 
-source /home/agent/.openclaw/workspace/scripts/cron/cron_env.sh
-source /home/agent/.openclaw/workspace/scripts/cron/lock_helper.sh
+source $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh
+source $CLARVIS_WORKSPACE/scripts/cron/lock_helper.sh
 LOGFILE="memory/cron/strategic_audit.log"
 
 # Acquire locks: local + global Claude
@@ -113,7 +113,7 @@ fi
 
 # === STEP 1: CLR Perturbation / Ablation Sweep ===
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running CLR perturbation ablation sweep..." >> "$LOGFILE"
-CLR_PERTURBATION_OUTPUT=$(timeout 300 python3 /home/agent/.openclaw/workspace/clarvis/metrics/clr_perturbation.py 2>&1) || true
+CLR_PERTURBATION_OUTPUT=$(timeout 300 python3 $CLARVIS_WORKSPACE/clarvis/metrics/clr_perturbation.py 2>&1) || true
 echo "$CLR_PERTURBATION_OUTPUT" >> "$LOGFILE"
 # Extract summary for audit prompt
 CLR_PERTURBATION_SUMMARY=$(echo "$CLR_PERTURBATION_OUTPUT" | grep -E "^\[perturbation\]|Baseline|CRITICAL|HELPFUL|HARMFUL|NEUTRAL" | tail -15)
@@ -123,7 +123,7 @@ echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] State gathered. Spawning Claude Code for d
 
 # === SPAWN CLAUDE CODE FOR DEEP STRATEGIC AUDIT ===
 AUDIT_OUTPUT=$(timeout 1200 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \
-  /home/agent/.local/bin/claude --model claude-opus-4-6 -p \
+  ${CLAUDE_BIN:-$(command -v claude || echo "$HOME/.local/bin/claude")} --model claude-opus-4-6 -p \
 "You are Clarvis's strategic auditor — a meta-evaluation layer that prevents metric gaming,
 integration overload, and wasted evolution cycles. Be brutally honest.
 
@@ -258,12 +258,12 @@ import re
 import sys
 import os
 
-sys.path.insert(0, os.path.join(os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace"), "scripts/evolution"))
+sys.path.insert(0, os.path.join(os.environ.get("CLARVIS_WORKSPACE", "$CLARVIS_WORKSPACE"), "scripts/evolution"))
 from queue_writer import add_task
 
 # Read audit text from saved file instead of argv (avoids ARG_MAX with large audits)
 audit_file = os.path.join(
-    os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace"),
+    os.environ.get("CLARVIS_WORKSPACE", "$CLARVIS_WORKSPACE"),
     "data", "strategic_audit_last.md"
 )
 try:
@@ -296,7 +296,7 @@ if json_match:
                 print(f"QUEUE: Skipped (duplicate/cap): {title}")
         # Save structured data for downstream use
         findings_path = os.path.join(
-            os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace"),
+            os.environ.get("CLARVIS_WORKSPACE", "$CLARVIS_WORKSPACE"),
             "data", "strategic_audit_findings.json"
         )
         data["extracted_at"] = __import__("datetime").datetime.now().isoformat()

@@ -17,7 +17,7 @@ from pathlib import Path
 
 from clarvis.brain import brain
 
-_WS = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+_WS = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 REASONING_DIR = Path(_WS) / "data" / "reasoning_chains"
 REASONING_DIR.mkdir(parents=True, exist_ok=True)
 

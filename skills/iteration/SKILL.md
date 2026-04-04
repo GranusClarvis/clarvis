@@ -26,7 +26,7 @@ Create a **one-shot** Gateway cron job via the `cron` tool:
 ## Payload prompt (required behavior)
 In ONE job, run N sequential cycles by invoking the same bash entrypoint used by scheduled evolution:
 
-- Run: `bash /home/agent/.openclaw/workspace/scripts/cron_autonomous.sh`
+- Run: `bash $CLARVIS_WORKSPACE/scripts/cron_autonomous.sh`
 - Wait for completion
 - Repeat until N cycles completed
 

@@ -452,7 +452,7 @@ def _transcript_log(ctx, _pf_errors):
 
 def _build_postflight_ctx(exit_code, output_file, preflight_data, task_duration):
     """Build shared context dict for postflight helpers."""
-    WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+    WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
     task = preflight_data.get("task", "unknown")
     output_text = ""
     try:

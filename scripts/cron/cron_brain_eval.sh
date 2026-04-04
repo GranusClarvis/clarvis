@@ -5,8 +5,8 @@
 # Recommended schedule: 06:00 daily (after PI refresh at 05:45, before autonomous runs)
 # This gives fresh metrics context and avoids lock contention.
 
-source /home/agent/.openclaw/workspace/scripts/cron/cron_env.sh
-source /home/agent/.openclaw/workspace/scripts/cron/lock_helper.sh
+source $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh
+source $CLARVIS_WORKSPACE/scripts/cron/lock_helper.sh
 
 LOGFILE="memory/cron/brain_eval.log"
 

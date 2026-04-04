@@ -22,7 +22,7 @@ import json
 import os
 from datetime import datetime, timezone, timedelta
 
-_WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+_WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 RELEVANCE_FILE = os.path.join(_WORKSPACE, "data", "retrieval_quality", "context_relevance.jsonl")
 LAMBDA_STATE_FILE = os.path.join(_WORKSPACE, "data", "retrieval_quality", "adaptive_mmr_state.json")
 

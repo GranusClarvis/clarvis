@@ -208,8 +208,8 @@ if __name__ == "__main__":
     elif cmd == "ingest-research":
         import glob as glob_mod
         import hashlib
-        research_dir = "/home/agent/.openclaw/workspace/memory/research"
-        tracker_file = "/home/agent/.openclaw/workspace/data/research_ingested.json"
+        research_dir = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "memory/research")
+        tracker_file = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "data/research_ingested.json")
         force = "--force" in sys.argv
 
         tracker = {}

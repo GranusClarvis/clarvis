@@ -53,7 +53,7 @@ REWARD_MAP = {
 }
 
 # Default data directory
-_DEFAULT_DATA_DIR = Path(os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")) / "data" / "retrieval_quality"
+_DEFAULT_DATA_DIR = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))) / "data" / "retrieval_quality"
 
 
 def _default_params() -> dict:

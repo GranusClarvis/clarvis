@@ -5,8 +5,8 @@
 #
 # Schedule: after graph_compaction (04:30), e.g. 04:45 UTC
 
-source /home/agent/.openclaw/workspace/scripts/cron/cron_env.sh
-source /home/agent/.openclaw/workspace/scripts/cron/lock_helper.sh
+source $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh
+source $CLARVIS_WORKSPACE/scripts/cron/lock_helper.sh
 
 LOGFILE="memory/cron/graph_verify.log"
 
@@ -29,7 +29,7 @@ echo "[$TS] SQLite DB: $(ls -lh data/clarvisdb/graph.db 2>/dev/null || echo 'NOT
 OUTPUT=$(python3 - 2>&1 <<'PY'
 import sys
 from clarvis.brain.graph_store_sqlite import GraphStoreSQLite
-store = GraphStoreSQLite("/home/agent/.openclaw/workspace/data/clarvisdb/graph.db")
+store = GraphStoreSQLite("$CLARVIS_WORKSPACE/data/clarvisdb/graph.db")
 ok = store.integrity_check()
 stats = store.stats()
 store.close()

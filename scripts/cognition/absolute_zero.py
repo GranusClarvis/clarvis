@@ -32,6 +32,7 @@ Integration:
 import json
 import random
 import sys
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -44,15 +45,15 @@ except ImportError:
     episodic = None
 
 # ── Storage ──────────────────────────────────────────────────────────────
-DATA_DIR = Path("/home/agent/.openclaw/workspace/data/absolute_zero")
+DATA_DIR = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))) / "data/absolute_zero"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 BUFFER_FILE = DATA_DIR / "task_buffer.json"
 HISTORY_FILE = DATA_DIR / "history.jsonl"
 STATS_FILE = DATA_DIR / "stats.json"
 
-SCRIPTS_DIR = Path("/home/agent/.openclaw/workspace/scripts")
-EPISODES_FILE = Path("/home/agent/.openclaw/workspace/data/episodes.json")
+SCRIPTS_DIR = Path(os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "scripts"))
+EPISODES_FILE = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))) / "data/episodes.json"
 
 # ── Constants ────────────────────────────────────────────────────────────
 TASK_TYPES = ["deduction", "abduction", "induction"]

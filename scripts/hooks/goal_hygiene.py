@@ -40,7 +40,7 @@ if _workspace not in sys.path:
 
 from clarvis.brain import brain
 
-WORKSPACE = "/home/agent/.openclaw/workspace"
+WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 GOALS_COLLECTION = "clarvis-goals"
 
 # Stale consciousness-first patterns to flag

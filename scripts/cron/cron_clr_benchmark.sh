@@ -9,8 +9,8 @@
 # checks stability over the last 14 days, and writes a summary to digest.
 # =============================================================================
 
-source /home/agent/.openclaw/workspace/scripts/cron/cron_env.sh
-source /home/agent/.openclaw/workspace/scripts/cron/lock_helper.sh
+source $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh
+source $CLARVIS_WORKSPACE/scripts/cron/lock_helper.sh
 
 LOGFILE="memory/cron/clr_benchmark.log"
 
@@ -61,7 +61,7 @@ echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] CLR=$CLR_SCORE value_add=+$VALUE_ADD gate=
 
 # Write summary to digest
 DIGEST_SUMMARY="Weekly CLR benchmark: CLR=$CLR_SCORE (+$VALUE_ADD value-add), gate=$GATE, stability=$STABILITY_PASS ($STABILITY_RUNS runs). $RATING"
-python3 /home/agent/.openclaw/workspace/scripts/tools/digest_writer.py evolution \
+python3 $CLARVIS_WORKSPACE/scripts/tools/digest_writer.py evolution \
     "$DIGEST_SUMMARY" >> "$LOGFILE" 2>&1 || true
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Weekly CLR benchmark completed ===" >> "$LOGFILE"

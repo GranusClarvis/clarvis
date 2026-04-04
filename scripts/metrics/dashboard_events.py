@@ -30,10 +30,11 @@ Usage (CLI — for bash cron scripts):
 import fcntl
 import json
 import sys
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-DASHBOARD_DIR = Path("/home/agent/.openclaw/workspace/data/dashboard")
+DASHBOARD_DIR = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))) / "data/dashboard"
 EVENTS_FILE = DASHBOARD_DIR / "events.jsonl"
 MAX_EVENTS = 5000  # auto-trim when exceeded
 

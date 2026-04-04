@@ -31,7 +31,7 @@ from pathlib import Path
 
 from clarvis.brain import brain
 
-_WS = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+_WS = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 _SCRIPTS_DIR = os.path.join(_WS, "scripts")
 
 EPISODES_FILE = Path(_WS) / "data" / "episodes.json"

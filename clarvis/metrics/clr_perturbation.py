@@ -35,7 +35,7 @@ from itertools import combinations
 from pathlib import Path
 from typing import Any
 
-WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 RESULTS_FILE = os.path.join(WORKSPACE, "data/clr_perturbation_results.json")
 HISTORY_FILE = os.path.join(WORKSPACE, "data/clr_perturbation_history.jsonl")
 MAX_HISTORY = 200

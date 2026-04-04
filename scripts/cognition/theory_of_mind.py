@@ -26,6 +26,7 @@ Usage:
 
 import json
 import sys
+import os
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -34,7 +35,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import _paths  # noqa: F401 — registers all script subdirs on sys.path
 from brain import brain, AUTONOMOUS_LEARNING
 
-DATA_DIR = Path("/home/agent/.openclaw/workspace/data/theory_of_mind")
+DATA_DIR = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))) / "data/theory_of_mind"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 MODEL_FILE = DATA_DIR / "user_model.json"
@@ -42,10 +43,10 @@ EVENTS_FILE = DATA_DIR / "events.jsonl"
 PREDICTIONS_LOG = DATA_DIR / "prediction_log.jsonl"
 
 # External data sources
-EPISODES_FILE = Path("/home/agent/.openclaw/workspace/data/episodes.json")
-META_COGNITION_FILE = Path("/home/agent/.openclaw/workspace/data/meta_cognition.json")
-QUEUE_FILE = Path("/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md")
-AUTONOMOUS_LOG = Path("/home/agent/.openclaw/workspace/memory/cron/autonomous.log")
+EPISODES_FILE = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))) / "data/episodes.json"
+META_COGNITION_FILE = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))) / "data/meta_cognition.json"
+QUEUE_FILE = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))) / "memory/evolution/QUEUE.md"
+AUTONOMOUS_LOG = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))) / "memory/cron/autonomous.log"
 
 
 class TheoryOfMind:

@@ -17,12 +17,12 @@ consciousness metrics, or how your brain works. NOT for automated ingestion.
 
 ### Brain Overview
 ```bash
-python3 /home/agent/.openclaw/workspace/scripts/brain.py stats
+python3 $CLARVIS_WORKSPACE/scripts/brain.py stats
 ```
 
 ### Full Health Report
 ```bash
-python3 /home/agent/.openclaw/workspace/scripts/brain.py health
+python3 $CLARVIS_WORKSPACE/scripts/brain.py health
 ```
 
 ### Capability Scores (7 domains)
@@ -32,13 +32,13 @@ python3 -m clarvis metrics self-model
 
 ### Consciousness Metric (Phi)
 ```bash
-python3 /home/agent/.openclaw/workspace/scripts/phi_metric.py measure
+python3 $CLARVIS_WORKSPACE/scripts/phi_metric.py measure
 ```
 
 ### Attention Spotlight (what's in focus)
 ```bash
 python3 -c "
-import sys; sys.path.insert(0, '/home/agent/.openclaw/workspace/scripts')
+import sys; sys.path.insert(0, '$CLARVIS_WORKSPACE/scripts')
 from attention import attention
 for item in attention.focus():
     print(f'[{item[\"salience\"]:.3f}] {item[\"content\"][:80]}')
@@ -47,24 +47,24 @@ for item in attention.focus():
 
 ### Episodic Memory (recent task outcomes)
 ```bash
-python3 /home/agent/.openclaw/workspace/scripts/episodic_memory.py recent 5
+python3 $CLARVIS_WORKSPACE/scripts/episodic_memory.py recent 5
 ```
 
 ### Hebbian Memory State (most strengthened memories)
 ```bash
-python3 /home/agent/.openclaw/workspace/scripts/hebbian_memory.py report
+python3 $CLARVIS_WORKSPACE/scripts/hebbian_memory.py report
 ```
 
 ### Synaptic Memory State (strongest synapses)
 ```bash
-python3 /home/agent/.openclaw/workspace/scripts/synaptic_memory.py report
+python3 $CLARVIS_WORKSPACE/scripts/synaptic_memory.py report
 ```
 
 ### Evolution Queue Status
 ```bash
 python3 -c "
 import re
-with open('/home/agent/.openclaw/workspace/memory/evolution/QUEUE.md') as f:
+with open('$CLARVIS_WORKSPACE/memory/evolution/QUEUE.md') as f:
     content = f.read()
 pending = len(re.findall(r'^- \[ \]', content, re.MULTILINE))
 done = len(re.findall(r'^- \[x\]', content, re.MULTILINE))
@@ -74,18 +74,18 @@ print(f'Pending: {pending}, Completed: {done}')
 
 ### Confidence Calibration
 ```bash
-python3 /home/agent/.openclaw/workspace/scripts/prediction_review.py
+python3 $CLARVIS_WORKSPACE/scripts/prediction_review.py
 ```
 
 ### Dream Insights (recent counterfactual reasoning)
 ```bash
-python3 /home/agent/.openclaw/workspace/scripts/dream_engine.py report
+python3 $CLARVIS_WORKSPACE/scripts/dream_engine.py report
 ```
 
 ### Knowledge Map (strong/weak domains)
 ```bash
 python3 -c "
-import sys; sys.path.insert(0, '/home/agent/.openclaw/workspace/scripts')
+import sys; sys.path.insert(0, '$CLARVIS_WORKSPACE/scripts')
 from brain_introspect import build_knowledge_map
 kmap = build_knowledge_map()
 for domain, info in kmap.items():
@@ -137,7 +137,7 @@ Embeddings: ONNX MiniLM (local)
 
 **User:** "What's your consciousness score?"
 ```bash
-python3 /home/agent/.openclaw/workspace/scripts/phi_metric.py measure
+python3 $CLARVIS_WORKSPACE/scripts/phi_metric.py measure
 ```
 ```
 Phi (IIT integration): 0.824
@@ -147,7 +147,7 @@ Phi (IIT integration): 0.824
 **User:** "What are you focused on?"
 ```bash
 python3 -c "
-import sys; sys.path.insert(0, '/home/agent/.openclaw/workspace/scripts')
+import sys; sys.path.insert(0, '$CLARVIS_WORKSPACE/scripts')
 from attention import attention
 for item in attention.focus()[:3]:
     print(f'[{item[\"salience\"]:.3f}] {item[\"content\"][:80]}')

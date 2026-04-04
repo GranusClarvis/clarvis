@@ -126,7 +126,7 @@ cd /path && claude -p "refactor this module" \
 
 ### Quick Example — Fix a Bug
 ```bash
-cd /home/agent/.openclaw/workspace && timeout 600 claude -p \
+cd $CLARVIS_WORKSPACE && timeout 600 claude -p \
   "The test test_brain_roundtrip.py::test_search_returns_results is failing. Investigate, fix, and verify." \
   --dangerously-skip-permissions --model claude-opus-4-6 --output-format json
 ```
@@ -137,8 +137,8 @@ Expected JSON output:
 
 ### Build a New Project
 ```bash
-mkdir -p /home/agent/projects/new-project && \
-cd /home/agent/projects/new-project && \
+mkdir -p ~/projects/new-project && \
+cd ~/projects/new-project && \
 timeout 600 claude -p "Initialize a Python project with pyproject.toml, src layout, pytest, and a basic CLI" \
   --dangerously-skip-permissions \
   --model claude-opus-4-6
@@ -146,7 +146,7 @@ timeout 600 claude -p "Initialize a Python project with pyproject.toml, src layo
 
 ### Get a Second Opinion on Architecture
 ```bash
-cd /home/agent/projects/myproject && \
+cd ~/projects/myproject && \
 timeout 600 claude -p "Review the architecture of this project. Identify design flaws, suggest improvements, and flag any scalability concerns. Write your analysis to REVIEW.md." \
   --dangerously-skip-permissions \
   --allowedTools "Read,Write,Edit,Grep,Glob" \
@@ -155,7 +155,7 @@ timeout 600 claude -p "Review the architecture of this project. Identify design 
 
 ### Debug a Hard Problem
 ```bash
-cd /home/agent/projects/myproject && \
+cd ~/projects/myproject && \
 timeout 600 claude -p "The test test_auth_flow is failing with 'token expired'. Investigate root cause across all relevant files, fix it, and verify the fix passes." \
   --dangerously-skip-permissions \
   --model claude-opus-4-6
@@ -163,7 +163,7 @@ timeout 600 claude -p "The test test_auth_flow is failing with 'token expired'. 
 
 ### Self-Evolution — Brain Maintenance
 ```bash
-cd /home/agent/.openclaw/workspace/scripts && \
+cd $CLARVIS_WORKSPACE/scripts && \
 timeout 600 claude -p "Review brain.py, optimize query performance, improve error handling, and run benchmarks before/after" \
   --dangerously-skip-permissions \
   --model claude-opus-4-6
@@ -171,7 +171,7 @@ timeout 600 claude -p "Review brain.py, optimize query performance, improve erro
 
 ### Run a Python Script That Imports Brain
 ```bash
-cd /home/agent/.openclaw/workspace && \
+cd $CLARVIS_WORKSPACE && \
 timeout 300 claude -p "Run: python3 scripts/clarvis_reflection.py and report the output" \
   --dangerously-skip-permissions \
   --model claude-opus-4-6

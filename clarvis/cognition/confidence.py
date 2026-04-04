@@ -10,7 +10,7 @@ import sys
 from datetime import datetime, timezone
 
 
-CALIBRATION_DIR = os.path.join(os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace"), "data", "calibration")
+CALIBRATION_DIR = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "data", "calibration")
 PREDICTIONS_FILE = f"{CALIBRATION_DIR}/predictions.jsonl"
 os.makedirs(CALIBRATION_DIR, exist_ok=True)
 

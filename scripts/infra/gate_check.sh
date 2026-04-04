@@ -6,7 +6,7 @@
 
 set -euo pipefail
 
-WORKSPACE="/home/agent/.openclaw/workspace"
+WORKSPACE="$CLARVIS_WORKSPACE"
 SCRIPTS="$WORKSPACE/scripts"
 PASSED=0
 FAILED=0

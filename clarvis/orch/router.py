@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 
 # === CONFIGURATION ===
 
-DATA_DIR = os.path.join(os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace"), "data")
+DATA_DIR = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "data")
 ROUTER_LOG = os.path.join(DATA_DIR, "router_decisions.jsonl")
 
 # Tier boundaries (from ClawRouter research, tuned for Clarvis tasks)

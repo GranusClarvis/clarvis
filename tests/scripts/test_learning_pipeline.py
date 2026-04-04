@@ -4,10 +4,11 @@ Tests for learning pipeline error handling and storage verification.
 Run: python3 -m pytest scripts/tests/test_learning_pipeline.py -v
 """
 import sys
+import os
 import pytest
 from unittest.mock import patch, MagicMock
 
-sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
+sys.path.insert(0, os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "scripts"))
 import _paths  # noqa: F401,E402
 
 

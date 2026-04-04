@@ -17,7 +17,7 @@ All scripts use explicit `sys.path.insert` to resolve sibling imports. The canon
 
 ```python
 import sys
-sys.path.insert(0, "/home/agent/.openclaw/workspace/scripts")
+sys.path.insert(0, "$CLARVIS_WORKSPACE/scripts")
 from brain import brain, search, remember, capture
 ```
 
@@ -144,7 +144,7 @@ This sets: `PATH`, `HOME`, `CLARVIS_WORKSPACE`, unsets `CLAUDECODE`/`CLAUDE_CODE
 Required flags when spawning from any script:
 ```bash
 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \
-  /home/agent/.local/bin/claude -p "$(cat /tmp/task.txt)" \
+  claude -p "$(cat /tmp/task.txt)" \
   --dangerously-skip-permissions --model claude-opus-4-6
 ```
 

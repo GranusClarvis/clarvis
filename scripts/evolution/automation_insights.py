@@ -17,13 +17,14 @@ Wired into heartbeat_preflight.py to enrich context with actionable warnings.
 import json
 import re
 import sys
+import os
 from collections import Counter, defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import _paths  # noqa: F401 — registers all script subdirs on sys.path
 
-EPISODES_FILE = Path("/home/agent/.openclaw/workspace/data/episodes.json")
+EPISODES_FILE = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))) / "data/episodes.json"
 
 
 def _load_episodes():

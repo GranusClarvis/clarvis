@@ -25,7 +25,7 @@ import os
 import re
 from datetime import datetime, timezone
 
-_WS = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+_WS = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 QUEUE_FILE = os.path.join(_WS, "memory", "evolution", "QUEUE.md")
 STATE_FILE = os.path.join(_WS, "data", "queue_writer_state.json")
 MAX_AUTO_TASKS_PER_DAY = 5

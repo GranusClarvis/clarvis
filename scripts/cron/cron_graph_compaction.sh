@@ -1,8 +1,8 @@
 #!/bin/bash
 # Graph compaction — 04:30 UTC daily
 # Removes orphan edges, deduplicates, backfills nodes, reports health.
-source /home/agent/.openclaw/workspace/scripts/cron/cron_env.sh
-source /home/agent/.openclaw/workspace/scripts/cron/lock_helper.sh
+source $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh
+source $CLARVIS_WORKSPACE/scripts/cron/lock_helper.sh
 
 LOGFILE="memory/cron/graph_compaction.log"
 
@@ -15,7 +15,7 @@ acquire_maintenance_lock "$LOGFILE"
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Graph compaction started ===" >> "$LOGFILE"
 
-python3 /home/agent/.openclaw/workspace/scripts/brain_mem/graph_compaction.py >> "$LOGFILE" 2>&1
+python3 $CLARVIS_WORKSPACE/scripts/brain_mem/graph_compaction.py >> "$LOGFILE" 2>&1
 EXIT_CODE=$?
 
 if [ $EXIT_CODE -ne 0 ]; then

@@ -38,7 +38,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-WORKSPACE = Path("/home/agent/.openclaw/workspace")
+WORKSPACE = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")))
 WORKTREE_DIR = WORKSPACE / ".claude" / "worktrees"
 LOG_DIR = WORKSPACE / "memory" / "cron"
 DATA_DIR = WORKSPACE / "data"

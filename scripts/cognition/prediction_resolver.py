@@ -19,7 +19,7 @@ import os
 import re
 import sys
 
-WORKSPACE = "/home/agent/.openclaw/workspace"
+WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 PREDICTIONS_FILE = f"{WORKSPACE}/data/calibration/predictions.jsonl"
 EPISODES_FILE = f"{WORKSPACE}/data/episodes.json"
 

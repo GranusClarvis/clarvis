@@ -9,10 +9,10 @@
 # This consolidation freed the 14:00 slot for cron_implementation_sprint.sh.
 # =============================================================================
 
-source /home/agent/.openclaw/workspace/scripts/cron/cron_env.sh
-source /home/agent/.openclaw/workspace/scripts/cron/lock_helper.sh
+source $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh
+source $CLARVIS_WORKSPACE/scripts/cron/lock_helper.sh
 LOGFILE="memory/cron/research.log"
-SCRIPTS="/home/agent/.openclaw/workspace/scripts"
+SCRIPTS="$CLARVIS_WORKSPACE/scripts"
 QUEUE_FILE="memory/evolution/QUEUE.md"
 
 # Prevent nested Claude sessions
@@ -195,7 +195,7 @@ if [ "$NOVELTY_EXIT" -ne 0 ]; then
     python3 - <<'PY' >> "$LOGFILE" 2>&1
 import os, sys
 from datetime import datetime, timezone
-sys.path.insert(0, '/home/agent/.openclaw/workspace/scripts/evolution')
+sys.path.insert(0, '$CLARVIS_WORKSPACE/scripts/evolution')
 from queue_writer import mark_task_complete, archive_completed
 queue_file = 'memory/evolution/QUEUE.md'
 archive_file = 'memory/evolution/QUEUE_ARCHIVE.md'
@@ -334,7 +334,7 @@ if [ "$TASK_EXIT" -eq 0 ]; then
     python3 - <<'PY' >> "$LOGFILE" 2>&1
 import os, sys
 from datetime import datetime, timezone
-sys.path.insert(0, '/home/agent/.openclaw/workspace/scripts/evolution')
+sys.path.insert(0, '$CLARVIS_WORKSPACE/scripts/evolution')
 from queue_writer import mark_task_complete, archive_completed
 
 queue_file = 'memory/evolution/QUEUE.md'

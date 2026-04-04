@@ -31,11 +31,11 @@ import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
 
-WORKSPACE = Path("/home/agent/.openclaw/workspace")
+WORKSPACE = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")))
 AGENTS_DIR = WORKSPACE / "data" / "agents"
 AGENTS_STATE = AGENTS_DIR / "agents_state.json"
 WORKTREE_ROOT = WORKSPACE / ".claude" / "worktrees"
-CLAUDE_BIN = "/home/agent/.local/bin/claude"
+CLAUDE_BIN = os.environ.get("CLAUDE_BIN", os.path.expanduser("~/.local/bin/claude"))
 LOGFILE = WORKSPACE / "memory" / "cron" / "agent_lifecycle.log"
 
 # Ensure dirs exist

@@ -29,7 +29,7 @@ The directive engine automatically classifies instructions by:
 
 When invoked with a description, include surrounding conversation context for better classification:
 ```bash
-python3 /home/agent/.openclaw/workspace/scripts/directive_engine.py ingest "$ARGUMENTS" --source user --context "$CONTEXT"
+python3 $CLARVIS_WORKSPACE/scripts/directive_engine.py ingest "$ARGUMENTS" --source user --context "$CONTEXT"
 ```
 
 **$CONTEXT**: Include 1-3 sentences of conversation context surrounding the promise — what the user said, what prompted the commitment, the emotional tone. This helps the directive engine classify scope and detect emotional dampening. If no clear context is available, omit the `--context` flag.
@@ -38,7 +38,7 @@ You may also specify priority: `--priority P0|P1|P2|P3` (default: P2).
 
 When invoked without arguments, show current directive status:
 ```bash
-python3 /home/agent/.openclaw/workspace/scripts/directive_engine.py status
+python3 $CLARVIS_WORKSPACE/scripts/directive_engine.py status
 ```
 
 ## Auto-Detection Guidance

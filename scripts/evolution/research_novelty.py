@@ -36,7 +36,7 @@ import time
 from dataclasses import asdict, dataclass, field
 from typing import Optional
 
-WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 REGISTRY_PATH = os.path.join(WORKSPACE, "data", "research_topic_registry.json")
 INGESTED_TRACKER = os.path.join(WORKSPACE, "data", "research_ingested.json")
 LESSONS_PATH = os.path.join(WORKSPACE, "data", "research_lessons.jsonl")

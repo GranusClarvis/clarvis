@@ -11,7 +11,7 @@
 #   3. Maintenance lock — mutual exclusion for DB maintenance operations
 #
 # Usage:
-#   source /home/agent/.openclaw/workspace/scripts/cron/lock_helper.sh
+#   source $CLARVIS_WORKSPACE/scripts/cron/lock_helper.sh
 #
 #   # Local lock (required for all scripts)
 #   acquire_local_lock "/tmp/clarvis_autonomous.lock" "$LOGFILE" 2400
