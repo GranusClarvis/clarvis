@@ -16,7 +16,7 @@ emit_dashboard_event task_started --task-name "Evening assessment" --section cro
 # === PHI METRIC: RECORD AND ACT ===
 # Record phi metric AND act on it: drops trigger cross-linking, rises log positive episodes
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Recording phi metric and acting on changes..." >> "$LOGFILE"
-PHI_OUTPUT=$(python3 $CLARVIS_WORKSPACE/scripts/metrics/phi_metric.py act 2>&1)
+PHI_OUTPUT=$(python3 "$CLARVIS_WORKSPACE/scripts/metrics/phi_metric.py" act 2>&1)
 PHI_EXIT=$?
 echo "$PHI_OUTPUT" >> "$LOGFILE"
 
@@ -28,7 +28,7 @@ fi
 # Run self_model.py daily update — scores capabilities, tracks diffs, alerts on degradation
 # NEW: domains below 0.4 auto-generate P0 remediation tasks in QUEUE.md (sense-assess-act loop)
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running daily capability assessment (with auto-remediation)..." >> "$LOGFILE"
-ASSESSMENT_OUTPUT=$(python3 $CLARVIS_WORKSPACE/scripts/metrics/self_model.py daily 2>&1)
+ASSESSMENT_OUTPUT=$(python3 "$CLARVIS_WORKSPACE/scripts/metrics/self_model.py" daily 2>&1)
 ASSESSMENT_EXIT=$?
 echo "$ASSESSMENT_OUTPUT" >> "$LOGFILE"
 
@@ -49,7 +49,7 @@ fi
 # === RETRIEVAL QUALITY REPORT ===
 # Generate 7-day retrieval quality report — non-blocking
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Generating retrieval quality report..." >> "$LOGFILE"
-RQ_OUTPUT=$(python3 $CLARVIS_WORKSPACE/scripts/brain_mem/retrieval_quality.py report 7 2>&1)
+RQ_OUTPUT=$(python3 "$CLARVIS_WORKSPACE/scripts/brain_mem/retrieval_quality.py" report 7 2>&1)
 RQ_EXIT=$?
 echo "$RQ_OUTPUT" >> "$LOGFILE"
 
@@ -59,7 +59,7 @@ fi
 
 # === RETRIEVAL BENCHMARK: Ground-truth precision@3 and recall ===
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running retrieval benchmark (20 ground-truth queries)..." >> "$LOGFILE"
-BENCH_OUTPUT=$(python3 $CLARVIS_WORKSPACE/scripts/brain_mem/retrieval_benchmark.py run 2>&1)
+BENCH_OUTPUT=$(python3 "$CLARVIS_WORKSPACE/scripts/brain_mem/retrieval_benchmark.py" run 2>&1)
 BENCH_EXIT=$?
 echo "$BENCH_OUTPUT" >> "$LOGFILE"
 
@@ -69,11 +69,11 @@ fi
 
 # === SELF-REPORT: Cognitive growth tracking ===
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running self-report assessment..." >> "$LOGFILE"
-python3 $CLARVIS_WORKSPACE/scripts/metrics/self_report.py >> "$LOGFILE" 2>&1 || true
+python3 "$CLARVIS_WORKSPACE/scripts/metrics/self_report.py" >> "$LOGFILE" 2>&1 || true
 
 # === DASHBOARD: Regenerate monitoring dashboard ===
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Regenerating dashboard..." >> "$LOGFILE"
-python3 $CLARVIS_WORKSPACE/scripts/metrics/dashboard.py >> "$LOGFILE" 2>&1 || true
+python3 "$CLARVIS_WORKSPACE/scripts/metrics/dashboard.py" >> "$LOGFILE" 2>&1 || true
 
 # === EXISTING: Claude Code evening audit ===
 # Try to acquire global Claude lock — if held, skip audit but continue to digest
@@ -118,13 +118,13 @@ fi
 # === DIGEST: Write first-person summary for M2.5 agent ===
 PHI_DIGEST=$(echo "$PHI_OUTPUT" | grep -oP 'Phi\s*=\s*[\d.]+' | head -1 || echo "Phi not measured")
 ASSESSMENT_DIGEST=$(echo "$ASSESSMENT_OUTPUT" | grep -oP '^\s+\S.*:\s[\d.]+' | head -7 | tr '\n' '; ' || echo "assessment unavailable")
-python3 $CLARVIS_WORKSPACE/scripts/tools/digest_writer.py evening \
+python3 "$CLARVIS_WORKSPACE/scripts/tools/digest_writer.py" evening \
     "Evening assessment complete. $PHI_DIGEST. Capability scores: $ASSESSMENT_DIGEST. Ran retrieval benchmark, self-report, and dashboard regeneration. Evening code audit ${AUDIT_SKIPPED:+skipped (lock held)}${AUDIT_SKIPPED:-done}." \
     >> "$LOGFILE" 2>&1 || true
 
 # === DAILY MEMORY LOG: Generate memory/YYYY-MM-DD.md from digest ===
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Generating daily memory log..." >> "$LOGFILE"
-python3 $CLARVIS_WORKSPACE/scripts/tools/daily_memory_log.py >> "$LOGFILE" 2>&1 || true
+python3 "$CLARVIS_WORKSPACE/scripts/tools/daily_memory_log.py" >> "$LOGFILE" 2>&1 || true
 
 emit_dashboard_event task_completed --task-name "Evening assessment" --section cron_evening --status success
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Evening routine complete ===" >> "$LOGFILE"

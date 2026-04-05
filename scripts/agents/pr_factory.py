@@ -19,6 +19,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 CLARVIS_WORKSPACE = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")))
+import sys
+sys.path.insert(0, str(CLARVIS_WORKSPACE / "scripts" / "brain_mem"))
 
 # ── Task Classification ──
 

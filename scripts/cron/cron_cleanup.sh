@@ -18,5 +18,5 @@ echo "$$ $(date -u +%Y-%m-%dT%H:%M:%S)" > "$LOCKFILE"
 trap 'rm -f "$LOCKFILE"' EXIT
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Weekly cleanup started ==="
-python3 $CLARVIS_WORKSPACE/scripts/infra/cleanup_policy.py
+python3 "$CLARVIS_WORKSPACE/scripts/infra/cleanup_policy.py"
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Weekly cleanup finished ==="

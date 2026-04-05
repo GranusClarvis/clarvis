@@ -18,5 +18,5 @@ echo "$$ $(date -u +%Y-%m-%dT%H:%M:%S)" > "$LOCKFILE"
 trap 'rm -f "$LOCKFILE"' EXIT
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === AZR weekly session started ==="
-python3 $CLARVIS_WORKSPACE/scripts/cognition/absolute_zero.py run 5
+python3 "$CLARVIS_WORKSPACE/scripts/cognition/absolute_zero.py" run 5
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === AZR weekly session finished ==="

@@ -97,7 +97,7 @@ fi
 
 # === DIGEST: Write first-person summary for M2.5 agent ===
 SUMMARY=$(tail -c 300 "$TASK_OUTPUT" 2>/dev/null | tr '\n' ' ' | sed 's/[^a-zA-Z0-9 _.,:;=+\-\/()@#%]//g' | tail -c 250)
-python3 $CLARVIS_WORKSPACE/scripts/tools/digest_writer.py reflection \
+python3 "$CLARVIS_WORKSPACE/scripts/tools/digest_writer.py" reflection \
     "MONTHLY REFLECTION (${MONTH_TAG}): ${SUMMARY}" \
     >> "$LOGFILE" 2>&1 || true
 

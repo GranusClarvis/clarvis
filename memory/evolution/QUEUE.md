@@ -6,9 +6,6 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 
 ## P0 — Current Sprint
 
-- [ ] [P0_CLARVIS_REFLECTION_PATH_BUG] Fix `scripts/cognition/clarvis_reflection.py` path construction regressions introduced in the path-hygiene sweep (`fos.path.join` typo, broken `"memory/{today}.md"` interpolation, missing `os` import safety). Add a smoke test that exercises `get_today_memory()`.
-- [ ] [P0_CRON_DOCTOR_HOME_EXPANSION] Fix `scripts/cron/cron_doctor.py` setting `HOME` to the literal string `"~"` in subprocess env. Use `os.path.expanduser("~")` or inherited HOME and add a regression check.
-- [ ] [P0_SHELL_PATH_QUOTING_AUDIT] Audit the April 5 path-hygiene shell edits for unsafe unquoted `$CLARVIS_WORKSPACE` usages in command positions (`git -C`, `python3`, worktree paths, sourced files). Quote variables consistently and add one shellcheck-style smoke pass for modified cron scripts.
 
 ## P1 — This Week
 
@@ -19,9 +16,9 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 ### Context/Prompt Pipeline
 
 ### SWO / Clarvis Brand Integration
-- [ ] [SWO_CLARVIS_ECOSYSTEM_POSITIONING] Write a short positioning doc that explains why Clarvis exists in the SWO ecosystem, what unique role it plays, how it connects to SWO products/lore, and what naming conventions should be used publicly.
-- [ ] [SWO_AGENT_WORKSPACE_SETUP] Ensure star-world-order agent workspace is functional: clone, brain seed, golden QA passing.
-- [ ] [SWO_NEXT_PR] Pick next SWO issue from upstream, spawn agent, deliver PR via fork workflow.
+- [x] [SWO_CLARVIS_ECOSYSTEM_POSITIONING] Write a short positioning doc that explains why Clarvis exists in the SWO ecosystem, what unique role it plays, how it connects to SWO products/lore, and what naming conventions should be used publicly. _(2026-04-05: `docs/SWO_CLARVIS_POSITIONING.md` created — covers role, architecture position, naming rules, voice guidelines, quick reference card)_
+- [x] [SWO_AGENT_WORKSPACE_SETUP] Ensure star-world-order agent workspace is functional: clone, brain seed, golden QA passing. _(2026-04-05: workspace functional — repo synced with upstream/dev, brain has 19 golden QA pairs (P@1=0.632), 7/7 tasks success, 3 PRs delivered. Fixed `lite_brain` import path bug in `project_agent.py` — was pointing to `scripts/` instead of `scripts/brain_mem/`)_
+- [ ] [SWO_NEXT_PR] Pick next SWO issue from upstream, spawn agent, deliver PR via fork workflow. _(2026-04-05: blocked — 3 PRs already open (#175, #176, #177) with zero reviews. Only 2 open issues (#43, #44) are large features. Wait for upstream to review existing PRs before adding more.)_
 
 ### Fresh-Install / Isolation Validation
 - [ ] [INSTALL_MATRIX_DEFINE] Define the supported install matrix for isolated validation: fresh OpenClaw install, fresh Hermes agent install, and Clarvis-on-top install path. Document expected prerequisites, local-model-only mode, and pass/fail criteria for “usable without extra hassle”.

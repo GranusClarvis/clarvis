@@ -8,7 +8,7 @@ LOG_DIR="$CLARVIS_WORKSPACE/monitoring"
 mkdir -p "$LOG_DIR"
 
 # === DAILY MEMORY FILE BOOTSTRAP (ensure it exists for consumers) ===
-python3 $CLARVIS_WORKSPACE/scripts/tools/daily_memory_log.py ensure >/dev/null 2>&1 || true
+python3 "$CLARVIS_WORKSPACE/scripts/tools/daily_memory_log.py" ensure >/dev/null 2>&1 || true
 
 # === SYSTEM HEALTH ===
 MEM_TOTAL=$(free -m | awk '/^Mem:/{print $2}')
@@ -86,7 +86,7 @@ if [ -f "$BRAIN_CACHE" ]; then
     [ "$BRAIN_AGE" -lt 3600 ] && BRAIN_STALE=false
 fi
 if [ "$BRAIN_STALE" = true ]; then
-    python3 $CLARVIS_WORKSPACE/scripts/brain_mem/brain_hygiene.py check >> "$LOG_DIR"/health.log 2>&1 || {
+    python3 "$CLARVIS_WORKSPACE/scripts/brain_mem/brain_hygiene.py" check >> "$LOG_DIR"/health.log 2>&1 || {
         echo "[$DATE] [WARNING] Brain hygiene check failed or detected regression" >> "$LOG_DIR"/alerts.log
     
     }
@@ -101,7 +101,7 @@ if [ -f "$PI_CACHE" ]; then
     [ "$PI_AGE" -lt 3600 ] && PI_STALE=false
 fi
 if [ "$PI_STALE" = true ]; then
-    PI_VAL=$(cd $CLARVIS_WORKSPACE && python3 - <<'PYEOF' 2>/dev/null
+    PI_VAL=$(cd "$CLARVIS_WORKSPACE" && python3 - <<'PYEOF' 2>/dev/null
 import sys; sys.path.insert(0, 'scripts/metrics')
 from performance_benchmark import run_quick_benchmark
 try:
@@ -130,7 +130,7 @@ if [ -f "$PHI_SUB_CACHE" ]; then
     [ "$PHI_SUB_AGE" -lt 3600 ] && PHI_SUB_STALE=false
 fi
 if [ "$PHI_SUB_STALE" = true ]; then
-    PHI_SUB_JSON=$(cd $CLARVIS_WORKSPACE && python3 -c "
+    PHI_SUB_JSON=$(cd "$CLARVIS_WORKSPACE" && python3 -c "
 import sys, json
 sys.path.insert(0, '.')
 try:
@@ -272,7 +272,7 @@ GATEWAY_STATUS="down"
 ss -tlnp 2>/dev/null | grep -q ":18789 " && GATEWAY_STATUS="up"
 
 # Brain count (fast — just a ChromaDB count)
-BRAIN_COUNT=$(cd $CLARVIS_WORKSPACE && python3 -c "
+BRAIN_COUNT=$(cd "$CLARVIS_WORKSPACE" && python3 -c "
 import sys; sys.path.insert(0, 'scripts')
 try:
     from brain import get_brain
@@ -297,7 +297,7 @@ fi
 CACHED_PI="null"
 if [ -n "${PI_VAL:-}" ] && [ "${PI_VAL:-}" != "error" ]; then
     CACHED_PI="$PI_VAL"
-elif [ -f $CLARVIS_WORKSPACE/data/performance_metrics.json ]; then
+elif [ -f "$CLARVIS_WORKSPACE/data/performance_metrics.json" ]; then
     CACHED_PI=$(python3 -c "
 import json
 try:
@@ -312,7 +312,7 @@ fi
 CACHED_PHI="null"
 if [ -n "${PHI_TOTAL:-}" ]; then
     CACHED_PHI="$PHI_TOTAL"
-elif [ -f $CLARVIS_WORKSPACE/data/phi_history.json ]; then
+elif [ -f "$CLARVIS_WORKSPACE/data/phi_history.json" ]; then
     CACHED_PHI=$(python3 -c "
 import json
 try:

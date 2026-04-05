@@ -130,8 +130,8 @@ print(active)
         REPORT="${REPORT}WARN    working_memory — only ${WM_ACTIVE} active items (target: 3+)\n"
         # Auto-seed if completely empty
         if [ "$WM_ACTIVE" -eq 0 ]; then
-            python3 $CLARVIS_WORKSPACE/scripts/cognition/attention.py add "System watchdog: working memory was empty, seeded" 0.6 >> "$WATCHDOG_LOG" 2>&1
-            python3 $CLARVIS_WORKSPACE/scripts/cognition/attention.py add "Active evolution: $(date -u +%Y-%m-%d) heartbeat cycle running" 0.5 >> "$WATCHDOG_LOG" 2>&1
+            python3 "$CLARVIS_WORKSPACE/scripts/cognition/attention.py" add "System watchdog: working memory was empty, seeded" 0.6 >> "$WATCHDOG_LOG" 2>&1
+            python3 "$CLARVIS_WORKSPACE/scripts/cognition/attention.py" add "Active evolution: $(date -u +%Y-%m-%d) heartbeat cycle running" 0.5 >> "$WATCHDOG_LOG" 2>&1
             REPORT="${REPORT}REPAIR  working_memory — seeded 2 items to prevent empty state\n"
         fi
     else

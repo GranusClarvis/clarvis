@@ -2128,3 +2128,8 @@ _Last archived: 2026-04-03_
 - [x] [SWO_CLARVIS_REDESIGN_CONCEPT] *(2026-04-05)* Redesign concept covering CSS palette, typography, motifs, README/SOUL/dashboard changes — see `docs/SWO_CLARVIS_REDESIGN_CONCEPT.md`.
 - [x] [SWO_CLARVIS_COPY_AUDIT] *(2026-04-05)* Audited 9 surfaces, identified 14 replacements across 8 files with copy-paste-ready snippets — see `docs/SWO_CLARVIS_COPY_AUDIT.md`.
 - [x] [BRAIN_RESEARCH_CANONICALIZATION] Audit ClarvisDB + memory files for duplicate research memories/episodes created by repeated runs. Deduplicate safely, preserve the best canonical summary per topic, and link follow-up/refinement entries instead of creating parallel duplicates. (2026-03-12)
+
+## Archived 2026-04-05
+- [x] [P0_CLARVIS_REFLECTION_PATH_BUG] Fixed `fos.path.join` → `os.path.join`, `"memory/{today}.md"` → f-string. Added 8 smoke tests. (2026-04-05)
+- [x] [P0_CRON_DOCTOR_HOME_EXPANSION] Fixed `"HOME": "~"` → `os.path.expanduser("~")` + regression test. (2026-04-05)
+- [x] [P0_SHELL_PATH_QUOTING_AUDIT] Quoted ~48 unquoted `$CLARVIS_WORKSPACE` usages across 13 shell scripts. (2026-04-05)

@@ -931,7 +931,7 @@ Status: success=done, partial=incomplete, failed=error, blocked=external dep.
 ## Brain Usage
 Store learnings about this repo:
 ```python
-import sys; sys.path.insert(0, os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "scripts"))
+import sys; sys.path.insert(0, os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "scripts", "brain_mem"))
 from lite_brain import LiteBrain
 brain = LiteBrain("{agent_dir}/data/brain")
 brain.store("insight about this repo", "project-learnings")
@@ -1425,7 +1425,7 @@ def build_spawn_prompt(name: str, task: str, config: dict,
         "",
         "## Brain (optional — store useful learnings)",
         f"export AGENT_BRAIN_DIR={agent_dir}/data/brain",
-        f"python3 -c \"import sys; sys.path.insert(0, '{CLARVIS_WORKSPACE}/scripts'); "
+        f"python3 -c \"import sys; sys.path.insert(0, '{CLARVIS_WORKSPACE}/scripts/brain_mem'); "
         f"from lite_brain import LiteBrain; b=LiteBrain('{agent_dir}/data/brain'); "
         "b.store('what you learned', 'project-procedures')\"",
         "",
@@ -2374,7 +2374,7 @@ def cmd_seed(name: str) -> dict:
         return {"error": f"Failed to read golden_qa.json: {e}"}
 
     # Import lite brain
-    sys.path.insert(0, str(CLARVIS_WORKSPACE / "scripts"))
+    sys.path.insert(0, str(CLARVIS_WORKSPACE / "scripts" / "brain_mem"))
     from lite_brain import LiteBrain
     brain = LiteBrain(str(agent_dir / "data" / "brain"))
 
@@ -2486,6 +2486,7 @@ def _benchmark_retrieval(name: str) -> dict:
     except Exception as e:
         return {"status": "error", "error": str(e)}
 
+    sys.path.insert(0, str(CLARVIS_WORKSPACE / "scripts" / "brain_mem"))
     from lite_brain import LiteBrain
     brain = LiteBrain(str(agent_dir / "data" / "brain"))
 
@@ -3280,7 +3281,7 @@ def run_task_loop(name: str, task: str, timeout_per_subtask: int = 1200,
 
             # Store episode in agent brain
             try:
-                sys.path.insert(0, str(CLARVIS_WORKSPACE / "scripts"))
+                sys.path.insert(0, str(CLARVIS_WORKSPACE / "scripts" / "brain_mem"))
                 from lite_brain import LiteBrain
                 brain = LiteBrain(str(agent_dir / "data" / "brain"))
                 brain.store(

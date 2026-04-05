@@ -14,7 +14,7 @@ from brain import brain
 def get_today_memory():
     """Read today's memory file"""
     today = datetime.now().strftime("%Y-%m-%d")
-    path = fos.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "memory/{today}.md")
+    path = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), f"memory/{today}.md")
     
     if not os.path.exists(path):
         return None

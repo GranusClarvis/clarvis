@@ -52,51 +52,51 @@ run_step "context_gc" python3 -m clarvis context gc
 run_step "brain_optimize" python3 -m clarvis brain optimize
 
 # Step 2: Full reflection loop (extract lessons + generate queue tasks)
-run_step "reflection_loop" python3 $CLARVIS_WORKSPACE/scripts/cognition/clarvis_reflection.py
+run_step "reflection_loop" python3 "$CLARVIS_WORKSPACE/scripts/cognition/clarvis_reflection.py"
 
 # Step 3: Knowledge synthesis — cross-domain connections
-run_step "knowledge_synthesis" python3 $CLARVIS_WORKSPACE/scripts/cognition/knowledge_synthesis.py
+run_step "knowledge_synthesis" python3 "$CLARVIS_WORKSPACE/scripts/cognition/knowledge_synthesis.py"
 
 # Step 3.5: Cross-collection linking
 run_step "crosslink" python3 -m clarvis brain crosslink
 
 # Step 3.6: Intra-collection linking (cap 5/collection)
-run_step "intra_linker" python3 $CLARVIS_WORKSPACE/scripts/hooks/intra_linker.py --cap 5
+run_step "intra_linker" python3 "$CLARVIS_WORKSPACE/scripts/hooks/intra_linker.py" --cap 5
 
 # Step 3.7: Semantic bridge building (cap 5/run)
 # semantic_bridge_builder.py was removed; skip this step.
 # run_step "semantic_bridge" python3 $CLARVIS_WORKSPACE/scripts/hooks/semantic_bridge_builder.py --top 2
 
 # Step 4: Memory consolidation — deduplicate, prune noise, archive stale
-run_step "memory_consolidation" python3 $CLARVIS_WORKSPACE/scripts/brain_mem/memory_consolidation.py consolidate
+run_step "memory_consolidation" python3 "$CLARVIS_WORKSPACE/scripts/brain_mem/memory_consolidation.py" consolidate
 
 # Step 4.5: Hebbian memory evolution (A-Mem style)
-run_step "hebbian_evolve" python3 $CLARVIS_WORKSPACE/scripts/brain_mem/hebbian_memory.py evolve
+run_step "hebbian_evolve" python3 "$CLARVIS_WORKSPACE/scripts/brain_mem/hebbian_memory.py" evolve
 
 # Step 4.6: Synaptic memory evolution — STDP weight updates + consolidation
-run_step "synaptic_evolve" python3 $CLARVIS_WORKSPACE/scripts/brain_mem/synaptic_memory.py evolve
-run_step "synaptic_consolidate" python3 $CLARVIS_WORKSPACE/scripts/brain_mem/synaptic_memory.py consolidate
+run_step "synaptic_evolve" python3 "$CLARVIS_WORKSPACE/scripts/brain_mem/synaptic_memory.py" evolve
+run_step "synaptic_consolidate" python3 "$CLARVIS_WORKSPACE/scripts/brain_mem/synaptic_memory.py" consolidate
 
 # Step 5: Conversation learning
-run_step "conversation_learner" python3 $CLARVIS_WORKSPACE/scripts/cognition/conversation_learner.py
+run_step "conversation_learner" python3 "$CLARVIS_WORKSPACE/scripts/cognition/conversation_learner.py"
 
 # Step 5.5: Failure amplification — surface soft failures as negative episodes
-run_step "failure_amplifier" python3 $CLARVIS_WORKSPACE/scripts/evolution/failure_amplifier.py amplify
+run_step "failure_amplifier" python3 "$CLARVIS_WORKSPACE/scripts/evolution/failure_amplifier.py" amplify
 
 # Step 6: Episodic synthesis
-run_step "episodic_synthesis" python3 $CLARVIS_WORKSPACE/scripts/brain_mem/episodic_memory.py synthesize
+run_step "episodic_synthesis" python3 "$CLARVIS_WORKSPACE/scripts/brain_mem/episodic_memory.py" synthesize
 
 # Step 6.5: Temporal self-awareness
-run_step "temporal_self" python3 $CLARVIS_WORKSPACE/scripts/hooks/temporal_self.py store
+run_step "temporal_self" python3 "$CLARVIS_WORKSPACE/scripts/hooks/temporal_self.py" store
 
 # Step 6.7: Meta-learning analysis
-run_step "meta_learning" python3 $CLARVIS_WORKSPACE/scripts/evolution/meta_learning.py analyze
+run_step "meta_learning" python3 "$CLARVIS_WORKSPACE/scripts/evolution/meta_learning.py" analyze
 
 # Step 6.9: Absolute Zero Reasoner (AZR)
-run_step "absolute_zero" python3 $CLARVIS_WORKSPACE/scripts/cognition/absolute_zero.py run 3
+run_step "absolute_zero" python3 "$CLARVIS_WORKSPACE/scripts/cognition/absolute_zero.py" run 3
 
 # Step 6.95: Causal Analysis (Pearl SCM)
-run_step "causal_model" python3 $CLARVIS_WORKSPACE/scripts/cognition/causal_model.py analyze
+run_step "causal_model" python3 "$CLARVIS_WORKSPACE/scripts/cognition/causal_model.py" analyze
 
 # Step 6.96: Confidence recalibration (7-day rolling window)
 run_step "recalibrate" python3 -c "from clarvis.cognition.confidence import recalibrate; r = recalibrate(); print(f'Brier 7d={r[\"brier_7d\"]}, all={r[\"brier_all\"]}, shift={r[\"shift_detected\"]}, threshold={r[\"new_threshold\"]}, archived={r[\"archived\"]}, swept={r[\"swept\"]}')"
@@ -104,11 +104,11 @@ run_step "recalibrate" python3 -c "from clarvis.cognition.confidence import reca
 # Step 6.97: Research-to-Queue bridge (monthly — 1st of month only)
 DAY_OF_MONTH=$(date +%d)
 if [ "$DAY_OF_MONTH" = "01" ]; then
-    run_step "research_bridge" python3 $CLARVIS_WORKSPACE/scripts/evolution/research_to_queue.py inject --max 3
+    run_step "research_bridge" python3 "$CLARVIS_WORKSPACE/scripts/evolution/research_to_queue.py" inject --max 3
 fi
 
 # Step 7: Session close — save attention state and working memory for next session — CRITICAL
-run_step "session_close" python3 $CLARVIS_WORKSPACE/scripts/hooks/session_hook.py close
+run_step "session_close" python3 "$CLARVIS_WORKSPACE/scripts/hooks/session_hook.py" close
 
 # === Failure summary ===
 if [ "$STEP_FAILURES" -gt 0 ]; then
@@ -119,7 +119,7 @@ else
 fi
 
 # === DIGEST: Write first-person summary for M2.5 agent ===
-python3 $CLARVIS_WORKSPACE/scripts/tools/digest_writer.py reflection \
+python3 "$CLARVIS_WORKSPACE/scripts/tools/digest_writer.py" reflection \
     "${DIGEST_STATUS} QUEUE: ${QUEUE_PENDING} pending, ${QUEUE_DONE} done. WEAKEST: ${WEAKEST_METRIC}. Pipeline: optimize, reflect, synthesize, crosslink, consolidate, learn, amplify, episodic, temporal, meta-learn, AZR, causal. Session saved." \
     >> "$LOGFILE" 2>&1 || true
 

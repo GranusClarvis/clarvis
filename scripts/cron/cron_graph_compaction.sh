@@ -15,7 +15,7 @@ acquire_maintenance_lock "$LOGFILE"
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Graph compaction started ===" >> "$LOGFILE"
 
-python3 $CLARVIS_WORKSPACE/scripts/brain_mem/graph_compaction.py >> "$LOGFILE" 2>&1
+python3 "$CLARVIS_WORKSPACE/scripts/brain_mem/graph_compaction.py" >> "$LOGFILE" 2>&1
 EXIT_CODE=$?
 
 if [ $EXIT_CODE -ne 0 ]; then

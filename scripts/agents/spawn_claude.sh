@@ -74,9 +74,9 @@ if [ "$ISOLATED" = "true" ]; then
     AGENT_ID="spawn-$(date +%m%d%H%M)-$$"
     WORKTREE_PATH="$CLARVIS_WORKSPACE/.claude/worktrees/$AGENT_ID"
     WORKTREE_BRANCH="agent/$AGENT_ID"
-    mkdir -p $CLARVIS_WORKSPACE/.claude/worktrees
+    mkdir -p "$CLARVIS_WORKSPACE/.claude/worktrees"
 
-    git -C $CLARVIS_WORKSPACE worktree add -b "$WORKTREE_BRANCH" "$WORKTREE_PATH" HEAD 2>> "$LOGFILE"
+    git -C "$CLARVIS_WORKSPACE" worktree add -b "$WORKTREE_BRANCH" "$WORKTREE_PATH" HEAD 2>> "$LOGFILE"
     if [ $? -eq 0 ]; then
         WORK_DIR="$WORKTREE_PATH"
         echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] ISOLATED: worktree=$WORKTREE_PATH branch=$WORKTREE_BRANCH" >> "$LOGFILE"
@@ -218,7 +218,7 @@ if [ "$ISOLATED" = "true" ] && [ -n "$WORKTREE_PATH" ]; then
 
     # === Clone-Test-Verify gate (ROADMAP Phase 3.2) ===
     # Run tests in the worktree before deciding to keep or reject changes
-    VERIFY_JSON=\$(python3 $CLARVIS_WORKSPACE/scripts/tools/clone_test_verify.py verify "$WORKTREE_PATH" 2>/dev/null || echo '{"safe_to_promote": false}')
+    VERIFY_JSON=\$(python3 "$CLARVIS_WORKSPACE/scripts/tools/clone_test_verify.py" verify "$WORKTREE_PATH" 2>/dev/null || echo '{"safe_to_promote": false}')
     SAFE=\$(echo "\$VERIFY_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin).get('safe_to_promote', False))" 2>/dev/null || echo "False")
     if [ "\$SAFE" = "True" ]; then
       echo "[\$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] VERIFY: PASS — worktree $WORKTREE_BRANCH safe to promote" >> "\$LOGFILE"
@@ -227,8 +227,8 @@ if [ "$ISOLATED" = "true" ] && [ -n "$WORKTREE_PATH" ]; then
     fi
   else
     echo "[\$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] ISOLATED: no changes, removing worktree" >> "\$LOGFILE"
-    git -C $CLARVIS_WORKSPACE worktree remove --force "$WORKTREE_PATH" 2>/dev/null || true
-    git -C $CLARVIS_WORKSPACE branch -D "$WORKTREE_BRANCH" 2>/dev/null || true
+    git -C "$CLARVIS_WORKSPACE" worktree remove --force "$WORKTREE_PATH" 2>/dev/null || true
+    git -C "$CLARVIS_WORKSPACE" branch -D "$WORKTREE_BRANCH" 2>/dev/null || true
   fi
 fi
 rm -f "$OUTPUT_FILE"

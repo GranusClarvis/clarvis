@@ -479,7 +479,7 @@ def _rerun_job(job_name: str, result: dict) -> dict:
             capture_output=True, text=True,
             timeout=timeout,
             cwd=str(WORKSPACE),
-            env={**os.environ, "HOME": "~"},
+            env={**os.environ, "HOME": os.path.expanduser("~")},
         )
         result["success"] = proc.returncode == 0
         result["exit_code"] = proc.returncode

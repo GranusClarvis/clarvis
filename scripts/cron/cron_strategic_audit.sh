@@ -113,7 +113,7 @@ fi
 
 # === STEP 1: CLR Perturbation / Ablation Sweep ===
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running CLR perturbation ablation sweep..." >> "$LOGFILE"
-CLR_PERTURBATION_OUTPUT=$(timeout 300 python3 $CLARVIS_WORKSPACE/clarvis/metrics/clr_perturbation.py 2>&1) || true
+CLR_PERTURBATION_OUTPUT=$(timeout 300 python3 "$CLARVIS_WORKSPACE/clarvis/metrics/clr_perturbation.py" 2>&1) || true
 echo "$CLR_PERTURBATION_OUTPUT" >> "$LOGFILE"
 # Extract summary for audit prompt
 CLR_PERTURBATION_SUMMARY=$(echo "$CLR_PERTURBATION_OUTPUT" | grep -E "^\[perturbation\]|Baseline|CRITICAL|HELPFUL|HARMFUL|NEUTRAL" | tail -15)

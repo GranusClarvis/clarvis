@@ -28,6 +28,7 @@ from pathlib import Path
 
 WORKSPACE = Path(os.environ.get("CLARVIS_WORKSPACE",
                                 os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))))
+sys.path.insert(0, str(WORKSPACE / "scripts" / "brain_mem"))
 SCRIPTS = WORKSPACE / "scripts"
 DATA_DIR = WORKSPACE / "data" / "orchestration_benchmarks"
 
