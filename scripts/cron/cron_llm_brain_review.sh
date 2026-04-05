@@ -14,8 +14,8 @@
 # the expense of better recall. This is encoded in the review prompt itself.
 # =============================================================================
 
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/cron_env.sh"
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lock_helper.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || echo "${CLARVIS_WORKSPACE:-$HOME/.openclaw/workspace}/scripts/cron")/cron_env.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || echo "${CLARVIS_WORKSPACE:-$HOME/.openclaw/workspace}/scripts/cron")/lock_helper.sh"
 
 LOGFILE="memory/cron/llm_brain_review.log"
 CLAUDE_OUTPUT="/tmp/brain_review_output.txt"

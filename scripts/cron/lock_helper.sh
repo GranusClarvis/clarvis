@@ -11,7 +11,7 @@
 #   3. Maintenance lock — mutual exclusion for DB maintenance operations
 #
 # Usage:
-#   source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lock_helper.sh"
+#   source "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || echo "${CLARVIS_WORKSPACE:-$HOME/.openclaw/workspace}/scripts/cron")/lock_helper.sh"
 #
 #   # Local lock (required for all scripts)
 #   acquire_local_lock "/tmp/clarvis_autonomous.lock" "$LOGFILE" 2400
@@ -196,7 +196,7 @@ acquire_global_claude_lock() {
             echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] GLOBAL LOCK: Claude already running (PID $gpid, age=${glock_age}s) — deferring" >> "$logfile"
             if [ "$on_conflict" = "queue" ]; then
                 local scripts_dir
-                scripts_dir="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+                scripts_dir="$(dirname "$(readlink -f "${BASH_SOURCE[0]:-$0}")")" 2>/dev/null || scripts_dir="${CLARVIS_WORKSPACE:-$HOME/.openclaw/workspace}/scripts/cron"
                 local caller_name
                 caller_name="$(basename "$0" .sh)"
                 python3 "$scripts_dir/../evolution/queue_writer.py" add \

@@ -69,7 +69,7 @@ def route_query(query: str) -> list:
     return DEFAULT_COLLECTIONS
 
 
-def smart_recall(query: str, n: int = 5, max_distance: float = 1.5, **kwargs):
+def smart_recall(query: str, n: int = 5, max_distance: float = 1.4, **kwargs):
     """
     Improved recall with query routing, collection priority, and distance filtering.
 
@@ -110,7 +110,7 @@ def smart_recall(query: str, n: int = 5, max_distance: float = 1.5, **kwargs):
         if dist is None:
             r["_boosted_distance"] = 999
         elif r.get("collection") in primary_collections:
-            r["_boosted_distance"] = dist * 0.8  # 20% boost
+            r["_boosted_distance"] = dist * 0.75  # 20% boost
         else:
             r["_boosted_distance"] = dist
 

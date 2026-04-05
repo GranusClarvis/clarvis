@@ -47,7 +47,7 @@ EVENTS_FILE = WORKSPACE / "data" / "dashboard" / "events.jsonl"
 SCOREBOARD_FILE = WORKSPACE / "data" / "orchestration_scoreboard.jsonl"
 STATIC_DIR = Path(__file__).parent / "dashboard_static"
 LOCK_DIR = Path("/tmp")
-AGENTS_DIR = Path("~/agents")
+AGENTS_DIR = Path("~/agents").expanduser()
 
 # ── Config ─────────────────────────────────────────────────────────────
 

@@ -9,8 +9,8 @@
 # This consolidation freed the 14:00 slot for cron_implementation_sprint.sh.
 # =============================================================================
 
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/cron_env.sh"
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lock_helper.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || echo "${CLARVIS_WORKSPACE:-$HOME/.openclaw/workspace}/scripts/cron")/cron_env.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || echo "${CLARVIS_WORKSPACE:-$HOME/.openclaw/workspace}/scripts/cron")/lock_helper.sh"
 LOGFILE="memory/cron/research.log"
 SCRIPTS="$CLARVIS_WORKSPACE/scripts"
 QUEUE_FILE="memory/evolution/QUEUE.md"
@@ -83,13 +83,13 @@ if [ -z "$RESEARCH_TASK" ]; then
     # Run discovery inline (same logic as cron_research_discovery.sh)
     CONTEXT_BRIEF_DISC=$(python3 "$SCRIPTS/tools/prompt_builder.py" context-brief --task "identify valuable research topics" --tier standard 2>/dev/null || echo "")
 
-    # Sources: research_ingested.json + QUEUE_ARCHIVE.md (completed research topics)
+    # Sources: research_ingested.json + QUEUE_ARCHIVE.md + topic registry (completion lock)
     ALREADY_RESEARCHED=$(python3 -c "
 import json, os, re
 seen = set()
 
 def emit(text):
-    text = re.sub(r'\s+', ' ', text).strip(' -–—:')
+    text = re.sub(r'\s+', ' ', text).strip(' -\xe2\x80\x93\xe2\x80\x94:')
     if not text:
         return
     key = text.lower()
@@ -121,7 +121,17 @@ if os.path.exists(archive_file):
             if m:
                 emit(f'{m.group(1)} {m.group(2)}')
 
-if not os.path.exists(tracker_file) and not os.path.exists(archive_file):
+# 3. Canonical topic registry (strongest completion lock — catches semantic dupes)
+registry_file = 'data/research_topic_registry.json'
+if os.path.exists(registry_file):
+    with open(registry_file) as f:
+        registry = json.load(f)
+    for name, entry in sorted(registry.items()):
+        rc = entry.get('research_count', 0)
+        if rc >= 1:
+            emit(f'{name} (researched {rc}x)')
+
+if not os.path.exists(tracker_file) and not os.path.exists(archive_file) and not os.path.exists(registry_file):
     print('  (none)')
 " 2>/dev/null)
 
@@ -302,9 +312,41 @@ STEPS:
 $STRUCTURED_OUTPUT_FMT"
 fi
 
+# === V2 RUN RECORD: START ===
+V2_RUN_ID=$(python3 -c "
+import sys, os
+sys.path.insert(0, os.path.join(os.environ.get('CLARVIS_WORKSPACE', os.getcwd()), 'clarvis', 'queue'))
+try:
+    from engine import QueueEngine
+    qe = QueueEngine()
+    rid = qe.start_external_run('$RESEARCH_TASK', source='cron_research')
+    if rid:
+        print(rid)
+except Exception as e:
+    print('', end='')  # empty on failure — non-fatal
+    import traceback; traceback.print_exc(file=sys.stderr)
+" 2>> "$LOGFILE")
+[ -n "$V2_RUN_ID" ] && echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] V2 run started: $V2_RUN_ID" >> "$LOGFILE"
+
 run_claude_monitored 1800 "$TASK_OUTPUT_FILE" "$RESEARCH_PROMPT" "$LOGFILE"
 TASK_EXIT=$MONITORED_EXIT
 TASK_DURATION=$((SECONDS - TASK_START))
+
+# === V2 RUN RECORD: END ===
+if [ -n "$V2_RUN_ID" ]; then
+    python3 -c "
+import sys, os
+sys.path.insert(0, os.path.join(os.environ.get('CLARVIS_WORKSPACE', os.getcwd()), 'clarvis', 'queue'))
+try:
+    from engine import QueueEngine
+    qe = QueueEngine()
+    outcome = 'success' if $TASK_EXIT == 0 else 'failure'
+    qe.end_run('$V2_RUN_ID', outcome, exit_code=$TASK_EXIT, duration_s=$TASK_DURATION)
+except Exception as e:
+    import traceback; traceback.print_exc(file=sys.stderr)
+" 2>> "$LOGFILE"
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] V2 run ended: $V2_RUN_ID outcome=$([ $TASK_EXIT -eq 0 ] && echo success || echo failure)" >> "$LOGFILE"
+fi
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] RESEARCH EXECUTION: exit=$TASK_EXIT duration=${TASK_DURATION}s" >> "$LOGFILE"
 

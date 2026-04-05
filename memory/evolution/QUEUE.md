@@ -6,14 +6,10 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 
 ## P0 — Current Sprint
 
-- [ ] [PATH_HYGIENE_TILDE_LITERAL_BUG] Fix literal `~` path usage introduced in the 2026-04-04 reorg (`Path("~/agents")`, `"~/.openclaw/..."`, fallback agent roots, heartbeat watched dirs). Expand with `Path(...).expanduser()` or `os.path.expanduser()` so runtime lookups work outside shell expansion.
 
 ## P1 — This Week
 
 ### Queue Architecture v2 (2026-04-04 audit)
-- [ ] [MANUAL 2026-04-04] [MANUAL 2026-03-15] User task: update architecture notes
-- [ ] [QUEUE_V2_CRON_ORCHESTRATOR_RUNS] Wire cron_research.sh and cron_strategic_audit.sh to create V2 run records around their Claude Code spawns (currently they mark_task_complete but don't log run duration/outcome in queue_runs.jsonl). Low priority — sidecar state sync now works via writer fix (2026-04-05), only run-record observability is missing.
-- [ ] [QUEUE_V2_RESEARCH_COMPLETION_LOCK] Ensure completed research topics cannot be rediscovered/requeued/executed again unless explicitly reopened by a new task tag or manual override. Audit cron_research + research discovery + queue injection paths.
 
 ### Runtime Bootstrap / Path Hygiene (2026-04-04 restructure audit)
 - [ ] [BOOTSTRAP_DIRECT_SHELL_SCRIPTS] Audit direct-invocation shell scripts under `scripts/` and add self-resolving `CLARVIS_WORKSPACE` bootstrap where needed (spawn pattern), instead of assuming env is pre-exported.
@@ -57,15 +53,24 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 - [ ] [COGNITION_GATE_PROMOTION] Gate promotion of self-improvements — require benchmark delta before accepting code changes.
 - [ ] [COGNITION_CONCEPTUAL_FRAMEWORK] Knowledge synthesis beyond keyword matching — conceptual framework building.
 
+### Calibration / Brier Score (weakest metric — 7d Brier=0.2014 vs target 0.1)
+- [ ] [BRIER_7D_REGRESSION_DIAGNOSIS] Diagnose why 7-day Brier (0.2014) is 2x worse than all-time (0.096). Analyze `data/calibration/predictions.jsonl` for recent mispredictions — identify which task types or confidence bands are miscalibrated. Fix the confidence estimator or recalibration logic.
+- [ ] [CALIBRATION_CONFIDENCE_BAND_AUDIT] Audit confidence bands in heartbeat preflight — current threshold (0.825) may be too coarse. Implement per-domain confidence adjustments based on historical accuracy by task type (research vs code vs maintenance).
+
+### CLR Autonomy Dimension (critically low: 0.025)
+- [ ] [CLR_AUTONOMY_DIGEST_FRESHNESS] CLR autonomy score is 0.025 because digest age=23.4h. Ensure `cron_report_*.sh` and `digest_writer.py` reliably update `memory/cron/digest.md` — add staleness alert to watchdog if digest is >6h old.
+
 ### Adaptive RAG Pipeline
 - [ ] [RAG_PHASE1_GATE] Implement GATE phase of adaptive RAG — query classification before retrieval. Design: `docs/ADAPTIVE_RAG_PLAN.md`.
+
+### Cron Schedule Hygiene (non-Python)
+- [ ] [CRON_SCHEDULE_DRIFT_AUDIT] Non-code: diff system crontab against CLAUDE.md schedule table. Fix any drift (missing jobs, wrong times, stale entries). Verify all 30+ entries match documented schedule.
 
 ---
 
 ## Partial Items (tracked, not actively worked)
 
 ### Research Sessions
-- [ ] [RESEARCH_CANONICAL_TOPIC_TRACKING] Implement canonical topic identity + lifecycle tracking so related research can be classified as duplicate, continuation, refinement, resynthesis, or reopen — without blocking legitimate follow-up work.
 - [ ] [RESEARCH_REPEAT_CLASSIFIER] Add smart repeat detection for research selection/requeue paths using canonical topic IDs + scope comparison, with tests designed to minimize false positives and user-annoying suppression.
 - [ ] [BRAIN_RESEARCH_CANONICALIZATION] Audit ClarvisDB + memory files for duplicate research memories/episodes created by repeated runs. Deduplicate safely, preserve the best canonical summary per topic, and link follow-up/refinement entries instead of creating parallel duplicates.
 

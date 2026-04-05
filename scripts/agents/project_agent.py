@@ -45,7 +45,7 @@ from pathlib import Path
 from typing import Optional
 
 AGENTS_ROOT_PRIMARY = Path("/opt/clarvis-agents")  # preferred (needs sudo once)
-AGENTS_ROOT_FALLBACK = Path("~/agents")  # fallback (always writable)
+AGENTS_ROOT_FALLBACK = Path("~/agents").expanduser()  # fallback (always writable)
 CLARVIS_WORKSPACE = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")))
 CLAUDE_BIN = os.environ.get("CLAUDE_BIN", os.path.expanduser("~/.local/bin/claude"))
 CRON_ENV = CLARVIS_WORKSPACE / "scripts" / "cron_env.sh"

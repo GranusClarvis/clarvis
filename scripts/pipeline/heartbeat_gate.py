@@ -43,7 +43,7 @@ WATCHED_FILES = [
 # Directories to check for new/modified files
 WATCHED_DIRS = [
     os.path.join(WORKSPACE, "memory/cron"),           # Cron outputs
-    "~/.openclaw/delivery-queue",             # Incoming messages
+    os.path.expanduser("~/.openclaw/delivery-queue"),  # Incoming messages
 ]
 
 # Maximum consecutive skips before forcing a wake (prevents stale agent)
@@ -112,7 +112,7 @@ def _today_memory_file() -> str:
 
 def _cron_runs_fingerprint() -> Optional[Dict]:
     """Check OpenClaw cron runs for recent completions."""
-    cron_dir = "~/.openclaw/cron/runs"
+    cron_dir = os.path.expanduser("~/.openclaw/cron/runs")
     return _dir_fingerprint(cron_dir)
 
 

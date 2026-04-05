@@ -6,8 +6,8 @@
 # metrics collection with 1 batched evolution_preflight.py process.
 # Savings: ~3s from eliminated cold-starts + reduced disk I/O.
 
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/cron_env.sh"
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lock_helper.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || echo "${CLARVIS_WORKSPACE:-$HOME/.openclaw/workspace}/scripts/cron")/cron_env.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || echo "${CLARVIS_WORKSPACE:-$HOME/.openclaw/workspace}/scripts/cron")/lock_helper.sh"
 
 LOGFILE="memory/cron/evolution.log"
 SCRIPTS="$CLARVIS_WORKSPACE/scripts"
@@ -46,10 +46,39 @@ print(f'COMPRESSED_HEALTH={shlex.quote(str(d.get(\"compressed_health\", \"\")))}
 print(f'PENDING_COUNT={shlex.quote(str(d.get(\"pending_count\", 0)))}')
 t = d.get('timings', {})
 print(f'EVO_PF_TIME={shlex.quote(str(t.get(\"total\", \"?\")))}')
-# Extract key metrics for digest
-print(f'PHI_SHORT={shlex.quote(str(d.get(\"phi_trend\", \"Phi unknown\"))[:100])}')
-print(f'WEAKEST={shlex.quote(str(d.get(\"capabilities\", \"unknown\"))[:100])}')
-print(f'CALIBRATION_SHORT={shlex.quote(str(d.get(\"calibration\", \"\"))[:100])}')
+# Extract key metrics for digest (human-readable summaries)
+phi = d.get('phi_trend', {})
+if isinstance(phi, dict):
+    phi_str = f\"Phi={phi.get('current','?')} ({phi.get('trend','?')}, delta={phi.get('delta','?')})\"
+else:
+    phi_str = str(phi)[:100] if phi else 'Phi unknown'
+print(f'PHI_SHORT={shlex.quote(phi_str)}')
+
+caps = d.get('capabilities', {})
+if isinstance(caps, dict):
+    weakest_name, weakest_score = 'unknown', 1.0
+    for name, info in caps.items():
+        score = info.get('score', 1.0) if isinstance(info, dict) else 1.0
+        if score < weakest_score:
+            weakest_name, weakest_score = name, score
+    print(f'WEAKEST={shlex.quote(f\"{weakest_name} ({weakest_score:.2f})\")}')
+else:
+    print(f'WEAKEST={shlex.quote(str(caps)[:100] if caps else \"unknown\")}')
+
+cal = d.get('calibration', {})
+if isinstance(cal, dict):
+    total = cal.get('total', 0)
+    resolved = cal.get('resolved', 0)
+    buckets = cal.get('buckets', {})
+    acc_parts = []
+    for bname, bdata in buckets.items():
+        if isinstance(bdata, dict) and 'accuracy' in bdata:
+            acc_parts.append(f\"{bdata['accuracy']:.0%}\")
+    acc_str = '/'.join(acc_parts[:3]) if acc_parts else '?'
+    cal_str = f\"{resolved}/{total} resolved, accuracy={acc_str}\"
+    print(f'CALIBRATION_SHORT={shlex.quote(cal_str)}')
+else:
+    print(f'CALIBRATION_SHORT={shlex.quote(str(cal)[:100] if cal else \"\")}')
 " 2>> "$LOGFILE")"
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] PREFLIGHT: Collected all metrics in ${EVO_PF_TIME}s" >> "$LOGFILE"
 fi

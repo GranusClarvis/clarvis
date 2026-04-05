@@ -68,7 +68,7 @@ logger = logging.getLogger(__name__)
 CDP_PORT = int(os.environ.get("CLARVIS_CDP_PORT", "18800"))
 AGENT_BROWSER_BIN = os.environ.get(
     "AGENT_BROWSER_BIN",
-    shutil.which("agent-browser") or "~/.npm-global/bin/agent-browser"
+    shutil.which("agent-browser") or os.path.expanduser("~/.npm-global/bin/agent-browser")
 )
 SCREENSHOT_DIR = Path("/tmp/clarvis-screenshots")
 SESSION_DIR = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))) / "data/browser_sessions"

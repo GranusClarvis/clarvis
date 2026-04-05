@@ -171,6 +171,66 @@ def _is_duplicate(new_task: str, existing_items: list) -> bool:
     return False
 
 
+_RESEARCH_PATTERN = re.compile(
+    r'(?i)(?:^|\[)\s*(?:research|bundle|study|investigate|explore)\b'
+)
+
+
+def _is_research_topic_completed(task: str, source: str = "unknown") -> bool:
+    """Check if a research-like task covers a topic already completed in the topic registry.
+
+    This is the injection-time completion lock: even if word-overlap dedup misses a
+    semantically equivalent topic, the canonical topic registry will catch it.
+    Only applies to research-flavored tasks (Research:, Bundle, etc.).
+
+    Manual sources (manual, cli, user) bypass the lock — this is the explicit
+    reopening path required by the completion lock protocol.
+    """
+    if source in ("manual", "cli", "user"):
+        return False  # Explicit override allowed
+    if not _RESEARCH_PATTERN.search(task):
+        return False
+    try:
+        import importlib.util
+        _novelty_path = os.path.join(_WS, "scripts", "evolution", "research_novelty.py")
+        spec = importlib.util.spec_from_file_location("research_novelty", _novelty_path)
+        _mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(_mod)
+        TopicRegistry = _mod.TopicRegistry
+        registry = TopicRegistry()
+        match = registry.find_matching(task)
+        if match is None:
+            return False
+        # Block if topic has been researched at least once (completion lock).
+        # REFINEMENT and ALREADY_KNOWN are both blocked at injection time.
+        # Only NEW (no registry match) passes through for auto-sources.
+        return match.research_count >= 1
+    except Exception:
+        return False  # Registry unavailable — don't block
+
+
+def _get_succeeded_task_texts() -> list:
+    """Extract task tags from sidecar entries in 'succeeded' state.
+
+    Covers the window between task completion and archive_completed() running.
+    The sidecar is keyed by tag (e.g., QUEUE_V2_RESEARCH_COMPLETION_LOCK),
+    which is also embedded in QUEUE.md task text, so word-overlap dedup works.
+    """
+    sidecar_file = os.path.join(_WS, "data", "queue_state.json")
+    if not os.path.exists(sidecar_file):
+        return []
+    try:
+        with open(sidecar_file) as f:
+            sidecar = json.load(f)
+        return [
+            tag.replace("_", " ")
+            for tag, entry in sidecar.items()
+            if entry.get("state") == "succeeded"
+        ]
+    except Exception:
+        return []
+
+
 def add_task(task: str, priority: str = "P0", source: str = "unknown") -> bool:
     """Add a single task to QUEUE.md with deduplication and daily cap.
 
@@ -252,7 +312,11 @@ def add_tasks(tasks: list, priority: str = "P0", source: str = "unknown") -> lis
                 archive_items = _extract_all_items(f.read())
             existing_items.extend(archive_items)
 
-        # Filter: deduplicate against existing items + archive
+        # Also check sidecar for succeeded tasks not yet archived
+        succeeded_texts = _get_succeeded_task_texts()
+        existing_items.extend(succeeded_texts)
+
+        # Filter: deduplicate against existing items + archive + succeeded sidecar
         new_tasks = []
         for task in tasks:
             if len(new_tasks) >= remaining_cap:
@@ -260,6 +324,9 @@ def add_tasks(tasks: list, priority: str = "P0", source: str = "unknown") -> lis
             if not task or len(task.strip()) < 10:
                 continue
             if _is_duplicate(task, existing_items):
+                continue
+            # Research completion lock: check topic registry for research-like tasks
+            if _is_research_topic_completed(task, source):
                 continue
             # Also check against tasks we're about to add (intra-batch dedup)
             if _is_duplicate(task, new_tasks):

@@ -32,7 +32,7 @@ WATCHED_FILES = [
 
 WATCHED_DIRS = [
     os.path.join(WORKSPACE, "memory/cron"),
-    "~/.openclaw/delivery-queue",
+    os.path.expanduser("~/.openclaw/delivery-queue"),
 ]
 
 MAX_CONSECUTIVE_SKIPS = 4
@@ -78,7 +78,7 @@ def _today_memory_file() -> str:
 
 
 def _cron_runs_fingerprint() -> Optional[Dict]:
-    return _dir_fingerprint("~/.openclaw/cron/runs")
+    return _dir_fingerprint(os.path.expanduser("~/.openclaw/cron/runs"))
 
 
 def get_context_relevance() -> Optional[float]:

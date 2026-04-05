@@ -2104,3 +2104,12 @@ _Last archived: 2026-04-03_
 - [x] [RESEARCH_PROACTIVE_TOOLS] Proactive research on emerging agent tools and frameworks (Phase 3.3 gap). (2026-04-04)
 - [x] [RESEARCH_PHI_COMPUTATION] Research integrated information theory and the computation of Φ, including definitional limits, PyPhi tooling, and scaling to multi-valued systems. (2026-04-04)
 - [x] [RESEARCH_TOPIC_LIFECYCLE_AUDIT] Audit the full research pipeline (discovery -> queue -> execution -> memory writeback -> completion) and identify why topics are not being worked through cleanly to a durable "done" state. (2026-04-05)
+
+## Archived 2026-04-05
+- [x] [PATH_HYGIENE_TILDE_LITERAL_BUG] Fix literal `~` path usage — 10 fixes across 8 files (heartbeat gates, project_agent, pr_factory, dashboard_server, orchestration_benchmark, scoreboard, clarvis_browser). (2026-04-05)
+- [x] [MANUAL 2026-04-04] [MANUAL 2026-03-15] User task: update architecture notes — updated SELF.md (model info, brain stats, dual-layer diagram, spine modules). (2026-04-05)
+- [x] [QUEUE_V2_CRON_ORCHESTRATOR_RUNS] Wire cron_research.sh and cron_strategic_audit.sh to create V2 run records around their Claude Code spawns. (2026-04-05)
+- [x] [RESEARCH_CANONICAL_TOPIC_TRACKING] (2026-04-05) Implement canonical topic identity + lifecycle tracking so related research can be classified as duplicate, continuation, refinement, resynthesis, or reopen — without blocking legitimate follow-up work.
+
+## Archived 2026-04-05
+- [x] [QUEUE_V2_RESEARCH_COMPLETION_LOCK] Ensure completed research topics cannot be rediscovered/requeued/executed again unless explicitly reopened by a new task tag or manual override. Audit cron_research + research discovery + queue injection paths. (2026-04-05 14:07 UTC)

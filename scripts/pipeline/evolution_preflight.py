@@ -29,7 +29,7 @@ except ImportError:
 apply_calibration = None  # No separate apply function exists; calibration() is read-only
 
 try:
-    from prediction_review import review_domains
+    from prediction_review import review_and_generate as review_domains
 except ImportError:
     review_domains = None
 
@@ -44,12 +44,14 @@ except ImportError:
     assess_capabilities = None
 
 try:
-    from retrieval_quality import generate_report
-except ImportError:
+    from retrieval_quality import get_tracker as _rq_tracker_fn
+    def generate_report(days=7):
+        return _rq_tracker_fn().report(days)
+except (ImportError, AttributeError):
     generate_report = None
 
 try:
-    from parameter_evolution import evolve_params
+    from parameter_evolution import run_evolution as evolve_params
 except ImportError:
     evolve_params = None
 
@@ -64,7 +66,7 @@ except ImportError:
     router_stats = None
 
 try:
-    from goal_tracker import check_progress, update_goals
+    from goal_tracker import get_goals_with_status as check_progress, update_goal_progress as update_goals
 except ImportError:
     check_progress = None
     update_goals = None
@@ -77,6 +79,17 @@ except ImportError:
 
 _import_time = time.monotonic() - start_import
 log = lambda msg: print(f"[{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S')}] EVO-PREFLIGHT: {msg}", file=sys.stderr)
+
+
+def _quiet_call(fn, *args, **kwargs):
+    """Call fn with stdout redirected to stderr (prevents JSON pollution)."""
+    import io
+    old_stdout = sys.stdout
+    sys.stdout = io.TextIOWrapper(io.BytesIO(), encoding='utf-8')
+    try:
+        return fn(*args, **kwargs)
+    finally:
+        sys.stdout = old_stdout
 
 
 def run():
@@ -112,7 +125,7 @@ def run():
     t = time.monotonic()
     if review_domains:
         try:
-            result["domain_review"] = review_domains()
+            result["domain_review"] = _quiet_call(review_domains)
         except Exception as e:
             result["domain_review"] = f"Error: {e}"
             log(f"Domain review failed: {e}")
@@ -152,7 +165,7 @@ def run():
     t = time.monotonic()
     if evolve_params:
         try:
-            result["param_evolution"] = evolve_params()
+            result["param_evolution"] = _quiet_call(evolve_params)
         except Exception as e:
             result["param_evolution"] = f"Error: {e}"
             log(f"Param evolution failed: {e}")

@@ -889,7 +889,7 @@ if __name__ == "__main__":
     elif cmd == "brief":
         name = sys.argv[2] if len(sys.argv) > 2 else "star-world-order"
         task = sys.argv[3] if len(sys.argv) > 3 else "Add tests for auth module"
-        agent_dir = Path(f"~/agents/{name}")
+        agent_dir = Path(f"~/agents/{name}").expanduser()
         if not agent_dir.exists():
             agent_dir = Path(f"/opt/clarvis-agents/{name}")
         if agent_dir.exists():

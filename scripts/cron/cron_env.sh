@@ -5,7 +5,7 @@
 # Source this at the top of every cron script to get the full interactive PATH
 # and environment that scripts need (python3, claude, openclaw, npm, etc.)
 #
-# Usage: source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/cron_env.sh"
+# Usage: source "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || echo "${CLARVIS_WORKSPACE:-$HOME/.openclaw/workspace}/scripts/cron")/cron_env.sh"
 # =============================================================================
 
 export HOME="${HOME:-$HOME}"

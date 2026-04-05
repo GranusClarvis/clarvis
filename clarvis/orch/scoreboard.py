@@ -35,7 +35,7 @@ def _list_agent_names() -> list[str]:
                 sys.path.remove(str(SCRIPTS))
     except Exception:
         names = []
-        for root in [Path("/opt/clarvis-agents"), Path("~/agents")]:
+        for root in [Path("/opt/clarvis-agents"), Path("~/agents").expanduser()]:
             if root.exists():
                 for d in sorted(root.iterdir()):
                     if (d / "configs" / "agent.json").exists():
@@ -58,7 +58,7 @@ def _agent_summary(name: str, bench: dict | None) -> dict:
     """Build a scoreboard row for one agent."""
     if bench is None:
         config_file = None
-        for root in [Path("/opt/clarvis-agents"), Path("~/agents")]:
+        for root in [Path("/opt/clarvis-agents"), Path("~/agents").expanduser()]:
             f = root / name / "configs" / "agent.json"
             if f.exists():
                 config_file = f

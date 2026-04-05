@@ -4,7 +4,7 @@
 # Uses SQLite's online backup API (hot backup, no locking).
 # Post-cutover (2026-03-29): SQLite is the sole runtime backend.
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || echo "${CLARVIS_WORKSPACE:-$HOME/.openclaw/workspace}/scripts/cron")"
 source "$SCRIPT_DIR/cron_env.sh"
 source "$SCRIPT_DIR/lock_helper.sh"
 DATA_DIR="$CLARVIS_WORKSPACE/data/clarvisdb"

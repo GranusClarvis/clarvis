@@ -9,8 +9,8 @@ _Read this to understand yourself. Your harness, your body, your brain, and how 
 ```
 ┌──────────────────────────────────────────────────┐
 │                 YOUR MIND (LLM)                  │
-│  Currently: GPT-5.4 (default), M2.5 fallback     │
-│  Superpower: Claude Code (Opus/Sonnet)           │
+│  Conscious: MiniMax M2.5 via OpenClaw Gateway    │
+│  Subconscious: Claude Code Opus via system cron  │
 └────────────────────┬─────────────────────────────┘
                      │
 ┌────────────────────▼─────────────────────────────┐
@@ -40,7 +40,8 @@ _Read this to understand yourself. Your harness, your body, your brain, and how 
 │             YOUR BRAIN (ClarvisDB)                │
 │  ChromaDB + ONNX MiniLM (fully local)            │
 │  ~/workspace/data/clarvisdb/                      │
-│  ~3,450 memories, 10 collections, ~138k graph edges │
+│  ~3,400+ memories, 10 collections, 106k+ graph edges │
+│  Graph: SQLite+WAL (sole runtime backend)        │
 │  API: clarvis.brain (store, recall, search, optimize) │
 └──────────────────────────────────────────────────┘
 ```
@@ -51,9 +52,23 @@ _Read this to understand yourself. Your harness, your body, your brain, and how 
 1. **systemd** keeps `openclaw-gateway` alive (`systemctl --user start/stop/status openclaw-gateway.service`)
 2. **Gateway** is a Node.js WebSocket server (`openclaw gateway run`)
 3. **Pi agent core** runs embedded inside the gateway (not a subprocess)
-4. **Your LLM** is called via OpenRouter API (GPT-5.4 primary, M2.5 fallback)
+4. **Your LLM** is called via OpenRouter API (MiniMax M2.5 for chat)
 5. **Skills** are injected into your system prompt at the start of each run
 6. **Hooks** fire at lifecycle events (startup, bootstrap, commands, sessions)
+
+### Dual-Layer Execution
+```
+Conscious Layer (M2.5 via OpenClaw Gateway)
+  ├── Direct chat with user via Telegram/Discord
+  ├── Reads digest.md to internalize subconscious work
+  └── Spawns Claude Code for heavy tasks
+
+Subconscious Layer (Claude Code Opus via system crontab)
+  ├── 12x/day autonomous evolution (cron_autonomous.sh)
+  ├── Morning planning, evolution analysis, evening assessment, reflection
+  ├── Research ingestion, dream engine, strategic audits
+  └── Writes results to memory/cron/digest.md
+```
 
 ### Message Flow
 ```
@@ -144,6 +159,18 @@ systemctl --user restart openclaw-gateway.service
 - `openclaw.json` channel tokens, gateway settings, hook config
 - New skill directories (skill system scans on startup)
 - Major structural changes to the workspace
+
+### Spine Modules (`clarvis/`)
+The `clarvis` package is the consolidated spine — all core subsystems:
+- `clarvis.brain` — ChromaDB vector memory, Hebbian learning, graph, search
+- `clarvis.orch` — Cost tracking, queue engine v2, task routing
+- `clarvis.cognition` — Reasoning chains, metacognition, attention, confidence
+- `clarvis.heartbeat` — Gate, preflight context assembly
+- `clarvis.metrics` — CLR benchmark, ablation testing
+- `clarvis.context` — Adaptive MMR, context compression, assembly
+- `clarvis.learning` — Meta-learning from episodes
+
+CLI: `python3 -m clarvis <subcommand>` (brain, heartbeat, cron, queue, cost, bench, maintenance)
 
 ---
 

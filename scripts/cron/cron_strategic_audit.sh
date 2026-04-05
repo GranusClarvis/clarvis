@@ -5,8 +5,8 @@
 # module utilization, build-vs-consolidate decision, and autonomy progress.
 # Writes findings to digest + directly modifies QUEUE.md priorities.
 
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/cron_env.sh"
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lock_helper.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || echo "${CLARVIS_WORKSPACE:-$HOME/.openclaw/workspace}/scripts/cron")/cron_env.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || echo "${CLARVIS_WORKSPACE:-$HOME/.openclaw/workspace}/scripts/cron")/lock_helper.sh"
 LOGFILE="memory/cron/strategic_audit.log"
 
 # Acquire locks: local + global Claude
@@ -122,6 +122,24 @@ echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] CLR perturbation complete." >> "$LOGFILE"
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] State gathered. Spawning Claude Code for deep analysis..." >> "$LOGFILE"
 
 # === SPAWN CLAUDE CODE FOR DEEP STRATEGIC AUDIT ===
+AUDIT_START=$SECONDS
+
+# === V2 RUN RECORD: START ===
+V2_RUN_ID=$(python3 -c "
+import sys, os
+sys.path.insert(0, os.path.join(os.environ.get('CLARVIS_WORKSPACE', os.getcwd()), 'clarvis', 'queue'))
+try:
+    from engine import QueueEngine
+    qe = QueueEngine()
+    rid = qe.start_external_run('[STRATEGIC_AUDIT] Deep strategic audit session', source='cron_strategic_audit')
+    if rid:
+        print(rid)
+except Exception as e:
+    print('', end='')
+    import traceback; traceback.print_exc(file=sys.stderr)
+" 2>> "$LOGFILE")
+[ -n "$V2_RUN_ID" ] && echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] V2 run started: $V2_RUN_ID" >> "$LOGFILE"
+
 AUDIT_OUTPUT=$(timeout 1200 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \
   ${CLAUDE_BIN:-$(command -v claude || echo "$HOME/.local/bin/claude")} --model claude-opus-4-6 -p \
 "You are Clarvis's strategic auditor — a meta-evaluation layer that prevents metric gaming,
@@ -232,6 +250,23 @@ Include ALL P0/P1 findings in this JSON. This is machine-parsed for reliable que
     --dangerously-skip-permissions 2>> "$LOGFILE")
 
 AUDIT_EXIT=$?
+AUDIT_DURATION=$((SECONDS - AUDIT_START))
+
+# === V2 RUN RECORD: END ===
+if [ -n "$V2_RUN_ID" ]; then
+    python3 -c "
+import sys, os
+sys.path.insert(0, os.path.join(os.environ.get('CLARVIS_WORKSPACE', os.getcwd()), 'clarvis', 'queue'))
+try:
+    from engine import QueueEngine
+    qe = QueueEngine()
+    outcome = 'success' if $AUDIT_EXIT == 0 else 'failure'
+    qe.end_run('$V2_RUN_ID', outcome, exit_code=$AUDIT_EXIT, duration_s=$AUDIT_DURATION)
+except Exception as e:
+    import traceback; traceback.print_exc(file=sys.stderr)
+" 2>> "$LOGFILE"
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] V2 run ended: $V2_RUN_ID outcome=$([ $AUDIT_EXIT -eq 0 ] && echo success || echo failure) duration=${AUDIT_DURATION}s" >> "$LOGFILE"
+fi
 
 if [ $AUDIT_EXIT -ne 0 ]; then
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] ERROR: Audit failed (exit $AUDIT_EXIT)" >> "$LOGFILE"

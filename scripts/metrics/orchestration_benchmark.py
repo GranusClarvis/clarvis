@@ -53,7 +53,7 @@ import _paths  # noqa: F401 — registers all script subdirs on sys.path
 def _get_agent_dir(name: str) -> Path:
     """Resolve agent directory (same logic as project_agent.py)."""
     primary = Path("/opt/clarvis-agents") / name
-    fallback = Path("~/agents") / name
+    fallback = Path("~/agents").expanduser() / name
     if primary.exists():
         return primary
     return fallback
@@ -415,7 +415,7 @@ def run_all() -> list[dict]:
     except ImportError:
         # Fallback: scan agent directories
         agents = []
-        for root in [Path("/opt/clarvis-agents"), Path("~/agents")]:
+        for root in [Path("/opt/clarvis-agents"), Path("~/agents").expanduser()]:
             if root.exists():
                 for d in sorted(root.iterdir()):
                     cfg = d / "configs" / "config.json"

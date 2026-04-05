@@ -1,7 +1,7 @@
 #!/bin/bash
 # Evening Report - 22:30 UTC
 # Comprehensive report: what happened today, metrics, accomplishments
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/cron_env.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || echo "${CLARVIS_WORKSPACE:-$HOME/.openclaw/workspace}/scripts/cron")/cron_env.sh"
 
 LOCKFILE="/tmp/clarvis_report_evening.lock"
 MAX_LOCK_AGE=1200  # seconds — reclaim stale locks older than 20 min
