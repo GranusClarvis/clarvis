@@ -2137,3 +2137,8 @@ _Last archived: 2026-04-03_
 ## Archived 2026-04-05
 - [x] [SWO_CLARVIS_ECOSYSTEM_POSITIONING] Write a short positioning doc that explains why Clarvis exists in the SWO ecosystem, what unique role it plays, how it connects to SWO products/lore, and what naming conventions should be used publicly. _(2026-04-05: `docs/SWO_CLARVIS_POSITIONING.md` created — covers role, architecture position, naming rules, voice guidelines, quick reference card)_
 - [x] [SWO_AGENT_WORKSPACE_SETUP] Ensure star-world-order agent workspace is functional: clone, brain seed, golden QA passing. _(2026-04-05: workspace functional — repo synced with upstream/dev, brain has 19 golden QA pairs (P@1=0.632), 7/7 tasks success, 3 PRs delivered. Fixed `lite_brain` import path bug in `project_agent.py` — was pointing to `scripts/` instead of `scripts/brain_mem/`)_
+
+## Archived 2026-04-05
+- [x] [SWO_NEXT_PR] _(2026-04-05: blocked — 3 PRs open (#175-#177), zero reviews. Deferred until upstream reviews. No action needed.)_
+- [x] [INSTALL_MATRIX_DEFINE] _(2026-04-05: done — wrote `docs/INSTALL_MATRIX.md` with 3 paths (OpenClaw, Hermes, Clarvis-on-top), prerequisites, local-model-only mode, isolation requirements, and pass/fail criteria.)_
+- [x] [OPENCLAW_FRESH_INSTALL_ISOLATED] _(2026-04-05: done — installed v2026.4.2 in /tmp/openclaw-fresh-test/. Gateway boots, health passes. Auth profile friction found: `key` not `token` field. Model OOM on 32GB. Report: `memory/research/openclaw_fresh_install_test_2026-04-05.md`)_

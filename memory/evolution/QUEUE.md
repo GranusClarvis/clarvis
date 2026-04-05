@@ -16,12 +16,9 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 ### Context/Prompt Pipeline
 
 ### SWO / Clarvis Brand Integration
-- [x] [SWO_NEXT_PR] _(2026-04-05: blocked — 3 PRs open (#175-#177), zero reviews. Deferred until upstream reviews. No action needed.)_
 
 ### Fresh-Install / Isolation Validation
-- [x] [INSTALL_MATRIX_DEFINE] _(2026-04-05: done — wrote `docs/INSTALL_MATRIX.md` with 3 paths (OpenClaw, Hermes, Clarvis-on-top), prerequisites, local-model-only mode, isolation requirements, and pass/fail criteria.)_
-- [x] [OPENCLAW_FRESH_INSTALL_ISOLATED] _(2026-04-05: done — installed v2026.4.2 in /tmp/openclaw-fresh-test/. Gateway boots, health passes. Auth profile friction found: `key` not `token` field. Model OOM on 32GB. Report: `memory/research/openclaw_fresh_install_test_2026-04-05.md`)_
-- [ ] [HERMES_FRESH_INSTALL_ISOLATED] In an isolated location, perform a fresh Hermes agent install from scratch using a local model only. Verify harness basics and capture any setup friction or hidden dependencies.
+- [x] [HERMES_FRESH_INSTALL_ISOLATED] _(2026-04-05: Done. Installed v0.7.0 in /tmp, 5/6 criteria pass, 4 friction points documented in docs/HERMES_FRESH_INSTALL_REPORT.md. Key issue: hermes-agent ignores CLI flags; qwen3-vl:4b too slow for agent loop on CPU.)_
 - [ ] [CLARVIS_OVERLAY_INSTALL_TEST] On top of fresh isolated installs, test the procedure for installing Clarvis without disturbing the current live system. Validate whether Clarvis layers cleanly onto OpenClaw/Hermes end-to-end and document exact install steps.
 - [ ] [ISOLATED_CRON_END_TO_END] In the isolated test environments, verify cron/autonomous scheduling actually runs, writes expected logs/artifacts, and remains intact without modifying current production crons.
 - [ ] [LOCAL_MODEL_HARNESS_VALIDATION] Confirm which local model(s) already on the machine can drive OpenClaw/Hermes/Clarvis install and smoke tests. Standardize a zero-API-key test mode and record exact commands/config.
