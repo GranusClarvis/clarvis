@@ -2133,3 +2133,7 @@ _Last archived: 2026-04-03_
 - [x] [P0_CLARVIS_REFLECTION_PATH_BUG] Fixed `fos.path.join` → `os.path.join`, `"memory/{today}.md"` → f-string. Added 8 smoke tests. (2026-04-05)
 - [x] [P0_CRON_DOCTOR_HOME_EXPANSION] Fixed `"HOME": "~"` → `os.path.expanduser("~")` + regression test. (2026-04-05)
 - [x] [P0_SHELL_PATH_QUOTING_AUDIT] Quoted ~48 unquoted `$CLARVIS_WORKSPACE` usages across 13 shell scripts. (2026-04-05)
+
+## Archived 2026-04-05
+- [x] [SWO_CLARVIS_ECOSYSTEM_POSITIONING] Write a short positioning doc that explains why Clarvis exists in the SWO ecosystem, what unique role it plays, how it connects to SWO products/lore, and what naming conventions should be used publicly. _(2026-04-05: `docs/SWO_CLARVIS_POSITIONING.md` created — covers role, architecture position, naming rules, voice guidelines, quick reference card)_
+- [x] [SWO_AGENT_WORKSPACE_SETUP] Ensure star-world-order agent workspace is functional: clone, brain seed, golden QA passing. _(2026-04-05: workspace functional — repo synced with upstream/dev, brain has 19 golden QA pairs (P@1=0.632), 7/7 tasks success, 3 PRs delivered. Fixed `lite_brain` import path bug in `project_agent.py` — was pointing to `scripts/` instead of `scripts/brain_mem/`)_

@@ -16,8 +16,6 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 ### Context/Prompt Pipeline
 
 ### SWO / Clarvis Brand Integration
-- [x] [SWO_CLARVIS_ECOSYSTEM_POSITIONING] Write a short positioning doc that explains why Clarvis exists in the SWO ecosystem, what unique role it plays, how it connects to SWO products/lore, and what naming conventions should be used publicly. _(2026-04-05: `docs/SWO_CLARVIS_POSITIONING.md` created — covers role, architecture position, naming rules, voice guidelines, quick reference card)_
-- [x] [SWO_AGENT_WORKSPACE_SETUP] Ensure star-world-order agent workspace is functional: clone, brain seed, golden QA passing. _(2026-04-05: workspace functional — repo synced with upstream/dev, brain has 19 golden QA pairs (P@1=0.632), 7/7 tasks success, 3 PRs delivered. Fixed `lite_brain` import path bug in `project_agent.py` — was pointing to `scripts/` instead of `scripts/brain_mem/`)_
 - [ ] [SWO_NEXT_PR] Pick next SWO issue from upstream, spawn agent, deliver PR via fork workflow. _(2026-04-05: blocked — 3 PRs already open (#175, #176, #177) with zero reviews. Only 2 open issues (#43, #44) are large features. Wait for upstream to review existing PRs before adding more.)_
 
 ### Fresh-Install / Isolation Validation
