@@ -14,7 +14,7 @@
 | 2 | Main entry point responds | **PASS** | `hermes --help` shows full CLI, `hermes-agent --help` initializes agent |
 | 3 | Session can be created and persisted | **PASS** | `~/.hermes/sessions/` created, `hermes sessions list` works |
 | 4 | System prompt is loaded | **PASS** | `SOUL.md` auto-generated with default Hermes persona |
-| 5 | Basic chat round-trip (local model) | **PARTIAL** | Ollama endpoint works (confirmed via curl), but hermes-agent ignores `--base_url`/`--api_key` flags and falls back to GitHub Copilot token. `hermes` CLI reads config.yaml correctly |
+| 5 | Basic chat round-trip (local model) | **PASS** | Ollama round-trip works via `python run_agent.py` (674s for "Say hello" — 28 tools = 5166 tokens context). `hermes-agent` entry point ignores flags (bug), but direct invocation works. Response: "Hello! How can I assist you today?" |
 | 6 | No hardcoded paths assume specific user/dir | **PASS** | Grep found 0 hardcoded `/home/agent` paths in agent module |
 
 ## Setup Friction Points
@@ -23,7 +23,7 @@
 The `hermes-agent` (run_agent.py) entry point does not respect `--model`, `--base_url`, or `--api_key` flags passed via CLI. It auto-detects a GitHub Copilot OAuth token from the environment and uses that instead. The `hermes` CLI (hermes_cli/) correctly reads `~/.hermes/config.yaml` — the two entry points have divergent config resolution.
 
 **Impact:** Users trying `hermes-agent` with local models hit a 403 error immediately.
-**Workaround:** Use `hermes` CLI instead, configure via `hermes config set`.
+**Workaround:** Use `python run_agent.py --query "..." --model "qwen3-vl:4b" --base_url "http://127.0.0.1:11434/v1" --api_key "ollama"` directly (works), or use `hermes` CLI which reads config.yaml.
 
 ### FRICTION-2: qwen3-vl:4b too slow for agent loop (MEDIUM)
 At ~7 tok/s on CPU, qwen3-vl:4b cannot complete a tool-calling round-trip within reasonable time. The model uses reasoning/thinking tokens by default (Qwen3 behavior), consuming the token budget before producing content. A 100-token request times out after 120s.
