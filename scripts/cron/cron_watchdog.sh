@@ -10,7 +10,7 @@
 #   ./cron_watchdog.sh --alert   # Also send Telegram alert on failures
 # =============================================================================
 
-source $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/cron_env.sh"
 
 LOG_DIR="$CLARVIS_WORKSPACE/memory/cron"
 WATCHDOG_LOG="$LOG_DIR/watchdog.log"

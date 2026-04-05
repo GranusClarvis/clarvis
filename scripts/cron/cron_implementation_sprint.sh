@@ -9,8 +9,8 @@
 # so episodes, reasoning chains, and metrics are properly recorded.
 # =============================================================================
 
-source $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh
-source $CLARVIS_WORKSPACE/scripts/cron/lock_helper.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/cron_env.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lock_helper.sh"
 LOGFILE="memory/cron/implementation_sprint.log"
 SCRIPTS="$CLARVIS_WORKSPACE/scripts"
 QUEUE_FILE="memory/evolution/QUEUE.md"

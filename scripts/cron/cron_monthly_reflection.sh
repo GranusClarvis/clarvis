@@ -2,8 +2,8 @@
 # Monthly structural reflection — runs 1st of month at 03:30
 # Analyzes 30-day episode trends, identifies structural changes needed,
 # proposes ROADMAP updates, writes output to memory/cron/monthly_reflection_YYYY-MM.md
-source $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh
-source $CLARVIS_WORKSPACE/scripts/cron/lock_helper.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/cron_env.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lock_helper.sh"
 
 LOGFILE="memory/cron/monthly_reflection.log"
 MONTH_TAG=$(date -u +%Y-%m)

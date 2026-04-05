@@ -1,7 +1,7 @@
 #!/bin/bash
 # Evening Report - 22:30 UTC
 # Comprehensive report: what happened today, metrics, accomplishments
-source $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/cron_env.sh"
 
 LOCKFILE="/tmp/clarvis_report_evening.lock"
 MAX_LOCK_AGE=1200  # seconds — reclaim stale locks older than 20 min
@@ -31,14 +31,15 @@ from datetime import datetime, timezone
 import os
 import subprocess
 
-WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", "$CLARVIS_WORKSPACE")
+WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", os.getcwd())
 today_str = datetime.now(timezone.utc).strftime('%Y-%m-%d')
 
 # Get bot token from env (preferred) or openclaw config (fallback)
 TOKEN = os.environ.get("CLARVIS_TG_BOT_TOKEN", "")
 if not TOKEN:
     try:
-        with open('${OPENCLAW_HOME:-$HOME/.openclaw}/openclaw.json') as f:
+        _oc = os.environ.get('OPENCLAW_HOME', os.path.expanduser('~/.openclaw'))
+        with open(os.path.join(_oc, 'openclaw.json')) as f:
             config = json.load(f)
         TOKEN = config['channels']['telegram']['botToken']
     except Exception:

@@ -662,7 +662,7 @@ class QueueEngine:
 
         Checks:
         1. Sidecar file integrity (loads, valid JSON, no corruption)
-        2. QUEUE.md ↔ sidecar consistency (no orphan/missing entries)
+        2. QUEUE.md ↔ sidecar consistency (post-reconcile — no residual drift)
         3. State machine validity (no impossible states)
         4. Run records integrity (JSONL parseable, no dangling runs)
         5. Stats sanity (no negative counts, no stuck tasks)
@@ -672,25 +672,26 @@ class QueueEngine:
         checks = {}
         failures = []
 
-        # 1. Sidecar integrity
+        # 1. Sidecar integrity (pre-reconcile snapshot for diagnostics)
         try:
-            sidecar = self._load()
+            raw_sidecar = self._load()
             checks["sidecar_loads"] = True
-            checks["sidecar_entries"] = len(sidecar)
+            checks["sidecar_entries"] = len(raw_sidecar)
         except Exception as e:
             checks["sidecar_loads"] = False
             failures.append(f"sidecar load failed: {e}")
+            raw_sidecar = {}
 
-        # 2. QUEUE.md ↔ sidecar sync
+        # 2. QUEUE.md ↔ sidecar sync — reconcile first so manual edits self-heal
         try:
-            md_tasks = parse_queue(self.queue_file)
+            md_tasks, sidecar = self.reconcile()
             md_tags = {t["tag"] for t in md_tasks}
             sidecar_active_tags = {
                 tag for tag, entry in sidecar.items()
                 if entry.get("state") not in ("succeeded", "removed")
             }
 
-            # Pending in QUEUE.md but not in sidecar = reconcile will fix, but flag it
+            # Post-reconcile: these should both be empty if reconcile works
             missing_in_sidecar = md_tags - set(sidecar.keys())
             orphan_in_sidecar = sidecar_active_tags - md_tags
 
@@ -698,11 +699,22 @@ class QueueEngine:
             checks["missing_in_sidecar"] = list(missing_in_sidecar)
             checks["orphan_in_sidecar"] = list(orphan_in_sidecar)
 
+            # Report how many entries reconcile auto-healed (informational, not a failure)
+            pre_tags = set(raw_sidecar.keys())
+            auto_added = md_tags - pre_tags
+            auto_removed = {t for t in pre_tags
+                           if raw_sidecar.get(t, {}).get("state") not in ("succeeded", "removed")
+                           } - md_tags
+            if auto_added or auto_removed:
+                checks["reconcile_healed"] = {
+                    "added": list(auto_added),
+                    "marked_removed": list(auto_removed),
+                }
+
             if missing_in_sidecar:
-                failures.append(f"tags in QUEUE.md but not sidecar: {missing_in_sidecar}")
-            # Orphans are expected (completed items removed from queue) — only flag active ones
+                failures.append(f"tags in QUEUE.md but not sidecar (post-reconcile): {missing_in_sidecar}")
             if orphan_in_sidecar:
-                failures.append(f"active sidecar entries not in QUEUE.md: {orphan_in_sidecar}")
+                failures.append(f"active sidecar entries not in QUEUE.md (post-reconcile): {orphan_in_sidecar}")
         except Exception as e:
             failures.append(f"sync check failed: {e}")
 

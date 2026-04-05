@@ -83,12 +83,15 @@ def test_mode_gate_in_heartbeat_gate():
 
 
 def test_mode_gate_in_queue_writer():
-    """queue_writer.py gates task injection by mode."""
-    qw_path = os.path.join(WORKSPACE, "scripts", "evolution", "queue_writer.py")
-    with open(qw_path) as f:
-        content = f.read()
-    assert "should_allow_auto_task_injection" in content, \
-        "queue_writer.py missing auto-injection mode gate"
+    """queue_writer (spine module) gates task injection by mode."""
+    # Core logic moved to clarvis.queue.writer (spine migration 2026-04-04).
+    # Legacy scripts/evolution/queue_writer.py is a thin re-export wrapper.
+    import importlib
+    wr_mod = importlib.import_module("clarvis.queue.writer")
+    import inspect
+    source = inspect.getsource(wr_mod)
+    assert "should_allow_auto_task_injection" in source, \
+        "clarvis.queue.writer missing auto-injection mode gate"
 
 
 def test_mode_policies_cover_all_behavioral_dimensions():

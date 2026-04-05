@@ -13,9 +13,15 @@
 
 set -euo pipefail
 
+# Resolve workspace/script roots before sourcing env; supports direct invocation
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+CLARVIS_WORKSPACE="${CLARVIS_WORKSPACE:-$(cd -- "$SCRIPT_DIR/../.." && pwd)}"
+export CLARVIS_WORKSPACE
+SCRIPTS_DIR="$CLARVIS_WORKSPACE/scripts"
+
 # Source cron env for proper PATH, HOME, env cleanup
-source $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh
-source $CLARVIS_WORKSPACE/scripts/cron/lock_helper.sh
+source "$SCRIPTS_DIR/cron/cron_env.sh"
+source "$SCRIPTS_DIR/cron/lock_helper.sh"
 
 TASK="${1:-}"
 TIMEOUT="${2:-1200}"
@@ -137,7 +143,7 @@ WORKER_SCRIPT="/tmp/spawn_claude_worker_$$.sh"
 cat > "$WORKER_SCRIPT" <<EOF
 #!/bin/bash
 set -euo pipefail
-source $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh
+source "${CLARVIS_WORKSPACE:-$HOME/.openclaw/workspace}"/scripts/cron/cron_env.sh
 GLOBAL_LOCK="/tmp/clarvis_claude_global.lock"
 echo "\$\$ \$(date -u +%Y-%m-%dT%H:%M:%S)" > "\$GLOBAL_LOCK"
 cleanup() {
@@ -179,7 +185,8 @@ chat_id = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4] else os.environ.get("
 topic_id = sys.argv[5] if len(sys.argv) > 5 and sys.argv[5] else ""
 token = os.environ.get("CLARVIS_TG_BOT_TOKEN", "")
 if not token:
-    with open('${OPENCLAW_HOME:-$HOME/.openclaw}/openclaw.json') as f:
+    _oc = os.environ.get('OPENCLAW_HOME', os.path.expanduser('~/.openclaw'))
+    with open(os.path.join(_oc, 'openclaw.json')) as f:
         config = json.load(f)
     token = config['channels']['telegram']['botToken']
 status = "TIMEOUT" if exit_code == 124 else ("FAIL" if exit_code != 0 else "OK")

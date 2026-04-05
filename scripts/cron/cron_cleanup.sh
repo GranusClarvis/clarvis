@@ -2,7 +2,7 @@
 # File-hygiene cleanup — weekly Sunday 05:30 UTC
 # Rotates logs, compresses old memory, trims JSONL, prunes stale locks.
 # No Claude Code spawning — lightweight Python-only.
-source $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/cron_env.sh"
 
 LOCKFILE="/tmp/clarvis_cleanup.lock"
 

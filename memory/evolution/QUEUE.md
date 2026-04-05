@@ -6,19 +6,19 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 
 ## P0 — Current Sprint
 
-- [x] [QUEUE_V2_SELECTOR_CUTOVER] Wire `queue_engine.select_next()` into heartbeat preflight `_gather_candidates` as primary selection path (V2 scoring, backoff, retry limits). Legacy `task_selector` becomes fallback. _(Blocked: this task — being done now.)_ (2026-04-04 wired into preflight)
-- [x] [QUEUE_V2_SOAK_WITH_TASKS] Run soak check with real tasks in queue to validate reconciliation, scoring, and state transitions end-to-end. Must show md_tasks>0, no orphans, no stuck runs. (2026-04-04 PASS md_tasks=22 no_orphans)
+- [ ] [PATH_HYGIENE_TILDE_LITERAL_BUG] Fix literal `~` path usage introduced in the 2026-04-04 reorg (`Path("~/agents")`, `"~/.openclaw/..."`, fallback agent roots, heartbeat watched dirs). Expand with `Path(...).expanduser()` or `os.path.expanduser()` so runtime lookups work outside shell expansion.
 
 ## P1 — This Week
 
 ### Queue Architecture v2 (2026-04-04 audit)
 - [ ] [MANUAL 2026-04-04] [MANUAL 2026-03-15] User task: update architecture notes
-- [x] [QUEUE_V2_STUCK_RUN_RECOVERY] Add auto-recovery for stuck "running" entries in sidecar (>4h with no end_run). Heartbeat or watchdog should reset to failed. (2026-04-04 implemented: reconcile auto-recovers >3h stuck, recover_stuck() + dangling run closure)
-- [x] [QUEUE_V2_SPINE_MOVE] Move queue_engine.py + queue_writer.py from clarvis/orch/ to clarvis/queue/ as canonical spine package. Backward-compat shims in clarvis/orch/. (2026-04-04 done: 37 tests pass, soak PASS)
-- [x] [QUEUE_V2_DAILY_CAP_WIRE] Wire queue_writer daily cap + dedup into heartbeat autonomous loop so self-generated tasks respect limits. (2026-04-04 verified: all 15+ injection callers route through writer.add_task() which enforces cap=5/day + word-overlap dedup)
-- [x] [QUEUE_V2_PRIMARY_SELECTOR_CUTOVER] Final cutover: remove legacy task_selector fallback from heartbeat_preflight, make queue_engine.select_next() the sole selection path. (2026-04-04 done: ranked_eligible() is sole primary path, legacy demoted to import-fail-only fallback, 44 tests pass, soak PASS)
-- [x] [QUEUE_V2_MANUAL_SPAWN_VISIBILITY] Wire spawn_claude.sh to register V2 run records via engine.start_external_run() / end_run(), so operator-spawned tasks create run records + sidecar state transitions. (2026-04-04 done: spawn_claude.sh wired, CLI start-external/end-external commands added, 48 tests pass, soak PASS)
-- [ ] [QUEUE_V2_CRON_ORCHESTRATOR_RUNS] Wire cron_research.sh and cron_strategic_audit.sh to create V2 run records around their Claude Code spawns (currently they mark_task_complete but don't log run duration/outcome in queue_runs.jsonl). Low priority — heartbeat pipeline covers 90%+ of runs.
+- [ ] [QUEUE_V2_CRON_ORCHESTRATOR_RUNS] Wire cron_research.sh and cron_strategic_audit.sh to create V2 run records around their Claude Code spawns (currently they mark_task_complete but don't log run duration/outcome in queue_runs.jsonl). Low priority — sidecar state sync now works via writer fix (2026-04-05), only run-record observability is missing.
+- [ ] [QUEUE_V2_RESEARCH_COMPLETION_LOCK] Ensure completed research topics cannot be rediscovered/requeued/executed again unless explicitly reopened by a new task tag or manual override. Audit cron_research + research discovery + queue injection paths.
+
+### Runtime Bootstrap / Path Hygiene (2026-04-04 restructure audit)
+- [ ] [BOOTSTRAP_DIRECT_SHELL_SCRIPTS] Audit direct-invocation shell scripts under `scripts/` and add self-resolving `CLARVIS_WORKSPACE` bootstrap where needed (spawn pattern), instead of assuming env is pre-exported.
+- [ ] [BOOTSTRAP_STALE_PATH_REFS] Find and update stale references to old flat script paths (`scripts/spawn_claude.sh`, `scripts/heartbeat_preflight.py`, `scripts/heartbeat_postflight.py`, `scripts/prompt_builder.py`) across docs, tests, comments, and helpers.
+- [ ] [BOOTSTRAP_TEST_REALIGN] Realign tests/fixtures that still assume old flat heartbeat/prompt import structure, keeping coverage but matching the new `scripts/pipeline/*` and `scripts/tools/*` layout.
 
 ### Context/Prompt Pipeline
 - [ ] [CONTEXT_TIERED_BRIEF_COVERAGE] Validate tiered brief covers all 10 task types in taskset.json with no missing critical sections. Fix gaps found by prompt_quality_eval.py.
@@ -65,7 +65,9 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 ## Partial Items (tracked, not actively worked)
 
 ### Research Sessions
-- [x] [RESEARCH_PROACTIVE_TOOLS] Proactive research on emerging agent tools and frameworks (Phase 3.3 gap). (2026-04-04)
+- [ ] [RESEARCH_CANONICAL_TOPIC_TRACKING] Implement canonical topic identity + lifecycle tracking so related research can be classified as duplicate, continuation, refinement, resynthesis, or reopen — without blocking legitimate follow-up work.
+- [ ] [RESEARCH_REPEAT_CLASSIFIER] Add smart repeat detection for research selection/requeue paths using canonical topic IDs + scope comparison, with tests designed to minimize false positives and user-annoying suppression.
+- [ ] [BRAIN_RESEARCH_CANONICALIZATION] Audit ClarvisDB + memory files for duplicate research memories/episodes created by repeated runs. Deduplicate safely, preserve the best canonical summary per topic, and link follow-up/refinement entries instead of creating parallel duplicates.
 
 ### External Challenges
 - [ ] [EXTERNAL_CHALLENGE:coding-challenge-next] Pick and complete next coding challenge from benchmark suite.

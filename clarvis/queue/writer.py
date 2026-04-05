@@ -24,10 +24,67 @@ import json
 import os
 import re
 from datetime import datetime, timezone
+from typing import Optional
 
 _WS = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 QUEUE_FILE = os.path.join(_WS, "memory", "evolution", "QUEUE.md")
 STATE_FILE = os.path.join(_WS, "data", "queue_writer_state.json")
+
+
+def _sync_sidecar_add(tags_and_priorities: list[tuple[str, str]]) -> None:
+    """Create sidecar entries for newly added tasks so they're immediately visible to the engine.
+
+    Called after add_task()/add_tasks() writes to QUEUE.md. This prevents
+    sidecar drift: without this, new tasks only appear in the sidecar on
+    the next reconcile() call (i.e., next heartbeat), and any soak_check()
+    or stats() call in between would report 'missing_in_sidecar'.
+
+    Args:
+        tags_and_priorities: list of (tag, priority) tuples for newly added tasks.
+    """
+    if not tags_and_priorities:
+        return
+    try:
+        from clarvis.queue.engine import _load_sidecar, _save_sidecar, _default_entry
+        sidecar = _load_sidecar()
+        changed = False
+        for tag, priority in tags_and_priorities:
+            if tag and tag not in sidecar:
+                sidecar[tag] = _default_entry(tag, priority)
+                changed = True
+        if changed:
+            _save_sidecar(sidecar)
+    except Exception:
+        pass  # Best-effort: reconcile() will catch up on next heartbeat
+
+
+def _sync_sidecar_complete(tag: str) -> None:
+    """Mark a sidecar entry as succeeded when the writer marks a task [x].
+
+    Keeps sidecar in sync with QUEUE.md so mark_task_complete() callers
+    (e.g., cron_research.sh) that don't use engine.mark_succeeded() directly
+    still update the V2 state machine.
+    """
+    if not tag:
+        return
+    try:
+        from clarvis.queue.engine import _load_sidecar, _save_sidecar, _now_iso
+        sidecar = _load_sidecar()
+        if tag in sidecar:
+            entry = sidecar[tag]
+            if entry.get("state") not in ("succeeded",):
+                entry["state"] = "succeeded"
+                entry["updated_at"] = _now_iso()
+                entry["failure_reason"] = None
+                _save_sidecar(sidecar)
+    except Exception:
+        pass  # Best-effort
+
+
+def _extract_tag_from_text(text: str) -> Optional[str]:
+    """Extract [TAG] from task text for sidecar sync."""
+    m = re.match(r"\[([A-Z][A-Za-z0-9_:.-]+)\]", text.strip())
+    return m.group(1) if m else None
 MAX_AUTO_TASKS_PER_DAY = 5
 SIMILARITY_THRESHOLD = 0.5  # Word overlap ratio to consider a duplicate
 
@@ -247,6 +304,14 @@ def add_tasks(tasks: list, priority: str = "P0", source: str = "unknown") -> lis
         with open(QUEUE_FILE, "w") as f:
             f.write("\n".join(lines))
 
+        # Sync sidecar so new tasks are immediately visible to engine
+        tags_priorities = []
+        for task in new_tasks:
+            tag = _extract_tag_from_text(task)
+            if tag:
+                tags_priorities.append((tag, priority))
+        _sync_sidecar_add(tags_priorities)
+
         # Update state
         state["tasks_added_today"] += len(new_tasks)
         _save_state(state)
@@ -362,6 +427,7 @@ def mark_task_complete(task_text: str, annotation: str, queue_file: str = QUEUE_
                 lines[i] = line.replace("- [ ] ", "- [x] ", 1).rstrip() + f" ({annotation})\n"
                 with open(queue_file, 'w') as f:
                     f.writelines(lines)
+                _sync_sidecar_complete(tag)
                 return "marked"
 
     for i, line in enumerate(lines):
@@ -369,6 +435,9 @@ def mark_task_complete(task_text: str, annotation: str, queue_file: str = QUEUE_
             lines[i] = line.replace("- [ ] ", "- [x] ", 1).rstrip() + f" ({annotation})\n"
             with open(queue_file, 'w') as f:
                 f.writelines(lines)
+            # Try to extract tag from the matched line for sidecar sync
+            line_tag = _extract_tag_from_text(line.strip().replace("- [ ] ", "", 1))
+            _sync_sidecar_complete(line_tag)
             return "marked"
 
     if archive_file and os.path.exists(archive_file):
@@ -400,11 +469,16 @@ def archive_completed():
 
         # Extract completed items and their full lines
         completed = []
+        completed_tags = []
         new_lines = []
         for line in content.split("\n"):
             m = re.match(r'^- \[x\] (.+)', line.strip())
             if m:
-                completed.append(m.group(1))
+                item_text = m.group(1)
+                completed.append(item_text)
+                tag = _extract_tag_from_text(item_text)
+                if tag:
+                    completed_tags.append(tag)
             else:
                 new_lines.append(line)
 
@@ -432,6 +506,10 @@ def archive_completed():
         # Rewrite QUEUE.md without completed items
         with open(QUEUE_FILE, "w") as f:
             f.write("\n".join(new_lines))
+
+        # Sync sidecar: ensure archived tags are marked succeeded
+        for tag in completed_tags:
+            _sync_sidecar_complete(tag)
 
         return len(completed)
 

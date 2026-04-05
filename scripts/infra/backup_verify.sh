@@ -12,7 +12,7 @@
 # =============================================================================
 
 set -euo pipefail
-source $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh
+source "${CLARVIS_WORKSPACE:-$HOME/.openclaw/workspace}"/scripts/cron/cron_env.sh
 
 WORKSPACE="$HOME/.openclaw/workspace"
 BACKUP_ROOT="$HOME/.openclaw/backups/daily"

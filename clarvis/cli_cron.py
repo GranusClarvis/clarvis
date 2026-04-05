@@ -79,69 +79,77 @@ def _job(schedule: str, script: str, log: str) -> str:
 
 
 def _env_prefix() -> str:
-    return f". {WORKSPACE}/scripts/cron_env.sh &&"
+    return f". {WORKSPACE}/scripts/cron/cron_env.sh &&"
 
 
 # Shared job definitions used across presets
+# Paths updated 2026-04-04 for scripts/ subdirectory reorganization:
+#   cron_*.sh    → scripts/cron/
+#   health/backup/infra → scripts/infra/
+#   dream/cognition     → scripts/cognition/
+#   brain/memory        → scripts/brain_mem/
+#   metrics/benchmarks  → scripts/metrics/
+#   hygiene/hooks       → scripts/hooks/
+#   data lifecycle      → scripts/infra/
 _JOBS = {
     # Monitoring (always recommended)
-    "health_monitor": "*/15 * * * * __WORKSPACE__/scripts/health_monitor.sh >> __WORKSPACE__/monitoring/health.log 2>&1",
-    "watchdog": "*/30 * * * * __WORKSPACE__/scripts/cron_watchdog.sh >> __WORKSPACE__/monitoring/watchdog.log 2>&1",
+    "health_monitor": "*/15 * * * * __WORKSPACE__/scripts/infra/health_monitor.sh >> __WORKSPACE__/monitoring/health.log 2>&1",
+    "watchdog": "*/30 * * * * __WORKSPACE__/scripts/cron/cron_watchdog.sh >> __WORKSPACE__/monitoring/watchdog.log 2>&1",
     # Backup
-    "backup": "0 2 * * * __WORKSPACE__/scripts/backup_daily.sh >> __WORKSPACE__/memory/cron/backup.log 2>&1",
-    "backup_verify": "30 2 * * * __WORKSPACE__/scripts/backup_verify.sh >> __WORKSPACE__/memory/cron/backup_verify.log 2>&1",
+    "backup": "0 2 * * * __WORKSPACE__/scripts/infra/backup_daily.sh >> __WORKSPACE__/memory/cron/backup.log 2>&1",
+    "backup_verify": "30 2 * * * __WORKSPACE__/scripts/infra/backup_verify.sh >> __WORKSPACE__/memory/cron/backup_verify.log 2>&1",
     # Maintenance window (04:00-05:00)
-    "graph_checkpoint": "0 4 * * * __WORKSPACE__/scripts/cron_graph_checkpoint.sh >> __WORKSPACE__/memory/cron/graph_checkpoint.log 2>&1",
-    "graph_compaction": "30 4 * * * __WORKSPACE__/scripts/cron_graph_compaction.sh >> __WORKSPACE__/memory/cron/graph_compaction.log 2>&1",
-    "graph_verify": "45 4 * * * __WORKSPACE__/scripts/cron_graph_verify.sh >> __WORKSPACE__/memory/cron/graph_verify.log 2>&1",
-    "chromadb_vacuum": "0 5 * * * __WORKSPACE__/scripts/cron_chromadb_vacuum.sh >> __WORKSPACE__/memory/cron/chromadb_vacuum.log 2>&1",
+    "graph_checkpoint": "0 4 * * * __WORKSPACE__/scripts/cron/cron_graph_checkpoint.sh >> __WORKSPACE__/memory/cron/graph_checkpoint.log 2>&1",
+    "graph_compaction": "30 4 * * * __WORKSPACE__/scripts/cron/cron_graph_compaction.sh >> __WORKSPACE__/memory/cron/graph_compaction.log 2>&1",
+    "graph_verify": "45 4 * * * __WORKSPACE__/scripts/cron/cron_graph_verify.sh >> __WORKSPACE__/memory/cron/graph_verify.log 2>&1",
+    "chromadb_vacuum": "0 5 * * * __WORKSPACE__/scripts/cron/cron_chromadb_vacuum.sh >> __WORKSPACE__/memory/cron/chromadb_vacuum.log 2>&1",
     # Core cycle
-    "morning": "0 8 * * * __WORKSPACE__/scripts/cron_morning.sh >> __WORKSPACE__/memory/cron/morning.log 2>&1",
-    "evening": "0 18 * * * __WORKSPACE__/scripts/cron_evening.sh >> __WORKSPACE__/memory/cron/evening.log 2>&1",
-    "reflection": "0 21 * * * __WORKSPACE__/scripts/cron_reflection.sh >> __WORKSPACE__/memory/cron/reflection.log 2>&1",
-    "evolution": "0 13 * * * __WORKSPACE__/scripts/cron_evolution.sh >> __WORKSPACE__/memory/cron/evolution.log 2>&1",
+    "morning": "0 8 * * * __WORKSPACE__/scripts/cron/cron_morning.sh >> __WORKSPACE__/memory/cron/morning.log 2>&1",
+    "evening": "0 18 * * * __WORKSPACE__/scripts/cron/cron_evening.sh >> __WORKSPACE__/memory/cron/evening.log 2>&1",
+    "reflection": "0 21 * * * __WORKSPACE__/scripts/cron/cron_reflection.sh >> __WORKSPACE__/memory/cron/reflection.log 2>&1",
+    "evolution": "0 13 * * * __WORKSPACE__/scripts/cron/cron_evolution.sh >> __WORKSPACE__/memory/cron/evolution.log 2>&1",
     # Autonomous (various hours)
-    "autonomous_06": "0 6 * * * __WORKSPACE__/scripts/cron_autonomous.sh >> __WORKSPACE__/memory/cron/autonomous.log 2>&1",
-    "autonomous_07": "0 7 * * * __WORKSPACE__/scripts/cron_autonomous.sh >> __WORKSPACE__/memory/cron/autonomous.log 2>&1",
-    "autonomous_09": "0 9 * * * __WORKSPACE__/scripts/cron_autonomous.sh >> __WORKSPACE__/memory/cron/autonomous.log 2>&1",
-    "autonomous_11": "0 11 * * * __WORKSPACE__/scripts/cron_autonomous.sh >> __WORKSPACE__/memory/cron/autonomous.log 2>&1",
-    "autonomous_12": "0 12 * * * __WORKSPACE__/scripts/cron_autonomous.sh >> __WORKSPACE__/memory/cron/autonomous.log 2>&1",
-    "autonomous_15": "0 15 * * * __WORKSPACE__/scripts/cron_autonomous.sh >> __WORKSPACE__/memory/cron/autonomous.log 2>&1",
-    "autonomous_17": "0 17 * * 0,1,2,4,5 __WORKSPACE__/scripts/cron_autonomous.sh >> __WORKSPACE__/memory/cron/autonomous.log 2>&1",
-    "autonomous_19": "0 19 * * * __WORKSPACE__/scripts/cron_autonomous.sh >> __WORKSPACE__/memory/cron/autonomous.log 2>&1",
-    "autonomous_20": "0 20 * * * __WORKSPACE__/scripts/cron_autonomous.sh >> __WORKSPACE__/memory/cron/autonomous.log 2>&1",
-    "autonomous_22": "0 22 * * * __WORKSPACE__/scripts/cron_autonomous.sh >> __WORKSPACE__/memory/cron/autonomous.log 2>&1",
-    "autonomous_23": "0 23 * * * __WORKSPACE__/scripts/cron_autonomous.sh >> __WORKSPACE__/memory/cron/autonomous.log 2>&1",
-    "autonomous_01": "0 1 * * * __WORKSPACE__/scripts/cron_autonomous.sh >> __WORKSPACE__/memory/cron/autonomous.log 2>&1",
+    "autonomous_06": "0 6 * * * __WORKSPACE__/scripts/cron/cron_autonomous.sh >> __WORKSPACE__/memory/cron/autonomous.log 2>&1",
+    "autonomous_07": "0 7 * * * __WORKSPACE__/scripts/cron/cron_autonomous.sh >> __WORKSPACE__/memory/cron/autonomous.log 2>&1",
+    "autonomous_09": "0 9 * * * __WORKSPACE__/scripts/cron/cron_autonomous.sh >> __WORKSPACE__/memory/cron/autonomous.log 2>&1",
+    "autonomous_11": "0 11 * * * __WORKSPACE__/scripts/cron/cron_autonomous.sh >> __WORKSPACE__/memory/cron/autonomous.log 2>&1",
+    "autonomous_12": "0 12 * * * __WORKSPACE__/scripts/cron/cron_autonomous.sh >> __WORKSPACE__/memory/cron/autonomous.log 2>&1",
+    "autonomous_15": "0 15 * * * __WORKSPACE__/scripts/cron/cron_autonomous.sh >> __WORKSPACE__/memory/cron/autonomous.log 2>&1",
+    "autonomous_17": "0 17 * * 0,1,2,4,5 __WORKSPACE__/scripts/cron/cron_autonomous.sh >> __WORKSPACE__/memory/cron/autonomous.log 2>&1",
+    "autonomous_19": "0 19 * * * __WORKSPACE__/scripts/cron/cron_autonomous.sh >> __WORKSPACE__/memory/cron/autonomous.log 2>&1",
+    "autonomous_20": "0 20 * * * __WORKSPACE__/scripts/cron/cron_autonomous.sh >> __WORKSPACE__/memory/cron/autonomous.log 2>&1",
+    "autonomous_22": "0 22 * * * __WORKSPACE__/scripts/cron/cron_autonomous.sh >> __WORKSPACE__/memory/cron/autonomous.log 2>&1",
+    "autonomous_23": "0 23 * * * __WORKSPACE__/scripts/cron/cron_autonomous.sh >> __WORKSPACE__/memory/cron/autonomous.log 2>&1",
+    "autonomous_01": "0 1 * * * __WORKSPACE__/scripts/cron/cron_autonomous.sh >> __WORKSPACE__/memory/cron/autonomous.log 2>&1",
     # Research
-    "research_am": "0 10 * * * __WORKSPACE__/scripts/cron_research.sh >> __WORKSPACE__/memory/cron/research.log 2>&1",
-    "research_pm": "0 16 * * * __WORKSPACE__/scripts/cron_research.sh >> __WORKSPACE__/memory/cron/research.log 2>&1",
+    "research_am": "0 10 * * * __WORKSPACE__/scripts/cron/cron_research.sh >> __WORKSPACE__/memory/cron/research.log 2>&1",
+    "research_pm": "0 16 * * * __WORKSPACE__/scripts/cron/cron_research.sh >> __WORKSPACE__/memory/cron/research.log 2>&1",
     # Specialized
-    "implementation_sprint": "0 14 * * * __WORKSPACE__/scripts/cron_implementation_sprint.sh >> __WORKSPACE__/memory/cron/implementation_sprint.log 2>&1",
-    "strategic_audit": "0 17 * * 3,6 __WORKSPACE__/scripts/cron_strategic_audit.sh >> __WORKSPACE__/memory/cron/strategic_audit.log 2>&1",
-    "dream": "45 2 * * * . __WORKSPACE__/scripts/cron_env.sh && timeout 900 python3 __WORKSPACE__/scripts/dream_engine.py dream >> __WORKSPACE__/memory/cron/dream.log 2>&1",
+    "implementation_sprint": "0 14 * * * __WORKSPACE__/scripts/cron/cron_implementation_sprint.sh >> __WORKSPACE__/memory/cron/implementation_sprint.log 2>&1",
+    "strategic_audit": "0 17 * * 3,6 __WORKSPACE__/scripts/cron/cron_strategic_audit.sh >> __WORKSPACE__/memory/cron/strategic_audit.log 2>&1",
+    "dream": "45 2 * * * . __WORKSPACE__/scripts/cron/cron_env.sh && timeout 900 python3 __WORKSPACE__/scripts/cognition/dream_engine.py dream >> __WORKSPACE__/memory/cron/dream.log 2>&1",
     # Reports
-    "report_morning": "30 9 * * * __WORKSPACE__/scripts/cron_report_morning.sh >> __WORKSPACE__/memory/cron/report_morning.log 2>&1",
-    "report_evening": "30 22 * * * __WORKSPACE__/scripts/cron_report_evening.sh >> __WORKSPACE__/memory/cron/report_evening.log 2>&1",
+    "report_morning": "30 9 * * * __WORKSPACE__/scripts/cron/cron_report_morning.sh >> __WORKSPACE__/memory/cron/report_morning.log 2>&1",
+    "report_evening": "30 22 * * * __WORKSPACE__/scripts/cron/cron_report_evening.sh >> __WORKSPACE__/memory/cron/report_evening.log 2>&1",
     # Weekly hygiene (Sunday)
-    "goal_hygiene": "10 5 * * 0 cd __WORKSPACE__ && python3 scripts/goal_hygiene.py clean >> memory/cron/goal_hygiene.log 2>&1",
-    "brain_hygiene": "15 5 * * 0 cd __WORKSPACE__ && python3 scripts/brain_hygiene.py run >> memory/cron/brain_hygiene.log 2>&1",
-    "data_lifecycle": "20 5 * * 0 cd __WORKSPACE__ && python3 scripts/data_lifecycle.py >> memory/cron/data_lifecycle.log 2>&1",
-    "cleanup": "30 5 * * 0 __WORKSPACE__/scripts/cron_cleanup.sh >> __WORKSPACE__/memory/cron/cleanup.log 2>&1",
+    "goal_hygiene": "10 5 * * 0 cd __WORKSPACE__ && python3 scripts/hooks/goal_hygiene.py clean >> memory/cron/goal_hygiene.log 2>&1",
+    "brain_hygiene": "15 5 * * 0 cd __WORKSPACE__ && python3 scripts/brain_mem/brain_hygiene.py run >> memory/cron/brain_hygiene.log 2>&1",
+    "data_lifecycle": "20 5 * * 0 cd __WORKSPACE__ && python3 scripts/infra/data_lifecycle.py >> memory/cron/data_lifecycle.log 2>&1",
+    "cleanup": "30 5 * * 0 __WORKSPACE__/scripts/cron/cron_cleanup.sh >> __WORKSPACE__/memory/cron/cleanup.log 2>&1",
     # Evaluation
-    "pi_refresh": "45 5 * * * __WORKSPACE__/scripts/cron_pi_refresh.sh >> __WORKSPACE__/memory/cron/pi_refresh.log 2>&1",
-    "status_json": "50 5 * * * . __WORKSPACE__/scripts/cron_env.sh && python3 __WORKSPACE__/scripts/generate_status_json.py >> __WORKSPACE__/memory/cron/status_json.log 2>&1",
-    "brain_eval": "5 6 * * * __WORKSPACE__/scripts/cron_brain_eval.sh >> __WORKSPACE__/memory/cron/brain_eval.log 2>&1",
-    "llm_brain_review": "15 6 * * * __WORKSPACE__/scripts/cron_llm_brain_review.sh >> __WORKSPACE__/memory/cron/llm_brain_review.log 2>&1",
-    "relevance_refresh": "40 2 * * * . __WORKSPACE__/scripts/cron_env.sh && python3 -m clarvis cognition context-relevance refresh >> __WORKSPACE__/memory/cron/relevance_refresh.log 2>&1",
-    "orchestrator": "30 19 * * * __WORKSPACE__/scripts/cron_orchestrator.sh >> __WORKSPACE__/memory/cron/orchestrator.log 2>&1",
+    "pi_refresh": "45 5 * * * __WORKSPACE__/scripts/cron/cron_pi_refresh.sh >> __WORKSPACE__/memory/cron/pi_refresh.log 2>&1",
+    "status_json": "50 5 * * * . __WORKSPACE__/scripts/cron/cron_env.sh && python3 __WORKSPACE__/scripts/infra/generate_status_json.py >> __WORKSPACE__/memory/cron/status_json.log 2>&1",
+    "brain_eval": "5 6 * * * __WORKSPACE__/scripts/cron/cron_brain_eval.sh >> __WORKSPACE__/memory/cron/brain_eval.log 2>&1",
+    "llm_brain_review": "15 6 * * * __WORKSPACE__/scripts/cron/cron_llm_brain_review.sh >> __WORKSPACE__/memory/cron/llm_brain_review.log 2>&1",
+    "relevance_refresh": "40 2 * * * . __WORKSPACE__/scripts/cron/cron_env.sh && python3 -m clarvis cognition context-relevance refresh >> __WORKSPACE__/memory/cron/relevance_refresh.log 2>&1",
+    "orchestrator": "30 19 * * * __WORKSPACE__/scripts/cron/cron_orchestrator.sh >> __WORKSPACE__/memory/cron/orchestrator.log 2>&1",
     # Monthly
-    "monthly_reflection": "30 3 1 * * __WORKSPACE__/scripts/cron_monthly_reflection.sh >> __WORKSPACE__/memory/cron/monthly_reflection.log 2>&1",
-    "brief_benchmark": "45 3 1 * * . __WORKSPACE__/scripts/cron_env.sh && python3 __WORKSPACE__/scripts/brief_benchmark.py >> __WORKSPACE__/memory/cron/brief_benchmark.log 2>&1",
+    "monthly_reflection": "30 3 1 * * __WORKSPACE__/scripts/cron/cron_monthly_reflection.sh >> __WORKSPACE__/memory/cron/monthly_reflection.log 2>&1",
+    "brief_benchmark": "45 3 1 * * . __WORKSPACE__/scripts/cron/cron_env.sh && python3 __WORKSPACE__/scripts/metrics/brief_benchmark.py >> __WORKSPACE__/memory/cron/brief_benchmark.log 2>&1",
     # Weekly benchmarks (Sunday)
-    "pi_benchmark": "0 6 * * 0 . __WORKSPACE__/scripts/cron_env.sh && python3 __WORKSPACE__/scripts/performance_benchmark.py record >> __WORKSPACE__/memory/cron/pi_benchmark.log 2>&1",
-    "clr_benchmark": "30 6 * * 0 __WORKSPACE__/scripts/cron_clr_benchmark.sh >> __WORKSPACE__/memory/cron/clr_benchmark.log 2>&1",
-    "absolute_zero": "0 3 * * 0 __WORKSPACE__/scripts/cron_absolute_zero.sh >> __WORKSPACE__/memory/cron/absolute_zero.log 2>&1",
+    "pi_benchmark": "0 6 * * 0 . __WORKSPACE__/scripts/cron/cron_env.sh && python3 __WORKSPACE__/scripts/metrics/performance_benchmark.py record >> __WORKSPACE__/memory/cron/pi_benchmark.log 2>&1",
+    "clr_benchmark": "30 6 * * 0 __WORKSPACE__/scripts/cron/cron_clr_benchmark.sh >> __WORKSPACE__/memory/cron/clr_benchmark.log 2>&1",
+    "absolute_zero": "0 3 * * 0 __WORKSPACE__/scripts/cron/cron_absolute_zero.sh >> __WORKSPACE__/memory/cron/absolute_zero.log 2>&1",
 }
 
 
@@ -223,8 +231,8 @@ _PRESETS: dict[str, dict] = {
 
 
 def _script_path(job: str) -> Path:
-    """Return the path to scripts/cron_<job>.sh."""
-    return SCRIPTS / f"cron_{job}.sh"
+    """Return the path to scripts/cron/cron_<job>.sh."""
+    return SCRIPTS / "cron" / f"cron_{job}.sh"
 
 
 def _log_path(job: str) -> Path:
@@ -244,12 +252,14 @@ def _parse_crontab() -> list[dict]:
         line = line.strip()
         if not line or line.startswith("#"):
             continue
-        # Skip @reboot and non-clarvis lines
-        if "openclaw/workspace/scripts/cron_" not in line and \
-           "openclaw/workspace/scripts/backup_" not in line and \
-           "openclaw/workspace/scripts/health_monitor" not in line and \
-           "openclaw/workspace/scripts/dream_engine" not in line:
+        # Skip @reboot and non-clarvis lines — match both old flat and new subdir paths
+        if "openclaw/workspace/scripts/" not in line and "openclaw/workspace" not in line:
             continue
+        # Must reference a known script pattern (cron job, backup, hygiene, etc.)
+        if not re.search(r"scripts/(?:cron/cron_|infra/|cognition/|brain_mem/|metrics/|hooks/|cron_|backup_|health_monitor|dream_engine)", line):
+            # Also match clarvis-managed lines that use `python3 -m clarvis` or `python3 scripts/`
+            if "python3 -m clarvis" not in line and "python3 scripts/" not in line:
+                continue
 
         # Extract schedule + command
         # Standard cron: min hour dom mon dow command...
@@ -260,11 +270,16 @@ def _parse_crontab() -> list[dict]:
         schedule = " ".join(parts[:5])
         command = parts[5]
 
-        # Extract the primary script (the last scripts/*.sh or scripts/*.py in the line,
-        # which is the actual job — not a sourced helper like cron_env.sh)
-        all_scripts = re.findall(r"scripts/([\w_]+\.(?:sh|py))", command)
+        # Extract the primary script — handles both flat and subdirectory layouts
+        # e.g. scripts/cron/cron_autonomous.sh, scripts/infra/health_monitor.sh
+        all_scripts = re.findall(r"scripts/(?:[\w_]+/)?([\w_]+\.(?:sh|py))", command)
         if not all_scripts:
-            script_name = command.split("/")[-1].split()[0]
+            # Try python -m clarvis ... pattern
+            m = re.search(r"python3 -m clarvis (\S+)", command)
+            if m:
+                script_name = f"clarvis_{m.group(1).replace(' ', '_')}"
+            else:
+                script_name = command.split("/")[-1].split()[0]
         else:
             # Use the last match (skip sourced helpers like cron_env.sh)
             script_name = all_scripts[-1]

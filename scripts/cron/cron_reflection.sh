@@ -1,7 +1,7 @@
 #!/bin/bash
 # Daily reflection - consolidate memory AND generate new evolution tasks
-source $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh
-source $CLARVIS_WORKSPACE/scripts/cron/lock_helper.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/cron_env.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lock_helper.sh"
 
 LOGFILE="memory/cron/reflection.log"
 

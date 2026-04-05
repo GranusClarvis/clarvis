@@ -426,7 +426,7 @@ def grid_search():
 
 def apply_recall_sort_weights(semantic_w, importance_w):
     """Update brain.py recall sort weights."""
-    brain_path = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "scripts/brain.py")
+    brain_path = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "scripts/brain_mem/brain.py")
     with open(brain_path) as f:
         content = f.read()
 
@@ -454,7 +454,7 @@ def apply_recall_sort_weights(semantic_w, importance_w):
 
 def apply_smart_recall_params(collection_boost, max_distance):
     """Update retrieval_experiment.py smart_recall parameters."""
-    exp_path = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "scripts/retrieval_experiment.py")
+    exp_path = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "scripts/brain_mem/retrieval_experiment.py")
     with open(exp_path) as f:
         content = f.read()
 
@@ -498,7 +498,7 @@ def apply_smart_recall_params(collection_boost, max_distance):
 
 def apply_attention_weights(w_imp, w_rec, w_rel, w_acc, w_bst):
     """Update attention.py salience weights."""
-    attn_path = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "scripts/attention.py")
+    attn_path = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "scripts/cognition/attention.py")
     with open(attn_path) as f:
         content = f.read()
 
@@ -521,7 +521,7 @@ def apply_attention_weights(w_imp, w_rec, w_rel, w_acc, w_bst):
 
 def apply_procedural_threshold(threshold):
     """Update procedural_memory.py match threshold."""
-    proc_path = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "scripts/procedural_memory.py")
+    proc_path = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "scripts/brain_mem/procedural_memory.py")
     with open(proc_path) as f:
         content = f.read()
 

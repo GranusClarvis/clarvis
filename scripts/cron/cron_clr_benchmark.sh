@@ -9,8 +9,8 @@
 # checks stability over the last 14 days, and writes a summary to digest.
 # =============================================================================
 
-source $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh
-source $CLARVIS_WORKSPACE/scripts/cron/lock_helper.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/cron_env.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lock_helper.sh"
 
 LOGFILE="memory/cron/clr_benchmark.log"
 

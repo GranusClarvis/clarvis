@@ -6,8 +6,8 @@
 # with 2 batched Python processes (heartbeat_preflight.py + heartbeat_postflight.py).
 # Savings: ~7-8s per heartbeat from eliminated cold-starts + reduced disk I/O.
 
-source $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh
-source $CLARVIS_WORKSPACE/scripts/cron/lock_helper.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/cron_env.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lock_helper.sh"
 LOGFILE="memory/cron/autonomous.log"
 SCRIPTS="$CLARVIS_WORKSPACE/scripts"
 
@@ -223,10 +223,11 @@ BATCH_COUNT=1
 if [ "$ROUTE_EXECUTOR" = "claude" ]; then
     eval "$(NEXT_TASK="$NEXT_TASK" python3 - <<'PY'
 import os, re, shlex, sys
-sys.path.insert(0,'$CLARVIS_WORKSPACE/scripts/cognition')
+_ws = os.environ.get('CLARVIS_WORKSPACE', os.getcwd())
+sys.path.insert(0, os.path.join(_ws, 'scripts/cognition'))
 from cognitive_load import estimate_task_complexity
 
-QUEUE_FILE = '$CLARVIS_WORKSPACE/memory/evolution/QUEUE.md'
+QUEUE_FILE = os.path.join(_ws, 'memory/evolution/QUEUE.md')
 
 next_task = os.environ.get('NEXT_TASK', '').strip()
 if not next_task:

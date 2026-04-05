@@ -5,8 +5,8 @@
 # module utilization, build-vs-consolidate decision, and autonomy progress.
 # Writes findings to digest + directly modifies QUEUE.md priorities.
 
-source $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh
-source $CLARVIS_WORKSPACE/scripts/cron/lock_helper.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/cron_env.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lock_helper.sh"
 LOGFILE="memory/cron/strategic_audit.log"
 
 # Acquire locks: local + global Claude
@@ -258,12 +258,12 @@ import re
 import sys
 import os
 
-sys.path.insert(0, os.path.join(os.environ.get("CLARVIS_WORKSPACE", "$CLARVIS_WORKSPACE"), "scripts/evolution"))
+sys.path.insert(0, os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.getcwd()), "scripts/evolution"))
 from queue_writer import add_task
 
 # Read audit text from saved file instead of argv (avoids ARG_MAX with large audits)
 audit_file = os.path.join(
-    os.environ.get("CLARVIS_WORKSPACE", "$CLARVIS_WORKSPACE"),
+    os.environ.get("CLARVIS_WORKSPACE", os.getcwd()),
     "data", "strategic_audit_last.md"
 )
 try:
@@ -296,7 +296,7 @@ if json_match:
                 print(f"QUEUE: Skipped (duplicate/cap): {title}")
         # Save structured data for downstream use
         findings_path = os.path.join(
-            os.environ.get("CLARVIS_WORKSPACE", "$CLARVIS_WORKSPACE"),
+            os.environ.get("CLARVIS_WORKSPACE", os.getcwd()),
             "data", "strategic_audit_findings.json"
         )
         data["extracted_at"] = __import__("datetime").datetime.now().isoformat()

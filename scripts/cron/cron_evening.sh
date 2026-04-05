@@ -1,7 +1,7 @@
 #!/bin/bash
 # Evening code review - audit today's work + daily capability assessment
-source $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh
-source $CLARVIS_WORKSPACE/scripts/cron/lock_helper.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/cron_env.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lock_helper.sh"
 LOGFILE="memory/cron/evening.log"
 
 # Acquire local lock only during Python assessment phase.

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Clarvis Self-Monitoring System
 # Runs every 15 minutes via cron
-source $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh
+source "${CLARVIS_WORKSPACE:-$HOME/.openclaw/workspace}"/scripts/cron/cron_env.sh
 
 DATE=$(date '+%Y-%m-%d %H:%M:%S')
 LOG_DIR="$CLARVIS_WORKSPACE/monitoring"

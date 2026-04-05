@@ -25,7 +25,7 @@
 # =============================================================================
 
 set -euo pipefail
-source $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh
+source "${CLARVIS_WORKSPACE:-$HOME/.openclaw/workspace}"/scripts/cron/cron_env.sh
 
 # --- Configuration ---
 WORKSPACE="$HOME/.openclaw/workspace"
