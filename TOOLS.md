@@ -73,7 +73,7 @@ async with BrowserAgent() as ba:
 
 ### From spawn_claude.sh
 ```bash
-workspace/scripts/spawn_claude.sh "
+workspace/scripts/agents/spawn_claude.sh "
 source ~/.openclaw/venvs/chroma/bin/activate
 python3 workspace/scripts/browser_agent.py browse https://target-url.com
 " 600

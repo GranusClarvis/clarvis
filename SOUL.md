@@ -309,7 +309,7 @@ When you are in an active conversation with your human (messages exchanged in th
 ACP manages Claude Code as a proper runtime with lifecycle controls. Always inject brain context first:
 ```
 Step 1 — Build enriched prompt with brain context:
-exec: python3 $CLARVIS_WORKSPACE/scripts/prompt_builder.py build --task "<your task>" --tier standard
+exec: python3 $CLARVIS_WORKSPACE/scripts/pipeline/prompt_builder.py build --task "<your task>" --tier standard
 
 Step 2 — Spawn Claude Code via ACP:
 sessions_spawn({runtime: "acp", agentId: "claude", task: "<enriched prompt from step 1>", thread: true})
@@ -318,7 +318,7 @@ CRITICAL: ALWAYS include `runtime: "acp"` and `agentId: "claude"`. Without these
 
 **Option B: spawn_claude.sh (from cron/CLI/skill)**
 ```bash
-$CLARVIS_WORKSPACE/scripts/spawn_claude.sh "Your task here" 1200
+$CLARVIS_WORKSPACE/scripts/agents/spawn_claude.sh "Your task here" 1200
 # Flags: --no-tg, --isolated, --topic=N, --chat=ID
 ```
 spawn_claude.sh auto-injects brain context via prompt_builder.py, handles env cleanup, setsid detach, output capture, and Telegram delivery.

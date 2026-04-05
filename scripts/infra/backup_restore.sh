@@ -20,7 +20,12 @@
 
 set -euo pipefail
 
-WORKSPACE="$HOME/.openclaw/workspace"
+# Self-resolve CLARVIS_WORKSPACE so this script works when invoked directly
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+CLARVIS_WORKSPACE="${CLARVIS_WORKSPACE:-$(cd -- "$SCRIPT_DIR/../.." && pwd)}"
+export CLARVIS_WORKSPACE
+
+WORKSPACE="$CLARVIS_WORKSPACE"
 BACKUP_ROOT="$HOME/.openclaw/backups/daily"
 PRE_RESTORE_DIR="$HOME/.openclaw/backups/pre-restore"
 

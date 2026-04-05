@@ -2113,3 +2113,18 @@ _Last archived: 2026-04-03_
 
 ## Archived 2026-04-05
 - [x] [QUEUE_V2_RESEARCH_COMPLETION_LOCK] Ensure completed research topics cannot be rediscovered/requeued/executed again unless explicitly reopened by a new task tag or manual override. Audit cron_research + research discovery + queue injection paths. (2026-04-05 14:07 UTC)
+
+## Archived 2026-04-05
+- [x] [BOOTSTRAP_DIRECT_SHELL_SCRIPTS] _(2026-04-05)_ Added self-resolving `CLARVIS_WORKSPACE` bootstrap to gate_check.sh, safe_update.sh, backup_restore.sh, setup.sh.
+- [x] [BOOTSTRAP_STALE_PATH_REFS] _(2026-04-05)_ Fixed 25+ stale references across AGENTS.md, SOUL.md, HEARTBEAT.md, USER.md, TOOLS.md, RUNBOOK.md, DO_NOT_TOUCH_REGISTRY.md, SKILL.md, procedural_memory.py, runner.py (incl. runtime bug: preflight/postflight file lookups pointed to wrong dir).
+- [x] [BOOTSTRAP_TEST_REALIGN] _(2026-04-05)_ Fixed test_heartbeat_pipeline.py missing `_paths` import; verified all other tests already aligned. 114 tests pass.
+
+## Archived 2026-04-05
+- [x] [RESEARCH_REPEAT_CLASSIFIER 2026-04-05] Add smart repeat detection for research selection/requeue paths using canonical topic IDs + scope comparison, with tests designed to minimize false positives and user-annoying suppression. → repeat_classifier.py (42 tests, integrated into writer.py)
+
+## Archived 2026-04-05
+- [x] [CONTEXT_TIERED_BRIEF_COVERAGE] *(2026-04-05)* Added 5 missing task classes (benchmarking, agent_orchestration, brand_creative, reflection, self_awareness) to classifier + budget policy. 15/15 tasks now classify correctly, all 14 classes bidirectionally covered.
+- [x] [SWO_CLARVIS_BRAND_SYSTEM] *(2026-04-03)* Completed — see `docs/SWO_CLARVIS_BRAND_INTEGRATION.md`.
+- [x] [SWO_CLARVIS_REDESIGN_CONCEPT] *(2026-04-05)* Redesign concept covering CSS palette, typography, motifs, README/SOUL/dashboard changes — see `docs/SWO_CLARVIS_REDESIGN_CONCEPT.md`.
+- [x] [SWO_CLARVIS_COPY_AUDIT] *(2026-04-05)* Audited 9 surfaces, identified 14 replacements across 8 files with copy-paste-ready snippets — see `docs/SWO_CLARVIS_COPY_AUDIT.md`.
+- [x] [BRAIN_RESEARCH_CANONICALIZATION] Audit ClarvisDB + memory files for duplicate research memories/episodes created by repeated runs. Deduplicate safely, preserve the best canonical summary per topic, and link follow-up/refinement entries instead of creating parallel duplicates. (2026-03-12)

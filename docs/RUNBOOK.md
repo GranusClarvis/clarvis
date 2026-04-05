@@ -25,7 +25,7 @@ timeout 1200 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \
   --dangerously-skip-permissions --model claude-opus-4-6 > /tmp/claude_output.txt 2>&1
 
 # 4. Postflight (episode encoding, metrics)
-python3 scripts/heartbeat_postflight.py
+python3 scripts/pipeline/heartbeat_postflight.py
 ```
 
 ### Check Heartbeat Health
@@ -281,7 +281,7 @@ python3 scripts/import_health.py --depth     # Dependency depth analysis
 
 ### Preferred Method
 ```bash
-workspace/scripts/spawn_claude.sh "Your task here" 1200
+workspace/scripts/agents/spawn_claude.sh "Your task here" 1200
 # Add --no-tg as 3rd arg to skip Telegram delivery
 ```
 

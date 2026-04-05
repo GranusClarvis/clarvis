@@ -1270,15 +1270,28 @@ def _classify_task_class(task_text):
     """Classify a task into a budget-policy task class.
 
     Returns one of the keys from data/prompt_eval/context_budget_policy.json.
+    Rules are ordered most-specific-first to avoid false matches.
     """
     if not task_text:
         return "code_implementation"
     t = task_text.lower()
+    # --- specific classes first (avoid false matches) ---
+    if any(kw in t for kw in ("benchmark", "clr benchmark", "pi benchmark", "performance benchmark")):
+        return "benchmarking"
+    if any(kw in t for kw in ("spawn", "agent task", "orchestrat", "project agent")):
+        return "agent_orchestration"
+    if any(kw in t for kw in ("brand", "redesign", "visual identity", "copy audit", "naming treatment")):
+        return "brand_creative"
+    if any(kw in t for kw in ("evening assessment", "morning planning", "self-report", "review today", "velocity review", "reflection pipeline", "reflection —")):
+        return "reflection"
+    if any(kw in t for kw in ("brier", "calibration", "self-aware", "capability score", "phi metric", "confidence sweep")):
+        return "self_awareness"
+    # --- broader classes ---
     if any(kw in t for kw in ("research", "investigate", "paper", "compare", "survey")):
         return "research_synthesis"
-    if any(kw in t for kw in ("remove dead", "cleanup", "prune dead", "delete unused")):
+    if any(kw in t for kw in ("remove dead", "cleanup", "prune dead", "delete unused", "remove 5 dead", "dead scripts")):
         return "repo_cleanup"
-    if any(kw in t for kw in ("migrate", "move", "refactor", "rename across", "replace proxy")):
+    if any(kw in t for kw in ("migrate", "move to", "refactor", "rename across", "replace proxy")):
         return "migration_refactor"
     if any(kw in t for kw in ("fix", "bug", "crash", "error", "broken", "fails")):
         return "bugfix_debug"

@@ -10,11 +10,13 @@ import os
 import sys
 import pytest
 
-# Ensure scripts/ is importable
-sys.path.insert(0, os.path.join(
+# Ensure scripts/ and its subdirs are importable
+_scripts_dir = os.path.join(
     os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")),
     "scripts",
-))
+)
+sys.path.insert(0, _scripts_dir)
+import _paths  # noqa: F401,E402 — registers scripts/pipeline/, etc. on sys.path
 
 
 # ---------------------------------------------------------------------------

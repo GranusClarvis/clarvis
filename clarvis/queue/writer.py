@@ -177,36 +177,28 @@ _RESEARCH_PATTERN = re.compile(
 
 
 def _is_research_topic_completed(task: str, source: str = "unknown") -> bool:
-    """Check if a research-like task covers a topic already completed in the topic registry.
+    """Check if a research-like task is a true repeat using scope-aware classification.
 
-    This is the injection-time completion lock: even if word-overlap dedup misses a
-    semantically equivalent topic, the canonical topic registry will catch it.
-    Only applies to research-flavored tasks (Research:, Bundle, etc.).
+    Uses RepeatClassifier for smart repeat detection that distinguishes:
+      - NOVEL:         No matching topic → allow
+      - SCOPE_SHIFT:   Same topic, different scope → allow
+      - SHALLOW_PRIOR: Same topic, prior was shallow → allow
+      - REPEAT:        Same topic, same scope, recent → block
 
-    Manual sources (manual, cli, user) bypass the lock — this is the explicit
-    reopening path required by the completion lock protocol.
+    Manual sources (manual, cli, user) bypass via RepeatClassifier's source check.
     """
-    if source in ("manual", "cli", "user"):
-        return False  # Explicit override allowed
     if not _RESEARCH_PATTERN.search(task):
         return False
     try:
         import importlib.util
-        _novelty_path = os.path.join(_WS, "scripts", "evolution", "research_novelty.py")
-        spec = importlib.util.spec_from_file_location("research_novelty", _novelty_path)
+        _classifier_path = os.path.join(_WS, "scripts", "evolution", "repeat_classifier.py")
+        spec = importlib.util.spec_from_file_location("repeat_classifier", _classifier_path)
         _mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(_mod)
-        TopicRegistry = _mod.TopicRegistry
-        registry = TopicRegistry()
-        match = registry.find_matching(task)
-        if match is None:
-            return False
-        # Block if topic has been researched at least once (completion lock).
-        # REFINEMENT and ALREADY_KNOWN are both blocked at injection time.
-        # Only NEW (no registry match) passes through for auto-sources.
-        return match.research_count >= 1
+        classifier = _mod.RepeatClassifier()
+        return classifier.is_repeat(task, source=source)
     except Exception:
-        return False  # Registry unavailable — don't block
+        return False  # Classifier unavailable — don't block
 
 
 def _get_succeeded_task_texts() -> list:

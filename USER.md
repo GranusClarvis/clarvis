@@ -17,7 +17,7 @@ Founder of Granus Labs. Web3 builder, EVM developer, infrastructure thinker. Mov
 - Vibe codes — builds fast, iterates faster
 - Security-conscious but practical
 - Values autonomy in his tools and agents
-- **Claude Code spawn preference:** when he says “spawn a claude”, use `scripts/spawn_claude.sh` (non-ACP) unless he explicitly asks for ACP
+- **Claude Code spawn preference:** when he says “spawn a claude”, use `scripts/agents/spawn_claude.sh` (non-ACP) unless he explicitly asks for ACP
 
 ## Projects
 

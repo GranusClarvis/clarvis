@@ -16,9 +16,9 @@ These files ARE the autonomous execution pipeline. Breaking any of them stops al
 
 | File | Lines | Why untouchable |
 |------|-------|-----------------|
-| `scripts/heartbeat_preflight.py` | 1,347 | THE runtime entry point. Imports 20+ modules. Every autonomous task flows through this. |
-| `scripts/heartbeat_postflight.py` | 1,991 | Runs after every task. Episode encoding, confidence, metrics, digest. Dense import web. |
-| `scripts/heartbeat_gate.py` | — | Zero-LLM pre-check. Gate for all autonomous execution. Has spine equivalent but not yet verified identical. |
+| `scripts/pipeline/heartbeat_preflight.py` | 1,347 | THE runtime entry point. Imports 20+ modules. Every autonomous task flows through this. |
+| `scripts/pipeline/heartbeat_postflight.py` | 1,991 | Runs after every task. Episode encoding, confidence, metrics, digest. Dense import web. |
+| `scripts/pipeline/heartbeat_gate.py` | — | Zero-LLM pre-check. Gate for all autonomous execution. Has spine equivalent but not yet verified identical. |
 
 ## Category 2: Bridge Wrappers (8 scripts)
 
@@ -101,8 +101,8 @@ crontab -l | grep <filename>
 grep -rl "<filename>" scripts/*.sh
 
 # Check heartbeat pipeline dependencies specifically
-grep -n "import" scripts/heartbeat_preflight.py | head -40
-grep -n "import" scripts/heartbeat_postflight.py | head -40
+grep -n "import" scripts/pipeline/heartbeat_preflight.py | head -40
+grep -n "import" scripts/pipeline/heartbeat_postflight.py | head -40
 ```
 
 ---

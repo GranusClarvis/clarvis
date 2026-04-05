@@ -57,7 +57,7 @@
 **Rollback:** `git revert`
 **Validation:**
 - [ ] `python3 -m clarvis brain health` passes
-- [ ] Manual heartbeat trigger succeeds: `python3 scripts/heartbeat_preflight.py --dry-run` (or equivalent)
+- [ ] Manual heartbeat trigger succeeds: `python3 scripts/pipeline/heartbeat_preflight.py --dry-run` (or equivalent)
 - [ ] `cd packages/clarvis-db && python3 -m pytest tests/` passes
 
 - [x] Delete 4 confirmed-dead scripts + 1 test — **DONE 2026-03-23**

@@ -6,28 +6,41 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 
 ## P0 — Current Sprint
 
+- [ ] [P0_CLARVIS_REFLECTION_PATH_BUG] Fix `scripts/cognition/clarvis_reflection.py` path construction regressions introduced in the path-hygiene sweep (`fos.path.join` typo, broken `"memory/{today}.md"` interpolation, missing `os` import safety). Add a smoke test that exercises `get_today_memory()`.
+- [ ] [P0_CRON_DOCTOR_HOME_EXPANSION] Fix `scripts/cron/cron_doctor.py` setting `HOME` to the literal string `"~"` in subprocess env. Use `os.path.expanduser("~")` or inherited HOME and add a regression check.
+- [ ] [P0_SHELL_PATH_QUOTING_AUDIT] Audit the April 5 path-hygiene shell edits for unsafe unquoted `$CLARVIS_WORKSPACE` usages in command positions (`git -C`, `python3`, worktree paths, sourced files). Quote variables consistently and add one shellcheck-style smoke pass for modified cron scripts.
 
 ## P1 — This Week
 
 ### Queue Architecture v2 (2026-04-04 audit)
 
 ### Runtime Bootstrap / Path Hygiene (2026-04-04 restructure audit)
-- [ ] [BOOTSTRAP_DIRECT_SHELL_SCRIPTS] Audit direct-invocation shell scripts under `scripts/` and add self-resolving `CLARVIS_WORKSPACE` bootstrap where needed (spawn pattern), instead of assuming env is pre-exported.
-- [ ] [BOOTSTRAP_STALE_PATH_REFS] Find and update stale references to old flat script paths (`scripts/spawn_claude.sh`, `scripts/heartbeat_preflight.py`, `scripts/heartbeat_postflight.py`, `scripts/prompt_builder.py`) across docs, tests, comments, and helpers.
-- [ ] [BOOTSTRAP_TEST_REALIGN] Realign tests/fixtures that still assume old flat heartbeat/prompt import structure, keeping coverage but matching the new `scripts/pipeline/*` and `scripts/tools/*` layout.
 
 ### Context/Prompt Pipeline
-- [ ] [CONTEXT_TIERED_BRIEF_COVERAGE] Validate tiered brief covers all 10 task types in taskset.json with no missing critical sections. Fix gaps found by prompt_quality_eval.py.
 
 ### SWO / Clarvis Brand Integration
+- [ ] [SWO_CLARVIS_ECOSYSTEM_POSITIONING] Write a short positioning doc that explains why Clarvis exists in the SWO ecosystem, what unique role it plays, how it connects to SWO products/lore, and what naming conventions should be used publicly.
 - [ ] [SWO_AGENT_WORKSPACE_SETUP] Ensure star-world-order agent workspace is functional: clone, brain seed, golden QA passing.
 - [ ] [SWO_NEXT_PR] Pick next SWO issue from upstream, spawn agent, deliver PR via fork workflow.
+
+### Fresh-Install / Isolation Validation
+- [ ] [INSTALL_MATRIX_DEFINE] Define the supported install matrix for isolated validation: fresh OpenClaw install, fresh Hermes agent install, and Clarvis-on-top install path. Document expected prerequisites, local-model-only mode, and pass/fail criteria for “usable without extra hassle”.
+- [ ] [OPENCLAW_FRESH_INSTALL_ISOLATED] In an isolated location, perform a fresh OpenClaw install from scratch using a local model only (no API keys). Verify first-run usability, session/chat basics, and note any manual fixes required.
+- [ ] [HERMES_FRESH_INSTALL_ISOLATED] In an isolated location, perform a fresh Hermes agent install from scratch using a local model only. Verify harness basics and capture any setup friction or hidden dependencies.
+- [ ] [CLARVIS_OVERLAY_INSTALL_TEST] On top of fresh isolated installs, test the procedure for installing Clarvis without disturbing the current live system. Validate whether Clarvis layers cleanly onto OpenClaw/Hermes end-to-end and document exact install steps.
+- [ ] [ISOLATED_CRON_END_TO_END] In the isolated test environments, verify cron/autonomous scheduling actually runs, writes expected logs/artifacts, and remains intact without modifying current production crons.
+- [ ] [LOCAL_MODEL_HARNESS_VALIDATION] Confirm which local model(s) already on the machine can drive OpenClaw/Hermes/Clarvis install and smoke tests. Standardize a zero-API-key test mode and record exact commands/config.
+- [ ] [FRESH_INSTALL_SMOKE_SUITE] Create a repeatable smoke-test checklist/script for fresh installs: launch, basic chat, memory paths, cron wiring, autonomous trigger, and first-use experience.
+- [ ] [INSTALL_FRICTION_REPORT] Produce a concise install-friction report after isolated tests: what broke, what required manual intervention, what must be automated, and what blocks “instant usable” status.
 
 ### Spine Migration (continued)
 - [ ] [SPINE_MIGRATION_WAVE3_ORCH] Migrate orchestrator logic from `scripts/` into `clarvis/orch/`. _(Phase 1-3 done. Remaining: `pr_factory.py` (905L), `project_agent.py` (3492L), `agent_orchestrator.py` (763L). Large, not trivially wrappable. Each is a multi-hour refactor.)_
 
 ### Execution Reliability
 - [ ] [CRON_STUCK_LOCK_RECOVERY] Add stale-lock auto-recovery to cron_watchdog.sh — detect locks held >2h with dead PID, clean up.
+- [ ] [DIGEST_WEEKEND_GAP_RECOVERY] Diagnose why `memory/2026-04-04.md` and `memory/2026-04-05.md` were left with no digest entries. Trace cron/report writers, verify weekend schedule coverage, and add a freshness assertion so a blank daily log triggers repair or alert.
+- [ ] [AUTONOMOUS_PROMPT_INPUT_GUARD] Fix the autonomous execution path so Claude/OpenRouter invocations can never crash with `Input must be provided either through stdin or as a prompt argument when using --print`. Add one regression test that covers the empty-prompt path.
+- [ ] [CANONICAL_STATE_WEEKLY_REFRESH] Add a weekly hygiene step that refreshes ROADMAP current-state metrics, canonical priorities memory, and any stale goal snapshots from live data so reflection docs stop drifting.
 
 ### Open-Source Release
 - [ ] [OSS_HARDCODED_PATHS] Audit and parameterize remaining hardcoded `/home/agent/.openclaw/` paths in Python and shell scripts. _(146+ Python files, 7 shell files identified.)_
@@ -71,8 +84,6 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 ## Partial Items (tracked, not actively worked)
 
 ### Research Sessions
-- [ ] [RESEARCH_REPEAT_CLASSIFIER] Add smart repeat detection for research selection/requeue paths using canonical topic IDs + scope comparison, with tests designed to minimize false positives and user-annoying suppression.
-- [ ] [BRAIN_RESEARCH_CANONICALIZATION] Audit ClarvisDB + memory files for duplicate research memories/episodes created by repeated runs. Deduplicate safely, preserve the best canonical summary per topic, and link follow-up/refinement entries instead of creating parallel duplicates.
 
 ### External Challenges
 - [ ] [EXTERNAL_CHALLENGE:coding-challenge-next] Pick and complete next coding challenge from benchmark suite.

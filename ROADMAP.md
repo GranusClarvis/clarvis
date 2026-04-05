@@ -1,7 +1,7 @@
 # ROADMAP.md — Clarvis Evolution Roadmap
 
 _The single source of truth for where Clarvis is going and how to get there._
-_Updated: 2026-03-29_
+_Updated: 2026-04-05_
 
 ---
 
@@ -46,30 +46,30 @@ Clarvis should grow into:
 - likely first extraction candidate: **ClarvisDB** (vector memory with graph associations)
 - a public website presenting Clarvis, linked repos, current work, and benchmarks
 
-## Current State (2026-03-29)
+## Current State (2026-04-05)
 
 | Capability | Status | Summary |
 |-----------|--------|---------|
-| **Brain (ClarvisDB)** | 98% | 10 collections, healthy brain checks, faster retrieval, stronger temporal recall, final benchmark gates passing |
-| **Session Continuity** | 86% | Daily memory, curated memory, session automation; still solid but not meaningfully advanced this week |
-| **Heartbeat Evolution** | 100% | Autonomous cron backbone remains in place; remaining gap is explicit cron audit closure |
-| **Self-Awareness** | 94% | Phi 0.8304, 7 capability domains tracked, stronger weekly benchmark evidence |
-| **Task Tracking** | 94% | Queue remains active and delivery-oriented, but goal/queue signal needs compaction to reduce planning noise |
-| **Reflection** | 93% | Daily/weekly synthesis still feeding roadmap and queue maintenance effectively |
-| **Confidence Gating** | 93% | Brier calibration wiring repaired and re-validated; confidence loop looks healthy |
-| **Attention & Working Memory** | 93% | Cognitive workspace remains effective with high reuse and better brief quality |
+| **Brain (ClarvisDB)** | 98% | 10 collections remain healthy; retrieval usefulness stayed strong (mostly 88-94%) while avg benchmark speed improved sharply through the week |
+| **Session Continuity** | 86% | Daily memory and curated continuity are intact, but Apr 4-5 missing digest entries exposed a reporting/continuity gap |
+| **Heartbeat Evolution** | 88% | Backbone is strong, but Apr 2 preflight failures and Apr 4-5 digest silence show the cron/heartbeat path is not yet fully reliable |
+| **Self-Awareness** | 91% | Capability tracking remains solid, but roadmap metrics had drifted stale and phi sat around ~0.74 rather than prior inflated claims |
+| **Task Tracking** | 91% | Queue remains useful and delivery-oriented, though canonical state still needs better sync across goals, roadmap, and weekly priorities |
+| **Reflection** | 94% | Daily, monthly, and strategic reflection continue to produce actionable direction; reflection quality remains a strength |
+| **Confidence Gating** | 95% | Tiered confidence action levels landed this week, moving this area from theory into actual implementation |
+| **Attention & Working Memory** | 95% | Context caching, concurrent preflight, and section ordering materially improved working-memory efficiency and prompt assembly quality |
 | **Reasoning Chains** | 100% | Persistent multi-step reasoning infrastructure remains stable |
-| **Knowledge Synthesis** | 94% | Cross-domain connection finding improved, though some bridge quality work remains |
-| **Procedural Memory** | 92% | Procedure capture is strong, but procedural/infrastructure factual retrieval still needs polish |
-| **Context Quality** | 94% | Brief compression now above target, dynamic pruning and relevance quality substantially improved |
-| **Monitoring** | 95% | Health checks, dashboards, status surfaces, and benchmark reporting are in strong shape |
-| **Episodic Memory** | 96% | Crash guarding, failure subclassing, and postmortem tagging materially improved robustness |
-| **Self-Surgery** | 90% | Major decomposition/recombine work landed across brain search, postflight, context, and benchmark code |
-| **Cognitive Workspace** | 84% | Hierarchical buffers are working well; reuse and context assembly are materially healthier |
-| **ACT-R Activation** | 88% | Power-law decay and recall-path usage remain solid, with retrieval behavior now better grounded in benchmarks |
-| **Agent Orchestrator** | 91% | Benchmark scripts and scoreboard added; orchestration layer is more measurable and release-ready |
-| **Performance Index** | 100% | PI hit 1.0000 with all final benchmark gates passing |
-| **Public Surface** | 88% | Website v0, architecture/public pages, and status surfacing exist; final reliability validation remains |
+| **Knowledge Synthesis** | 95% | Synthesis and adaptive retrieval work advanced, though conceptual framework building is still unfinished |
+| **Procedural Memory** | 92% | Procedure capture remains strong; factual/procedural retrieval is reliable, but runtime failure recovery still needs polish |
+| **Context Quality** | 96% | Compression stability, keyword coverage, and section ordering all improved materially this week |
+| **Monitoring** | 94% | Structured health export improved observability, but missing weekend digests prevent a higher score |
+| **Episodic Memory** | 96% | Episode capture and postflight recording remain robust even through noisy execution periods |
+| **Self-Surgery** | 92% | More spine migration and architecture cleanup landed, including cognitive workspace migration and clone→test→verify wiring |
+| **Cognitive Workspace** | 88% | Workspace architecture is healthier than before, with migration work and better context flow improving practical reuse |
+| **ACT-R Activation** | 88% | Activation/recall behavior remains solid and benchmark-grounded; no major change this week |
+| **Agent Orchestrator** | 92% | Coordinator-mode research, worker templates, and worktree groundwork improved the orchestration path, though execution reliability still lags design quality |
+| **Performance Index** | 96% | Core performance remains excellent, but reliability noise this week makes a flat 1.0000 claim too generous |
+| **Public Surface** | 90% | Docker quickstart, history scrub, and public-release prep advanced meaningfully, though privacy/path cleanup still blocks a clean open-source push |
 
 ---
 

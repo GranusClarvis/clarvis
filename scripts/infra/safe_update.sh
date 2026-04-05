@@ -87,8 +87,13 @@ if [ "${SAFE_UPDATE_DETACHED:-}" != "1" ]; then
   fi
 fi
 
+# --- Self-resolve workspace ---
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+CLARVIS_WORKSPACE="${CLARVIS_WORKSPACE:-$(cd -- "$SCRIPT_DIR/../.." && pwd)}"
+export CLARVIS_WORKSPACE
+
 # --- Configuration ---
-WORKSPACE="$HOME/.openclaw/workspace"
+WORKSPACE="$CLARVIS_WORKSPACE"
 OPENCLAW_CONFIG="$HOME/.openclaw/openclaw.json"
 OPENCLAW_PKG="$HOME/.npm-global/lib/node_modules/openclaw"
 BACKUP_ROOT="$HOME/.openclaw/backups"

@@ -19,7 +19,7 @@ Each heartbeat during active conversation re-sends the entire session context (~
 **If no active conversation, run the gate. Do NOT load brain, read digest, check queue, or do ANYTHING before running the gate.**
 
 ```bash
-python3 $CLARVIS_WORKSPACE/scripts/heartbeat_gate.py 2>/dev/null
+python3 $CLARVIS_WORKSPACE/scripts/pipeline/heartbeat_gate.py 2>/dev/null
 ```
 
 **Read the JSON output.** If `"decision": "skip"`:
@@ -36,8 +36,7 @@ If `"decision": "wake"`:
 
 ### 1. Brain Check (10 seconds)
 ```python
-import sys; sys.path.insert(0, "$CLARVIS_WORKSPACE/scripts")
-from brain import brain, search, remember, capture
+from clarvis.brain import brain, search, remember, capture
 stats = brain.stats()
 ```
 If total_memories decreased since last check → alert the operator immediately.
@@ -60,7 +59,7 @@ cat memory/cron/digest.md
 
 First, build enriched prompt:
 ```
-exec: python3 $CLARVIS_WORKSPACE/scripts/prompt_builder.py build --task "Investigate this finding: [paste digest excerpt]" --tier standard
+exec: python3 $CLARVIS_WORKSPACE/scripts/pipeline/prompt_builder.py build --task "Investigate this finding: [paste digest excerpt]" --tier standard
 ```
 Then spawn Claude Code via ACP with the enriched prompt:
 ```
@@ -80,7 +79,7 @@ Read `memory/evolution/QUEUE.md`. Pick the highest priority uncompleted task.
 - **Small task (< 5 min)?** → Do it NOW. Mark done with date.
 - **Big task (> 5 min)?** → Spawn Claude Code via ACP:
   ```
-  Step 1: exec: python3 scripts/prompt_builder.py build --task "[task description]" --tier standard
+  Step 1: exec: python3 scripts/pipeline/prompt_builder.py build --task "[task description]" --tier standard
   Step 2: sessions_spawn({runtime: "acp", agentId: "claude", task: "<enriched prompt>", thread: true})
   ```
   Or use `/spawn [task]` which routes through spawn_claude.sh with auto context injection.

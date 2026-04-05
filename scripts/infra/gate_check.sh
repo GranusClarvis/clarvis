@@ -6,6 +6,11 @@
 
 set -euo pipefail
 
+# Self-resolve CLARVIS_WORKSPACE so this script works when invoked directly
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+CLARVIS_WORKSPACE="${CLARVIS_WORKSPACE:-$(cd -- "$SCRIPT_DIR/../.." && pwd)}"
+export CLARVIS_WORKSPACE
+
 WORKSPACE="$CLARVIS_WORKSPACE"
 SCRIPTS="$WORKSPACE/scripts"
 PASSED=0

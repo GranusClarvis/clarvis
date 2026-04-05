@@ -18,6 +18,7 @@ import time
 from datetime import datetime, timezone
 
 _SCRIPTS_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "scripts")
+_PIPELINE_DIR = os.path.join(_SCRIPTS_DIR, "pipeline")
 
 
 def run_gate_check(verbose: bool = False) -> dict:
@@ -34,8 +35,8 @@ def run_gate_check(verbose: bool = False) -> dict:
 def run_preflight(dry_run: bool = False) -> dict:
     """Run heartbeat preflight checks.
 
-    Delegates to scripts/heartbeat_preflight.py (which does the heavy lifting
-    with all cognitive subsystem imports). Returns preflight JSON dict.
+    Delegates to scripts/pipeline/heartbeat_preflight.py (which does the heavy
+    lifting with all cognitive subsystem imports). Returns preflight JSON dict.
     """
     if _SCRIPTS_DIR not in sys.path:
         sys.path.insert(0, _SCRIPTS_DIR)
@@ -44,7 +45,7 @@ def run_preflight(dry_run: bool = False) -> dict:
     import importlib
     spec = importlib.util.spec_from_file_location(
         "heartbeat_preflight",
-        os.path.join(_SCRIPTS_DIR, "heartbeat_preflight.py"),
+        os.path.join(_PIPELINE_DIR, "heartbeat_preflight.py"),
     )
     mod = importlib.util.module_from_spec(spec)
 
@@ -72,7 +73,7 @@ def run_preflight(dry_run: bool = False) -> dict:
 def run_postflight(exit_code: int, output_file: str, preflight_json_file: str) -> dict:
     """Run heartbeat postflight.
 
-    Delegates to scripts/heartbeat_postflight.py.
+    Delegates to scripts/pipeline/heartbeat_postflight.py.
 
     Args:
         exit_code: Claude Code exit code (0=success)
@@ -88,7 +89,7 @@ def run_postflight(exit_code: int, output_file: str, preflight_json_file: str) -
     import importlib
     spec = importlib.util.spec_from_file_location(
         "heartbeat_postflight",
-        os.path.join(_SCRIPTS_DIR, "heartbeat_postflight.py"),
+        os.path.join(_PIPELINE_DIR, "heartbeat_postflight.py"),
     )
     mod = importlib.util.module_from_spec(spec)
 

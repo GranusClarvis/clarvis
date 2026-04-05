@@ -121,7 +121,7 @@ Claude Code (Opus 4.6) is not just a coding tool — it's your **reasoning engin
 | Path | When | How | Context Injection |
 |------|------|-----|-------------------|
 | **ACP** (conversation) | From Telegram/chat | Two-step: exec prompt_builder → sessions_spawn with `runtime: "acp"` | prompt_builder.py builds enriched prompt with brain context |
-| **spawn_claude.sh** (cron/CLI) | From cron scripts, /spawn skill, manual CLI | `$CLARVIS_WORKSPACE/scripts/spawn_claude.sh "task" 1200` | prompt_builder.py called internally |
+| **spawn_claude.sh** (cron/CLI) | From cron scripts, /spawn skill, manual CLI | `$CLARVIS_WORKSPACE/scripts/agents/spawn_claude.sh "task" 1200` | prompt_builder.py called internally |
 
 **Path A: ACP spawn (from conversation — PREFERRED)**
 
@@ -129,7 +129,7 @@ Use when spawning Claude Code from within a conversation. ACP manages Claude Cod
 
 ```
 Step 1 — Build enriched prompt:
-exec: python3 $CLARVIS_WORKSPACE/scripts/prompt_builder.py build --task "<task>" --tier standard
+exec: python3 $CLARVIS_WORKSPACE/scripts/pipeline/prompt_builder.py build --task "<task>" --tier standard
 
 Step 2 — Spawn with ACP:
 sessions_spawn({runtime: "acp", agentId: "claude", task: "<enriched prompt from step 1>", thread: true})
@@ -140,7 +140,7 @@ The Claude Code topic (thread 2) is pre-configured to do this automatically.
 **Path B: spawn_claude.sh (from cron/CLI/skill)**
 
 ```bash
-$CLARVIS_WORKSPACE/scripts/spawn_claude.sh "Your task here" 1200
+$CLARVIS_WORKSPACE/scripts/agents/spawn_claude.sh "Your task here" 1200
 # Flags: --no-tg, --isolated, --topic=N, --chat=ID
 ```
 
@@ -272,7 +272,7 @@ You have a dedicated Telegram forum group with topic-based channels. Each topic 
 
 **Claude Code topic (thread 2):**
 - EVERY message is a task for Claude Code — spawn immediately via ACP
-- Step 1: `exec: python3 scripts/prompt_builder.py build --task "<message>" --tier standard` (builds enriched prompt with brain context)
+- Step 1: `exec: python3 scripts/pipeline/prompt_builder.py build --task "<message>" --tier standard` (builds enriched prompt with brain context)
 - Step 2: `sessions_spawn({runtime: "acp", agentId: "claude", task: "<enriched prompt>", thread: true})`
 - ALWAYS do step 1 first. NEVER pass raw task text without brain context.
 - DO NOT try to answer yourself. ALWAYS delegate to Claude Code.
@@ -372,7 +372,7 @@ Send the script output as-is (it’s already concise).
 ### `/spawn <task>` — Spawn Claude Code
 Delegate a task to Claude Code (Opus 4.6). See the `spawn-claude` skill.
 ```bash
-$CLARVIS_WORKSPACE/scripts/spawn_claude.sh "[user's task description]" 1200
+$CLARVIS_WORKSPACE/scripts/agents/spawn_claude.sh "[user's task description]" 1200
 ```
 **From conversation:** ACP is preferred (two-step: prompt_builder → sessions_spawn with runtime: "acp"). The `/spawn` skill uses `spawn_claude.sh` which also injects brain context.
 **From cron/CLI:** Call `spawn_claude.sh` directly as shown above.

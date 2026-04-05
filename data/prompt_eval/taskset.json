@@ -8,7 +8,7 @@
   "tasks": [
     {
       "id": "impl_spine_migration",
-      "class": "code_implementation",
+      "class": "migration_refactor",
       "task_text": "[SPINE_PROXY_REPLACEMENT] Replace proxy module clarvis/cognition/reasoning.py with real implementation moved from scripts/clarvis_reasoning.py",
       "expected_context_needs": ["procedures", "failure_patterns", "architecture", "code_templates"],
       "failure_modes": ["import breakage", "missing test coverage", "circular imports"],
