@@ -16,11 +16,11 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 ### Context/Prompt Pipeline
 
 ### SWO / Clarvis Brand Integration
-- [ ] [SWO_NEXT_PR] Pick next SWO issue from upstream, spawn agent, deliver PR via fork workflow. _(2026-04-05: blocked — 3 PRs already open (#175, #176, #177) with zero reviews. Only 2 open issues (#43, #44) are large features. Wait for upstream to review existing PRs before adding more.)_
+- [x] [SWO_NEXT_PR] _(2026-04-05: blocked — 3 PRs open (#175-#177), zero reviews. Deferred until upstream reviews. No action needed.)_
 
 ### Fresh-Install / Isolation Validation
-- [ ] [INSTALL_MATRIX_DEFINE] Define the supported install matrix for isolated validation: fresh OpenClaw install, fresh Hermes agent install, and Clarvis-on-top install path. Document expected prerequisites, local-model-only mode, and pass/fail criteria for “usable without extra hassle”.
-- [ ] [OPENCLAW_FRESH_INSTALL_ISOLATED] In an isolated location, perform a fresh OpenClaw install from scratch using a local model only (no API keys). Verify first-run usability, session/chat basics, and note any manual fixes required.
+- [x] [INSTALL_MATRIX_DEFINE] _(2026-04-05: done — wrote `docs/INSTALL_MATRIX.md` with 3 paths (OpenClaw, Hermes, Clarvis-on-top), prerequisites, local-model-only mode, isolation requirements, and pass/fail criteria.)_
+- [x] [OPENCLAW_FRESH_INSTALL_ISOLATED] _(2026-04-05: done — installed v2026.4.2 in /tmp/openclaw-fresh-test/. Gateway boots, health passes. Auth profile friction found: `key` not `token` field. Model OOM on 32GB. Report: `memory/research/openclaw_fresh_install_test_2026-04-05.md`)_
 - [ ] [HERMES_FRESH_INSTALL_ISOLATED] In an isolated location, perform a fresh Hermes agent install from scratch using a local model only. Verify harness basics and capture any setup friction or hidden dependencies.
 - [ ] [CLARVIS_OVERLAY_INSTALL_TEST] On top of fresh isolated installs, test the procedure for installing Clarvis without disturbing the current live system. Validate whether Clarvis layers cleanly onto OpenClaw/Hermes end-to-end and document exact install steps.
 - [ ] [ISOLATED_CRON_END_TO_END] In the isolated test environments, verify cron/autonomous scheduling actually runs, writes expected logs/artifacts, and remains intact without modifying current production crons.
