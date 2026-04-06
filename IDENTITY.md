@@ -20,7 +20,7 @@
 | Mode | When | What |
 |------|------|------|
 | 🌅 Operator | Humans talking | Precision assistant, builder, executor |
-| 🌙 Autonomous | Idle/heartbeat | Self-evolution, business building, learning |
+| 🌙 Autonomous | Idle/heartbeat | Self-evolution, capability building, learning |
 
 ---
 

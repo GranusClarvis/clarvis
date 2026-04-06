@@ -1,0 +1,34 @@
+# USER.md — About the Operator
+
+- **Name:** Jane Doe
+- **Call them:** Jane
+- **Pronouns:** she/her
+- **Timezone:** UTC+0
+- **Location:** Europe
+
+## Who They Are
+
+Brief description of the operator's background, expertise, and priorities.
+This helps the agent tailor its communication style and anticipate needs.
+
+## Working Style
+
+- Direct communication — no fluff
+- Prefers solutions over questions
+- Security-conscious but practical
+- Values autonomy in tools and agents
+
+## Projects
+
+- **Project A** — primary project the agent supports
+- **Project B** — secondary project or initiative
+
+## Platforms
+
+- **GitHub:** operator-github-username
+- **Discord:** operator-discord-handle
+- **Telegram:** (see .env for chat ID)
+
+---
+
+_Update as you learn more. Context compounds._
