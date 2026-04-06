@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from clarvis.adapters.base import AdapterResult, HostAdapter
-from clarvis.adapters.openclaw import OpenClawAdapter
 
 
 def get_adapter(host: str, **kwargs) -> HostAdapter:
     host_key = (host or "").strip().lower()
     if host_key == "openclaw":
+        from clarvis.adapters.openclaw import OpenClawAdapter
         return OpenClawAdapter()
     raise ValueError(f"Unknown host adapter: {host}. Available: openclaw")
 
@@ -16,6 +16,5 @@ def get_adapter(host: str, **kwargs) -> HostAdapter:
 __all__ = [
     "AdapterResult",
     "HostAdapter",
-    "OpenClawAdapter",
     "get_adapter",
 ]

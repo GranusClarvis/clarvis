@@ -2142,3 +2142,6 @@ _Last archived: 2026-04-03_
 - [x] [SWO_NEXT_PR] _(2026-04-05: blocked — 3 PRs open (#175-#177), zero reviews. Deferred until upstream reviews. No action needed.)_
 - [x] [INSTALL_MATRIX_DEFINE] _(2026-04-05: done — wrote `docs/INSTALL_MATRIX.md` with 3 paths (OpenClaw, Hermes, Clarvis-on-top), prerequisites, local-model-only mode, isolation requirements, and pass/fail criteria.)_
 - [x] [OPENCLAW_FRESH_INSTALL_ISOLATED] _(2026-04-05: done — installed v2026.4.2 in /tmp/openclaw-fresh-test/. Gateway boots, health passes. Auth profile friction found: `key` not `token` field. Model OOM on 32GB. Report: `memory/research/openclaw_fresh_install_test_2026-04-05.md`)_
+
+## Archived 2026-04-05
+- [x] [HERMES_FRESH_INSTALL_ISOLATED] _(2026-04-05: Done. Installed v0.7.0 in /tmp, 5/6 criteria pass, 4 friction points documented in docs/HERMES_FRESH_INSTALL_REPORT.md. Key issue: hermes-agent ignores CLI flags; qwen3-vl:4b too slow for agent loop on CPU.)_

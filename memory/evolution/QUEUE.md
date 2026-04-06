@@ -18,8 +18,7 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 ### SWO / Clarvis Brand Integration
 
 ### Fresh-Install / Isolation Validation
-- [x] [HERMES_FRESH_INSTALL_ISOLATED] _(2026-04-05: Done. Installed v0.7.0 in /tmp, 5/6 criteria pass, 4 friction points documented in docs/HERMES_FRESH_INSTALL_REPORT.md. Key issue: hermes-agent ignores CLI flags; qwen3-vl:4b too slow for agent loop on CPU.)_
-- [ ] [CLARVIS_OVERLAY_INSTALL_TEST] On top of fresh isolated installs, test the procedure for installing Clarvis without disturbing the current live system. Validate whether Clarvis layers cleanly onto OpenClaw/Hermes end-to-end and document exact install steps.
+- [x] [CLARVIS_OVERLAY_INSTALL_TEST] _(2026-04-06)_ Overlay install tested: 27/27 checks pass. Created `tests/test_overlay_install.sh` (10-step isolated venv test). Fixed chromadb eager-import bug in `clarvis/adapters/` (lazy imports). Both `setup.sh` and `install.sh --profile standalone` work clean in fresh venv.
 - [ ] [ISOLATED_CRON_END_TO_END] In the isolated test environments, verify cron/autonomous scheduling actually runs, writes expected logs/artifacts, and remains intact without modifying current production crons.
 - [ ] [LOCAL_MODEL_HARNESS_VALIDATION] Confirm which local model(s) already on the machine can drive OpenClaw/Hermes/Clarvis install and smoke tests. Standardize a zero-API-key test mode and record exact commands/config.
 - [ ] [FRESH_INSTALL_SMOKE_SUITE] Create a repeatable smoke-test checklist/script for fresh installs: launch, basic chat, memory paths, cron wiring, autonomous trigger, and first-use experience.
