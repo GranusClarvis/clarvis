@@ -2145,3 +2145,15 @@ _Last archived: 2026-04-03_
 
 ## Archived 2026-04-05
 - [x] [HERMES_FRESH_INSTALL_ISOLATED] _(2026-04-05: Done. Installed v0.7.0 in /tmp, 5/6 criteria pass, 4 friction points documented in docs/HERMES_FRESH_INSTALL_REPORT.md. Key issue: hermes-agent ignores CLI flags; qwen3-vl:4b too slow for agent loop on CPU.)_
+
+## Archived 2026-04-06
+- [x] [CLARVIS_OVERLAY_INSTALL_TEST] _(2026-04-06)_ Overlay install tested: 27/27 checks pass. Created `tests/test_overlay_install.sh` (10-step isolated venv test). Fixed chromadb eager-import bug in `clarvis/adapters/` (lazy imports). Both `setup.sh` and `install.sh --profile standalone` work clean in fresh venv.
+
+## Archived 2026-04-06
+- [x] [ISOLATED_CRON_END_TO_END] _(2026-04-06)_ 19-test pytest suite in `tests/test_cron_isolated_e2e.py`: cron_env sourcing, lock acquire/release/stale-reclaim, queue crash-guard, daily memory bootstrap, log artifacts, prompt guard, task validation, crontab integrity, cron_doctor dry-run. All 19 pass.
+- [x] [LOCAL_MODEL_HARNESS_VALIDATION] _(2026-04-06)_ `scripts/infra/local_model_harness.sh` — Ollama qwen3-vl:4b confirmed working (v0.17.0, 3.3GB, ~7tok/s CPU). Provides status/test/start/stop commands. Zero-API test mode validated: all Clarvis imports + brain search work with local ONNX only.
+- [x] [FRESH_INSTALL_SMOKE_SUITE] _(2026-04-06)_ `scripts/infra/fresh_install_smoke.sh` — 8-section, 64-check smoke suite covering: core imports, CLI launch, memory paths, brain init, cron wiring, autonomous dry-run, prompt assembly, first-use experience. Supports --isolated, --no-brain, --quick, --profile flags. 63/64 pass on production.
+
+## Archived 2026-04-06
+- [x] [INSTALL_FRICTION_REPORT] _(2026-04-06)_ Report written: `docs/INSTALL_FRICTION_REPORT.md`. 3 critical blockers (OpenClaw auth field, Hermes CLI flags, model OOM), 5 friction points, 6 automation targets. All test suites green (59/61 smoke, 19/19 e2e, 27/27 overlay).
+- [x] [RESEARCH_CONSCIOUSNESS_ARCHITECTURES] (2026-04-06) Surveyed consciousness architectures across GNW, predictive active inference, and AST; summary stored in `memory/research/consciousness-architectures.md`.

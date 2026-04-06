@@ -18,11 +18,24 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 ### SWO / Clarvis Brand Integration
 
 ### Fresh-Install / Isolation Validation
-- [x] [CLARVIS_OVERLAY_INSTALL_TEST] _(2026-04-06)_ Overlay install tested: 27/27 checks pass. Created `tests/test_overlay_install.sh` (10-step isolated venv test). Fixed chromadb eager-import bug in `clarvis/adapters/` (lazy imports). Both `setup.sh` and `install.sh --profile standalone` work clean in fresh venv.
-- [ ] [ISOLATED_CRON_END_TO_END] In the isolated test environments, verify cron/autonomous scheduling actually runs, writes expected logs/artifacts, and remains intact without modifying current production crons.
-- [ ] [LOCAL_MODEL_HARNESS_VALIDATION] Confirm which local model(s) already on the machine can drive OpenClaw/Hermes/Clarvis install and smoke tests. Standardize a zero-API-key test mode and record exact commands/config.
-- [ ] [FRESH_INSTALL_SMOKE_SUITE] Create a repeatable smoke-test checklist/script for fresh installs: launch, basic chat, memory paths, cron wiring, autonomous trigger, and first-use experience.
-- [ ] [INSTALL_FRICTION_REPORT] Produce a concise install-friction report after isolated tests: what broke, what required manual intervention, what must be automated, and what blocks “instant usable” status.
+- [ ] [LLM_BRAIN_REVIEW 2026-04-06] [LLM_BRAIN_REVIEW] Add a 'brain effectiveness' summary memory in clarvis-learnings that captures CLR value-add, episode success rate, and reasoning chain quality metrics — updated weekly by the reflection pipeline. — Probe 7 could not answer whether the brain helps decisions. The evidence exists in metrics files but is not stored as a retrievable memory.
+
+### Guided Installer / Onboarding UX
+- [ ] [GUIDED_INSTALLER_MODES] Design a guided installer with clear user-selectable modes: minimal, assisted, full, local-model-only, OpenClaw-integrated, Hermes-integrated, cron-enabled, cron-disabled.
+- [ ] [GUIDED_INSTALLER_FLOW] Implement the guided installer flow (interactive and non-interactive) that walks users through prerequisites, package choices, model choice, cron preference, and harness integration without forcing manual file edits.
+- [ ] [INSTALL_PROFILE_MATRIX] Define and document install profiles/packages clearly: what each profile installs, which dependencies are optional vs required, and what features are enabled/disabled.
+- [ ] [CRON_OPT_IN_OUT_INSTALL] Make cron/autonomy an explicit guided install choice with safe defaults, and keep isolated tests from mutating production crons.
+- [ ] [POST_INSTALL_DOCTOR] Build a post-install doctor/verify flow that gives PASS/WARN/FAIL for model wiring, brain init, memory paths, cron readiness, and harness integration.
+- [ ] [LOCAL_MODEL_QUICKSTART] Create a zero-API-key quickstart path using local models only, including exact supported models and commands that actually work on this machine class.
+- [ ] [TMP_ISOLATION_LIFECYCLE] Define policy for `/tmp` test installs: when to keep, when to clean up, naming conventions, and when to preserve environments for debugging/regression tests.
+
+### User-Facing Clarvis Docs / Help Surface
+- [ ] [USER_GUIDE_OPENCLAW] Write a detailed user guide for running Clarvis inside OpenClaw: what it does, how to talk to it, what autonomy means, what cron does, what features are available, and what Clarvis adds over baseline OpenClaw.
+- [ ] [USER_GUIDE_HERMES] Write the equivalent detailed user guide for Clarvis-on-Hermes, including differences, limitations, and recommended usage patterns.
+- [ ] [CLARVIS_FEATURES_REFERENCE] Produce a comprehensive feature reference covering memory, cron/autonomy, Claude delegation, browser abilities, project agents, install profiles, and operational boundaries.
+- [ ] [CLARVIS_ONBOARDING_MESSAGE] Design an onboarding message/first-run briefing Clarvis can send automatically after installation so users immediately understand how he works and what to do next.
+- [ ] [CLARVIS_HELP_COMMAND_SURFACE] Decide and implement the best discoverability surface: e.g. `/clarvis`, help skill, welcome command, or first-run menu that explains commands, modes, and capabilities.
+- [ ] [CLARVIS_DIFFERENTIATION_DOC] Write a concise doc explaining what Clarvis provides over other agents/harnesses, when to use Clarvis vs plain OpenClaw/Hermes, and the unique value of the Clarvis layer.
 
 ### Spine Migration (continued)
 - [ ] [SPINE_MIGRATION_WAVE3_ORCH] Migrate orchestrator logic from `scripts/` into `clarvis/orch/`. _(Phase 1-3 done. Remaining: `pr_factory.py` (905L), `project_agent.py` (3492L), `agent_orchestrator.py` (763L). Large, not trivially wrappable. Each is a multi-hour refactor.)_
@@ -36,6 +49,10 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 ### Open-Source Release
 - [ ] [OSS_HARDCODED_PATHS] Audit and parameterize remaining hardcoded `/home/agent/.openclaw/` paths in Python and shell scripts. _(146+ Python files, 7 shell files identified.)_
 - [ ] [OSS_README_PUBLIC] Write public-facing README.md for the clarvis repo — architecture overview, quickstart, API examples.
+- [ ] [OSS_PRIVATE_MD_AUDIT] Audit repo-tracked markdown/docs/config files and identify which ones are personal/install-specific/internal-only (research logs, archives, personal memory, operator-specific setup) and should be gitignored, moved out of the public repo, or replaced with safe examples/templates.
+- [ ] [OSS_EXAMPLE_IDENTITY_FILES] Create public-safe example variants for personal/core identity files such as `SOUL.md`, `USER.md`, `IDENTITY.md`, and related operator-specific docs (e.g. `SOUL.md.example`) so the repo shows structure and guidance without exposing personal data or local setup.
+- [ ] [OSS_RESEARCH_ARCHIVE_BOUNDARY] Define what research notes, archives, queue history, and cron logs belong in the repo vs local/private storage. Move or exclude install-specific, personal, and noisy historical artifacts accordingly.
+- [ ] [SOUL_AGENT_DECONWAY_CLEANUP] Remove outdated Conway/business/crypto/autonomous-business goals from `SOUL.md`, `AGENTS.md`, and related identity docs where they no longer reflect Clarvis's intended direction. Keep the soul aligned with current purpose.
 
 ---
 

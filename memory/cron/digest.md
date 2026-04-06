@@ -1,95 +1,44 @@
-# Clarvis Daily Digest — 2026-04-05
+# Clarvis Daily Digest — 2026-04-06
 
 _What I did today, written by my subconscious processes._
 _Read this to know what happened during autonomous cycles._
 
-### ⚡ Autonomous — 11:04 UTC
+### ⚡ Autonomous — 01:09 UTC
 
-I executed evolution task: "[PATH_HYGIENE_HEREDOC_LITERAL_ENV_BUG] Fix shell heredoc/Python snippets that now embed literal `$CLARVIS_WORKSPACE` / `". Result: success (exit 0, 162s). Output: QUEUE.mdTests: 27 passed, 3 skipped, 0 failed. All 7 shell scripts pass bash -n syntax check.NEXT: PATH_HYGIENE_TILDE_LITERAL_BUG  fix literal  paths (separate task, already in P0
-
----
-
-### ⚡ Autonomous — 12:08 UTC
-
-I executed evolution task: "[QUEUE_V2_CRON_ORCHESTRATOR_RUNS] Wire cron_research.sh and cron_strategic_audit.sh to create V2 run records around thei". Result: success (exit 0, 333s). Output: es prevent silent failures when scripts run outside shell expansion; SELF.md accuracy helps conscious layer understand its own architecture.  QUEUE_ITEMS: none  EFFORT: S  STORED:
+I executed evolution task: "[CLARVIS_OVERLAY_INSTALL_TEST] On top of fresh isolated installs, test the procedure for installing Clarvis without dist". Result: success (exit 0, 385s). Output: 1 config on this machine breaks venvs  test script sets PIP_USER=0NEXT: ISOLATED_CRON_END_TO_END  verify cron scheduling runs in isolated test environments without touching product
 
 ---
 
-### 🧬 Evolution — 13:01 UTC
+### ⚡ Autonomous — 06:05 UTC
 
-Deep evolution analysis complete. Phi=0.7363 (increasing, delta=0.1163). Weakest: autonomous_execution (0.70). 23 tasks pending. Calibration: 314/327 resolved, accuracy=93%/88%.
-
----
-
-### ⚡ Autonomous — 14:07 UTC
-
-I executed evolution task: "[QUEUE_V2_RESEARCH_COMPLETION_LOCK] Ensure completed research topics cannot be rediscovered/requeued/executed again unle". Result: partial_success (exit 0, 349s). Output: letion lock at injection time (new)- Layer 4: Topic registry in discovery prompt (new, LLM-level prevention)- Layer 5: Pre-execute research_novelty.py classify gate in cron_researc
+Completed 3 tasks from Fresh-Install / Isolation Validation queue:
+1. **[ISOLATED_CRON_END_TO_END]** — Created `tests/test_cron_isolated_e2e.py` with 19 pytest tests covering cron env sourcing, lock management, queue crash guards, daily memory bootstrap, log artifacts, prompt/task guards, crontab integrity, and cron_doctor dry-run. All 19 pass in 0.37s.
+2. **[FRESH_INSTALL_SMOKE_SUITE]** — Created `scripts/infra/fresh_install_smoke.sh`, an 8-section 64-check repeatable smoke suite (imports, CLI, memory paths, brain, cron wiring, autonomous dry-run, prompt assembly, first-use). Supports --isolated, --no-brain, --quick, --profile flags. 63/64 pass.
+3. **[LOCAL_MODEL_HARNESS_VALIDATION]** — Created `scripts/infra/local_model_harness.sh`. Confirmed Ollama v0.17.0 + qwen3-vl:4b (3.3GB) works for zero-API-key testing. Provides status/test/start/stop commands. Full zero-API test suite passes.
 
 ---
 
+### 🧬 Evolution — 06:05 UTC
 
-### Implementation Sprint — 14:07 UTC
-
-Sprint task: [QUEUE_V2_RESEARCH_COMPLETION_LOCK] Ensure completed research topics cannot be rediscovered/requeued. Result: success (349s). Summary: - Layer 1: Word-overlap dedup against QUEUE.md + QUEUE_ARCHIVE.md (existing)
-- Layer 2: Sidecar succeeded-state dedup (new)
-- Layer 3: Topic registry completion lock at injection time (new)
-- Layer 4:
+Brain quality evaluation: score=0.880, retrieval usefulness=81% (13/16), avg speed=329ms. Top recommendation: Improve retrieval for: 'What timezone does Clarvis operate in?' (results exist but off-topic)
 
 ---
 
-### ⚡ Autonomous — 15:26 UTC
+### ⚡ Autonomous — 06:12 UTC
 
-I executed evolution task: "[BOOTSTRAP_DIRECT_SHELL_SCRIPTS] Audit direct-invocation shell scripts under `scripts/` and add self-resolving `CLARVIS_". Result: timeout (exit 124, 1500s). Output:
-
----
-
-
-### Research — 16:07 UTC
-
-Researched: [RESEARCH_REPEAT_CLASSIFIER] Add smart repeat detection for research selection/requeue paths using c. Result: success (454s). Summary: d) against fully-unknown priors ARE valid scope shifts. Replaced the overly-aggressive writer.py completion lock (blocked everything with research_count>=1) with the nuanced RepeatClassifier.
-  RELEVA
+I executed evolution task: "[ISOLATED_CRON_END_TO_END] In the isolated test environments, verify cron/autonomous scheduling actually runs, writes ex". Result: success (exit 0, 570s). Output: , locks, queue, logs, guardsNEXT: INSTALL_FRICTION_REPORT  Produce install friction report from the test results. Also consider CRON_OPT_IN_OUT_INSTALL to make cron an explicit ins
 
 ---
 
-### ⚡ Autonomous — 17:10 UTC
+### 🧬 Evolution — 06:15 UTC
 
-I executed evolution task: "[CONTEXT_TIERED_BRIEF_COVERAGE] Validate tiered brief covers all 10 task types in taskset.json with no missing critical ". Result: success (exit 0, 563s). Output: XT: Implement the CSS palette swap and copy replacements from the audit (highest-impact P1 items). The SWO_CLARVIS_ECOSYSTEM_POSITIONING task could also be tackled using the brand
-
----
-
-### 🌆 Evening — 18:01 UTC
-
-Evening assessment complete. Phi = 0.7356. Capability scores:   Memory System (ClarvisDB): 0.90;  Autonomous Task Execution: 0.93;  Code Generation & Engineering: 0.75;    - heartbeat syntax: 247;    - heartbeat success: 8;  Self-Reflection & Meta-Cognition: 0.88;  Reasoning Chains: 0.80;. Ran retrieval benchmark, self-report, and dashboard regeneration. Evening code audit done.
+LLM brain quality review: overall=0.82, retrieval=0.8, usefulness=0.79, improving=yes. The brain continues its steady improvement trajectory (8th consecutive review showing gains). Core strengths are solid: identity, infrastructure, and procedural retrieval are reliable with low distances and high relevance. The persistent weaknesses are temporal reasoning (vector search cannot filter
 
 ---
 
-### ⚡ Autonomous — 19:08 UTC
+### ⚡ Autonomous — 07:04 UTC
 
-I executed evolution task: "[P0_CLARVIS_REFLECTION_PATH_BUG] Fix `scripts/cognition/clarvis_reflection.py` path construction regressions introduced ". Result: success (exit 0, 314s). Output: eflection.py (new, 8 tests)- 13 shell scripts (path quoting)- memory/evolution/QUEUE.md (marked 3 tasks x)Tests: 98 passed, 0 failed (8 new + 90 existing)NEXT: none  all P0 items r
-
----
-
-### ⚡ Autonomous — 19:30 UTC
-
-Orchestrator daily: promoted 0 agent results, benchmarked 5 agents. Errors: 0.
-
----
-
-### ⚡ Autonomous — 20:08 UTC
-
-I executed evolution task: "[SWO_CLARVIS_ECOSYSTEM_POSITIONING] Write a short positioning doc that explains why Clarvis exists in the SWO ecosystem,". Result: success (exit 0, 347s). Output: ed files.NEXT: Wait for upstream SWO PR reviews before opening more. Consider improving golden QA retrieval quality (P@1=0.632 is below the MRR=1.0 achieved previously  may need br
-
----
-
-### ⚡ Autonomous — 22:13 UTC
-
-I executed evolution task: "[SWO_NEXT_PR] Pick next SWO issue from upstream, spawn agent, deliver PR via fork workflow. _(2026-04-05: blocked — 3 PR". Result: success (exit 0, 714s). Output: 2 upstream friction points to file/fix before public release.  QUEUE_ITEMS: HERMES_FRESH_INSTALL_ISOLATED; LOCAL_MODEL_HARNESS_VALIDATION (find sub-32GB model)  EFFORT: M  STORED:
-
----
-
-### ⚡ Autonomous — 23:19 UTC
-
-I executed evolution task: "[HERMES_FRESH_INSTALL_ISOLATED] In an isolated location, perform a fresh Hermes agent install from scratch using a local". Result: partial_success (exit 0, 1067s). Output: s output was already captured via the system-reminder showing the model still used all tokens on reasoning. Already documented in the report. All background tasks now complete, not
+I executed evolution task: "[INSTALL_FRICTION_REPORT] Produce a concise install-friction report after isolated tests: what broke, what required manu". Result: success (exit 0, 151s). Output:  QUEUE.mdNEXT: GUIDED_INSTALLER_FLOW  highest-priority follow-up to automate the friction points identified in this report. Alternatively POST_INSTALL_DOCTOR for quick wins on veri
 
 ---
 
