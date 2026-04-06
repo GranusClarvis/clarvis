@@ -276,6 +276,12 @@ def execute_openrouter(task_text, model=None, context="", proc_hint="", episode_
     import urllib.request
     import urllib.error
 
+    if not task_text or not task_text.strip():
+        return {
+            "output": "ERROR: Empty task text — refusing to send empty prompt to OpenRouter.",
+            "exit_code": 1, "model": "none", "usage": {}, "fallback": False,
+        }
+
     try:
         from clarvis.orch.cost_api import get_api_key
         api_key = get_api_key()

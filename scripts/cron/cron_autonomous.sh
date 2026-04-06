@@ -183,6 +183,13 @@ Rules: no duplicates, at least 1 non-Python task, at least 1 targeting the weake
 OUTPUT FORMAT (mandatory): TASKS ADDED: <count>. Then list each task on its own line.
 STATIC2
     } > "$REPLENISH_PROMPT"
+    # PROMPT_GUARD: validate replenish prompt is non-empty before invoking Claude
+    if [ ! -s "$REPLENISH_PROMPT" ]; then
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] PROMPT_GUARD: replenish prompt file is empty — skipping Claude invocation" >> "$LOGFILE"
+        rm -f "$REPLENISH_PROMPT"
+        rm -f "$PREFLIGHT_FILE"
+        exit 0
+    fi
     timeout 1200 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT ${CLAUDE_BIN:-$(command -v claude || echo "$HOME/.local/bin/claude")} -p \
         --dangerously-skip-permissions --model claude-opus-4-6 \
         < "$REPLENISH_PROMPT" >> "$LOGFILE" 2>&1

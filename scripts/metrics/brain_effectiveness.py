@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
-"""Brain Effectiveness Scorer — weekly memory in clarvis-learnings.
+"""Brain Effectiveness Scorer — weekly-gated memory in clarvis-learnings.
 
 Aggregates CLR value-add, episode success rate, reasoning chain quality,
 and daily brain eval useful_rate into a single retrievable memory.
 
 Designed to answer: "Does the brain actually help Clarvis make better decisions?"
 
+History is appended every run for trend tracking. Brain memory storage is
+gated to once per ISO week to avoid daily duplicates in clarvis-learnings.
+
 Usage:
-    python3 scripts/metrics/brain_effectiveness.py compute        # Print JSON
-    python3 scripts/metrics/brain_effectiveness.py compute_and_store  # Compute + store in brain
+    python3 scripts/metrics/brain_effectiveness.py compute             # Print JSON only
+    python3 scripts/metrics/brain_effectiveness.py compute_and_store   # Compute + store (weekly-gated)
+    python3 scripts/metrics/brain_effectiveness.py compute_and_store_force  # Compute + store (always)
 """
 
 import json
@@ -267,11 +271,58 @@ def store_in_brain(result):
     return narrative
 
 
+def _should_store_weekly():
+    """Check if a brain effectiveness memory was already stored this ISO week.
+
+    Returns True if no entry exists for the current week in the history file.
+    This gates brain storage to weekly cadence even when called daily.
+    """
+    if not os.path.exists(HISTORY_FILE):
+        return True
+    now = datetime.now(timezone.utc)
+    current_week = now.isocalendar()[:2]  # (year, week_number)
+    try:
+        with open(HISTORY_FILE) as f:
+            for line in f:
+                try:
+                    entry = json.loads(line)
+                    ts = entry.get("timestamp", "")
+                    if ts:
+                        entry_dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                        if entry_dt.isocalendar()[:2] == current_week:
+                            return False  # Already stored this week
+                except (json.JSONDecodeError, ValueError):
+                    continue
+    except IOError:
+        return True
+    return True
+
+
 def compute_and_store():
-    """Compute effectiveness, store in brain, append to history."""
+    """Compute effectiveness, always append to history, store in brain weekly.
+
+    History is appended every run (for trend tracking), but brain memory
+    storage is gated to once per ISO week to avoid polluting clarvis-learnings
+    with daily duplicates. Use compute_and_store_force() to bypass the gate.
+    """
     result = compute()
     _append_history(result)
-    narrative = store_in_brain(result)
+    if _should_store_weekly():
+        narrative = store_in_brain(result)
+        result["stored_in_brain"] = True
+    else:
+        print("[brain_effectiveness] Skipping brain storage — already stored this week.")
+        result["stored_in_brain"] = False
+    print(json.dumps(result, indent=2))
+    return result
+
+
+def compute_and_store_force():
+    """Compute effectiveness and store in brain unconditionally (bypass weekly gate)."""
+    result = compute()
+    _append_history(result)
+    store_in_brain(result)
+    result["stored_in_brain"] = True
     print(json.dumps(result, indent=2))
     return result
 
@@ -287,6 +338,8 @@ def main():
         print(json.dumps(result, indent=2))
     elif cmd == "compute_and_store":
         compute_and_store()
+    elif cmd == "compute_and_store_force":
+        compute_and_store_force()
     else:
         print(f"Unknown command: {cmd}")
         sys.exit(1)

@@ -508,6 +508,7 @@ def clean_tmp_test_installs(report: CleanupReport, dry_run: bool):
                     shutil.rmtree(entry)
                 report.bytes_freed += size
                 report.files_removed += 1
+                report.tmp_installs_removed += 1
                 report.log(f"Removed stale test install: {entry.name} ({size:,} bytes, age={int((time.time()-mtime)/86400)}d)")
             elif entry.is_file():
                 size = entry.stat().st_size
@@ -515,6 +516,7 @@ def clean_tmp_test_installs(report: CleanupReport, dry_run: bool):
                     entry.unlink()
                 report.bytes_freed += size
                 report.files_removed += 1
+                report.tmp_installs_removed += 1
                 report.log(f"Removed stale test artifact: {entry.name} ({size:,} bytes)")
         except (OSError, PermissionError):
             continue

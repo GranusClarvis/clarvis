@@ -109,6 +109,62 @@ except Exception:
         assert rc == 1  # Should fail, not leave partial file
 
 
+class TestPromptInputGuard:
+    """Regression tests for empty-prompt guards.
+
+    Covers: AUTONOMOUS_PROMPT_INPUT_GUARD — Claude/OpenRouter invocations
+    must never crash with 'Input must be provided either through stdin or
+    as a prompt argument when using --print'.
+    """
+
+    def test_run_claude_code_prompt_guard_rejects_empty(self):
+        """The run_claude_code() prompt guard rejects an empty prompt file."""
+        # Simulate the shell guard: [ ! -s "$_prompt_file" ]
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".txt", delete=False
+        ) as f:
+            f.write("")  # empty file
+            tmp = f.name
+        try:
+            result = subprocess.run(
+                ["sh", "-c", f'[ ! -s "{tmp}" ] && echo "PROMPT_GUARD_TRIGGERED" || echo "WOULD_EXECUTE"'],
+                capture_output=True, text=True, timeout=5,
+            )
+            assert "PROMPT_GUARD_TRIGGERED" in result.stdout
+        finally:
+            os.unlink(tmp)
+
+    def test_run_claude_code_prompt_guard_allows_nonempty(self):
+        """The run_claude_code() prompt guard allows a non-empty prompt file."""
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".txt", delete=False
+        ) as f:
+            f.write("You are Clarvis. Do a task.\n")
+            tmp = f.name
+        try:
+            result = subprocess.run(
+                ["sh", "-c", f'[ ! -s "{tmp}" ] && echo "PROMPT_GUARD_TRIGGERED" || echo "WOULD_EXECUTE"'],
+                capture_output=True, text=True, timeout=5,
+            )
+            assert "WOULD_EXECUTE" in result.stdout
+        finally:
+            os.unlink(tmp)
+
+    def test_openrouter_empty_task_guard(self):
+        """execute_openrouter() rejects empty task text without calling the API."""
+        import sys
+        sys.path.insert(0, os.path.join(
+            os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
+        ))
+        from clarvis.orch.router import execute_openrouter
+
+        for empty_input in ["", "   ", None]:
+            result = execute_openrouter(empty_input)
+            assert result["exit_code"] == 1, f"Expected exit 1 for input={empty_input!r}"
+            assert "Empty task text" in result["output"], f"Expected guard message for input={empty_input!r}"
+            assert result["fallback"] is False, "Empty input should not trigger Claude fallback"
+
+
 class TestCrashGuardAtomicWrite:
     """Test the crash-guard JSON injection pattern."""
 
