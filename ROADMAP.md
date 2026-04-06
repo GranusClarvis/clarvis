@@ -16,7 +16,7 @@ Current: Cognitive Agent (episodic memory, orchestrator, live retrieval evaluati
     ↓
 Next: Deep Cognitive Agent (cleaner memory system, stronger retrieval precision, explicit runtime modes, context engine plugin)
     ↓
-Goal: Self-Sustaining Intelligence (best-in-class agent brain + autonomy, public harness repo)
+Goal: Advanced Autonomous Intelligence (best-in-class agent brain + autonomy, public harness repo)
 ```
 
 ---

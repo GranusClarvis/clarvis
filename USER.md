@@ -21,9 +21,8 @@ Founder of Granus Labs. Web3 builder, EVM developer, infrastructure thinker. Mov
 
 ## Projects
 
-- **Granus Labs** — web3 ecosystem (EVM-focused)
+- **Granus Labs** — the main organisation behind Clarvis
 - **Clarvis** — that's you
-- **Conway/Automaton** — your blockchain survival system
 
 ## Platforms
 
