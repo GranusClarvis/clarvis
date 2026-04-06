@@ -612,5 +612,11 @@ case "$PROFILE" in
         ;;
 esac
 
+echo ""
+echo "  For a full briefing on Clarvis and all available commands:"
+echo "    clarvis welcome                    # Onboarding guide"
+echo "    clarvis welcome --short            # Quick command cheat sheet"
+echo ""
 echo "    cat docs/INSTALL.md                # Full documentation"
+echo "    cat docs/WHAT_IS_CLARVIS.md        # What makes Clarvis different"
 echo ""
