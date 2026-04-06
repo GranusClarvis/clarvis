@@ -21,9 +21,9 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 - [ ] [LLM_BRAIN_REVIEW 2026-04-06] [LLM_BRAIN_REVIEW] Add a 'brain effectiveness' summary memory in clarvis-learnings that captures CLR value-add, episode success rate, and reasoning chain quality metrics — updated weekly by the reflection pipeline. — Probe 7 could not answer whether the brain helps decisions. The evidence exists in metrics files but is not stored as a retrievable memory.
 
 ### Guided Installer / Onboarding UX
-- [ ] [GUIDED_INSTALLER_MODES] Design a guided installer with clear user-selectable modes: minimal, assisted, full, local-model-only, OpenClaw-integrated, Hermes-integrated, cron-enabled, cron-disabled.
-- [ ] [GUIDED_INSTALLER_FLOW] Implement the guided installer flow (interactive and non-interactive) that walks users through prerequisites, package choices, model choice, cron preference, and harness integration without forcing manual file edits.
-- [ ] [INSTALL_PROFILE_MATRIX] Define and document install profiles/packages clearly: what each profile installs, which dependencies are optional vs required, and what features are enabled/disabled.
+- [x] [GUIDED_INSTALLER_MODES] Design a guided installer with clear user-selectable modes: minimal, assisted, full, local-model-only, OpenClaw-integrated, Hermes-integrated, cron-enabled, cron-disabled. _(2026-04-06: 7 profiles + cron modifier in scripts/infra/install.sh v2.0)_
+- [x] [GUIDED_INSTALLER_FLOW] Implement the guided installer flow (interactive and non-interactive) that walks users through prerequisites, package choices, model choice, cron preference, and harness integration without forcing manual file edits. _(2026-04-06: interactive menu + --profile/--cron/--no-cron flags, auto-validation)_
+- [x] [INSTALL_PROFILE_MATRIX] Define and document install profiles/packages clearly: what each profile installs, which dependencies are optional vs required, and what features are enabled/disabled. _(2026-04-06: full matrix in docs/INSTALL.md and --help output)_
 - [ ] [CRON_OPT_IN_OUT_INSTALL] Make cron/autonomy an explicit guided install choice with safe defaults, and keep isolated tests from mutating production crons.
 - [ ] [POST_INSTALL_DOCTOR] Build a post-install doctor/verify flow that gives PASS/WARN/FAIL for model wiring, brain init, memory paths, cron readiness, and harness integration.
 - [ ] [LOCAL_MODEL_QUICKSTART] Create a zero-API-key quickstart path using local models only, including exact supported models and commands that actually work on this machine class.

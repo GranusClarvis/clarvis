@@ -2,12 +2,26 @@
 # install.sh — Guided Clarvis installer with profile selection.
 #
 # Usage:
-#   bash scripts/install.sh                          # Interactive (prompts for profile)
-#   bash scripts/install.sh --profile standalone     # Non-interactive
-#   bash scripts/install.sh --profile openclaw --dev # With dev extras
+#   bash scripts/install.sh                              # Interactive (prompts for profile)
+#   bash scripts/install.sh --profile standalone         # Non-interactive
+#   bash scripts/install.sh --profile openclaw --dev     # With dev extras
+#   bash scripts/install.sh --profile local --no-cron    # Local-only, no cron
 #
-# Profiles: standalone, openclaw, fullstack, docker
-# Flags:    --dev, --no-brain, --profile <name>, --help
+# Profiles:
+#   minimal      Core CLI only — no brain, no services, no API keys
+#   standalone   CLI + brain (ChromaDB + ONNX). Recommended for most users
+#   openclaw     Standalone + OpenClaw gateway + chat channels (Telegram/Discord)
+#   fullstack    OpenClaw + cron schedule + systemd. Reference deployment
+#   hermes       Standalone + Hermes agent harness (NousResearch/hermes-agent)
+#   local        Standalone + Ollama local models. Zero API keys needed
+#   docker       Containerized dev/test setup
+#
+# Modifiers:
+#   --dev          Include dev/test extras (ruff, pytest)
+#   --no-brain     Skip ChromaDB + ONNX (auto-set for minimal profile)
+#   --cron <preset>  Install cron schedule (minimal|recommended|full|research)
+#   --no-cron      Explicitly skip cron setup (default for non-fullstack profiles)
+#   --help         Show this help
 
 set -euo pipefail
 
@@ -18,8 +32,14 @@ cd "$REPO_ROOT"
 # ── Defaults ──────────────────────────────────────────────────────────────
 PROFILE=""
 DEV=0
-BRAIN=1
+BRAIN=1      # 1=install brain, 0=skip, -1=auto (profile decides)
+BRAIN_SET=0  # was --no-brain explicitly passed?
+CRON=""      # empty=auto (profile decides), "none"=skip, preset name=install
+CRON_SET=0   # was --cron/--no-cron explicitly passed?
 INTERACTIVE=1
+
+VALID_PROFILES="minimal standalone openclaw fullstack hermes local docker"
+VALID_CRON_PRESETS="minimal recommended full research"
 
 # ── Colours (if terminal) ────────────────────────────────────────────────
 if [ -t 1 ]; then
@@ -28,9 +48,10 @@ if [ -t 1 ]; then
     YELLOW="\033[33m"
     RED="\033[31m"
     CYAN="\033[36m"
+    DIM="\033[2m"
     RESET="\033[0m"
 else
-    BOLD="" GREEN="" YELLOW="" RED="" CYAN="" RESET=""
+    BOLD="" GREEN="" YELLOW="" RED="" CYAN="" DIM="" RESET=""
 fi
 
 info()  { echo -e "${CYAN}>>>${RESET} $*"; }
@@ -46,7 +67,12 @@ while [ $# -gt 0 ]; do
         --profile=*)
             PROFILE="${1#*=}"; INTERACTIVE=0; shift ;;
         --dev)      DEV=1; shift ;;
-        --no-brain) BRAIN=0; shift ;;
+        --no-brain) BRAIN=0; BRAIN_SET=1; shift ;;
+        --cron)
+            CRON="$2"; CRON_SET=1; shift 2 ;;
+        --cron=*)
+            CRON="${1#*=}"; CRON_SET=1; shift ;;
+        --no-cron)  CRON="none"; CRON_SET=1; shift ;;
         --help|-h)
             cat <<'USAGE'
 Clarvis Installer
@@ -54,21 +80,47 @@ Clarvis Installer
 Usage: bash scripts/install.sh [OPTIONS]
 
 Options:
-  --profile <name>   Install profile: standalone, openclaw, fullstack, docker
-  --dev              Include dev/test extras (ruff, pytest)
-  --no-brain         Skip ChromaDB + ONNX (lighter install, no vector memory)
-  --help             Show this help
+  --profile <name>     Install profile (see below)
+  --dev                Include dev/test extras (ruff, pytest)
+  --no-brain           Skip ChromaDB + ONNX (lighter install, no vector memory)
+  --cron <preset>      Install cron schedule: minimal, recommended, full, research
+  --no-cron            Explicitly skip cron setup
+  --help               Show this help
 
 Profiles:
-  standalone   Python packages + CLI + brain (default, recommended)
+  minimal      Core CLI only — no brain, no services, no API keys needed
+  standalone   CLI + brain (ChromaDB + ONNX). Recommended for most users
   openclaw     Standalone + OpenClaw gateway + chat channels
-  fullstack    OpenClaw + system crontab + systemd service
+  fullstack    OpenClaw + system crontab + systemd (reference deployment)
+  hermes       Standalone + Hermes agent harness (NousResearch/hermes-agent)
+  local        Standalone + Ollama local models (zero API keys)
   docker       Containerized dev/test setup
 
+Profile comparison:
+  Feature         minimal  standalone  openclaw  fullstack  hermes  local  docker
+  ─────────────────────────────────────────────────────────────────────────────────
+  Python CLI        Yes      Yes         Yes       Yes       Yes     Yes    Yes
+  Brain (ChromaDB)  -        Yes         Yes       Yes       Yes     Yes    Yes
+  OpenClaw GW       -        -           Yes       Yes       -       -      -
+  Chat channels     -        -           Yes       Yes       -       -      -
+  Cron schedule     -        -           -         Yes*      -       -      -
+  systemd service   -        -           -         Yes       -       -      -
+  Hermes agent      -        -           -         -         Yes     -      -
+  Local models      -        -           -         -         -       Yes    -
+  Container         -        -           -         -         -       -      Yes
+  API key needed    No       No**        Yes       Yes       No***   No     No
+
+  *  Cron can be added to any profile with --cron <preset>
+  ** Brain works locally; API key only needed for Claude Code spawning
+  *** Hermes can use local models or API keys
+
 Examples:
-  bash scripts/install.sh                           # Interactive
-  bash scripts/install.sh --profile standalone      # Non-interactive
-  bash scripts/install.sh --profile standalone --dev --no-brain
+  bash scripts/install.sh                             # Interactive
+  bash scripts/install.sh --profile standalone        # Quick standalone
+  bash scripts/install.sh --profile minimal           # Lightest possible
+  bash scripts/install.sh --profile local             # Zero API keys
+  bash scripts/install.sh --profile fullstack --cron recommended
+  bash scripts/install.sh --profile standalone --cron minimal --dev
 USAGE
             exit 0 ;;
         *) echo "Unknown option: $1 (try --help)"; exit 1 ;;
@@ -78,7 +130,7 @@ done
 # ── Banner ───────────────────────────────────────────────────────────────
 echo ""
 echo -e "${BOLD}╔═══════════════════════════════════════╗${RESET}"
-echo -e "${BOLD}║       Clarvis Installer v1.0          ║${RESET}"
+echo -e "${BOLD}║       Clarvis Installer v2.0          ║${RESET}"
 echo -e "${BOLD}╚═══════════════════════════════════════╝${RESET}"
 echo ""
 
@@ -126,39 +178,144 @@ echo ""
 if [ "$INTERACTIVE" -eq 1 ] && [ -z "$PROFILE" ]; then
     info "Select an installation profile:"
     echo ""
-    echo -e "  ${BOLD}1)${RESET} ${GREEN}Standalone${RESET} (recommended)"
-    echo "     Python packages + CLI + brain. No external services."
+    echo -e "  ${BOLD}1)${RESET} ${GREEN}Minimal${RESET}"
+    echo -e "     Core CLI only. No brain, no services, no API keys.${DIM} (~30 MB)${RESET}"
     echo ""
-    echo -e "  ${BOLD}2)${RESET} ${CYAN}OpenClaw Gateway${RESET}"
+    echo -e "  ${BOLD}2)${RESET} ${GREEN}Standalone${RESET} ${CYAN}(recommended)${RESET}"
+    echo -e "     CLI + vector brain (ChromaDB + ONNX). Full local intelligence.${DIM} (~500 MB)${RESET}"
+    echo ""
+    echo -e "  ${BOLD}3)${RESET} ${CYAN}OpenClaw Gateway${RESET}"
     echo "     Standalone + chat agent (Telegram/Discord). Needs Node.js 18+."
     echo ""
-    echo -e "  ${BOLD}3)${RESET} ${YELLOW}Full Stack${RESET}"
+    echo -e "  ${BOLD}4)${RESET} ${YELLOW}Full Stack${RESET}"
     echo "     OpenClaw + cron + systemd. The reference deployment. Needs Linux."
     echo ""
-    echo -e "  ${BOLD}4)${RESET} Docker"
+    echo -e "  ${BOLD}5)${RESET} Hermes Agent"
+    echo "     Standalone + Hermes harness (NousResearch). Alternative to OpenClaw."
+    echo ""
+    echo -e "  ${BOLD}6)${RESET} Local Models Only"
+    echo "     Standalone + Ollama setup. Zero API keys — fully offline."
+    echo ""
+    echo -e "  ${BOLD}7)${RESET} Docker"
     echo "     Containerized dev/test. Needs Docker + Compose."
     echo ""
     while true; do
-        read -rp "Profile [1-4, default=1]: " choice
-        case "${choice:-1}" in
-            1|standalone)  PROFILE="standalone"; break ;;
-            2|openclaw)    PROFILE="openclaw"; break ;;
-            3|fullstack)   PROFILE="fullstack"; break ;;
-            4|docker)      PROFILE="docker"; break ;;
-            *) echo "  Please enter 1-4." ;;
+        read -rp "Profile [1-7, default=2]: " choice
+        case "${choice:-2}" in
+            1|minimal)     PROFILE="minimal"; break ;;
+            2|standalone)  PROFILE="standalone"; break ;;
+            3|openclaw)    PROFILE="openclaw"; break ;;
+            4|fullstack)   PROFILE="fullstack"; break ;;
+            5|hermes)      PROFILE="hermes"; break ;;
+            6|local)       PROFILE="local"; break ;;
+            7|docker)      PROFILE="docker"; break ;;
+            *) echo "  Please enter 1-7." ;;
         esac
     done
     echo ""
+
+    # ── Interactive: cron preference ────────────────────────────────────
+    if [ "$CRON_SET" -eq 0 ]; then
+        # fullstack defaults to cron; others ask if user wants it
+        if [ "$PROFILE" = "fullstack" ]; then
+            echo -e "  ${DIM}Cron schedule will be configured (default for fullstack).${RESET}"
+            echo ""
+            info "Select cron preset:"
+            echo ""
+            echo -e "  ${BOLD}1)${RESET} ${GREEN}Minimal${RESET} — 12 jobs: monitoring + backup. No Claude Code spawning."
+            echo -e "  ${BOLD}2)${RESET} ${CYAN}Recommended${RESET} — 27 jobs: daily cycle + 4x autonomous/day."
+            echo -e "  ${BOLD}3)${RESET} ${YELLOW}Full${RESET} — 46 jobs: 12x autonomous, research, all benchmarks."
+            echo -e "  ${BOLD}4)${RESET} Research — 40 jobs: extra research + dream engine."
+            echo ""
+            while true; do
+                read -rp "Cron preset [1-4, default=2]: " cron_choice
+                case "${cron_choice:-2}" in
+                    1|minimal)      CRON="minimal"; break ;;
+                    2|recommended)  CRON="recommended"; break ;;
+                    3|full)         CRON="full"; break ;;
+                    4|research)     CRON="research"; break ;;
+                    *) echo "  Please enter 1-4." ;;
+                esac
+            done
+        elif [ "$PROFILE" != "minimal" ] && [ "$PROFILE" != "docker" ]; then
+            echo ""
+            read -rp "Enable cron schedule (autonomous background tasks)? [y/N]: " enable_cron
+            case "$enable_cron" in
+                [yY]|[yY][eE][sS])
+                    echo ""
+                    info "Select cron preset:"
+                    echo ""
+                    echo -e "  ${BOLD}1)${RESET} ${GREEN}Minimal${RESET} — 12 jobs: monitoring + backup only."
+                    echo -e "  ${BOLD}2)${RESET} ${CYAN}Recommended${RESET} — 27 jobs: daily cycle + 4x autonomous/day."
+                    echo ""
+                    while true; do
+                        read -rp "Cron preset [1-2, default=1]: " cron_choice
+                        case "${cron_choice:-1}" in
+                            1|minimal)      CRON="minimal"; break ;;
+                            2|recommended)  CRON="recommended"; break ;;
+                            *) echo "  Please enter 1-2." ;;
+                        esac
+                    done
+                    ;;
+                *)
+                    CRON="none"
+                    ;;
+            esac
+        else
+            CRON="none"
+        fi
+    fi
+    echo ""
 fi
 
-# Validate profile
+# ── Validate profile ────────────────────────────────────────────────────
 PROFILE="${PROFILE:-standalone}"
-case "$PROFILE" in
-    standalone|openclaw|fullstack|docker) ;;
-    *) fail "Unknown profile: $PROFILE (valid: standalone, openclaw, fullstack, docker)"; exit 1 ;;
-esac
+PROFILE_VALID=0
+for p in $VALID_PROFILES; do
+    [ "$p" = "$PROFILE" ] && PROFILE_VALID=1
+done
+if [ "$PROFILE_VALID" -eq 0 ]; then
+    fail "Unknown profile: $PROFILE"
+    echo "  Valid profiles: $VALID_PROFILES"
+    exit 1
+fi
 
-info "Profile: ${BOLD}$PROFILE${RESET}"
+# ── Apply profile defaults ──────────────────────────────────────────────
+# Brain: minimal=off, all others=on (unless user overrode with --no-brain)
+if [ "$BRAIN_SET" -eq 0 ]; then
+    case "$PROFILE" in
+        minimal) BRAIN=0 ;;
+        *)       BRAIN=1 ;;
+    esac
+fi
+
+# Cron: fullstack defaults to recommended, others default to none
+if [ "$CRON_SET" -eq 0 ] && [ -z "$CRON" ]; then
+    case "$PROFILE" in
+        fullstack) CRON="recommended" ;;
+        *)         CRON="none" ;;
+    esac
+fi
+
+# Validate cron preset
+if [ "$CRON" != "none" ] && [ -n "$CRON" ]; then
+    CRON_VALID=0
+    for p in $VALID_CRON_PRESETS; do
+        [ "$p" = "$CRON" ] && CRON_VALID=1
+    done
+    if [ "$CRON_VALID" -eq 0 ]; then
+        fail "Unknown cron preset: $CRON"
+        echo "  Valid presets: $VALID_CRON_PRESETS"
+        exit 1
+    fi
+fi
+
+# ── Display configuration ───────────────────────────────────────────────
+info "Configuration:"
+echo "  Profile:   $PROFILE"
+echo "  Brain:     $([ "$BRAIN" -eq 1 ] && echo "yes (ChromaDB + ONNX)" || echo "no")"
+echo "  Dev tools: $([ "$DEV" -eq 1 ] && echo "yes (ruff + pytest)" || echo "no")"
+echo "  Cron:      $([ "$CRON" = "none" ] && echo "disabled" || echo "$CRON")"
 echo ""
 
 # ── Step 3: Profile-specific prereq checks ───────────────────────────────
@@ -185,6 +342,27 @@ if [ "$PROFILE" = "fullstack" ]; then
     ok "systemd available"
 fi
 
+if [ "$PROFILE" = "hermes" ]; then
+    # Check if hermes-agent is installed or pip-installable
+    if command -v hermes &>/dev/null; then
+        ok "hermes CLI found: $(command -v hermes)"
+    elif python3 -c "import hermes_agent" 2>/dev/null; then
+        ok "hermes-agent Python package available"
+    else
+        warn "hermes-agent not found — will attempt pip install"
+    fi
+fi
+
+if [ "$PROFILE" = "local" ]; then
+    OLLAMA_BIN="${OLLAMA_BIN:-$(command -v ollama 2>/dev/null || echo "$HOME/.local/ollama/bin/ollama")}"
+    if [ -x "$OLLAMA_BIN" ]; then
+        ok "Ollama found: $OLLAMA_BIN"
+    else
+        warn "Ollama not found — install from https://ollama.com"
+        echo "  After install, run: ollama pull qwen3-vl:4b"
+    fi
+fi
+
 if [ "$PROFILE" = "docker" ]; then
     if ! command -v docker &>/dev/null; then
         fail "Docker not found — required for Docker profile"
@@ -198,7 +376,7 @@ if [ "$PROFILE" = "docker" ]; then
     ok "Docker image built"
 
     info "Running verification inside container..."
-    docker compose run --rm clarvis bash scripts/verify_install.sh
+    docker compose run --rm clarvis bash scripts/infra/verify_install.sh
     echo ""
     info "Docker profile ready."
     echo "  Run:  docker compose run clarvis"
@@ -216,37 +394,38 @@ if [ -f "$(python3 -c 'import sysconfig; print(sysconfig.get_path("stdlib"))')/E
     warn "PEP 668 detected — using --break-system-packages"
 fi
 
-echo "  [1/2] Main package..."
+EXTRAS=""
 if [ "$BRAIN" -eq 1 ] && [ "$DEV" -eq 1 ]; then
-    pip install $PIP_EXTRA -e ".[all]" -q 2>&1 | grep -v "already satisfied" || true
-    ok "clarvis[all] (brain + dev)"
+    EXTRAS="all"
 elif [ "$BRAIN" -eq 1 ]; then
-    pip install $PIP_EXTRA -e ".[brain]" -q 2>&1 | grep -v "already satisfied" || true
-    ok "clarvis[brain]"
+    EXTRAS="brain"
 elif [ "$DEV" -eq 1 ]; then
-    pip install $PIP_EXTRA -e ".[dev]" -q 2>&1 | grep -v "already satisfied" || true
-    ok "clarvis[dev] (no brain)"
+    EXTRAS="dev"
+fi
+
+if [ -n "$EXTRAS" ]; then
+    pip install $PIP_EXTRA -e ".[$EXTRAS]" -q 2>&1 | grep -v "already satisfied" || true
+    ok "clarvis[$EXTRAS]"
 else
     pip install $PIP_EXTRA -e . -q 2>&1 | grep -v "already satisfied" || true
     ok "clarvis (core only)"
 fi
 
 # ── Step 5: Environment setup ────────────────────────────────────────────
-echo "  [2/2] Environment..."
+info "Environment setup..."
 
 # Create .env if it doesn't exist
 if [ ! -f "$REPO_ROOT/.env" ]; then
     TEMPLATE="$REPO_ROOT/config/profiles/${PROFILE}.env.template"
     if [ -f "$TEMPLATE" ]; then
-        # Use profile-specific template
         sed "s|__WORKSPACE__|$REPO_ROOT|g" "$TEMPLATE" > "$REPO_ROOT/.env"
         ok "Created .env from $PROFILE profile template"
     else
-        # Fallback: create minimal .env
         cat > "$REPO_ROOT/.env" <<ENVEOF
 # Clarvis environment — generated by install.sh (profile: $PROFILE)
 CLARVIS_WORKSPACE=$REPO_ROOT
 CLARVIS_GRAPH_BACKEND=sqlite
+CLARVIS_INSTALL_PROFILE=$PROFILE
 ENVEOF
         ok "Created minimal .env"
     fi
@@ -254,30 +433,118 @@ else
     ok ".env already exists (kept as-is)"
 fi
 
-# Ensure CLARVIS_WORKSPACE is set for this session
 export CLARVIS_WORKSPACE="$REPO_ROOT"
 echo ""
 
 # ── Step 6: Profile-specific setup ──────────────────────────────────────
-if [ "$PROFILE" = "openclaw" ] || [ "$PROFILE" = "fullstack" ]; then
-    info "OpenClaw gateway setup..."
-    if command -v openclaw &>/dev/null; then
-        ok "OpenClaw CLI already installed"
-    elif [ -f "$HOME/.npm-global/lib/node_modules/openclaw/dist/index.js" ]; then
-        ok "OpenClaw found at ~/.npm-global"
+case "$PROFILE" in
+    openclaw|fullstack)
+        info "OpenClaw gateway setup..."
+        if command -v openclaw &>/dev/null; then
+            ok "OpenClaw CLI already installed"
+        elif [ -f "$HOME/.npm-global/lib/node_modules/openclaw/dist/index.js" ]; then
+            ok "OpenClaw found at ~/.npm-global"
+        else
+            warn "OpenClaw not installed — install with: npm install -g openclaw"
+            echo "  See https://openclaw.dev for setup instructions"
+        fi
+        ;;
+
+    hermes)
+        info "Hermes agent harness setup..."
+        if ! command -v hermes &>/dev/null && ! python3 -c "import hermes_agent" 2>/dev/null; then
+            echo "  Installing hermes-agent..."
+            pip install $PIP_EXTRA hermes-agent -q 2>&1 | grep -v "already satisfied" || true
+            if command -v hermes &>/dev/null || python3 -c "import hermes_agent" 2>/dev/null; then
+                ok "hermes-agent installed"
+            else
+                warn "hermes-agent install failed — install manually: pip install hermes-agent"
+            fi
+        else
+            ok "hermes-agent already available"
+        fi
+        echo ""
+        echo "  Hermes uses ~/.hermes/ for config and sessions."
+        echo "  Configure model: edit ~/.hermes/config.yaml"
+        echo "  For local models: set model to ollama endpoint in config.yaml"
+        echo "  Docs: https://github.com/NousResearch/hermes-agent"
+        ;;
+
+    local)
+        info "Local model setup..."
+        OLLAMA_BIN="${OLLAMA_BIN:-$(command -v ollama 2>/dev/null || echo "$HOME/.local/ollama/bin/ollama")}"
+        if [ -x "$OLLAMA_BIN" ]; then
+            ok "Ollama binary: $OLLAMA_BIN"
+
+            # Check if service is running
+            if systemctl --user is-active ollama.service &>/dev/null 2>&1; then
+                ok "Ollama service running"
+            elif curl -sf http://127.0.0.1:11434/api/version >/dev/null 2>&1; then
+                ok "Ollama API reachable"
+            else
+                warn "Ollama service not running"
+                echo "  Start: systemctl --user start ollama.service"
+                echo "  Or:    ollama serve &"
+            fi
+
+            # Check for recommended model
+            if "$OLLAMA_BIN" list 2>/dev/null | grep -q "qwen3-vl"; then
+                ok "Local model available (qwen3-vl)"
+            else
+                warn "No local model found"
+                echo "  Pull recommended model: ollama pull qwen3-vl:4b  (3.3 GB)"
+            fi
+        else
+            warn "Ollama not installed"
+            echo "  Install: curl -fsSL https://ollama.com/install.sh | sh"
+            echo "  Then: ollama pull qwen3-vl:4b"
+        fi
+
+        echo ""
+        echo "  Local model harness: bash scripts/infra/local_model_harness.sh status"
+        echo "  Zero-API test suite: bash scripts/infra/local_model_harness.sh test"
+        ;;
+esac
+
+# ── Step 7: Cron schedule ───────────────────────────────────────────────
+if [ "$CRON" != "none" ] && [ -n "$CRON" ]; then
+    echo ""
+    info "Cron schedule setup (preset: $CRON)..."
+
+    # Check if clarvis CLI supports cron commands
+    if python3 -m clarvis cron presets >/dev/null 2>&1; then
+        echo ""
+        echo "  Preview of cron entries:"
+        python3 -m clarvis cron install "$CRON" 2>&1 | head -20
+        echo "  ..."
+        echo ""
+
+        if [ "$INTERACTIVE" -eq 1 ]; then
+            read -rp "  Apply this cron schedule? [y/N]: " apply_cron
+            case "$apply_cron" in
+                [yY]|[yY][eE][sS])
+                    python3 -m clarvis cron install "$CRON" --apply
+                    ok "Cron schedule installed ($CRON)"
+                    ;;
+                *)
+                    warn "Cron schedule not applied (dry-run only)"
+                    echo "  Apply later: clarvis cron install $CRON --apply"
+                    ;;
+            esac
+        else
+            # Non-interactive: apply directly
+            python3 -m clarvis cron install "$CRON" --apply
+            ok "Cron schedule installed ($CRON)"
+        fi
     else
-        warn "OpenClaw not installed — install with: npm install -g openclaw"
-        echo "  See https://openclaw.dev for setup instructions"
+        warn "clarvis cron CLI not available — install cron manually"
+        echo "  See: clarvis cron presets"
     fi
 fi
 
+# ── Step 8: systemd service (fullstack only) ────────────────────────────
 if [ "$PROFILE" = "fullstack" ]; then
-    info "Cron schedule setup..."
-    echo "  The full cron schedule can be installed from the reference crontab."
-    echo "  Review: less scripts/crontab.reference"
-    echo "  Install: crontab scripts/crontab.reference"
-    warn "Cron schedule not auto-installed (review first)"
-
+    echo ""
     info "systemd service setup..."
     if systemctl --user is-enabled openclaw-gateway.service &>/dev/null 2>&1; then
         ok "openclaw-gateway.service enabled"
@@ -288,35 +555,62 @@ if [ "$PROFILE" = "fullstack" ]; then
     fi
 fi
 
-# ── Step 7: First-run validation ─────────────────────────────────────────
+# ── Step 9: First-run validation ─────────────────────────────────────────
 echo ""
 info "Running first-run validation..."
 echo ""
 
 VERIFY_ARGS=""
-if [ "$BRAIN" -eq 0 ]; then
-    VERIFY_ARGS="--no-brain"
-fi
+[ "$BRAIN" -eq 0 ] && VERIFY_ARGS="$VERIFY_ARGS --no-brain"
+[ -n "$PROFILE" ] && VERIFY_ARGS="$VERIFY_ARGS --profile $PROFILE"
 
-if [ -n "$VERIFY_ARGS" ]; then
-    bash "$SCRIPT_DIR/verify_install.sh" "$VERIFY_ARGS"
-else
-    bash "$SCRIPT_DIR/verify_install.sh"
-fi
+# shellcheck disable=SC2086
+bash "$SCRIPT_DIR/verify_install.sh" $VERIFY_ARGS || true
 
+# ── Summary ──────────────────────────────────────────────────────────────
 echo ""
 echo -e "${BOLD}╔═══════════════════════════════════════╗${RESET}"
 echo -e "${BOLD}║       Installation Complete            ║${RESET}"
 echo -e "${BOLD}╚═══════════════════════════════════════╝${RESET}"
 echo ""
 echo "  Profile:   $PROFILE"
+echo "  Brain:     $([ "$BRAIN" -eq 1 ] && echo "enabled" || echo "disabled")"
+echo "  Cron:      $([ "$CRON" = "none" ] && echo "disabled" || echo "$CRON")"
 echo "  Workspace: $REPO_ROOT"
 echo ""
 echo "  Next steps:"
-echo "    clarvis brain health          # Check brain status"
-echo "    python3 -m pytest -m 'not slow'  # Run tests"
-if [ "$PROFILE" = "openclaw" ] || [ "$PROFILE" = "fullstack" ]; then
-    echo "    systemctl --user start openclaw-gateway.service  # Start gateway"
-fi
-echo "    cat docs/INSTALL.md           # Full documentation"
+
+case "$PROFILE" in
+    minimal)
+        echo "    clarvis --help                     # Explore CLI"
+        echo "    clarvis mode show                  # Check operating mode"
+        echo "    # Upgrade to standalone: bash scripts/install.sh --profile standalone"
+        ;;
+    standalone)
+        echo "    clarvis brain health               # Check brain status"
+        echo "    clarvis demo                       # Run self-contained demo"
+        echo "    python3 -m pytest -m 'not slow'    # Run tests"
+        ;;
+    openclaw|fullstack)
+        echo "    clarvis brain health               # Check brain status"
+        echo "    systemctl --user start openclaw-gateway.service  # Start gateway"
+        if [ "$CRON" = "none" ]; then
+            echo "    clarvis cron presets              # See available cron presets"
+        else
+            echo "    clarvis cron status               # Check cron job status"
+        fi
+        ;;
+    hermes)
+        echo "    clarvis brain health               # Check brain status"
+        echo "    hermes --help                      # Explore Hermes CLI"
+        echo "    hermes doctor                      # Check Hermes setup"
+        ;;
+    local)
+        echo "    clarvis brain health               # Check brain status"
+        echo "    bash scripts/infra/local_model_harness.sh status  # Model status"
+        echo "    bash scripts/infra/local_model_harness.sh test    # Zero-API test"
+        ;;
+esac
+
+echo "    cat docs/INSTALL.md                # Full documentation"
 echo ""

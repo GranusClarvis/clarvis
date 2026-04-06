@@ -35,19 +35,30 @@ The guided installer will ask which profile to install. If unsure, choose **Stan
 
 ## Installation Profiles
 
-Clarvis supports four deployment profiles. The installer selects one and configures accordingly.
+Clarvis supports seven deployment profiles. The installer selects one and configures accordingly.
+Cron scheduling is available as an add-on modifier for any non-minimal profile.
 
-### 1. Standalone (recommended for most users)
+### 1. Minimal
+
+Lightest possible install — core CLI only. No brain, no services, no API keys.
+
+```
+What you get:  clarvis CLI, core Python modules (~30 MB)
+What you skip: Brain, services, cron, all optional dependencies
+Best for:      CI pipelines, quick evaluation, scripting
+```
+
+### 2. Standalone (recommended for most users)
 
 Installs the Clarvis Python packages, CLI, and vector brain. No external services.
 
 ```
-What you get:  clarvis CLI, brain (ChromaDB + ONNX), all Python packages
+What you get:  clarvis CLI, brain (ChromaDB + ONNX), all Python packages (~500 MB)
 What you skip: OpenClaw gateway, cron schedule, chat channels
 Best for:      Developers, contributors, experimentation
 ```
 
-### 2. OpenClaw Gateway
+### 3. OpenClaw Gateway
 
 Adds the OpenClaw agent gateway on top of Standalone. Provides chat integration
 (Telegram, Discord) and the conscious-layer M2.5 session management.
@@ -58,7 +69,7 @@ Requires:      Node.js 18+, npm, OpenRouter API key
 Best for:      Running Clarvis as a chat agent with Telegram/Discord
 ```
 
-### 3. Full Stack
+### 4. Full Stack
 
 Complete dual-layer deployment: OpenClaw gateway (conscious) + system crontab
 (subconscious). This is how the reference Clarvis instance runs.
@@ -69,7 +80,28 @@ Requires:      Linux with systemd, Node.js 18+, Claude Code CLI
 Best for:      Production-like deployment on a dedicated host
 ```
 
-### 4. Docker
+### 5. Hermes Agent
+
+Standalone + NousResearch Hermes agent harness. Alternative to OpenClaw for
+users who prefer the Hermes tool ecosystem.
+
+```
+What you get:  Everything in Standalone + hermes-agent package
+Requires:      pip (hermes-agent auto-installed)
+Best for:      Users familiar with Hermes, alternative harness evaluation
+```
+
+### 6. Local Models Only
+
+Standalone + Ollama local models. Fully offline — zero API keys needed.
+
+```
+What you get:  Everything in Standalone + Ollama setup guidance
+Requires:      Ollama installed, ~3.3 GB for recommended model
+Best for:      Air-gapped environments, privacy-sensitive deployments, cost=0
+```
+
+### 7. Docker
 
 Containerized setup for development and testing. Stateless by design.
 
@@ -78,6 +110,19 @@ What you get:  Full Python stack in a container, persistent brain volume
 Requires:      Docker, Docker Compose
 Best for:      Quick evaluation, CI, isolated testing
 ```
+
+### Cron Scheduling (modifier)
+
+Cron can be added to any non-minimal profile with `--cron <preset>`:
+
+```bash
+bash scripts/install.sh --profile standalone --cron minimal    # Monitoring only
+bash scripts/install.sh --profile openclaw --cron recommended  # Daily cycle
+bash scripts/install.sh --profile fullstack                    # Defaults to recommended
+bash scripts/install.sh --profile fullstack --no-cron          # Fullstack without cron
+```
+
+The Full Stack profile defaults to `--cron recommended`. All others default to `--no-cron`.
 
 ```bash
 # Try Clarvis without installing anything locally:
@@ -89,42 +134,55 @@ docker compose run clarvis bash         # interactive shell
 
 ## Profile Comparison Matrix
 
-| Feature | Standalone | OpenClaw | Full Stack | Docker |
-|---------|-----------|----------|------------|--------|
-| Python packages | Yes | Yes | Yes | Yes |
-| CLI (`clarvis`) | Yes | Yes | Yes | Yes |
-| Brain (ChromaDB) | Yes | Yes | Yes | Yes |
-| Tests (`pytest`) | Yes | Yes | Yes | Yes |
-| OpenClaw gateway | - | Yes | Yes | - |
-| Chat channels | - | Telegram/Discord | Telegram/Discord | - |
-| Cron schedule | - | - | Yes | - |
-| systemd service | - | - | Yes | - |
-| Claude Code spawning | - | - | Yes | - |
-| Container isolation | - | - | - | Yes |
+| Feature | Minimal | Standalone | OpenClaw | Full Stack | Hermes | Local | Docker |
+|---------|---------|-----------|----------|------------|--------|-------|--------|
+| Python CLI | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
+| Brain (ChromaDB) | - | Yes | Yes | Yes | Yes | Yes | Yes |
+| Tests (`pytest`) | opt | opt | opt | opt | opt | opt | Yes |
+| OpenClaw gateway | - | - | Yes | Yes | - | - | - |
+| Chat channels | - | - | Yes | Yes | - | - | - |
+| Cron schedule | - | opt* | opt* | Yes* | opt* | opt* | - |
+| systemd service | - | - | - | Yes | - | - | - |
+| Hermes agent | - | - | - | - | Yes | - | - |
+| Local models | - | - | - | - | - | Yes | - |
+| Container | - | - | - | - | - | - | Yes |
+| API key needed | No | No** | Yes | Yes | No*** | No | No |
+
+\* Cron available via `--cron <preset>` modifier on any non-minimal profile
+\*\* Brain works locally; API key only needed for Claude Code spawning
+\*\*\* Hermes can use local models or API keys
 
 ## Guided Installer Flow
 
 The installer (`scripts/install.sh`) runs these steps:
 
-1. **Environment check** — Python version, pip, git, disk space
-2. **Profile selection** — Interactive menu or `--profile <name>` flag
-3. **Package installation** — Sub-packages in dependency order, then main package
-4. **Environment setup** — Creates `.env` from profile template, sets `CLARVIS_WORKSPACE`
-5. **Profile-specific setup** — Gateway config, cron install, or Docker build
-6. **First-run validation** — Automatic verification with PASS/WARN/FAIL summary
+1. **Environment check** — Python version, pip, git, SQLite
+2. **Profile selection** — Interactive menu (7 profiles) or `--profile <name>` flag
+3. **Cron preference** — Interactive prompt or `--cron <preset>` / `--no-cron` flag
+4. **Package installation** — Main package with appropriate extras
+5. **Environment setup** — Creates `.env` with profile tag, sets `CLARVIS_WORKSPACE`
+6. **Profile-specific setup** — Gateway config, Hermes install, Ollama check, cron install, or Docker build
+7. **Cron schedule** — Installs selected cron preset (if any)
+8. **First-run validation** — Automatic verification with PASS/WARN/FAIL summary
 
 ### Non-interactive Mode
 
 ```bash
 # Install with a specific profile, no prompts
+bash scripts/install.sh --profile minimal
 bash scripts/install.sh --profile standalone
 bash scripts/install.sh --profile openclaw
 bash scripts/install.sh --profile fullstack
+bash scripts/install.sh --profile hermes
+bash scripts/install.sh --profile local
 bash scripts/install.sh --profile docker
 
-# Additional flags
+# Modifiers
 bash scripts/install.sh --profile standalone --no-brain   # Skip ChromaDB/ONNX
 bash scripts/install.sh --profile standalone --dev         # Include ruff + pytest
+bash scripts/install.sh --profile standalone --cron minimal  # Add monitoring cron
+bash scripts/install.sh --profile fullstack --cron full    # Full cron schedule
+bash scripts/install.sh --profile fullstack --no-cron      # Fullstack without cron
 ```
 
 ## First-Run Validation

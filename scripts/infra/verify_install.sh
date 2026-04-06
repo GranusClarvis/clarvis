@@ -22,7 +22,7 @@ while [ $# -gt 0 ]; do
         --help|-h)
             echo "Usage: bash scripts/verify_install.sh [--no-brain] [--profile <name>]"
             echo "  --no-brain        Treat brain imports as optional (warn, not fail)"
-            echo "  --profile <name>  Run profile-specific checks (standalone|openclaw|fullstack|docker)"
+            echo "  --profile <name>  Run profile-specific checks (minimal|standalone|openclaw|fullstack|hermes|local|docker)"
             exit 0
             ;;
         *) shift ;;
@@ -187,6 +187,10 @@ echo ""
 if [ -n "$PROFILE" ]; then
     echo "Profile checks ($PROFILE):"
     case "$PROFILE" in
+        minimal)
+            check "writable workspace" test -w "$REPO_ROOT"
+            warn_check ".env exists" test -f "$REPO_ROOT/.env"
+            ;;
         standalone)
             check "writable data dir" test -w "$REPO_ROOT/data" -o -w "$REPO_ROOT"
             check ".env exists" test -f "$REPO_ROOT/.env"
@@ -218,6 +222,34 @@ if [ -n "$PROFILE" ]; then
                 WARN=$((WARN + 1))
             fi
             warn_check "crontab configured" bash -c "crontab -l 2>/dev/null | grep -q clarvis"
+            ;;
+        hermes)
+            check ".env exists" test -f "$REPO_ROOT/.env"
+            if command -v hermes &>/dev/null || python3 -c "import hermes_agent" 2>/dev/null; then
+                echo "  PASS  hermes-agent available"
+                PASS=$((PASS + 1))
+            else
+                echo "  WARN  hermes-agent not found (pip install hermes-agent)"
+                WARN=$((WARN + 1))
+            fi
+            ;;
+        local)
+            check ".env exists" test -f "$REPO_ROOT/.env"
+            OLLAMA_BIN="${OLLAMA_BIN:-$(command -v ollama 2>/dev/null || echo "$HOME/.local/ollama/bin/ollama")}"
+            if [ -x "$OLLAMA_BIN" ]; then
+                echo "  PASS  Ollama binary found"
+                PASS=$((PASS + 1))
+            else
+                echo "  WARN  Ollama not found (install from https://ollama.com)"
+                WARN=$((WARN + 1))
+            fi
+            if curl -sf http://127.0.0.1:11434/api/version >/dev/null 2>&1; then
+                echo "  PASS  Ollama API reachable"
+                PASS=$((PASS + 1))
+            else
+                echo "  WARN  Ollama API not reachable (start with: ollama serve)"
+                WARN=$((WARN + 1))
+            fi
             ;;
         docker)
             check "Docker available" command -v docker
