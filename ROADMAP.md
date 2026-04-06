@@ -46,30 +46,30 @@ Clarvis should grow into:
 - likely first extraction candidate: **ClarvisDB** (vector memory with graph associations)
 - a public website presenting Clarvis, linked repos, current work, and benchmarks
 
-## Current State (2026-04-05)
+## Current State (2026-04-06)
 
 | Capability | Status | Summary |
 |-----------|--------|---------|
-| **Brain (ClarvisDB)** | 98% | 10 collections remain healthy; retrieval usefulness stayed strong (mostly 88-94%) while avg benchmark speed improved sharply through the week |
-| **Session Continuity** | 86% | Daily memory and curated continuity are intact, but Apr 4-5 missing digest entries exposed a reporting/continuity gap |
-| **Heartbeat Evolution** | 88% | Backbone is strong, but Apr 2 preflight failures and Apr 4-5 digest silence show the cron/heartbeat path is not yet fully reliable |
-| **Self-Awareness** | 91% | Capability tracking remains solid, but roadmap metrics had drifted stale and phi sat around ~0.74 rather than prior inflated claims |
-| **Task Tracking** | 91% | Queue remains useful and delivery-oriented, though canonical state still needs better sync across goals, roadmap, and weekly priorities |
-| **Reflection** | 94% | Daily, monthly, and strategic reflection continue to produce actionable direction; reflection quality remains a strength |
-| **Confidence Gating** | 95% | Tiered confidence action levels landed this week, moving this area from theory into actual implementation |
-| **Attention & Working Memory** | 95% | Context caching, concurrent preflight, and section ordering materially improved working-memory efficiency and prompt assembly quality |
-| **Reasoning Chains** | 100% | Persistent multi-step reasoning infrastructure remains stable |
-| **Knowledge Synthesis** | 95% | Synthesis and adaptive retrieval work advanced, though conceptual framework building is still unfinished |
-| **Procedural Memory** | 92% | Procedure capture remains strong; factual/procedural retrieval is reliable, but runtime failure recovery still needs polish |
-| **Context Quality** | 96% | Compression stability, keyword coverage, and section ordering all improved materially this week |
-| **Monitoring** | 94% | Structured health export improved observability, but missing weekend digests prevent a higher score |
-| **Episodic Memory** | 96% | Episode capture and postflight recording remain robust even through noisy execution periods |
-| **Self-Surgery** | 92% | More spine migration and architecture cleanup landed, including cognitive workspace migration and clone→test→verify wiring |
-| **Cognitive Workspace** | 88% | Workspace architecture is healthier than before, with migration work and better context flow improving practical reuse |
-| **ACT-R Activation** | 88% | Activation/recall behavior remains solid and benchmark-grounded; no major change this week |
-| **Agent Orchestrator** | 92% | Coordinator-mode research, worker templates, and worktree groundwork improved the orchestration path, though execution reliability still lags design quality |
-| **Performance Index** | 96% | Core performance remains excellent, but reliability noise this week makes a flat 1.0000 claim too generous |
-| **Public Surface** | 90% | Docker quickstart, history scrub, and public-release prep advanced meaningfully, though privacy/path cleanup still blocks a clean open-source push |
+| **Brain (ClarvisDB)** | 98% | memory_quality=0.97, retrieval_precision=1.00 |
+| **Session Continuity** | 78% | autonomy=0.78 |
+| **Heartbeat Evolution** | 78% | task_success=0.78 |
+| **Self-Awareness** | 88% | Phi=0.729 |
+| **Task Tracking** | 77% | task_success=0.78, prompt_context=0.74 |
+| **Reflection** | 94% | reflection log fresh (0d old) |
+| **Confidence Gating** | 95% | 50/50 recent predictions resolved |
+| **Attention & Working Memory** | 84% | prompt_context=0.74 |
+| **Reasoning Chains** | 100% | 267 chain files |
+| **Knowledge Synthesis** | 95% | stable — conceptual framework still WIP |
+| **Procedural Memory** | 92% | 179 procedures |
+| **Context Quality** | 84% | prompt_context=0.74, efficiency=0.98 |
+| **Monitoring** | 95% | health log fresh (0h old) |
+| **Episodic Memory** | 96% | 432 episodes |
+| **Self-Surgery** | 92% | spine module healthy |
+| **Cognitive Workspace** | 88% | 0 items across buffers |
+| **ACT-R Activation** | 88% | stable |
+| **Agent Orchestrator** | 80% | no agent dir |
+| **Performance Index** | 99% | PI=0.9994 |
+| **Public Surface** | 90% | Dockerfile=yes, README=yes |
 
 ---
 

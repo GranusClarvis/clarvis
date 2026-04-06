@@ -57,6 +57,8 @@
 */15 * * * * $CLARVIS_WORKSPACE/scripts/infra/health_monitor.sh >> $CLARVIS_WORKSPACE/monitoring/health.log 2>&1
 */30 * * * * $CLARVIS_WORKSPACE/scripts/cron/cron_watchdog.sh >> $CLARVIS_WORKSPACE/monitoring/watchdog.log 2>&1
 
+# === Weekly canonical state refresh (Sunday 05:00, before goal_hygiene) ===
+0 5 * * 0 cd ${OPENCLAW_HOME:-$HOME/.openclaw}/workspace && python3 scripts/hooks/canonical_state_refresh.py >> memory/cron/canonical_state_refresh.log 2>&1
 # === Weekly goal hygiene (Sunday 05:10, before brain_hygiene) ===
 10 5 * * 0 cd ${OPENCLAW_HOME:-$HOME/.openclaw}/workspace && python3 scripts/hooks/goal_hygiene.py clean >> memory/cron/goal_hygiene.log 2>&1
 # === Weekly brain hygiene (Sunday 05:15, after vacuum, before cleanup) ===
