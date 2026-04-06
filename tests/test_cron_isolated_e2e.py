@@ -425,8 +425,9 @@ class TestCronScheduleIntegrity:
 
     def test_cron_scripts_are_executable_or_sourced(self):
         """All referenced cron scripts exist and are readable."""
+        _ws = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
         rc = _bash(
-            "crontab -l 2>/dev/null | grep -oP '/home/agent/.openclaw/workspace/scripts/\\S+' | sort -u"
+            f"crontab -l 2>/dev/null | grep -oP '{_ws}/scripts/\\S+' | sort -u"
         )
         if not rc.stdout.strip():
             pytest.skip("No crontab or no script paths found")

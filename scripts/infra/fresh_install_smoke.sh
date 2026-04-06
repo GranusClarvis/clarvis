@@ -237,7 +237,7 @@ if [ "$ISOLATED" -eq 0 ]; then
             warn "crontab references missing: $path"
             MISSING_SCRIPTS=$((MISSING_SCRIPTS+1))
         fi
-    done < <(crontab -l 2>/dev/null | grep -oP '/home/agent/.openclaw/workspace/scripts/\S+' | sort -u)
+    done < <(crontab -l 2>/dev/null | grep -oP "${REPO_ROOT}/scripts/\\S+" | sort -u)
     [ "$MISSING_SCRIPTS" -eq 0 ] && pass "all crontab script paths valid"
 fi
 echo ""

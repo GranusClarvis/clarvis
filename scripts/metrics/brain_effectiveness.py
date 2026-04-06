@@ -21,7 +21,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace")
+WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 DATA = os.path.join(WORKSPACE, "data")
 HISTORY_FILE = os.path.join(DATA, "brain_effectiveness_history.jsonl")
 MAX_HISTORY = 90
