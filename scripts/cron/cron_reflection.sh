@@ -101,7 +101,11 @@ run_step "causal_model" python3 "$CLARVIS_WORKSPACE/scripts/cognition/causal_mod
 # Step 6.96: Confidence recalibration (7-day rolling window)
 run_step "recalibrate" python3 -c "from clarvis.cognition.confidence import recalibrate; r = recalibrate(); print(f'Brier 7d={r[\"brier_7d\"]}, all={r[\"brier_all\"]}, shift={r[\"shift_detected\"]}, threshold={r[\"new_threshold\"]}, archived={r[\"archived\"]}, swept={r[\"swept\"]}')"
 
-# Step 6.97: Research-to-Queue bridge (monthly — 1st of month only)
+# Step 6.97: Brain Effectiveness Scoring — stores retrievable memory in clarvis-learnings
+# Answers "does the brain help decisions?" by aggregating CLR, episodes, chains, eval
+run_step "brain_effectiveness" python3 "$CLARVIS_WORKSPACE/scripts/metrics/brain_effectiveness.py" compute_and_store
+
+# Step 6.98: Research-to-Queue bridge (monthly — 1st of month only)
 DAY_OF_MONTH=$(date +%d)
 if [ "$DAY_OF_MONTH" = "01" ]; then
     run_step "research_bridge" python3 "$CLARVIS_WORKSPACE/scripts/evolution/research_to_queue.py" inject --max 3
@@ -120,7 +124,7 @@ fi
 
 # === DIGEST: Write first-person summary for M2.5 agent ===
 python3 "$CLARVIS_WORKSPACE/scripts/tools/digest_writer.py" reflection \
-    "${DIGEST_STATUS} QUEUE: ${QUEUE_PENDING} pending, ${QUEUE_DONE} done. WEAKEST: ${WEAKEST_METRIC}. Pipeline: optimize, reflect, synthesize, crosslink, consolidate, learn, amplify, episodic, temporal, meta-learn, AZR, causal. Session saved." \
+    "${DIGEST_STATUS} QUEUE: ${QUEUE_PENDING} pending, ${QUEUE_DONE} done. WEAKEST: ${WEAKEST_METRIC}. Pipeline: optimize, reflect, synthesize, crosslink, consolidate, learn, amplify, episodic, temporal, meta-learn, AZR, causal, brain-effectiveness. Session saved." \
     >> "$LOGFILE" 2>&1 || true
 
 if [ "$STEP_FAILURES" -gt 0 ]; then
