@@ -3,7 +3,7 @@
 External Challenge Feed — inject novel external challenges into the evolution loop.
 
 Sources:
-  1. Curated challenge set (data/challenge_feed.json) — coding, reasoning, benchmark tasks
+  1. Curated challenge set (seed/challenge_feed.json) — coding, reasoning, benchmark tasks
   2. GitHub issues labeled 'challenge' from GranusClarvis/clarvis (when gh CLI available)
 
 The evolution loop calls `inject` to add one fresh challenge to QUEUE.md under
@@ -25,9 +25,10 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-WORKSPACE = Path(__file__).resolve().parent.parent
+WORKSPACE = Path(__file__).resolve().parent.parent.parent
 DATA_DIR = WORKSPACE / "data"
-FEED_FILE = DATA_DIR / "challenge_feed.json"
+SEED_DIR = WORKSPACE / "seed"
+FEED_FILE = SEED_DIR / "challenge_feed.json"
 STATE_FILE = DATA_DIR / "challenge_feed_state.json"
 QUEUE_FILE = WORKSPACE / "memory" / "evolution" / "QUEUE.md"
 GH_CACHE_FILE = DATA_DIR / "challenge_feed_gh_cache.json"

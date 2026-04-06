@@ -23,7 +23,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 import _paths  # noqa: F401,E402
 
 GOLDEN_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "prompt_eval", "golden")
-TASKSET_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "prompt_eval", "taskset.json")
+TASKSET_PATH = os.path.join(os.path.dirname(__file__), "..", "seed", "prompt_eval_taskset.json")
 
 # Representative task for fixture generation
 FIXTURE_TASK = "[SPINE_PROXY_REPLACEMENT] Replace proxy module clarvis/cognition/reasoning.py with real implementation"

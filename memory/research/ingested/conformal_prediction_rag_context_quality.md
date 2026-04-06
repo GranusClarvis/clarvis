@@ -1,8 +1,0 @@
-# Research: Conformal Prediction for RAG Context Quality
-
-Date: 2026-03-15
-Source: arXiv:2511.17908 — *Principled Context Engineering for RAG: Statistical Guarantees via Conformal Prediction*
-
-Conformal prediction offers a principled answer to a recurring RAG problem: retrievers return too much vaguely relevant material, and LLMs degrade when that noise consumes their finite attention budget. This paper applies split conformal prediction directly after retrieval, treating snippet retention as a coverage-controlled filtering problem. Instead of using ad hoc similarity cutoffs or uncalibrated LLM confidence, it learns a threshold on a calibration set so that a chosen fraction of truly relevant snippets is retained with formal finite-sample guarantees. The method is model-agnostic and works with both embedding-based and LLM-based scoring functions.
-
-Across NeuCLIR and RAGTIME, conformal filtering consistently met target coverage while shrinking retained context by roughly 2–3x relative to unfiltered retrieval. On NeuCLIR, downstream factual quality (ARGUE F1) improved under strict filtering and stayed near baseline at moderate settings, suggesting much of the removed context was redundant rather than useful. The practical implication for Clarvis is significant: retrieval should not merely maximize recall or similarity, but expose a calibrated confidence knob. A conformal gate could sit between retrieval and context assembly, selecting snippets only when they satisfy a target relevance-coverage guarantee. This would replace heuristic thresholding with measurable, tunable control over noise, token cost, and context reliability.

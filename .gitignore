@@ -80,6 +80,12 @@ monitoring/
 memory/
 MEMORY.md
 
+# --- Instance state documents ---
+DELIVERY_BOARD.md
+DELIVERY_LOCK.md
+metrics-baseline.md
+docs/status.json
+
 # --- Agent worktrees (managed by agent_lifecycle.py) ---
 .claude/worktrees/
 

@@ -1,8 +1,0 @@
-# Late Chunking + Contextual Retrieval
-
-Research date: 2026-03-19
-Topic: retrieval optimization via document-aware chunk representations
-
-Recent retrieval work converges on the same failure mode: standard RAG chunking strips away document-level context before retrieval ever happens. Two strong remedies attack that loss at different stages. Jina AI’s *Late Chunking* (arXiv:2409.04701) keeps full-document context during token encoding, then splits into chunks only after the transformer pass and before pooling. That means each chunk embedding retains surrounding-document information without requiring extra training. Anthropic’s *Contextual Retrieval* instead rewrites each chunk with short, chunk-specific context before indexing, then combines contextual embeddings with contextual BM25 and reranking. Anthropic reports 49% fewer failed retrievals from contextual embeddings + BM25, and 67% fewer when reranking is added.
-
-The practical insight is that retrieval quality is no longer mainly about “better embedding models” or smaller chunk sizes; it is about preserving or reintroducing document context while still retrieving at chunk granularity. Late chunking is attractive when long-context embedding models are available and indexing cost is acceptable. Contextual Retrieval is attractive when teams can cheaply synthesize chunk metadata and want hybrid lexical-semantic search. For Clarvis, the most promising architecture is hybrid: late chunking for dense retrieval, contextual BM25 for exact matches, and reranking as the final precision layer. The common lesson is simple: context should be attached before retrieval, not reconstructed after failure.

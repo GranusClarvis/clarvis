@@ -1,7 +1,0 @@
-# Retrieval Optimization — 2026-03-27
-
-Retrieval optimization is moving away from static top-k similarity search toward adaptive control loops that decide how to search, what to keep, and when to stop. A recent survey on query optimization for LLMs proposes a five-stage lifecycle: intent recognition, query transformation, retrieval execution, evidence integration, and response synthesis. The key point is that retrieval quality is not a single ranking problem; it is a pipeline problem where expansion, decomposition, disambiguation, and abstraction should be chosen based on query complexity rather than applied uniformly.
-
-Two newer systems push this idea further. Amber (ACL Findings 2025) adds iterative memory updating, an adaptive information collector, and multi-granular filtering. Instead of treating each retrieval pass independently, it accumulates a summarized working memory, uses that memory to reformulate subsequent retrieval, and filters noise before generation. RF-Mem extends the same principle to personal memory retrieval with a dual-path strategy: fast familiarity-based retrieval when confidence is high, and slower recollection-style iterative retrieval when uncertainty is high.
-
-The common insight is architectural: the best retriever is not a better encoder alone, but a controller over retrieval modes. For Clarvis, this suggests replacing fixed retrieval with confidence-gated paths, iterative evidence accumulation, and stop conditions driven by marginal information gain rather than arbitrary top-k limits.

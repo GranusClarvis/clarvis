@@ -1,7 +1,0 @@
-# Retrieval optimization in RAG — 2026-03-29
-
-Recent retrieval research suggests that stronger RAG performance comes less from simply using larger embedding models and more from designing the retrieval stack as a coordinated system. A useful pattern is hybrid retrieval: combine dense semantic search, sparse lexical search such as BM25, and optionally graph or structural signals, then fuse candidates before re-ranking. The arXiv paper *Rethinking Hybrid Retrieval: When Small Embeddings and LLM Re-ranking Beat Bigger Models* reports that MiniLM-v6 outperformed BGE-Large in a tri-modal setup once LLM-based re-ranking was added, implying that embedding size alone is a poor proxy for end-to-end quality. Compatibility with fusion and re-ranking matters more.
-
-COLING 2025’s *Enhancing Retrieval-Augmented Generation: A Study of Best Practices* broadens this: retrieval quality depends on chunk size, stride, query expansion, prompt design, sentence-level focus mode, and knowledge-base construction. In other words, retrieval optimization is a pipeline problem, not a single-model choice.
-
-A further trend is iterative retrieval, where the system refines the query and retrieval set across multiple passes instead of treating retrieval as one-shot. The practical lesson for Clarvis is clear: prioritize hybrid candidate generation, sentence-aware chunking, query expansion, and a strong re-ranker, then evaluate retrieval independently from generation. Better retrieval architecture beats brute model scaling surprisingly often.

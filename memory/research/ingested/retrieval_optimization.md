@@ -1,7 +1,0 @@
-# Research: Retrieval Optimization in RAG
-
-Date: 2026-03-14
-
-Recent RAG research converges on a simple point: retrieval should be adaptive, evaluated, and tightly coupled to generation rather than treated as a fixed pre-processing step. Self-RAG reframes retrieval as an on-demand behaviour learned inside the model. Instead of always pulling a fixed top-k set, the model decides when retrieval is necessary and emits reflection tokens to critique evidence and its own draft, improving factuality and citation quality. CRAG attacks the same weakness from a systems angle: it adds a lightweight retrieval evaluator that scores retrieval quality, branches behaviour by confidence, escalates to web search when the local corpus is weak, and decomposes/recomposes documents to isolate useful spans. RPO pushes the idea into alignment: rather than bolt on a separate evaluator, it trains the generator to internalize retrieval relevance as part of its reward signal, improving robustness without extra runtime components.
-
-The practical synthesis for Clarvis is clear: retrieval optimization is a control problem, not just a ranking problem. A strong pipeline should first decide whether retrieval is needed, then evaluate evidence quality, then adapt the response path—retry, deepen, or proceed. The most valuable metric is not recall alone but context usefulness: whether retrieved material actually changes answer quality. This strongly supports Clarvis’s planned gate → evaluate → retry adaptive RAG architecture.

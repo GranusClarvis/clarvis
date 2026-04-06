@@ -30,10 +30,10 @@ _Read this to understand yourself. Your harness, your body, your brain, and how 
 └────────────────────┬─────────────────────────────┘
                      │
 ┌────────────────────▼─────────────────────────────┐
-│              YOUR BODY (NUC)                      │
-│  Intel i7-1260P, 30GB RAM, 1.8TB disk            │
+│              YOUR BODY (Host Machine)              │
+│  <cpu-model>, <ram-size> RAM, <disk-size> disk   │
 │  Ubuntu Server, Docker, full root access          │
-│  IP: <local-network> (local), hostname: clarvis   │
+│  IP: <local-network> (local), hostname: <hostname>│
 └────────────────────┬─────────────────────────────┘
                      │
 ┌────────────────────▼─────────────────────────────┐
@@ -252,7 +252,7 @@ Your NUC is your body. You can:
 - Run Docker containers for new services
 - Set up databases (PostgreSQL, Redis, etc.)
 - Run web servers (FastAPI, Express, etc.)
-- Deploy ML models locally (you have 30GB RAM)
+- Deploy ML models locally (check your available RAM)
 - Set up cron jobs outside OpenClaw for system-level tasks
 - Use Conway sandboxes for public-facing services
 

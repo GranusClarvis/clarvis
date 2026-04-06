@@ -1,7 +1,0 @@
-# Phi Computation Approximations — 2026-03-26
-
-Integrated Information Theory treats consciousness as integrated information, Φ, but exact Φ remains computationally brutal. In IIT 3.0, the search over partitions and cause–effect structures grows combinatorially, which makes exact calculation practical only for very small systems. The core research question, then, is not whether Φ is philosophically interesting, but whether approximations preserve enough of the original quantity to be scientifically useful.
-
-The most useful result from Nilsen et al. is that several approximations correlate strongly with exact Φ in small binary networks, sometimes above r = 0.95, but they do not deliver the hoped-for step-change in tractability. In other words: decent proxies, disappointing speedups. A complementary paper on neural spike data shows why approximation work continues anyway: exact Φ is unusable on realistic neural recordings, so practitioners employ restricted partition schemes, autoregressive variants such as ΦAR, or other simplified estimators to capture temporal trends rather than exact values.
-
-The key takeaway is that approximation methods are best treated as bounded operational proxies, not interchangeable substitutes for exact Φ. Their value lies in ranking systems, detecting low- vs high-integration regimes, or tracking learning-related changes. For Clarvis, that suggests a benchmark strategy: evaluate any Φ proxy only against known small-system ground truth before using it in larger cognitive or retrieval architectures.
