@@ -34,6 +34,21 @@ CRONTAB_REFERENCE = SCRIPTS / "crontab.reference"
 _BLOCK_START = "# >>> clarvis-managed (do not edit) >>>"
 _BLOCK_END = "# <<< clarvis-managed <<<"
 
+# ── Crontab Isolation ──────────────────────────────────────────────────
+# Set CLARVIS_CRONTAB_FILE to redirect all crontab read/write operations
+# to a plain text file instead of the system crontab.  This is used by:
+#   - Isolated tests (prevent production crontab mutation)
+#   - Dry-run previews in non-standard environments
+#   - Fresh installs that want to stage before committing
+#
+# When set, `crontab -l` and `crontab <file>` are replaced with file I/O.
+_CRONTAB_FILE = os.environ.get("CLARVIS_CRONTAB_FILE", "")
+
+
+def _is_isolated_workspace() -> bool:
+    """Return True if workspace is under /tmp (test/isolated install)."""
+    return str(WORKSPACE).startswith("/tmp")
+
 # Map short names to script filenames.  Only entries that exist on disk
 # are considered valid targets for `clarvis cron run`.
 _KNOWN_JOBS = [
@@ -427,7 +442,16 @@ def run(
 # ── Preset / Install / Remove commands ───────────────────────────────────
 
 def _get_current_crontab() -> str:
-    """Return the raw crontab content, or empty string if none."""
+    """Return the raw crontab content, or empty string if none.
+
+    If CLARVIS_CRONTAB_FILE is set, reads from that file instead of
+    the system crontab.  This enables fully isolated testing.
+    """
+    if _CRONTAB_FILE:
+        try:
+            return Path(_CRONTAB_FILE).read_text()
+        except FileNotFoundError:
+            return ""
     try:
         return subprocess.check_output(
             ["crontab", "-l"], text=True, stderr=subprocess.DEVNULL
@@ -478,7 +502,14 @@ def _build_preset_block(preset_name: str) -> str:
 
 
 def _install_crontab(new_content: str) -> None:
-    """Write a new crontab via a temp file."""
+    """Write a new crontab via a temp file.
+
+    If CLARVIS_CRONTAB_FILE is set, writes to that file instead of
+    the system crontab.  This enables fully isolated testing.
+    """
+    if _CRONTAB_FILE:
+        Path(_CRONTAB_FILE).write_text(new_content)
+        return
     with tempfile.NamedTemporaryFile(mode="w", suffix=".crontab", delete=False) as f:
         f.write(new_content)
         tmp = f.name
@@ -503,6 +534,7 @@ def presets():
 def install(
     preset: str = typer.Argument(help="Preset name: minimal, recommended, full, research"),
     apply: bool = typer.Option(False, "--apply", help="Actually install (default is dry-run preview)."),
+    force: bool = typer.Option(False, "--force", help="Override safety guards (e.g. /tmp workspace)."),
 ):
     """Install a cron preset into the system crontab.
 
@@ -510,6 +542,10 @@ def install(
 
     Clarvis entries are wrapped in sentinel comments so they can be safely
     updated or removed later without touching other crontab entries.
+
+    Safety: if CLARVIS_WORKSPACE is under /tmp (isolated/test install),
+    --apply is blocked unless CLARVIS_CRONTAB_FILE is set or --force is passed.
+    This prevents test environments from mutating production crontabs.
     """
     if preset not in _PRESETS:
         print(f"Unknown preset: {preset}")
@@ -534,14 +570,28 @@ def install(
             print(m)
         print("These jobs will fail until the scripts exist.\n")
 
+    # Safety guard: block /tmp workspaces from touching system crontab
+    if apply and _is_isolated_workspace() and not _CRONTAB_FILE and not force:
+        print("BLOCKED: workspace is under /tmp (isolated/test environment).")
+        print("Installing to the system crontab from a temporary workspace")
+        print("would mutate production crons — this is almost certainly wrong.")
+        print()
+        print("Options:")
+        print("  1. Set CLARVIS_CRONTAB_FILE=/path/to/file to use file-based isolation")
+        print("  2. Pass --force to override this safety guard")
+        print("  3. Run from the real workspace instead")
+        raise typer.Exit(1)
+
     current = _get_current_crontab()
     cleaned, had_block = _strip_clarvis_block(current)
     block = _build_preset_block(preset)
     new_crontab = cleaned.rstrip("\n") + "\n\n" + block
 
     cfg = _PRESETS[preset]
+    target = f"file ({_CRONTAB_FILE})" if _CRONTAB_FILE else "system crontab"
     print(f"Preset: {preset} — {cfg['description']}")
     print(f"Jobs:   {len(cfg['jobs'])}")
+    print(f"Target: {target}")
     if had_block:
         print("Action: REPLACE existing clarvis cron block")
     else:
@@ -557,23 +607,31 @@ def install(
 
     # Safety: back up current crontab
     backup = WORKSPACE / "memory" / "cron" / "crontab.backup"
+    backup.parent.mkdir(parents=True, exist_ok=True)
     backup.write_text(current)
     print(f"Backed up current crontab to {backup}")
 
     _install_crontab(new_crontab)
-    print(f"Installed preset '{preset}' ({len(cfg['jobs'])} jobs).")
+    print(f"Installed preset '{preset}' ({len(cfg['jobs'])} jobs) to {target}.")
     print(f"Verify: clarvis cron list")
 
 
 @app.command()
 def remove(
     apply: bool = typer.Option(False, "--apply", help="Actually remove (default is dry-run preview)."),
+    force: bool = typer.Option(False, "--force", help="Override safety guards (e.g. /tmp workspace)."),
 ):
     """Remove all clarvis-managed cron entries.
 
     Only removes the sentinel-wrapped block added by 'clarvis cron install'.
     Other crontab entries are preserved.  Default is dry-run.
     """
+    # Safety guard: block /tmp workspaces from touching system crontab
+    if apply and _is_isolated_workspace() and not _CRONTAB_FILE and not force:
+        print("BLOCKED: workspace is under /tmp (isolated/test environment).")
+        print("Set CLARVIS_CRONTAB_FILE or pass --force to override.")
+        raise typer.Exit(1)
+
     current = _get_current_crontab()
     cleaned, had_block = _strip_clarvis_block(current)
 
@@ -601,6 +659,7 @@ def remove(
         return
 
     backup = WORKSPACE / "memory" / "cron" / "crontab.backup"
+    backup.parent.mkdir(parents=True, exist_ok=True)
     backup.write_text(current)
     print(f"Backed up current crontab to {backup}")
 

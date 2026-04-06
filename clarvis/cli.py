@@ -27,6 +27,8 @@ def _register_subcommands():
     from clarvis.cli_cost import app as cost_app
     from clarvis.cli_cron import app as cron_app
     from clarvis.cli_demo import app as demo_app
+    from clarvis.cli_doctor import app as doctor_app
+    from clarvis.cli_local import app as local_app
     from clarvis.cli_heartbeat import app as heartbeat_app
     from clarvis.cli_mode import app as mode_app
     from clarvis.cli_queue import app as queue_app
@@ -40,6 +42,8 @@ def _register_subcommands():
     app.add_typer(cost_app, name="cost", help="Cost tracking and budget monitoring.")
     app.add_typer(cron_app, name="cron", help="Cron job inspection and execution.")
     app.add_typer(demo_app, name="demo", help="Self-contained demo (no data needed).")
+    app.add_typer(doctor_app, name="doctor", help="Post-install health verification.")
+    app.add_typer(local_app, name="local", help="Zero-API-key local model quickstart.")
     app.add_typer(heartbeat_app, name="heartbeat", help="Heartbeat pipeline.")
     app.add_typer(maintenance_app, name="maintenance", help="Periodic hygiene and lifecycle.")
     app.add_typer(metrics_app, name="metrics", help="Metrics: self-model, phi, PI.")

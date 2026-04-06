@@ -8,6 +8,7 @@ Retention rules:
   memory/YYYY-MM-DD.md — compress after 3 days, delete .gz after 90 days
   data/*.jsonl        — trim to last N lines (configurable per file)
   /tmp/clarvis_*.lock — remove stale locks (>1h, PID dead)
+  /tmp/clarvis-fresh*, clarvis_smoke_*, etc — remove test installs after 3 days
   data/browser_sessions/screenshots/* — delete files older than 7 days
 
 Run: python3 cleanup_policy.py [--dry-run] [--verbose]
@@ -19,6 +20,7 @@ import gzip
 import json
 import os
 import re
+import shutil
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -162,6 +164,25 @@ LOCK_PATTERN = "/tmp/clarvis_*.lock"
 SCREENSHOT_DIR = WORKSPACE / "data" / "browser_sessions" / "screenshots"
 SCREENSHOT_MAX_AGE_DAYS = 7
 
+# /tmp test install cleanup
+# Naming convention (all prefixed "clarvis-" for discoverability):
+#   clarvis-freshclone-*   — full repo clones for install testing
+#   clarvis-fresh-venv*    — isolated venvs for pip install testing
+#   clarvis-isolated-*     — isolated workspace dirs for e2e tests
+#   clarvis_smoke_*        — smoke test workspaces (from fresh_install_smoke.sh)
+#   clarvis_fork_*         — fork comparison dirs
+# Retention: keep for 3 days (enough for debugging), then auto-remove.
+# pytest tmp_path fixtures auto-clean — only manual test installs need this.
+TMP_TEST_PREFIXES = [
+    "clarvis-freshclone-",
+    "clarvis-fresh-venv",
+    "clarvis-isolated-",
+    "clarvis_smoke_",
+    "clarvis_fork_compare",
+    "clarvis_fork_clone",
+]
+TMP_TEST_MAX_AGE_DAYS = 3
+
 
 class CleanupReport:
     """Tracks what was cleaned and how much space was freed."""
@@ -174,6 +195,7 @@ class CleanupReport:
         self.files_compressed = 0
         self.lines_trimmed = 0
         self.locks_removed = 0
+        self.tmp_installs_removed = 0
 
     def log(self, action: str):
         self.actions.append(action)
@@ -187,6 +209,7 @@ class CleanupReport:
             f"  Files removed:    {self.files_removed}",
             f"  JSONL lines trimmed: {self.lines_trimmed}",
             f"  Stale locks removed: {self.locks_removed}",
+            f"  Tmp test installs removed: {self.tmp_installs_removed}",
         ]
         if self.actions:
             lines.append("  Actions:")
@@ -460,6 +483,43 @@ def compress_old_transcripts(report: CleanupReport, dry_run: bool):
                 continue
 
 
+def clean_tmp_test_installs(report: CleanupReport, dry_run: bool):
+    """Remove stale /tmp test install directories older than TMP_TEST_MAX_AGE_DAYS.
+
+    Only removes dirs/files matching known clarvis test prefixes.
+    Directories are removed recursively; files are unlinked.
+    """
+    cutoff = time.time() - (TMP_TEST_MAX_AGE_DAYS * 86400)
+    tmp = Path("/tmp")
+    if not tmp.exists():
+        return
+
+    for entry in tmp.iterdir():
+        # Check if name matches any known test prefix
+        if not any(entry.name.startswith(pfx) for pfx in TMP_TEST_PREFIXES):
+            continue
+        try:
+            mtime = entry.stat().st_mtime
+            if mtime >= cutoff:
+                continue  # Too recent, keep for debugging
+            if entry.is_dir():
+                size = sum(f.stat().st_size for f in entry.rglob("*") if f.is_file())
+                if not dry_run:
+                    shutil.rmtree(entry)
+                report.bytes_freed += size
+                report.files_removed += 1
+                report.log(f"Removed stale test install: {entry.name} ({size:,} bytes, age={int((time.time()-mtime)/86400)}d)")
+            elif entry.is_file():
+                size = entry.stat().st_size
+                if not dry_run:
+                    entry.unlink()
+                report.bytes_freed += size
+                report.files_removed += 1
+                report.log(f"Removed stale test artifact: {entry.name} ({size:,} bytes)")
+        except (OSError, PermissionError):
+            continue
+
+
 def run_cleanup(dry_run: bool = False, verbose: bool = False) -> CleanupReport:
     """Execute the full cleanup policy."""
     report = CleanupReport()
@@ -501,6 +561,9 @@ def run_cleanup(dry_run: bool = False, verbose: bool = False) -> CleanupReport:
     # 6. Clean old screenshots
     clean_screenshots(report, dry_run)
 
+    # 7. Clean stale /tmp test installs
+    clean_tmp_test_installs(report, dry_run)
+
     return report
 
 
@@ -526,6 +589,7 @@ def main():
             "files_removed": report.files_removed,
             "lines_trimmed": report.lines_trimmed,
             "locks_removed": report.locks_removed,
+            "tmp_installs_removed": report.tmp_installs_removed,
             "actions": report.actions,
         }, indent=2))
     else:

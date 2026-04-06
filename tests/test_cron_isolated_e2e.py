@@ -16,6 +16,7 @@ import shutil
 import subprocess
 import tempfile
 import time
+from pathlib import Path
 
 import pytest
 
@@ -470,3 +471,143 @@ class TestCronDoctorDryRun:
             except json.JSONDecodeError:
                 # Some output modes are not JSON — that's ok
                 pass
+
+
+class TestCronInstallIsolated:
+    """Test cron install/remove using file-based crontab isolation.
+
+    Uses CLARVIS_CRONTAB_FILE to prevent any mutation of the system crontab.
+    """
+
+    def test_install_to_file_creates_managed_block(self, tmp_path):
+        """clarvis cron install writes a sentinel-wrapped block to the target file."""
+        crontab_file = str(tmp_path / "crontab.txt")
+        env = {
+            "CLARVIS_CRONTAB_FILE": crontab_file,
+            "CLARVIS_WORKSPACE": WORKSPACE,
+        }
+        rc = _bash(
+            f'cd "{WORKSPACE}" && '
+            f'CLARVIS_CRONTAB_FILE="{crontab_file}" '
+            f'python3 -m clarvis cron install minimal --apply',
+            env=env,
+            timeout=30,
+        )
+        assert rc.returncode == 0, f"stderr: {rc.stderr}"
+        content = open(crontab_file).read()
+        assert ">>> clarvis-managed" in content
+        assert "<<< clarvis-managed" in content
+        assert "health_monitor" in content
+        assert "Preset: minimal" in content
+
+    def test_install_replaces_existing_block(self, tmp_path):
+        """A second install replaces the managed block, not appends."""
+        crontab_file = str(tmp_path / "crontab.txt")
+        env = {
+            "CLARVIS_CRONTAB_FILE": crontab_file,
+            "CLARVIS_WORKSPACE": WORKSPACE,
+        }
+        # Install minimal first
+        _bash(
+            f'cd "{WORKSPACE}" && '
+            f'CLARVIS_CRONTAB_FILE="{crontab_file}" '
+            f'python3 -m clarvis cron install minimal --apply',
+            env=env, timeout=30,
+        )
+        # Install recommended (should replace, not append)
+        rc = _bash(
+            f'cd "{WORKSPACE}" && '
+            f'CLARVIS_CRONTAB_FILE="{crontab_file}" '
+            f'python3 -m clarvis cron install recommended --apply',
+            env=env, timeout=30,
+        )
+        assert rc.returncode == 0, f"stderr: {rc.stderr}"
+        content = open(crontab_file).read()
+        # Should have exactly one managed block
+        assert content.count(">>> clarvis-managed") == 1
+        assert "Preset: recommended" in content
+
+    def test_remove_from_file(self, tmp_path):
+        """clarvis cron remove strips the managed block from the file."""
+        crontab_file = str(tmp_path / "crontab.txt")
+        # Pre-populate with user entries + managed block
+        Path(crontab_file).write_text(
+            "0 3 * * * /usr/local/bin/my-backup\n"
+            "# >>> clarvis-managed (do not edit) >>>\n"
+            "*/15 * * * * /some/health_monitor.sh\n"
+            "# <<< clarvis-managed <<<\n"
+        )
+        env = {
+            "CLARVIS_CRONTAB_FILE": crontab_file,
+            "CLARVIS_WORKSPACE": WORKSPACE,
+        }
+        rc = _bash(
+            f'cd "{WORKSPACE}" && '
+            f'CLARVIS_CRONTAB_FILE="{crontab_file}" '
+            f'python3 -m clarvis cron remove --apply',
+            env=env, timeout=30,
+        )
+        assert rc.returncode == 0, f"stderr: {rc.stderr}"
+        content = open(crontab_file).read()
+        assert "clarvis-managed" not in content
+        # User entries preserved
+        assert "my-backup" in content
+
+    def test_tmp_workspace_blocks_system_crontab(self, tmp_path):
+        """A /tmp workspace is blocked from writing to system crontab."""
+        ws = str(tmp_path / "workspace")
+        os.makedirs(ws, exist_ok=True)
+        env = {
+            "CLARVIS_WORKSPACE": ws,
+            # No CLARVIS_CRONTAB_FILE — would hit system crontab
+        }
+        rc = _bash(
+            f'cd "{WORKSPACE}" && '
+            f'CLARVIS_WORKSPACE="{ws}" '
+            f'python3 -m clarvis cron install minimal --apply',
+            env=env, timeout=30,
+        )
+        # Should be blocked with exit code 1
+        assert rc.returncode == 1
+        assert "BLOCKED" in rc.stdout
+
+    def test_tmp_workspace_allows_dry_run(self, tmp_path):
+        """A /tmp workspace can still do dry-run previews."""
+        ws = str(tmp_path / "workspace")
+        os.makedirs(ws, exist_ok=True)
+        env = {
+            "CLARVIS_WORKSPACE": ws,
+        }
+        rc = _bash(
+            f'cd "{WORKSPACE}" && '
+            f'CLARVIS_WORKSPACE="{ws}" '
+            f'python3 -m clarvis cron install minimal',
+            env=env, timeout=30,
+        )
+        # Dry-run should succeed
+        assert rc.returncode == 0
+        assert "DRY RUN" in rc.stdout
+
+    def test_preserves_non_clarvis_entries(self, tmp_path):
+        """Install preserves existing non-clarvis crontab entries."""
+        crontab_file = str(tmp_path / "crontab.txt")
+        Path(crontab_file).write_text(
+            "# My custom cron jobs\n"
+            "0 3 * * * /usr/local/bin/my-backup\n"
+            "30 4 * * * /usr/local/bin/my-cleanup\n"
+        )
+        env = {
+            "CLARVIS_CRONTAB_FILE": crontab_file,
+            "CLARVIS_WORKSPACE": WORKSPACE,
+        }
+        rc = _bash(
+            f'cd "{WORKSPACE}" && '
+            f'CLARVIS_CRONTAB_FILE="{crontab_file}" '
+            f'python3 -m clarvis cron install minimal --apply',
+            env=env, timeout=30,
+        )
+        assert rc.returncode == 0, f"stderr: {rc.stderr}"
+        content = open(crontab_file).read()
+        assert "my-backup" in content
+        assert "my-cleanup" in content
+        assert "clarvis-managed" in content
