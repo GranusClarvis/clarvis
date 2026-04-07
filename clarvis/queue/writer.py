@@ -465,12 +465,14 @@ def mark_task_complete(task_text: str, annotation: str, queue_file: str = QUEUE_
 
     Returns:
       - "marked" if task was found and marked [x]
+      - "already_complete" if task is already [x] (e.g., Claude marked it first)
       - "archived" if it already appears in QUEUE_ARCHIVE.md
       - False if not found
 
     Matching strategy:
       1) Prefer exact tag match when task_text contains [TAG]
       2) Fallback to prefix substring match
+      3) Check if already marked [x] (handles race with Claude Code)
     """
     with open(queue_file, 'r') as f:
         lines = f.readlines()
@@ -479,6 +481,7 @@ def mark_task_complete(task_text: str, annotation: str, queue_file: str = QUEUE_
     m = re.match(r"\[([^\]]+)\]", task_text.strip())
     tag = m.group(1) if m else None
 
+    # Pass 1: Find unchecked items and mark them
     if tag:
         tag_re = re.compile(rf"^\- \[ \] \[{re.escape(tag)}\](?=\s|$)")
         for i, line in enumerate(lines):
@@ -498,6 +501,18 @@ def mark_task_complete(task_text: str, annotation: str, queue_file: str = QUEUE_
             line_tag = _extract_tag_from_text(line.strip().replace("- [ ] ", "", 1))
             _sync_sidecar_complete(line_tag)
             return "marked"
+
+    # Pass 2: Check if already marked [x] (Claude Code may have marked it during its run)
+    if tag:
+        done_re = re.compile(rf"^\- \[x\] \[{re.escape(tag)}\](?=\s|$)")
+        for line in lines:
+            if done_re.search(line):
+                _sync_sidecar_complete(tag)
+                return "already_complete"
+
+    for line in lines:
+        if line.strip().startswith("- [x] ") and task_prefix in line:
+            return "already_complete"
 
     if archive_file and os.path.exists(archive_file):
         with open(archive_file, 'r') as f:

@@ -427,7 +427,7 @@ if [ "$TASK_EXIT" -eq 0 ]; then
         [ -f "$stray" ] || continue
         fname=$(basename "$stray")
         # Skip known permanent files
-        case "$fname" in OBLITERATUS_review.md) continue ;; esac
+        case "$fname" in README.md|OBLITERATUS_review.md) continue ;; esac
         MTIME=$(stat -c %Y "$stray" 2>/dev/null || echo 0)
         if [ "$MTIME" -lt "$RUN_START_EPOCH" ]; then
             echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Leaving pre-existing root artifact in place: $fname" >> "$LOGFILE"
