@@ -14,7 +14,7 @@ import pytest
 sys.path.insert(0, os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "scripts"))
 import _paths  # noqa: F401,E402
 
-from dashboard_server import parse_queue, read_locks, build_state
+from dashboard_server import parse_queue, read_locks, read_metrics, build_state
 
 
 class TestParseQueue:
@@ -106,12 +106,44 @@ class TestReadLocks:
         assert names == {"a", "b"}
 
 
+class TestReadMetrics:
+    def test_returns_dict_with_known_keys(self, tmp_path):
+        status = tmp_path / "status.json"
+        status.write_text(json.dumps({
+            "benchmarks": {
+                "pi": {"pi": 0.72},
+                "clr": {"clr": 0.65, "dimensions": {"autonomy": 0.5}},
+            },
+            "phi": {"current": 0.71},
+            "brain": {"total_memories": 3400, "collections": {"memories": 200}},
+            "bloat_score": 0.12,
+            "mode": {"mode": "autonomous"},
+        }))
+        with patch("dashboard_server.STATUS_JSON", status), \
+             patch("dashboard_server.DASHBOARD_STATUS_JSON", tmp_path / "nope.json"):
+            m = read_metrics()
+        assert m["pi"] == 0.72
+        assert m["clr"] == 0.65
+        assert m["phi"] == 0.71
+        assert m["brain_total"] == 3400
+        assert m["bloat_score"] == 0.12
+        assert m["mode"] == "autonomous"
+        assert m["clr_dimensions"] == {"autonomy": 0.5}
+
+    def test_returns_empty_dict_when_no_file(self, tmp_path):
+        with patch("dashboard_server.STATUS_JSON", tmp_path / "nope1.json"), \
+             patch("dashboard_server.DASHBOARD_STATUS_JSON", tmp_path / "nope2.json"):
+            m = read_metrics()
+        assert m == {}
+
+
 class TestBuildState:
     def test_returns_all_keys(self):
         """build_state returns dict with all expected keys."""
         s = build_state()
         expected_keys = {"queue", "agents", "locks", "recent_events",
-                        "prs", "digest_lines", "scoreboard", "updated_at"}
+                        "prs", "digest_lines", "scoreboard", "metrics",
+                        "updated_at"}
         assert set(s.keys()) == expected_keys
 
     def test_queue_has_items(self):
@@ -127,6 +159,11 @@ class TestBuildState:
             assert "name" in a
             assert "status" in a
             assert "trust_score" in a
+
+    def test_metrics_is_dict(self):
+        """build_state includes metrics as a dict."""
+        s = build_state()
+        assert isinstance(s["metrics"], dict)
 
     def test_state_is_json_serializable(self):
         """Full state must be JSON serializable for SSE."""

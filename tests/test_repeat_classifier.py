@@ -27,7 +27,10 @@ from repeat_classifier import (
     REPEAT,
     SHALLOW_PRIOR,
 )
-from research_novelty import TopicRegistry, TopicEntry, _word_overlap, _normalize
+from research_novelty import (
+    TopicRegistry, TopicEntry, _word_overlap, _normalize,
+    REFINEMENT_AGE_DAYS, REFINEMENT_MIN_MEMORIES,
+)
 
 
 # --- Fixtures ---
@@ -179,23 +182,16 @@ class TestScopeComparison:
         b = Scope(depth="survey", angle="theory")
         assert not a.differs_from(b)
 
-    def test_unknown_vs_known_strong_signal_is_diff(self):
-        """If new scope has a STRONG signal (critique, implementation, etc.)
-        and prior is fully unknown, treat as scope shift."""
+    def test_unknown_vs_known_no_diff_single_dimension(self):
+        """One unknown + one known on same dimension = no difference.
+        We can't confirm they differ if one side has no signal."""
         new = Scope(depth="unknown", angle="critique")
         prior = Scope(depth="unknown", angle="unknown")
-        assert new.differs_from(prior)
-
-    def test_strong_signal_only_when_prior_fully_unknown(self):
-        """Strong signal rule only fires when prior is FULLY unknown.
-        If prior has any known dimension, fall back to normal rules."""
-        new = Scope(depth="unknown", angle="critique")
-        prior = Scope(depth="survey", angle="unknown")
-        assert not new.differs_from(prior)  # prior not fully unknown
+        assert not new.differs_from(prior)
 
     def test_both_known_different(self):
-        a = Scope(depth="intro", angle="theory", specificity="broad")
-        b = Scope(depth="advanced", angle="practice", specificity="focused")
+        a = Scope(depth="intro", angle="theory")
+        b = Scope(depth="advanced", angle="practice")
         assert a.differs_from(b)
 
 
@@ -285,13 +281,15 @@ class TestFalsePositivePrevention:
             f"Got: {result.verdict}, reason: {result.reason}"
         )
 
-    def test_same_topic_different_angle_allowed(self, classifier):
-        """IIT theory vs IIT critique = different angle → allow."""
+    def test_same_topic_unknown_prior_scope_is_repeat(self, classifier):
+        """Critique of topic with unknown prior scope → REPEAT (can't prove shift).
+        After STRONG_SIGNALS removal (2026-04-07), we require BOTH scopes to be
+        known and different to call it a scope shift."""
         result = classifier.classify(
             "Research: Critique of IIT 4.0 — limitations, weaknesses, and counterarguments"
         )
-        assert result.verdict != REPEAT, (
-            f"False positive! Critique angle was blocked. "
+        assert result.verdict == REPEAT, (
+            f"Expected REPEAT when prior scope is unknown. "
             f"Got: {result.verdict}, reason: {result.reason}"
         )
 
@@ -371,6 +369,238 @@ class TestClassifyResultMetadata:
     def test_novel_result_has_no_canonical(self, classifier):
         result = classifier.classify("Research: completely new quantum topic XYZ")
         assert result.canonical_name == ""
+
+
+# =============================================================================
+# RESEARCH TEST MATRIX — Real failure case coverage (2026-04-07)
+# =============================================================================
+
+@pytest.fixture
+def matrix_registry(tmp_path):
+    """Registry with diverse topics for test matrix coverage."""
+    reg_path = str(tmp_path / "matrix_registry.json")
+    data = {
+        "phi-computation": {
+            "canonical_name": "phi computation",
+            "topic_id": "phi-computation",
+            "status": "done",
+            "family": "iit-phi",
+            "aliases": ["scalable phi approximations", "phi metric for llms"],
+            "source_files": ["phi-computation.md", "phi-approximations.md"],
+            "first_seen": "2026-03-01T10:00:00Z",
+            "last_researched": "2026-04-03T10:00:00Z",
+            "research_count": 3,
+            "memory_count": 15,
+            "last_novelty": "",
+        },
+        "rag-pipeline-chunking": {
+            "canonical_name": "rag pipeline chunking",
+            "topic_id": "rag-pipeline-chunking",
+            "status": "active",
+            "family": "rag-retrieval",
+            "aliases": ["late chunking for rag"],
+            "source_files": ["rag-chunking.md"],
+            "first_seen": "2026-03-15T10:00:00Z",
+            "last_researched": "2026-04-05T10:00:00Z",
+            "research_count": 1,
+            "memory_count": 2,  # shallow
+            "last_novelty": "",
+        },
+        "mem0-memory-layer": {
+            "canonical_name": "mem0 memory layer architecture",
+            "topic_id": "mem0-memory-layer",
+            "status": "done",
+            "family": "memory-systems",
+            "aliases": [],
+            "source_files": ["mem0-architecture.md"],
+            "first_seen": "2026-02-20T10:00:00Z",
+            "last_researched": "2026-03-10T10:00:00Z",  # stale (>14d)
+            "research_count": 2,
+            "memory_count": 8,
+            "last_novelty": "",
+        },
+        "reflexion-metacognition": {
+            "canonical_name": "reflexion metacognitive self-debugging",
+            "topic_id": "reflexion-metacognition",
+            "status": "revisitable",
+            "family": "metacognition",
+            "aliases": ["reflexion agent self-improvement"],
+            "source_files": ["reflexion.md"],
+            "first_seen": "2026-03-05T10:00:00Z",
+            "last_researched": "2026-04-01T10:00:00Z",
+            "research_count": 2,
+            "memory_count": 6,
+            "last_novelty": "",
+        },
+    }
+    with open(reg_path, "w") as f:
+        json.dump(data, f)
+    return TopicRegistry(path=reg_path)
+
+
+@pytest.fixture
+def matrix_classifier(matrix_registry):
+    return RepeatClassifier(registry=matrix_registry)
+
+
+class TestResearchMatrix:
+    """Focused test matrix covering the real failure cases in research dedup.
+
+    Each test documents what SHOULD happen for a specific scenario and why.
+    """
+
+    # --- Case 1: Same topic rephrased ---
+
+    def test_rephrased_same_topic_blocked(self, matrix_classifier):
+        """Same topic with different wording → must match and block.
+        Uses words that overlap well with canonical name + aliases."""
+        result = matrix_classifier.classify(
+            "Research: Phi computation approximation methods for LLMs"
+        )
+        assert result.verdict == REPEAT
+        assert result.canonical_name == "phi computation"
+
+    def test_rephrased_too_different_is_novel(self, matrix_classifier):
+        """Heavily rephrased topic may not match — this is correct behavior.
+        Word overlap below threshold means the classifier can't be sure."""
+        result = matrix_classifier.classify(
+            "Research: Computing integrated information values"
+        )
+        # Low word overlap → NOVEL (not a false negative — genuinely ambiguous)
+        assert result.verdict == NOVEL
+
+    # --- Case 2: Same topic with tags/dates ---
+
+    def test_topic_with_date_prefix_blocked(self, matrix_classifier):
+        """Topic with date prefix → date stripped, matches canonical."""
+        result = matrix_classifier.classify(
+            "[RESEARCH 2026-04-07] Phi computation methods"
+        )
+        assert result.verdict == REPEAT
+        assert result.canonical_name == "phi computation"
+
+    def test_topic_with_queue_tag_blocked(self, matrix_classifier):
+        """Topic with queue-style tag → tag stripped, matches canonical."""
+        result = matrix_classifier.classify(
+            "[PHI_COMPUTATION] Research: Phi computation methods"
+        )
+        assert result.verdict == REPEAT
+        assert result.canonical_name == "phi computation"
+
+    # --- Case 3: Same artifact renamed ---
+
+    def test_file_rename_matches_canonical(self, matrix_classifier):
+        """Renamed file (different slug) for same topic → must still match."""
+        result = matrix_classifier.classify(
+            "Research: Scalable phi metric for llms"
+        )
+        assert result.verdict == REPEAT
+        assert result.canonical_name == "phi computation"
+
+    # --- Case 4: Shallow vs deep prior coverage ---
+
+    def test_shallow_prior_allows_reresearch(self, matrix_classifier):
+        """Topic with <3 memories (shallow) → SHALLOW_PRIOR (allow)."""
+        result = matrix_classifier.classify(
+            "Research: RAG pipeline chunking strategies"
+        )
+        assert result.verdict == SHALLOW_PRIOR
+
+    def test_deep_prior_blocks_reresearch(self, matrix_classifier):
+        """Topic with many memories (deep) → REPEAT (block)."""
+        result = matrix_classifier.classify(
+            "Research: Phi computation techniques"
+        )
+        assert result.verdict == REPEAT
+        assert result.research_count >= 3
+
+    # --- Case 5: Legitimate new angle (both scopes known) ---
+
+    def test_known_depth_shift_allowed(self, matrix_classifier):
+        """Same topic, known depth shift (survey → implementation) → SCOPE_SHIFT."""
+        # Add a topic with known prior scope (survey)
+        reg = matrix_classifier._registry
+        entry = reg.find_matching("rag pipeline chunking")
+        # Give it enough memories so shallow-prior doesn't fire
+        entry.memory_count = 10
+        entry.research_count = 2
+        # Set alias with scope marker so prior scope is detected
+        entry.aliases.append("survey of rag chunking strategies")
+        reg._save()
+
+        result = matrix_classifier.classify(
+            "Research: Hands-on implementation of RAG chunking pipeline"
+        )
+        assert result.verdict == SCOPE_SHIFT
+
+    # --- Case 6: Stale revisit (>14 days old) ---
+
+    def test_stale_topic_allowed(self, matrix_classifier):
+        """Topic last researched >14 days ago → allowed regardless."""
+        result = matrix_classifier.classify(
+            "Research: Mem0 memory layer architecture"
+        )
+        assert result.verdict in (SCOPE_SHIFT, SHALLOW_PRIOR)
+        assert result.age_days > REFINEMENT_AGE_DAYS
+
+    # --- Case 7: Explicit reopen (revisitable status) ---
+
+    def test_revisitable_status_allowed(self, matrix_classifier):
+        """Topic explicitly marked revisitable → REFINEMENT via novelty classify."""
+        reg = matrix_classifier._registry
+        # Use canonical name for reliable matching
+        entry = reg.find_matching("reflexion metacognitive self-debugging")
+        assert entry is not None
+        assert entry.status == "revisitable"
+
+        # Classify via the registry's classify (used by cron_research.sh)
+        from research_novelty import REFINEMENT as NOVELTY_REFINEMENT
+        novelty, reason, match = reg.classify("reflexion metacognitive self-debugging")
+        assert novelty == NOVELTY_REFINEMENT
+        assert "revisitable" in reason
+
+    # --- Case 8: Genuinely novel topic ---
+
+    def test_unrelated_topic_is_novel(self, matrix_classifier):
+        """Topic with no registry match → NOVEL."""
+        result = matrix_classifier.classify(
+            "Research: Formal verification of neural network safety properties"
+        )
+        assert result.verdict == NOVEL
+
+    # --- Case 9: Cross-family distinction ---
+
+    def test_different_family_topics_not_confused(self, matrix_classifier):
+        """Topics from different families should not cross-match."""
+        # "memory layer" shouldn't match "phi computation"
+        result = matrix_classifier.classify(
+            "Research: Mem0 memory layer for conversation agents"
+        )
+        assert result.canonical_name != "phi computation"
+
+    # --- Case 10: Family lock propagation ---
+
+    def test_family_lock_blocks_new_entry(self, matrix_classifier):
+        """New topic in a locked family → blocked even without exact match."""
+        from research_novelty import ALREADY_KNOWN
+
+        # Add enough done topics to lock iit-phi family
+        reg = matrix_classifier._registry
+        reg.register("iit axioms", memory_count=5)
+        entry = reg.find_matching("iit axioms")
+        entry.family = "iit-phi"
+        entry.status = "done"
+        entry.research_count = 2
+        reg._save()
+
+        # Now iit-phi has 2 topics (phi-computation=done, iit-axioms=done) = 100% done
+        locked, _ = reg.is_family_locked("iit-phi")
+        assert locked
+
+        # New topic in same family should be blocked
+        novelty, reason, _ = reg.classify("New IIT phi decomposition algorithm")
+        assert novelty == ALREADY_KNOWN
+        assert "family-locked" in reason
 
 
 if __name__ == "__main__":

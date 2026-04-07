@@ -585,26 +585,9 @@ class TopicRegistry:
         # Classify the title against registry
         novelty, reason, match = self.classify(title)
 
-        # If classified as ALREADY_KNOWN, do a deeper content check:
-        # see if the file has substantial new content vs what's in ingested/
-        if novelty == ALREADY_KNOWN and match and match.source_files:
-            new_words = _word_set(content)
-            existing_content = ""
-            for src in match.source_files[-3:]:  # Check last 3 source files
-                src_path = os.path.join(INGESTED_DIR, src)
-                if os.path.exists(src_path):
-                    with open(src_path) as f:
-                        existing_content += f.read() + "\n"
-            if existing_content:
-                existing_words = _word_set(existing_content)
-                truly_new = new_words - existing_words
-                new_ratio = len(truly_new) / len(new_words) if new_words else 0
-                if new_ratio > 0.4:
-                    # >40% new content → upgrade to REFINEMENT
-                    return REFINEMENT, (
-                        f"topic is known but file has {new_ratio:.0%} new content "
-                        f"(canonical: '{match.canonical_name}')"
-                    )
+        # Content-based novelty upgrade removed (2026-04-07): word-level diff between
+        # new file and prior source files was unreliable — different phrasing of the same
+        # topic easily exceeded the 40% threshold. Trust the registry classification.
 
         return novelty, reason
 

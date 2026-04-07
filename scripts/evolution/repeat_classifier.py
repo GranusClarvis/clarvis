@@ -9,8 +9,7 @@ Combines canonical topic matching with scope comparison to distinguish:
 
 Design principles:
   1. Minimize false positives — never suppress a genuinely new angle
-  2. Scope dimensions: depth (intro→deep-dive), angle (theory→practice→critique),
-     specificity (broad→narrow)
+  2. Scope dimensions: depth (intro→deep-dive), angle (theory→practice→critique)
   3. Canonical topic IDs: stable slugs derived from canonical_name for cross-system refs
   4. Shares word_set/word_overlap from research_novelty.py (single source of truth)
 
@@ -67,37 +66,37 @@ SHALLOW_PRIOR = "SHALLOW_PRIOR"
 
 # Depth markers: ordered from shallow to deep
 DEPTH_MARKERS = {
-    "intro": ["intro", "basics", "overview", "primer", "getting started", "101", "beginner"],
-    "survey": ["survey", "review", "landscape", "taxonomy", "state of the art", "comparison"],
-    "focused": ["deep dive", "deep-dive", "analysis", "investigation", "focused", "case study"],
-    "implementation": ["implementation", "build", "prototype", "code", "hands-on", "practical",
-                       "apply", "integrate", "migration"],
-    "advanced": ["advanced", "formalization", "mathematical", "theoretical foundations",
-                 "scalable", "optimization", "production"],
+    "intro": ["intro", "basics", "overview", "primer", "getting started"],
+    "survey": ["survey", "landscape", "taxonomy", "state of the art"],
+    "focused": ["deep dive", "deep-dive", "investigation", "case study"],
+    "implementation": ["implementation", "prototype", "hands-on", "migration"],
+    "advanced": ["advanced", "formalization", "theoretical foundations",
+                 "scalable"],
 }
 
 # Angle markers: different perspectives on the same topic
 ANGLE_MARKERS = {
-    "theory": ["theory", "theoretical", "formal", "mathematical", "proof", "axiom"],
-    "practice": ["practical", "applied", "real-world", "production", "deployment", "hands-on"],
-    "critique": ["critique", "criticism", "limitations", "problems", "challenges", "weaknesses"],
-    "comparison": ["comparison", "versus", "vs", "benchmark", "evaluation", "tradeoffs"],
-    "synthesis": ["synthesis", "integration", "combining", "hybrid", "unified", "holistic"],
+    "theory": ["theory", "theoretical", "formal", "mathematical"],
+    "practice": ["practical", "applied", "real-world", "deployment", "hands-on"],
+    "critique": ["critique", "criticism", "limitations", "weaknesses"],
+    "comparison": ["comparison", "versus", "benchmark", "tradeoffs"],
+    "synthesis": ["synthesis", "combining", "hybrid", "unified"],
 }
 
-# Specificity markers
-SPECIFICITY_MARKERS = {
-    "broad": ["broad", "general", "comprehensive", "complete", "full", "all"],
-    "focused": ["specific", "focused", "particular", "targeted", "narrow", "single"],
-}
+# Specificity markers removed (2026-04-07): words like "all", "full", "general",
+# "single" are too common to be reliable scope indicators. Caused false scope-shift
+# verdicts on topics that happened to contain these everyday words.
 
 
 @dataclass
 class Scope:
-    """Extracted scope dimensions from a topic description."""
+    """Extracted scope dimensions from a topic description.
+
+    Only two dimensions: depth (intro→advanced) and angle (theory→synthesis).
+    Specificity was removed (2026-04-07) — too many false positives from common words.
+    """
     depth: str = "unknown"       # intro|survey|focused|implementation|advanced|unknown
     angle: str = "unknown"       # theory|practice|critique|comparison|synthesis|unknown
-    specificity: str = "unknown" # broad|focused|unknown
     scope_terms: list = None     # Raw terms that contributed to scope detection
 
     def __post_init__(self):
@@ -111,34 +110,16 @@ class Scope:
         1. Two unknowns on the same dimension do NOT count as different
            (avoids false scope-shift on vague topics).
         2. Two known, different values on the same dimension = definite difference.
-        3. If the NEW scope has a specific non-default signal (critique, implementation,
-           advanced, comparison) and the prior is fully unknown, count it as a likely
-           scope shift — the new request is explicitly angling for something specific
-           that the generic prior probably didn't cover.
         """
-        diffs = 0
-        # Rule 2: both known, different
+        # Both known and different on at least one dimension
         if self.depth != "unknown" and other.depth != "unknown" and self.depth != other.depth:
-            diffs += 1
-        if self.angle != "unknown" and other.angle != "unknown" and self.angle != other.angle:
-            diffs += 1
-        if self.specificity != "unknown" and other.specificity != "unknown" and self.specificity != other.specificity:
-            diffs += 1
-        if diffs >= 1:
             return True
-
-        # Rule 3: new has strong signal, prior is fully unknown
-        # Only applies to high-specificity angles/depths that are unlikely
-        # to overlap with a generic prior research run.
-        STRONG_SIGNALS = {"critique", "implementation", "advanced", "comparison", "synthesis"}
-        if other.is_fully_unknown():
-            if self.depth in STRONG_SIGNALS or self.angle in STRONG_SIGNALS:
-                return True
-
+        if self.angle != "unknown" and other.angle != "unknown" and self.angle != other.angle:
+            return True
         return False
 
     def is_fully_unknown(self) -> bool:
-        return self.depth == "unknown" and self.angle == "unknown" and self.specificity == "unknown"
+        return self.depth == "unknown" and self.angle == "unknown"
 
 
 def extract_scope(text: str) -> Scope:
@@ -172,18 +153,7 @@ def extract_scope(text: str) -> Scope:
         if angle != "unknown":
             break
 
-    # Detect specificity
-    specificity = "unknown"
-    for level, markers in SPECIFICITY_MARKERS.items():
-        for marker in markers:
-            if marker in norm:
-                specificity = level
-                scope_terms.append(f"spec:{marker}")
-                break
-        if specificity != "unknown":
-            break
-
-    return Scope(depth=depth, angle=angle, specificity=specificity, scope_terms=scope_terms)
+    return Scope(depth=depth, angle=angle, scope_terms=scope_terms)
 
 
 # --- Canonical topic ID ---
@@ -348,8 +318,6 @@ class RepeatClassifier:
                 diffs.append(f"depth: {prior_scope.depth}→{new_scope.depth}")
             if new_scope.angle != prior_scope.angle and new_scope.angle != "unknown" and prior_scope.angle != "unknown":
                 diffs.append(f"angle: {prior_scope.angle}→{new_scope.angle}")
-            if new_scope.specificity != prior_scope.specificity and new_scope.specificity != "unknown" and prior_scope.specificity != "unknown":
-                diffs.append(f"specificity: {prior_scope.specificity}→{new_scope.specificity}")
             base.reason = (
                 f"same topic but different scope ({', '.join(diffs) or 'scope shift detected'}), "
                 f"canonical: '{match.canonical_name}'"
@@ -389,8 +357,6 @@ class RepeatClassifier:
                 best_scope.depth = scope.depth
             if scope.angle != "unknown" and best_scope.angle == "unknown":
                 best_scope.angle = scope.angle
-            if scope.specificity != "unknown" and best_scope.specificity == "unknown":
-                best_scope.specificity = scope.specificity
             best_scope.scope_terms.extend(scope.scope_terms)
 
         return best_scope
@@ -434,9 +400,9 @@ def main():
         if result.canonical_name:
             print(f"CANONICAL: {result.canonical_name}")
         if result.new_scope:
-            print(f"NEW_SCOPE: depth={result.new_scope.depth}, angle={result.new_scope.angle}, spec={result.new_scope.specificity}")
+            print(f"NEW_SCOPE: depth={result.new_scope.depth}, angle={result.new_scope.angle}")
         if result.prior_scope:
-            print(f"PRIOR_SCOPE: depth={result.prior_scope.depth}, angle={result.prior_scope.angle}, spec={result.prior_scope.specificity}")
+            print(f"PRIOR_SCOPE: depth={result.prior_scope.depth}, angle={result.prior_scope.angle}")
         print(f"MATCH_SCORE: {result.match_score:.3f}")
         # Exit code: 0=allow (NOVEL/SCOPE_SHIFT/SHALLOW_PRIOR), 1=block (REPEAT)
         sys.exit(0 if result.verdict != REPEAT else 1)
@@ -444,9 +410,9 @@ def main():
     elif args.command == "compare":
         scope_a = extract_scope(args.topic_a)
         scope_b = extract_scope(args.topic_b)
-        print(f"TOPIC A: depth={scope_a.depth}, angle={scope_a.angle}, spec={scope_a.specificity}")
+        print(f"TOPIC A: depth={scope_a.depth}, angle={scope_a.angle}")
         print(f"  terms: {scope_a.scope_terms}")
-        print(f"TOPIC B: depth={scope_b.depth}, angle={scope_b.angle}, spec={scope_b.specificity}")
+        print(f"TOPIC B: depth={scope_b.depth}, angle={scope_b.angle}")
         print(f"  terms: {scope_b.scope_terms}")
         print(f"DIFFERS: {scope_a.differs_from(scope_b)}")
 
@@ -455,7 +421,7 @@ def main():
 
     elif args.command == "scope":
         scope = extract_scope(args.topic)
-        print(f"depth={scope.depth}, angle={scope.angle}, specificity={scope.specificity}")
+        print(f"depth={scope.depth}, angle={scope.angle}")
         print(f"terms: {scope.scope_terms}")
 
     else:
