@@ -257,6 +257,17 @@ class RepeatClassifier:
         match = self._registry.find_matching(topic_text)
 
         if match is None:
+            # Check family-level lock even with no exact topic match
+            detected_family = self._registry._auto_detect_family(topic_text)
+            if detected_family:
+                locked, lock_reason = self._registry.is_family_locked(detected_family)
+                if locked:
+                    return ClassifyResult(
+                        verdict=REPEAT,
+                        reason=f"family-locked: {lock_reason}",
+                        topic_id=canonical_topic_id(topic_text),
+                        new_scope=extract_scope(topic_text),
+                    )
             new_scope = extract_scope(topic_text)
             return ClassifyResult(
                 verdict=NOVEL,
@@ -264,6 +275,22 @@ class RepeatClassifier:
                 topic_id=canonical_topic_id(topic_text),
                 new_scope=new_scope,
             )
+
+        # Check family-level lock (broader than individual topic lock)
+        family_key = match.family or self._registry._auto_detect_family(match.canonical_name)
+        if family_key and match.status != "revisitable":
+            locked, lock_reason = self._registry.is_family_locked(family_key)
+            if locked:
+                return ClassifyResult(
+                    verdict=REPEAT,
+                    reason=f"family-locked: {lock_reason}, topic: '{match.canonical_name}'",
+                    topic_id=canonical_topic_id(match.canonical_name),
+                    canonical_name=match.canonical_name,
+                    new_scope=extract_scope(topic_text),
+                    research_count=match.research_count,
+                    memory_count=match.memory_count,
+                    age_days=_days_since(match.last_researched),
+                )
 
         # We have a match — compare scopes
         new_scope = extract_scope(topic_text)

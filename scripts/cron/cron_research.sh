@@ -133,6 +133,24 @@ if os.path.exists(registry_file):
 
 if not os.path.exists(tracker_file) and not os.path.exists(archive_file) and not os.path.exists(registry_file):
     print('  (none)')
+
+# 4. Family-level locks (entire topic areas that are sufficiently covered)
+try:
+    import importlib.util
+    _novelty_path = os.path.join('scripts', 'evolution', 'research_novelty.py')
+    _spec = importlib.util.spec_from_file_location('research_novelty', _novelty_path)
+    _mod = importlib.util.module_from_spec(_spec)
+    _spec.loader.exec_module(_mod)
+    reg = _mod.TopicRegistry()
+    reg.assign_families()
+    fstats = reg.family_stats()
+    locked_families = [f'{fk} ({fs[\"description\"]})' for fk, fs in fstats.items() if fs['locked']]
+    if locked_families:
+        print('\\nLOCKED FAMILIES (do NOT propose topics in these areas):')
+        for lf in locked_families:
+            print(f'  - {lf}')
+except Exception:
+    pass
 " 2>/dev/null)
 
     QUEUE_RESEARCH=$(grep -i 'research\|study\|paper\|explore\|investigate\|bundle' memory/evolution/QUEUE.md 2>/dev/null | head -10 || echo "(none)")
@@ -440,9 +458,14 @@ if [ "$TASK_EXIT" -eq 0 ]; then
 
         # Ingest this specific file (not a root sweep)
         echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Ingesting $fname (novelty=$FILE_TIER)..." >> "$LOGFILE"
-        python3 "$SCRIPTS/brain_mem/brain.py" ingest-research "$research_file" >> "$LOGFILE" 2>&1
+        INGEST_OUTPUT=$(python3 "$SCRIPTS/brain_mem/brain.py" ingest-research "$research_file" 2>&1)
+        echo "$INGEST_OUTPUT" >> "$LOGFILE"
 
-        # Register topic in the novelty registry
+        # Extract real memory count from ingest output (line: "Ingestion complete: N memories stored")
+        REAL_MEM_COUNT=$(echo "$INGEST_OUTPUT" | grep -oP 'Ingestion complete: \K[0-9]+' || echo "0")
+        [ "$REAL_MEM_COUNT" = "0" ] && REAL_MEM_COUNT=$(echo "$INGEST_OUTPUT" | grep -c "Stored:")
+
+        # Register topic in the novelty registry with actual memory count
         TOPIC_NAME=$(python3 -c "
 with open('$research_file') as f:
     for line in f:
@@ -450,7 +473,7 @@ with open('$research_file') as f:
             print(line[2:].strip()); break
 " 2>/dev/null)
         [ -z "$TOPIC_NAME" ] && TOPIC_NAME="$fname"
-        python3 "$SCRIPTS/evolution/research_novelty.py" register "$TOPIC_NAME" --source "$fname" --memories 1 >> "$LOGFILE" 2>&1
+        python3 "$SCRIPTS/evolution/research_novelty.py" register "$TOPIC_NAME" --source "$fname" --memories "$REAL_MEM_COUNT" >> "$LOGFILE" 2>&1
 
         INGESTED_COUNT=$((INGESTED_COUNT + 1))
     done

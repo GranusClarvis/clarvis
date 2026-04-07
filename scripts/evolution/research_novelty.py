@@ -54,6 +54,59 @@ REFINEMENT_AGE_DAYS = 14          # Older than this → REFINEMENT instead of AL
 REFINEMENT_MIN_MEMORIES = 3       # Fewer stored memories → REFINEMENT
 MAX_RESEARCH_COUNT = 3            # More than this many researches on same topic → hard block
 
+# Family-level completion locking
+FAMILY_LOCK_THRESHOLD = 0.6       # If >= 60% of family topics are done/blocked, lock the family
+FAMILY_MIN_TOPICS = 2             # Only lock families with at least this many topics
+FAMILY_MIN_RESEARCH = 3           # Family needs at least this total research count to lock
+
+# Predefined topic families: keyword patterns → family name
+# Topics matching multiple families go to the first match.
+TOPIC_FAMILIES = {
+    "iit-phi": {
+        "keywords": ["iit", "phi computation", "phi approximat", "scalable phi", "phiid",
+                      "integrated information", "consciousness metric"],
+        "description": "IIT / Phi consciousness measurement",
+    },
+    "consciousness": {
+        "keywords": ["consciousness", "attention schema", "awareness", "butlin",
+                      "global workspace", "gwt", "just aware enough"],
+        "description": "Consciousness architectures and theories",
+    },
+    "rag-retrieval": {
+        "keywords": ["rag", "retrieval", "chunking", "reranking", "late interaction",
+                      "context pruning", "noise filtering", "hybrid rag", "arag",
+                      "macrag", "crag", "targ"],
+        "description": "RAG and retrieval optimization",
+    },
+    "memory-systems": {
+        "keywords": ["mem0", "memgpt", "memory benchmark", "memoryagent", "memrl",
+                      "memory layer", "memory consolidation", "trajectory.*memory",
+                      "agemem", "learned memory"],
+        "description": "Memory systems and benchmarks",
+    },
+    "self-evolution": {
+        "keywords": ["self.evolv", "self.improv", "hermes.*evolution", "swe.evo",
+                      "a.evolve", "autoresearch", "evolving constitution",
+                      "open.ended evolution"],
+        "description": "Self-evolution and autonomous improvement",
+    },
+    "world-models": {
+        "keywords": ["world model", "jepa", "dreamer", "free energy", "predictive processing",
+                      "generative model.*cognitive", "bayesian brain"],
+        "description": "World models and predictive processing",
+    },
+    "agent-tools": {
+        "keywords": ["browser.*autom", "agent browser", "agent.*tool", "browser.*research",
+                      "plugin.*config", "harness"],
+        "description": "Agent tooling and browser automation",
+    },
+    "metacognition": {
+        "keywords": ["metacognit", "confidence calibrat", "self.debug", "reasoning failure",
+                      "runtime verification", "reflexion", "intrinsic.*learning"],
+        "description": "Metacognition and self-monitoring",
+    },
+}
+
 # Topic anchors: if present, they should generally match on both sides for a
 # topic to be considered the same. Prevents over-broad matches like
 # "Phi computation in IIT" -> canonical "iit 4.0" just because both mention IIT.
@@ -76,9 +129,41 @@ PROTECTED_PHRASES = [
 ]
 
 
+def _generate_topic_id(name: str) -> str:
+    """Generate a stable, deterministic topic ID from a canonical name.
+
+    Produces a short slug like 'phi-computation', 'world-models-jepa'.
+    Strips noise, lowercases, replaces spaces with hyphens, deduplicates hyphens.
+    """
+    slug = _normalize(name)
+    # Strip .md extension if present
+    slug = re.sub(r"\.md$", "", slug)
+    # Remove leftover punctuation except hyphens
+    slug = re.sub(r"[^a-z0-9\s-]", "", slug)
+    slug = re.sub(r"\s+", "-", slug.strip())
+    slug = re.sub(r"-{2,}", "-", slug)
+    slug = slug.strip("-")
+    # Cap at 60 chars to keep IDs readable
+    if len(slug) > 60:
+        slug = slug[:60].rsplit("-", 1)[0]
+    return slug or "unknown"
+
+
+# Topic family status — the single source of truth for "is this topic done?"
+# These are persisted in the registry entry's `status` field.
+STATUS_NEW = "new"                 # No research yet (just discovered/queued)
+STATUS_ACTIVE = "active"           # Currently being researched or queued
+STATUS_DONE = "done"               # Sufficiently covered — blocks re-research
+STATUS_REVISITABLE = "revisitable" # Done but explicitly marked for future revisit
+STATUS_BLOCKED = "blocked_duplicate"  # Hard-blocked repeat (research_count >= MAX)
+
+
 @dataclass
 class TopicEntry:
     canonical_name: str
+    topic_id: str = ""              # Stable canonical slug (e.g. "phi-computation")
+    status: str = ""                # Single source of truth: new/active/done/revisitable/blocked_duplicate
+    family: str = ""                # Topic family for group-level locking (e.g. "iit-phi", "rag-retrieval")
     aliases: list[str] = field(default_factory=list)
     source_files: list[str] = field(default_factory=list)
     first_seen: str = ""
@@ -92,6 +177,21 @@ class TopicEntry:
             self.first_seen = _now_iso()
         if not self.last_researched:
             self.last_researched = self.first_seen
+        if not self.topic_id:
+            self.topic_id = _generate_topic_id(self.canonical_name)
+        if not self.status:
+            self.status = self._compute_status()
+
+    def _compute_status(self) -> str:
+        """Derive status from research_count and age when not explicitly set."""
+        if self.research_count == 0:
+            return STATUS_NEW
+        if self.research_count >= MAX_RESEARCH_COUNT:
+            return STATUS_BLOCKED
+        age = _days_since(self.last_researched)
+        if age < REFINEMENT_AGE_DAYS and self.memory_count >= REFINEMENT_MIN_MEMORIES:
+            return STATUS_DONE
+        return STATUS_ACTIVE
 
 
 def _now_iso() -> str:
@@ -110,18 +210,32 @@ def _days_since(iso_date: str) -> float:
 
 
 def _normalize(text: str) -> str:
-    """Normalize text for comparison: lowercase, strip tags/dates/prefixes."""
+    """Normalize text for comparison: lowercase, strip all noise deterministically.
+
+    Stripping order matters — broadest removals first, then fine-grained cleanup.
+    Every rule here should be boring and obvious; no clever heuristics.
+    """
     text = text.lower()
-    # Strip common prefixes
-    text = re.sub(r"^(research:\s*|bundle\s+[a-z]:\s*|study\s+)", "", text)
-    # Strip queue tags like [RESEARCH_DISCOVERY 2026-02-27]
-    text = re.sub(r"\[[A-Z_]+\s+\d{4}-\d{2}-\d{2}\]\s*", "", text)
-    # Normalize common variants
+    # 1. Strip all bracket tags: [RESEARCH_FOO], [P0], [2026-03-27], etc.
+    text = re.sub(r"\[[^\]]*\]\s*", "", text)
+    # 2. Strip common boilerplate prefixes (after bracket removal)
+    text = re.sub(r"^(research:\s*|bundle\s+[a-z]:\s*|study\s+|investigate\s+|explore\s+)", "", text)
+    # 3. Strip standalone dates: 2026-03-27, 2026-03-27-, (2026-03-27)
+    text = re.sub(r"\(?\d{4}-\d{2}-\d{2}\)?-?\s*", "", text)
+    # 4. Strip queue task IDs (must contain underscore): RESEARCH_NORMALIZATION_HARDENING
+    #    Preserves plain acronyms like IIT, RAG, CRAG
+    text = re.sub(r"\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b\s*", "", text)
+    # 5. Strip filename artifacts: .md extension, path prefixes, separators
+    text = re.sub(r"\.md\b", "", text)
+    text = re.sub(r"(?:memory|research|ingested|runs)/", "", text)
+    text = re.sub(r"[/\\]", " ", text)
+    # 6. Normalize common domain variants
     text = text.replace("integrated information theory", "iit")
     text = text.replace("Φ", "phi")
     text = text.replace("phi (φ)", "phi")
-    # Strip markdown formatting
+    # 7. Strip markdown formatting
     text = re.sub(r"[*_#`]", "", text)
+    # 8. Collapse whitespace and strip
     text = re.sub(r"\s+", " ", text)
     return text.strip()
 
@@ -210,6 +324,108 @@ class TopicRegistry:
             )
         os.replace(tmp, self._path)
 
+    def _auto_detect_family(self, text: str) -> str:
+        """Auto-detect which family a topic belongs to via keyword matching.
+
+        Returns family key (e.g. "iit-phi") or "" if no match.
+        """
+        norm = _normalize(text).lower()
+        for family_key, family_def in TOPIC_FAMILIES.items():
+            for kw in family_def["keywords"]:
+                # Support regex-like dots in keyword patterns
+                if "." in kw or "*" in kw:
+                    if re.search(kw.replace("*", ".*"), norm):
+                        return family_key
+                elif kw in norm:
+                    return family_key
+        return ""
+
+    def assign_families(self) -> int:
+        """Auto-assign family labels to all topics missing one. Returns count updated."""
+        count = 0
+        for entry in self._topics.values():
+            if not entry.family:
+                detected = self._auto_detect_family(entry.canonical_name)
+                # Also check aliases
+                if not detected:
+                    for alias in entry.aliases:
+                        detected = self._auto_detect_family(alias)
+                        if detected:
+                            break
+                if detected:
+                    entry.family = detected
+                    count += 1
+        if count:
+            self._save()
+        return count
+
+    def get_family_topics(self, family_key: str) -> list[TopicEntry]:
+        """Get all topics belonging to a family."""
+        return [e for e in self._topics.values() if e.family == family_key]
+
+    def is_family_locked(self, family_key: str) -> tuple[bool, str]:
+        """Check if a topic family is sufficiently covered and should be locked.
+
+        A family is locked when:
+          1. It has >= FAMILY_MIN_TOPICS topics
+          2. Total research count >= FAMILY_MIN_RESEARCH
+          3. >= FAMILY_LOCK_THRESHOLD fraction of topics are done/blocked
+
+        Returns: (is_locked, reason)
+        """
+        if not family_key:
+            return False, ""
+
+        members = self.get_family_topics(family_key)
+        if len(members) < FAMILY_MIN_TOPICS:
+            return False, f"family '{family_key}' has only {len(members)} topics (need {FAMILY_MIN_TOPICS})"
+
+        total_research = sum(m.research_count for m in members)
+        if total_research < FAMILY_MIN_RESEARCH:
+            return False, f"family '{family_key}' has only {total_research} total researches (need {FAMILY_MIN_RESEARCH})"
+
+        done_statuses = {STATUS_DONE, STATUS_BLOCKED}
+        done_count = sum(1 for m in members if m.status in done_statuses)
+        done_ratio = done_count / len(members)
+
+        if done_ratio >= FAMILY_LOCK_THRESHOLD:
+            family_desc = TOPIC_FAMILIES.get(family_key, {}).get("description", family_key)
+            return True, (
+                f"family '{family_desc}' is locked: {done_count}/{len(members)} topics "
+                f"done/blocked ({done_ratio:.0%}), {total_research} total researches"
+            )
+
+        return False, f"family '{family_key}' not locked: {done_count}/{len(members)} done ({done_ratio:.0%})"
+
+    def family_stats(self) -> dict[str, dict]:
+        """Get statistics for all families."""
+        stats = {}
+        # Collect all families (predefined + any custom ones assigned to topics)
+        all_families = set(TOPIC_FAMILIES.keys())
+        for entry in self._topics.values():
+            if entry.family:
+                all_families.add(entry.family)
+
+        for fk in sorted(all_families):
+            members = self.get_family_topics(fk)
+            if not members:
+                continue
+            done_statuses = {STATUS_DONE, STATUS_BLOCKED}
+            done_count = sum(1 for m in members if m.status in done_statuses)
+            total_research = sum(m.research_count for m in members)
+            locked, reason = self.is_family_locked(fk)
+            desc = TOPIC_FAMILIES.get(fk, {}).get("description", fk)
+            stats[fk] = {
+                "description": desc,
+                "topic_count": len(members),
+                "done_count": done_count,
+                "total_research": total_research,
+                "locked": locked,
+                "reason": reason,
+                "topics": [m.canonical_name for m in members],
+            }
+        return stats
+
     def find_matching(self, topic_text: str, threshold: float = SIMILARITY_THRESHOLD) -> Optional[TopicEntry]:
         """Find the best matching canonical topic, or None if no match.
 
@@ -255,27 +471,63 @@ class TopicRegistry:
     def classify(self, topic_text: str) -> tuple[str, str, Optional[TopicEntry]]:
         """Classify a research topic's novelty.
 
+        Checks both topic-level and family-level completion status.
+        The topic's `status` field is the single source of truth for individual completion.
+        Family-level locking blocks new entries in sufficiently covered families.
         Returns: (novelty_tier, reason, matched_entry_or_None)
         """
         match = self.find_matching(topic_text)
 
         if match is None:
+            # Even with no exact match, check if the topic would fall into a locked family
+            detected_family = self._auto_detect_family(topic_text)
+            if detected_family:
+                locked, reason = self.is_family_locked(detected_family)
+                if locked:
+                    return ALREADY_KNOWN, f"family-locked: {reason}", None
             return NEW, "no prior research found on this topic", None
 
         age_days = _days_since(match.last_researched)
+
+        # Check family-level lock before individual status (broader block)
+        family_key = match.family or self._auto_detect_family(match.canonical_name)
+        if family_key:
+            # Auto-assign family if not set yet
+            if not match.family:
+                match.family = family_key
+                self._save()
+            locked, lock_reason = self.is_family_locked(family_key)
+            if locked and match.status != STATUS_REVISITABLE:
+                return ALREADY_KNOWN, (
+                    f"family-locked: {lock_reason}, "
+                    f"topic: '{match.canonical_name}' (id: {match.topic_id})"
+                ), match
+
+        # Check explicit status first — this is the single source of truth
+        if match.status == STATUS_REVISITABLE:
+            return REFINEMENT, (
+                f"topic explicitly marked revisitable, "
+                f"canonical: '{match.canonical_name}' (id: {match.topic_id})"
+            ), match
+
+        if match.status == STATUS_BLOCKED:
+            return ALREADY_KNOWN, (
+                f"hard-blocked (status={match.status}), "
+                f"canonical: '{match.canonical_name}' (id: {match.topic_id})"
+            ), match
 
         # Hard block: too many researches on same topic
         if match.research_count >= MAX_RESEARCH_COUNT and age_days < REFINEMENT_AGE_DAYS:
             return ALREADY_KNOWN, (
                 f"researched {match.research_count}x (last {age_days:.0f}d ago), "
-                f"canonical: '{match.canonical_name}'"
+                f"canonical: '{match.canonical_name}' (id: {match.topic_id})"
             ), match
 
         # Recent + well-covered → ALREADY_KNOWN
         if age_days < REFINEMENT_AGE_DAYS and match.memory_count >= REFINEMENT_MIN_MEMORIES:
             return ALREADY_KNOWN, (
                 f"recently researched ({age_days:.0f}d ago, {match.memory_count} memories), "
-                f"canonical: '{match.canonical_name}'"
+                f"canonical: '{match.canonical_name}' (id: {match.topic_id})"
             ), match
 
         # Old or shallow → REFINEMENT
@@ -286,7 +538,7 @@ class TopicRegistry:
             reasons.append(f"only {match.memory_count} memories stored")
         return REFINEMENT, (
             f"prior research exists but {' and '.join(reasons)}, "
-            f"canonical: '{match.canonical_name}'"
+            f"canonical: '{match.canonical_name}' (id: {match.topic_id})"
         ), match
 
     def evaluate_file(self, filepath: str) -> tuple[str, str]:
@@ -352,14 +604,27 @@ class TopicRegistry:
             if memory_count > 0:
                 entry.memory_count += memory_count
             entry.last_novelty = ""  # Reset after new research
+            # Ensure topic_id is set (backfill for pre-existing entries)
+            if not entry.topic_id:
+                entry.topic_id = _generate_topic_id(entry.canonical_name)
+            # Auto-assign family if not set
+            if not entry.family:
+                entry.family = self._auto_detect_family(entry.canonical_name)
+            # Update status based on current state
+            entry.status = entry._compute_status()
         else:
+            topic_id = _generate_topic_id(canonical_name)
+            family = self._auto_detect_family(canonical_name)
             entry = TopicEntry(
                 canonical_name=canonical_name,
+                topic_id=topic_id,
+                family=family,
                 aliases=[alias] if alias else [],
                 source_files=[source_file] if source_file else [],
                 research_count=1,
                 memory_count=memory_count,
             )
+            # status is computed in __post_init__
             self._topics[canonical_name] = entry
 
         self._save()
@@ -453,6 +718,43 @@ class TopicRegistry:
         self._save()
         return count
 
+    def set_status(self, topic_text: str, status: str) -> Optional[TopicEntry]:
+        """Explicitly set the status of a topic family. Operator override."""
+        valid = {STATUS_NEW, STATUS_ACTIVE, STATUS_DONE, STATUS_REVISITABLE, STATUS_BLOCKED}
+        if status not in valid:
+            raise ValueError(f"Invalid status '{status}'. Valid: {', '.join(sorted(valid))}")
+        match = self.find_matching(topic_text)
+        if not match:
+            return None
+        match.status = status
+        self._save()
+        return match
+
+    def find_by_id(self, topic_id: str) -> Optional[TopicEntry]:
+        """Look up a topic by its stable topic_id slug."""
+        for entry in self._topics.values():
+            if entry.topic_id == topic_id:
+                return entry
+        return None
+
+    def migrate_ids_and_status(self) -> int:
+        """Backfill topic_id and status for all existing entries.
+
+        Always force-saves to persist fields computed by __post_init__
+        that may not have been in the JSON yet.
+        """
+        count = 0
+        for entry in self._topics.values():
+            if not entry.topic_id:
+                entry.topic_id = _generate_topic_id(entry.canonical_name)
+                count += 1
+            if not entry.status:
+                entry.status = entry._compute_status()
+                count += 1
+        # Always save — __post_init__ may have computed fields that aren't persisted yet
+        self._save()
+        return count
+
     def list_topics(self) -> list[TopicEntry]:
         return sorted(self._topics.values(), key=lambda e: e.last_researched, reverse=True)
 
@@ -493,6 +795,22 @@ def main():
     sub.add_parser("build", help="Build registry from existing ingested data")
     sub.add_parser("list", help="List all canonical topics")
     sub.add_parser("stats", help="Show registry statistics")
+    sub.add_parser("migrate", help="Backfill topic_id and status for existing entries")
+
+    ss = sub.add_parser("set-status", help="Set status of a topic family (operator override)")
+    ss.add_argument("topic", help="Topic text or ID to match")
+    ss.add_argument("status", choices=[STATUS_NEW, STATUS_ACTIVE, STATUS_DONE, STATUS_REVISITABLE, STATUS_BLOCKED],
+                     help="New status")
+
+    sub.add_parser("families", help="Show all topic families and their lock status")
+    sub.add_parser("assign-families", help="Auto-assign family labels to unassigned topics")
+
+    sf = sub.add_parser("set-family", help="Manually set a topic's family")
+    sf.add_argument("topic", help="Topic text or ID to match")
+    sf.add_argument("family", help="Family key (e.g. 'iit-phi', 'rag-retrieval', or custom)")
+
+    uf = sub.add_parser("unlock-family", help="Mark all topics in a family as revisitable (unlock)")
+    uf.add_argument("family", help="Family key to unlock")
 
     args = parser.parse_args()
     registry = TopicRegistry()
@@ -503,6 +821,8 @@ def main():
         print(f"REASON: {reason}")
         if match:
             print(f"CANONICAL: {match.canonical_name}")
+            print(f"TOPIC_ID: {match.topic_id}")
+            print(f"STATUS: {match.status}")
             print(f"RESEARCH_COUNT: {match.research_count}")
             print(f"LAST_RESEARCHED: {match.last_researched}")
         # Exit code: 0=NEW/REFINEMENT (proceed), 1=ALREADY_KNOWN (skip)
@@ -538,13 +858,83 @@ def main():
             return
         for t in topics:
             age = _days_since(t.last_researched)
-            print(f"  [{t.research_count}x, {t.memory_count}mem, {age:.0f}d] {t.canonical_name}")
+            status_tag = t.status or "?"
+            family_tag = f" fam={t.family}" if t.family else ""
+            print(f"  [{status_tag}] [{t.research_count}x, {t.memory_count}mem, {age:.0f}d{family_tag}] {t.canonical_name}")
+            print(f"    id: {t.topic_id}")
             if t.aliases:
                 print(f"    aliases: {', '.join(t.aliases[:3])}")
 
     elif args.command == "stats":
         stats = registry.stats()
         print(json.dumps(stats, indent=2))
+
+    elif args.command == "migrate":
+        count = registry.migrate_ids_and_status()
+        print(f"Migrated {count} entries (backfilled topic_id and/or status)")
+        stats = registry.stats()
+        print(f"Total: {stats['total_topics']} topics")
+
+    elif args.command == "set-status":
+        # Try by topic_id first, then by text match
+        entry = registry.find_by_id(args.topic)
+        if entry:
+            entry.status = args.status
+            registry._save()
+        else:
+            entry = registry.set_status(args.topic, args.status)
+        if entry:
+            print(f"Set status of '{entry.canonical_name}' (id: {entry.topic_id}) to: {args.status}")
+        else:
+            print(f"No matching topic found for: {args.topic}")
+            sys.exit(1)
+
+    elif args.command == "families":
+        # Auto-assign first so we have the latest
+        assigned = registry.assign_families()
+        if assigned:
+            print(f"(auto-assigned {assigned} topics to families)")
+        fstats = registry.family_stats()
+        if not fstats:
+            print("No families found. Run 'assign-families' first.")
+            return
+        for fk, fs in fstats.items():
+            lock_icon = "LOCKED" if fs["locked"] else "open"
+            print(f"\n  [{lock_icon}] {fk} — {fs['description']}")
+            print(f"    topics: {fs['topic_count']}, done: {fs['done_count']}, "
+                  f"total research: {fs['total_research']}")
+            for tname in fs["topics"]:
+                print(f"      - {tname}")
+
+    elif args.command == "assign-families":
+        count = registry.assign_families()
+        print(f"Auto-assigned {count} topics to families")
+        fstats = registry.family_stats()
+        for fk, fs in fstats.items():
+            print(f"  {fk}: {fs['topic_count']} topics")
+
+    elif args.command == "set-family":
+        entry = registry.find_by_id(args.topic)
+        if not entry:
+            entry = registry.find_matching(args.topic)
+        if entry:
+            entry.family = args.family
+            registry._save()
+            print(f"Set family of '{entry.canonical_name}' to: {args.family}")
+        else:
+            print(f"No matching topic found for: {args.topic}")
+            sys.exit(1)
+
+    elif args.command == "unlock-family":
+        members = registry.get_family_topics(args.family)
+        if not members:
+            print(f"No topics in family '{args.family}'")
+            sys.exit(1)
+        for m in members:
+            if m.status in (STATUS_DONE, STATUS_BLOCKED):
+                m.status = STATUS_REVISITABLE
+        registry._save()
+        print(f"Unlocked family '{args.family}': {len(members)} topics set to revisitable")
 
     else:
         parser.print_help()
