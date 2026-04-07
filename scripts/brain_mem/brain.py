@@ -252,6 +252,17 @@ if __name__ == "__main__":
                 print(f"\nSkipping: {filename} (already ingested, hash match)")
                 continue
 
+            # Reingest guard: check if the same content exists under a different filename
+            if not force:
+                dup_name = None
+                for other_name, other_info in tracker.items():
+                    if other_name != filename and other_info.get("hash") == file_hash:
+                        dup_name = other_name
+                        break
+                if dup_name:
+                    print(f"\nSkipping: {filename} (content already ingested as '{dup_name}', same hash {file_hash})")
+                    continue
+
             with open(filepath) as f:
                 content = f.read()
 

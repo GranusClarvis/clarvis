@@ -172,6 +172,17 @@ class TopicEntry:
     memory_count: int = 0           # How many brain memories were stored
     last_novelty: str = ""          # Last classification result
 
+    @property
+    def coverage_depth(self) -> str:
+        """Computed coverage level: none/shallow/moderate/deep."""
+        if self.research_count == 0:
+            return "none"
+        if self.memory_count < REFINEMENT_MIN_MEMORIES or self.research_count == 1:
+            return "shallow"
+        if self.memory_count >= 10 or self.research_count >= 3:
+            return "deep"
+        return "moderate"
+
     def __post_init__(self):
         if not self.first_seen:
             self.first_seen = _now_iso()
@@ -309,8 +320,17 @@ class TopicRegistry:
         try:
             with open(self._path) as f:
                 data = json.load(f)
-            for name, entry_data in data.items():
-                self._topics[name] = TopicEntry(**entry_data)
+            # Auto-detect format: old format has canonical_name as key,
+            # new format has topic_id as key.
+            needs_migrate = False
+            for key, entry_data in data.items():
+                entry = TopicEntry(**entry_data)
+                if entry.topic_id and entry.topic_id != key and entry.canonical_name == key:
+                    # Old format: keyed by canonical_name
+                    needs_migrate = True
+                self._topics[entry.topic_id] = entry
+            if needs_migrate:
+                self._save()  # Persist migration to topic_id keys
         except (json.JSONDecodeError, TypeError, KeyError):
             pass
 
@@ -459,8 +479,8 @@ class TopicRegistry:
                 best_score = score
                 best_match = entry
 
-        for name, entry in self._topics.items():
-            consider(name, entry)
+        for entry in self._topics.values():
+            consider(entry.canonical_name, entry)
             for alias in entry.aliases:
                 consider(alias, entry)
 
@@ -625,7 +645,7 @@ class TopicRegistry:
                 memory_count=memory_count,
             )
             # status is computed in __post_init__
-            self._topics[canonical_name] = entry
+            self._topics[entry.topic_id] = entry
 
         self._save()
         return entry
@@ -682,9 +702,11 @@ class TopicRegistry:
                 tracker_data = json.load(f)
 
         for canonical, fnames in clusters.items():
-            if canonical in self._topics:
+            # Look up by topic_id (new key format)
+            tid = _generate_topic_id(canonical)
+            if tid in self._topics:
                 # Update existing
-                entry = self._topics[canonical]
+                entry = self._topics[tid]
                 for fn in fnames:
                     if fn not in entry.source_files:
                         entry.source_files.append(fn)
@@ -712,7 +734,7 @@ class TopicRegistry:
                     research_count=len(fnames),
                     memory_count=total_memories,
                 )
-                self._topics[canonical] = entry
+                self._topics[entry.topic_id] = entry
                 count += 1
 
         self._save()
@@ -795,6 +817,7 @@ def main():
     sub.add_parser("build", help="Build registry from existing ingested data")
     sub.add_parser("list", help="List all canonical topics")
     sub.add_parser("stats", help="Show registry statistics")
+    sub.add_parser("status", help="Lightweight status report: families, topics, coverage, risks")
     sub.add_parser("migrate", help="Backfill topic_id and status for existing entries")
 
     ss = sub.add_parser("set-status", help="Set status of a topic family (operator override)")
@@ -868,6 +891,73 @@ def main():
     elif args.command == "stats":
         stats = registry.stats()
         print(json.dumps(stats, indent=2))
+
+    elif args.command == "status":
+        # Lightweight status report — readable at a glance
+        registry.assign_families()
+        topics = registry.list_topics()
+        fstats = registry.family_stats()
+
+        # Header
+        total = len(topics)
+        by_status = {}
+        for t in topics:
+            by_status[t.status] = by_status.get(t.status, 0) + 1
+        print(f"Research Registry: {total} topics, {sum(t.research_count for t in topics)} runs, "
+              f"{sum(t.memory_count for t in topics)} memories")
+        print(f"  Status: {', '.join(f'{s}={c}' for s, c in sorted(by_status.items()))}")
+        print()
+
+        # Family summary table
+        if fstats:
+            print("FAMILIES:")
+            for fk, fs in fstats.items():
+                lock_icon = "LOCKED" if fs["locked"] else "open  "
+                print(f"  [{lock_icon}] {fk:<20s}  {fs['topic_count']} topics, "
+                      f"{fs['done_count']} done, {fs['total_research']} runs")
+            print()
+
+        # Topics with risk indicators
+        unfamilied = [t for t in topics if not t.family]
+        dup_risk = [t for t in topics if t.research_count >= MAX_RESEARCH_COUNT]
+        shallow = [t for t in topics if t.coverage_depth == "shallow" and t.research_count >= 1]
+        stale = [t for t in topics if _days_since(t.last_researched) > 30 and t.status == STATUS_ACTIVE]
+
+        if dup_risk:
+            print(f"DUPLICATE RISK ({len(dup_risk)} topics at max research count):")
+            for t in dup_risk:
+                print(f"  {t.topic_id:<45s} {t.research_count}x  {t.status}")
+            print()
+
+        if shallow:
+            print(f"SHALLOW COVERAGE ({len(shallow)} topics with <{REFINEMENT_MIN_MEMORIES} memories):")
+            for t in shallow[:10]:
+                print(f"  {t.topic_id:<45s} {t.memory_count}mem  {_days_since(t.last_researched):.0f}d ago")
+            if len(shallow) > 10:
+                print(f"  ... and {len(shallow) - 10} more")
+            print()
+
+        if stale:
+            print(f"STALE ACTIVE ({len(stale)} topics active but >30d old):")
+            for t in stale[:10]:
+                print(f"  {t.topic_id:<45s} {_days_since(t.last_researched):.0f}d ago  {t.memory_count}mem")
+            print()
+
+        if unfamilied:
+            print(f"UNFAMILIED ({len(unfamilied)} topics without family assignment):")
+            for t in unfamilied[:10]:
+                print(f"  {t.topic_id}")
+            if len(unfamilied) > 10:
+                print(f"  ... and {len(unfamilied) - 10} more")
+            print()
+
+        # Recent activity
+        recent = [t for t in topics if _days_since(t.last_researched) <= 7]
+        if recent:
+            print(f"RECENT (last 7 days, {len(recent)} topics):")
+            for t in recent[:5]:
+                alias_str = f"  aka: {', '.join(t.aliases[:2])}" if t.aliases else ""
+                print(f"  {t.topic_id:<45s} {t.coverage_depth:<8s} {t.status}{alias_str}")
 
     elif args.command == "migrate":
         count = registry.migrate_ids_and_status()

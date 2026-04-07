@@ -126,10 +126,11 @@ registry_file = 'data/research_topic_registry.json'
 if os.path.exists(registry_file):
     with open(registry_file) as f:
         registry = json.load(f)
-    for name, entry in sorted(registry.items()):
+    for tid, entry in sorted(registry.items()):
         rc = entry.get('research_count', 0)
         if rc >= 1:
-            emit(f'{name} (researched {rc}x)')
+            display = entry.get('canonical_name', tid)
+            emit(f'{display} (researched {rc}x)')
 
 if not os.path.exists(tracker_file) and not os.path.exists(archive_file) and not os.path.exists(registry_file):
     print('  (none)')
