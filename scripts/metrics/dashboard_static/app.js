@@ -38,6 +38,7 @@ let state = {
   prs: [],
   digest_lines: [],
   scoreboard: [],
+  metrics: {},
 };
 
 let app = null;
@@ -424,6 +425,165 @@ function drawPRPanel(container, x, y, w, h) {
   }
 }
 
+// ── Metrics panel ─────────────────────────────────────────────────────
+
+function drawMetricsPanel(container, x, y, w, h) {
+  const bg = new PIXI.Graphics();
+  bg.roundRect(x, y, w, h, 4).fill({ color: 0x111122, alpha: 0.85 });
+  bg.roundRect(x, y, w, 16, 4).fill(0x6b21a8);
+  container.addChild(bg);
+
+  const header = new PIXI.Text({
+    text: 'SYSTEM METRICS',
+    style: { fontFamily: 'Courier New', fontSize: 10, fill: COLORS.textPrimary, fontWeight: 'bold' },
+  });
+  header.x = x + 6;
+  header.y = y + 2;
+  container.addChild(header);
+
+  const m = state.metrics || {};
+  let my = y + 22;
+
+  // Gauge helper — draws a labeled bar
+  function drawGauge(label, value, maxVal, thresholdGood, thresholdWarn) {
+    if (value == null) return;
+    const barW = w - 60;
+    const barH = 6;
+    const pct = Math.min(value / maxVal, 1.0);
+    const color = pct >= thresholdGood ? COLORS.success :
+                  pct >= thresholdWarn ? COLORS.pending : COLORS.fail;
+
+    const lbl = new PIXI.Text({
+      text: label,
+      style: { fontFamily: 'Courier New', fontSize: 8, fill: COLORS.textDim },
+    });
+    lbl.x = x + 6;
+    lbl.y = my;
+    container.addChild(lbl);
+
+    const valText = new PIXI.Text({
+      text: typeof value === 'number' ? value.toFixed(3) : String(value),
+      style: { fontFamily: 'Courier New', fontSize: 8, fill: color },
+    });
+    valText.x = x + 46;
+    valText.y = my;
+    container.addChild(valText);
+
+    // Bar background
+    const barG = new PIXI.Graphics();
+    barG.rect(x + 6, my + 11, barW, barH).fill(0x333344);
+    barG.rect(x + 6, my + 11, barW * pct, barH).fill(color);
+    container.addChild(barG);
+
+    my += 22;
+  }
+
+  drawGauge('PI', m.pi, 1.0, 0.8, 0.5);
+  drawGauge('CLR', m.clr, 1.0, 0.7, 0.4);
+  drawGauge('Phi', m.phi, 1.0, 0.6, 0.3);
+
+  // Brain memory count
+  if (m.brain_total != null) {
+    const brainLine = new PIXI.Text({
+      text: `Brain: ${m.brain_total} memories`,
+      style: { fontFamily: 'Courier New', fontSize: 8, fill: COLORS.textPrimary },
+    });
+    brainLine.x = x + 6;
+    brainLine.y = my;
+    container.addChild(brainLine);
+    my += 14;
+  }
+
+  // Mode indicator
+  if (m.mode) {
+    const modeLine = new PIXI.Text({
+      text: `Mode: ${m.mode}`,
+      style: { fontFamily: 'Courier New', fontSize: 8, fill: COLORS.working },
+    });
+    modeLine.x = x + 6;
+    modeLine.y = my;
+    container.addChild(modeLine);
+    my += 14;
+  }
+
+  // CLR dimensions as mini bars
+  const dims = m.clr_dimensions || {};
+  const dimNames = Object.keys(dims);
+  if (dimNames.length > 0 && my < y + h - 16) {
+    const dimHeader = new PIXI.Text({
+      text: 'CLR Dimensions:',
+      style: { fontFamily: 'Courier New', fontSize: 7, fill: COLORS.textDim },
+    });
+    dimHeader.x = x + 6;
+    dimHeader.y = my;
+    container.addChild(dimHeader);
+    my += 12;
+
+    for (const dn of dimNames) {
+      if (my > y + h - 10) break;
+      const dv = dims[dn];
+      const shortName = dn.replace(/_/g, ' ').slice(0, 12);
+      const dColor = dv >= 0.8 ? COLORS.success : dv >= 0.5 ? COLORS.pending : COLORS.fail;
+      const dimLine = new PIXI.Text({
+        text: `  ${shortName.padEnd(13)} ${(dv * 100).toFixed(0)}%`,
+        style: { fontFamily: 'Courier New', fontSize: 7, fill: dColor },
+      });
+      dimLine.x = x + 6;
+      dimLine.y = my;
+      container.addChild(dimLine);
+      my += 10;
+    }
+  }
+}
+
+// ── Digest panel ──────────────────────────────────────────────────────
+
+function drawDigestPanel(container, x, y, w, h) {
+  const bg = new PIXI.Graphics();
+  bg.roundRect(x, y, w, h, 4).fill({ color: 0x111122, alpha: 0.85 });
+  bg.roundRect(x, y, w, 16, 4).fill(0x4a5568);
+  container.addChild(bg);
+
+  const header = new PIXI.Text({
+    text: 'CRON DIGEST',
+    style: { fontFamily: 'Courier New', fontSize: 10, fill: COLORS.textPrimary, fontWeight: 'bold' },
+  });
+  header.x = x + 6;
+  header.y = y + 2;
+  container.addChild(header);
+
+  const lines = state.digest_lines || [];
+  let dy = y + 20;
+  for (const line of lines.slice(-Math.floor((h - 24) / 11))) {
+    if (dy > y + h - 8) break;
+    // Color based on content
+    const isHeader = line.startsWith('#') || line.startsWith('##');
+    const isResult = line.includes('✓') || line.includes('success') || line.includes('ok');
+    const isError = line.includes('✗') || line.includes('fail') || line.includes('error');
+    const color = isHeader ? COLORS.textPrimary :
+                  isResult ? COLORS.success :
+                  isError ? COLORS.fail : COLORS.textDim;
+    const text = new PIXI.Text({
+      text: truncate(line.replace(/^#+\s*/, ''), Math.floor(w / 5.5)),
+      style: { fontFamily: 'Courier New', fontSize: 8, fill: color },
+    });
+    text.x = x + 6;
+    text.y = dy;
+    container.addChild(text);
+    dy += 11;
+  }
+
+  if (lines.length === 0) {
+    const none = new PIXI.Text({
+      text: 'No digest available',
+      style: { fontFamily: 'Courier New', fontSize: 8, fill: COLORS.textDim },
+    });
+    none.x = x + 6;
+    none.y = y + 20;
+    container.addChild(none);
+  }
+}
+
 // ── Scene builder ──────────────────────────────────────────────────────
 
 function buildScene() {
@@ -483,15 +643,24 @@ function buildScene() {
     sceneContainer.addChild(label);
   }
 
-  // Panels
-  const panelY = Math.max(wallH + 30 + Math.ceil(agents.length / 5) * 80 + 20, H * 0.4);
-  const panelW = Math.min(260, (W - 40) / 4 - 8);
-  const panelH = H - panelY - 40;
+  // Panels — 3-column × 2-row grid
+  const panelY = Math.max(wallH + 30 + Math.ceil(agents.length / 5) * 80 + 20, H * 0.35);
+  const panelGap = 8;
+  const panelCols = 3;
+  const panelW = Math.min(340, (W - 20 - panelGap * (panelCols - 1)) / panelCols);
+  const availH = H - panelY - 40;
+  const panelH = Math.floor((availH - panelGap) / 2);
 
+  // Row 1: Queue, Completed, Metrics
   drawQueuePanel(sceneContainer, 10, panelY, panelW, panelH);
-  drawCompletedPanel(sceneContainer, 10 + (panelW + 8) * 1, panelY, panelW, panelH);
-  drawEventsPanel(sceneContainer, 10 + (panelW + 8) * 2, panelY, panelW, panelH);
-  drawPRPanel(sceneContainer, 10 + (panelW + 8) * 3, panelY, panelW, panelH);
+  drawCompletedPanel(sceneContainer, 10 + (panelW + panelGap), panelY, panelW, panelH);
+  drawMetricsPanel(sceneContainer, 10 + (panelW + panelGap) * 2, panelY, panelW, panelH);
+
+  // Row 2: Events, PRs, Digest
+  const row2Y = panelY + panelH + panelGap;
+  drawEventsPanel(sceneContainer, 10, row2Y, panelW, panelH);
+  drawPRPanel(sceneContainer, 10 + (panelW + panelGap), row2Y, panelW, panelH);
+  drawDigestPanel(sceneContainer, 10 + (panelW + panelGap) * 2, row2Y, panelW, panelH);
 
   // Active locks indicator
   const activeLocks = (state.locks || []).filter(l => l.alive);
@@ -528,6 +697,15 @@ function updateStatusBar() {
     document.getElementById('last-event').textContent =
       `Last: ${lastEv.type} @ ${ts}`;
   }
+
+  // Metrics summary in status bar
+  const m = state.metrics || {};
+  const metricParts = [];
+  if (m.pi != null) metricParts.push(`PI:${m.pi.toFixed(2)}`);
+  if (m.clr != null) metricParts.push(`CLR:${m.clr.toFixed(2)}`);
+  if (m.phi != null) metricParts.push(`\u03A6:${m.phi.toFixed(2)}`);
+  const metricsEl = document.getElementById('metrics-summary');
+  if (metricsEl) metricsEl.textContent = metricParts.join(' | ') || '';
 
   document.getElementById('clock').textContent =
     new Date().toLocaleTimeString('en-GB', { hour12: false });

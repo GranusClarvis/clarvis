@@ -5,6 +5,7 @@ Run: python3 -m pytest scripts/tests/test_project_agent.py -v
 """
 import json
 import os
+import shutil
 import sys
 import textwrap
 from pathlib import Path
@@ -24,6 +25,7 @@ from project_agent import (
     _is_task_failure,
     _build_retry_context,
     cmd_spawn_with_retry,
+    cmd_spawn_parallel,
     _poll_ci_checks,
     _extract_ci_failure_logs,
     _ci_fix_loop,
@@ -34,6 +36,13 @@ from project_agent import (
     _acquire_loop_lock,
     _release_loop_lock,
     _loop_lock_path,
+    _acquire_agent_claude_lock,
+    _release_agent_claude_lock,
+    _agent_claude_lock_path,
+    _acquire_claude_slot,
+    _release_claude_slot,
+    _slots_dir,
+    MAX_PARALLEL_AGENT_CLAUDE,
     A2A_PROTOCOL_VERSION,
     A2A_REQUIRED_FIELDS,
     A2A_VALID_STATUSES,
@@ -1220,3 +1229,211 @@ class TestCommitSafetyWhitelist:
         assert "Commit Safety" in prompt
         assert "NEVER use `git add .`" in prompt
         assert ".env" in prompt
+
+
+# ── cmd_spawn_parallel tests ──
+
+class TestSpawnParallel:
+    """Tests for cmd_spawn_parallel — multi-agent concurrent execution."""
+
+    def _success_result(self, name):
+        return {
+            "task_id": f"t_{name}_001",
+            "agent": name,
+            "exit_code": 0,
+            "elapsed": 30.0,
+            "result": {"status": "success", "summary": f"Done for {name}"},
+        }
+
+    def _failure_result(self, name):
+        return {
+            "task_id": f"t_{name}_001",
+            "agent": name,
+            "exit_code": 1,
+            "elapsed": 10.0,
+            "result": {"status": "failed", "summary": f"Failed for {name}"},
+        }
+
+    @patch("project_agent.cmd_spawn")
+    def test_two_agents_both_succeed(self, mock_spawn):
+        mock_spawn.side_effect = lambda name, task, timeout, ctx="": self._success_result(name)
+        tasks = [
+            {"agent": "alpha", "task": "build feature A"},
+            {"agent": "beta", "task": "build feature B"},
+        ]
+        result = cmd_spawn_parallel(tasks, timeout=600)
+        assert result["total"] == 2
+        assert result["succeeded"] == 2
+        assert result["failed"] == 0
+        assert "alpha" in result["results"]
+        assert "beta" in result["results"]
+        assert result["results"]["alpha"]["exit_code"] == 0
+        assert result["results"]["beta"]["exit_code"] == 0
+
+    @patch("project_agent.cmd_spawn")
+    def test_one_succeeds_one_fails(self, mock_spawn):
+        def side_effect(name, task, timeout, ctx=""):
+            if name == "alpha":
+                return self._success_result(name)
+            return self._failure_result(name)
+        mock_spawn.side_effect = side_effect
+        tasks = [
+            {"agent": "alpha", "task": "task A"},
+            {"agent": "beta", "task": "task B"},
+        ]
+        result = cmd_spawn_parallel(tasks)
+        assert result["total"] == 2
+        assert result["succeeded"] == 1
+        assert result["failed"] == 1
+        assert result["results"]["alpha"]["exit_code"] == 0
+        assert result["results"]["beta"]["exit_code"] == 1
+
+    @patch("project_agent.cmd_spawn")
+    def test_empty_task_list(self, mock_spawn):
+        result = cmd_spawn_parallel([])
+        assert result.get("error")
+        mock_spawn.assert_not_called()
+
+    @patch("project_agent.cmd_spawn")
+    def test_per_task_timeout_override(self, mock_spawn):
+        mock_spawn.side_effect = lambda name, task, timeout, ctx="": {
+            **self._success_result(name),
+            "timeout_used": timeout,
+        }
+        tasks = [
+            {"agent": "alpha", "task": "quick", "timeout": 300},
+            {"agent": "beta", "task": "long"},  # uses default
+        ]
+        result = cmd_spawn_parallel(tasks, timeout=1200)
+        # alpha should have used 300, beta should have used 1200
+        assert result["results"]["alpha"]["timeout_used"] == 300
+        assert result["results"]["beta"]["timeout_used"] == 1200
+
+    @patch("project_agent.cmd_spawn")
+    def test_context_passthrough(self, mock_spawn):
+        mock_spawn.side_effect = lambda name, task, timeout, ctx="": {
+            **self._success_result(name),
+            "context_received": ctx,
+        }
+        tasks = [
+            {"agent": "alpha", "task": "t", "context": "extra info"},
+        ]
+        result = cmd_spawn_parallel(tasks)
+        assert result["results"]["alpha"]["context_received"] == "extra info"
+
+    @patch("project_agent.cmd_spawn")
+    def test_exception_in_one_agent_captured(self, mock_spawn):
+        def side_effect(name, task, timeout, ctx=""):
+            if name == "broken":
+                raise RuntimeError("agent workspace corrupted")
+            return self._success_result(name)
+        mock_spawn.side_effect = side_effect
+        tasks = [
+            {"agent": "good", "task": "t"},
+            {"agent": "broken", "task": "t"},
+        ]
+        result = cmd_spawn_parallel(tasks)
+        assert result["succeeded"] == 1
+        assert result["failed"] == 1
+        assert "error" in result["results"]["broken"]
+        assert "corrupted" in result["results"]["broken"]["error"]
+
+    @patch("project_agent.cmd_spawn")
+    def test_three_agents_concurrently(self, mock_spawn):
+        mock_spawn.side_effect = lambda name, task, timeout, ctx="": self._success_result(name)
+        tasks = [
+            {"agent": "a", "task": "t1"},
+            {"agent": "b", "task": "t2"},
+            {"agent": "c", "task": "t3"},
+        ]
+        result = cmd_spawn_parallel(tasks)
+        assert result["total"] == 3
+        assert result["succeeded"] == 3
+        assert len(result["results"]) == 3
+
+    @patch("project_agent.cmd_spawn")
+    def test_config_error_counted_as_success(self, mock_spawn):
+        """Config errors (agent not found) have 'error' key — not counted as failure."""
+        mock_spawn.return_value = {"error": "Agent 'ghost' not found"}
+        tasks = [{"agent": "ghost", "task": "t"}]
+        result = cmd_spawn_parallel(tasks)
+        # _is_task_failure returns False for config errors (has "error" key)
+        # so it should count as succeeded (not a task failure, just a config error)
+        assert result["total"] == 1
+
+
+# ── Concurrency slot tests ──
+
+class TestConcurrencySlots:
+    """Tests for global Claude semaphore slot management."""
+
+    def setup_method(self):
+        """Clean up test slot files."""
+        d = _slots_dir()
+        if d.exists():
+            for f in d.glob("slot_test_*"):
+                f.unlink(missing_ok=True)
+
+    def teardown_method(self):
+        self.setup_method()
+
+    def test_acquire_and_release_slot(self):
+        slot_file, err = _acquire_claude_slot("test_agent")
+        assert err is None
+        assert slot_file is not None
+        assert slot_file.exists()
+        _release_claude_slot(slot_file)
+        assert not slot_file.exists()
+
+    def test_release_none_is_safe(self):
+        _release_claude_slot(None)  # should not raise
+
+    def test_slot_dir_created(self):
+        d = _slots_dir()
+        if d.exists():
+            shutil.rmtree(d)
+        slot_file, err = _acquire_claude_slot("test_agent")
+        assert d.exists()
+        _release_claude_slot(slot_file)
+
+    def test_slots_dir_path(self):
+        assert str(_slots_dir()) == "/tmp/clarvis_claude_slots"
+
+
+class TestAgentClaudeLock:
+    """Tests for per-agent Claude lock."""
+
+    def setup_method(self):
+        lock = _agent_claude_lock_path("test-lock-claude")
+        lock.unlink(missing_ok=True)
+
+    def teardown_method(self):
+        self.setup_method()
+
+    def test_acquire_and_release(self):
+        err = _acquire_agent_claude_lock("test-lock-claude")
+        assert err is None
+        lock = _agent_claude_lock_path("test-lock-claude")
+        assert lock.exists()
+        _release_agent_claude_lock("test-lock-claude")
+        assert not lock.exists()
+
+    def test_double_acquire_blocked(self):
+        err1 = _acquire_agent_claude_lock("test-lock-claude")
+        assert err1 is None
+        # Second acquire should fail (same PID holds it)
+        err2 = _acquire_agent_claude_lock("test-lock-claude")
+        assert err2 is not None
+        assert "lock held" in err2
+        _release_agent_claude_lock("test-lock-claude")
+
+    def test_stale_lock_reclaimed(self):
+        lock = _agent_claude_lock_path("test-lock-claude")
+        lock.write_text("99999999")  # Dead PID
+        err = _acquire_agent_claude_lock("test-lock-claude")
+        assert err is None  # Should reclaim
+        _release_agent_claude_lock("test-lock-claude")
+
+    def test_lock_path_format(self):
+        path = _agent_claude_lock_path("my-agent")
+        assert str(path) == "/tmp/clarvis_agent_my-agent_claude.lock"

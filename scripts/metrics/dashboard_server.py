@@ -46,6 +46,8 @@ DIGEST_FILE = WORKSPACE / "memory" / "cron" / "digest.md"
 EVENTS_FILE = WORKSPACE / "data" / "dashboard" / "events.jsonl"
 SCOREBOARD_FILE = WORKSPACE / "data" / "orchestration_scoreboard.jsonl"
 STATIC_DIR = Path(__file__).parent / "dashboard_static"
+STATUS_JSON = WORKSPACE / "docs" / "status.json"
+DASHBOARD_STATUS_JSON = WORKSPACE / "data" / "dashboard" / "status.json"
 LOCK_DIR = Path("/tmp")
 AGENTS_DIR = Path("~/agents").expanduser()
 
@@ -274,6 +276,27 @@ def read_digest(n: int = 15) -> list[str]:
         return []
 
 
+def read_metrics() -> dict:
+    """Read system metrics from status.json files."""
+    for path in [STATUS_JSON, DASHBOARD_STATUS_JSON]:
+        if path.exists():
+            try:
+                data = json.loads(path.read_text())
+                return {
+                    "pi": data.get("benchmarks", {}).get("pi", {}).get("pi"),
+                    "clr": data.get("benchmarks", {}).get("clr", {}).get("clr"),
+                    "clr_dimensions": data.get("benchmarks", {}).get("clr", {}).get("dimensions", {}),
+                    "phi": data.get("phi", {}).get("current") if isinstance(data.get("phi"), dict) else data.get("phi"),
+                    "brain_total": data.get("brain", {}).get("total_memories"),
+                    "brain_collections": data.get("brain", {}).get("collections", {}),
+                    "bloat_score": data.get("bloat_score"),
+                    "mode": data.get("mode", {}).get("mode") if isinstance(data.get("mode"), dict) else data.get("mode"),
+                }
+            except (json.JSONDecodeError, OSError):
+                continue
+    return {}
+
+
 def read_scoreboard(n: int = 20) -> list[dict]:
     """Read last N scoreboard entries."""
     if not SCOREBOARD_FILE.exists():
@@ -328,6 +351,7 @@ def build_state() -> dict:
         "prs": fetch_prs(),
         "digest_lines": read_digest(),
         "scoreboard": read_scoreboard(),
+        "metrics": read_metrics(),
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -451,6 +475,12 @@ async def queue_block_endpoint(request):
     return JSONResponse({"tag": tag, "block": block})
 
 
+async def metrics_endpoint(request):
+    """GET /metrics — system metrics (PI, CLR, Phi, brain stats)."""
+    metrics = await asyncio.get_event_loop().run_in_executor(None, read_metrics)
+    return JSONResponse(metrics, headers={"Cache-Control": "no-cache"})
+
+
 async def health_endpoint(request):
     """GET /health — simple health check."""
     return JSONResponse({"status": "ok", "ts": datetime.now(timezone.utc).isoformat()})
@@ -467,6 +497,7 @@ routes = [
     Route("/state", state_endpoint),
     Route("/queue-block/{tag}", queue_block_endpoint),
     Route("/sse", sse_endpoint),
+    Route("/metrics", metrics_endpoint),
     Route("/health", health_endpoint),
     Mount("/", app=StaticFiles(directory=str(STATIC_DIR), html=True)),
 ]

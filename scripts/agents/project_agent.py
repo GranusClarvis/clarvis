@@ -28,6 +28,7 @@ Usage:
     python3 project_agent.py decompose <name> "task" # break task into subtasks
     python3 project_agent.py loop <name> "task" [--timeout 1200] [--max-sessions 8] [--budget 2.0]
     python3 project_agent.py ci-check <name> <pr_number> [--timeout 600]
+    python3 project_agent.py spawn-parallel --tasks '[{"agent":"a","task":"t1"},{"agent":"b","task":"t2"}]'
 """
 
 import argparse
