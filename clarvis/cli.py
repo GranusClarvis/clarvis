@@ -35,6 +35,7 @@ def _register_subcommands():
     from clarvis.cli_maintenance import app as maintenance_app
     from clarvis.cli_metrics import app as metrics_app
     from clarvis.cli_welcome import app as welcome_app
+    from clarvis.cli_wiki import app as wiki_app
 
     app.add_typer(brain_app, name="brain", help="ClarvisDB brain operations.")
     app.add_typer(bench_app, name="bench", help="Performance benchmarks.")
@@ -51,6 +52,7 @@ def _register_subcommands():
     app.add_typer(mode_app, name="mode", help="Runtime mode control-plane.")
     app.add_typer(queue_app, name="queue", help="Evolution queue management.")
     app.add_typer(welcome_app, name="welcome", help="Onboarding briefing and command reference.")
+    app.add_typer(wiki_app, name="wiki", help="Knowledge wiki management.")
 
 
 def main():

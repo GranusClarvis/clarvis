@@ -1,0 +1,45 @@
+{
+  "collapse-filter": false,
+  "search": "",
+  "showTags": true,
+  "showAttachments": false,
+  "hideUnresolved": false,
+  "showOrphans": true,
+  "collapse-color-groups": false,
+  "colorGroups": [
+    {
+      "query": "path:wiki/concepts",
+      "color": { "a": 1, "rgb": 5373695 }
+    },
+    {
+      "query": "path:wiki/projects",
+      "color": { "a": 1, "rgb": 43520 }
+    },
+    {
+      "query": "path:wiki/people",
+      "color": { "a": 1, "rgb": 16744448 }
+    },
+    {
+      "query": "path:wiki/syntheses",
+      "color": { "a": 1, "rgb": 11141120 }
+    },
+    {
+      "query": "path:wiki/questions",
+      "color": { "a": 1, "rgb": 16776960 }
+    },
+    {
+      "query": "path:raw",
+      "color": { "a": 1, "rgb": 8421504 }
+    }
+  ],
+  "collapse-display": false,
+  "showArrow": true,
+  "textFadeMultiplier": -1.5,
+  "nodeSizeMultiplier": 1.2,
+  "lineSizeMultiplier": 1,
+  "collapse-forces": true,
+  "centerStrength": 0.5,
+  "repelStrength": 10,
+  "linkStrength": 1,
+  "linkDistance": 250
+}

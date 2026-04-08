@@ -1,0 +1,14 @@
+{
+  "showLineNumber": true,
+  "strictLineBreaks": true,
+  "readableLineLength": true,
+  "showFrontmatter": false,
+  "defaultViewMode": "source",
+  "foldHeading": true,
+  "foldIndent": true,
+  "attachmentFolderPath": "raw/attachments",
+  "newFileLocation": "folder",
+  "newFileFolderPath": "wiki/concepts",
+  "useMarkdownLinks": true,
+  "alwaysUpdateLinks": true
+}
