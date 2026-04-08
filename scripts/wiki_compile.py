@@ -21,6 +21,12 @@ import re
 import sys
 from pathlib import Path
 
+try:
+    from wiki_canonical import CanonicalResolver, get_resolver
+except ImportError:
+    sys.path.insert(0, str(Path(__file__).parent))
+    from wiki_canonical import CanonicalResolver, get_resolver
+
 WORKSPACE = Path(os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace"))
 KNOWLEDGE = WORKSPACE / "knowledge"
 WIKI_DIR = KNOWLEDGE / "wiki"
@@ -601,19 +607,30 @@ def compile_source(record: dict, existing_pages: dict, dry_run: bool = False) ->
             "gate_failures": gate_failures,
         }
 
-    # Determine target slug and check for existing pages
+    # Determine target slug and check for existing pages using canonical resolver
     title = record.get("title", "")
     candidate_slug = _slugify(title)
 
-    # Check if a page with this slug or matching alias already exists
-    matched_slug = None
-    for slug, info in existing_pages.items():
-        if slug == candidate_slug:
-            matched_slug = slug
-            break
-        if title.lower() in [a.lower() for a in info.get("aliases", [])]:
-            matched_slug = slug
-            break
+    # Use CanonicalResolver for robust duplicate detection (aliases, redirects, fuzzy)
+    resolver = get_resolver(WIKI_DIR)
+    matched_slug = resolver.resolve(title)
+    if not matched_slug:
+        matched_slug = resolver.resolve(candidate_slug)
+    if not matched_slug:
+        # Check concepts extracted from source
+        for concept in record.get("concepts", [])[:5]:
+            resolved = resolver.resolve(concept)
+            if resolved:
+                # Only match if concept is very close to the title
+                from wiki_canonical import _trigram_similarity
+                if _trigram_similarity(title, concept) > 0.7:
+                    matched_slug = resolved
+                    break
+    if not matched_slug:
+        # Fallback: fuzzy suggestion with high threshold
+        _, suggestions = resolver.resolve_or_suggest(title, threshold=0.7)
+        if suggestions:
+            matched_slug = suggestions[0][0]
 
     if matched_slug:
         # Update existing page

@@ -53,8 +53,12 @@ def _save_predictions(entries):
     _predictions_cache_mtime = os.path.getmtime(PREDICTIONS_FILE)
 
 
-def _band_accuracy(band_lo, band_hi, min_samples=5):
+def _band_accuracy(band_lo, band_hi, min_samples=5, recency_weight=True):
     """Compute historical accuracy for predictions in a given confidence band.
+
+    When recency_weight=True, uses exponential decay to weight recent predictions
+    more heavily (half-life = 50 predictions), which detects distribution shifts
+    faster than uniform weighting.
 
     Returns (accuracy, sample_count) or (None, 0) if insufficient data.
     """
@@ -67,8 +71,20 @@ def _band_accuracy(band_lo, band_hi, min_samples=5):
     ]
     if len(resolved) < min_samples:
         return None, len(resolved)
-    correct = sum(1 for e in resolved if e["correct"])
-    return correct / len(resolved), len(resolved)
+    if not recency_weight:
+        correct = sum(1 for e in resolved if e["correct"])
+        return correct / len(resolved), len(resolved)
+    # Exponential recency weighting: most recent entries matter most
+    import math
+    half_life = 50  # predictions
+    total_w = 0.0
+    correct_w = 0.0
+    for i, e in enumerate(reversed(resolved)):
+        w = math.exp(-math.log(2) * i / half_life)
+        total_w += w
+        if e["correct"]:
+            correct_w += w
+    return correct_w / total_w, len(resolved)
 
 
 def predict(event: str, expected: str, confidence: float) -> dict:
@@ -99,12 +115,13 @@ def predict(event: str, expected: str, confidence: float) -> dict:
             print(f"Recalibrated: {original_confidence:.0%} → {confidence:.0%} "
                   f"(band 60-80% accuracy={acc:.0%}, n={n}, underconfident)", file=sys.stderr)
     elif 0.85 <= confidence < 0.95:
-        # 2026-03-20 audit: 90-100% band has 87% accuracy vs 90% predicted.
-        # Proportional correction: pull confidence toward observed accuracy.
+        # 2026-04-08: 85-95% band has ~82% recent accuracy vs ~89% predicted.
+        # Aggressive correction: close 85% of the gap to match empirical rate.
+        # Recency-weighted accuracy detects distribution shifts faster.
         acc, n = _band_accuracy(0.85, 0.95)
         if acc is not None and acc < 0.90:
             gap = confidence - acc
-            correction = min(0.12, gap * 0.6)  # close 60% of the gap
+            correction = min(0.15, gap * 0.85)  # close 85% of the gap
             confidence = max(0.3, confidence - correction)
             recalibrated = True
             print(f"Recalibrated: {original_confidence:.0%} → {confidence:.0%} "

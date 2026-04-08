@@ -1,3 +1,6 @@
 # Syntheses
 
-_Cross-cutting analysis documents combining multiple sources and concepts._
+_Cross-cutting synthesis documents. 0 pages._
+
+_No pages yet._
+_Auto-generated 2026-04-08 by `wiki_index.py`._

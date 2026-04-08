@@ -7,7 +7,8 @@ updated: 2026-04-08
 status: draft
 tags:
   - project/clarvis-self
-aliases: []
+aliases:
+  - "Clarvis"
 sources:
   - git@github.com:GranusClarvis/clarvis.git
   - raw/repos/2026-04-08-repo-0a9732b2.md
