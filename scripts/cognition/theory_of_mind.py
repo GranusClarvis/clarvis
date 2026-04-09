@@ -802,7 +802,7 @@ class TheoryOfMind:
 
         pushed = 0
         try:
-            from attention import attention
+            from clarvis.cognition.attention import attention
             for s in suggestions[:3]:  # Push top 3
                 if s["priority"] in ("high", "medium"):
                     attention.submit(

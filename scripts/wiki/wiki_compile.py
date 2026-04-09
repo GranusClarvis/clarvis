@@ -21,11 +21,7 @@ import re
 import sys
 from pathlib import Path
 
-try:
-    from wiki_canonical import CanonicalResolver, get_resolver
-except ImportError:
-    sys.path.insert(0, str(Path(__file__).parent))
-    from wiki_canonical import CanonicalResolver, get_resolver
+from clarvis.wiki.canonical import CanonicalResolver, get_resolver
 
 WORKSPACE = Path(os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace"))
 KNOWLEDGE = WORKSPACE / "knowledge"
@@ -622,7 +618,7 @@ def compile_source(record: dict, existing_pages: dict, dry_run: bool = False) ->
             resolved = resolver.resolve(concept)
             if resolved:
                 # Only match if concept is very close to the title
-                from wiki_canonical import _trigram_similarity
+                from clarvis.wiki.canonical import _trigram_similarity
                 if _trigram_similarity(title, concept) > 0.7:
                     matched_slug = resolved
                     break

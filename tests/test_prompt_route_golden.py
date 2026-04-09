@@ -131,7 +131,7 @@ class TestPromptBuilderRoute:
     @pytest.fixture(autouse=True)
     def _import(self):
         try:
-            from prompt_builder import get_context_brief
+            from clarvis.context.prompt_builder import get_context_brief
             self.get_brief = get_context_brief
         except ImportError:
             pytest.skip("prompt_builder not importable")
@@ -149,7 +149,7 @@ class TestPromptBuilderRoute:
         introspect_for_task once via _introspect_for_task AND again directly
         plus a brain.recall for IDs. Now it should only call _introspect_for_task once.
         """
-        import prompt_builder
+        import clarvis.context.prompt_builder as prompt_builder
         import inspect
         src = inspect.getsource(prompt_builder.get_context_brief)
         # _introspect_for_task appears at most twice: primary path + except fallback.

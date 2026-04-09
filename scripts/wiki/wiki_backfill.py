@@ -191,7 +191,7 @@ def scan_candidates(limit: int = 50) -> list[dict]:
 
 def backfill_ingest(candidates: list[dict], dry_run: bool = False) -> list[dict]:
     """Ingest candidates through the wiki pipeline. Returns results."""
-    sys.path.insert(0, str(WORKSPACE / "scripts"))
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
     from wiki_ingest import ingest_file
 
     results = []
@@ -231,14 +231,14 @@ def backfill_ingest(candidates: list[dict], dry_run: bool = False) -> list[dict]
 
 def backfill_compile(dry_run: bool = False) -> list[dict]:
     """Compile all pending (ingested but unlinked) sources into wiki pages."""
-    sys.path.insert(0, str(WORKSPACE / "scripts"))
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
     from wiki_compile import compile_all_pending
     return compile_all_pending(dry_run=dry_run)
 
 
 def backfill_sync(dry_run: bool = False) -> list[dict]:
     """Sync newly created/updated wiki pages into ClarvisDB."""
-    sys.path.insert(0, str(WORKSPACE / "scripts"))
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
     from wiki_brain_sync import sync_changed, sync_all
     # Sync all since backfill creates pages with today's date
     return sync_changed(dry_run=dry_run)

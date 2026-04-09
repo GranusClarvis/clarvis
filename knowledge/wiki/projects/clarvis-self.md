@@ -11,7 +11,7 @@ aliases:
   - "Clarvis"
 sources:
   - git@github.com:GranusClarvis/clarvis.git
-  - raw/repos/2026-04-08-repo-0a9732b2.md
+  - raw/repo/2026-04-08-repo-0a9732b2.md
 confidence: medium
 repo_url: "git@github.com:GranusClarvis/clarvis.git"
 language: ["Python", "Shell", "JavaScript"]
@@ -31,7 +31,7 @@ maintained: true
 ## Evidence
 
 - **[README]**: Project description and usage. [git@github.com:GranusClarvis/clarvis.git]
-- **[Analysis]**: Local analysis snapshot. [raw/repos/2026-04-08-repo-0a9732b2.md]
+- **[Analysis]**: Local analysis snapshot. [raw/repo/2026-04-08-repo-0a9732b2.md]
 
 ## Architecture
 

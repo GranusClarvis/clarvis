@@ -33,7 +33,7 @@ class TestAttentionItem:
 
     def _make_item(self, importance=0.5, relevance=0.5, boost=0.0,
                    age_hours=0.0, access_count=0):
-        from attention import AttentionItem
+        from clarvis.cognition.attention import AttentionItem
         item = AttentionItem(
             content="test item",
             source="test",
@@ -127,7 +127,7 @@ class TestAttentionItem:
 
     def test_to_dict_roundtrip(self):
         """to_dict → from_dict should preserve all fields."""
-        from attention import AttentionItem
+        from clarvis.cognition.attention import AttentionItem
         item = self._make_item(importance=0.7, relevance=0.4, boost=0.3)
         item.access_count = 5
         item.ticks_in_spotlight = 3
@@ -333,7 +333,7 @@ class TestCompressQueue:
 
     def test_pending_tasks_preserved(self):
         """Pending tasks should appear in compressed output."""
-        from context_compressor import compress_queue
+        from clarvis.context.compressor import compress_queue
         path = self._write_queue("""## P0 — Critical
 - [ ] Fix memory regression
 - [ ] Update brain schema
@@ -348,7 +348,7 @@ class TestCompressQueue:
 
     def test_completed_section_stripped(self):
         """Tasks under ## Completed should be stripped."""
-        from context_compressor import compress_queue
+        from clarvis.context.compressor import compress_queue
         path = self._write_queue("""## P1
 - [ ] Active task
 ## Completed
@@ -362,7 +362,7 @@ class TestCompressQueue:
 
     def test_recent_completed_limited(self):
         """Only last N completed (outside ## Completed section) shown."""
-        from context_compressor import compress_queue
+        from clarvis.context.compressor import compress_queue
         path = self._write_queue("""## P1
 - [x] Done 1 (2026-02-25)
 - [x] Done 2 (2026-02-24)
@@ -379,13 +379,13 @@ class TestCompressQueue:
 
     def test_missing_file(self):
         """Non-existent file should return graceful message."""
-        from context_compressor import compress_queue
+        from clarvis.context.compressor import compress_queue
         result = compress_queue("/tmp/nonexistent_queue_12345.md")
         assert "No evolution queue" in result
 
     def test_empty_queue(self):
         """Empty file should not crash."""
-        from context_compressor import compress_queue
+        from clarvis.context.compressor import compress_queue
         path = self._write_queue("")
         result = compress_queue(path)
         os.unlink(path)
@@ -397,25 +397,25 @@ class TestCompressHealth:
 
     def test_brier_extraction(self):
         """Should extract Brier score from calibration output."""
-        from context_compressor import compress_health
+        from clarvis.context.compressor import compress_health
         result = compress_health(calibration_output="Brier: 0.142\nOther data")
         assert "0.142" in result
 
     def test_accuracy_extraction(self):
         """Should extract accuracy from calibration output."""
-        from context_compressor import compress_health
+        from clarvis.context.compressor import compress_health
         result = compress_health(calibration_output="15/20 correct predictions")
         assert "15/20" in result
 
     def test_phi_extraction(self):
         """Should extract Phi from output."""
-        from context_compressor import compress_health
+        from clarvis.context.compressor import compress_health
         result = compress_health(phi_output="Phi: 0.723")
         assert "0.723" in result
 
     def test_empty_inputs(self):
         """Empty inputs should produce header only, no crash."""
-        from context_compressor import compress_health
+        from clarvis.context.compressor import compress_health
         result = compress_health()
         assert "HEALTH" in result
 
@@ -425,7 +425,7 @@ class TestDetectWireTask:
 
     def test_wire_with_scripts(self):
         """Should detect 'wire X.py into Y.sh' pattern."""
-        from context_compressor import _detect_wire_task
+        from clarvis.context.assembly import _detect_wire_task
         is_wire, src, tgt = _detect_wire_task(
             "Wire attention.py into cron_autonomous.sh for daily scoring"
         )
@@ -435,7 +435,7 @@ class TestDetectWireTask:
 
     def test_integrate_pattern(self):
         """Should detect 'integrate' verb."""
-        from context_compressor import _detect_wire_task
+        from clarvis.context.assembly import _detect_wire_task
         is_wire, src, tgt = _detect_wire_task(
             "Integrate self_model.py into heartbeat_postflight.py"
         )
@@ -443,7 +443,7 @@ class TestDetectWireTask:
 
     def test_non_wire_task(self):
         """Should not detect non-wire tasks."""
-        from context_compressor import _detect_wire_task
+        from clarvis.context.assembly import _detect_wire_task
         is_wire, src, tgt = _detect_wire_task("Create performance benchmark script")
         assert not is_wire
         assert src is None
@@ -451,7 +451,7 @@ class TestDetectWireTask:
 
     def test_hook_pattern(self):
         """Should detect 'hook' verb."""
-        from context_compressor import _detect_wire_task
+        from clarvis.context.assembly import _detect_wire_task
         is_wire, _, _ = _detect_wire_task("Hook phi_metric into evening reflection")
         assert is_wire
 
@@ -467,7 +467,7 @@ class TestFindRelatedTasks:
 
     def test_finds_related(self):
         """Should find tasks with word overlap."""
-        from context_compressor import _find_related_tasks
+        from clarvis.context.assembly import find_related_tasks as _find_related_tasks
         path = self._write_queue("""## P1
 - [ ] Improve brain memory retrieval quality
 - [ ] Fix browser agent timeout
@@ -479,7 +479,7 @@ class TestFindRelatedTasks:
 
     def test_excludes_identical(self):
         """Should exclude tasks that are >60% similar (same task)."""
-        from context_compressor import _find_related_tasks
+        from clarvis.context.assembly import find_related_tasks as _find_related_tasks
         path = self._write_queue("""## P1
 - [ ] Improve brain memory retrieval quality and speed
 """)
@@ -491,7 +491,7 @@ class TestFindRelatedTasks:
 
     def test_empty_task(self):
         """Empty current task should return empty list."""
-        from context_compressor import _find_related_tasks
+        from clarvis.context.assembly import find_related_tasks as _find_related_tasks
         assert _find_related_tasks("", "/tmp/any.md") == []
 
 
@@ -506,7 +506,7 @@ class TestGetRecentCompletions:
 
     def test_extracts_completions(self):
         """Should extract completed tasks with dates."""
-        from context_compressor import _get_recent_completions
+        from clarvis.context.assembly import get_recent_completions as _get_recent_completions
         path = self._write_queue("""## P1
 - [x] Built performance benchmark (2026-02-27)
 - [x] Fixed brain recall bug (2026-02-26)
@@ -519,7 +519,7 @@ class TestGetRecentCompletions:
 
     def test_limits_to_n(self):
         """Should limit to N completions."""
-        from context_compressor import _get_recent_completions
+        from clarvis.context.assembly import get_recent_completions as _get_recent_completions
         path = self._write_queue("""## P1
 - [x] Task 1 (2026-02-27)
 - [x] Task 2 (2026-02-26)

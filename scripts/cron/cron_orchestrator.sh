@@ -123,7 +123,7 @@ done
 # Appends composite scores to data/orchestration_scoreboard.jsonl.
 # Script may not exist yet — `|| true` prevents job abort.
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Recording scoreboard snapshot" >> "$LOGFILE"
-python3 "$SCRIPTS/metrics/orchestration_scoreboard.py" record >> "$LOGFILE" 2>&1 || true
+python3 -m clarvis.orch.scoreboard record >> "$LOGFILE" 2>&1 || true
 
 # Summary
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Orchestrator complete: promoted=$PROMOTED benchmarked=$BENCHMARKED errors=$ERRORS" >> "$LOGFILE"

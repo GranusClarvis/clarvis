@@ -84,8 +84,7 @@ def test_mode_gate_in_heartbeat_gate():
 
 def test_mode_gate_in_queue_writer():
     """queue_writer (spine module) gates task injection by mode."""
-    # Core logic moved to clarvis.queue.writer (spine migration 2026-04-04).
-    # Legacy scripts/evolution/queue_writer.py is a thin re-export wrapper.
+    # Canonical location: clarvis.queue.writer (spine migration 2026-04-04).
     import importlib
     wr_mod = importlib.import_module("clarvis.queue.writer")
     import inspect

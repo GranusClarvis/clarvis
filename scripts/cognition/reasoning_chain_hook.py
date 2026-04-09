@@ -51,8 +51,7 @@ if smart_recall is None:
 
 if thought_proto is None:
     try:
-        sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "cognition"))
-        from thought_protocol import thought as thought_proto
+        from clarvis.cognition.thought_protocol import thought as thought_proto
     except ImportError:
         thought_proto = None
 

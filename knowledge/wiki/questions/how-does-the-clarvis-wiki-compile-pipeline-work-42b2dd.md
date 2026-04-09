@@ -12,7 +12,7 @@ sources:
   - ../projects/clarvis-self.md
   - ../concepts/llm-wiki-architecture-spec.md
   - ../concepts/anthropic-cookbook-readme.md
-  - raw/repos/2026-04-08-repo-0a9732b2.md
+  - raw/repo/2026-04-08-repo-0a9732b2.md
   - raw/paper/2026-04-08-paper-123a4588.md
 confidence: low
 answer_status: partial
@@ -34,7 +34,7 @@ This answer draws from 3 wiki page(s) and 2 raw source(s).
 - **[Wiki: Clarvis (self)]**: Canonical wiki page. [../projects/clarvis-self.md]
 - **[Wiki: LLM Wiki Architecture Spec]**: Canonical wiki page. [../concepts/llm-wiki-architecture-spec.md]
 - **[Wiki: Anthropic Cookbook README]**: Canonical wiki page. [../concepts/anthropic-cookbook-readme.md]
-- **[Raw: raw/repos/2026-04-08-repo-0a9732b2.md]**: Source material. [raw/repos/2026-04-08-repo-0a9732b2.md]
+- **[Raw: raw/repo/2026-04-08-repo-0a9732b2.md]**: Source material. [raw/repo/2026-04-08-repo-0a9732b2.md]
 - **[Raw: raw/paper/2026-04-08-paper-123a4588.md]**: Source material. [raw/paper/2026-04-08-paper-123a4588.md]
 
 ## Context Gathered

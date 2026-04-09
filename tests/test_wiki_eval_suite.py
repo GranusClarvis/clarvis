@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 WORKSPACE = Path(os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace"))
-sys.path.insert(0, str(WORKSPACE / "scripts"))
+sys.path.insert(0, str(WORKSPACE / "scripts" / "wiki"))
 
 
 # ── Gold questions fixture ────────────────────────────────────────

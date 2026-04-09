@@ -157,7 +157,7 @@ def append_to_queue(tasks: list[str]):
     import re
     clean_tasks = [re.sub(r'^- \[[ x]\] ', '', t).strip() for t in tasks]
     try:
-        from queue_writer import add_tasks
+        from clarvis.queue.writer import add_tasks
         added = add_tasks(clean_tasks, priority="P1", source="prediction-review")
         if added:
             print(f"  Injected {len(added)} prediction-review tasks into QUEUE.md")

@@ -41,7 +41,7 @@ MAINTENANCE_LOG = LOGS_DIR / "maintenance.log"
 TODAY = datetime.date.today().isoformat()
 NOW = datetime.datetime.now().isoformat(timespec="seconds")
 
-sys.path.insert(0, str(WORKSPACE / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 
 def log(msg: str):
@@ -277,7 +277,7 @@ def job_promote(limit: int = 5, dry_run: bool = False) -> dict:
             try:
                 import subprocess
                 result = subprocess.run(
-                    [sys.executable, str(WORKSPACE / "scripts" / "wiki_ingest.py"),
+                    [sys.executable, str(WORKSPACE / "scripts" / "wiki" / "wiki_ingest.py"),
                      "file", str(f), "--type", source_type],
                     capture_output=True, text=True, timeout=60
                 )
@@ -308,7 +308,7 @@ def job_full(dry_run: bool = False) -> dict:
         try:
             import subprocess
             subprocess.run(
-                [sys.executable, str(WORKSPACE / "scripts" / "wiki_index.py"), "rebuild"],
+                [sys.executable, str(WORKSPACE / "scripts" / "wiki" / "wiki_index.py"), "rebuild"],
                 capture_output=True, timeout=60
             )
             log("INDEX: Rebuilt after promotions.")

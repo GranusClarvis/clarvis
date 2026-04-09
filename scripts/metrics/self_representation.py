@@ -766,7 +766,7 @@ def broadcast_self_state():
 
     # Push to attention spotlight
     try:
-        from attention import attention
+        from clarvis.cognition.attention import attention
         attention.submit(
             summary,
             source="self_representation",

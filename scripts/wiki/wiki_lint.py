@@ -335,6 +335,83 @@ def check_uncovered_sources() -> list[LintIssue]:
     return issues
 
 
+def check_source_paths(pages: dict) -> list[LintIssue]:
+    """Check that frontmatter `sources:` entries follow canonical format.
+
+    Rules N2+N6: sources must be raw/{type}/{id}.md or external URLs only.
+    Relative paths (../), plural dirs (raw/repos/, raw/papers/), and wiki
+    cross-refs in sources: are flagged.
+    """
+    issues = []
+    # Canonical raw types (singular)
+    CANONICAL_TYPES = {"paper", "web", "repo", "transcript", "image"}
+    # Plural variants that should be singular
+    PLURAL_MAP = {"repos": "repo", "papers": "paper", "transcripts": "transcript", "images": "image"}
+
+    for rel, info in pages.items():
+        sources = info.get("sources", [])
+        if not sources:
+            continue
+
+        for src in sources:
+            src = str(src).strip()
+            if not src:
+                continue
+
+            # External URLs are fine
+            if src.startswith("http://") or src.startswith("https://"):
+                continue
+
+            # Flag relative path traversal
+            if "../" in src:
+                issues.append(LintIssue(
+                    "source_path_relative", "error", rel,
+                    f"Relative path in sources: '{src}' — use raw/{{type}}/{{id}}.md"
+                ))
+                continue
+
+            # Must start with raw/
+            if not src.startswith("raw/"):
+                # Could be a wiki cross-ref — should go in Related Pages, not sources
+                if src.endswith(".md") and "/" in src:
+                    issues.append(LintIssue(
+                        "source_path_crossref", "warning", rel,
+                        f"Wiki cross-ref in sources: '{src}' — move to Related Pages"
+                    ))
+                else:
+                    issues.append(LintIssue(
+                        "source_path_invalid", "error", rel,
+                        f"Invalid source path: '{src}' — expected raw/{{type}}/{{id}}.md or URL"
+                    ))
+                continue
+
+            # Check for plural directory names
+            parts = src.split("/")
+            if len(parts) >= 2:
+                raw_type = parts[1]
+                if raw_type in PLURAL_MAP:
+                    correct = PLURAL_MAP[raw_type]
+                    issues.append(LintIssue(
+                        "source_path_plural", "warning", rel,
+                        f"Plural dir in source: '{src}' — should be raw/{correct}/..."
+                    ))
+                elif raw_type not in CANONICAL_TYPES:
+                    issues.append(LintIssue(
+                        "source_path_unknown_type", "info", rel,
+                        f"Unknown raw type: '{raw_type}' in '{src}'"
+                    ))
+
+            # Check file exists
+            resolved = KNOWLEDGE / src
+            if not resolved.exists():
+                issues.append(LintIssue(
+                    "source_path_missing", "warning", rel,
+                    f"Source file not found: '{src}'"
+                ))
+
+    return issues
+
+
 # ============================================================
 # Lint runner
 # ============================================================
@@ -347,6 +424,7 @@ ALL_CHECKS = {
     "stale": check_stale_pages,
     "oversized": check_oversized,
     "underspecified": check_underspecified,
+    "source_paths": check_source_paths,
     # uncovered_sources doesn't take pages arg — handled separately
 }
 

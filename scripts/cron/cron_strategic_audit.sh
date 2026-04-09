@@ -293,8 +293,7 @@ import re
 import sys
 import os
 
-sys.path.insert(0, os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.getcwd()), "scripts/evolution"))
-from queue_writer import add_task
+from clarvis.queue.writer import add_task
 
 # Read audit text from saved file instead of argv (avoids ARG_MAX with large audits)
 audit_file = os.path.join(

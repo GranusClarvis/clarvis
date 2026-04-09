@@ -900,7 +900,7 @@ def _extract_insight(task_type: str, task: dict, result: dict,
 def _inject_improvement_task(insights: list, avg_learnability: float):
     """Inject a self-improvement task into QUEUE.md if learnability is high."""
     try:
-        from queue_writer import add_task
+        from clarvis.queue.writer import add_task
         task_desc = (
             "[AZR] Self-improvement: AZR cycle found capability gap "
             f"(avg_learnability={avg_learnability:.2f}). "

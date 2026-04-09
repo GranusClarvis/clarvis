@@ -35,7 +35,7 @@ Source: [`wiki/concepts/llm-wiki-architecture-spec.md`](../wiki/concepts/llm-wik
 
 ## Raw Evidence
 
-- `raw/repos/2026-04-08-repo-0a9732b2.md` — 3000 chars of source text
+- `raw/repo/2026-04-08-repo-0a9732b2.md` — 3000 chars of source text
 - `raw/paper/2026-04-08-paper-123a4588.md` — 3000 chars of source text
 
 ---

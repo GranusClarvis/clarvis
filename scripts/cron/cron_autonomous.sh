@@ -234,8 +234,7 @@ if [ "$ROUTE_EXECUTOR" = "claude" ]; then
     eval "$(NEXT_TASK="$NEXT_TASK" python3 - <<'PY'
 import os, re, shlex, sys
 _ws = os.environ.get('CLARVIS_WORKSPACE', os.getcwd())
-sys.path.insert(0, os.path.join(_ws, 'scripts/cognition'))
-from cognitive_load import estimate_task_complexity
+from clarvis.cognition.cognitive_load import estimate_task_complexity
 
 QUEUE_FILE = os.path.join(_ws, 'memory/evolution/QUEUE.md')
 

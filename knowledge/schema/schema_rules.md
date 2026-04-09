@@ -40,7 +40,7 @@ aliases:
   - "Alternative Name"
   - "Abbreviation"
 sources:
-  - raw/papers/2026-04-07-paper-a3f1c2d0.md
+  - raw/paper/2026-04-07-paper-a3f1c2d0.md
   - https://arxiv.org/abs/2508.13171
 confidence: high|medium|low
 ---
@@ -168,7 +168,7 @@ Reference raw sources or external URLs in the `## Evidence` section:
 ```markdown
 ## Evidence
 
-- **[Source 1]**: Description of claim. [raw/papers/2026-04-07-paper-a3f1c2d0.md]
+- **[Source 1]**: Description of claim. [raw/paper/2026-04-07-paper-a3f1c2d0.md]
 - **[Source 2]**: Description of claim. [https://arxiv.org/abs/2508.13171]
 ```
 

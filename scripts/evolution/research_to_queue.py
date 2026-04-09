@@ -35,6 +35,13 @@ QUEUE_FILE = os.path.join(WORKSPACE, "memory", "evolution", "QUEUE.md")
 ARCHIVE_FILE = os.path.join(WORKSPACE, "memory", "evolution", "QUEUE_ARCHIVE.md")
 DISPOSITION_LOG = os.path.join(WORKSPACE, "data", "research_dispositions.jsonl")
 
+# Wiki bridge: register papers in wiki source registry during scan
+try:
+    sys.path.insert(0, os.path.join(WORKSPACE, "scripts", "wiki"))
+    from wiki_hooks import research_paper_to_wiki
+except ImportError:
+    research_paper_to_wiki = None
+
 # Disposition categories — every proposal MUST be classified into one
 DISPOSITIONS = ("benchmark_target", "code_change", "queue_item", "discard")
 
@@ -425,6 +432,14 @@ def scan_papers() -> list[dict]:
 
         title = _extract_paper_title(content)
         source = _extract_paper_source(content)
+
+        # Wiki bridge: register paper in wiki source registry (idempotent)
+        if research_paper_to_wiki:
+            try:
+                research_paper_to_wiki(filename, title, source)
+            except Exception:
+                pass  # non-fatal: wiki registration failure must not block queue
+
         proposals = _extract_actionable_sections(content)
 
         for proposal in proposals:
@@ -558,14 +573,8 @@ def main():
         except ImportError:
             pass  # Config module not available — allow (backward compat)
 
-        # Import queue_writer for injection
-        sys.path.insert(0, os.path.join(WORKSPACE, "scripts"))
-        import _paths  # noqa: F401 — registers all script subdirs on sys.path
-        try:
-            from queue_writer import add_tasks
-        except ImportError:
-            print("ERROR: Could not import queue_writer", file=sys.stderr)
-            sys.exit(1)
+        # Import queue writer from spine
+        from clarvis.queue.writer import add_tasks
 
         tasks = [format_queue_item(r) for r in actionable[:max_inject]]
         added = add_tasks(tasks, priority="P1", source="research_bridge")

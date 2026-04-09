@@ -138,8 +138,7 @@ def add_tasks_to_queue(tasks):
     if not tasks:
         return 0
     try:
-        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-        from queue_writer import add_tasks
+        from clarvis.queue.writer import add_tasks
         added = add_tasks(tasks, priority="P1", source="reflection")
         return len(added)
     except ImportError:

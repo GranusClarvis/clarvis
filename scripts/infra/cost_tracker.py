@@ -134,19 +134,19 @@ def main():
 
     elif cmd == "realtime":
         # Real costs from OpenRouter API
-        from cost_api import fetch_usage, format_usage
+        from clarvis.orch.cost_api import fetch_usage, format_usage
         usage = fetch_usage()
         print(format_usage(usage))
 
     elif cmd == "api":
         # JSON output of real API data
-        from cost_api import fetch_usage
+        from clarvis.orch.cost_api import fetch_usage
         usage = fetch_usage()
         print(json.dumps(usage, indent=2))
 
     elif cmd == "compare":
         # Compare local tracked costs vs real API data
-        from cost_api import fetch_usage
+        from clarvis.orch.cost_api import fetch_usage
         usage = fetch_usage()
         local_day = tracker.rollup("day")
         local_week = tracker.rollup("week")
@@ -163,7 +163,7 @@ def main():
 
     elif cmd == "telegram":
         # Formatted output for Telegram /costs command
-        from cost_api import fetch_usage
+        from clarvis.orch.cost_api import fetch_usage
         usage = fetch_usage()
         rollup = tracker.rollup("day")
 

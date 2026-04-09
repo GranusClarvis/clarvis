@@ -149,7 +149,7 @@ class WorkspaceBroadcast:
         except Exception as e:
             # Fallback to legacy import
             try:
-                from attention import attention
+                from clarvis.cognition.attention import attention
                 spotlight = attention.focus()
                 for item in spotlight[:5]:
                     self.codelets.append(Codelet(
@@ -240,7 +240,7 @@ class WorkspaceBroadcast:
 
         # --- SOAR engine: current goal ---
         try:
-            from soar_engine import get_soar
+            from clarvis.memory.soar import get_soar
             soar = get_soar()
             goal = soar.current_goal()
             if goal:
@@ -368,7 +368,7 @@ class WorkspaceBroadcast:
         except Exception as e:
             # Fallback to legacy
             try:
-                from attention import attention
+                from clarvis.cognition.attention import attention
                 for coalition in winners[:3]:
                     lead = max(coalition.codelets, key=lambda c: c.salience)
                     if lead.source != "attention":

@@ -627,3 +627,121 @@ def generate_tiered_brief(current_task="", tier="standard", episodic_hints=None,
                 sections.append("KNOWLEDGE:\n" + "\n".join(kh_lines))
 
     return "\n\n".join(sections)
+
+
+# ---------------------------------------------------------------------------
+# Health compression (migrated from scripts/tools/context_compressor.py)
+# ---------------------------------------------------------------------------
+
+def _extract_calibration(calibration_output):
+    """Extract Brier score and accuracy from calibration output."""
+    brier_match = re.search(r'[Bb]rier[:\s=]*([0-9.]+)', calibration_output)
+    accuracy_match = re.search(r'(\d+)/(\d+)\s*correct|accuracy[:\s=]*([0-9.]+)', calibration_output)
+    brier = brier_match.group(1) if brier_match else "?"
+    if accuracy_match:
+        accuracy = f"{accuracy_match.group(1)}/{accuracy_match.group(2)}" if accuracy_match.group(1) else accuracy_match.group(3)
+    else:
+        accuracy = "?"
+    return f"Calibration: Brier={brier}, accuracy={accuracy}"
+
+
+def _extract_capabilities(capability_output):
+    """Extract capability scores into summary lines."""
+    scores = re.findall(r'(\w[\w_]+)[:=]\s*([0-9.]+)', capability_output)
+    if not scores:
+        return []
+    score_pairs = [(name, float(val)) for name, val in scores if 0 <= float(val) <= 1.0]
+    if not score_pairs:
+        return []
+    score_pairs.sort(key=lambda x: x[1])
+    worst = score_pairs[0]
+    avg = sum(v for _, v in score_pairs) / len(score_pairs)
+    scores_str = ", ".join(f"{n}={v:.2f}" for n, v in score_pairs)
+    return [
+        f"Capabilities: avg={avg:.2f}, worst={worst[0]}={worst[1]:.2f}, n={len(score_pairs)}",
+        f"  Scores: {scores_str}",
+    ]
+
+
+def compress_health(
+    calibration_output="",
+    phi_output="",
+    capability_output="",
+    retrieval_output="",
+    episode_output="",
+    goal_output="",
+    param_output="",
+    domain_output="",
+):
+    """Compress multi-line health data into compact key=value summary.
+
+    Typical reduction: 8KB -> 1KB (87% token savings).
+    """
+    summary = ["=== SYSTEM HEALTH (compressed) ==="]
+
+    if calibration_output:
+        summary.append(_extract_calibration(calibration_output))
+
+    if phi_output:
+        phi_match = re.search(r'[Pp]hi[:\s=]*([0-9.]+)', phi_output)
+        trend_match = re.search(r'trend[:\s=]*([a-z_]+|[↑↓→]+)', phi_output, re.IGNORECASE)
+        summary.append(f"Phi={phi_match.group(1) if phi_match else '?'} (trend: {trend_match.group(1) if trend_match else 'stable'})")
+
+    if capability_output:
+        summary.extend(_extract_capabilities(capability_output))
+
+    if retrieval_output:
+        hit_match = re.search(r'hit[_ ]rate[:\s=]*([0-9.]+)%?', retrieval_output, re.IGNORECASE)
+        health_match = re.search(r'(HEALTHY|DEGRADED|CRITICAL)', retrieval_output)
+        summary.append(f"Retrieval: hit_rate={hit_match.group(1) if hit_match else '?'}%, status={health_match.group(1) if health_match else '?'}")
+
+    if episode_output:
+        count_match = re.search(r'(\d+)\s*episodes?', episode_output)
+        success_match = re.search(r'success[:\s=]*([0-9.]+)%?', episode_output, re.IGNORECASE)
+        summary.append(f"Episodes: n={count_match.group(1) if count_match else '?'}, success_rate={success_match.group(1) if success_match else '?'}%")
+
+    if goal_output:
+        stalled_match = re.search(r'(\d+)\s*stalled', goal_output, re.IGNORECASE)
+        tasks_match = re.search(r'(\d+)\s*tasks?\s*(generated|added)', goal_output, re.IGNORECASE)
+        summary.append(f"Goals: {stalled_match.group(1) if stalled_match else '0'} stalled, {tasks_match.group(1) if tasks_match else '0'} remediation tasks generated")
+
+    if not any(line for line in summary if not line.startswith("===")):
+        summary.append("No health data available this cycle.")
+
+    return "\n".join(summary)
+
+
+def generate_context_brief(queue_file=None):
+    """Generate a full compressed context brief for Claude Code prompts.
+
+    Combines compressed queue + latest scores into a single compact payload.
+    This is the legacy brief generator; prefer generate_tiered_brief() from
+    clarvis.context.assembly for new code.
+
+    Returns string (~1-3KB instead of ~50KB).
+    """
+    queue_file = queue_file or QUEUE_FILE
+    brief_parts = []
+
+    brief_parts.append(compress_queue(queue_file))
+
+    scores = get_latest_scores()
+    if scores:
+        brief_parts.append("\n=== LATEST METRICS ===")
+        if "capabilities" in scores:
+            caps = scores["capabilities"]
+            worst_k = min(caps, key=caps.get) if caps else "?"
+            worst_v = caps.get(worst_k, "?") if caps else "?"
+            brief_parts.append(f"Capability avg={scores.get('capability_avg', '?')}, worst={worst_k}={worst_v}")
+            brief_parts.append(f"  All: {', '.join(f'{k}={v}' for k, v in sorted(caps.items(), key=lambda x: x[1]))}")
+        if "phi" in scores:
+            brief_parts.append(f"Phi={scores['phi']}")
+
+    try:
+        from clarvis.brain import brain
+        stats = brain.stats()
+        brief_parts.append(f"Brain: {stats['total_memories']} memories, {stats['graph_edges']} edges")
+    except Exception:
+        pass
+
+    return "\n".join(brief_parts)

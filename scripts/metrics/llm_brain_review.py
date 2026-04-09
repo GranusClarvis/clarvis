@@ -511,7 +511,7 @@ def _write_digest(result):
 def _push_recommendations(result):
     """Push high-priority recommendations to QUEUE.md."""
     try:
-        from queue_writer import add_task
+        from clarvis.queue.writer import add_task
 
         review = result.get("review", {})
         recs = review.get("recommendations", [])

@@ -105,7 +105,7 @@ def run_assessment():
             if all(h.get("goal_progress", {}).get(name) == pct for h in metrics["goals_history"][-3:]):
                 print(f"  ⚠ Stalled: {name} at {pct}% for 3+ days")
                 try:
-                    from self_model import update_model
+                    from clarvis.metrics.self_model import update_model
                     update_model(weakness=f"Stalled on {name} ({pct}%) for 3+ days")
                 except Exception as e:
                     print(f"    (Could not update self_model: {e})")

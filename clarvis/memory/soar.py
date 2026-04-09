@@ -26,7 +26,7 @@ Integration points:
   - heartbeat_postflight.py: postflight calls soar.apply_outcome()
 
 Usage:
-    from soar_engine import soar
+    from clarvis.memory.soar import soar
     soar.push_goal("Improve retrieval accuracy", source="episodic_synthesis")
     proposal = soar.propose_operators()
     selected = soar.select_operator()

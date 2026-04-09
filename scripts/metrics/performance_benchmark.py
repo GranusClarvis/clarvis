@@ -281,7 +281,7 @@ def benchmark_brain_stats():
 def benchmark_phi():
     """Dimension 5 (partial): Consciousness integration metric."""
     try:
-        from phi_metric import compute_phi
+        from clarvis.metrics.phi import compute_phi
         result = compute_phi()
         return {
             "phi": result["phi"],
@@ -536,7 +536,7 @@ def benchmark_consciousness(phi_data=None):
         result["cross_collection_overlap"] = components.get("semantic_cross_collection", 0.0)
     else:
         try:
-            from phi_metric import compute_phi
+            from clarvis.metrics.phi import compute_phi
             phi_result = compute_phi()
             result["phi_composite"] = phi_result.get("phi", 0.0)
             components = phi_result.get("components", {})
@@ -604,7 +604,7 @@ def benchmark_intelligence(retrieval_data=None, speed_data=None):
 
     # Context compression ratio
     try:
-        from context_compressor import generate_tiered_brief
+        from clarvis.context.assembly import generate_tiered_brief
         brief = generate_tiered_brief("benchmark test task", "standard")
         if brief:
             # Compare to full queue size
@@ -891,10 +891,11 @@ def _measure_compression_live():
     metric boundaries.  Raw measurement is appended to bcr_history.jsonl
     and smoothed via EWMA (window=10, alpha=0.3).
     """
-    from context_compressor import generate_tiered_brief, compress_text
+    from clarvis.context.assembly import generate_tiered_brief
+    from clarvis.context.compressor import compress_text
     raw_parts = []
     try:
-        from context_compressor import compress_queue, get_latest_scores
+        from clarvis.context.compressor import compress_queue, get_latest_scores
         raw_parts.append(compress_queue())
         scores = get_latest_scores()
         if scores:
@@ -902,7 +903,7 @@ def _measure_compression_live():
     except Exception as e:
         logger.debug("Gathering raw queue data for compression measurement failed: %s", e)
     try:
-        from attention import attention
+        from clarvis.cognition.attention import attention
         attention._load()
         focused = attention.focus()
         for item in focused[:10]:
@@ -1017,7 +1018,7 @@ def push_optimization_tasks(alerts):
         return 0
 
     try:
-        from queue_writer import add_task
+        from clarvis.queue.writer import add_task
     except ImportError:
         return 0
 

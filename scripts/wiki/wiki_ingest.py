@@ -697,7 +697,7 @@ def ingest_repo(repo_ref: str, title: str | None = None) -> dict:
     """Ingest a GitHub repo URL or local repo path.
 
     Clones (shallow) if GitHub URL. Analyzes structure, README, notable files.
-    Stores a structured markdown analysis in knowledge/raw/repos/.
+    Stores a structured markdown analysis in knowledge/raw/repo/.
     Returns the source registry record.
     """
     import shutil as _shutil
@@ -793,7 +793,7 @@ dir_count: {analysis['dir_count']}
             return {"error": "duplicate", "existing": existing}
 
         source_id = make_source_id("repo", checksum)
-        dest_dir = RAW_DIR / "repos"
+        dest_dir = RAW_DIR / "repo"
         dest_dir.mkdir(parents=True, exist_ok=True)
         dest = dest_dir / f"{source_id}.md"
         dest.write_text(md_content, encoding="utf-8")
@@ -972,7 +972,7 @@ source_url: "{arxiv_url or str(src)}"
 title: "{title}"
 source_type: paper
 ingested: {TODAY}
-pdf_path: "raw/papers/{source_id}.pdf"
+pdf_path: "raw/paper/{source_id}.pdf"
 authors: "{authors_str}"
 year: {year}
 arxiv: "{arxiv_id}"
@@ -1036,7 +1036,7 @@ arxiv: "{arxiv_id}"
         "proposed_pages": proposed,
         "confidence": "medium",
         "meta": {
-            "pdf_path": f"raw/papers/{source_id}.pdf",
+            "pdf_path": f"raw/paper/{source_id}.pdf",
             "authors": meta["authors"][:5],
             "year": year,
             "arxiv": arxiv_id,
@@ -1148,7 +1148,7 @@ def cmd_compile(args):
         sys.path.insert(0, str(Path(__file__).parent))
         from wiki_compile import compile_one, compile_all_pending
     except ImportError:
-        print("ERROR: wiki_compile.py not found in scripts/")
+        print("ERROR: wiki_compile.py not found in scripts/wiki/")
         return 1
 
     if getattr(args, "source_id", None):

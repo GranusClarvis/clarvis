@@ -5,8 +5,7 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
-from wiki_canonical import (
+from clarvis.wiki.canonical import (
     CanonicalResolver,
     _normalize,
     _slugify,
@@ -27,7 +26,7 @@ def wiki_tmpdir(tmp_path):
         '---\ntitle: "Integrated Information Theory"\nslug: "integrated-information-theory"\n'
         'type: concept\ncreated: 2026-01-01\nupdated: 2026-01-01\nstatus: active\n'
         'tags:\n  - ai/consciousness\naliases:\n  - "IIT"\n  - "Phi theory"\n'
-        'sources:\n  - raw/papers/iit.md\nconfidence: high\n---\n\n# Integrated Information Theory\n\nSummary.\n'
+        'sources:\n  - raw/paper/iit.md\nconfidence: high\n---\n\n# Integrated Information Theory\n\nSummary.\n'
         '\n## Key Claims\n\n- Claim 1\n\n## Evidence\n\n- Source 1\n\n## Related Pages\n\n'
         '\n## Open Questions\n\n- Q1\n\n## Update History\n\n- 2026-01-01: Created.\n'
     )
@@ -37,7 +36,7 @@ def wiki_tmpdir(tmp_path):
         '---\ntitle: "IIT 4.0"\nslug: "iit-4-0"\n'
         'type: concept\ncreated: 2026-02-01\nupdated: 2026-02-01\nstatus: draft\n'
         'tags:\n  - ai/consciousness\naliases: []\n'
-        'sources:\n  - raw/papers/iit40.md\nconfidence: medium\n---\n\n# IIT 4.0\n\nVersion 4.\n'
+        'sources:\n  - raw/paper/iit40.md\nconfidence: medium\n---\n\n# IIT 4.0\n\nVersion 4.\n'
         '\n## Key Claims\n\n- Claim\n\n## Evidence\n\n- Source\n\n## Related Pages\n\n'
         '\n## Open Questions\n\n- Q\n\n## Update History\n\n- 2026-02-01: Created.\n'
     )
@@ -47,7 +46,7 @@ def wiki_tmpdir(tmp_path):
         '---\ntitle: "Clarvis"\nslug: "clarvis"\n'
         'type: repo\ncreated: 2026-01-01\nupdated: 2026-01-01\nstatus: active\n'
         'tags:\n  - project/clarvis\naliases:\n  - "Clarvis Agent"\n'
-        'sources:\n  - raw/repos/clarvis.md\nconfidence: high\n---\n\n# Clarvis\n\nAgent.\n'
+        'sources:\n  - raw/repo/clarvis.md\nconfidence: high\n---\n\n# Clarvis\n\nAgent.\n'
         '\n## Key Claims\n\n- Claim\n\n## Evidence\n\n- Source\n\n## Related Pages\n\n'
         '\n## Open Questions\n\n- Q\n\n## Update History\n\n- 2026-01-01: Created.\n'
     )

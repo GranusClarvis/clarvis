@@ -20,7 +20,7 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import _paths  # noqa: F401 — registers all script subdirs on sys.path
 from brain import brain
-from self_model import assess_all_capabilities
+from clarvis.metrics.self_model import assess_all_capabilities
 
 QUEUE_FILE = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "memory/evolution/QUEUE.md")
 TRACKER_STATE_FILE = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "data/goal_tracker_state.json")
@@ -269,7 +269,7 @@ def inject_tasks(tasks):
     if not tasks:
         return
     try:
-        from queue_writer import add_tasks
+        from clarvis.queue.writer import add_tasks
         added = add_tasks(tasks, priority="P0", source="goal-tracker")
         if added:
             print(f"  Injected {len(added)} goal-tracker tasks into QUEUE.md")

@@ -195,8 +195,7 @@ DEFAULT_TRUST_SCORE = 0.50  # new agents start supervised
 
 # Cost tracking via OpenRouter API
 try:
-    sys.path.insert(0, str(CLARVIS_WORKSPACE / "scripts"))
-    from cost_api import fetch_usage as _fetch_openrouter_usage
+    from clarvis.orch.cost_api import fetch_usage as _fetch_openrouter_usage
     _HAS_COST_API = True
 except ImportError:
     _HAS_COST_API = False

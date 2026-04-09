@@ -127,12 +127,12 @@ except ImportError:
     self_rep_update = None
 
 try:
-    from self_model import think_about_thinking
+    from clarvis.metrics.self_model import think_about_thinking
 except ImportError:
     think_about_thinking = None
 
 try:
-    from soar_engine import get_soar as get_soar_engine
+    from clarvis.memory.soar import get_soar as get_soar_engine
 except ImportError:
     get_soar_engine = None
 
@@ -142,7 +142,7 @@ except ImportError:
     get_atomspace = None
 
 try:
-    from workspace_broadcast import WorkspaceBroadcast
+    from clarvis.cognition.workspace_broadcast import WorkspaceBroadcast
 except ImportError:
     WorkspaceBroadcast = None
 
@@ -175,6 +175,11 @@ except ImportError:
     rq_tracker = None
 
 try:
+    from wiki_hooks import postflight_wiki_ingest
+except ImportError:
+    postflight_wiki_ingest = None
+
+try:
     from clarvis.brain.retrieval_feedback import record_feedback as retrieval_record_feedback
 except ImportError:
     retrieval_record_feedback = None
@@ -189,7 +194,7 @@ except ImportError:
     mem_evo_evolve = None
 
 try:
-    from prompt_optimizer import record_outcome as po_record_outcome
+    from clarvis.context.prompt_optimizer import record_outcome as po_record_outcome
 except ImportError:
     po_record_outcome = None
 
@@ -223,7 +228,7 @@ except ImportError:
     record_cot_score = None
 
 try:
-    from obligation_tracker import ObligationTracker as OT_Postflight
+    from clarvis.cognition.obligations import ObligationTracker as OT_Postflight
 except ImportError:
     OT_Postflight = None
 
@@ -273,7 +278,7 @@ from clarvis.heartbeat.brain_store import (
 def _mark_task_in_queue(task_text, annotation, queue_file, archive_file=None):
     """Back-compat shim; use queue_writer.mark_task_complete as canonical path."""
     try:
-        from queue_writer import mark_task_complete
+        from clarvis.queue.writer import mark_task_complete
         return mark_task_complete(task_text, annotation, queue_file=queue_file, archive_file=archive_file)
     except Exception as e:
         log(f"_mark_task_in_queue failed for '{task_text[:60]}': {e}")
@@ -973,7 +978,7 @@ def _store_regression_alert(task, selftest_result, brain_ok):
     except Exception as e:
         logging.debug("Storing regression alert in brain failed: %s", e)
     try:
-        from queue_writer import add_task
+        from clarvis.queue.writer import add_task
         fix_task = f"FIX REGRESSION: Self-test failed after '{task[:60]}'. Review and fix immediately."
         add_task(fix_task, priority="P0", source="self_test_harness")
         log("Pushed P0 regression fix task to QUEUE.md")
@@ -1316,7 +1321,7 @@ def _handle_cv_failures(ctx, cv_output_result, cv_file_errors, has_output_errs):
         total_cv_errors += len(cv_output_result.get("errors", []))
     if total_cv_errors > 3:
         try:
-            from queue_writer import add_task as _cv_add_task
+            from clarvis.queue.writer import add_task as _cv_add_task
             affected_files = ", ".join(fe["file"] for fe in cv_file_errors[:3])
             fix_desc = (f"[CODE_QUALITY_FIX] Fix {total_cv_errors} code validation errors "
                         f"in: {affected_files or 'output'} — task: {ctx['task'][:80]}")
@@ -1464,7 +1469,7 @@ def _evaluate_quality_gate(current_hit_rate, current_dead_rate, current_avg_dist
         with open(QUALITY_GATE_FILE, "w") as gf:
             json.dump(gate_data, gf, indent=2)
         try:
-            from queue_writer import add_task
+            from clarvis.queue.writer import add_task
             repair_desc = (f"[MEMORY_REPAIR] Memory quality degraded — {'; '.join(violations)}. "
                            f"Run retrieval_quality.py baseline, check recent brain changes, fix retrieval before resuming new features.")
             if add_task(repair_desc, priority="P0", source="memory_quality_gate"):
@@ -1554,7 +1559,7 @@ def _pf_retrieval_feedback(ctx, _pf_errors):
                         _diag_task = (f"[ACTION_ACCURACY_DIAGNOSTIC] Action accuracy dropped to {_aa_score:.3f} "
                                       f"(threshold: 0.95). Failing episodes: {', '.join(_failing_ids[:5])}. Investigate root causes and fix.")
                         try:
-                            from queue_writer import add_task
+                            from clarvis.queue.writer import add_task
                             if add_task(_diag_task, priority="P1", source="action_accuracy_guard"):
                                 log(f"ACTION ACCURACY GUARD: pushed P1 diagnostic (score={_aa_score})")
                         except Exception as e:
@@ -1809,7 +1814,7 @@ def _pf_finalize(ctx, _pf_errors):
 
     # §12 Queue hygiene
     try:
-        from queue_writer import archive_completed
+        from clarvis.queue.writer import archive_completed
         archived = archive_completed()
         if archived > 0:
             log(f"Queue hygiene: archived {archived} completed items")
@@ -1966,6 +1971,26 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
     # §7.5-8.5: Cost, evolution, synthesis
     timings.update(_pf_cost_and_budget(ctx, _pf_errors))
     timings.update(_pf_evolution_synthesis(ctx, _pf_errors))
+    # §8.7: Wiki auto-ingest (promotion-gated)
+    t_wiki = time.monotonic()
+    if postflight_wiki_ingest:
+        try:
+            wiki_result = postflight_wiki_ingest(
+                task=ctx["task"],
+                task_tag=ctx.get("preflight_data", {}).get("task_tag", ""),
+                task_status=ctx["task_status"],
+                output_text=ctx["output_text"],
+                exit_code=exit_code,
+            )
+            if wiki_result.get("ingested"):
+                log(f"Wiki: ingested {wiki_result['source_id']} (gate={wiki_result['reason']})")
+            else:
+                log(f"Wiki: skip ({wiki_result.get('reason', 'unknown')})")
+        except Exception as e:
+            log(f"Wiki ingest failed (non-fatal): {e}")
+            _pf_errors.append("wiki_ingest")
+    timings["wiki_ingest"] = round(time.monotonic() - t_wiki, 3)
+
     # §9-13: Digest, transcript, queue, cleanup, finalize
     timings.update(_digest_write_fn(ctx["task"], ctx["task_status"], exit_code, task_duration, ctx["output_text"], _pf_errors))
     timings.update(_transcript_log(ctx, _pf_errors))

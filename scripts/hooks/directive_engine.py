@@ -408,9 +408,7 @@ class DirectiveEngine:
         """
         if self._obligation_tracker is None:
             try:
-                sys.path.insert(0, os.path.join(WORKSPACE, "scripts"))
-                import _paths  # noqa: F401 — registers all script subdirs on sys.path
-                from obligation_tracker import ObligationTracker
+                from clarvis.cognition.obligations import ObligationTracker
                 self._obligation_tracker = ObligationTracker()
             except ImportError:
                 self._obligation_tracker = False

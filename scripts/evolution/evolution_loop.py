@@ -483,8 +483,7 @@ class EvolutionLoop:
     def _add_to_queue(self, task: str):
         """Add a fix task to the evolution queue under P0 via shared queue_writer."""
         try:
-            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-            from queue_writer import add_task
+            from clarvis.queue.writer import add_task
             add_task(task, priority="P0", source="evolution-loop")
         except ImportError:
             # Fallback: direct write with file locking

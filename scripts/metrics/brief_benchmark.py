@@ -267,10 +267,10 @@ def run_benchmark(dry_run: bool = False) -> dict:
     """
     # Import brief generator
     try:
-        from context_compressor import generate_tiered_brief
+        from clarvis.context.assembly import generate_tiered_brief
     except ImportError:
         try:
-            from clarvis.context import generate_tiered_brief
+            from clarvis.context.compressor import generate_tiered_brief
         except ImportError:
             return {"error": "Cannot import generate_tiered_brief"}
 

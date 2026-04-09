@@ -199,7 +199,7 @@ acquire_global_claude_lock() {
                 scripts_dir="$(dirname "$(readlink -f "${BASH_SOURCE[0]:-$0}")")" 2>/dev/null || scripts_dir="${CLARVIS_WORKSPACE:-$HOME/.openclaw/workspace}/scripts/cron"
                 local caller_name
                 caller_name="$(basename "$0" .sh)"
-                python3 "$scripts_dir/../evolution/queue_writer.py" add \
+                python3 -m clarvis queue add \
                     "Deferred ${caller_name} (global lock conflict at $(date -u +%H:%M))" \
                     --priority P0 --source cron_overlap_guard 2>> "$logfile" || true
             fi

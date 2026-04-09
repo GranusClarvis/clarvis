@@ -38,7 +38,7 @@ except ImportError:
     score_tasks = None
 
 try:
-    from cognitive_load import should_defer_task, estimate_task_complexity, log_sizing
+    from clarvis.cognition.cognitive_load import should_defer_task, estimate_task_complexity, log_sizing
 except ImportError:
     should_defer_task = None
     estimate_task_complexity = None
@@ -68,7 +68,8 @@ except ImportError:
     EpisodicMemory = None
 
 try:
-    from context_compressor import generate_context_brief, generate_tiered_brief, compress_episodes
+    from clarvis.context.compressor import generate_context_brief, compress_episodes
+    from clarvis.context.assembly import generate_tiered_brief
 except ImportError:
     generate_context_brief = None
     generate_tiered_brief = None
@@ -95,7 +96,7 @@ except ImportError:
     wm_predict = None
 
 try:
-    from workspace_broadcast import WorkspaceBroadcast
+    from clarvis.cognition.workspace_broadcast import WorkspaceBroadcast
 except ImportError:
     WorkspaceBroadcast = None
 
@@ -131,7 +132,7 @@ except ImportError:
     cog_workspace = None
 
 try:
-    from prompt_optimizer import select_variant as po_select_variant
+    from clarvis.context.prompt_optimizer import select_variant as po_select_variant
 except ImportError:
     po_select_variant = None
 
@@ -146,7 +147,7 @@ except ImportError:
     score_evidence = None
 
 try:
-    from obligation_tracker import ObligationTracker
+    from clarvis.cognition.obligations import ObligationTracker
 except ImportError:
     ObligationTracker = None
 
@@ -260,7 +261,7 @@ def _try_auto_split(cand_task):
     if not parent_tag:
         return None
     try:
-        from queue_writer import ensure_subtasks_for_tag, mark_task_in_progress
+        from clarvis.queue.writer import ensure_subtasks_for_tag, mark_task_in_progress
         subtasks = [
             f"[{parent_tag}_1] Analyze: read relevant source files, identify change boundary",
             f"[{parent_tag}_2] Implement: core logic change in one focused increment",

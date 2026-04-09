@@ -29,7 +29,7 @@ The wiki (Layer 2) is the **curated, durable knowledge surface**. Not everything
 - At least 3 key claims are extracted and cited
 - The paper is from a credible venue or has clear technical merit
 
-**Typical sources:** PDFs in `knowledge/raw/papers/`, arXiv links
+**Typical sources:** PDFs in `knowledge/raw/paper/`, arXiv links
 
 ### 3. Durable Procedures → `procedure` pages
 
@@ -48,7 +48,7 @@ The wiki (Layer 2) is the **curated, durable knowledge surface**. Not everything
 - Analysis includes: purpose, architecture summary, notable files, and Clarvis relationship
 - Not a drive-by mention — the repo was actually examined
 
-**Typical sources:** `knowledge/raw/repos/`, GitHub exploration artifacts
+**Typical sources:** `knowledge/raw/repo/`, GitHub exploration artifacts
 
 ### 5. High-Value Operator Q&A → `question` pages
 

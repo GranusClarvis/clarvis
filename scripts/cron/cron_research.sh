@@ -183,7 +183,7 @@ STATIC_HEADER
         printf 'IN QUEUE: %s\n\n' "$QUEUE_RESEARCH"
         cat <<'STATIC_FOOTER'
 PRIORITIES: autonomous execution, AGI architecture, consciousness/IIT, open-source tools, self-improvement.
-ACTION: Search web, add 3-5 topics via: python3 scripts/evolution/queue_writer.py add "Research: [topic]" --priority P1 --source research_discovery
+ACTION: Search web, add 3-5 topics via: python3 -m clarvis queue add "Research: [topic]" --priority P1 --source research_discovery
 OUTPUT FORMAT (mandatory): TOPICS ADDED: <count>. Then list each topic on its own line.
 STATIC_FOOTER
     } > "$DISC_PROMPT_FILE"
@@ -236,8 +236,7 @@ if [ "$NOVELTY_EXIT" -ne 0 ]; then
 import os, sys
 from datetime import datetime, timezone
 _ws = os.environ.get('CLARVIS_WORKSPACE', os.getcwd())
-sys.path.insert(0, os.path.join(_ws, 'scripts/evolution'))
-from queue_writer import mark_task_complete, archive_completed
+from clarvis.queue.writer import mark_task_complete, archive_completed
 queue_file = 'memory/evolution/QUEUE.md'
 archive_file = 'memory/evolution/QUEUE_ARCHIVE.md'
 task = os.environ.get('RESEARCH_TASK', '').strip()
@@ -295,7 +294,7 @@ RESEARCH_RESULT:
   QUEUE_ITEMS: <semicolon-separated list of concrete implementation tasks, or 'none'>
   EFFORT: S|M|L
   STORED: <count> brain memories
-If DECISION=APPLY, also queue items: python3 scripts/evolution/queue_writer.py add '<task>' --priority P1 --source research"
+If DECISION=APPLY, also queue items: python3 -m clarvis queue add '<task>' --priority P1 --source research"
 
 # IMPORTANT: Claude Code MUST write research notes to the scoped run directory,
 # not to memory/research/ root. This prevents cross-run artifact pollution.
@@ -408,8 +407,7 @@ if [ "$TASK_EXIT" -eq 0 ]; then
 import os, sys
 from datetime import datetime, timezone
 _ws = os.environ.get('CLARVIS_WORKSPACE', os.getcwd())
-sys.path.insert(0, os.path.join(_ws, 'scripts/evolution'))
-from queue_writer import mark_task_complete, archive_completed
+from clarvis.queue.writer import mark_task_complete, archive_completed
 
 queue_file = 'memory/evolution/QUEUE.md'
 archive_file = 'memory/evolution/QUEUE_ARCHIVE.md'

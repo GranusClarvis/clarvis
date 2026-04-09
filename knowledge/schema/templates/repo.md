@@ -10,7 +10,7 @@ tags:
 aliases: []
 sources:
   - {{REPO_URL}}
-  - raw/repos/{{RAW_ANALYSIS_FILE}}
+  - raw/repo/{{RAW_ANALYSIS_FILE}}
 confidence: medium
 repo_url: "{{REPO_URL}}"
 language: ["{{LANG1}}", "{{LANG2}}"]

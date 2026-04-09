@@ -270,7 +270,7 @@ class TestCognitiveLoadSizing(unittest.TestCase):
     """Verify task sizing thresholds from cognitive_load.py."""
 
     def test_oversized_threshold(self):
-        from cognitive_load import estimate_task_complexity
+        from clarvis.cognition.cognitive_load import estimate_task_complexity
 
         oversized_task = (
             "[BIG_TASK] Refactor the entire authentication system — "
@@ -286,7 +286,7 @@ class TestCognitiveLoadSizing(unittest.TestCase):
                       f"Expected defer_to_sprint or warn, got {sizing}")
 
     def test_simple_passes(self):
-        from cognitive_load import estimate_task_complexity
+        from clarvis.cognition.cognitive_load import estimate_task_complexity
 
         simple_task = "[FIX] Update constant in config.py"
         sizing = estimate_task_complexity(simple_task)
@@ -294,7 +294,7 @@ class TestCognitiveLoadSizing(unittest.TestCase):
                          f"Expected proceed, got {sizing}")
 
     def test_medium_warns(self):
-        from cognitive_load import estimate_task_complexity
+        from clarvis.cognition.cognitive_load import estimate_task_complexity
 
         medium_task = "[MEDIUM] Implement a new validation function in validator.py"
         sizing = estimate_task_complexity(medium_task)

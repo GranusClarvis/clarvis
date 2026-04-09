@@ -25,20 +25,7 @@ WIKI_DIR = KNOWLEDGE / "wiki"
 RAW_DIR = KNOWLEDGE / "raw"
 TODAY = datetime.date.today().isoformat()
 
-sys.path.insert(0, str(Path(__file__).parent))
-
-try:
-    from wiki_canonical import CanonicalResolver, _slugify, _normalize
-except ImportError:
-    # Fallback if import fails
-    def _slugify(text):
-        s = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
-        return s[:60]
-    def _normalize(text):
-        s = text.lower().strip()
-        s = re.sub(r"[^a-z0-9\s]", "", s)
-        return re.sub(r"\s+", " ", s)
-    CanonicalResolver = None
+from clarvis.wiki.canonical import CanonicalResolver, _slugify, _normalize
 
 
 # ============================================================

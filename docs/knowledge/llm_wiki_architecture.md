@@ -37,11 +37,11 @@ The wiki layer adds durable, citable, human-readable knowledge pages that sit *b
 **What**: Original source artifacts, stored as-is or converted to markdown.
 
 **Subdirectories**:
-- `raw/papers/` — PDFs and extracted markdown from academic papers
+- `raw/paper/` — PDFs and extracted markdown from academic papers
 - `raw/web/` — Web page snapshots (markdown + metadata)
-- `raw/repos/` — Repo analyses, README extracts, structure summaries
-- `raw/images/` — Diagrams, screenshots, figures referenced by wiki pages
-- `raw/transcripts/` — Meeting notes, conversation excerpts
+- `raw/repo/` — Repo analyses, README extracts, structure summaries
+- `raw/image/` — Diagrams, screenshots, figures referenced by wiki pages
+- `raw/transcript/` — Meeting notes, conversation excerpts
 
 **Invariants**:
 - Raw files are **append-only** — once ingested, the file content does not change.

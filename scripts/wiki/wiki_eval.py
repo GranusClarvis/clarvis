@@ -28,7 +28,7 @@ GOLD_FILE = WORKSPACE / "data" / "wiki_eval" / "gold_questions.json"
 HISTORY_FILE = WORKSPACE / "data" / "wiki_eval" / "history.jsonl"
 LATEST_FILE = WORKSPACE / "data" / "wiki_eval" / "latest.json"
 
-sys.path.insert(0, str(WORKSPACE / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 
 def _load_gold():

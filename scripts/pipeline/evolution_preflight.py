@@ -23,7 +23,7 @@ import _paths  # noqa: F401 — registers all script subdirs on sys.path
 start_import = time.monotonic()
 
 try:
-    from clarvis_confidence import calibration as calibration_report
+    from clarvis.cognition.confidence import calibration as calibration_report
 except ImportError:
     calibration_report = None
 apply_calibration = None  # No separate apply function exists; calibration() is read-only
@@ -34,12 +34,12 @@ except ImportError:
     review_domains = None
 
 try:
-    from phi_metric import trend_analysis as get_trend
+    from clarvis.metrics.phi import trend_analysis as get_trend
 except ImportError:
     get_trend = None
 
 try:
-    from self_model import assess_all_capabilities as assess_capabilities
+    from clarvis.metrics.self_model import assess_all_capabilities as assess_capabilities
 except ImportError:
     assess_capabilities = None
 
@@ -72,7 +72,7 @@ except ImportError:
     update_goals = None
 
 try:
-    from context_compressor import compress_queue, compress_health
+    from clarvis.context.compressor import compress_queue, compress_health
 except ImportError:
     compress_queue = None
     compress_health = None

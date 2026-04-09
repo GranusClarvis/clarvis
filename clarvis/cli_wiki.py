@@ -20,7 +20,7 @@ import typer
 
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_enable=False)
 
-SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
+SCRIPTS = Path(__file__).resolve().parent.parent / "scripts" / "wiki"
 
 
 def _run(script: str, args: list[str], check: bool = True) -> int:
@@ -98,6 +98,43 @@ def ingest_registry(
         args += ["--status", status]
     args += ["--limit", str(limit)]
     _run("wiki_ingest.py", args)
+
+
+# ── drop (operator source drop) ──────────────────────────────
+
+@app.command("drop")
+def drop(
+    source: str = typer.Argument(..., help="File path or URL to ingest"),
+    type: str = typer.Option(None, "--type", "-t", help="Source type: paper|web|repo|transcript|image"),
+    title: str = typer.Option(None, "--title", help="Override title"),
+):
+    """Drop a source into the wiki — operator shortcut for ingest + compile.
+
+    Accepts file paths, URLs, or GitHub repo URLs. The operator's intent
+    to ingest acts as the promotion gate — no further qualification needed.
+    """
+    try:
+        import sys as _sys
+        _sys.path.insert(0, str(SCRIPTS))
+        from wiki_hooks import operator_drop
+        result = operator_drop(source, source_type=type, title=title)
+        if "error" in result:
+            typer.echo(f"Error: {result['error']}", err=True)
+            raise typer.Exit(1)
+        typer.echo(f"Ingested: {result.get('source_id', 'unknown')}")
+        typer.echo(f"Raw path: {result.get('raw_path', 'n/a')}")
+        typer.echo(f"Title: {result.get('title', 'n/a')}")
+        # Auto-compile
+        typer.echo("\nCompiling to wiki page...")
+        sid = result.get("source_id")
+        if sid:
+            _run("wiki_compile.py", ["compile", "--source-id", sid], check=False)
+    except ImportError:
+        typer.echo("wiki_hooks module not available — falling back to raw ingest", err=True)
+        args = ["file", source]
+        if type:
+            args += ["--type", type]
+        _run("wiki_ingest.py", args)
 
 
 # ── query ─────────────────────────────────────────────────────

@@ -16,26 +16,25 @@ import _paths  # noqa: F401,E402
 
 CRITICAL_SCRIPTS = [
     "heartbeat_gate", "heartbeat_preflight", "heartbeat_postflight",
-    "attention", "context_compressor", "prompt_builder",
-    "episodic_memory", "procedural_memory", "working_memory", "hebbian_memory",
-    "phi_metric", "dream_engine", "queue_writer", "task_router",
-    "brain_bridge", "brain_introspect",
-    "self_model", "self_report", "self_representation",
-    "clarvis_reasoning", "clarvis_confidence", "clarvis_reflection",
-    "somatic_markers", "reasoning_chain_hook", "reasoning_chains",
-    "actr_activation", "soar_engine", "workspace_broadcast",
+    "context_compressor", "prompt_builder",
+    "dream_engine", "task_router",
+    "brain_introspect",
+    "self_report", "self_representation",
+    "clarvis_reflection",
+    "somatic_markers", "reasoning_chain_hook",
+    "actr_activation",
 ]
 
 COGNITIVE_SCRIPTS = [
-    "absolute_zero", "causal_model", "cognitive_load",
+    "absolute_zero", "causal_model",
     "evolution_loop", "evolution_preflight", "failure_amplifier",
     "goal_tracker", "graph_compaction",
     "hyperon_atomspace", "intra_linker", "knowledge_synthesis",
-    "memory_consolidation", "meta_learning", "parameter_evolution",
+    "meta_learning", "parameter_evolution",
     "performance_benchmark", "prediction_review",
     "retrieval_benchmark", "retrieval_experiment", "retrieval_quality",
     "temporal_self", "theory_of_mind",
-    "thought_protocol", "world_models",
+    "world_models",
 ]
 
 
@@ -120,7 +119,7 @@ class TestBroadcastCycle:
 
     def test_broadcast_imports(self):
         """Both modules import and key classes/functions exist."""
-        from workspace_broadcast import WorkspaceBroadcast, Codelet, Coalition
+        from clarvis.cognition.workspace_broadcast import WorkspaceBroadcast, Codelet, Coalition
         from self_representation import encode_self_state, broadcast_self_state
         assert WorkspaceBroadcast is not None
         assert encode_self_state is not None
@@ -144,7 +143,7 @@ class TestBroadcastCycle:
 
     def test_collect_self_codelet(self):
         """WorkspaceBroadcast.collect() produces a self_model codelet without error."""
-        from workspace_broadcast import WorkspaceBroadcast
+        from clarvis.cognition.workspace_broadcast import WorkspaceBroadcast
         ws = WorkspaceBroadcast()
         codelets = ws.collect()
         # At least some codelets collected (self_model may or may not be present

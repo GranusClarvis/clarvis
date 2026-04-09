@@ -11,10 +11,7 @@ def gc(
 ):
     """Archive old completed tasks and rotate logs."""
     import json
-    import sys
-    import os
-    sys.path.insert(0, os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "scripts", "tools"))
-    from context_compressor import gc as run_gc
+    from clarvis.context.gc import gc as run_gc
 
     result = run_gc(dry_run=dry_run)
     typer.echo(json.dumps(result, indent=2))

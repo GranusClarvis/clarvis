@@ -871,7 +871,7 @@ def _get_spotlight_items(n=5, exclude_task=""):
     Excludes items that closely match `exclude_task` to avoid echoing the current task.
     """
     try:
-        from attention import attention
+        from clarvis.cognition.attention import attention
         attention._load()
         focused = attention.focus()
         items = []

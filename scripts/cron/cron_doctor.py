@@ -765,8 +765,7 @@ def _rerun_job(job_name: str, result: dict) -> dict:
 def _add_evolution_task(task: str):
     """Add a fix task to QUEUE.md under P0 via shared queue_writer."""
     try:
-        sys.path.insert(0, str(WORKSPACE / "scripts"))
-        from queue_writer import add_task
+        from clarvis.queue.writer import add_task
         add_task(task, priority="P0", source="cron-doctor")
     except ImportError:
         # Fallback: direct write with file locking
