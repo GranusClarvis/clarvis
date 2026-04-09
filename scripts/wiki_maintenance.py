@@ -169,6 +169,52 @@ def job_drift() -> dict:
     return drift
 
 
+# ── Source Type Detection ─────────────────────────────────────
+
+def _detect_source_type(filepath: Path) -> str:
+    """Detect wiki source type from file content heuristics.
+
+    Returns one of: paper, web, repo, transcript.
+    Falls back to 'web' for generic research markdown (not 'paper').
+    """
+    try:
+        text = filepath.read_text(errors="replace")[:3000]
+    except OSError:
+        return "web"
+    text_lower = text.lower()
+
+    # Paper signals: arxiv, DOI, abstract section, citation-heavy
+    paper_signals = (
+        "arxiv" in text_lower,
+        "doi:" in text_lower or "doi.org" in text_lower,
+        re.search(r"^##?\s*abstract\b", text, re.MULTILINE | re.IGNORECASE) is not None,
+        text_lower.count("et al") >= 2,
+        re.search(r"\[\d+\]", text) is not None and text.count("[") > 5,
+    )
+    if sum(paper_signals) >= 2:
+        return "paper"
+
+    # Repo signals: code blocks, file paths, imports
+    repo_signals = (
+        text.count("```") >= 4,
+        re.search(r"(import |from .+ import |require\(|#include)", text) is not None,
+        re.search(r"(README|setup\.py|package\.json|Cargo\.toml)", text) is not None,
+    )
+    if sum(repo_signals) >= 2:
+        return "repo"
+
+    # Transcript signals: speaker labels, timestamps
+    transcript_signals = (
+        re.search(r"^\[?\d{1,2}:\d{2}", text, re.MULTILINE) is not None,
+        re.search(r"^(Speaker|Host|Guest|Q:|A:)\s", text, re.MULTILINE) is not None,
+    )
+    if sum(transcript_signals) >= 1:
+        return "transcript"
+
+    # Default: generic research/web content
+    return "web"
+
+
 # ── Research Promotion ────────────────────────────────────────
 
 def job_promote(limit: int = 5, dry_run: bool = False) -> dict:
@@ -220,8 +266,11 @@ def job_promote(limit: int = 5, dry_run: bool = False) -> dict:
     candidates.sort(key=lambda x: (x[1], -x[2]))
 
     for f, age, size in candidates[:limit]:
+        # Detect source type from content instead of assuming paper
+        source_type = _detect_source_type(f)
+
         if dry_run:
-            log(f"  WOULD PROMOTE: {f.name} ({age}d old, {size} chars)")
+            log(f"  WOULD PROMOTE: {f.name} ({age}d old, {size} chars, type={source_type})")
             promoted.append(f.name)
         else:
             # Delegate to wiki_ingest
@@ -229,7 +278,7 @@ def job_promote(limit: int = 5, dry_run: bool = False) -> dict:
                 import subprocess
                 result = subprocess.run(
                     [sys.executable, str(WORKSPACE / "scripts" / "wiki_ingest.py"),
-                     "file", str(f), "--type", "paper"],
+                     "file", str(f), "--type", source_type],
                     capture_output=True, text=True, timeout=60
                 )
                 if result.returncode == 0:

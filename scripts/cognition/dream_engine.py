@@ -33,7 +33,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import _paths  # noqa: F401 — registers all script subdirs on sys.path
 
 from brain import brain
-from episodic_memory import episodic
+from clarvis.memory.episodic_memory import episodic
 from reasoning_chains import create_chain, add_step, complete_step
 
 DREAM_LOG = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))) / "data/dream_log.json"

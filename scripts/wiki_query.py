@@ -215,10 +215,10 @@ def gather_context(question: str, max_pages: int = 3, max_raw: int = 2) -> dict:
 # Answer Generation (template-based, no LLM needed)
 # ============================================================
 
-def generate_answer_artifact(question: str, context: dict, artifact_type: str = "question") -> tuple[str, str]:
+def generate_answer_artifact(question: str, context: dict, artifact_type: str = "question") -> tuple[str, str, str]:
     """Generate an answer artifact from gathered context.
 
-    Returns (slug, markdown_content). The answer synthesizes found wiki pages
+    Returns (slug, markdown_content, dest_section). The answer synthesizes found wiki pages
     and raw sources into a structured response. Without an LLM, this creates
     a well-organized evidence brief that can be refined later.
     """

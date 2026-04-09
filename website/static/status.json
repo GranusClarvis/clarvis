@@ -4,74 +4,74 @@
     "pending_mode": null
   },
   "queue": {
-    "pending": 0,
-    "in_progress": 2,
-    "done": 11
+    "pending": 92,
+    "in_progress": 0,
+    "done": 1
   },
   "benchmarks": {
     "clr": {
-      "clr": 0.869,
+      "clr": 0.725,
       "baseline_clr": 0.19,
-      "value_add": 0.679,
+      "value_add": 0.535,
       "gate_pass": true,
       "dimensions": {
-        "memory_quality": 0.99,
+        "memory_quality": 0.923,
         "retrieval_precision": 1.0,
-        "prompt_context": 0.741,
-        "task_success": 0.785,
-        "autonomy": 0.774,
-        "efficiency": 0.985,
-        "integration_dynamics": 0.847
+        "prompt_context": 0.508,
+        "task_success": 0.5,
+        "autonomy": 0.411,
+        "efficiency": 0.986,
+        "integration_dynamics": 0.86
       },
-      "timestamp": "2026-04-04T05:45:16.896504+00:00"
+      "timestamp": "2026-04-09T05:45:24.334290+00:00"
     },
     "pi": {
-      "pi": 1.0,
+      "pi": 0.7013,
       "dimensions": 15,
-      "timestamp": "2026-04-04T05:45:02.379122+00:00"
+      "timestamp": "2026-04-09T05:45:01.761896+00:00"
     }
   },
   "phi": {
-    "current": 0.7415,
-    "timestamp": "2026-04-03T18:00:04.129105+00:00"
+    "current": 0.7212,
+    "timestamp": "2026-04-07T18:00:03.953968+00:00"
   },
   "bloat_score": 0.0,
   "brain": {
-    "total_memories": 2982,
+    "total_memories": 2888,
     "collections": 10
   },
   "episodes": {
-    "success_rate": 0.805,
-    "total": 411,
+    "success_rate": 0.94,
+    "total": 369,
     "breakdown": {
-      "success": 331,
-      "soft_failure": 45,
+      "success": 347,
+      "soft_failure": 0,
       "failure": 11,
-      "timeout": 16
+      "timeout": 9
     }
   },
-  "uptime_since": "2026-02-18 12:20:37",
+  "uptime_since": "2026-02-18 12:20:55",
   "recent_completions": [
     {
-      "tag": "QUEUE_ENGINE_V2",
+      "tag": "RESEARCH_RETRIEVAL_OPTIMIZATION",
       "status": "success"
     },
     {
-      "tag": "QUEUE_RUN_RECORDS",
+      "tag": "SPINE_PROXY_REPLACEMENT",
       "status": "success"
     },
     {
-      "tag": "QUEUE_V2_SOAK",
+      "tag": "SPINE_HOOK_DEPS_MIGRATE",
       "status": "success"
     },
     {
-      "tag": "PKG_COST_OPTIMIZER_MIGRATE",
+      "tag": "QUEUE_AUTO_ARCHIVE",
       "status": "success"
     },
     {
-      "tag": "PKG_COST_TESTS_MIGRATE",
+      "tag": "CRON_CANONICAL_ENTRYPOINTS",
       "status": "success"
     }
   ],
-  "updated_at": "2026-04-04T05:50:03.159828+00:00"
+  "updated_at": "2026-04-09T17:10:55.231754+00:00"
 }

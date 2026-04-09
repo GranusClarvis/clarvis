@@ -147,7 +147,7 @@ except ImportError:
     WorkspaceBroadcast = None
 
 try:
-    from brain_bridge import brain_record_outcome, brain_update_context
+    from clarvis.heartbeat.brain_bridge import brain_record_outcome, brain_update_context
 except ImportError:
     brain_record_outcome = None
     brain_update_context = None

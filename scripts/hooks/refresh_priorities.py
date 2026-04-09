@@ -16,7 +16,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-WORKSPACE = Path(__file__).resolve().parent.parent
+WORKSPACE = Path(__file__).resolve().parent.parent.parent
 QUEUE_PATH = WORKSPACE / "memory" / "evolution" / "QUEUE.md"
 ROADMAP_PATH = WORKSPACE / "ROADMAP.md"
 

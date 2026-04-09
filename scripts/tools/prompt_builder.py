@@ -104,7 +104,7 @@ def _get_episodic_recall(task=None, limit=3):
     Also includes causal chains for recent failures.
     """
     try:
-        from episodic_memory import EpisodicMemory
+        from clarvis.memory.episodic_memory import EpisodicMemory
         em = EpisodicMemory()
         if not em.episodes:
             return ""
@@ -163,7 +163,7 @@ def _get_synaptic_associations(task, recalled_ids=None):
     if not recalled_ids:
         return ""
     try:
-        from synaptic_memory import SynapticMemory
+        from clarvis.memory.synaptic_memory import SynapticMemory
         syn = SynapticMemory()
         if syn.stats().get("total_synapses", 0) == 0:
             return ""

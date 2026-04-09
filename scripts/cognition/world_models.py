@@ -888,7 +888,7 @@ class HierarchicalWorldModel:
 
 def get_world_model():
     """Get a trained world model instance."""
-    from episodic_memory import episodic
+    from clarvis.memory.episodic_memory import episodic
 
     wm = HierarchicalWorldModel()
     wm.train(episodic.episodes)
@@ -903,7 +903,7 @@ def predict_task_outcome(task_text, domain="unknown"):
 
 def simulate_and_rank(candidate_tasks, domain="unknown"):
     """Quick API: Mind's Eye simulation for candidate tasks."""
-    from episodic_memory import episodic
+    from clarvis.memory.episodic_memory import episodic
     wm = get_world_model()
     return wm.simulate_candidates(candidate_tasks, episodic.episodes, domain)
 
@@ -937,7 +937,7 @@ if __name__ == "__main__":
     cmd = sys.argv[1]
 
     if cmd == "train":
-        from episodic_memory import episodic
+        from clarvis.memory.episodic_memory import episodic
         wm = HierarchicalWorldModel()
         results = wm.train(episodic.episodes)
         wm.save()

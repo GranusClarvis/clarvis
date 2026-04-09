@@ -402,7 +402,7 @@ def aggregate_procedures() -> dict:
         Dict with aggregation results
     """
     try:
-        from procedural_memory import list_procedures, store_procedure
+        from clarvis.memory.procedural_memory import list_procedures, store_procedure
         from brain import brain, PROCEDURES
     except ImportError as e:
         return {"error": f"Import failed: {e}"}
@@ -795,7 +795,7 @@ def promote_tool(tool_id: str) -> dict:
     available for the tool-user (M2.5 / future heartbeats) to discover and use.
     """
     try:
-        from procedural_memory import store_procedure
+        from clarvis.memory.procedural_memory import store_procedure
     except ImportError:
         return {"error": "procedural_memory not available"}
 

@@ -130,7 +130,7 @@ def _save_state(state):
 def _encode_competence():
     """Compute competence dimension from recent task success rate."""
     try:
-        from episodic_memory import EpisodicMemory
+        from clarvis.memory.episodic_memory import EpisodicMemory
         em = EpisodicMemory()
         recent = em.episodes[-20:] if em.episodes else []
         if recent:
@@ -175,7 +175,7 @@ def _encode_procedural_fluency():
 def _encode_episodic_richness():
     """Compute episodic richness from episode count and domain diversity."""
     try:
-        from episodic_memory import EpisodicMemory
+        from clarvis.memory.episodic_memory import EpisodicMemory
         em = EpisodicMemory()
         n_episodes = len(em.episodes)
         domains = set()
@@ -255,7 +255,7 @@ def _encode_prediction_accuracy():
 def _encode_cognitive_load():
     """Compute cognitive load from tasks per hour (last 3 hours)."""
     try:
-        from episodic_memory import EpisodicMemory
+        from clarvis.memory.episodic_memory import EpisodicMemory
         em = EpisodicMemory()
         now = datetime.now(timezone.utc)
         cutoff = now - timedelta(hours=3)
@@ -273,7 +273,7 @@ def _encode_cognitive_load():
 def _encode_momentum():
     """Compute momentum from success/failure streak direction."""
     try:
-        from episodic_memory import EpisodicMemory
+        from clarvis.memory.episodic_memory import EpisodicMemory
         em = EpisodicMemory()
         last_5 = em.episodes[-5:] if em.episodes else []
         if last_5:
@@ -292,7 +292,7 @@ def _encode_momentum():
 def _encode_novelty_exposure():
     """Compute novelty exposure from unique error patterns in recent tasks."""
     try:
-        from episodic_memory import EpisodicMemory
+        from clarvis.memory.episodic_memory import EpisodicMemory
         em = EpisodicMemory()
         recent = em.episodes[-20:] if em.episodes else []
         error_set = set()
@@ -379,7 +379,7 @@ def check_consistency():
 
     # --- Episodic view: success rates per domain ---
     try:
-        from episodic_memory import EpisodicMemory
+        from clarvis.memory.episodic_memory import EpisodicMemory
         em = EpisodicMemory()
         domain_eps = defaultdict(lambda: {"success": 0, "total": 0})
         for ep in em.episodes[-50:]:

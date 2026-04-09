@@ -100,7 +100,7 @@ except ImportError:
     WorkspaceBroadcast = None
 
 try:
-    from brain_bridge import brain_preflight_context
+    from clarvis.heartbeat.brain_bridge import brain_preflight_context
 except ImportError:
     brain_preflight_context = None
 
@@ -116,7 +116,7 @@ except ImportError:
     get_automation_insights = None
 
 try:
-    from synaptic_memory import SynapticMemory
+    from clarvis.memory.synaptic_memory import SynapticMemory
 except ImportError:
     SynapticMemory = None
 

@@ -634,7 +634,7 @@ def _get_failure_patterns(current_task, n=3):
     """
     patterns = []
     try:
-        from episodic_memory import EpisodicMemory
+        from clarvis.memory.episodic_memory import EpisodicMemory
         em = EpisodicMemory()
 
         # Get failures relevant to this task type

@@ -17,7 +17,7 @@ from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
-WORKSPACE = Path(__file__).resolve().parent.parent
+WORKSPACE = Path(__file__).resolve().parent.parent.parent
 DATA_DIR = WORKSPACE / "data"
 MEMORY_DIR = WORKSPACE / "memory"
 

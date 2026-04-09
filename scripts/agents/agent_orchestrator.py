@@ -621,7 +621,7 @@ def _default_ci_pipeline() -> list[dict]:
                 "task": (
                     "Integration check: import all key scripts and verify no import errors.\n"
                     "python3 -c \"\nimport sys; sys.path.insert(0, 'workspace/scripts')\n"
-                    "from brain import brain\nfrom episodic_memory import EpisodicMemory\n"
+                    "from brain import brain\nfrom clarvis.memory.episodic_memory import EpisodicMemory\n"
                     "from attention import AttentionSystem\nprint('All imports OK')\n\""
                 ),
                 "timeout": 300,

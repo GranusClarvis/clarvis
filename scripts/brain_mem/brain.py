@@ -87,7 +87,7 @@ if __name__ == "__main__":
             print("  Graph nodes: OK (all edge references resolved)")
 
         try:
-            from memory_consolidation import get_consolidation_stats
+            from clarvis.memory.memory_consolidation import get_consolidation_stats
             cs = get_consolidation_stats()
             print("\nConsolidation status:")
             print(f"  Potential duplicates: {cs['potential_duplicates']}")

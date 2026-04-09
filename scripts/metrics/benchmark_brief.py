@@ -34,10 +34,10 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-DATA_DIR = Path(__file__).parent.parent / "data" / "benchmarks"
+DATA_DIR = Path(__file__).parent.parent.parent / "data" / "benchmarks"
 BENCHMARK_FILE = DATA_DIR / "brief_v2_benchmark.jsonl"
 REPORT_FILE = DATA_DIR / "brief_v2_report.json"
-LOG_FILE = Path(__file__).parent.parent / "memory" / "cron" / "autonomous.log"
+LOG_FILE = Path(__file__).parent.parent.parent / "memory" / "cron" / "autonomous.log"
 
 TARGET_HEARTBEATS = 10
 TARGET_SUCCESS_RATE = 0.60

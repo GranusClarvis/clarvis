@@ -56,7 +56,7 @@ except ImportError:
     evolve_params = None
 
 try:
-    from episodic_memory import EpisodicMemory
+    from clarvis.memory.episodic_memory import EpisodicMemory
 except ImportError:
     EpisodicMemory = None
 

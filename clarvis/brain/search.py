@@ -458,6 +458,11 @@ class SearchMixin:
         else:
             use_parallel = len(valid_collections) >= 3
 
+        # get_related() uses the graph SQLite connection which is not thread-safe.
+        # Force sequential dispatch when include_related is requested.
+        if include_related and use_parallel:
+            use_parallel = False
+
         query_fn = partial(self._query_single_collection,
                            query=query, query_embedding=query_embedding, n=n,
                            cutoff_epoch=cutoff_epoch, cutoff_date=cutoff_date,
