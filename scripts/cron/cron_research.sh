@@ -18,6 +18,9 @@ QUEUE_FILE="memory/evolution/QUEUE.md"
 # Prevent nested Claude sessions
 unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT 2>/dev/null || true
 
+# Arm outer script timeout (2700s = 45 min) — kills entire script on hang
+set_script_timeout 2700 "$LOGFILE"
+
 # Acquire locks: local (with stale detection) + global Claude
 acquire_local_lock "/tmp/clarvis_research.lock" "$LOGFILE" 2400
 acquire_global_claude_lock "$LOGFILE"
@@ -54,13 +57,21 @@ if found:
 if [ -z "$RESEARCH_TASK" ]; then
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] No pending research tasks" >> "$LOGFILE"
 
-    # Research auto-replenish can be paused by user preference.
-    # When paused, cron_research only executes explicitly queued research tasks
-    # and does NOT auto-discover/add new research topics.
-    RESEARCH_AUTO_REPLENISH="${RESEARCH_AUTO_REPLENISH:-0}"
-    if [ "$RESEARCH_AUTO_REPLENISH" != "1" ]; then
-        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Auto-replenish paused; exiting without discovery fallback" >> "$LOGFILE"
-        exit 0
+    # Research auto-replenish: gated by durable config file (data/research_config.json).
+    # The config file is the single source of truth; env var is a legacy override.
+    # Check durable config first, fall back to env var for backward compat.
+    RESEARCH_DISCOVERY_ALLOWED=$(python3 -c "
+from clarvis.research_config import is_enabled
+print('1' if is_enabled('research_discovery_fallback') else '0')
+" 2>/dev/null || echo "0")
+
+    if [ "$RESEARCH_DISCOVERY_ALLOWED" != "1" ]; then
+        # Legacy env var override (if someone sets it explicitly)
+        RESEARCH_AUTO_REPLENISH="${RESEARCH_AUTO_REPLENISH:-0}"
+        if [ "$RESEARCH_AUTO_REPLENISH" != "1" ]; then
+            echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Auto-replenish OFF (research_config.json); exiting without discovery fallback" >> "$LOGFILE"
+            exit 0
+        fi
     fi
 
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Auto-replenish enabled — running discovery fallback" >> "$LOGFILE"
@@ -523,22 +534,8 @@ lesson = store.record(topic=topic, decision=decision, findings=findings, queue_i
 print(f'Lesson recorded: [{lesson.decision}] {lesson.topic[:60]}')
 " >> "$LOGFILE" 2>&1
 
-# Log cost estimate (Claude Code research sessions ~5k input, ~2k output tokens per minute)
-python3 -c "
-import sys, os
-try:
-    from clarvis.orch.cost_tracker import CostTracker, estimate_tokens
-    COST_LOG = os.path.join('$SCRIPTS', '..', 'data', 'costs.jsonl')
-    ct = CostTracker(COST_LOG)
-    # Rough estimate: ~5k input + ~2k output tokens per minute of research
-    duration_min = max(1, $TASK_DURATION // 60)
-    task_desc = '''${RESEARCH_TASK:0:150}'''
-    ct.log('claude-code', 5000 * duration_min, 2000 * duration_min,
-           source='research', task=task_desc[:150], duration_s=$TASK_DURATION)
-    print('Cost logged')
-except Exception as e:
-    print(f'Cost log failed: {e}', file=sys.stderr)
-" >> "$LOGFILE" 2>&1
+# Cost logging removed — postflight already logs cost for the spawned Claude session.
+# Duplicate logging here caused double-counting. (Fixed 2026-04-09, ref: SECOND_PASS_VALIDATION F4.6.2)
 
 rm -f "$TASK_OUTPUT_FILE"
 

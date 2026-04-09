@@ -422,7 +422,7 @@ def generate_health_report(issues: list[LintIssue] | None = None) -> str:
                     try:
                         record = json.loads(line)
                         total_sources += 1
-                        ts = record.get("ingested_at", "")[:10]
+                        ts = record.get("ingest_ts", "")[:10]
                         if ts:
                             try:
                                 d = datetime.date.fromisoformat(ts)

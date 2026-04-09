@@ -410,18 +410,11 @@ class WorkspaceBroadcast:
             learning_results["brain"] = f"failed: {e}"
 
         # 4. SELF-REPRESENTATION
-        try:
-            from clarvis.brain import brain as brain_sr
-            brain_sr.store(
-                f"GWT broadcast context: {broadcast_text[:200]}",
-                collection="clarvis-context",
-                importance=0.4,
-                tags=["gwt", "broadcast", "self_model"],
-                source="workspace_broadcast",
-            )
-            learning_results["self_model"] = "stored"
-        except Exception as e:
-            learning_results["self_model"] = f"failed: {e}"
+        # NOTE: Removed brain.store() for GWT broadcast context — this was
+        # generating 158+ near-identical entries.  Brain context is already
+        # set via set_context() above (step 3).  Episodic tagging (step 2)
+        # preserves the last 3 broadcasts for history.
+        learning_results["self_model"] = "skipped (dedup: context already set)"
 
         # 5. SOAR
         try:

@@ -185,9 +185,9 @@ def job_promote(limit: int = 5, dry_run: bool = False) -> dict:
                 if line:
                     try:
                         entry = json.loads(line)
-                        known_hashes.add(entry.get("content_hash", ""))
-                        # Also track by original path
-                        known_hashes.add(entry.get("original_path", ""))
+                        known_hashes.add(entry.get("checksum_sha256", ""))
+                        # Also track by raw path
+                        known_hashes.add(entry.get("raw_path", ""))
                     except json.JSONDecodeError:
                         continue
 

@@ -29,7 +29,7 @@ CRITICAL_SCRIPTS = [
 COGNITIVE_SCRIPTS = [
     "absolute_zero", "causal_model", "cognitive_load",
     "evolution_loop", "evolution_preflight", "failure_amplifier",
-    "goal_tracker", "graph_compaction", "graphrag_communities",
+    "goal_tracker", "graph_compaction",
     "hyperon_atomspace", "intra_linker", "knowledge_synthesis",
     "memory_consolidation", "meta_learning", "parameter_evolution",
     "performance_benchmark", "prediction_review",

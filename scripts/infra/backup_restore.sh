@@ -145,7 +145,78 @@ create_pre_restore_snapshot() {
   echo "$snap_dir"
 }
 
-# --- Restore from backup ---
+# --- Build incremental restore chain ---
+# For a target backup, find the nearest full backup before it, then collect
+# all incrementals between the full and the target (inclusive).  Returns an
+# ordered list of backup dirs to apply (full first, incrementals in date order).
+build_restore_chain() {
+  local target_dir="$1"
+  local target_name
+  target_name=$(basename "$target_dir")
+
+  # Read target backup type
+  local target_type="full"
+  if [ -f "$target_dir/meta.json" ]; then
+    target_type=$(python3 -c "import json; print(json.load(open('$target_dir/meta.json')).get('type','full'))" 2>/dev/null || echo "full")
+  fi
+
+  # If the target is a full backup, chain is just that one backup
+  if [ "$target_type" = "full" ]; then
+    echo "$target_dir"
+    return
+  fi
+
+  # Find the most recent full backup at or before the target
+  local full_dir=""
+  # shellcheck disable=SC2012,SC2045
+  for dir in $(ls -dt "$BACKUP_ROOT"/2*/ 2>/dev/null); do
+    local dname
+    dname=$(basename "$dir")
+    # Only consider backups at or before the target
+    if [[ "$dname" > "$target_name" ]]; then
+      continue
+    fi
+    if [ -f "$dir/meta.json" ]; then
+      local btype
+      btype=$(python3 -c "import json; print(json.load(open('$dir/meta.json')).get('type','full'))" 2>/dev/null || echo "unknown")
+      if [ "$btype" = "full" ]; then
+        full_dir="$dir"
+        break
+      fi
+    fi
+  done
+
+  if [ -z "$full_dir" ]; then
+    log "WARNING: No full backup found before $target_name — restoring target only"
+    echo "$target_dir"
+    return
+  fi
+
+  local full_name
+  full_name=$(basename "$full_dir")
+
+  # Collect: full + all incrementals between full and target (inclusive), oldest first
+  local chain=()
+  # shellcheck disable=SC2012,SC2045
+  for dir in $(ls -dt "$BACKUP_ROOT"/2*/ 2>/dev/null | tac); do
+    local dname
+    dname=$(basename "$dir")
+    if [[ "$dname" < "$full_name" ]]; then
+      continue
+    fi
+    if [[ "$dname" > "$target_name" ]]; then
+      continue
+    fi
+    chain+=("$dir")
+  done
+
+  # Print chain, one dir per line
+  for d in "${chain[@]}"; do
+    echo "$d"
+  done
+}
+
+# --- Restore from backup (with incremental chaining) ---
 do_restore() {
   local backup_dir
   backup_dir=$(resolve_backup)
@@ -171,15 +242,33 @@ print(f\"  Created:  {m['created_at']}\")
 " 2>/dev/null || true
   fi
 
-  # Count files to restore
-  local file_count
-  file_count=$(find "$backup_dir" -type f ! -name 'manifest.json' ! -name 'meta.json' ! -name '*.bundle' ! -name '*.tar.gz' | wc -l)
-  log "Files to restore: $file_count"
+  # Build incremental restore chain
+  log "Building restore chain..."
+  mapfile -t CHAIN < <(build_restore_chain "$backup_dir")
+  log "Restore chain: ${#CHAIN[@]} backup(s)"
+  for c in "${CHAIN[@]}"; do
+    local cname ctype
+    cname=$(basename "$c")
+    ctype=$(python3 -c "import json; print(json.load(open('$c/meta.json')).get('type','?'))" 2>/dev/null || echo "?")
+    log "  $cname ($ctype)"
+  done
+
+  # Count total files across chain
+  local total_files=0
+  for c in "${CHAIN[@]}"; do
+    local cnt
+    cnt=$(find "$c" -type f ! -name 'manifest.json' ! -name 'meta.json' ! -name '*.bundle' ! -name '*.tar.gz' 2>/dev/null | wc -l)
+    ((total_files += cnt)) || true
+  done
+  log "Total files to restore: $total_files"
 
   if [ "$DRY_RUN" = true ]; then
-    log "DRY RUN - would restore from: $backup_dir"
-    find "$backup_dir" -type f ! -name 'manifest.json' ! -name 'meta.json' ! -name '*.bundle' ! -name '*.tar.gz' | while read -r f; do
-      echo "  ${f#$backup_dir/}"
+    log "DRY RUN - would restore chain:"
+    for c in "${CHAIN[@]}"; do
+      log "  --- $(basename "$c") ---"
+      find "$c" -type f ! -name 'manifest.json' ! -name 'meta.json' ! -name '*.bundle' ! -name '*.tar.gz' | while read -r f; do
+        echo "    ${f#$c/}"
+      done
     done
     return
   fi
@@ -187,7 +276,7 @@ print(f\"  Created:  {m['created_at']}\")
   # Confirmation
   if [ "$SKIP_CONFIRM" = false ]; then
     echo ""
-    echo "This will overwrite current workspace files with backup: $backup_name"
+    echo "This will overwrite current workspace files using ${#CHAIN[@]} backup(s) ending at: $backup_name"
     read -p "Continue? [y/N] " -n 1 -r
     echo
     [[ $REPLY =~ ^[Yy]$ ]] || { log "Aborted."; exit 0; }
@@ -198,33 +287,36 @@ print(f\"  Created:  {m['created_at']}\")
   snap=$(create_pre_restore_snapshot)
   log "Pre-restore snapshot saved to: $snap"
 
-  # Restore files
+  # Restore files in chain order (full first, then incrementals overlay)
   log "Restoring files..."
   local restored=0
   local errors=0
 
-  find "$backup_dir" -type f ! -name 'manifest.json' ! -name 'meta.json' ! -name '*.bundle' ! -name '*.tar.gz' -print0 | while IFS= read -r -d '' file; do
-    local rel_path="${file#$backup_dir/}"
-    local dest="$WORKSPACE/$rel_path"
-    mkdir -p "$(dirname "$dest")"
-    if cp -p "$file" "$dest" 2>/dev/null; then
-      ((restored++)) || true
-    else
-      log "ERROR restoring: $rel_path"
-      ((errors++)) || true
-    fi
+  for c in "${CHAIN[@]}"; do
+    log "  Applying: $(basename "$c")"
+    find "$c" -type f ! -name 'manifest.json' ! -name 'meta.json' ! -name '*.bundle' ! -name '*.tar.gz' -print0 | while IFS= read -r -d '' file; do
+      local rel_path="${file#$c/}"
+      local dest="$WORKSPACE/$rel_path"
+      mkdir -p "$(dirname "$dest")"
+      if cp -p "$file" "$dest" 2>/dev/null; then
+        ((restored++)) || true
+      else
+        log "ERROR restoring: $rel_path"
+        ((errors++)) || true
+      fi
+    done
   done
 
-  # Verify restored files against manifest
+  # Verify restored files against the target backup's manifest
   if [ -f "$backup_dir/manifest.json" ]; then
-    log "Verifying restored files..."
+    log "Verifying restored files against target manifest..."
     python3 -c "
 import json, hashlib, sys
 
 with open('$backup_dir/manifest.json') as f:
     manifest = json.load(f)
 
-ok = fail = 0
+ok = fail = skip = 0
 for entry in manifest.get('files', []):
     path = '$WORKSPACE/' + entry['path']
     expected = entry['sha256']
@@ -237,15 +329,14 @@ for entry in manifest.get('files', []):
             print(f'MISMATCH: {entry[\"path\"]}')
             fail += 1
     except FileNotFoundError:
-        # File might be from an incremental that didn't include it
-        pass
+        skip += 1
 
-print(f'Verified: {ok} OK, {fail} failed')
+print(f'Verified: {ok} OK, {fail} failed, {skip} not in backup')
 sys.exit(1 if fail > 0 else 0)
 " 2>/dev/null && log "Verification passed" || log "WARNING: Some files failed verification"
   fi
 
-  log "Restore complete from: $backup_name"
+  log "Restore complete from chain ending at: $backup_name"
   log "Pre-restore snapshot at: $snap"
   log ""
   log "If something went wrong, run:"

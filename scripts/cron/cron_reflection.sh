@@ -106,9 +106,18 @@ run_step "recalibrate" python3 -c "from clarvis.cognition.confidence import reca
 run_step "brain_effectiveness" python3 "$CLARVIS_WORKSPACE/scripts/metrics/brain_effectiveness.py" compute_and_store
 
 # Step 6.98: Research-to-Queue bridge (monthly — 1st of month only)
+# Gated by durable config: data/research_config.json (research_bridge_monthly)
 DAY_OF_MONTH=$(date +%d)
 if [ "$DAY_OF_MONTH" = "01" ]; then
-    run_step "research_bridge" python3 "$CLARVIS_WORKSPACE/scripts/evolution/research_to_queue.py" inject --max 3
+    BRIDGE_ALLOWED=$(python3 -c "
+from clarvis.research_config import is_enabled
+print('1' if is_enabled('research_bridge_monthly') else '0')
+" 2>/dev/null || echo "0")
+    if [ "$BRIDGE_ALLOWED" = "1" ]; then
+        run_step "research_bridge" python3 "$CLARVIS_WORKSPACE/scripts/evolution/research_to_queue.py" inject --max 3
+    else
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Research bridge OFF (research_config.json) — skipping" >> "$LOGFILE"
+    fi
 fi
 
 # Step 7: Session close — save attention state and working memory for next session — CRITICAL

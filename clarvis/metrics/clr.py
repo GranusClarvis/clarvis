@@ -180,7 +180,16 @@ def _score_memory_quality():
 
 
 def _score_retrieval_precision():
-    """Dimension 2: Retrieval Precision — context relevance and noise filtering."""
+    """Dimension 2: Retrieval Precision — context relevance and noise filtering.
+
+    Uses cross-collection discriminative queries that test whether the brain
+    returns genuinely relevant results.  Includes an adversarial query that
+    SHOULD score low (Clarvis has no Kubernetes content), ensuring precision
+    is < 1.0 when retrieval is working correctly.
+
+    Fixed 2026-04-09 (Phase 2 Measurement Integrity): replaced trivial
+    per-collection queries that always returned precision=1.0.
+    """
     evidence = []
     scores = []
 
@@ -188,15 +197,25 @@ def _score_retrieval_precision():
         from clarvis.brain import brain
         from clarvis.brain.retrieval_eval import evaluate_retrieval
 
-        test_cases = [
-            ("current evolution goals", "clarvis-goals"),
-            ("infrastructure details", "clarvis-infrastructure"),
-            ("recent learnings", "clarvis-learnings"),
+        # Cross-collection queries: no collection filter, require genuine matching.
+        # Mix of specific technical queries (should match) and one adversarial
+        # query (should NOT match), producing real dynamic range.
+        test_queries = [
+            # Should match: heartbeat pipeline is well-documented
+            "heartbeat pipeline preflight postflight episode encoding",
+            # Should match: graph store is core infra
+            "SQLite graph store WAL checkpoint compaction",
+            # Should match: context assembly is a key subsystem
+            "context assembly token budget section relevance scoring",
+            # Should match: secret redaction was recently fixed
+            "secret redaction pattern API key Bearer token",
+            # Adversarial: Clarvis does NOT use Kubernetes — should score low
+            "kubernetes pod horizontal autoscaler helm chart deployment",
         ]
 
-        for query, collection in test_cases:
+        for query in test_queries:
             try:
-                results = brain.recall(query, n=5, collections=[collection])
+                results = brain.recall(query, n=5)
                 if results:
                     eval_result = evaluate_retrieval(results, query)
                     n_above = eval_result.get("n_above_threshold", 0)
@@ -205,12 +224,17 @@ def _score_retrieval_precision():
                     precision = n_above / max(n_total, 1)
                     scores.append(precision)
                     verdict = eval_result.get("verdict", "INCORRECT")
-                    evidence.append(f"{collection}: {verdict} (p={precision:.2f}, max={max_score:.2f})")
+                    short_q = query[:40]
+                    evidence.append(
+                        f"{short_q}: {verdict} (p={precision:.2f}, max={max_score:.2f})"
+                    )
                 else:
                     scores.append(0.0)
-                    evidence.append(f"{collection}: no results")
+                    short_q = query[:40]
+                    evidence.append(f"{short_q}: no results")
             except Exception as e:
-                evidence.append(f"{collection}: error={e}")
+                short_q = query[:40]
+                evidence.append(f"{short_q}: error={e}")
 
     except ImportError as e:
         evidence.append(f"import error: {e}")
@@ -422,7 +446,7 @@ def _score_autonomy():
         evidence.append(f"error: {e}")
 
     try:
-        costs_file = os.path.join(WORKSPACE, "data/costs_real.jsonl")
+        costs_file = os.path.join(WORKSPACE, "data/costs.jsonl")
         if os.path.exists(costs_file):
             today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
             yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
@@ -433,7 +457,7 @@ def _score_autonomy():
                         entry = json.loads(line.strip())
                         ts = entry.get("timestamp", "")
                         if ts.startswith(today) or ts.startswith(yesterday):
-                            daily_cost += entry.get("cost", 0.0)
+                            daily_cost += entry.get("cost_usd", entry.get("cost", 0.0))
                     except Exception:
                         pass
             cost_score = max(0, min(1.0, 1.0 - daily_cost / 10))
@@ -698,11 +722,28 @@ def compute_clr(quick=False):
     baseline_clr = sum(WEIGHTS[d] * BASELINE[d] for d in WEIGHTS)
     value_add = round(clr - baseline_clr, 3)
 
+    # Count dimensions using real data vs fallback defaults
+    dims_with_real_data = 0
+    dims_total = 0
+    for dim, data in results.items():
+        if data["score"] is None:
+            continue  # skipped in quick mode
+        dims_total += 1
+        # A dimension uses real data if it has evidence beyond just errors/fallbacks
+        has_real = any(
+            not e.startswith("error") and e != "no_data"
+            for e in data.get("evidence", [])
+        )
+        if has_real:
+            dims_with_real_data += 1
+
     result = {
         "clr": clr,
         "baseline_clr": round(baseline_clr, 3),
         "value_add": value_add,
         "dimensions": results,
+        "dims_with_real_data": dims_with_real_data,
+        "dims_total": dims_total,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "commit_sha": _get_commit_sha(),
         "quick": quick,

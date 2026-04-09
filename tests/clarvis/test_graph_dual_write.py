@@ -1,10 +1,8 @@
-"""Tests for Phase 2 dual-write/dual-read graph backend.
+"""Tests for graph backend (post-cutover: SQLite-only writes).
 
-Verifies that when CLARVIS_GRAPH_BACKEND=sqlite:
-  - Writes go to both JSON and SQLite
-  - Reads come from SQLite
-  - Parity verification works
-  - Rollback to JSON-only works when backend=json
+After the 2026-03-29 cutover, add_relationship() writes SQLite only
+when the SQLite backend is active — dual-write is no longer the
+default.  JSON fallback is tested separately for the json-only path.
 """
 
 import json
@@ -67,19 +65,16 @@ def json_only_host():
 # Dual-write: add_relationship
 # ====================================================================
 
-class TestDualWriteAddRelationship:
-    def test_writes_to_both_backends(self, dual_host):
+class TestSQLiteWriteAddRelationship:
+    """Post-cutover: add_relationship writes to SQLite only (no JSON dual-write)."""
+
+    def test_writes_to_sqlite_only(self, dual_host):
         host, tmpdir = dual_host
         host.add_relationship("a", "b", "similar_to",
                               source_collection="clarvis-memories",
                               target_collection="clarvis-learnings")
 
-        # JSON side
-        assert len(host.graph["edges"]) == 1
-        assert host.graph["edges"][0]["from"] == "a"
-        assert host.graph["edges"][0]["to"] == "b"
-
-        # SQLite side
+        # SQLite side — edge written
         sqlite_edges = host._sqlite_store.get_edges(from_id="a", to_id="b")
         assert len(sqlite_edges) == 1
         assert sqlite_edges[0]["type"] == "similar_to"
@@ -88,12 +83,14 @@ class TestDualWriteAddRelationship:
         assert host._sqlite_store.get_node("a") is not None
         assert host._sqlite_store.get_node("b") is not None
 
+        # JSON side — NOT written (post-cutover behavior)
+        assert len(host.graph["edges"]) == 0
+
     def test_duplicate_not_added(self, dual_host):
         host, _ = dual_host
         host.add_relationship("a", "b", "similar_to")
         host.add_relationship("a", "b", "similar_to")  # duplicate
 
-        assert len(host.graph["edges"]) == 1
         assert host._sqlite_store.edge_count() == 1
 
     def test_different_types_both_added(self, dual_host):
@@ -101,43 +98,39 @@ class TestDualWriteAddRelationship:
         host.add_relationship("a", "b", "similar_to")
         host.add_relationship("a", "b", "cross_collection")
 
-        assert len(host.graph["edges"]) == 2
         assert host._sqlite_store.edge_count() == 2
-
-    def test_json_file_persisted(self, dual_host):
-        host, tmpdir = dual_host
-        host.add_relationship("x", "y", "test_type")
-
-        json_path = os.path.join(tmpdir, "relationships.json")
-        assert os.path.exists(json_path)
-        with open(json_path) as f:
-            data = json.load(f)
-        assert len(data["edges"]) == 1
-        assert data["edges"][0]["from"] == "x"
 
 
 # ====================================================================
 # Dual-write: backfill
 # ====================================================================
 
-class TestDualWriteBackfill:
-    def test_backfill_syncs_to_sqlite(self, dual_host):
+class TestBackfill:
+    def test_backfill_noop_when_sqlite_active(self, dual_host):
+        """Post-cutover: backfill delegates to SQL compaction, returns 0."""
         host, _ = dual_host
-        # Manually add edges referencing nodes not in the graph
         host.graph["edges"].append({
             "from": "orphan_a", "to": "orphan_b",
             "type": "test", "created_at": "2026-03-05T00:00:00+00:00",
             "source_collection": "clarvis-memories",
             "target_collection": "clarvis-learnings",
         })
-        host._save_graph()
+        count = host.backfill_graph_nodes()
+        assert count == 0  # SQLite active — defers to compaction SQL
 
+    def test_backfill_works_json_only(self, json_only_host):
+        """JSON fallback: backfill populates missing nodes from edges."""
+        host, _ = json_only_host
+        host.graph["edges"].append({
+            "from": "orphan_a", "to": "orphan_b",
+            "type": "test", "created_at": "2026-03-05T00:00:00+00:00",
+            "source_collection": "clarvis-memories",
+            "target_collection": "clarvis-learnings",
+        })
         count = host.backfill_graph_nodes()
         assert count == 2
-
-        # Both nodes should be in SQLite
-        assert host._sqlite_store.get_node("orphan_a") is not None
-        assert host._sqlite_store.get_node("orphan_b") is not None
+        assert "orphan_a" in host.graph["nodes"]
+        assert "orphan_b" in host.graph["nodes"]
 
 
 # ====================================================================
@@ -208,16 +201,13 @@ class TestJsonOnlyBackend:
 # Decay dual-write
 # ====================================================================
 
-class TestDualWriteDecay:
-    def test_decay_applies_to_both(self, dual_host):
+class TestSQLiteDecay:
+    def test_decay_applies_to_sqlite(self, dual_host):
         host, _ = dual_host
-        # Add a hebbian edge
         host.add_relationship("a", "b", "hebbian_association")
 
-        # Verify it exists in both
         assert host._sqlite_store.edge_count() == 1
 
-        # Decay (won't prune fresh edges, but will update weights)
         result = host.decay_edges(half_life_days=30, prune_below=0.02)
         assert result["decayed"] == 1
         assert result["pruned"] == 0
@@ -228,56 +218,24 @@ class TestDualWriteDecay:
 # ====================================================================
 
 class TestVerifyParity:
-    def test_parity_ok_after_dual_writes(self, dual_host):
+    """Post-cutover: verify_graph_parity runs SQLite integrity check only."""
+
+    def test_integrity_after_writes(self, dual_host):
         host, _ = dual_host
         host.add_relationship("a", "b", "similar_to",
                               source_collection="clarvis-memories",
                               target_collection="clarvis-learnings")
-        host.add_relationship("b", "c", "cross_collection",
-                              source_collection="clarvis-learnings",
-                              target_collection="clarvis-goals")
 
         result = host.verify_graph_parity(sample_n=10)
         assert result["parity_ok"] is True
-        assert result["json_nodes"] == result["sqlite_nodes"]
-        assert result["json_unique_edges"] == result["sqlite_edges"]
-        assert result["sample_mismatched"] == 0
+        assert result["integrity_ok"] is True
+        assert result["sqlite_edges"] == 1
+        assert result["sqlite_nodes"] == 2
 
-    def test_parity_detects_missing_edge(self, dual_host):
-        host, _ = dual_host
-        host.add_relationship("a", "b", "similar_to")
-
-        # Manually add an edge only to JSON (simulating a desync)
-        host.graph["edges"].append({
-            "from": "x", "to": "y", "type": "test",
-            "created_at": "2026-03-05T00:00:00+00:00",
-        })
-        host.graph["nodes"]["x"] = {"collection": "unknown", "added_at": "2026-03-05T00:00:00+00:00"}
-        host.graph["nodes"]["y"] = {"collection": "unknown", "added_at": "2026-03-05T00:00:00+00:00"}
-
-        result = host.verify_graph_parity(sample_n=100)
-        assert result["parity_ok"] is False
-        # Either edge_delta or sample_mismatched should be nonzero
-        assert result["edge_delta"] != 0 or result["sample_mismatched"] > 0
-
-    def test_parity_error_when_no_sqlite(self, json_only_host):
+    def test_error_when_no_sqlite(self, json_only_host):
         host, _ = json_only_host
         result = host.verify_graph_parity()
         assert "error" in result
-
-    def test_parity_reports_json_duplicates(self, dual_host):
-        host, _ = dual_host
-        host.add_relationship("a", "b", "similar_to")
-        # Force a duplicate into JSON (bypassing dedup check)
-        host.graph["edges"].append({
-            "from": "a", "to": "b", "type": "similar_to",
-            "created_at": "2026-03-05T00:00:00+00:00",
-        })
-
-        result = host.verify_graph_parity(sample_n=10)
-        assert result["json_duplicates"] == 1
-        assert result["json_edges"] == 2
-        assert result["json_unique_edges"] == 1
 
 
 # ====================================================================

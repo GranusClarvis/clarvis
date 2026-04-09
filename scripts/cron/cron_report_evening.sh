@@ -9,12 +9,17 @@ if [ -f "$LOCKFILE" ]; then
     lock_content=$(cat "$LOCKFILE" 2>/dev/null)
     pid=$(echo "$lock_content" | awk '{print $1}')
     if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-        # Process alive — check if lock is stale (hung process)
-        lock_age=$(( $(date +%s) - $(stat -c %Y "$LOCKFILE" 2>/dev/null || echo 0) ))
-        if [ "$lock_age" -lt "$MAX_LOCK_AGE" ]; then
-            exit 0
+        # Verify PID is actually a report script (guards against PID recycling)
+        cmdline=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)
+        if echo "$cmdline" | grep -q "cron_report"; then
+            lock_age=$(( $(date +%s) - $(stat -c %Y "$LOCKFILE" 2>/dev/null || echo 0) ))
+            if [ "$lock_age" -lt "$MAX_LOCK_AGE" ]; then
+                exit 0
+            fi
+            echo "[report_evening] Stale lock (age=${lock_age}s, pid=$pid) — reclaiming"
+        else
+            echo "[report_evening] PID $pid recycled (cmdline mismatch) — reclaiming lock"
         fi
-        echo "[report_evening] Stale lock (age=${lock_age}s, pid=$pid) — reclaiming"
     fi
     rm -f "$LOCKFILE"
 fi

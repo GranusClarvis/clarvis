@@ -11,6 +11,9 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || echo "${
 LOGFILE="memory/cron/autonomous.log"
 SCRIPTS="$CLARVIS_WORKSPACE/scripts"
 
+# Arm outer script timeout (2400s = 40 min) — kills entire script on hang
+set_script_timeout 2400 "$LOGFILE"
+
 # Belt-and-suspenders: forcibly remove Claude Code nesting guard env vars.
 # cron_env.sh already does this, but if invoked from within a claude session
 # (e.g. manual trigger during dev), the vars may leak through.

@@ -25,9 +25,7 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import _paths  # noqa: F401 — registers all script subdirs on sys.path
-from brain import brain
+from clarvis.brain import brain
 
 AUTONOMOUS_LOG = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))) / "memory/cron/autonomous.log"
 CHAINS_DIR = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))) / "data/reasoning_chains"

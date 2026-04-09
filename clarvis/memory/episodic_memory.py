@@ -24,6 +24,7 @@ import json
 import math
 import os
 import sys
+import tempfile
 import time
 from collections import deque
 from datetime import datetime, timezone
@@ -57,25 +58,66 @@ class EpisodicMemory:
 
     def _load(self):
         if EPISODES_FILE.exists():
-            with open(EPISODES_FILE) as f:
-                return json.load(f)
+            try:
+                with open(EPISODES_FILE) as f:
+                    return json.load(f)
+            except (json.JSONDecodeError, ValueError):
+                # Corrupted file — try backup
+                bak = EPISODES_FILE.with_suffix(".json.bak")
+                if bak.exists():
+                    try:
+                        with open(bak) as f:
+                            return json.load(f)
+                    except (json.JSONDecodeError, ValueError):
+                        pass
+                return []
         return []
 
     def _load_causal(self):
         if CAUSAL_LINKS_FILE.exists():
-            with open(CAUSAL_LINKS_FILE) as f:
-                return json.load(f)
+            try:
+                with open(CAUSAL_LINKS_FILE) as f:
+                    return json.load(f)
+            except (json.JSONDecodeError, ValueError):
+                return []
         return []
 
     def _save(self):
         EPISODES_FILE.parent.mkdir(parents=True, exist_ok=True)
-        with open(EPISODES_FILE, 'w') as f:
-            json.dump(self.episodes[-500:], f, indent=2)  # cap at 500
+        data = self.episodes[-500:]  # cap at 500
+        # Atomic write: serialize to temp file, then rename
+        fd, tmp = tempfile.mkstemp(dir=EPISODES_FILE.parent, suffix=".tmp")
+        try:
+            with os.fdopen(fd, 'w') as f:
+                json.dump(data, f, indent=2)
+            os.replace(tmp, EPISODES_FILE)
+        except BaseException:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            raise
+        # Keep a backup for corruption recovery
+        try:
+            import shutil
+            shutil.copy2(EPISODES_FILE, EPISODES_FILE.with_suffix(".json.bak"))
+        except OSError:
+            pass
 
     def _save_causal(self):
         CAUSAL_LINKS_FILE.parent.mkdir(parents=True, exist_ok=True)
-        with open(CAUSAL_LINKS_FILE, 'w') as f:
-            json.dump(self.causal_links[-2000:], f, indent=2)  # cap at 2000
+        data = self.causal_links[-2000:]  # cap at 2000
+        fd, tmp = tempfile.mkstemp(dir=CAUSAL_LINKS_FILE.parent, suffix=".tmp")
+        try:
+            with os.fdopen(fd, 'w') as f:
+                json.dump(data, f, indent=2)
+            os.replace(tmp, CAUSAL_LINKS_FILE)
+        except BaseException:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            raise
 
     # ------------------------------------------------------------------
     # Causal graph: linking and querying
@@ -505,7 +547,8 @@ class EpisodicMemory:
             summary += f" (error: {error_msg[:80]})"
 
         brain.store(summary, collection="clarvis-episodes",
-                    importance=importance, tags=tags, source="episodic_memory")
+                    importance=importance, tags=tags, source="episodic_memory",
+                    memory_id=f"episode_{episode['id']}")
 
         try:
             from clarvis.cognition.somatic_markers import somatic
@@ -1021,8 +1064,29 @@ class EpisodicMemory:
         }
 
 
-# Singleton
-episodic = EpisodicMemory()
+# Lazy singleton — avoid I/O at import time so corrupted data files
+# don't block `import clarvis.memory`.  Use get_episodic() for access.
+_episodic = None
+
+
+def get_episodic() -> EpisodicMemory:
+    """Return the module-level EpisodicMemory singleton (lazy-init)."""
+    global _episodic
+    if _episodic is None:
+        _episodic = EpisodicMemory()
+    return _episodic
+
+
+class _LazyEpisodic:
+    """Proxy that defers construction until first attribute access."""
+    def __getattr__(self, name):
+        return getattr(get_episodic(), name)
+
+    def __repr__(self):
+        return repr(get_episodic())
+
+
+episodic = _LazyEpisodic()
 
 # CLI interface
 def _cli_basic(cmd):

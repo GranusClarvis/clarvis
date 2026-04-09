@@ -21,25 +21,40 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import _paths  # noqa: F401 — registers all script subdirs on sys.path
-
-from reasoning_chains import create_chain, add_step, complete_step, find_related_chains, list_chains
-from brain import brain
+from clarvis.cognition.reasoning_chains import create_chain, add_step, complete_step, find_related_chains, list_chains
+from clarvis.brain import brain
 
 # clarvis-reasoning package removed — spine module is canonical
 # (clarvis.cognition.reasoning provides the full reasoning engine)
 cr_reasoner = None
 
 try:
-    from retrieval_experiment import smart_recall
+    from clarvis.brain.search import contextual_enrich
+    # smart_recall was experimental; contextual_enrich is the spine equivalent
+    smart_recall = None
 except ImportError:
     smart_recall = None
 
 try:
-    from thought_protocol import thought as thought_proto
+    from clarvis.cognition.thought_protocol import ThoughtProtocol
+    thought_proto = ThoughtProtocol()
 except ImportError:
     thought_proto = None
+
+# Legacy fallback paths for scripts that haven't migrated yet
+if smart_recall is None:
+    try:
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "brain_mem"))
+        from retrieval_experiment import smart_recall
+    except ImportError:
+        smart_recall = None
+
+if thought_proto is None:
+    try:
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "cognition"))
+        from thought_protocol import thought as thought_proto
+    except ImportError:
+        thought_proto = None
 
 # Map chain_id -> session_id for the ClarvisReasoning dual-write
 _SESSION_MAP_FILE = os.path.join(os.path.dirname(__file__),

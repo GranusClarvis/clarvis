@@ -46,6 +46,7 @@ from clarvis.cognition.attention import attention
 DATA_DIR = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "data")
 ARCHIVE_DIR = os.path.join(DATA_DIR, "memory_archive")
 ARCHIVE_FILE = os.path.join(ARCHIVE_DIR, "archived_memories.json")
+MERGE_ARCHIVE_FILE = os.path.join(ARCHIVE_DIR, "merge_originals.jsonl")
 
 os.makedirs(ARCHIVE_DIR, exist_ok=True)
 
@@ -93,6 +94,48 @@ def _save_archive(entries):
     """Save archive entries to JSON file."""
     with open(ARCHIVE_FILE, "w") as f:
         json.dump(entries, f, indent=2)
+
+
+SNAPSHOT_DIR = os.path.join(ARCHIVE_DIR, "pre_consolidation_snapshots")
+os.makedirs(SNAPSHOT_DIR, exist_ok=True)
+
+
+def _take_pre_consolidation_snapshot():
+    """Snapshot collection IDs + counts before consolidation.
+
+    Writes a timestamped JSON to SNAPSHOT_DIR so consolidation can be
+    audited or rolled back if it crashes mid-run.  Keeps the last 10 snapshots.
+    """
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    snapshot = {"timestamp": ts, "collections": {}}
+    for col_name in ALL_COLLECTIONS:
+        try:
+            col = brain.collections.get(col_name)
+            if col is None:
+                continue
+            count = col.count()
+            ids = col.get(limit=count, include=[])["ids"] if count else []
+            snapshot["collections"][col_name] = {
+                "count": count,
+                "ids": ids,
+            }
+        except Exception as exc:
+            snapshot["collections"][col_name] = {"error": str(exc)}
+
+    path = os.path.join(SNAPSHOT_DIR, f"snapshot_{ts}.json")
+    with open(path, "w") as f:
+        json.dump(snapshot, f)
+    print(f"[consolidation] Pre-consolidation snapshot: {path} ({sum(c.get('count', 0) for c in snapshot['collections'].values() if isinstance(c.get('count'), int))} total memories)")
+
+    # Prune old snapshots — keep last 10
+    existing = sorted(
+        [f for f in os.listdir(SNAPSHOT_DIR) if f.startswith("snapshot_")],
+        reverse=True,
+    )
+    for old in existing[10:]:
+        os.remove(os.path.join(SNAPSHOT_DIR, old))
+
+    return path
 
 
 # Session-level cache for _get_all_memories — avoids re-fetching the same
@@ -287,6 +330,27 @@ def merge_clusters(dry_run=False):
             })
 
             if not dry_run:
+                # Archive originals before deletion (Phase 4 safety hardening)
+                try:
+                    archive_entry = {
+                        "ts": datetime.now(timezone.utc).isoformat(),
+                        "collection": col_name,
+                        "original_count": len(cluster),
+                        "consolidated_preview": consolidated_text[:200],
+                        "originals": [
+                            {
+                                "id": item["id"],
+                                "document": item["document"],
+                                "metadata": item.get("metadata", {}),
+                            }
+                            for item in cluster
+                        ],
+                    }
+                    with open(MERGE_ARCHIVE_FILE, "a") as af:
+                        af.write(json.dumps(archive_entry) + "\n")
+                except Exception:
+                    pass  # archive is best-effort; never block consolidation
+
                 # Store consolidated memory
                 tags_list = list(all_tags)
                 brain.store(
@@ -1639,6 +1703,13 @@ def run_consolidation():
         dict with stats from each phase.
     """
     results = {}
+
+    print("[consolidation] Phase 0: Pre-consolidation snapshot...")
+    try:
+        results["snapshot_path"] = _take_pre_consolidation_snapshot()
+    except Exception as exc:
+        print(f"  WARNING: snapshot failed ({exc}), continuing anyway")
+        results["snapshot_path"] = None
 
     print("[consolidation] Phase 1: Deduplication...")
     results["dedup"] = deduplicate(dry_run=False)

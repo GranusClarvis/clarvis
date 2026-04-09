@@ -777,7 +777,7 @@ def broadcast_self_state():
     except Exception:
         pass
 
-    # Store in brain identity
+    # Store in brain identity — fixed ID so repeated updates upsert in place
     try:
         from brain import brain
         brain.store(
@@ -786,6 +786,7 @@ def broadcast_self_state():
             importance=0.5,
             tags=["self-representation", "latent-state", "gwt-broadcast"],
             source="self_representation",
+            memory_id="self-rep-current",
         )
     except Exception:
         pass

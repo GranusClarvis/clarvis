@@ -11,14 +11,42 @@ Usage:
     neighbors = store.get_related("node1", depth=1)
 """
 
+import functools
 import json
 import logging
 import math
 import os
 import sqlite3
+import time
 from datetime import datetime, timezone
 
 _log = logging.getLogger("clarvis.brain.graph_store_sqlite")
+
+# Maintenance lock file — held by cron maintenance jobs (04:00-05:00 CET).
+_MAINTENANCE_LOCK = "/tmp/clarvis_maintenance.lock"
+
+_DEFAULT_BUSY_TIMEOUT_MS = 5000
+_MAINTENANCE_BUSY_TIMEOUT_MS = 15000
+
+
+def _retry_on_locked(method):
+    """Decorator: retry up to 3× with exponential backoff on OperationalError (database locked)."""
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        last_exc = None
+        for attempt in range(3):
+            try:
+                return method(self, *args, **kwargs)
+            except sqlite3.OperationalError as exc:
+                if "locked" not in str(exc).lower() and "busy" not in str(exc).lower():
+                    raise  # Not a concurrency issue — propagate immediately
+                last_exc = exc
+                wait = 0.5 * (2 ** attempt)  # 0.5s, 1s, 2s
+                _log.warning("graph_store_sqlite: %s attempt %d failed (%s), retrying in %.1fs",
+                             method.__name__, attempt + 1, exc, wait)
+                time.sleep(wait)
+        raise last_exc  # type: ignore[misc]
+    return wrapper
 
 _SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS nodes (
@@ -70,14 +98,23 @@ class GraphStoreSQLite:
         c = self._conn
         c.execute("PRAGMA journal_mode=WAL")
         c.execute("PRAGMA synchronous=NORMAL")
-        c.execute("PRAGMA busy_timeout=5000")
+        self._apply_busy_timeout()
         c.executescript(_SCHEMA_SQL)
         c.commit()
+
+    def _apply_busy_timeout(self):
+        """Set busy_timeout: 15s during maintenance windows, 5s otherwise."""
+        if os.path.exists(_MAINTENANCE_LOCK):
+            timeout = _MAINTENANCE_BUSY_TIMEOUT_MS
+        else:
+            timeout = _DEFAULT_BUSY_TIMEOUT_MS
+        self._conn.execute(f"PRAGMA busy_timeout={timeout}")
 
     # ------------------------------------------------------------------
     # Nodes
     # ------------------------------------------------------------------
 
+    @_retry_on_locked
     def add_node(self, node_id: str, collection: str, added_at: str,
                  backfilled: bool = False, metadata: str | None = None):
         """Insert a node. Ignores if already exists."""
@@ -98,6 +135,7 @@ class GraphStoreSQLite:
     def node_count(self) -> int:
         return self._conn.execute("SELECT COUNT(*) FROM nodes").fetchone()[0]
 
+    @_retry_on_locked
     def remove_node(self, node_id: str) -> int:
         """Remove a node by id. Returns count removed."""
         cur = self._conn.execute("DELETE FROM nodes WHERE id = ?", (node_id,))
@@ -108,6 +146,7 @@ class GraphStoreSQLite:
     # Edges
     # ------------------------------------------------------------------
 
+    @_retry_on_locked
     def add_edge(self, from_id: str, to_id: str, edge_type: str, *,
                  created_at: str | None = None,
                  source_collection: str | None = None,
@@ -154,6 +193,7 @@ class GraphStoreSQLite:
     def edge_count(self) -> int:
         return self._conn.execute("SELECT COUNT(*) FROM edges").fetchone()[0]
 
+    @_retry_on_locked
     def remove_edges(self, *, from_id: str | None = None,
                      to_id: str | None = None,
                      edge_type: str | None = None,
@@ -243,6 +283,7 @@ class GraphStoreSQLite:
     # Decay
     # ------------------------------------------------------------------
 
+    @_retry_on_locked
     def decay_edges(self, half_life_days: float = 30, prune_below: float = 0.02,
                     decay_types: set | None = None,
                     dry_run: bool = False) -> dict:
@@ -316,6 +357,7 @@ class GraphStoreSQLite:
     # Bulk operations
     # ------------------------------------------------------------------
 
+    @_retry_on_locked
     def bulk_add_nodes(self, nodes: list[tuple]):
         """Bulk insert nodes. Each tuple: (id, collection, added_at, backfilled).
 
@@ -328,6 +370,7 @@ class GraphStoreSQLite:
         )
         self._conn.commit()
 
+    @_retry_on_locked
     def bulk_add_edges(self, edges: list[tuple]) -> int:
         """Bulk insert edges. Each tuple:
         (from_id, to_id, type, created_at, source_collection, target_collection, weight).
@@ -374,6 +417,19 @@ class GraphStoreSQLite:
             "db_path": self.db_path,
             "db_size_bytes": os.path.getsize(self.db_path) if os.path.exists(self.db_path) else 0,
         }
+
+    def orphan_edges_count(self) -> int:
+        """Count edges that reference non-existent nodes (from_id or to_id not in nodes table).
+
+        These are 'soft orphans' — the edges work for graph traversal but the
+        node metadata (collection, added_at) is missing. Backfill can fix them.
+        """
+        row = self._conn.execute(
+            "SELECT COUNT(*) FROM edges e "
+            "WHERE NOT EXISTS (SELECT 1 FROM nodes n WHERE n.id = e.from_id) "
+            "   OR NOT EXISTS (SELECT 1 FROM nodes n WHERE n.id = e.to_id)"
+        ).fetchone()
+        return row[0]
 
     def integrity_check(self) -> bool:
         """Run PRAGMA integrity_check. Returns True if OK."""

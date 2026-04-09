@@ -5,6 +5,9 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || echo "${
 
 LOGFILE="memory/cron/morning.log"
 
+# Arm outer script timeout (1800s = 30 min) — kills entire script on hang
+set_script_timeout 1800 "$LOGFILE"
+
 # Acquire locks: local + global Claude
 acquire_local_lock "/tmp/clarvis_morning.lock" "$LOGFILE" 3600
 acquire_global_claude_lock "$LOGFILE"
@@ -32,13 +35,19 @@ echo "$MORNING_PROMPT" > "$MORNING_PROMPT_FILE"
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Prompt: ${#MORNING_PROMPT} bytes" >> "$LOGFILE"
 MORNING_OUTPUT_FILE=$(mktemp)
 run_claude_monitored 1200 "$MORNING_OUTPUT_FILE" "$MORNING_PROMPT_FILE" "$LOGFILE"
+CLAUDE_EXIT=${MONITORED_EXIT:-1}
 rm -f "$MORNING_PROMPT_FILE"
 cat "$MORNING_OUTPUT_FILE" >> "$LOGFILE"
 
-# === DIGEST: Write first-person summary for M2.5 agent ===
-PRIORITIES=$(tail -c 500 "$MORNING_OUTPUT_FILE" 2>/dev/null | tr '\n' ' ' | sed 's/[^a-zA-Z0-9 _.,:;=+\-\/()@#%]//g' | tail -c 400)
-python3 "$CLARVIS_WORKSPACE/scripts/tools/digest_writer.py" morning "I started my day and reviewed the evolution queue. $PRIORITIES" >> "$LOGFILE" 2>&1 || true
+if [ "$CLAUDE_EXIT" -eq 0 ]; then
+    # === DIGEST: Write first-person summary for M2.5 agent ===
+    PRIORITIES=$(tail -c 500 "$MORNING_OUTPUT_FILE" 2>/dev/null | tr '\n' ' ' | sed 's/[^a-zA-Z0-9 _.,:;=+\-\/()@#%]//g' | tail -c 400)
+    python3 "$CLARVIS_WORKSPACE/scripts/tools/digest_writer.py" morning "I started my day and reviewed the evolution queue. $PRIORITIES" >> "$LOGFILE" 2>&1 || true
+    emit_dashboard_event task_completed --task-name "Morning planning" --section cron_morning --status success
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Morning routine complete ===" >> "$LOGFILE"
+else
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WARNING: Claude exited with code $CLAUDE_EXIT — skipping digest" >> "$LOGFILE"
+    emit_dashboard_event task_completed --task-name "Morning planning" --section cron_morning --status failure
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Morning routine FAILED (exit=$CLAUDE_EXIT) ===" >> "$LOGFILE"
+fi
 rm -f "$MORNING_OUTPUT_FILE"
-
-emit_dashboard_event task_completed --task-name "Morning planning" --section cron_morning --status success
-echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Morning routine complete ===" >> "$LOGFILE"

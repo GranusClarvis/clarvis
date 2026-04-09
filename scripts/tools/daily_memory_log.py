@@ -74,9 +74,7 @@ def _extract_key_events(log_lines: list[str], target_date: str) -> list[str]:
 def _get_brain_stats() -> str:
     """Quick brain stats (no-fail)."""
     try:
-        sys.path.insert(0, str(WORKSPACE / "scripts"))
-        import _paths  # noqa: F401 — registers all script subdirs on sys.path
-        from brain import brain
+        from clarvis.brain import brain
         stats = brain.stats()
         total = stats.get("total_memories", "?")
         return f"{total} memories"

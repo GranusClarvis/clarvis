@@ -77,21 +77,95 @@ REFERENCE_TASKS = [
 ]
 
 
+# Section markers: keywords that indicate a module's content is present in the brief.
+SECTION_MARKERS = {
+    "episodic_recall": ["EPISODIC", "episode", "past task", "lesson"],
+    "graph_expansion": ["BRAIN CONTEXT", "KNOWLEDGE", "brain search",
+                        "RELEVANT KNOWLEDGE"],
+    "related_tasks": ["RELATED TASKS", "QUEUE", "pending"],
+    "decision_context": ["SUCCESS CRITERIA", "FAILURE", "AVOID",
+                         "CONSTRAINT", "OBLIGATION"],
+    "reasoning_scaffold": ["REASONING", "APPROACH", "STRATEGY",
+                           "multi-step", "CODE GENERATION TEMPLATES"],
+    "working_memory": ["WORKING MEMORY", "GWT BROADCAST",
+                       "ATTENTION", "SPOTLIGHT", "WORKING CONTEXT"],
+}
+
+# Regex patterns that match section blocks to strip during post-assembly ablation.
+# Each pattern matches from a header line through to the next section header or separator.
+import re as _re
+
+_STRIP_PATTERNS = {
+    "episodic_recall": _re.compile(
+        r"(?:^|\n)(EPISODIC[^\n]*|[^\n]*episode[^\n]*lesson[^\n]*)(?:\n(?!---|\n[A-Z]{2,}).*)*",
+        _re.IGNORECASE,
+    ),
+    "graph_expansion": _re.compile(
+        r"(?:^|\n)(?:RELEVANT KNOWLEDGE|BRAIN CONTEXT|KNOWLEDGE SYNTHESIS)[:\n]"
+        r"(?:\n(?!---|\n[A-Z]{2,}[:\n]).*)*",
+        _re.IGNORECASE,
+    ),
+    "related_tasks": _re.compile(
+        r"(?:^|\n)RELATED TASKS[:\n](?:\n(?!---|\n[A-Z]{2,}).*)*",
+        _re.IGNORECASE,
+    ),
+    "decision_context": _re.compile(
+        r"(?:^|\n)(?:SUCCESS CRITERIA|FAILURE AVOIDANCE|CONSTRAINTS)[:\n]"
+        r"(?:\n(?!---|\n[A-Z]{2,}).*)*",
+        _re.IGNORECASE,
+    ),
+    "reasoning_scaffold": _re.compile(
+        r"(?:^|\n)(?:REASONING|APPROACH|CODE GENERATION TEMPLATES)[:\n]"
+        r"(?:\n(?!---|\n[A-Z]{2,}).*)*",
+        _re.IGNORECASE,
+    ),
+    "working_memory": _re.compile(
+        r"(?:^|\n)(?:WORKING MEMORY|WORKING CONTEXT|GWT BROADCAST|SPOTLIGHT)[:\n]"
+        r"(?:\n(?!---|\n[A-Z]{2,}).*)*",
+        _re.IGNORECASE,
+    ),
+}
+
+
+def _strip_ablated_sections(brief: str, disabled_modules: list[str]) -> str:
+    """Strip sections belonging to disabled modules from assembly output.
+
+    Uses regex patterns to identify and remove section blocks.  This is the
+    reliable second layer of ablation — even when budget zeroing doesn't
+    propagate through the assembly pipeline, post-hoc stripping ensures the
+    measurement reflects the module's absence.
+    """
+    for module in disabled_modules:
+        pattern = _STRIP_PATTERNS.get(module)
+        if pattern:
+            brief = pattern.sub("", brief)
+    # Clean up consecutive blank lines and separators
+    brief = _re.sub(r"\n{3,}", "\n\n", brief)
+    brief = _re.sub(r"\n---\n---", "\n---", brief)
+    return brief.strip()
+
+
 def _measure_assembly_quality(disabled_modules: list[str]) -> dict[str, Any]:
     """Measure context assembly output quality with specific modules disabled.
 
-    This is the assembly-sensitive measurement that the ablation actually tests.
-    Unlike compute_clr() which reads historical metrics, this runs the assembly
-    pipeline and measures the output.
+    Uses a two-layer approach:
+      1. Pre-assembly: zero budgets and add HARD_SUPPRESS entries (best-effort)
+      2. Post-assembly: strip sections matching disabled modules from the output
+
+    The post-assembly stripping is the reliable signal — it directly removes
+    the module's content regardless of whether the budget pipeline correctly
+    suppresses it.  This was added in Phase 2 (2026-04-09) after discovering
+    that budget zeroing alone had zero effect due to budget → assembly pipeline
+    indirection (get_adjusted_budgets copies, DyCP may re-include, etc.).
 
     Returns dict with section_count, total_chars, section_presence, and a
     normalized quality score.
     """
     import clarvis.context.assembly as assembly
-    from clarvis.context.budgets import TIER_BUDGETS as ORIGINAL_BUDGETS
+    import clarvis.context.dycp as dycp
 
     original_budgets = deepcopy(assembly.TIER_BUDGETS)
-    original_hard_suppress = set(assembly.HARD_SUPPRESS)
+    original_hard_suppress = set(dycp.HARD_SUPPRESS)
 
     try:
         _apply_ablation(disabled_modules, assembly)
@@ -103,22 +177,14 @@ def _measure_assembly_quality(disabled_modules: list[str]) -> dict[str, Any]:
             except Exception as e:
                 brief = f"ERROR: {e}"
 
+            # Post-assembly stripping: remove sections belonging to disabled modules
+            if disabled_modules:
+                brief = _strip_ablated_sections(brief, disabled_modules)
+
             # Measure what's in the brief
             sections_present = set()
-            section_markers = {
-                "episodic_recall": ["EPISODIC", "episode", "past task", "lesson"],
-                "graph_expansion": ["BRAIN CONTEXT", "KNOWLEDGE", "brain search"],
-                "related_tasks": ["RELATED TASKS", "QUEUE", "pending"],
-                "decision_context": ["SUCCESS CRITERIA", "FAILURE", "AVOID",
-                                     "CONSTRAINT", "OBLIGATION"],
-                "reasoning_scaffold": ["REASONING", "APPROACH", "STRATEGY",
-                                       "multi-step"],
-                "working_memory": ["WORKING MEMORY", "GWT BROADCAST",
-                                   "ATTENTION", "SPOTLIGHT"],
-            }
-
-            brief_upper = brief.upper()
-            for module, markers in section_markers.items():
+            for module, markers in SECTION_MARKERS.items():
+                brief_upper = brief.upper()
                 for marker in markers:
                     if marker.upper() in brief_upper:
                         sections_present.add(module)
@@ -167,11 +233,18 @@ def _measure_assembly_quality(disabled_modules: list[str]) -> dict[str, Any]:
 
     finally:
         assembly.TIER_BUDGETS = original_budgets
-        assembly.HARD_SUPPRESS = frozenset(original_hard_suppress)
+        dycp.HARD_SUPPRESS = frozenset(original_hard_suppress)
 
 
 def _apply_ablation(disabled_modules: list[str], assembly):
-    """Apply ablation patches to assembly module state."""
+    """Apply ablation patches to assembly module state.
+
+    Patches dycp.HARD_SUPPRESS directly because dycp.should_suppress_section()
+    reads its own module scope, not assembly's re-export.
+    (Fixed 2026-04-09, ref: SECOND_PASS F2.3a)
+    """
+    import clarvis.context.dycp as dycp
+
     budget_key_map = {
         "episodic_recall": "episodes",
         "graph_expansion": None,  # handled via HARD_SUPPRESS
@@ -189,8 +262,8 @@ def _apply_ablation(disabled_modules: list[str], assembly):
                     assembly.TIER_BUDGETS[tier][budget_key] = 0
 
     if "graph_expansion" in disabled_modules:
-        assembly.HARD_SUPPRESS = frozenset(
-            set(assembly.HARD_SUPPRESS) | {"brain_context", "knowledge"}
+        dycp.HARD_SUPPRESS = frozenset(
+            set(dycp.HARD_SUPPRESS) | {"brain_context", "knowledge"}
         )
 
 
@@ -203,10 +276,11 @@ def _run_clr_with_ablation(disabled_modules: list[str]) -> dict[str, Any]:
     and to detect any indirect effects.
     """
     import clarvis.context.assembly as assembly
+    import clarvis.context.dycp as dycp
     from clarvis.metrics.clr import compute_clr
 
     original_budgets = deepcopy(assembly.TIER_BUDGETS)
-    original_hard_suppress = set(assembly.HARD_SUPPRESS)
+    original_hard_suppress = set(dycp.HARD_SUPPRESS)
 
     try:
         _apply_ablation(disabled_modules, assembly)
@@ -214,7 +288,7 @@ def _run_clr_with_ablation(disabled_modules: list[str]) -> dict[str, Any]:
         return result
     finally:
         assembly.TIER_BUDGETS = original_budgets
-        assembly.HARD_SUPPRESS = frozenset(original_hard_suppress)
+        dycp.HARD_SUPPRESS = frozenset(original_hard_suppress)
 
 
 def run_ablation_sweep(

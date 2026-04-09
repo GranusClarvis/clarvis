@@ -128,6 +128,165 @@ JOBS = {
         "max_age_hours": 26,
         "timeout": 300,
     },
+    # --- Daily jobs added 2026-04-09 (Phase 1: Operational Truthfulness) ---
+    "graph_checkpoint": {
+        "script": "scripts/cron/cron_graph_checkpoint.sh",
+        "log": "memory/cron/graph_checkpoint.log",
+        "lock": "/tmp/clarvis_maintenance.lock",
+        "max_age_hours": 26,
+        "timeout": 300,
+    },
+    "graph_verify": {
+        "script": "scripts/cron/cron_graph_verify.sh",
+        "log": "memory/cron/graph_verify.log",
+        "lock": None,
+        "max_age_hours": 26,
+        "timeout": 300,
+    },
+    "implementation_sprint": {
+        "script": "scripts/cron/cron_implementation_sprint.sh",
+        "log": "memory/cron/implementation_sprint.log",
+        "lock": "/tmp/clarvis_implementation_sprint.lock",
+        "max_age_hours": 26,
+        "timeout": 1800,
+    },
+    "strategic_audit": {
+        "script": "scripts/cron/cron_strategic_audit.sh",
+        "log": "memory/cron/strategic_audit.log",
+        "lock": None,
+        "max_age_hours": 170,  # Wed+Sat only (~3.5 day max gap)
+        "timeout": 1200,
+    },
+    "dream_engine": {
+        "script": None,
+        "command": ["python3", "scripts/cognition/dream_engine.py", "dream"],
+        "log": "memory/cron/dream.log",
+        "lock": None,
+        "max_age_hours": 26,
+        "timeout": 900,
+    },
+    "orchestrator": {
+        "script": "scripts/cron/cron_orchestrator.sh",
+        "log": "memory/cron/orchestrator.log",
+        "lock": None,
+        "max_age_hours": 26,
+        "timeout": 600,
+    },
+    "pi_refresh": {
+        "script": "scripts/cron/cron_pi_refresh.sh",
+        "log": "memory/cron/pi_refresh.log",
+        "lock": None,
+        "max_age_hours": 26,
+        "timeout": 300,
+    },
+    "brain_eval": {
+        "script": "scripts/cron/cron_brain_eval.sh",
+        "log": "memory/cron/brain_eval.log",
+        "lock": None,
+        "max_age_hours": 26,
+        "timeout": 600,
+    },
+    "llm_brain_review": {
+        "script": "scripts/cron/cron_llm_brain_review.sh",
+        "log": "memory/cron/llm_brain_review.log",
+        "lock": None,
+        "max_age_hours": 26,
+        "timeout": 600,
+    },
+    "status_json": {
+        "script": None,
+        "command": ["python3", "scripts/infra/generate_status_json.py"],
+        "log": "memory/cron/status_json.log",
+        "lock": None,
+        "max_age_hours": 26,
+        "timeout": 120,
+    },
+    "relevance_refresh": {
+        "script": None,
+        "command": ["python3", "-m", "clarvis", "cognition", "context-relevance", "refresh"],
+        "log": "memory/cron/relevance_refresh.log",
+        "lock": None,
+        "max_age_hours": 26,
+        "timeout": 300,
+    },
+    # --- Weekly jobs ---
+    "cleanup": {
+        "script": "scripts/cron/cron_cleanup.sh",
+        "log": "memory/cron/cleanup.log",
+        "lock": None,
+        "max_age_hours": 170,  # weekly
+        "timeout": 300,
+    },
+    "absolute_zero": {
+        "script": "scripts/cron/cron_absolute_zero.sh",
+        "log": "memory/cron/absolute_zero.log",
+        "lock": None,
+        "max_age_hours": 170,
+        "timeout": 1200,
+    },
+    "clr_benchmark": {
+        "script": "scripts/cron/cron_clr_benchmark.sh",
+        "log": "memory/cron/clr_benchmark.log",
+        "lock": None,
+        "max_age_hours": 170,
+        "timeout": 600,
+    },
+    "goal_hygiene": {
+        "script": None,
+        "command": ["python3", "scripts/hooks/goal_hygiene.py", "clean"],
+        "log": "memory/cron/goal_hygiene.log",
+        "lock": None,
+        "max_age_hours": 170,
+        "timeout": 300,
+    },
+    "brain_hygiene": {
+        "script": None,
+        "command": ["python3", "scripts/brain_mem/brain_hygiene.py", "run"],
+        "log": "memory/cron/brain_hygiene.log",
+        "lock": None,
+        "max_age_hours": 170,
+        "timeout": 600,
+    },
+    "data_lifecycle": {
+        "script": None,
+        "command": ["python3", "scripts/infra/data_lifecycle.py"],
+        "log": "memory/cron/data_lifecycle.log",
+        "lock": None,
+        "max_age_hours": 170,
+        "timeout": 300,
+    },
+    "pi_benchmark": {
+        "script": None,
+        "command": ["python3", "scripts/metrics/performance_benchmark.py", "record"],
+        "log": "memory/cron/pi_benchmark.log",
+        "lock": None,
+        "max_age_hours": 170,
+        "timeout": 600,
+    },
+    # --- Monthly jobs ---
+    "monthly_reflection": {
+        "script": "scripts/cron/cron_monthly_reflection.sh",
+        "log": "memory/cron/monthly_reflection.log",
+        "lock": None,
+        "max_age_hours": 750,  # monthly
+        "timeout": 1200,
+    },
+    "brief_benchmark": {
+        "script": None,
+        "command": ["python3", "scripts/metrics/brief_benchmark.py"],
+        "log": "memory/cron/brief_benchmark.log",
+        "lock": None,
+        "max_age_hours": 750,
+        "timeout": 300,
+    },
+    "canonical_state_refresh": {
+        "script": None,
+        "command": ["python3", "scripts/hooks/canonical_state_refresh.py"],
+        "log": "memory/cron/canonical_state_refresh.log",
+        "lock": None,
+        "max_age_hours": 170,
+        "timeout": 300,
+    },
 }
 
 # Backoff multiplier for retries (seconds): attempt 1 = 30s wait, attempt 2 = 120s, etc.
@@ -316,7 +475,8 @@ def recover_stale_lock(failure: dict, dry_run: bool = False) -> dict:
 
     if dry_run:
         result["dry_run"] = True
-        result["would_do"] = f"rm {lock_path}, then re-run {JOBS[job_name]['script']}"
+        run_desc = " ".join(JOBS[job_name].get("command", [])) or JOBS[job_name].get("script", "?")
+        result["would_do"] = f"rm {lock_path}, then re-run {run_desc}"
         return result
 
     # Remove stale lock
@@ -336,7 +496,8 @@ def recover_crash(failure: dict, dry_run: bool = False) -> dict:
 
     if dry_run:
         result["dry_run"] = True
-        result["would_do"] = f"Re-run {JOBS[job_name]['script']}"
+        run_desc = " ".join(JOBS[job_name].get("command", [])) or JOBS[job_name].get("script", "?")
+        result["would_do"] = f"Re-run {run_desc}"
         return result
 
     return _rerun_job(job_name, result)
@@ -356,7 +517,8 @@ def recover_timeout(failure: dict, dry_run: bool = False) -> dict:
         lock = JOBS[job_name].get("lock")
         if lock:
             actions.append(f"clear lock {lock}")
-        actions.append(f"re-run {JOBS[job_name]['script']}")
+        run_desc = " ".join(JOBS[job_name].get("command", [])) or JOBS[job_name].get("script", "?")
+        actions.append(f"re-run {run_desc}")
         result["would_do"] = ", ".join(actions)
         return result
 
@@ -387,7 +549,8 @@ def recover_missing_log(failure: dict, dry_run: bool = False) -> dict:
 
     if dry_run:
         result["dry_run"] = True
-        result["would_do"] = f"mkdir -p {log_path.parent}, touch {log_path}, re-run {JOBS[job_name]['script']}"
+        run_desc = " ".join(JOBS[job_name].get("command", [])) or JOBS[job_name].get("script", "?")
+        result["would_do"] = f"mkdir -p {log_path.parent}, touch {log_path}, re-run {run_desc}"
         return result
 
     log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -424,7 +587,8 @@ def recover_data_issue(failure: dict, dry_run: bool = False) -> dict:
 
     if dry_run:
         result["dry_run"] = True
-        result["would_do"] = f"Ensure data dirs exist, re-run {JOBS[job_name]['script']}"
+        run_desc = " ".join(JOBS[job_name].get("command", [])) or JOBS[job_name].get("script", "?")
+        result["would_do"] = f"Ensure data dirs exist, re-run {run_desc}"
         return result
 
     # Ensure common data directories exist
@@ -442,10 +606,100 @@ def recover_unknown(failure: dict, dry_run: bool = False) -> dict:
 
     if dry_run:
         result["dry_run"] = True
-        result["would_do"] = f"Re-run {JOBS[job_name]['script']} (unknown cause)"
+        run_desc = " ".join(JOBS[job_name].get("command", [])) or JOBS[job_name].get("script", "?")
+        result["would_do"] = f"Re-run {run_desc} (unknown cause)"
         return result
 
     return _rerun_job(job_name, result)
+
+
+# === ChromaDB Health & Repair (Phase 4: Safety Hardening) ===
+
+def check_chromadb_health(dry_run: bool = False) -> dict:
+    """Check ChromaDB health and attempt repair if broken.
+
+    Steps:
+    1. Try to import and instantiate ClarvisBrain
+    2. If it fails, attempt SQLite .recover on the ChromaDB sqlite3 file
+    3. If .recover fails, try restoring from latest backup
+    4. Returns a result dict with success/failure details
+    """
+    result = {"action": "chromadb_health_check", "job": "chromadb"}
+    data_dir = WORKSPACE / "data" / "clarvisdb"
+
+    # Step 1: Try brain health check
+    try:
+        sys.path.insert(0, str(WORKSPACE))
+        from clarvis.brain import get_brain
+        b = get_brain()
+        hc = b.health_check()
+        if hc["status"] == "healthy":
+            result["success"] = True
+            result["detail"] = f"ChromaDB healthy: {hc['total_memories']} memories"
+            return result
+        else:
+            result["issues"] = hc.get("issues", [])
+            _log(f"ChromaDB health check issues: {hc.get('issues', [])}")
+    except Exception as e:
+        result["init_error"] = str(e)[:200]
+        _log(f"ChromaDB init failed: {e}")
+
+    if dry_run:
+        result["dry_run"] = True
+        result["would_do"] = "Attempt SQLite .recover on ChromaDB data, then restore from backup if needed"
+        return result
+
+    # Step 2: Try SQLite recover on ChromaDB's internal sqlite3 file
+    chroma_sqlite = data_dir / "chroma.sqlite3"
+    if chroma_sqlite.exists():
+        recover_path = data_dir / "chroma.sqlite3.recover"
+        try:
+            _log("Attempting SQLite .recover on ChromaDB...")
+            proc = subprocess.run(
+                ["sqlite3", str(chroma_sqlite), ".recover"],
+                capture_output=True, text=True, timeout=120,
+            )
+            if proc.returncode == 0 and proc.stdout:
+                # Write recovered SQL to a new DB, then swap
+                with open(recover_path, "w") as f:
+                    f.write(proc.stdout)
+                result["sqlite_recover"] = "output_captured"
+                _log("SQLite .recover succeeded, output saved")
+            else:
+                result["sqlite_recover"] = f"failed: exit {proc.returncode}"
+                _log(f"SQLite .recover failed: {proc.stderr[:200]}")
+        except subprocess.TimeoutExpired:
+            result["sqlite_recover"] = "timed_out"
+            _log("SQLite .recover timed out after 120s")
+        except FileNotFoundError:
+            result["sqlite_recover"] = "sqlite3_not_found"
+            _log("sqlite3 binary not found for .recover")
+    else:
+        result["sqlite_recover"] = "no_chroma_sqlite"
+
+    # Step 3: Try restoring from latest backup
+    backup_dir = Path(os.path.expanduser("~/.openclaw/backups/daily"))
+    if backup_dir.exists():
+        # Find most recent backup with brain data
+        backups = sorted(backup_dir.glob("*/brain/"), reverse=True)
+        if backups:
+            latest_backup = backups[0]
+            result["backup_found"] = str(latest_backup)
+            _log(f"Latest brain backup: {latest_backup}")
+            # Don't auto-restore — too risky. Queue for manual review.
+            _add_evolution_task(
+                f"ChromaDB repair needed: init failed, .recover attempted. "
+                f"Latest backup at {latest_backup}. Manual restore may be needed."
+            )
+            result["queued_for_review"] = True
+        else:
+            result["backup_found"] = None
+    else:
+        result["backup_found"] = None
+
+    result["success"] = False
+    result["detail"] = "ChromaDB unhealthy — repair attempted, queued for review"
+    return result
 
 
 # Recovery dispatch
@@ -461,21 +715,33 @@ RECOVERY_HANDLERS = {
 
 
 def _rerun_job(job_name: str, result: dict) -> dict:
-    """Re-run a cron job script in the background."""
+    """Re-run a cron job script or command."""
     job = JOBS[job_name]
-    script = WORKSPACE / job["script"]
     timeout = job.get("timeout", 600)
 
-    if not script.exists():
+    # Build command: prefer explicit "command" list, else bash wrapper around "script"
+    if job.get("command"):
+        cmd = list(job["command"])
+        cmd_desc = " ".join(cmd)
+    elif job.get("script"):
+        script = WORKSPACE / job["script"]
+        if not script.exists():
+            result["success"] = False
+            result["error"] = f"Script not found: {script}"
+            _log(f"FAILED: Cannot re-run {job_name} — script missing: {script}")
+            return result
+        cmd = ["bash", str(script)]
+        cmd_desc = str(script)
+    else:
         result["success"] = False
-        result["error"] = f"Script not found: {script}"
-        _log(f"FAILED: Cannot re-run {job_name} — script missing: {script}")
+        result["error"] = f"No script or command configured for {job_name}"
+        _log(f"FAILED: Cannot re-run {job_name} — no script or command configured")
         return result
 
     try:
-        _log(f"RERUNNING: {job_name} via {script} (timeout={timeout}s)")
+        _log(f"RERUNNING: {job_name} via {cmd_desc} (timeout={timeout}s)")
         proc = subprocess.run(
-            ["bash", str(script)],
+            cmd,
             capture_output=True, text=True,
             timeout=timeout,
             cwd=str(WORKSPACE),
@@ -539,10 +805,26 @@ def diagnose() -> list[dict]:
 
 
 def recover(dry_run: bool = False) -> list[dict]:
-    """Diagnose and attempt recovery for all failed jobs."""
+    """Diagnose and attempt recovery for all failed jobs.
+
+    Also runs ChromaDB health check (Phase 4: safety hardening).
+    """
     state = _load_state()
     failures = diagnose()
     results = []
+
+    # ChromaDB health check — runs once per recovery cycle
+    chromadb_retries = state["retries"].get("chromadb", 0)
+    if chromadb_retries < MAX_RETRIES_PER_DAY:
+        try:
+            chromadb_result = check_chromadb_health(dry_run=dry_run)
+            results.append(chromadb_result)
+            if not dry_run and not chromadb_result.get("success"):
+                state["retries"]["chromadb"] = chromadb_retries + 1
+        except Exception as ex:
+            _log(f"ChromaDB health check error: {ex}")
+    else:
+        _log("SKIP: chromadb health check — max retries reached today")
 
     for failure in failures:
         job_name = failure["job"]

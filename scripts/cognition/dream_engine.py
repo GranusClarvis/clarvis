@@ -466,13 +466,17 @@ def dream(n_episodes=10):
         chain_id, insight = reason_about_counterfactual(cf)
         chains_created.append(chain_id)
 
-        # 4. Store dream insight (0.5 — discoverable by preflight knowledge recall)
+        # 4. Store dream insight — dedup by episode+template to prevent reruns
+        #    from creating duplicate entries.
+        dream_text = f"[DREAM INSIGHT] {insight}"
+        dream_dedup_id = f"dream_{episode['id']}_{cf['template_id']}"
         dream_memory_id = brain.store(
-            f"[DREAM INSIGHT] {insight}",
+            dream_text,
             collection="clarvis-learnings",
             importance=0.5,  # Must be >=0.3 to surface in preflight knowledge recall
             tags=["dream", "counterfactual", cf["template_id"], session_id],
-            source="dream_engine"
+            source="dream_engine",
+            memory_id=dream_dedup_id,
         )
 
         dream_entry = {
@@ -507,7 +511,8 @@ def dream(n_episodes=10):
         collection="clarvis-learnings",
         importance=0.4,
         tags=["dream_session", session_id],
-        source="dream_engine"
+        source="dream_engine",
+        memory_id=f"dream_session_{session_id}",
     )
 
     print("\n[dream] Dream cycle complete:")

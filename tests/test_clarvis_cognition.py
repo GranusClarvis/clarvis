@@ -711,9 +711,7 @@ class TestThoughtFrame:
 
 @pytest.fixture
 def proto(tmp_path, monkeypatch):
-    """Create a ThoughtProtocol with temp log file and no disk patterns."""
-    import clarvis.cognition.thought_protocol as tp_mod
-    monkeypatch.setattr(tp_mod, "THOUGHT_LOG", tmp_path / "thought_log.jsonl")
+    """Create a ThoughtProtocol with no disk patterns."""
     return ThoughtProtocol()
 
 
@@ -1003,46 +1001,24 @@ class TestThoughtProtocolPatternPersistence:
 
 
 class TestThoughtProtocolLogging:
-    def test_log_frame_writes_to_disk(self, proto, tmp_path, monkeypatch):
-        """Thought frames should be logged to JSONL."""
-        import clarvis.cognition.thought_protocol as tp_mod
-        log_file = tmp_path / "thought_log.jsonl"
-        monkeypatch.setattr(tp_mod, "THOUGHT_LOG", log_file)
-
+    def test_log_frame_records_in_memory(self, proto):
+        """Thought frames should be recorded in memory history."""
         proto.eval("@sal(0.8)")
-        assert log_file.exists()
-        lines = [l for l in log_file.read_text().strip().split("\n") if l]
-        assert len(lines) >= 1
-        entry = json.loads(lines[0])
+        assert len(proto.frame_history) >= 1
+        entry = proto.frame_history[-1]
         assert "frame_id" in entry
         assert "purpose" in entry
         assert "duration_ms" in entry
 
-    def test_thought_stats_from_disk(self, tmp_path, monkeypatch):
-        """thought_stats should read from disk if no in-memory history."""
-        import clarvis.cognition.thought_protocol as tp_mod
-        log_file = tmp_path / "thought_log.jsonl"
-        monkeypatch.setattr(tp_mod, "THOUGHT_LOG", log_file)
-
-        # Write some log entries
-        for i in range(3):
-            entry = {
-                "ts": "2026-01-01T00:00:00",
-                "frame_id": f"tf_{i}",
-                "purpose": "test",
-                "encoded": "S[]",
-                "signals": {},
-                "trace": [],
-                "duration_ms": 1.0 + i,
-            }
-            with open(log_file, "a") as f:
-                f.write(json.dumps(entry) + "\n")
-
+    def test_thought_stats_from_memory(self):
+        """thought_stats should work from in-memory history."""
         p = ThoughtProtocol()
-        p.frame_history = []  # ensure empty
+        p.frame_history = []
+        for i in range(3):
+            p.eval(f"@val({i / 10})")
         stats = p.thought_stats()
         assert stats["total_frames"] == 3
-        assert stats["avg_duration_ms"] == pytest.approx(2.0, abs=0.1)
+        assert "avg_duration_ms" in stats
 
     def test_frame_history_limit(self, proto):
         """History should be limited to 50 entries."""

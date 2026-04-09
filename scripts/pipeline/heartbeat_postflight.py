@@ -235,7 +235,7 @@ except ImportError:
 # Cost tracking — spine module
 try:
     from clarvis.orch.cost_tracker import CostTracker, estimate_tokens
-    COST_LOG = os.path.join(os.path.dirname(__file__), '..', 'data', 'costs.jsonl')
+    COST_LOG = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), 'data', 'costs.jsonl')
     cost_tracker = CostTracker(COST_LOG)
 except ImportError:
     cost_tracker = None

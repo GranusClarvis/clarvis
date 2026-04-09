@@ -31,9 +31,7 @@ from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import _paths  # noqa: F401 — registers all script subdirs on sys.path
-from brain import brain, AUTONOMOUS_LEARNING
+from clarvis.brain import brain, AUTONOMOUS_LEARNING
 
 DATA_DIR = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))) / "data/theory_of_mind"
 DATA_DIR.mkdir(parents=True, exist_ok=True)

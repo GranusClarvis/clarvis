@@ -43,11 +43,12 @@ def create_chain(title: str, initial_thought: str) -> str:
     chain_file = REASONING_DIR / f"{chain_id}.json"
     chain_file.write_text(json.dumps(chain, indent=2))
 
-    # Also store in brain for searchability
+    # Also store in brain for searchability — use chain_id as memory_id for upsert
     brain.store(
         f"Reasoning chain: {title}. Initial thought: {initial_thought}",
         collection="clarvis-learnings",
-        tags=["reasoning_chain", chain_id]
+        tags=["reasoning_chain", chain_id],
+        memory_id=f"rc_{chain_id}",
     )
 
     return chain_id
@@ -75,11 +76,12 @@ def add_step(chain_id: str, thought: str, previous_outcome: str = None) -> int:
 
     chain_file.write_text(json.dumps(chain, indent=2))
 
-    # Store in brain
+    # Store in brain — use chain_id + step for upsert
     brain.store(
         f"Reasoning chain '{chain['title']}' step {step_num}: {thought}",
         collection="clarvis-learnings",
-        tags=["reasoning_step", chain_id]
+        tags=["reasoning_step", chain_id],
+        memory_id=f"rc_{chain_id}_s{step_num}",
     )
 
     return step_num
@@ -96,11 +98,12 @@ def complete_step(chain_id: str, outcome: str):
         chain["steps"][-1]["outcome"] = outcome
         chain_file.write_text(json.dumps(chain, indent=2))
 
-        # Store outcome in brain
+        # Store outcome in brain — upsert by chain_id
         brain.store(
             f"Reasoning chain '{chain['title']}' outcome: {outcome}",
             collection="clarvis-learnings",
-            tags=["reasoning_outcome", chain_id]
+            tags=["reasoning_outcome", chain_id],
+            memory_id=f"rc_{chain_id}_outcome",
         )
 
 

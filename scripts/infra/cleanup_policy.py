@@ -102,7 +102,7 @@ JSONL_TRIM = {
     "data/hebbian/access_log.jsonl": 5000,
     "data/hebbian/evolution_history.jsonl": 500,
     "data/retrieval_quality/events.jsonl": 2000,
-    "data/thought_log.jsonl": 2000,
+    # data/thought_log.jsonl — no longer written (Phase 6, 2026-04-09)
     "data/router_decisions.jsonl": 2000,
     "data/code_gen_outcomes.jsonl": 2000,
     "data/conflict_log.jsonl": 1500,

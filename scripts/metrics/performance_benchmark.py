@@ -45,11 +45,8 @@ from datetime import datetime, timezone, timedelta
 
 logger = logging.getLogger(__name__)
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import _paths  # noqa: F401 — registers all script subdirs on sys.path
-
 # Ensure clarvis package is importable
-_workspace = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+_workspace = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 if _workspace not in sys.path:
     sys.path.insert(0, _workspace)
 
@@ -124,7 +121,7 @@ ACCURACY_QUERIES = [
 
 def benchmark_brain_speed():
     """Dimension 1: Measure brain.recall() latency across representative queries."""
-    from brain import brain
+    from clarvis.brain import brain
 
     # Warm up (first query loads ChromaDB/ONNX)
     brain.recall("warmup", n=1)
@@ -234,7 +231,7 @@ def benchmark_efficiency():
 
 def benchmark_brain_stats():
     """Dimension 6: Brain size, graph health, bloat detection."""
-    from brain import brain
+    from clarvis.brain import brain
     stats = brain.stats()
     total_mem = stats["total_memories"]
     total_edges = stats["graph_edges"]
@@ -409,7 +406,7 @@ def benchmark_context_quality():
 
 def benchmark_load_scaling():
     """Dimension 8: Performance under load / degradation as brain grows."""
-    from brain import brain
+    from clarvis.brain import brain
     from statistics import median
 
     # Warm up embedding + ChromaDB caches with the test query at all n-levels.
@@ -671,7 +668,7 @@ def benchmark_self_improvement():
 
     # Goal non-zombie rate
     try:
-        from brain import brain
+        from clarvis.brain import brain
         goals = brain.get_goals(include_archived=True)
         if goals:
             non_zombie = sum(
@@ -794,7 +791,7 @@ def _build_report(timestamp, bench_duration, metrics, details, report_type=None)
 
 def _retrieval_accuracy_fallback():
     """Fallback retrieval benchmark using known-answer pairs."""
-    from brain import brain
+    from clarvis.brain import brain
     hits = 0
     for query, expected in ACCURACY_QUERIES:
         results = brain.recall(query, n=3)
@@ -1206,7 +1203,7 @@ def run_heartbeat_check():
     timestamp = datetime.now(timezone.utc).isoformat()
     t0 = time.monotonic()
 
-    from brain import brain
+    from clarvis.brain import brain
 
     # Quick speed check (3 queries only)
     brain.recall("warmup", n=1)

@@ -25,6 +25,80 @@ from datetime import datetime, timezone
 
 from .constants import DEFAULT_COLLECTIONS, ALL_COLLECTIONS, route_query
 
+# ---------------------------------------------------------------------------
+# Hook safety: per-hook timeout + circuit breaker (Phase 4: Safety Hardening)
+# ---------------------------------------------------------------------------
+
+# Per-hook failure tracking: {fn_id: {"consecutive_failures": int, "disabled_at": float}}
+_hook_state = {}
+_HOOK_FAILURE_THRESHOLD = 3
+_HOOK_COOLDOWN_S = 300  # re-enable after 5 minutes
+# Timeouts: brain hooks (scorers/boosters) are latency-sensitive; observers run in bg
+_BRAIN_HOOK_TIMEOUT_S = 0.5   # 500ms for inline recall hooks
+_HEARTBEAT_HOOK_TIMEOUT_S = 10.0  # 10s for heartbeat/observer hooks
+
+
+def _hook_id(fn):
+    """Stable identifier for a hook function."""
+    return getattr(fn, "__qualname__", None) or id(fn)
+
+
+def _is_hook_disabled(fn) -> bool:
+    """Check if a hook is circuit-broken (disabled after repeated failures)."""
+    hid = _hook_id(fn)
+    state = _hook_state.get(hid)
+    if state and state.get("disabled_at"):
+        import time as _t
+        elapsed = _t.time() - state["disabled_at"]
+        if elapsed < _HOOK_COOLDOWN_S:
+            return True
+        # Cooldown expired — half-open: re-enable for one try
+        state["disabled_at"] = None
+        state["consecutive_failures"] = 0
+    return False
+
+
+def _record_hook_result(fn, success: bool):
+    """Track hook success/failure for circuit-breaker logic."""
+    hid = _hook_id(fn)
+    state = _hook_state.setdefault(hid, {"consecutive_failures": 0, "disabled_at": None})
+    if success:
+        state["consecutive_failures"] = 0
+        state["disabled_at"] = None
+    else:
+        state["consecutive_failures"] += 1
+        if state["consecutive_failures"] >= _HOOK_FAILURE_THRESHOLD:
+            import time as _t
+            state["disabled_at"] = _t.time()
+            _log.warning(
+                "Hook circuit breaker OPEN for %s (%d consecutive failures, "
+                "cooldown %ds)", _hook_id(fn), state["consecutive_failures"],
+                _HOOK_COOLDOWN_S,
+            )
+
+
+def _run_hook_with_timeout(fn, args, timeout_s):
+    """Run a hook function with a timeout. Returns True on success."""
+    if _is_hook_disabled(fn):
+        return False
+    from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
+    with ThreadPoolExecutor(max_workers=1, thread_name_prefix="hook-to") as ex:
+        future = ex.submit(fn, *args)
+        try:
+            future.result(timeout=timeout_s)
+            _record_hook_result(fn, True)
+            return True
+        except FuturesTimeout:
+            _log.warning("Hook %s timed out after %.1fs", _hook_id(fn), timeout_s)
+            _record_hook_result(fn, False)
+            future.cancel()
+            return False
+        except Exception:
+            _log.debug("Hook %s failed", _hook_id(fn), exc_info=True)
+            _record_hook_result(fn, False)
+            return False
+
+
 # Patterns that identify synthetic bridge/boost memories by ID or content
 _BRIDGE_ID_PREFIXES = ("bridge_", "sbridge_", "cross_link_", "xlink_", "boost_", "tm_")
 _BRIDGE_TEXT_PREFIXES = (
@@ -436,23 +510,17 @@ class SearchMixin:
 
     def _score_and_sort(self, all_results, recency_weight, attention_boost, filter_bridges):
         """Apply hooks, recency scoring, sorting, and filtering to results."""
-        # Hook: attention boost
+        # Hook: attention boost (with timeout + circuit breaker)
         if attention_boost:
             for fn in self._recall_boosters:
-                try:
-                    fn(all_results)
-                except Exception:
-                    pass
+                _run_hook_with_timeout(fn, (all_results,), _BRAIN_HOOK_TIMEOUT_S)
 
-        # Hook: scoring (actr or fallback)
+        # Hook: scoring (actr or fallback, with timeout + circuit breaker)
         scored = False
         for fn in self._recall_scorers:
-            try:
-                fn(all_results)
+            if _run_hook_with_timeout(fn, (all_results,), _BRAIN_HOOK_TIMEOUT_S):
                 scored = True
                 break
-            except Exception:
-                continue
 
         rw = max(0.0, min(1.0, recency_weight))
 
@@ -521,11 +589,15 @@ class SearchMixin:
 
         def _run():
             for fn in observers:
+                if _is_hook_disabled(fn):
+                    continue
                 try:
                     fn(query, obs_snapshot, caller=caller,
                        rate_limit_mono=now_mono, last_mono=last_obs)
+                    _record_hook_result(fn, True)
                 except Exception:
                     _log.debug("Observer %s failed", fn.__qualname__, exc_info=True)
+                    _record_hook_result(fn, False)
         _observer_executor.submit(_run)
 
     # --- recall: main entry point ---
@@ -574,6 +646,25 @@ class SearchMixin:
         temporal_target = n * len(valid_collections)
         if cutoff_epoch and recency_weight >= 0.5 and len(all_results) < temporal_target:
             self._supplement_chronological(all_results, valid_collections, cutoff_epoch, n)
+
+        # Phase 4c: Cross-collection dedup — same document text from
+        # multiple collections should appear only once (keep best distance)
+        if len(valid_collections) > 1 and all_results:
+            seen_texts = {}  # normalized_text -> index in deduped list
+            deduped = []
+            for r in all_results:
+                txt = r.get("document", "").strip()[:500].lower()
+                if txt in seen_texts:
+                    existing = deduped[seen_texts[txt]]
+                    ed = existing.get("distance")
+                    rd = r.get("distance")
+                    if rd is not None and (ed is None or rd < ed):
+                        deduped[seen_texts[txt]] = r
+                else:
+                    seen_texts[txt] = len(deduped)
+                    deduped.append(r)
+            all_results = deduped
+
         _t_fetch_done = time.monotonic()
 
         # Phase 5: Score, sort, filter
@@ -596,13 +687,25 @@ class SearchMixin:
 
         # Phase 7: Observers + reconsolidation + cache
         self._fire_recall_observers(query, final_results, caller)
+        now_mono = time.monotonic()
         for result in final_results:
             mem_id = result.get("id")
             col_name = result.get("collection")
             if mem_id and col_name:
                 self._labile_memories[mem_id] = {
-                    "retrieved_at": time.monotonic(), "collection": col_name,
+                    "retrieved_at": now_mono, "collection": col_name,
                 }
+        # Cap _labile_memories: evict expired entries first, then oldest if > 500
+        if len(self._labile_memories) > 500:
+            expired = [k for k, v in self._labile_memories.items()
+                       if (now_mono - v["retrieved_at"]) > self._lability_window]
+            for k in expired:
+                del self._labile_memories[k]
+        if len(self._labile_memories) > 500:
+            oldest = sorted(self._labile_memories,
+                            key=lambda k: self._labile_memories[k]["retrieved_at"])
+            for k in oldest[:len(self._labile_memories) - 500]:
+                del self._labile_memories[k]
         self._recall_cache[cache_key] = (time.monotonic(), final_results)
         if len(self._recall_cache) > 50:
             oldest = min(self._recall_cache, key=lambda k: self._recall_cache[k][0])

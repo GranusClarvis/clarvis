@@ -13,9 +13,11 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import _paths  # noqa: F401 — registers all script subdirs on sys.path
-from brain import brain
+_workspace = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
+if _workspace not in sys.path:
+    sys.path.insert(0, _workspace)
+
+from clarvis.brain import brain
 from clarvis.cognition.attention import attention
 
 DATA_DIR = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))) / "data"
@@ -56,6 +58,7 @@ def session_open(session_key=None):
 
     # 5. Theory of Mind: generate proactive suggestions and push to spotlight
     try:
+        sys.path.insert(0, os.path.join(_workspace, "scripts", "cognition"))
         from theory_of_mind import tom
         suggestions = tom.generate_suggestions()
         pushed = tom.push_to_spotlight(suggestions)

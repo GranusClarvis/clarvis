@@ -175,11 +175,19 @@ def is_task_allowed_for_mode(task_text: str, mode: str | None = None) -> tuple[b
 
 def mode_policies(mode: str | None = None) -> dict[str, Any]:
     current = normalize_mode(mode or get_mode())
+    # Research bursts also gated by durable research config
+    research_allowed = current == "ge"
+    if research_allowed:
+        try:
+            from clarvis.research_config import is_enabled
+            research_allowed = is_enabled("research_auto_fill")
+        except ImportError:
+            pass
     return {
         "mode": current,
         "allow_autonomous_execution": current in {"ge", "architecture"},
         "allow_autonomous_queue_generation": current == "ge",
-        "allow_research_bursts": current == "ge",
+        "allow_research_bursts": research_allowed,
         "allow_self_surgery": current == "ge",
         "allow_user_assigned_execution": True,
         "enforce_improve_existing": current == "architecture",

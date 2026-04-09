@@ -68,6 +68,30 @@ check_job "backup"          "$LOG_DIR/backup.log"           26   # daily at 02:0
 check_job "backup_verify"   "$LOG_DIR/backup_verify.log"    26   # daily at 02:30, grace 2h
 check_job "dream_engine"    "$LOG_DIR/dream.log"            26   # daily at 02:45, grace 2h
 check_job "research"        "$LOG_DIR/research.log"         10   # 2x/day at 10,16, grace 4h
+# --- Added 2026-04-09 (Phase 1: Operational Truthfulness) ---
+check_job "impl_sprint"     "$LOG_DIR/implementation_sprint.log" 26  # daily at 14:00, grace 2h
+check_job "strategic_audit" "$LOG_DIR/strategic_audit.log"  170  # Wed+Sat 17:00 (~3.5d max gap)
+check_job "graph_checkpoint" "$LOG_DIR/graph_checkpoint.log" 26  # daily at 04:00
+check_job "graph_compaction" "$LOG_DIR/graph_compaction.log" 26  # daily at 04:30
+check_job "graph_verify"    "$LOG_DIR/graph_verify.log"     26   # daily at 04:45
+check_job "db_vacuum"       "$LOG_DIR/chromadb_vacuum.log"  26   # daily at 05:00
+check_job "orchestrator"    "$LOG_DIR/orchestrator.log"     26   # daily at 19:30
+check_job "pi_refresh"      "$LOG_DIR/pi_refresh.log"       26   # daily at 05:45
+check_job "brain_eval"      "$LOG_DIR/brain_eval.log"       26   # daily at 06:05
+check_job "llm_brain_review" "$LOG_DIR/llm_brain_review.log" 26  # daily at 06:15
+check_job "status_json"     "$LOG_DIR/status_json.log"      26   # daily at 05:50
+check_job "relevance_refresh" "$LOG_DIR/relevance_refresh.log" 26 # daily at 02:40
+# Weekly jobs
+check_job "cleanup"         "$LOG_DIR/cleanup.log"          170  # Sun 05:30
+check_job "absolute_zero"   "$LOG_DIR/absolute_zero.log"    170  # Sun 03:00
+check_job "clr_benchmark"   "$LOG_DIR/clr_benchmark.log"    170  # Sun 06:30
+check_job "goal_hygiene"    "$LOG_DIR/goal_hygiene.log"     170  # Sun 05:10
+check_job "brain_hygiene"   "$LOG_DIR/brain_hygiene.log"    170  # Sun 05:15
+check_job "data_lifecycle"  "$LOG_DIR/data_lifecycle.log"   170  # Sun 05:20
+check_job "pi_benchmark"    "$LOG_DIR/pi_benchmark.log"     170  # Sun 06:00
+# Monthly jobs
+check_job "monthly_reflection" "$LOG_DIR/monthly_reflection.log" 750  # 1st 03:30
+check_job "brief_benchmark" "$LOG_DIR/brief_benchmark.log"  750  # 1st 03:45
 
 # --- Stale lock check ---
 # Alert on any /tmp/clarvis_*.lock files older than 2 hours.
@@ -175,8 +199,8 @@ if [ "$FAILURES" -gt 0 ]; then
     local age=$(( $(date +%s) - file_mod ))
     [ "$age" -gt "$max_age_seconds" ] && { ((STILL_FAILING++)) || true; }
   }
-  # Brief pause to let re-runs produce output
-  sleep 2
+  # Allow adequate startup time for recovered services before rechecking
+  sleep 30
   recheck_job "$LOG_DIR/autonomous.log" 4
   recheck_job "$CLARVIS_WORKSPACE/monitoring/health.log" 1
   recheck_job "$LOG_DIR/report_morning.log" 26
@@ -189,6 +213,27 @@ if [ "$FAILURES" -gt 0 ]; then
   recheck_job "$LOG_DIR/backup_verify.log" 26
   recheck_job "$LOG_DIR/dream.log" 26
   recheck_job "$LOG_DIR/research.log" 10
+  recheck_job "$LOG_DIR/implementation_sprint.log" 26
+  recheck_job "$LOG_DIR/strategic_audit.log" 170
+  recheck_job "$LOG_DIR/graph_checkpoint.log" 26
+  recheck_job "$LOG_DIR/graph_compaction.log" 26
+  recheck_job "$LOG_DIR/graph_verify.log" 26
+  recheck_job "$LOG_DIR/chromadb_vacuum.log" 26
+  recheck_job "$LOG_DIR/orchestrator.log" 26
+  recheck_job "$LOG_DIR/pi_refresh.log" 26
+  recheck_job "$LOG_DIR/brain_eval.log" 26
+  recheck_job "$LOG_DIR/llm_brain_review.log" 26
+  recheck_job "$LOG_DIR/status_json.log" 26
+  recheck_job "$LOG_DIR/relevance_refresh.log" 26
+  recheck_job "$LOG_DIR/cleanup.log" 170
+  recheck_job "$LOG_DIR/absolute_zero.log" 170
+  recheck_job "$LOG_DIR/clr_benchmark.log" 170
+  recheck_job "$LOG_DIR/goal_hygiene.log" 170
+  recheck_job "$LOG_DIR/brain_hygiene.log" 170
+  recheck_job "$LOG_DIR/data_lifecycle.log" 170
+  recheck_job "$LOG_DIR/pi_benchmark.log" 170
+  recheck_job "$LOG_DIR/monthly_reflection.log" 750
+  recheck_job "$LOG_DIR/brief_benchmark.log" 750
 
   RECOVERED=$(( FAILURES - STILL_FAILING ))
   echo "------------------------------"

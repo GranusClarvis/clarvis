@@ -160,13 +160,14 @@ def update_model(capability_change=None, strength=None, weakness=None, trajector
     model["last_updated"] = today
     save_model(model)
 
-    # Store in brain
+    # Store in brain — use fixed daily ID to upsert instead of appending
     brain.store(
         f"World model updated: {today} - {trajectory_event or 'routine update'}",
         collection="clarvis-identity",
         importance=0.7,
         tags=["self-model", "world-model"],
-        source="self-assessment"
+        source="self-assessment",
+        memory_id=f"self-model-world-{today}",
     )
 
 # === Meta-Cognition Functions (Higher-Order Theories) ===
@@ -192,7 +193,8 @@ def set_awareness_level(level):
         f"Meta-cognition: awareness level changed from {old} to {level}",
         collection="clarvis-identity",
         importance=0.6,
-        tags=["meta-cognition", "awareness"]
+        tags=["meta-cognition", "awareness"],
+        memory_id="self-model-awareness-current",
     )
     print(f"✓ Awareness level: {old} → {level}")
 
@@ -232,14 +234,8 @@ def think_about_thinking(thought):
     meta["meta_thoughts"] = meta["meta_thoughts"][-20:]
     save_meta(meta)
 
-    # Also store in brain for long-term
-    brain.store(
-        f"Meta-cognition: {thought}",
-        collection="clarvis-identity",
-        importance=0.5,
-        tags=["meta-cognition", "reflection"],
-        source="internal"
-    )
+    # Meta-thoughts are already persisted in the meta JSON file (last 20).
+    # No brain storage — this previously generated massive duplicate spam.
 
 def update_user_model(inferred_state=None, intent=None):
     """Update theory of mind about user (simulated)"""
@@ -1458,7 +1454,8 @@ def daily_update():
         collection="clarvis-identity",
         importance=0.8,
         tags=["self-model", "capability-assessment", "daily"],
-        source="self-assessment"
+        source="self-assessment",
+        memory_id=f"self-model-capability-{today}",
     )
 
     # === ACT ON ASSESSMENT: Auto-generate remediation tasks for weak domains ===

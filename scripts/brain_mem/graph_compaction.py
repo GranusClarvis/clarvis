@@ -19,11 +19,7 @@ import sys
 import time
 from datetime import datetime, timezone
 
-SCRIPTS_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, SCRIPTS_DIR)
-import _paths  # noqa: F401 — registers all script subdirs on sys.path
-
-from brain import get_brain
+from clarvis.brain import get_brain
 
 
 # ====================================================================

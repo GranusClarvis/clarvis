@@ -17,6 +17,8 @@ import re
 import time
 import uuid
 
+_logger = logging.getLogger("clarvis.brain")
+
 from .constants import (
     DATA_DIR, LOCAL_DATA_DIR, GRAPH_FILE, LOCAL_GRAPH_FILE,
     GRAPH_SQLITE_FILE, LOCAL_GRAPH_SQLITE_FILE, GRAPH_BACKEND,
@@ -85,8 +87,15 @@ class ClarvisBrain(StoreMixin, GraphMixin, SearchMixin):
         self._optimize_hooks = []
 
     def _init_collections(self):
-        """Ensure all collections exist. Raises RuntimeError if any fail."""
+        """Initialise collections, entering degraded mode on partial failure.
+
+        If some collections fail to init, the brain continues with whatever
+        succeeded.  Only raises RuntimeError if ALL collections fail (total
+        brain failure).  Per-collection error state is tracked for the circuit
+        breaker.  (Added 2026-04-09, ref: SECOND_PASS F4.4.1/F4.4.2)
+        """
         self.collections = {}
+        self._failed_collections = {}  # name -> error string
         failed = []
         for name in ALL_COLLECTIONS:
             try:
@@ -99,12 +108,18 @@ class ClarvisBrain(StoreMixin, GraphMixin, SearchMixin):
                     self.collections[name] = self.client.get_or_create_collection(name)
             except Exception as e:
                 failed.append((name, str(e)))
+                self._failed_collections[name] = str(e)
 
         if failed:
             names = [f[0] for f in failed]
-            raise RuntimeError(
-                f"Brain init failed: {len(failed)}/{len(ALL_COLLECTIONS)} collections "
-                f"could not be created: {names}. Errors: {failed}"
+            if not self.collections:
+                raise RuntimeError(
+                    f"Brain init TOTAL FAILURE: 0/{len(ALL_COLLECTIONS)} collections "
+                    f"available: {names}. Errors: {failed}"
+                )
+            _logger.warning(
+                "Brain degraded mode: %d/%d collections failed: %s",
+                len(failed), len(ALL_COLLECTIONS), names,
             )
 
     # --- Hook registration API ---
@@ -199,16 +214,46 @@ def get_local_brain():
 
 
 class _LazyBrain:
-    """Lazy proxy for ClarvisBrain — delays ChromaDB init until first access."""
+    """Lazy proxy for ClarvisBrain — delays ChromaDB init until first access.
+
+    Circuit breaker: after 3 consecutive init failures, stops retrying for
+    60 seconds (fail-fast) to avoid hammering a broken ChromaDB.
+    (Added 2026-04-09, ref: SECOND_PASS F4.4.2)
+    """
+    _failure_count = 0
+    _last_failure_time = 0
+    _CIRCUIT_THRESHOLD = 3
+    _CIRCUIT_COOLDOWN = 60  # seconds
 
     def __getattr__(self, name):
-        real = get_brain()
-        # Replace module-level 'brain' so future accesses skip the proxy
+        import time as _time
+        # Circuit breaker: fail fast if recently failed
+        if self._failure_count >= self._CIRCUIT_THRESHOLD:
+            elapsed = _time.time() - self._last_failure_time
+            if elapsed < self._CIRCUIT_COOLDOWN:
+                raise RuntimeError(
+                    f"Brain circuit breaker OPEN ({self._failure_count} failures, "
+                    f"retry in {int(self._CIRCUIT_COOLDOWN - elapsed)}s)"
+                )
+            # Half-open: allow one retry
+            _logger.info("Brain circuit breaker half-open, retrying init...")
+
+        try:
+            real = get_brain()
+        except Exception:
+            _LazyBrain._failure_count += 1
+            _LazyBrain._last_failure_time = _time.time()
+            raise
+
+        # Success — reset breaker and replace proxy
+        _LazyBrain._failure_count = 0
         import clarvis.brain as _module
         _module.brain = real
         return getattr(real, name)
 
     def __repr__(self):
+        if self._failure_count >= self._CIRCUIT_THRESHOLD:
+            return f"<LazyBrain (circuit OPEN, {self._failure_count} failures)>"
         return "<LazyBrain (not yet initialized)>"
 
 
@@ -298,11 +343,19 @@ def _run_brain_hooks(phase, context):
     Lazy-imports the registry to avoid circular imports (brain is loaded
     before heartbeat in many scripts). Failures are silently ignored —
     hooks must never block brain operations.
+
+    Timeout: 10s for heartbeat hooks (Phase 4 safety hardening).
     """
     try:
         from clarvis.heartbeat.hooks import registry
-        if registry.hooks_for(phase):
-            registry.run(phase, context)
+        if not registry.hooks_for(phase):
+            return
+        from concurrent.futures import ThreadPoolExecutor, TimeoutError as FTO
+        with ThreadPoolExecutor(max_workers=1, thread_name_prefix="bhook") as ex:
+            fut = ex.submit(registry.run, phase, context)
+            fut.result(timeout=10.0)
+    except FTO:
+        _logger.warning("Brain hook %s timed out after 10s", phase)
     except Exception:
         pass  # hooks are advisory, never block brain ops
 

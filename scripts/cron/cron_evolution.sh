@@ -12,6 +12,9 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || echo "${
 LOGFILE="memory/cron/evolution.log"
 SCRIPTS="$CLARVIS_WORKSPACE/scripts"
 
+# Arm outer script timeout (2400s = 40 min) — kills entire script on hang
+set_script_timeout 2400 "$LOGFILE"
+
 # Acquire locks: local + global Claude
 acquire_local_lock "/tmp/clarvis_evolution.lock" "$LOGFILE" 3600
 acquire_global_claude_lock "$LOGFILE"
@@ -123,18 +126,29 @@ STATIC_FOOTER
 
 EVO_OUTPUT_FILE=$(mktemp)
 run_claude_monitored 1200 "$EVO_OUTPUT_FILE" "$EVO_PROMPT_FILE" "$LOGFILE"
+CLAUDE_EXIT=$MONITORED_EXIT
 cat "$EVO_OUTPUT_FILE" >> "$LOGFILE"
 rm -f "$EVO_PROMPT_FILE" "$EVO_OUTPUT_FILE"
 
 # ============================================================================
-# DIGEST (lightweight — single subprocess)
+# DIGEST (lightweight — single subprocess, only on success)
 # ============================================================================
-python3 "$SCRIPTS/tools/digest_writer.py" evolution \
-    "Deep evolution analysis complete. ${PHI_SHORT:-Phi unknown}. Weakest: ${WEAKEST:-unknown}. $PENDING_COUNT tasks pending. Calibration: ${CALIBRATION_SHORT:-unknown}." \
-    >> "$LOGFILE" 2>&1 || true
+if [ "$CLAUDE_EXIT" -eq 0 ]; then
+    python3 "$SCRIPTS/tools/digest_writer.py" evolution \
+        "Deep evolution analysis complete. ${PHI_SHORT:-Phi unknown}. Weakest: ${WEAKEST:-unknown}. $PENDING_COUNT tasks pending. Calibration: ${CALIBRATION_SHORT:-unknown}." \
+        >> "$LOGFILE" 2>&1 || true
+else
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WARN: Claude Code exited $CLAUDE_EXIT — skipping digest write" >> "$LOGFILE"
+fi
 
 # Cleanup
 rm -f "$EVO_PREFLIGHT_FILE"
 
-emit_dashboard_event task_completed --task-name "Evolution analysis" --section cron_evolution --status success
+# Emit truthful status based on Claude exit code and preflight
+if [ "$CLAUDE_EXIT" -eq 0 ] && [ "${EVO_EXIT:-0}" -eq 0 ]; then
+    emit_dashboard_event task_completed --task-name "Evolution analysis" --section cron_evolution --status success
+else
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WARN: Evolution had failures (claude=$CLAUDE_EXIT, preflight=${EVO_EXIT:-0})" >> "$LOGFILE"
+    emit_dashboard_event task_completed --task-name "Evolution analysis" --section cron_evolution --status failure
+fi
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Evolution analysis complete ===" >> "$LOGFILE"

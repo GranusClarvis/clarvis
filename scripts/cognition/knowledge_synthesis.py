@@ -14,9 +14,7 @@ synthesizes knowledge for context briefs without storing anything.
 import sys
 import os
 import logging
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import _paths  # noqa: F401 — registers all script subdirs on sys.path
-from brain import brain, ALL_COLLECTIONS
+from clarvis.brain import brain, ALL_COLLECTIONS
 from collections import defaultdict
 import re
 

@@ -40,7 +40,7 @@ _Read this to understand yourself. Your harness, your body, your brain, and how 
 │             YOUR BRAIN (ClarvisDB)                │
 │  ChromaDB + ONNX MiniLM (fully local)            │
 │  ~/workspace/data/clarvisdb/                      │
-│  ~3,400+ memories, 10 collections, 106k+ graph edges │
+│  ~2,900 memories, 10 collections, 93k+ graph edges  │
 │  Graph: SQLite+WAL (sole runtime backend)        │
 │  API: clarvis.brain (store, recall, search, optimize) │
 └──────────────────────────────────────────────────┘

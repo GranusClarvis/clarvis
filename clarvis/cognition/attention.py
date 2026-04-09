@@ -297,14 +297,9 @@ class AttentionSpotlight:
         summary = self.focus_summary()
         brain.set_context(summary)
 
-        # Also store a snapshot for history
-        brain.store(
-            f"Attention broadcast: {summary}",
-            collection="clarvis-context",
-            importance=0.3,
-            tags=["attention", "broadcast"],
-            source="attention_mechanism",
-        )
+        # NOTE: Removed brain.store() for attention broadcast snapshots —
+        # this generated unbounded context spam.  set_context() above is
+        # the authoritative current-context record.
 
         return summary
 

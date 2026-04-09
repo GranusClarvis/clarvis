@@ -701,7 +701,7 @@ class TopicRegistry:
                 for fn in fnames:
                     info = tracker_data.get(fn, {})
                     total_memories += info.get("memory_count", 0)
-                    ts = info.get("ingested_at", "")
+                    ts = info.get("ingest_ts", "")
                     if ts:
                         if not earliest or ts < earliest:
                             earliest = ts

@@ -2,6 +2,7 @@
 """Brain store operations — memory storage, goals, context, decay, stats."""
 
 import json
+import logging
 import os
 import time
 from datetime import datetime, timezone
@@ -10,21 +11,68 @@ from .constants import (
     MEMORIES, GOALS, CONTEXT, DEFAULT_COLLECTIONS, ALL_COLLECTIONS,
 )
 
+_store_log = logging.getLogger("clarvis.brain.store")
+
+# Write-time dedup: L2 distance threshold below which a new memory is
+# considered a near-duplicate of an existing one.  Only applies when
+# memory_id is auto-generated (caller did not request explicit upsert).
+DEDUP_DISTANCE_THRESHOLD = 0.30
+
 
 class StoreMixin:
     """Store operations for ClarvisBrain (mixed into the main class)."""
 
     def store(self, text, collection=MEMORIES, importance=0.5, tags=None, source="conversation", memory_id=None):
-        """Store a memory with rich metadata. Returns the memory ID."""
+        """Store a memory with rich metadata. Returns the memory ID.
+
+        Write-time dedup: when *memory_id* is auto-generated (None), the
+        target collection is queried for a near-duplicate (L2 < 0.30).
+        If one is found the existing entry's importance is boosted and its
+        ID is returned — no new entry is created.  Callers that pass an
+        explicit *memory_id* bypass this check (they want upsert semantics).
+        """
+        # --- Secret redaction at the storage boundary ---
+        # This runs on EVERY write path (remember, capture, commit, direct
+        # store calls from heartbeat/cognition/memory modules).
+        try:
+            from .secret_redaction import redact_secrets
+            text, matched = redact_secrets(text)
+            if matched:
+                _store_log.warning(
+                    "Secret redaction in store(): removed %d pattern(s): %s",
+                    len(matched), ", ".join(matched),
+                )
+        except Exception:
+            pass  # redaction is best-effort; never block a store
+
         if collection not in self.collections:
+            if collection in getattr(self, '_failed_collections', {}):
+                _store_log.warning(
+                    "Collection %s unavailable (degraded mode), routing to %s",
+                    collection, MEMORIES,
+                )
             collection = MEMORIES
 
-        col = self.collections[collection]
+        col = self.collections.get(collection)
+        if col is None:
+            raise RuntimeError(
+                f"Cannot store: collection {collection!r} unavailable. "
+                "Brain may be in total failure mode."
+            )
+
+        caller_provided_id = memory_id is not None
 
         if memory_id is None:
             memory_id = f"{collection}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
 
         tags = tags or []
+
+        # --- Write-time dedup guard (only for auto-generated IDs) ---
+        if not caller_provided_id:
+            existing = self._find_near_duplicate(text, collection)
+            if existing is not None:
+                self._boost_existing(existing, importance, collection)
+                return existing["id"]
 
         now_utc = datetime.now(timezone.utc)
         metadata = {
@@ -49,6 +97,52 @@ class StoreMixin:
         self._invalidate_cache(collection)
         self.auto_link(memory_id, text, collection)
         return memory_id
+
+    # -- Dedup helpers -------------------------------------------------
+
+    def _find_near_duplicate(self, text, collection):
+        """Return the closest existing memory if L2 distance < threshold, else None."""
+        try:
+            results = self.collections[collection].query(
+                query_texts=[text],
+                n_results=1,
+            )
+            if (results
+                    and results.get("ids") and results["ids"][0]
+                    and results.get("distances") and results["distances"][0]):
+                dist = results["distances"][0][0]
+                if dist < DEDUP_DISTANCE_THRESHOLD:
+                    mid = results["ids"][0][0]
+                    doc = results["documents"][0][0] if results.get("documents") else ""
+                    meta = results["metadatas"][0][0] if results.get("metadatas") else {}
+                    _store_log.debug(
+                        "Write-time dedup: near-duplicate in %s (d=%.4f, id=%s)",
+                        collection, dist, mid,
+                    )
+                    return {"id": mid, "document": doc, "metadata": meta, "distance": dist}
+        except Exception:
+            pass  # dedup is best-effort; never block a store
+        return None
+
+    def _boost_existing(self, existing, new_importance, collection):
+        """Boost importance of an existing memory instead of creating a duplicate."""
+        mid = existing["id"]
+        meta = dict(existing.get("metadata") or {})
+        old_imp = meta.get("importance", 0.5)
+        try:
+            old_imp = float(old_imp)
+        except (TypeError, ValueError):
+            old_imp = 0.5
+        # Take the max of old and new importance, plus a small reinforcement bump
+        boosted = min(1.0, max(old_imp, new_importance) + 0.02)
+        meta["importance"] = boosted
+        meta["last_accessed"] = datetime.now(timezone.utc).isoformat()
+        meta["dedup_boost_count"] = meta.get("dedup_boost_count", 0) + 1
+        try:
+            self.collections[collection].update(ids=[mid], metadatas=[meta])
+            self._invalidate_cache(collection)
+        except Exception:
+            pass
 
     def auto_link(self, memory_id, text, collection):
         """Automatically link a memory to similar memories."""
@@ -816,7 +910,12 @@ class StoreMixin:
         try:
             t0 = time.monotonic()
             probe = f"health_probe_{int(time.time())}"
-            self.store(probe, collection=MEMORIES, importance=0.1)
+            # Use explicit memory_id to bypass write-time dedup — without
+            # this, probes get merged into previous probes (L2 < 0.30) and
+            # the retrieval verification below fails.
+            probe_id = f"_health_probe_{int(time.time())}"
+            self.store(probe, collection=MEMORIES, importance=0.1,
+                       memory_id=probe_id)
             timings["store_ms"] = round((time.monotonic() - t0) * 1000)
 
             t0 = time.monotonic()
@@ -827,6 +926,13 @@ class StoreMixin:
             found = any(probe in r.get("document", "") for r in results)
             if not found:
                 issues.append("retrieval failed: probe memory not in recall results")
+
+            # Clean up probe to avoid accumulating health-check garbage
+            try:
+                self.delete_memory(probe_id, collection=MEMORIES,
+                                   reason="health_probe_cleanup", hard=True)
+            except Exception:
+                pass  # cleanup is best-effort
         except Exception as e:
             issues.append(f"store/recall error: {e}")
 
@@ -839,12 +945,26 @@ class StoreMixin:
             issues.append(f"stats error: {e}")
             s = {"total_memories": 0, "collections": {}, "graph_edges": 0}
 
+        # 4. Graph orphan check (SQLite backend)
+        orphan_edges = 0
+        sqlite = getattr(self, "_sqlite_store", None)
+        if sqlite is not None:
+            try:
+                t0 = time.monotonic()
+                orphan_edges = sqlite.orphan_edges_count()
+                timings["orphan_check_ms"] = round((time.monotonic() - t0) * 1000)
+                if orphan_edges > 0:
+                    issues.append(f"graph has {orphan_edges} orphan edges (run backfill)")
+            except Exception as e:
+                issues.append(f"orphan check error: {e}")
+
         status = "unhealthy" if issues else "healthy"
         return {
             "status": status,
             "total_memories": s["total_memories"],
             "collections": len(s["collections"]),
             "graph_edges": s.get("graph_edges", 0),
+            "orphan_edges": orphan_edges,
             "timings": timings,
             **({"issues": issues} if issues else {}),
         }

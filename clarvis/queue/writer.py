@@ -26,8 +26,28 @@ import re
 from datetime import datetime, timezone
 from typing import Optional
 
+import time as _time
+
 _WS = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 QUEUE_FILE = os.path.join(_WS, "memory", "evolution", "QUEUE.md")
+
+
+def _flock_with_timeout(fd, timeout_s=30):
+    """Acquire exclusive flock with timeout (Phase 4 safety hardening).
+
+    Raises TimeoutError if lock cannot be acquired within timeout_s.
+    """
+    deadline = _time.monotonic() + timeout_s
+    while True:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return
+        except (IOError, OSError):
+            if _time.monotonic() >= deadline:
+                raise TimeoutError(
+                    f"Could not acquire queue writer lock within {timeout_s}s"
+                )
+            _time.sleep(0.1)
 STATE_FILE = os.path.join(_WS, "data", "queue_writer_state.json")
 
 
@@ -265,6 +285,17 @@ def add_tasks(tasks: list, priority: str = "P0", source: str = "unknown") -> lis
     except ImportError:
         pass  # Mode system not installed yet — allow all
 
+    # Research gate: block research-source injections when research auto-fill is OFF.
+    # This prevents any code path from sneaking research tasks into the queue.
+    _RESEARCH_SOURCES = frozenset({"research_bridge", "research_discovery", "research"})
+    if source.lower() in _RESEARCH_SOURCES:
+        try:
+            from clarvis.research_config import is_enabled
+            if not is_enabled("research_auto_fill"):
+                return []
+        except ImportError:
+            pass  # Config module not available — allow (backward compat)
+
     # Provenance gate: structural refactor tasks require manual/audit source.
     # Auto-generated structural tasks are blocked to prevent metric-cult behavior.
     # See: docs/DECOMPOSITION_REMEDIATION_AND_STRUCTURAL_POLICY_PLAN_2026-03-29.md
@@ -281,7 +312,7 @@ def add_tasks(tasks: list, priority: str = "P0", source: str = "unknown") -> lis
     os.makedirs(os.path.dirname(lock_path), exist_ok=True)
     lock_fd = open(lock_path, "w")
     try:
-        fcntl.flock(lock_fd, fcntl.LOCK_EX)
+        _flock_with_timeout(lock_fd)
 
         # Load state and reset daily counter if new day
         state = _load_state()
@@ -406,7 +437,7 @@ def ensure_subtasks_for_tag(parent_tag: str, subtasks: list[str], source: str = 
     lock_fd = open(lock_path, "w")
 
     try:
-        fcntl.flock(lock_fd, fcntl.LOCK_EX)
+        _flock_with_timeout(lock_fd)
 
         content = _read_queue()
         if not content:
@@ -535,7 +566,7 @@ def archive_completed():
     os.makedirs(os.path.dirname(lock_path), exist_ok=True)
     lock_fd = open(lock_path, "w")
     try:
-        fcntl.flock(lock_fd, fcntl.LOCK_EX)
+        _flock_with_timeout(lock_fd)
 
         content = _read_queue()
         if not content:
@@ -609,7 +640,7 @@ def mark_task_in_progress(tag: str) -> bool:
     os.makedirs(os.path.dirname(lock_path), exist_ok=True)
     lock_fd = open(lock_path, "w")
     try:
-        fcntl.flock(lock_fd, fcntl.LOCK_EX)
+        _flock_with_timeout(lock_fd)
 
         content = _read_queue()
         lines = content.split("\n")
@@ -637,6 +668,59 @@ def mark_task_in_progress(tag: str) -> bool:
     finally:
         fcntl.flock(lock_fd, fcntl.LOCK_UN)
         lock_fd.close()
+
+
+def prune_sidecar(removed_days: int = 30, succeeded_days: int = 90) -> dict:
+    """Prune old sidecar entries to bound growth.
+
+    Removes:
+      - 'removed' entries older than removed_days (default 30)
+      - 'succeeded' entries older than succeeded_days (default 90)
+
+    Returns dict with counts: {"removed": N, "succeeded": N, "total_before": N, "total_after": N}
+    """
+    try:
+        from clarvis.queue.engine import _load_sidecar, _save_sidecar
+    except ImportError:
+        return {"removed": 0, "succeeded": 0, "total_before": 0, "total_after": 0}
+
+    sidecar = _load_sidecar()
+    total_before = len(sidecar)
+    now = datetime.now(timezone.utc)
+    pruned_removed = 0
+    pruned_succeeded = 0
+    to_delete = []
+
+    for tag, entry in sidecar.items():
+        state = entry.get("state", "")
+        updated = entry.get("updated_at", "")
+        if not updated:
+            continue
+        try:
+            updated_dt = datetime.fromisoformat(updated.replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            continue
+        age_days = (now - updated_dt).days
+
+        if state == "removed" and age_days > removed_days:
+            to_delete.append(tag)
+            pruned_removed += 1
+        elif state == "succeeded" and age_days > succeeded_days:
+            to_delete.append(tag)
+            pruned_succeeded += 1
+
+    for tag in to_delete:
+        del sidecar[tag]
+
+    if to_delete:
+        _save_sidecar(sidecar)
+
+    return {
+        "removed": pruned_removed,
+        "succeeded": pruned_succeeded,
+        "total_before": total_before,
+        "total_after": len(sidecar),
+    }
 
 
 def tasks_added_today() -> int:

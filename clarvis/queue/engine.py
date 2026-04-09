@@ -167,11 +167,29 @@ class QueueEngine:
 
     # -- locking --
 
-    def _acquire_lock(self):
+    def _acquire_lock(self, timeout_s=30):
+        """Acquire exclusive file lock with timeout (default 30s).
+
+        Uses non-blocking flock with retry to avoid indefinite hangs
+        from crashed-process locks. Raises TimeoutError on failure.
+        (Phase 4 safety hardening)
+        """
+        import time as _time
         os.makedirs(os.path.dirname(self._lock_path), exist_ok=True)
         fd = open(self._lock_path, "w")
-        fcntl.flock(fd, fcntl.LOCK_EX)
-        return fd
+        deadline = _time.monotonic() + timeout_s
+        while True:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                return fd
+            except (IOError, OSError):
+                if _time.monotonic() >= deadline:
+                    fd.close()
+                    raise TimeoutError(
+                        f"Could not acquire queue lock {self._lock_path} "
+                        f"within {timeout_s}s"
+                    )
+                _time.sleep(0.1)
 
     def _release_lock(self, fd):
         try:

@@ -58,8 +58,10 @@ from typing import Any, Optional
 _WS = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 _SCRIPTS_DIR = os.path.join(_WS, "scripts")
 
-THOUGHT_LOG = Path(_WS) / "data" / "thought_log.jsonl"
-THOUGHT_LOG.parent.mkdir(parents=True, exist_ok=True)
+
+# NOTE: Disk logging to thought_log.jsonl was removed in Phase 6 (2026-04-09).
+# The file had zero downstream consumers. Thought frames are kept in-memory only
+# (frame_history, last 50) and surfaced via get_recent_thoughts() / thought_stats().
 
 
 # =============================================================================
@@ -714,7 +716,7 @@ class ThoughtProtocol:
     # === Logging ===
 
     def _log_frame(self, frame: ThoughtFrame, results: list):
-        """Append thought frame to persistent log."""
+        """Record thought frame in memory history (last 50 frames)."""
         entry = {
             "ts": datetime.now(timezone.utc).isoformat(),
             "frame_id": frame.id,
@@ -724,13 +726,6 @@ class ThoughtProtocol:
             "trace": frame.trace,
             "duration_ms": round(frame.duration_ms(), 2),
         }
-        try:
-            with open(THOUGHT_LOG, "a") as f:
-                f.write(json.dumps(entry) + "\n")
-        except Exception:
-            pass
-
-        # Keep in memory history (last 50 frames)
         self.frame_history.append(entry)
         if len(self.frame_history) > 50:
             self.frame_history = self.frame_history[-50:]
@@ -741,17 +736,6 @@ class ThoughtProtocol:
 
     def thought_stats(self) -> dict:
         """Statistics about thought protocol usage."""
-        if not self.frame_history:
-            # Try loading from disk
-            if THOUGHT_LOG.exists():
-                entries = []
-                for line in THOUGHT_LOG.read_text().strip().split("\n")[-50:]:
-                    try:
-                        entries.append(json.loads(line))
-                    except json.JSONDecodeError:
-                        continue
-                self.frame_history = entries
-
         if not self.frame_history:
             return {"total_frames": 0}
 

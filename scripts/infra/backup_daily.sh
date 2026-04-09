@@ -25,7 +25,8 @@
 # =============================================================================
 
 set -euo pipefail
-source "${CLARVIS_WORKSPACE:-$HOME/.openclaw/workspace}"/scripts/cron/cron_env.sh
+export CLARVIS_WORKSPACE="${CLARVIS_WORKSPACE:-$HOME/.openclaw/workspace}"
+source "$CLARVIS_WORKSPACE"/scripts/cron/cron_env.sh
 
 # --- Configuration ---
 WORKSPACE="$HOME/.openclaw/workspace"
@@ -114,6 +115,18 @@ BACKUP_SOURCES=(
   ".gitignore"
 )
 
+# --- OpenClaw gateway config (outside workspace) ---
+OPENCLAW_CONFIG_FILES=(
+  "$HOME/.openclaw/openclaw.json"
+  "$HOME/.openclaw/agents/main/agent/auth.json"
+  "$HOME/.openclaw/workspace/data/budget_config.json"
+)
+
+# --- Sensitive files backed up separately (encrypted) ---
+ENCRYPTED_FILES=(
+  "$HOME/.openclaw/workspace/.env"
+)
+
 # --- Build current manifest (path -> sha256) ---
 declare -A CURRENT_FILES
 declare -A PREV_FILES
@@ -193,12 +206,54 @@ fi
 # --- Create backup directory ---
 mkdir -p "$BACKUP_DIR"
 
-# --- Copy changed files ---
+# --- Copy changed files (with SQLite WAL-safe backup) ---
 log "Copying $CHANGED_COUNT files..."
 for path in "${!CHANGED_FILES[@]}"; do
   dest="$BACKUP_DIR/$path"
+  src="$WORKSPACE/$path"
   mkdir -p "$(dirname "$dest")"
-  cp -p "$WORKSPACE/$path" "$dest"
+  # Use SQLite backup API for database files to avoid WAL corruption
+  if [[ "$src" == *.sqlite3 ]] || [[ "$src" == *.db ]]; then
+    if sqlite3 "$src" ".backup '$dest'" 2>/dev/null; then
+      touch -r "$src" "$dest" 2>/dev/null  # preserve mtime
+    else
+      log "WARNING: sqlite3 .backup failed for $path, falling back to cp"
+      cp -p "$src" "$dest"
+    fi
+  else
+    cp -p "$src" "$dest"
+  fi
+done
+
+# --- Copy OpenClaw config files (outside workspace) ---
+log "Copying OpenClaw config files..."
+CONFIG_DEST="$BACKUP_DIR/openclaw-config"
+mkdir -p "$CONFIG_DEST"
+for cfg in "${OPENCLAW_CONFIG_FILES[@]}"; do
+  if [ -f "$cfg" ]; then
+    cp -p "$cfg" "$CONFIG_DEST/"
+    log "  Backed up: $(basename "$cfg")"
+  fi
+done
+
+# --- Encrypted backup of sensitive files ---
+log "Backing up sensitive files (encrypted)..."
+SENSITIVE_DEST="$BACKUP_DIR/encrypted"
+mkdir -p "$SENSITIVE_DEST"
+for sf in "${ENCRYPTED_FILES[@]}"; do
+  if [ -f "$sf" ]; then
+    # Use openssl enc with a key derived from the machine's host ID
+    # This ensures only this machine can decrypt, without requiring a separate password
+    ENCRYPT_KEY=$(cat /etc/machine-id 2>/dev/null || hostname)
+    openssl enc -aes-256-cbc -pbkdf2 -salt \
+      -in "$sf" \
+      -out "$SENSITIVE_DEST/$(basename "$sf").enc" \
+      -pass "pass:$ENCRYPT_KEY" 2>/dev/null && {
+        log "  Encrypted: $(basename "$sf")"
+      } || {
+        log "  WARNING: encryption failed for $(basename "$sf"), skipping"
+      }
+  fi
 done
 
 # --- Create git bundle (full repo state in one file) ---
@@ -209,6 +264,18 @@ git bundle create "$BACKUP_DIR/git-bundle.bundle" --all 2>/dev/null || {
   # Fallback: tar the git dir
   tar czf "$BACKUP_DIR/git-repo.tar.gz" -C "$WORKSPACE" .git 2>/dev/null || true
 }
+
+# --- Offsite git push (weekly, on Sundays) ---
+DOW=$(date +%u)  # 7 = Sunday
+if [ "$DOW" -eq 7 ]; then
+  log "Weekly offsite git push..."
+  cd "$WORKSPACE"
+  if git push origin main 2>/dev/null; then
+    log "  Git push to origin succeeded"
+  else
+    log "  WARNING: git push to origin failed (will retry next Sunday)"
+  fi
+fi
 
 # --- Write manifest ---
 log "Writing manifest..."

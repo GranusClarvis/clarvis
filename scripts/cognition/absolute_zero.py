@@ -36,11 +36,13 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import _paths  # noqa: F401 — registers all script subdirs on sys.path
-from brain import brain
+_workspace = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
+if _workspace not in sys.path:
+    sys.path.insert(0, _workspace)
+
+from clarvis.brain import brain
 try:
-    from episodic_memory import episodic
+    from clarvis.memory.episodic_memory import episodic
 except ImportError:
     episodic = None
 

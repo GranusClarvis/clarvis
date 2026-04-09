@@ -24,9 +24,7 @@ import sys
 import argparse
 import numpy as np
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import _paths  # noqa: F401 — registers all script subdirs on sys.path
-from brain import brain, ALL_COLLECTIONS, GRAPH_FILE  # Use singleton to prevent data loss from concurrent writes
+from clarvis.brain import brain, ALL_COLLECTIONS, GRAPH_FILE
 
 
 def _load_graph_safe():

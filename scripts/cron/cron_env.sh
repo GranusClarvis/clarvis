@@ -96,6 +96,15 @@ run_claude_monitored() {
         _owns_prompt_file=1
     fi
 
+    # Budget kill switch: skip launch when budget freeze is active
+    local _budget_freeze="/tmp/clarvis_budget_freeze"
+    if [ -f "$_budget_freeze" ]; then
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] BUDGET_FREEZE: skipping Claude invocation (${_budget_freeze} exists)" >> "$_logfile"
+        [ "$_owns_prompt_file" -eq 1 ] && rm -f "$_prompt_file"
+        MONITORED_EXIT=1
+        return 1
+    fi
+
     # Validate prompt is non-empty
     if [ ! -s "$_prompt_file" ]; then
         echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] PROMPT_GUARD: prompt file is empty — aborting Claude invocation" >> "$_logfile"
@@ -137,8 +146,18 @@ print(f\"reason={d.get('reason','?')} aborted={d.get('aborted',False)}\")
         rm -f "$_reconsider_file"
     fi
 
+    # Capture task summary before prompt file cleanup
+    local _task_head
+    _task_head=$(head -c 130 "$_prompt_file" 2>/dev/null | tr '\n' ' ' || echo "")
+
     # Clean up temp prompt file if we created one
     [ "$_owns_prompt_file" -eq 1 ] && rm -f "$_prompt_file"
+
+    # Log real cost checkpoint from OpenRouter API (non-blocking, best-effort)
+    local _source
+    _source="${CRON_SOURCE:-$(basename "${BASH_SOURCE[1]:-$0}" .sh 2>/dev/null || echo unknown)}"
+    python3 "$CLARVIS_WORKSPACE/scripts/infra/cost_checkpoint.py" \
+        "$_source" "$_task_head" "$_timeout" >> "$_logfile" 2>&1 || true
 
     return $MONITORED_EXIT
 }

@@ -126,5 +126,11 @@ python3 "$CLARVIS_WORKSPACE/scripts/tools/digest_writer.py" evening \
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Generating daily memory log..." >> "$LOGFILE"
 python3 "$CLARVIS_WORKSPACE/scripts/tools/daily_memory_log.py" >> "$LOGFILE" 2>&1 || true
 
-emit_dashboard_event task_completed --task-name "Evening assessment" --section cron_evening --status success
+# Emit truthful status based on critical step exit codes
+if [ "${PHI_EXIT:-0}" -eq 0 ] && [ "${ASSESSMENT_EXIT:-0}" -eq 0 ]; then
+    emit_dashboard_event task_completed --task-name "Evening assessment" --section cron_evening --status success
+else
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WARN: Evening had failures (phi=$PHI_EXIT, assessment=$ASSESSMENT_EXIT)" >> "$LOGFILE"
+    emit_dashboard_event task_completed --task-name "Evening assessment" --section cron_evening --status failure
+fi
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Evening routine complete ===" >> "$LOGFILE"

@@ -22,10 +22,8 @@ import sys
 import re
 from datetime import datetime, timezone
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import _paths  # noqa: F401 — registers all script subdirs on sys.path
-from brain import brain, ALL_COLLECTIONS, DEFAULT_COLLECTIONS, \
-    GOALS, PROCEDURES, CONTEXT, LEARNINGS, MEMORIES, IDENTITY, PREFERENCES, INFRASTRUCTURE
+from clarvis.brain import (brain, ALL_COLLECTIONS, DEFAULT_COLLECTIONS,
+    GOALS, PROCEDURES, CONTEXT, LEARNINGS, MEMORIES, IDENTITY, PREFERENCES, INFRASTRUCTURE)
 
 # === QUERY ROUTER ===
 
@@ -110,7 +108,7 @@ def smart_recall(query: str, n: int = 5, max_distance: float = 1.4, **kwargs):
         if dist is None:
             r["_boosted_distance"] = 999
         elif r.get("collection") in primary_collections:
-            r["_boosted_distance"] = dist * 0.75  # 20% boost
+            r["_boosted_distance"] = dist * 0.8  # 20% boost
         else:
             r["_boosted_distance"] = dist
 

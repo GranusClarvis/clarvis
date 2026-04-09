@@ -44,8 +44,7 @@ import re
 import sys
 import time
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import _paths  # noqa: F401 — registers all script subdirs on sys.path
+# Spine imports used inside functions (lazy) to avoid import-time ChromaDB init
 
 # === CAPABILITY MANIFEST ===
 # Static description of what the brain can do, for injection into prompts.
@@ -193,8 +192,8 @@ def introspect_for_task(task_text, budget="standard"):
         - associative_memories: graph-connected memories
         - meta_awareness: self-assessment of knowledge state for this task
     """
-    from brain import get_brain, IDENTITY, PREFERENCES, INFRASTRUCTURE, LEARNINGS
-    from brain import EPISODES, AUTONOMOUS_LEARNING, MEMORIES
+    from clarvis.brain import get_brain, IDENTITY, PREFERENCES, INFRASTRUCTURE, LEARNINGS
+    from clarvis.brain import EPISODES, AUTONOMOUS_LEARNING, MEMORIES
 
     result = {
         "domain_knowledge": "",
@@ -496,7 +495,7 @@ def _select_collections(task_domains, budget="standard"):
     This is the key intelligence: instead of searching everything, we
     search the RIGHT collections based on what the task is about.
     """
-    from brain import (LEARNINGS, MEMORIES, EPISODES, AUTONOMOUS_LEARNING,
+    from clarvis.brain import (LEARNINGS, MEMORIES, EPISODES, AUTONOMOUS_LEARNING,
                        IDENTITY, PREFERENCES, INFRASTRUCTURE, PROCEDURES, GOALS)
 
     # Always search these (core knowledge)
@@ -552,7 +551,7 @@ def build_knowledge_map():
 
     Returns dict: {domain: {count, top_topics, strength}}
     """
-    from brain import get_brain, ALL_COLLECTIONS
+    from clarvis.brain import get_brain, ALL_COLLECTIONS
 
     b = get_brain()
     knowledge_map = {}

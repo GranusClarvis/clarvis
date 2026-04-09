@@ -281,6 +281,18 @@ def _dedup_key(entry: dict) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 
+def _proposal_fingerprint(paper_file: str, proposal: str) -> str:
+    """Disposition-agnostic fingerprint: paper_file + normalized proposal.
+
+    Used at scan time to skip proposals that were previously processed
+    (regardless of their disposition), preventing completed/discarded
+    research from leaking back into the actionable pipeline.
+    """
+    norm = re.sub(r"\s+", " ", proposal).strip().lower()
+    raw = f"{paper_file}|{norm}"
+    return hashlib.sha256(raw.encode()).hexdigest()[:16]
+
+
 def _load_existing_keys(path: str) -> set[str]:
     """Load dedup keys from an existing disposition log."""
     keys: set[str] = set()
@@ -301,6 +313,35 @@ def _load_existing_keys(path: str) -> set[str]:
     except Exception:
         pass
     return keys
+
+
+def _load_processed_fingerprints(path: str) -> set[str]:
+    """Load disposition-agnostic fingerprints from the disposition log.
+
+    Returns a set of fingerprints for proposals that have already been
+    classified (any disposition), so scan_papers() can skip them.
+    """
+    fps: set[str] = set()
+    if not os.path.exists(path):
+        return fps
+    try:
+        with open(path) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    rec = json.loads(line)
+                    fp = _proposal_fingerprint(
+                        rec.get("paper_file", ""),
+                        rec.get("proposal", ""),
+                    )
+                    fps.add(fp)
+                except json.JSONDecodeError:
+                    pass
+    except Exception:
+        pass
+    return fps
 
 
 def _log_dispositions(entries: list[dict]):
@@ -366,6 +407,11 @@ def scan_papers() -> list[dict]:
     # Also include the raw queue text for broader matching
     all_queue_text = (queue_content + "\n" + archive_content).lower()
 
+    # Load previously-processed proposal fingerprints from disposition log.
+    # This prevents completed/partial/discarded proposals from re-entering
+    # the actionable pipeline on subsequent scans.
+    processed_fps = _load_processed_fingerprints(DISPOSITION_LOG)
+
     results = []
 
     for filename in sorted(os.listdir(INGESTED_DIR)):
@@ -382,6 +428,11 @@ def scan_papers() -> list[dict]:
         proposals = _extract_actionable_sections(content)
 
         for proposal in proposals:
+            # Skip proposals already processed in a previous run
+            fp = _proposal_fingerprint(filename, proposal)
+            if fp in processed_fps:
+                continue
+
             covered = _is_covered(proposal, queue_items)
             score = _score_proposal(proposal)
             disposition, reason = classify_disposition(proposal, covered)
@@ -498,6 +549,15 @@ def main():
         print()
 
     if cmd == "inject" and actionable:
+        # Check durable research config before injecting
+        try:
+            from clarvis.research_config import is_enabled
+            if not is_enabled("research_inject_from_papers"):
+                print("Research inject is OFF (data/research_config.json). Use 'python3 -m clarvis.research_config enable' to re-enable.")
+                return
+        except ImportError:
+            pass  # Config module not available — allow (backward compat)
+
         # Import queue_writer for injection
         sys.path.insert(0, os.path.join(WORKSPACE, "scripts"))
         import _paths  # noqa: F401 — registers all script subdirs on sys.path

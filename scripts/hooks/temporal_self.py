@@ -24,8 +24,7 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from collections import defaultdict
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import _paths  # noqa: F401 — registers all script subdirs on sys.path
+# Spine imports used below (lazy, inside functions)
 
 CAPABILITY_HISTORY = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "data/capability_history.json")
 PHI_HISTORY = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "data/phi_history.json")
@@ -245,7 +244,7 @@ def growth_narrative(days=7):
 
 def store_narrative():
     """Generate narrative and store to ClarvisDB for retrieval."""
-    from brain import brain
+    from clarvis.brain import brain
 
     narrative = growth_narrative()
     summary = narrative["summary"]

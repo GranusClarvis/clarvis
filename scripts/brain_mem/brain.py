@@ -301,7 +301,7 @@ if __name__ == "__main__":
             import time as _time
             tracker[filename] = {
                 "hash": file_hash,
-                "ingested_at": _time.strftime("%Y-%m-%dT%H:%M:%SZ", _time.gmtime()),
+                "ingest_ts": _time.strftime("%Y-%m-%dT%H:%M:%SZ", _time.gmtime()),
                 "memory_count": len(memory_ids),
                 "memory_ids": memory_ids,
             }

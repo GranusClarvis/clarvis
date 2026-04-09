@@ -128,9 +128,16 @@ for category, tasks in TASK_CATEGORIES.items():
 # ── Assembly with ablation ──────────────────────────────────────────────
 
 def _apply_ablation(disabled_modules: list[str], assembly) -> tuple:
-    """Apply ablation patches, return (original_budgets, original_suppress) for restore."""
+    """Apply ablation patches, return (original_budgets, original_suppress) for restore.
+
+    HARD_SUPPRESS must be patched on the dycp module directly because
+    dycp.should_suppress_section() reads its own module-level HARD_SUPPRESS,
+    not assembly's re-exported copy.  (Fixed 2026-04-09, ref: SECOND_PASS F2.3a)
+    """
+    import clarvis.context.dycp as dycp
+
     original_budgets = deepcopy(assembly.TIER_BUDGETS)
-    original_hard_suppress = set(assembly.HARD_SUPPRESS)
+    original_hard_suppress = set(dycp.HARD_SUPPRESS)
 
     budget_key_map = {
         "episodic_recall": "episodes",
@@ -149,8 +156,8 @@ def _apply_ablation(disabled_modules: list[str], assembly) -> tuple:
                     assembly.TIER_BUDGETS[tier][budget_key] = 0
 
     if "graph_expansion" in disabled_modules:
-        assembly.HARD_SUPPRESS = frozenset(
-            set(assembly.HARD_SUPPRESS) | {"brain_context", "knowledge"}
+        dycp.HARD_SUPPRESS = frozenset(
+            set(dycp.HARD_SUPPRESS) | {"brain_context", "knowledge"}
         )
 
     return original_budgets, original_hard_suppress
@@ -158,8 +165,10 @@ def _apply_ablation(disabled_modules: list[str], assembly) -> tuple:
 
 def _restore_assembly(assembly, original_budgets, original_hard_suppress):
     """Restore assembly state after ablation."""
+    import clarvis.context.dycp as dycp
+
     assembly.TIER_BUDGETS = original_budgets
-    assembly.HARD_SUPPRESS = frozenset(original_hard_suppress)
+    dycp.HARD_SUPPRESS = frozenset(original_hard_suppress)
 
 
 def _generate_brief(task_text: str, disabled_modules: list[str]) -> str:

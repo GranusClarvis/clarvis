@@ -19,15 +19,17 @@ import os
 import sys
 from datetime import datetime, timezone
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import _paths  # noqa: F401 — registers all script subdirs on sys.path
-from brain import brain, GOALS, PROCEDURES, CONTEXT, LEARNINGS, MEMORIES, \
-    IDENTITY, PREFERENCES, INFRASTRUCTURE
+from clarvis.brain import (brain, GOALS, PROCEDURES, CONTEXT, LEARNINGS, MEMORIES,
+    IDENTITY, PREFERENCES, INFRASTRUCTURE)
 
 try:
-    from retrieval_experiment import smart_recall
+    from scripts.brain_mem.retrieval_experiment import smart_recall
 except ImportError:
-    smart_recall = None
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from retrieval_experiment import smart_recall
+    except ImportError:
+        smart_recall = None
 
 # === DATA PATHS ===
 DATA_DIR = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "data/retrieval_benchmark")
