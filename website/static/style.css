@@ -1,23 +1,28 @@
-/* Clarvis — Design System v1 */
+/* Clarvis — Design System v2 (SWO Integration) */
+
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
 
 :root {
-  --bg: #0a0e14;
-  --bg-raised: #0d1117;
-  --surface: #151b24;
-  --surface-hover: #1c2330;
-  --border: #252d38;
-  --border-subtle: #1e2530;
-  --text: #d1d7e0;
-  --text-muted: #7d8590;
-  --text-faint: #545d68;
-  --accent: #58a6ff;
-  --accent-dim: rgba(88, 166, 255, 0.12);
-  --accent-glow: rgba(88, 166, 255, 0.06);
-  --green: #3fb950;
+  --bg: #0a0a1a;
+  --bg-raised: #0d0d1f;
+  --surface: #151525;
+  --surface-hover: #1c1c35;
+  --border: #252540;
+  --border-subtle: #1e1e35;
+  --text: #e8e8e8;
+  --text-muted: #8a8a9a;
+  --text-faint: #55556a;
+  --accent: #ffd700;
+  --accent-dim: rgba(255, 215, 0, 0.12);
+  --accent-glow: rgba(255, 215, 0, 0.06);
+  --blue: #4488ff;
+  --green: #44ff88;
   --yellow: #d29922;
-  --red: #f85149;
-  --purple: #bc8cff;
-  --gradient-accent: linear-gradient(135deg, #58a6ff 0%, #bc8cff 100%);
+  --red: #ff4466;
+  --purple: #9966ff;
+  --purple-dim: rgba(153, 102, 255, 0.12);
+  --gold-glow: rgba(255, 215, 0, 0.06);
+  --gradient-accent: linear-gradient(135deg, #ffd700 0%, #9966ff 100%);
   --radius: 8px;
   --radius-lg: 12px;
   --space-xs: 0.25rem;
@@ -27,7 +32,8 @@
   --space-xl: 2.5rem;
   --space-2xl: 4rem;
   --transition: 200ms ease;
-  --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', 'JetBrains Mono', monospace;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', 'Cascadia Code', monospace;
+  --font-display: 'Press Start 2P', monospace;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -60,8 +66,8 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-a { color: var(--accent); text-decoration: none; transition: color var(--transition); }
-a:hover { color: #79bbff; text-decoration: none; }
+a { color: var(--blue); text-decoration: none; transition: color var(--transition); }
+a:hover { color: var(--accent); text-decoration: none; }
 
 /* ─── Navigation ─── */
 
@@ -72,7 +78,9 @@ nav {
   margin-bottom: var(--space-2xl);
   padding-bottom: var(--space-md);
   border-bottom: 1px solid var(--border-subtle);
-  font-size: 0.8125rem;
+  font-family: var(--font-display);
+  font-size: 0.6875rem;
+  letter-spacing: 0.5px;
   animation: fadeIn 400ms ease;
 }
 nav a {
@@ -102,11 +110,13 @@ h1 {
 }
 
 h2 {
-  font-size: 1.125rem;
+  font-family: var(--font-display);
+  font-size: 0.75rem;
   font-weight: 600;
   margin-bottom: var(--space-md);
   color: var(--text);
-  letter-spacing: -0.01em;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
 }
 
 .subtitle {
@@ -130,6 +140,19 @@ h2 {
   padding: var(--space-2xl) 0 var(--space-xl);
   position: relative;
   animation: fadeUp 600ms ease;
+}
+.hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.03) 2px,
+    rgba(0, 0, 0, 0.03) 4px
+  );
+  pointer-events: none;
+  z-index: 1;
 }
 
 .hero h1 {
@@ -184,9 +207,9 @@ h2 {
   color: var(--bg) !important;
 }
 .btn-primary:hover {
-  background: #79bbff;
+  background: #ffe44d;
   transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(88, 166, 255, 0.2);
+  box-shadow: 0 4px 16px rgba(255, 215, 0, 0.25);
 }
 
 .btn-ghost {
@@ -210,9 +233,9 @@ h2 {
   letter-spacing: 0.02em;
 }
 .badge-mode {
-  background: rgba(88, 166, 255, 0.12);
+  background: rgba(255, 215, 0, 0.12);
   color: var(--accent);
-  border: 1px solid rgba(88, 166, 255, 0.3);
+  border: 1px solid rgba(255, 215, 0, 0.3);
 }
 .badge-stabilizing {
   background: rgba(210, 153, 34, 0.12);
@@ -252,13 +275,14 @@ h2 {
   transition: all var(--transition);
 }
 .status-card:hover {
-  border-color: rgba(88, 166, 255, 0.25);
+  border-color: rgba(255, 215, 0, 0.25);
   background: var(--surface-hover);
   transform: translateY(-1px);
 }
 
 .status-label {
-  font-size: 0.6875rem;
+  font-family: var(--font-display);
+  font-size: 0.625rem;
   color: var(--text-faint);
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -276,6 +300,7 @@ h2 {
   font-weight: 700;
   font-size: 1.25rem;
   font-variant-numeric: tabular-nums;
+  color: var(--accent);
 }
 
 /* Pulse dot for live indicators */
@@ -284,7 +309,8 @@ h2 {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--green);
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent), 0 0 12px var(--gold-glow);
   margin-right: var(--space-xs);
   animation: pulse-subtle 2s ease-in-out infinite;
 }
@@ -319,7 +345,7 @@ h2 {
   transition: all var(--transition);
 }
 .card:hover {
-  border-color: rgba(88, 166, 255, 0.2);
+  border-color: rgba(255, 215, 0, 0.2);
   background: var(--surface-hover);
 }
 .card h3 {
@@ -369,9 +395,21 @@ h2 {
   transition: all var(--transition);
 }
 .feature-card:hover {
-  border-color: rgba(88, 166, 255, 0.25);
+  border-color: rgba(255, 215, 0, 0.25);
   transform: translateY(-2px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+.feature-card {
+  position: relative;
+}
+.feature-card::after {
+  content: '\25E2';
+  position: absolute;
+  bottom: 4px;
+  right: 8px;
+  color: var(--accent);
+  opacity: 0.3;
+  font-size: 0.5rem;
 }
 .feature-icon {
   font-size: 1.25rem;
@@ -382,9 +420,11 @@ h2 {
   font-weight: 700;
 }
 .feature-card h3 {
-  font-size: 0.9375rem;
+  font-family: var(--font-display);
+  font-size: 0.6875rem;
   font-weight: 600;
-  margin-bottom: var(--space-xs);
+  margin-bottom: var(--space-sm);
+  letter-spacing: 0.5px;
 }
 .feature-card p {
   color: var(--text-muted);
@@ -493,7 +533,7 @@ ul.clean-list li::before {
   transition: all var(--transition);
 }
 .repo-card:hover {
-  border-color: rgba(88, 166, 255, 0.2);
+  border-color: rgba(255, 215, 0, 0.2);
   transform: translateY(-1px);
 }
 .repo-header {
@@ -600,8 +640,18 @@ footer a:hover { color: var(--accent); }
 .status-grid > *:nth-child(4),
 .feature-grid > *:nth-child(4) { animation-delay: 325ms; }
 
+/* ─── Feature icon color variants ─── */
+
+.feature-icon--gold { color: var(--accent); }
+.feature-icon--purple { color: var(--purple); }
+.feature-icon--blue { color: var(--blue); }
+.feature-icon--green { color: var(--green); }
+
 /* ─── Mobile adjustments ─── */
 
+@media (max-width: 640px) {
+  .hero::before { display: none; }
+}
 @media (max-width: 600px) {
   body { padding: var(--space-lg) var(--space-sm); }
   .hero h1 { font-size: 2rem; }
@@ -609,10 +659,12 @@ footer a:hover { color: var(--accent); }
   .hero-links { flex-direction: column; gap: var(--space-sm); }
   .hero-links a { text-align: center; }
   nav { flex-wrap: wrap; gap: 0; }
-  nav a { padding: var(--space-xs) var(--space-xs); font-size: 0.75rem; }
+  nav a { padding: var(--space-xs) var(--space-xs); font-size: 0.625rem; }
   .arch-diagram { font-size: 0.625rem; padding: var(--space-md); }
   h1 { font-size: 1.5rem; }
+  h2 { font-size: 0.625rem; }
   .repo-card { padding: var(--space-lg); }
+  .feature-card h3 { font-size: 0.5625rem; }
 }
 
 /* ─── Scrollbar ─── */

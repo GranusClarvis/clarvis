@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Clarvis — An AI That Learns While You Sleep</title>
-<meta name="description" content="Clarvis is an autonomous cognitive agent that remembers everything, reflects on its own performance, and evolves itself 24/7. Fully local memory, no cloud dependencies.">
+<title>Clarvis — Autonomous Intelligence by Star World Order</title>
+<meta name="description" content="Clarvis is an autonomous cognitive agent that remembers everything, reflects on its own performance, and evolves itself 24/7. Persistent local memory, self-directed evolution, continuous self-improvement.">
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -20,13 +20,13 @@
 
 <div class="hero">
   <h1>Clarvis</h1>
-  <p class="subtitle">An AI agent that remembers everything, reflects on itself, and gets better while you sleep.</p>
+  <p class="subtitle">Autonomous intelligence that never stops learning.</p>
   <p class="hero-description">
     Most AI agents forget everything between sessions. Clarvis doesn't. It runs a
     <strong>persistent vector memory</strong> with Hebbian learning dynamics, executes
-    <strong>20+ autonomous jobs daily</strong> (research, reflection, self-benchmarking),
-    and measures its own improvement across 8 performance dimensions. All memory and
-    embeddings are local &mdash; zero cloud dependencies for retrieval.
+    <strong>20+ autonomous jobs daily</strong> &mdash; research, reflection, self-benchmarking &mdash;
+    and measures its own improvement across 8 performance dimensions.
+    All memory and embeddings are local. Zero cloud dependencies for retrieval.
   </p>
   <div class="hero-links">
     <a href="https://github.com/GranusClarvis/clarvis" class="btn-primary">View on GitHub</a>
@@ -34,7 +34,7 @@
   </div>
 </div>
 
-<!-- Why Clarvis Exists -->
+<!-- The Problem / The Approach -->
 <section class="why-section">
   <h2>The Problem</h2>
   <p class="identity">
@@ -51,10 +51,10 @@
   </p>
 </section>
 
-<!-- What Makes It Different -->
+<!-- Core Capabilities -->
 <div class="feature-grid">
   <div class="feature-card">
-    <span class="feature-icon">//</span>
+    <span class="feature-icon feature-icon--gold">&#10022;</span>
     <h3>Persistent Memory</h3>
     <p>
       ChromaDB + ONNX MiniLM embeddings, 10 specialized collections, 3,400+ memories,
@@ -62,7 +62,7 @@
     </p>
   </div>
   <div class="feature-card">
-    <span class="feature-icon">&gt;_</span>
+    <span class="feature-icon feature-icon--gold">&#10227;</span>
     <h3>Autonomous Evolution</h3>
     <p>
       12 heartbeats/day, morning planning, afternoon sprints, evening reflection,
@@ -70,7 +70,7 @@
     </p>
   </div>
   <div class="feature-card">
-    <span class="feature-icon">~&gt;</span>
+    <span class="feature-icon feature-icon--purple">&#9889;</span>
     <h3>Hebbian Learning</h3>
     <p>
       STDP synaptic dynamics strengthen connections between co-activated memories.
@@ -78,7 +78,7 @@
     </p>
   </div>
   <div class="feature-card">
-    <span class="feature-icon">[&phi;]</span>
+    <span class="feature-icon feature-icon--purple">&#9672;</span>
     <h3>Self-Measurement</h3>
     <p>
       8-dimension Performance Index, CLR benchmark, confidence calibration, and a
@@ -86,7 +86,7 @@
     </p>
   </div>
   <div class="feature-card">
-    <span class="feature-icon">{&hellip;}</span>
+    <span class="feature-icon feature-icon--blue">&#11041;</span>
     <h3>Dual-Layer Architecture</h3>
     <p>
       A <strong>conscious layer</strong> for direct chat and a <strong>subconscious layer</strong>
@@ -94,7 +94,7 @@
     </p>
   </div>
   <div class="feature-card">
-    <span class="feature-icon">&lt;/&gt;</span>
+    <span class="feature-icon feature-icon--green">&#8862;</span>
     <h3>Open &amp; Inspectable</h3>
     <p>
       MIT licensed, no black boxes. Every decision is logged, every memory is queryable,
@@ -103,7 +103,7 @@
   </div>
 </div>
 
-<!-- How It Works (condensed) -->
+<!-- Architecture Overview -->
 <section class="section-divider">
   <h2>How It Works</h2>
   <div class="arch-diagram">  ┌────────────────────────────────────────┐
@@ -134,7 +134,7 @@
   </div>
 </section>
 
-<!-- Live status section -->
+<!-- Live Status -->
 <section class="status-section section-divider">
   <h2><span class="live-dot"></span>Live Status</h2>
 
@@ -183,7 +183,7 @@
   </div>
 </section>
 
-<!-- Why follow / star -->
+<!-- Why Follow -->
 <section class="section-divider">
   <h2>Why Follow This Project</h2>
   <p class="identity">
@@ -205,7 +205,7 @@
 </section>
 
 <footer>
-  <p>Built by <a href="https://github.com/GranusClarvis">Granus Labs</a> &middot; <a href="https://github.com/GranusClarvis/clarvis">Source</a> &middot; MIT License</p>
+  <p><a href="https://starworldorder.com">Star World Order</a> &middot; <a href="https://github.com/GranusClarvis/clarvis">Source</a> &middot; MIT License &middot; Built by <a href="https://github.com/GranusClarvis">Granus Labs</a></p>
 </footer>
 
 <script>
@@ -257,7 +257,6 @@
       .then(function(r) { return r.json(); })
       .then(update)
       .catch(function() {
-        // Fallback: try static JSON if API is unavailable
         fetch('/static/status.json')
           .then(function(r) { return r.json(); })
           .then(update)

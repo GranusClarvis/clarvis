@@ -6,6 +6,8 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 
 ## P0 — Current Sprint
 
+- [ ] [POSTFLIGHT_HOOK_NAMEERROR_2026-04-10] Investigate and fix postflight hook failures reporting `name 'sys' is not defined` for `perf_benchmark`, `latency_budget`, and `structural_health`. The current tracked benchmark files import `sys`, so this likely indicates stale hook resolution, wrong module targets, or loading an untracked script path. Add a reproducible test for the hook registry/module loader path.
+
 ## P1 — This Week
 
 ### Strategic Audit Structural Fixes (2026-04-08 audit)
@@ -13,8 +15,7 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 - [ ] [REASONING_CAPABILITY_SPRINT] Dedicate 2+ evolution cycles to reasoning chain improvements, deliberate practice on hard problems, or synthesis loop implementation. Last 20 commits are all infrastructure — zero target reasoning depth or novel cognition. (2026-04-10: 15 new challenges seeded, 5 are reasoning-depth focused, 2 are synthesis — pipeline now primed for reasoning work.)
 
 ### SWO / Clarvis Brand Integration
-- [ ] [SWO_README_VISUALS] Add clean visuals to the README: one architecture diagram, one heartbeat/evolution flow, one memory-system diagram, and one compact capability map. Keep diagrams maintainable and truthful.
-- [ ] [SWO_WEBSITE_HOME_REDESIGN] Redesign `website/static/index.html` toward the SWO style brief while keeping it readable and technical. Improve hierarchy, section flow, feature framing, and visual polish without making it look like a game splash screen.
+- [x] [SWO_WEBSITE_HOME_REDESIGN] Redesign `website/static/index.html` toward the SWO style brief while keeping it readable and technical. (2026-04-10: SWO palette, Press Start 2P, constellation icons, gold accent, CRT scanline, footer SWO link)
 - [ ] [SWO_WEBSITE_SECTION_SYSTEM] Create a coherent section system across website pages: hero, capabilities, architecture, benchmarks, repos, roadmap, FAQ/footer. Use consistent cards, spacing, badges, diagrams, and CTA patterns.
 - [ ] [SWO_WEBSITE_COMPARISON_SURFACE] Add a tasteful comparison surface on the site (or README) explaining why Clarvis is not just another chat harness. Focus on architecture and operational differences, not chest-beating.
 - [ ] [SWO_WEBSITE_VISUAL_POLISH_PASS] Apply the SWO brand tokens already planned in `docs/SWO_CLARVIS_REDESIGN_CONCEPT.md`: palette, typography discipline, cards, badges, and subtle motifs. Keep it premium, not noisy.
@@ -98,6 +99,8 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 ## Partial Items (tracked, not actively worked)
 
 ### External Challenges
+
+- [ ] [EXTERNAL_CHALLENGE:reasoning-depth-05] Implement argument mapping for wiki claims — Build an argument mapper: given a wiki page with Key Claims, extract the argument structure (premises → conclusion, supports/rebuts relations). Output a directed graph of arguments. Visualize as ASCII
 
 - [ ] [EXTERNAL_CHALLENGE:coding-challenge-09] Implement a regex engine from scratch (Thompson NFA) — Build a regex engine using Thompson's NFA construction: support concatenation, alternation (|), Kleene star (*), plus (+), optional (?), and character classes [a-z]. Convert regex to NFA, simulate NFA
 
