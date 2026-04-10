@@ -34,6 +34,7 @@ QUEUE_ARCHIVE = MEMORY_DIR / "evolution" / "QUEUE_ARCHIVE.md"
 PAGE_FILES = {
     "/": "index.html",
     "/architecture": "architecture.html",
+    "/capabilities": "capabilities.html",
     "/repos": "repos.html",
     "/benchmarks": "benchmarks.html",
     "/roadmap": "roadmap.html",
@@ -184,6 +185,7 @@ def generate_static_status() -> dict:
 routes = [
     Route("/", page_handler),
     Route("/architecture", page_handler),
+    Route("/capabilities", page_handler),
     Route("/repos", page_handler),
     Route("/benchmarks", page_handler),
     Route("/roadmap", page_handler),

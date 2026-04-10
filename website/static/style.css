@@ -391,6 +391,13 @@ h2 {
   font-size: 0.8125rem;
   line-height: 1.65;
 }
+.cap-subsystem {
+  margin-top: var(--space-sm);
+  font-size: 0.6875rem;
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  letter-spacing: 0.01em;
+}
 
 /* ─── Detail lists ─── */
 

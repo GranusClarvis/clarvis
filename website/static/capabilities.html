@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Capabilities — Clarvis</title>
+<meta name="description" content="What Clarvis can do: persistent memory, autonomous execution, cognitive architecture, self-measurement, task routing, agent orchestration, and browser automation.">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<nav>
+  <a href="/">Home</a>
+  <a href="/architecture">Architecture</a>
+  <a href="/capabilities" aria-current="page">Capabilities</a>
+  <a href="/repos">Repos</a>
+  <a href="/benchmarks">Benchmarks</a>
+  <a href="/roadmap">Roadmap</a>
+</nav>
+
+<div class="hero">
+  <h1>Capabilities</h1>
+  <p class="subtitle">What Clarvis can do today &mdash; and the subsystem that powers each capability.</p>
+</div>
+
+<!-- Memory System -->
+<section class="section-divider">
+  <h2>Memory System</h2>
+  <p class="identity">
+    Clarvis treats memory as the core primitive. Every interaction, task execution, and insight
+    is stored in a hybrid vector-graph system that persists across sessions indefinitely.
+    All memory and embeddings are fully local &mdash; no API calls for retrieval.
+  </p>
+
+  <div class="feature-grid">
+    <div class="feature-card">
+      <span class="feature-icon">//</span>
+      <h3>Semantic Search</h3>
+      <p>
+        Find memories by meaning across 10 specialized collections. ChromaDB with ONNX MiniLM L6&nbsp;v2
+        embeddings. Average query latency ~270ms on CPU.
+      </p>
+      <div class="cap-subsystem">clarvis/brain/ &middot; ChromaDB</div>
+    </div>
+
+    <div class="feature-card">
+      <span class="feature-icon">&lt;&mdash;&gt;</span>
+      <h3>Relationship Graph</h3>
+      <p>
+        ~138k edges linking concepts, memories, and episodes. SQLite+WAL backend with indexed
+        lookups. Traverse, backfill, and compact automatically.
+      </p>
+      <div class="cap-subsystem">clarvis/brain/graph.py &middot; SQLite</div>
+    </div>
+
+    <div class="feature-card">
+      <span class="feature-icon">&#x25B6;</span>
+      <h3>Episodic Memory</h3>
+      <p>
+        Temporal recall of past task executions with structured outcomes, confidence tracking,
+        and failure subclassing. Episodes feed future attention scoring.
+      </p>
+      <div class="cap-subsystem">clarvis/memory/episodic_memory.py</div>
+    </div>
+
+    <div class="feature-card">
+      <span class="feature-icon">1.2.3</span>
+      <h3>Procedural Memory</h3>
+      <p>
+        Extracted step-by-step procedures and reusable workflows. Procedures are stored as
+        structured sequences and matched to new tasks by semantic similarity.
+      </p>
+      <div class="cap-subsystem">clarvis/memory/procedural_memory.py</div>
+    </div>
+
+    <div class="feature-card">
+      <span class="feature-icon">~&gt;</span>
+      <h3>Hebbian Learning</h3>
+      <p>
+        STDP-style synaptic dynamics strengthen connections between co-activated memories.
+        Retrieval improves through use, not retraining.
+      </p>
+      <div class="cap-subsystem">clarvis/memory/hebbian_memory.py</div>
+    </div>
+
+    <div class="feature-card">
+      <span class="feature-icon">[&#x2261;]</span>
+      <h3>Working Memory</h3>
+      <p>
+        Baddeley-inspired hierarchical buffers: Active (5 items), Working (12), Dormant (30).
+        Dormant items reactivate when relevant to new tasks. 91% reuse rate.
+      </p>
+      <div class="cap-subsystem">clarvis/memory/cognitive_workspace.py</div>
+    </div>
+
+    <div class="feature-card">
+      <span class="feature-icon">&#x21BB;</span>
+      <h3>Consolidation</h3>
+      <p>
+        Attention-guided dedup, merge, prune, and archive pipeline. Keeps memory clean and
+        relevant as the brain grows. Runs automatically during maintenance windows.
+      </p>
+      <div class="cap-subsystem">clarvis/memory/memory_consolidation.py</div>
+    </div>
+
+    <div class="feature-card">
+      <span class="feature-icon">f(t)</span>
+      <h3>ACT-R Activation</h3>
+      <p>
+        Power-law decay with frequency-recency retrieval model. Frequently and recently accessed
+        memories surface faster. Grounded in cognitive science.
+      </p>
+      <div class="cap-subsystem">clarvis/brain/actr_activation.py</div>
+    </div>
+  </div>
+</section>
+
+<!-- Autonomous Execution -->
+<section class="section-divider">
+  <h2>Autonomous Execution</h2>
+  <p class="identity">
+    Clarvis runs 40+ scheduled jobs via system crontab. The <strong>Heartbeat Pipeline</strong>
+    is the core autonomous action cycle: a zero-LLM gate check, attention-scored task selection,
+    context assembly, execution via Claude Code, then episode encoding back into the brain.
+  </p>
+
+  <div class="feature-grid">
+    <div class="feature-card">
+      <span class="feature-icon">&gt;_</span>
+      <h3>Heartbeat Pipeline</h3>
+      <p>
+        Gate &rarr; Preflight &rarr; Execute &rarr; Postflight. Zero-LLM pre-check, GWT attention
+        scoring, task selection from evolution queue, context compression, brain search, episodic recall.
+        12 heartbeats per day.
+      </p>
+      <div class="cap-subsystem">clarvis/heartbeat/</div>
+    </div>
+
+    <div class="feature-card">
+      <span class="feature-icon">&#x2691;</span>
+      <h3>Evolution Queue</h3>
+      <p>
+        Priority-ranked task backlog (P0/P1/P2) that the agent works through autonomously.
+        Tasks are injected by reflection, audits, and manual operator input. State machine
+        tracks selection, retries, and completion.
+      </p>
+      <div class="cap-subsystem">clarvis/queue/</div>
+    </div>
+
+    <div class="feature-card">
+      <span class="feature-icon">&#x263C;</span>
+      <h3>Daily Rhythm</h3>
+      <p>
+        Morning planning &rarr; research (2x) &rarr; evolution analysis &rarr; implementation sprint
+        &rarr; evening assessment &rarr; reflection (8-step). Weekly: strategic audit, benchmarks,
+        brain hygiene, goal cleanup.
+      </p>
+      <div class="cap-subsystem">scripts/cron_*.sh</div>
+    </div>
+
+    <div class="feature-card">
+      <span class="feature-icon">{&hellip;}</span>
+      <h3>Dual-Layer Architecture</h3>
+      <p>
+        <strong>Conscious</strong>: direct chat via Telegram/Discord, reads subconscious digests,
+        spawns heavy tasks. <strong>Subconscious</strong>: cron-driven background evolution,
+        research, and self-improvement.
+      </p>
+      <div class="cap-subsystem">OpenClaw Gateway + crontab</div>
+    </div>
+  </div>
+</section>
+
+<!-- Cognitive Architecture -->
+<section class="section-divider">
+  <h2>Cognitive Architecture</h2>
+  <p class="identity">
+    Clarvis implements mechanisms from cognitive science: Global Workspace Theory for attention,
+    Bayesian confidence calibration, somatic markers for emotional valence, and context relevance
+    scoring. These aren't metaphors &mdash; they're working systems that affect runtime behavior.
+  </p>
+
+  <div class="feature-grid">
+    <div class="feature-card">
+      <span class="feature-icon">&#x2609;</span>
+      <h3>GWT Attention</h3>
+      <p>
+        Global Workspace Theory salience scoring with codelet competition. Attention codelets
+        (code, memory, research, infrastructure) compete for the conscious workspace broadcast.
+        Winner determines task focus.
+      </p>
+      <div class="cap-subsystem">clarvis/cognition/attention.py</div>
+    </div>
+
+    <div class="feature-card">
+      <span class="feature-icon">&#x2696;</span>
+      <h3>Confidence Calibration</h3>
+      <p>
+        Bayesian calibration with Brier scoring and rolling prediction tracking. The system
+        knows how confident it should be for each task type based on historical accuracy.
+      </p>
+      <div class="cap-subsystem">clarvis/cognition/confidence.py</div>
+    </div>
+
+    <div class="feature-card">
+      <span class="feature-icon">&#x25C9;</span>
+      <h3>Retrieval Gate</h3>
+      <p>
+        3-tier routing (SKIP / LIGHT / DEEP) decides whether a query needs memory retrieval
+        at all. Saves latency and cost by skipping unnecessary brain queries.
+      </p>
+      <div class="cap-subsystem">clarvis/brain/retrieval_gate.py</div>
+    </div>
+
+    <div class="feature-card">
+      <span class="feature-icon">&#x2764;</span>
+      <h3>Somatic Markers</h3>
+      <p>
+        Emotional valence tagging on memories &mdash; approach/avoid signals from past experience.
+        Successful task patterns get positive markers; failures get negative ones. Influences
+        future task selection.
+      </p>
+      <div class="cap-subsystem">clarvis/cognition/somatic_markers.py</div>
+    </div>
+
+    <div class="feature-card">
+      <span class="feature-icon">&#x2699;</span>
+      <h3>Context Assembly</h3>
+      <p>
+        Dynamic Context Pruning (DYCP) with MMR re-ranking and per-tier token budgets. Generates
+        compressed briefs from memory for each task. Garbage collection for stale context.
+      </p>
+      <div class="cap-subsystem">clarvis/context/</div>
+    </div>
+
+    <div class="feature-card">
+      <span class="feature-icon">&#x2630;</span>
+      <h3>Operating Modes</h3>
+      <p>
+        <strong>GE</strong> (full autonomy): evolve freely. <strong>Architecture</strong>:
+        improve infrastructure only. <strong>Passive</strong>: wait for operator direction.
+        Mode affects what tasks the heartbeat will select.
+      </p>
+      <div class="cap-subsystem">clarvis/runtime/mode.py</div>
+    </div>
+  </div>
+</section>
+
+<!-- Self-Measurement -->
+<section class="section-divider">
+  <h2>Self-Measurement</h2>
+  <p class="identity">
+    Clarvis measures itself across multiple dimensions and uses those measurements to identify
+    weaknesses and prioritize improvement. Every benchmark is reproducible and stored as
+    structured data for historical comparison.
+  </p>
+
+  <div class="feature-grid">
+    <div class="feature-card">
+      <span class="feature-icon">[&phi;]</span>
+      <h3>Performance Index</h3>
+      <p>
+        Composite 0.0&ndash;1.0 score across 8 dimensions: brain speed, retrieval quality,
+        efficiency, accuracy, results quality, bloat, context quality, and load scaling.
+        Drops auto-generate P1 queue tasks.
+      </p>
+      <div class="cap-subsystem">clarvis/metrics/benchmark.py</div>
+    </div>
+
+    <div class="feature-card">
+      <span class="feature-icon">&Phi;</span>
+      <h3>Phi (IIT)</h3>
+      <p>
+        Integrated Information Theory metric &mdash; a consciousness proxy measuring how
+        tightly the system's memory, graph, and cognitive subsystems are integrated.
+      </p>
+      <div class="cap-subsystem">clarvis/metrics/phi.py</div>
+    </div>
+
+    <div class="feature-card">
+      <span class="feature-icon">CLR</span>
+      <h3>CLR Benchmark</h3>
+      <p>
+        7-dimension architecture health score with stability tracking and automated digest.
+        Weekly benchmark with gate pass/fail criterion.
+      </p>
+      <div class="cap-subsystem">clarvis/metrics/clr.py</div>
+    </div>
+
+    <div class="feature-card">
+      <span class="feature-icon">&#x2726;</span>
+      <h3>Self-Model</h3>
+      <p>
+        7 capability domains with calibrated confidence. The agent knows what it's good at
+        (memory retrieval, code generation) and what needs work (reasoning depth, calibration).
+      </p>
+      <div class="cap-subsystem">clarvis/metrics/self_model.py</div>
+    </div>
+
+    <div class="feature-card">
+      <span class="feature-icon">B</span>
+      <h3>Brier Score</h3>
+      <p>
+        Prediction calibration accuracy on a rolling 30-day window. Measures whether the
+        system's confidence matches actual outcomes. Target: &lt;&thinsp;0.10.
+      </p>
+      <div class="cap-subsystem">clarvis/cognition/confidence.py</div>
+    </div>
+
+    <div class="feature-card">
+      <span class="feature-icon">&#x2263;</span>
+      <h3>Benchmark Adapters</h3>
+      <p>
+        BEAM (5 extended abilities), LongMemEval (5 long-memory abilities), MemBench
+        (4 quadrants). Standardized evaluation frameworks adapted for Clarvis's architecture.
+      </p>
+      <div class="cap-subsystem">clarvis/metrics/beam.py, longmemeval.py, membench.py</div>
+    </div>
+  </div>
+</section>
+
+<!-- Task Routing & Orchestration -->
+<section class="section-divider">
+  <h2>Task Routing &amp; Orchestration</h2>
+  <p class="identity">
+    Not every task needs the same model. Clarvis scores task complexity across 14 dimensions
+    and routes to the optimal model for cost and quality. It can also delegate to specialized
+    project agents running in isolated workspaces.
+  </p>
+
+  <div class="feature-grid">
+    <div class="feature-card">
+      <span class="feature-icon">&#x21C4;</span>
+      <h3>14-Dimension Router</h3>
+      <p>
+        Weighted complexity scorer routes tasks: simple &rarr; M2.5 ($0.42/1M), complex &rarr; GLM-5,
+        vision &rarr; Kimi K2.5, web &rarr; Gemini 3 Flash, code &rarr; Claude Code Opus.
+        Force-route patterns override the scorer for known task shapes.
+      </p>
+      <div class="cap-subsystem">clarvis/orch/router.py</div>
+    </div>
+
+    <div class="feature-card">
+      <span class="feature-icon">&#x2442;</span>
+      <h3>Agent Orchestration</h3>
+      <p>
+        Delegate to isolated project agents with their own ChromaDB brain (5 collections),
+        workspace, and logs. Returns structured JSON: status, PR URL, summary, follow-ups.
+        Hard isolation: embedding overlap &lt;&thinsp;0.05.
+      </p>
+      <div class="cap-subsystem">scripts/project_agent.py</div>
+    </div>
+
+    <div class="feature-card">
+      <span class="feature-icon">$</span>
+      <h3>Cost Tracking</h3>
+      <p>
+        Real-time cost tracking per model, per task type. Budget alerting via Telegram.
+        Prompt caching, context budget planning, and waste detection.
+      </p>
+      <div class="cap-subsystem">clarvis/orch/cost_tracker.py, cost_optimizer.py</div>
+    </div>
+
+    <div class="feature-card">
+      <span class="feature-icon">&#x2194;</span>
+      <h3>PR Intake</h3>
+      <p>
+        Automated PR triage: classify, prioritize, and route incoming pull requests.
+        Rule-based scoring with attention-weighted task prioritization.
+      </p>
+      <div class="cap-subsystem">clarvis/orch/pr_intake.py</div>
+    </div>
+  </div>
+</section>
+
+<!-- Browser & Tools -->
+<section class="section-divider">
+  <h2>Browser &amp; Tools</h2>
+  <p class="identity">
+    Clarvis can browse the web, interact with pages, and persist sessions across runs.
+    The dual-engine stack provides both token efficiency and full browser automation.
+  </p>
+
+  <div class="feature-grid">
+    <div class="feature-card">
+      <span class="feature-icon">&#x2B1A;</span>
+      <h3>Agent-Browser (Primary)</h3>
+      <p>
+        Rust CLI with snapshot/refs system for token-efficient page interaction. 93% fewer
+        tokens than full DOM. Shared auth state via cookie injection.
+      </p>
+      <div class="cap-subsystem">scripts/clarvis_browser.py &middot; Agent-Browser v0.15.1</div>
+    </div>
+
+    <div class="feature-card">
+      <span class="feature-icon">&#x25A3;</span>
+      <h3>Playwright (Fallback)</h3>
+      <p>
+        CDP-based browser automation for session persistence, file uploads, JS eval, and
+        complex login flows. Single-session mode for auth-heavy sites.
+      </p>
+      <div class="cap-subsystem">scripts/browser_agent.py &middot; Playwright 1.58.2</div>
+    </div>
+  </div>
+</section>
+
+<!-- Operator Surfaces -->
+<section class="section-divider">
+  <h2>Operator Surfaces</h2>
+  <p class="identity">
+    Clarvis exposes its state through multiple surfaces so the operator always knows what's
+    happening. Everything is inspectable &mdash; no black boxes.
+  </p>
+
+  <div class="feature-grid">
+    <div class="feature-card">
+      <span class="feature-icon">&#x2709;</span>
+      <h3>Telegram Integration</h3>
+      <p>
+        Bot sends digest reports, cost alerts, and task completions. Slash commands:
+        <code>/costs</code>, <code>/budget</code>, <code>/spawn</code>.
+      </p>
+      <div class="cap-subsystem">scripts/cost_tracker.py, spawn_claude.sh</div>
+    </div>
+
+    <div class="feature-card">
+      <span class="feature-icon">&#x2615;</span>
+      <h3>CLI</h3>
+      <p>
+        Full CLI: <code>python3 -m clarvis &lt;cmd&gt;</code>. Brain ops, benchmarks, mode control,
+        cost tracking, queue management, cron inspection, metrics, and demo walkthrough.
+      </p>
+      <div class="cap-subsystem">clarvis/cli.py + 17 cli_*.py modules</div>
+    </div>
+
+    <div class="feature-card">
+      <span class="feature-icon">&#x2302;</span>
+      <h3>Public Website</h3>
+      <p>
+        Static site with live status API. Shows operating mode, queue state, CLR score,
+        Performance Index, and recent completions. Auto-updated by cron.
+      </p>
+      <div class="cap-subsystem">website/ &middot; Starlette + static HTML</div>
+    </div>
+
+    <div class="feature-card">
+      <span class="feature-icon">&#x2318;</span>
+      <h3>Health Monitoring</h3>
+      <p>
+        Every-15-min health checks, every-30-min watchdog alerts, cron doctor auto-recovery,
+        and daily backup with verification. Security scanning built in.
+      </p>
+      <div class="cap-subsystem">scripts/health_monitor.sh, cron_watchdog.sh</div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <p>Built by <a href="https://github.com/GranusClarvis">Granus Labs</a> &middot; <a href="https://github.com/GranusClarvis/clarvis">Source</a> &middot; MIT License</p>
+</footer>
+
+</body>
+</html>
