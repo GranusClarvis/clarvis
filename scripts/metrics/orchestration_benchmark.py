@@ -28,7 +28,6 @@ from pathlib import Path
 
 WORKSPACE = Path(os.environ.get("CLARVIS_WORKSPACE",
                                 os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))))
-sys.path.insert(0, str(WORKSPACE / "scripts" / "brain_mem"))
 SCRIPTS = WORKSPACE / "scripts"
 DATA_DIR = WORKSPACE / "data" / "orchestration_benchmarks"
 
@@ -46,9 +45,6 @@ LATENCY_P50_TARGET = 300.0   # seconds — p50 should be under this
 LATENCY_P95_TARGET = 900.0   # seconds — p95 should be under this
 COST_PER_TASK_TARGET = 0.50  # USD — avg cost per task target
 
-
-sys.path.insert(0, str(SCRIPTS))
-import _paths  # noqa: F401 — registers all script subdirs on sys.path
 
 
 def _get_agent_dir(name: str) -> Path:

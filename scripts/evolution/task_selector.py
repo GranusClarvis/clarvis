@@ -13,12 +13,6 @@ import json
 import sys
 import os
 
-# Ensure clarvis package is importable
-_workspace = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
-if _workspace not in sys.path:
-    sys.path.insert(0, _workspace)
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import _paths  # noqa: F401 — registers all script subdirs on sys.path
 
 # Import everything from the canonical spine module
 from clarvis.orch.task_selector import (  # noqa: E402

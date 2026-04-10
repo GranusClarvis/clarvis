@@ -20,7 +20,8 @@ from pathlib import Path
 
 CLARVIS_WORKSPACE = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")))
 import sys
-sys.path.insert(0, str(CLARVIS_WORKSPACE / "scripts" / "brain_mem"))
+from clarvis._script_loader import load as _load_script
+_lite_brain_mod = _load_script("lite_brain", "brain_mem")
 
 # ── Task Classification ──
 
@@ -138,7 +139,7 @@ def build_execution_brief(name: str, task: str, agent_dir: Path) -> dict:
     try:
         brain_dir = agent_dir / "data" / "brain"
         if brain_dir.exists():
-            from lite_brain import LiteBrain
+            LiteBrain = _lite_brain_mod.LiteBrain
             lb = LiteBrain(str(brain_dir))
 
             # Build/refresh typed edges from indexes (idempotent, deduped)
@@ -645,7 +646,7 @@ def run_writeback(name: str, agent_dir: Path, result: dict, task: str):
 
     # 2-5. Store in LiteBrain (graceful if ChromaDB unavailable)
     try:
-        from lite_brain import LiteBrain
+        LiteBrain = _lite_brain_mod.LiteBrain
         lb = LiteBrain(str(brain_dir))
         _store_episode(lb, episode)
         _store_facts(lb, result)

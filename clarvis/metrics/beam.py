@@ -428,9 +428,7 @@ def run_beam(
     Returns:
         Report dict with per-ability scores, domain breakdown, and details.
     """
-    import sys
-    sys.path.insert(0, os.path.join(WORKSPACE, "scripts"))
-    from brain import brain
+    from clarvis.brain import brain
 
     tasks = BEAM_TASKS
     if ability:

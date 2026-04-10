@@ -26,8 +26,6 @@ WORKSPACE = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.open
 BUDGET_FILE = WORKSPACE / "data" / "perf_budget.json"
 TREND_FILE = WORKSPACE / "data" / "latency_trend.jsonl"
 
-sys.path.insert(0, str(WORKSPACE / "scripts"))
-import _paths  # noqa: F401 — registers all script subdirs on sys.path
 
 # ---------------------------------------------------------------------------
 # Budget loading
@@ -77,7 +75,7 @@ BRAIN_QUERIES = [
 
 def measure_brain_recall(n_queries: int = 8) -> dict:
     """Measure brain.recall() latencies."""
-    from brain import brain
+    from clarvis.brain import brain
 
     queries = BRAIN_QUERIES[:n_queries]
     latencies = []
@@ -129,7 +127,7 @@ def measure_smart_recall(n_queries: int = 5) -> dict:
 
 def measure_brain_remember() -> dict:
     """Measure brain.remember() latency (write path)."""
-    from brain import remember
+    from clarvis.brain import remember
 
     latencies = []
     test_texts = [
@@ -404,7 +402,7 @@ def show_status():
 
 def quick_check() -> dict:
     """3-query brain check, returns dict suitable for heartbeat postflight."""
-    from brain import brain
+    from clarvis.brain import brain
 
     # Warmup
     _ = brain.recall("warmup", n=1)

@@ -4,15 +4,12 @@ Self-Assessment Script - Track cognitive growth metrics
 v1 MVP
 """
 import re
-import sys
 import os
 import json
 from datetime import datetime
 from pathlib import Path
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import _paths  # noqa: F401 — registers all script subdirs on sys.path
-from brain import brain
+from clarvis.brain import brain
 
 DATA_FILE = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "data/self_report_metrics.json")
 

@@ -39,24 +39,29 @@ from datetime import datetime, timezone, timedelta
 
 from clarvis.brain import brain, PROCEDURES
 
-_SCRIPTS_DIR = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "scripts")
+from clarvis._script_loader import load as _load_script
 
 try:
-    if _SCRIPTS_DIR not in sys.path:
-        sys.path.insert(0, _SCRIPTS_DIR)
-    from retrieval_experiment import smart_recall
-except ImportError:
+    _retrieval_mod = _load_script("retrieval_experiment", "brain_mem")
+    smart_recall = _retrieval_mod.smart_recall
+except Exception:
     smart_recall = None
 
 try:
-    from failure_amplifier import (
-        parse_log_entries, scan_duplicate_tasks, scan_long_durations,
-        scan_skipped_learning, scan_prediction_misses, scan_retroactive_fixes,
-        scan_low_capability_scores, scan_low_confidence_predictions,
-        scan_uncompleted_tasks, scan_reasoning_chains, AUTONOMOUS_LOG,
-    )
+    _fa_mod = _load_script("failure_amplifier", "evolution")
+    parse_log_entries = _fa_mod.parse_log_entries
+    scan_duplicate_tasks = _fa_mod.scan_duplicate_tasks
+    scan_long_durations = _fa_mod.scan_long_durations
+    scan_skipped_learning = _fa_mod.scan_skipped_learning
+    scan_prediction_misses = _fa_mod.scan_prediction_misses
+    scan_retroactive_fixes = _fa_mod.scan_retroactive_fixes
+    scan_low_capability_scores = _fa_mod.scan_low_capability_scores
+    scan_low_confidence_predictions = _fa_mod.scan_low_confidence_predictions
+    scan_uncompleted_tasks = _fa_mod.scan_uncompleted_tasks
+    scan_reasoning_chains = _fa_mod.scan_reasoning_chains
+    AUTONOMOUS_LOG = _fa_mod.AUTONOMOUS_LOG
     _HAS_FAILURE_AMPLIFIER = True
-except ImportError:
+except Exception:
     _HAS_FAILURE_AMPLIFIER = False
 
 # Quality tiers for skill lifecycle (SoK Pattern 4: Self-Evolving Libraries)
@@ -88,7 +93,7 @@ CODE_TEMPLATES = {
         "scaffold": [
             "Add shebang + docstring with purpose, usage examples, and CLI commands",
             "Import stdlib (json, os, sys, time, pathlib, datetime)",
-            "sys.path.insert(0, os.path.dirname(__file__)) for local imports",
+            "Use clarvis spine imports (from clarvis.brain import brain) for local imports",
             "Try/except import brain: from brain import brain, LEARNINGS (with fallback)",
             "Try/except import optional deps (attention, episodic_memory, etc.)",
             "Define DATA_FILE = Path(WORKSPACE) / 'data/<name>.json'",
@@ -212,7 +217,7 @@ CODE_TEMPLATES = {
         "match_keywords": ["test", "pytest", "unit test", "test suite",
                            "write tests", "add tests"],
         "scaffold": [
-            "Import pytest and sys.path.insert for local imports",
+            "Import pytest and set up imports for local modules",
             "Import the module under test with try/except",
             "Add fixtures: @pytest.fixture for common test data",
             "Test happy path: def test_<func>_basic(): assert expected_result",

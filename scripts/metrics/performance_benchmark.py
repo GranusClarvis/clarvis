@@ -45,11 +45,6 @@ from datetime import datetime, timezone, timedelta
 
 logger = logging.getLogger(__name__)
 
-# Ensure clarvis package is importable
-_workspace = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
-if _workspace not in sys.path:
-    sys.path.insert(0, _workspace)
-
 # Import canonical TARGETS, compute_pi, and check_self_optimization from spine
 from clarvis.metrics.benchmark import (  # noqa: E402
     TARGETS, compute_pi, check_self_optimization,

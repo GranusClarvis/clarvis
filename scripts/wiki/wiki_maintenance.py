@@ -41,7 +41,7 @@ MAINTENANCE_LOG = LOGS_DIR / "maintenance.log"
 TODAY = datetime.date.today().isoformat()
 NOW = datetime.datetime.now().isoformat(timespec="seconds")
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+from clarvis._script_loader import load as _load_script
 
 
 def log(msg: str):
@@ -56,7 +56,7 @@ def log(msg: str):
 def job_lint() -> dict:
     """Run wiki lint and return summary."""
     try:
-        from wiki_lint import run_lint
+        run_lint = _load_script("wiki_lint", "wiki").run_lint
         issues = run_lint()  # returns list of LintIssue objects
         total_issues = len(issues)
         errors = sum(1 for i in issues if getattr(i, "severity", "warning") == "error")

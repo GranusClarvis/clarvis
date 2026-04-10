@@ -126,8 +126,6 @@ def refresh(dry_run: bool = False) -> str:
         return memory_text
 
     # Import brain and upsert
-    sys.path.insert(0, str(WORKSPACE / "scripts"))
-    import _paths  # noqa: F401 — registers all script subdirs on sys.path
     from clarvis.brain import brain
     from clarvis.brain.constants import GOALS
 

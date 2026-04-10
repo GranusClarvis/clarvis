@@ -582,10 +582,7 @@ def adaptive_recall(brain_instance, query: str, tier: str = "DEEP_RETRIEVAL",
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    import sys
     import json
-
-    sys.path.insert(0, os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "scripts"))
 
     if len(sys.argv) < 2:
         print("Usage: python -m clarvis.brain.retrieval_eval <query> [--n N]")

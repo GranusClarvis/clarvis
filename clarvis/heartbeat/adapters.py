@@ -15,17 +15,14 @@ Usage:
 """
 
 import os
-import sys
 import json
 import time
 from datetime import datetime, timezone
 
 from .hooks import registry, HookPhase
+from clarvis._script_loader import load as _load_script
 
-# Ensure scripts/ is on path for lazy imports
 _SCRIPTS_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "scripts")
-if _SCRIPTS_DIR not in sys.path:
-    sys.path.insert(0, os.path.abspath(_SCRIPTS_DIR))
 
 _log = lambda msg: print(
     f"[{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S')}] HOOK: {msg}",
@@ -54,7 +51,8 @@ def _procedural_record(context):
         else:
             # Try to learn a new procedure from output
             try:
-                from extract_steps import extract_steps
+                _es_mod = _load_script("extract_steps", "tools")
+                extract_steps = _es_mod.extract_steps
                 extraction_text = output_text[-2000:] if len(output_text) > 2000 else output_text
                 steps = extract_steps(extraction_text)
                 if steps:
@@ -131,7 +129,8 @@ def _periodic_synthesis(context):
 
 def _perf_benchmark(context):
     """Quick performance health check (brain query speed, memory count)."""
-    from performance_benchmark import run_heartbeat_check
+    _pb = _load_script("performance_benchmark", "metrics")
+    run_heartbeat_check = _pb.run_heartbeat_check
 
     result = run_heartbeat_check()
     if not result.get("speed_ok", True):
@@ -146,7 +145,8 @@ def _perf_benchmark(context):
 
 def _latency_budget(context):
     """Check p50/p95 brain.recall latency against budget."""
-    from latency_budget import quick_check
+    _lb = _load_script("latency_budget", "metrics")
+    quick_check = _lb.quick_check
 
     result = quick_check()
     if result.get("critical"):
@@ -161,7 +161,8 @@ def _latency_budget(context):
 
 def _structural_health(context):
     """Import graph metrics for trend tracking."""
-    from import_health import build_import_graph, full_report, SCRIPTS_DIR
+    _ih = _load_script("import_health", "infra")
+    build_import_graph, full_report, SCRIPTS_DIR = _ih.build_import_graph, _ih.full_report, _ih.SCRIPTS_DIR
 
     graph = build_import_graph(SCRIPTS_DIR)
     report = full_report(graph, use_current_thresholds=True)
@@ -215,7 +216,7 @@ def _meta_learning_analyze(context):
         except (IOError, OSError):
             pass
 
-    from meta_learning import MetaLearner
+    from clarvis.learning.meta_learning import MetaLearner
 
     ml = MetaLearner()
     result = ml.analyze()

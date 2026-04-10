@@ -13,18 +13,15 @@ Migrated from scripts/task_selector.py (Phase 5 spine refactor).
 import json
 import os
 import re
-import sys
 
 from clarvis.cognition.attention import attention, get_codelet_competition
 from clarvis.brain import brain
 
-_SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'scripts')
-
 try:
-    if _SCRIPTS_DIR not in sys.path:
-        sys.path.insert(0, _SCRIPTS_DIR)
-    from retrieval_experiment import smart_recall
-except ImportError:
+    from clarvis._script_loader import load as _load_script
+    _retrieval_mod = _load_script("retrieval_experiment", "brain_mem")
+    smart_recall = _retrieval_mod.smart_recall
+except Exception:
     smart_recall = None
 
 try:
@@ -38,8 +35,8 @@ except Exception:
     thought_proto = None
 
 try:
-    from world_models import get_world_model  # scripts/ (pending spine migration)
-    _wm = get_world_model()
+    _world_models_mod = _load_script("world_models", "cognition")
+    _wm = _world_models_mod.get_world_model()
 except Exception:
     _wm = None
 

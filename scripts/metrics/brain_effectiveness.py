@@ -54,7 +54,6 @@ def _load_clr():
 def _load_episode_stats():
     """Load episode success rate from episodic memory."""
     try:
-        sys.path.insert(0, os.path.join(WORKSPACE, "scripts"))
         from clarvis.memory.episodic_memory import EpisodicMemory
         em = EpisodicMemory()
         stats = em.get_stats()

@@ -382,7 +382,6 @@ def benchmark_hybrid(brain_instance, benchmark_pairs: list[dict], k: int = 3) ->
 
 if __name__ == "__main__":
     import sys
-    sys.path.insert(0, os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "scripts"))
 
     logging.basicConfig(level=logging.INFO, format="%(name)s: %(message)s")
 

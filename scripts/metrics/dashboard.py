@@ -5,15 +5,11 @@ Shows brain stats, goal progress, and evolution velocity in real-time.
 """
 
 import json
-import sys
 import os
 from datetime import datetime
 from pathlib import Path
 
-# Add scripts to path
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import _paths  # noqa: F401 — registers all script subdirs on sys.path
-from brain import brain
+from clarvis.brain import brain
 
 DASHBOARD_DIR = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))) / "data/dashboard"
 DASHBOARD_DIR.mkdir(parents=True, exist_ok=True)

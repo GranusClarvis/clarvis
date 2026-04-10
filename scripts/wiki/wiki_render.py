@@ -35,10 +35,12 @@ OUTPUTS_DIR = KNOWLEDGE / "outputs"
 TODAY = datetime.date.today().isoformat()
 NOW = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M")
 
-sys.path.insert(0, str(Path(__file__).parent))
-
 try:
-    from wiki_query import gather_context, search_wiki, extract_keywords, _parse_frontmatter
+    from clarvis._script_loader import load as _load_script
+    _wq = _load_script("wiki_query", "wiki")
+    gather_context, search_wiki, extract_keywords, _parse_frontmatter = (
+        _wq.gather_context, _wq.search_wiki, _wq.extract_keywords, _wq._parse_frontmatter
+    )
 except ImportError:
     print("ERROR: wiki_query.py must be importable", file=sys.stderr)
     sys.exit(1)

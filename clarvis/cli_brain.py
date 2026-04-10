@@ -6,7 +6,6 @@ The old scripts/brain.py is a thin re-export wrapper.
 
 import json
 import os
-import sys
 from typing import Optional
 
 import typer
@@ -18,7 +17,6 @@ WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/
 
 def _get_brain():
     """Lazy-load brain singleton with hooks registered."""
-    sys.path.insert(0, f"{WORKSPACE}/scripts")
     from clarvis.brain import get_brain
     b = get_brain()
     try:

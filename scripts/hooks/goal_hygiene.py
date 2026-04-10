@@ -32,12 +32,6 @@ import sys
 import re
 from datetime import datetime, timezone
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import _paths  # noqa: F401 — registers all script subdirs on sys.path
-_workspace = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
-if _workspace not in sys.path:
-    sys.path.insert(0, _workspace)
-
 from clarvis.brain import brain
 
 WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))

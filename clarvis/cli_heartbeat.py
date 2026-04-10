@@ -20,6 +20,8 @@ from pathlib import Path
 
 import typer
 
+from clarvis._script_loader import load as _load_script
+
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_enable=False)
 
 WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
@@ -46,11 +48,10 @@ def run(dry_run: bool = typer.Option(False, "--dry-run", help="Run gate + prefli
     except Exception as e:
         print(f"Gate error (proceeding anyway): {e}")
 
-    # Step 2: Preflight (still uses scripts/ — heavy cognitive imports)
+    # Step 2: Preflight (loaded via importlib from scripts/pipeline/)
     print("\n=== Heartbeat Preflight ===")
-    sys.path.insert(0, f"{WORKSPACE}/scripts")
     try:
-        import heartbeat_preflight
+        heartbeat_preflight = _load_script("heartbeat_preflight", "pipeline")
         preflight_result = heartbeat_preflight.run_preflight()
         task = preflight_result.get("selected_task", "No task selected")
         print(f"Selected task: {task}")
@@ -79,12 +80,6 @@ def gate():
         print(json.dumps(output, default=str))
         if decision == "skip":
             raise typer.Exit(1)
-    except ImportError:
-        # Fallback to scripts/ if spine not available
-        sys.path.insert(0, f"{WORKSPACE}/scripts")
-        import heartbeat_gate
-        result = heartbeat_gate.run_gate()
-        print(json.dumps(result, default=str))
     except typer.Exit:
         raise
     except Exception as e:
@@ -102,9 +97,8 @@ def preflight(
     Prints the full preflight result as JSON. Useful for diagnostics and
     for piping into postflight after manual execution.
     """
-    sys.path.insert(0, f"{WORKSPACE}/scripts")
     try:
-        import heartbeat_preflight
+        heartbeat_preflight = _load_script("heartbeat_preflight", "pipeline")
         result = heartbeat_preflight.run_preflight(dry_run=dry_run)
         json_out = json.dumps(result, indent=2, default=str)
         if output_file:
@@ -149,9 +143,8 @@ def postflight(
         print(f"Output file not found: {output_file}", file=sys.stderr)
         raise typer.Exit(1)
 
-    sys.path.insert(0, f"{WORKSPACE}/scripts")
     try:
-        import heartbeat_postflight
+        heartbeat_postflight = _load_script("heartbeat_postflight", "pipeline")
         heartbeat_postflight.run_postflight(
             exit_code=exit_code,
             output_file=output_file,

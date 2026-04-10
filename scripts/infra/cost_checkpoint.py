@@ -30,7 +30,6 @@ def main():
     duration_s = float(sys.argv[3]) if len(sys.argv) > 3 else 0.0
 
     try:
-        sys.path.insert(0, os.path.join(WORKSPACE, "clarvis"))
         from clarvis.orch.cost_api import fetch_usage
         usage = fetch_usage()
     except Exception as e:

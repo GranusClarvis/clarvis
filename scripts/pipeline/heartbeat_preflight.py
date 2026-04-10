@@ -23,8 +23,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import _paths  # noqa: F401 — registers all script subdirs on sys.path
+from clarvis._script_loader import load as _load_script
 
 # === SINGLE IMPORT BLOCK (one-time cost) ===
 start_import = time.monotonic()
@@ -52,8 +51,9 @@ except ImportError:
     format_code_templates = None
 
 try:
-    from reasoning_chain_hook import open_chain
-except ImportError:
+    _reasoning_chain_hook = _load_script("reasoning_chain_hook", "cognition")
+    open_chain = _reasoning_chain_hook.open_chain
+except (ImportError, FileNotFoundError):
     open_chain = None
 
 try:

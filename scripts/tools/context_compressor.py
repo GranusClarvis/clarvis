@@ -45,8 +45,6 @@ import time as _time
 from collections import Counter
 from datetime import datetime, timezone, timedelta
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import _paths  # noqa: F401 — registers all script subdirs on sys.path
 
 QUEUE_FILE = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "memory/evolution/QUEUE.md")
 QUEUE_ARCHIVE = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "memory/evolution/QUEUE_ARCHIVE.md")

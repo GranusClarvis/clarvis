@@ -28,9 +28,6 @@ MIN_MEMORIES = 2000          # Alert if total drops below this (calibrated post-
 MAX_EDGE_DROP_PCT = 5.0      # Alert if edges drop >5% from previous snapshot
 MAX_BACKFILL_ORPHANS = 50    # Alert if backfill finds >50 orphans
 
-sys.path.insert(0, str(WORKSPACE / "scripts"))
-import _paths  # noqa: F401 — registers all script subdirs on sys.path
-
 
 def _log(msg: str):
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")

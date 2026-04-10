@@ -385,9 +385,10 @@ class ClarvisBrowser:
     async def _get_playwright(self):
         """Lazy-load the Playwright-based BrowserAgent."""
         if self._pw_agent is None:
-            sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            import _paths  # noqa: F401 — registers all script subdirs on sys.path
-            from browser_agent import BrowserAgent
+            # browser_agent is a sibling script in this directory
+            from clarvis._script_loader import load as _load_script
+            _ba_mod = _load_script("browser_agent", "tools")
+            BrowserAgent = _ba_mod.BrowserAgent
             self._pw_agent = BrowserAgent(
                 cdp_url=f"http://127.0.0.1:{self.cdp_port}",
                 session_file=str(self.session_file) if self.session_file else None,

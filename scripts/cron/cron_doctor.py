@@ -28,8 +28,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 WORKSPACE = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")))
-sys.path.insert(0, str(WORKSPACE / "scripts"))
-import _paths  # noqa: F401 — registers all script subdirs on sys.path
 LOG_DIR = WORKSPACE / "memory" / "cron"
 DOCTOR_LOG = LOG_DIR / "doctor.log"
 DOCTOR_STATE = WORKSPACE / "data" / "cron_doctor_state.json"
@@ -629,7 +627,6 @@ def check_chromadb_health(dry_run: bool = False) -> dict:
 
     # Step 1: Try brain health check
     try:
-        sys.path.insert(0, str(WORKSPACE))
         from clarvis.brain import get_brain
         b = get_brain()
         hc = b.health_check()

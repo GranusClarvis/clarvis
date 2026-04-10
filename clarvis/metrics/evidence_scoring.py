@@ -275,9 +275,7 @@ def run_evidence_scoring(live: bool = False) -> dict:
 
 def _run_live_evidence_scoring(all_tasks: dict[str, dict]) -> dict:
     """Run live brain queries and score actual retrieved evidence."""
-    import sys
-    sys.path.insert(0, os.path.join(WORKSPACE, "scripts"))
-    from brain import brain
+    from clarvis.brain import brain
 
     per_task = {}
     by_adapter: dict[str, list[dict]] = defaultdict(list)

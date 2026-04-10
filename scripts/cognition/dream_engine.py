@@ -29,10 +29,7 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import _paths  # noqa: F401 — registers all script subdirs on sys.path
-
-from brain import brain
+from clarvis.brain import brain
 from clarvis.memory.episodic_memory import episodic
 from clarvis.cognition.reasoning_chains import create_chain, add_step, complete_step
 

@@ -42,8 +42,6 @@ import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import _paths  # noqa: F401 — registers all script subdirs on sys.path
 
 WORKSPACE = Path(os.path.dirname(__file__)).parent
 TOOL_LIBRARY_DIR = WORKSPACE / "data" / "tool_library"

@@ -10,16 +10,11 @@ from typing import Optional
 
 import typer
 
+from clarvis._script_loader import load as _load_script
+
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_enable=False)
 
 WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
-
-
-def _ensure_scripts_path():
-    """Add scripts/ to sys.path so legacy imports resolve."""
-    scripts = os.path.join(WORKSPACE, "scripts")
-    if scripts not in sys.path:
-        sys.path.insert(0, scripts)
 
 
 # --- brain-hygiene -----------------------------------------------------------
@@ -32,8 +27,7 @@ def brain_hygiene(
 
     Replaces: python3 scripts/brain_hygiene.py <mode>
     """
-    _ensure_scripts_path()
-    import brain_hygiene as bh
+    bh = _load_script("brain_hygiene", "brain_mem")
 
     if mode == "run":
         bh.cmd_run()
@@ -56,8 +50,7 @@ def goal_hygiene(
 
     Replaces: python3 scripts/goal_hygiene.py <mode>
     """
-    _ensure_scripts_path()
-    import goal_hygiene as gh
+    gh = _load_script("goal_hygiene", "hooks")
 
     dispatch = {
         "audit": gh.audit_goals,
@@ -89,8 +82,7 @@ def data_lifecycle(
 
     Replaces: python3 scripts/data_lifecycle.py [--dry-run] [--verbose]
     """
-    _ensure_scripts_path()
-    # Inject args before importing (data_lifecycle uses argparse in main())
+    # Inject args before loading (data_lifecycle uses argparse in main())
     orig_argv = sys.argv[:]
     sys.argv = ["data_lifecycle"]
     if dry_run:
@@ -98,7 +90,7 @@ def data_lifecycle(
     if verbose:
         sys.argv.append("--verbose")
     try:
-        import data_lifecycle as dl
+        dl = _load_script("data_lifecycle", "infra")
         dl.main()
     finally:
         sys.argv = orig_argv
@@ -114,8 +106,7 @@ def graph_compaction(
 
     Replaces: python3 scripts/graph_compaction.py [--dry-run]
     """
-    _ensure_scripts_path()
-    import graph_compaction as gc
+    gc = _load_script("graph_compaction", "brain_mem")
 
     if dry_run:
         print("=== DRY RUN (no changes) ===\n")
@@ -133,9 +124,8 @@ def dream_cmd(
 
     Replaces: python3 scripts/dream_engine.py <mode> [n]
     """
-    _ensure_scripts_path()
     import json as _json
-    import dream_engine as de
+    de = _load_script("dream_engine", "cognition")
 
     if mode == "dream":
         result = de.dream(n)
@@ -174,8 +164,7 @@ def status_json():
 
     Replaces: python3 scripts/generate_status_json.py
     """
-    _ensure_scripts_path()
-    import generate_status_json as gs
+    gs = _load_script("generate_status_json", "infra")
 
     gs.main()
 
@@ -191,9 +180,8 @@ def brief_benchmark(
 
     Replaces: python3 scripts/brief_benchmark.py [--dry-run] [--json]
     """
-    _ensure_scripts_path()
     import json as _json
-    import brief_benchmark as bb
+    bb = _load_script("brief_benchmark", "metrics")
 
     result = bb.run_benchmark(dry_run=dry_run)
 

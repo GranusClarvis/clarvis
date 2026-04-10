@@ -16,8 +16,6 @@ import os
 import sys
 import warnings
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import _paths  # noqa: F401 — registers all script subdirs on sys.path
 
 # Spine delegation — all logic now lives in clarvis.orch.router
 from clarvis.orch.router import (  # noqa: E402

@@ -148,8 +148,6 @@ def metric_knowledge_synthesis() -> tuple[int, str]:
 def metric_procedural_memory() -> tuple[int, str]:
     proc_col_count = 0
     try:
-        sys.path.insert(0, str(WORKSPACE / "scripts"))
-        import _paths  # noqa: F401
         from clarvis.brain import brain
         col = brain.collections.get("clarvis-procedures")
         if col:
@@ -414,9 +412,9 @@ def refresh(dry_run: bool = False, roadmap_only: bool = False):
     print("Step 3: Refreshing canonical priorities memory...")
     try:
         # Import and run refresh_priorities
-        hooks_dir = Path(__file__).resolve().parent
-        sys.path.insert(0, str(hooks_dir))
-        from refresh_priorities import refresh as refresh_prio
+        from clarvis._script_loader import load as _load_script
+        _rp_mod = _load_script("refresh_priorities", "hooks")
+        refresh_prio = _rp_mod.refresh
         refresh_prio(dry_run=dry_run)
     except Exception as e:
         print(f"  Warning: priorities refresh failed: {e}")
@@ -425,7 +423,8 @@ def refresh(dry_run: bool = False, roadmap_only: bool = False):
     # Step 4: Refresh goals snapshot
     print("Step 4: Refreshing goals snapshot...")
     try:
-        from goal_hygiene import write_snapshot
+        _gh_mod = _load_script("goal_hygiene", "hooks")
+        write_snapshot = _gh_mod.write_snapshot
         if not dry_run:
             write_snapshot()
         else:

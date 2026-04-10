@@ -26,9 +26,7 @@ import logging
 from collections import Counter
 from pathlib import Path
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import _paths  # noqa: F401 — registers all script subdirs on sys.path
-from brain import brain, AUTONOMOUS_LEARNING
+from clarvis.brain import brain, AUTONOMOUS_LEARNING
 
 logger = logging.getLogger(__name__)
 

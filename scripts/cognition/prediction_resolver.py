@@ -36,8 +36,7 @@ def _get_ef():
     """Get ONNX MiniLM embedding function (lazy singleton)."""
     global _ef
     if _ef is None:
-        sys.path.insert(0, f"{WORKSPACE}/clarvis/brain")
-        from constants import get_local_embedding_function
+        from clarvis.brain.constants import get_local_embedding_function
         _ef = get_local_embedding_function()
     return _ef
 
@@ -307,8 +306,7 @@ def resolve_with_episodes(task_text: str, task_outcome: str) -> dict:
         dict with matched, stale_expired, embedding_matched, remaining_open counts
     """
     # First: run the existing string-based resolver
-    sys.path.insert(0, f"{WORKSPACE}/clarvis/cognition")
-    from confidence import auto_resolve as string_resolve
+    from clarvis.cognition.confidence import auto_resolve as string_resolve
     result = string_resolve(task_text, task_outcome)
 
     # If there are still unresolved predictions, try embedding matching

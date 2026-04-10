@@ -47,8 +47,6 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import _paths  # noqa: F401 — registers all script subdirs on sys.path
 
 DATA_DIR = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))) / "data/atomspace"
 DATA_DIR.mkdir(parents=True, exist_ok=True)

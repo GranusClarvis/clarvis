@@ -35,24 +35,21 @@ from dataclasses import asdict, dataclass
 from typing import Optional
 
 # Import shared utilities from research_novelty (single source of truth)
-_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, _SCRIPT_DIR)
 try:
-    from research_novelty import (
-        TopicRegistry,
-        TopicEntry,
-        _normalize,
-        _word_set,
-        _word_overlap,
-        _extract_anchor_phrases,
-        _days_since,
-        REFINEMENT_AGE_DAYS,
-        REFINEMENT_MIN_MEMORIES,
-        MAX_RESEARCH_COUNT,
-    )
-except ImportError:
-    # Fallback for testing in isolation
-    raise ImportError("repeat_classifier requires research_novelty.py in same directory")
+    from clarvis._script_loader import load as _load_script
+    _rn = _load_script("research_novelty", "evolution")
+    TopicRegistry = _rn.TopicRegistry
+    TopicEntry = _rn.TopicEntry
+    _normalize = _rn._normalize
+    _word_set = _rn._word_set
+    _word_overlap = _rn._word_overlap
+    _extract_anchor_phrases = _rn._extract_anchor_phrases
+    _days_since = _rn._days_since
+    REFINEMENT_AGE_DAYS = _rn.REFINEMENT_AGE_DAYS
+    REFINEMENT_MIN_MEMORIES = _rn.REFINEMENT_MIN_MEMORIES
+    MAX_RESEARCH_COUNT = _rn.MAX_RESEARCH_COUNT
+except (ImportError, FileNotFoundError):
+    raise ImportError("repeat_classifier requires research_novelty.py in scripts/evolution/")
 
 WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 

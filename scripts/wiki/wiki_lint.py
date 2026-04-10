@@ -335,6 +335,52 @@ def check_uncovered_sources() -> list[LintIssue]:
     return issues
 
 
+def check_tag_taxonomy(pages: dict) -> list[LintIssue]:
+    """Check that page tags follow the category/topic taxonomy (Rule N1).
+
+    Valid categories: ai, memory, cognition, infra, project, research, web3, agent.
+    Tags must be in category/topic format. Non-taxonomy tags generate warnings.
+    """
+    VALID_CATEGORIES = {"ai", "memory", "cognition", "infra", "project", "research", "web3", "agent"}
+    issues = []
+    for rel, info in pages.items():
+        tags = info.get("tags", [])
+        if not tags:
+            issues.append(LintIssue(
+                "tag_taxonomy", "warning", rel,
+                "No tags — every page should have 1-5 taxonomy tags"
+            ))
+            continue
+
+        if len(tags) > 5:
+            issues.append(LintIssue(
+                "tag_taxonomy", "info", rel,
+                f"Too many tags ({len(tags)}) — recommended max is 5"
+            ))
+
+        for tag in tags:
+            tag = str(tag).strip()
+            if "/" not in tag:
+                issues.append(LintIssue(
+                    "tag_taxonomy", "warning", rel,
+                    f"Non-taxonomy tag '{tag}' — expected category/topic format"
+                ))
+                continue
+            cat = tag.split("/", 1)[0]
+            if cat == "uncategorized":
+                issues.append(LintIssue(
+                    "tag_taxonomy", "info", rel,
+                    f"Uncategorized tag '{tag}' — consider mapping to a taxonomy category"
+                ))
+            elif cat not in VALID_CATEGORIES:
+                issues.append(LintIssue(
+                    "tag_taxonomy", "warning", rel,
+                    f"Unknown category '{cat}' in tag '{tag}' — valid: {', '.join(sorted(VALID_CATEGORIES))}"
+                ))
+
+    return issues
+
+
 def check_source_paths(pages: dict) -> list[LintIssue]:
     """Check that frontmatter `sources:` entries follow canonical format.
 
@@ -425,6 +471,7 @@ ALL_CHECKS = {
     "oversized": check_oversized,
     "underspecified": check_underspecified,
     "source_paths": check_source_paths,
+    "tag_taxonomy": check_tag_taxonomy,
     # uncovered_sources doesn't take pages arg — handled separately
 }
 

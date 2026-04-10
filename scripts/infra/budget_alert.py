@@ -22,8 +22,6 @@ import urllib.request
 import urllib.error
 from datetime import datetime, timezone
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import _paths  # noqa: F401 — registers all script subdirs on sys.path
 
 from clarvis.orch.cost_api import fetch_usage
 

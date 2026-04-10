@@ -3,13 +3,10 @@
 Clarvis Reflection Loop
 Reads today's memory, extracts lessons, stores in brain
 """
-import sys
 import os
 from datetime import datetime
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import _paths  # noqa: F401 — registers all script subdirs on sys.path
-from brain import brain
+from clarvis.brain import brain
 
 def get_today_memory():
     """Read today's memory file"""

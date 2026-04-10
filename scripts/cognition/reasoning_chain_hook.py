@@ -44,9 +44,10 @@ except ImportError:
 # Legacy fallback paths for scripts that haven't migrated yet
 if smart_recall is None:
     try:
-        sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "brain_mem"))
-        from retrieval_experiment import smart_recall
-    except ImportError:
+        from clarvis._script_loader import load as _load_script
+        _mod = _load_script("retrieval_experiment", "brain_mem")
+        smart_recall = _mod.smart_recall
+    except (ImportError, AttributeError):
         smart_recall = None
 
 if thought_proto is None:

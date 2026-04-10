@@ -17,8 +17,7 @@ import sys
 import time
 from datetime import datetime, timezone
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import _paths  # noqa: F401 — registers all script subdirs on sys.path
+from clarvis._script_loader import load as _load_script
 
 start_import = time.monotonic()
 
@@ -29,8 +28,9 @@ except ImportError:
 apply_calibration = None  # No separate apply function exists; calibration() is read-only
 
 try:
-    from prediction_review import review_and_generate as review_domains
-except ImportError:
+    _prediction_review = _load_script("prediction_review", "cognition")
+    review_domains = _prediction_review.review_and_generate
+except (ImportError, FileNotFoundError):
     review_domains = None
 
 try:
@@ -44,10 +44,11 @@ except ImportError:
     assess_capabilities = None
 
 try:
-    from retrieval_quality import get_tracker as _rq_tracker_fn
+    _retrieval_quality = _load_script("retrieval_quality", "brain_mem")
+    _rq_tracker_fn = _retrieval_quality.get_tracker
     def generate_report(days=7):
         return _rq_tracker_fn().report(days)
-except (ImportError, AttributeError):
+except (ImportError, FileNotFoundError, AttributeError):
     generate_report = None
 
 try:

@@ -2016,8 +2016,7 @@ def cmd_promote(name: str) -> dict:
     brain_stored = 0
     if procedures_to_promote:
         try:
-            sys.path.insert(0, str(CLARVIS_WORKSPACE / "scripts"))
-            from brain import brain as clarvis_brain
+            from clarvis.brain import brain as clarvis_brain
             tag = f"project:{name}"
             for proc in procedures_to_promote[:10]:  # cap at 10 per promotion
                 clarvis_brain.store(
@@ -2090,7 +2089,6 @@ def cmd_auto_golden_qa(name: str) -> dict:
                 "cap": GOLDEN_QA_CAP}
 
     # Get embedding function for dedup
-    sys.path.insert(0, str(CLARVIS_WORKSPACE / "scripts"))
     try:
         from clarvis.brain.factory import get_embedding_function
         embed_fn = get_embedding_function(use_onnx=True)
@@ -2374,8 +2372,8 @@ def cmd_seed(name: str) -> dict:
         return {"error": f"Failed to read golden_qa.json: {e}"}
 
     # Import lite brain
-    sys.path.insert(0, str(CLARVIS_WORKSPACE / "scripts" / "brain_mem"))
-    from lite_brain import LiteBrain
+    from clarvis._script_loader import load as _load_script
+    LiteBrain = _load_script("lite_brain", "brain_mem").LiteBrain
     brain = LiteBrain(str(agent_dir / "data" / "brain"))
 
     seeded = 0
@@ -2486,8 +2484,8 @@ def _benchmark_retrieval(name: str) -> dict:
     except Exception as e:
         return {"status": "error", "error": str(e)}
 
-    sys.path.insert(0, str(CLARVIS_WORKSPACE / "scripts" / "brain_mem"))
-    from lite_brain import LiteBrain
+    from clarvis._script_loader import load as _load_script
+    LiteBrain = _load_script("lite_brain", "brain_mem").LiteBrain
     brain = LiteBrain(str(agent_dir / "data" / "brain"))
 
     hits_at_1 = 0
@@ -3281,8 +3279,8 @@ def run_task_loop(name: str, task: str, timeout_per_subtask: int = 1200,
 
             # Store episode in agent brain
             try:
-                sys.path.insert(0, str(CLARVIS_WORKSPACE / "scripts" / "brain_mem"))
-                from lite_brain import LiteBrain
+                from clarvis._script_loader import load as _load_script
+                LiteBrain = _load_script("lite_brain", "brain_mem").LiteBrain
                 brain = LiteBrain(str(agent_dir / "data" / "brain"))
                 brain.store(
                     f"Task: {st['task'][:150]} | Status: {status} | Summary: {summary[:200]}",

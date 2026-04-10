@@ -1145,8 +1145,9 @@ def cmd_paper(args):
 def cmd_compile(args):
     """Delegate to wiki_compile.py for the compile pipeline."""
     try:
-        sys.path.insert(0, str(Path(__file__).parent))
-        from wiki_compile import compile_one, compile_all_pending
+        from clarvis._script_loader import load as _load_script
+        _wc = _load_script("wiki_compile", "wiki")
+        compile_one, compile_all_pending = _wc.compile_one, _wc.compile_all_pending
     except ImportError:
         print("ERROR: wiki_compile.py not found in scripts/wiki/")
         return 1

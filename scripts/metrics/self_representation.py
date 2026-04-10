@@ -54,8 +54,6 @@ from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import _paths  # noqa: F401 — registers all script subdirs on sys.path
 
 DATA_DIR = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))) / "data/self_representation"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -144,7 +142,7 @@ def _encode_competence():
 def _encode_knowledge_density():
     """Compute knowledge density from brain stats."""
     try:
-        from brain import brain
+        from clarvis.brain import brain
         stats = brain.stats()
         collections = stats.get("collections", {})
         total = stats.get("total_memories", 0)
@@ -397,7 +395,7 @@ def check_consistency():
 
     # --- Semantic view: knowledge density per domain (brain recall) ---
     try:
-        from brain import brain
+        from clarvis.brain import brain
         for domain in list(domain_views.keys()):
             results = brain.recall(f"{domain} knowledge", n=5, collections=["clarvis-learnings"])
             if results:
@@ -779,7 +777,7 @@ def broadcast_self_state():
 
     # Store in brain identity — fixed ID so repeated updates upsert in place
     try:
-        from brain import brain
+        from clarvis.brain import brain
         brain.store(
             f"Self-representation update: {summary}",
             collection="clarvis-identity",

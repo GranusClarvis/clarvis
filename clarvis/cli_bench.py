@@ -9,6 +9,8 @@ import sys
 
 import typer
 
+from clarvis._script_loader import load as _load_script
+
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_enable=False)
 
 WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
@@ -16,16 +18,12 @@ WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/
 
 def _get_benchmark():
     """Lazy-import performance_benchmark module."""
-    sys.path.insert(0, f"{WORKSPACE}/scripts")
-    import performance_benchmark
-    return performance_benchmark
+    return _load_script("performance_benchmark", "metrics")
 
 
 def _get_retrieval_benchmark():
     """Lazy-import retrieval_benchmark module."""
-    sys.path.insert(0, f"{WORKSPACE}/scripts")
-    import retrieval_benchmark
-    return retrieval_benchmark
+    return _load_script("retrieval_benchmark", "brain_mem")
 
 
 @app.command()
@@ -165,8 +163,7 @@ def brief(
 
     Replaces: python3 scripts/brief_benchmark.py [--dry-run] [--json]
     """
-    sys.path.insert(0, f"{WORKSPACE}/scripts")
-    import brief_benchmark as bb
+    bb = _load_script("brief_benchmark", "metrics")
 
     result = bb.run_benchmark(dry_run=dry_run)
 
@@ -276,8 +273,7 @@ def retrieval_report(
     as_json: bool = typer.Option(False, "--json", help="Output as JSON."),
 ):
     """Show retrieval quality report — hit rate, dead recall, diagnosis."""
-    sys.path.insert(0, f"{WORKSPACE}/scripts")
-    import retrieval_quality
+    retrieval_quality = _load_script("retrieval_quality", "brain_mem")
     report = retrieval_quality.tracker.report()
     if as_json:
         print(json.dumps(report, indent=2, default=str))

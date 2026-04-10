@@ -10,10 +10,6 @@ Usage:
 import sys
 import os
 
-# Ensure clarvis package is importable
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-import _paths  # noqa: F401 — registers all script subdirs on sys.path
-
 # Re-export everything from clarvis.brain for backward compatibility
 from clarvis.brain import (  # noqa: F401
     # Classes

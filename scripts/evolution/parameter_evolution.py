@@ -26,8 +26,6 @@ import sys
 import time
 from datetime import datetime, timezone
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import _paths  # noqa: F401 — registers all script subdirs on sys.path
 
 DATA_DIR = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "data/parameter_evolution")
 HISTORY_FILE = os.path.join(DATA_DIR, "history.jsonl")

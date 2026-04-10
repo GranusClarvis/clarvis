@@ -258,7 +258,7 @@ def generate_autocurriculum(max_tasks: int = 5) -> list[dict]:
     # Template mapping: failure_class → remediation strategy
     remediation_templates = {
         "timeout": "Break '{verb}' tasks into smaller sub-tasks. Recent {count}x timeouts suggest scope too large. Add incremental checkpoints.",
-        "import_error": "Fix import chain for '{verb}' tasks. {count}x import failures — verify sys.path and dependencies.",
+        "import_error": "Fix import chain for '{verb}' tasks. {count}x import failures — verify import paths and dependencies.",
         "runtime_error": "Add defensive error handling for '{verb}' tasks. {count}x runtime errors — common: {error}",
         "memory_error": "Investigate brain/ChromaDB issues in '{verb}' tasks. {count}x memory errors — check collection health.",
         "permission_error": "Fix file/process permissions for '{verb}' tasks. {count}x permission errors.",

@@ -28,8 +28,6 @@ import sys
 import time
 from datetime import datetime, timezone
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import _paths  # noqa: F401 — registers all script subdirs on sys.path
 
 # ── Thresholds ──────────────────────────────────────────────
 THRESHOLDS = {
@@ -57,7 +55,7 @@ def gate_brain_health(verbose=False):
     """Brain store/recall/stats smoke test."""
     t0 = time.monotonic()
     try:
-        from brain import brain
+        from clarvis.brain import brain
         hc = brain.health_check()
         elapsed = round((time.monotonic() - t0) * 1000, 1)
 

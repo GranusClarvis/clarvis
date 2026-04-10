@@ -28,8 +28,6 @@ import sys
 import time
 from datetime import datetime, timezone
 WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
-sys.path.insert(0, os.path.join(WORKSPACE, "scripts"))
-import _paths  # noqa: F401 — registers all script subdirs on sys.path
 
 EVAL_DIR = os.path.join(WORKSPACE, "data/daily_brain_eval")
 LATEST_FILE = os.path.join(EVAL_DIR, "latest.json")

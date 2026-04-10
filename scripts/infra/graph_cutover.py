@@ -26,9 +26,6 @@ import sys
 from datetime import datetime, timezone
 
 WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
-sys.path.insert(0, os.path.join(WORKSPACE, "scripts"))
-import _paths  # noqa: F401 — registers all script subdirs on sys.path
-sys.path.insert(0, WORKSPACE)
 
 from clarvis.brain.constants import GRAPH_FILE, GRAPH_SQLITE_FILE
 

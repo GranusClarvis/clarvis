@@ -849,9 +849,7 @@ class BrowserAgent:
 def store_browse_result(result: BrowseResult, importance: float = 0.6):
     """Store a browse result in ClarvisDB."""
     try:
-        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        import _paths  # noqa: F401 — registers all script subdirs on sys.path
-        from brain import remember
+        from clarvis.brain import remember
         text = f"Browsed {result.url}: {result.title}\n{result.text[:500]}"
         remember(text, importance=importance)
         logger.info("Stored browse result in brain: %s", result.url)

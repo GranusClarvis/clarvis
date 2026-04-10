@@ -466,9 +466,7 @@ def run_longmemeval(
         Report dict with per-ability scores, aggregate metrics,
         stage diagnostics, and retrieval details.
     """
-    import sys
-    sys.path.insert(0, os.path.join(WORKSPACE, "scripts"))
-    from brain import brain
+    from clarvis.brain import brain
 
     tasks = LONGMEMEVAL_TASKS
     if ability:

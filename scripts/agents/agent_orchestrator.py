@@ -59,12 +59,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from typing import Optional
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import _paths  # noqa: F401 — registers all script subdirs on sys.path
-from agent_lifecycle import (
-    cmd_spawn, cmd_status, cmd_kill, cmd_list,
-    AGENTS_DIR, WORKSPACE
-)
+from clarvis._script_loader import load as _load_script
+_al = _load_script("agent_lifecycle", "agents")
+cmd_spawn, cmd_status, cmd_kill, cmd_list = _al.cmd_spawn, _al.cmd_status, _al.cmd_kill, _al.cmd_list
+AGENTS_DIR, WORKSPACE = _al.AGENTS_DIR, _al.WORKSPACE
 
 # === Configuration ===
 MAX_CONCURRENCY = 3          # Default parallel agents

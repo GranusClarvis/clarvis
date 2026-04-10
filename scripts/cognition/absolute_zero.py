@@ -36,10 +36,6 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-_workspace = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
-if _workspace not in sys.path:
-    sys.path.insert(0, _workspace)
-
 from clarvis.brain import brain
 try:
     from clarvis.memory.episodic_memory import episodic

@@ -23,13 +23,11 @@ from clarvis.brain import (brain, GOALS, PROCEDURES, CONTEXT, LEARNINGS, MEMORIE
     IDENTITY, PREFERENCES, INFRASTRUCTURE)
 
 try:
-    from scripts.brain_mem.retrieval_experiment import smart_recall
-except ImportError:
-    try:
-        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-        from retrieval_experiment import smart_recall
-    except ImportError:
-        smart_recall = None
+    from clarvis._script_loader import load as _load_script
+    _retrieval_experiment = _load_script("retrieval_experiment", "brain_mem")
+    smart_recall = _retrieval_experiment.smart_recall
+except (ImportError, AttributeError):
+    smart_recall = None
 
 # === DATA PATHS ===
 DATA_DIR = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "data/retrieval_benchmark")

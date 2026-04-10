@@ -25,12 +25,9 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 import time
 from datetime import datetime, timezone
 from typing import Any
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "scripts"))
 
 WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 DATA_DIR = os.path.join(WORKSPACE, "data", "benchmarks")
@@ -351,7 +348,7 @@ def run_membench(
     Returns:
         Report dict with per-quadrant and aggregate metrics.
     """
-    from brain import brain
+    from clarvis.brain import brain
 
     tasks = MEMBENCH_TASKS
     if quadrant:

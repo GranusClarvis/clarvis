@@ -9,7 +9,6 @@ data/orchestrator/scoreboard.jsonl.
 
 import json
 import os
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -24,15 +23,9 @@ SCOREBOARD_FILE = SCOREBOARD_DIR / "scoreboard.jsonl"
 def _list_agent_names() -> list[str]:
     """Get all agent names from project_agent.py or by scanning directories."""
     try:
-        # project_agent.py hasn't been migrated to spine yet — import from scripts
-        sys.path.insert(0, str(SCRIPTS))
-        try:
-            from project_agent import cmd_list
-            return [a["name"] if isinstance(a, dict) else a for a in cmd_list()]
-        finally:
-            # Clean up sys.path insertion
-            if str(SCRIPTS) in sys.path:
-                sys.path.remove(str(SCRIPTS))
+        from clarvis._script_loader import load as _load_script
+        pa = _load_script("project_agent", "agents")
+        return [a["name"] if isinstance(a, dict) else a for a in pa.cmd_list()]
     except Exception:
         names = []
         for root in [Path("/opt/clarvis-agents"), Path("~/agents").expanduser()]:

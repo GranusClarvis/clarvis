@@ -64,6 +64,7 @@ fi
 
 PROMPT_FILE="/tmp/claude_prompt_$$.txt"
 OUTPUT_FILE="/tmp/claude_output_$$.txt"
+TASK_FILE="/tmp/claude_task_$$.txt"
 LOGFILE="$CLARVIS_WORKSPACE/memory/cron/spawn_claude.log"
 WORK_DIR="$CLARVIS_WORKSPACE"
 WORKTREE_PATH=""
@@ -137,9 +138,13 @@ acquire_global_claude_lock "$SPAWN_LOGFILE"
 echo "[spawn_claude] Spawned with ${TIMEOUT}s timeout ${CATEGORY_TAG}. Task: ${TASK:0:80}"
 echo "[spawn_claude] Output will be delivered via Telegram when complete."
 
+# Save task text to file — avoids shell quoting issues in the heredoc
+printf '%s' "${TASK:0:120}" > "$TASK_FILE"
+
 # The actual Claude run happens in a detached worker so the parent exec session can die
 # without taking the Claude job down with it.
 WORKER_SCRIPT="/tmp/spawn_claude_worker_$$.sh"
+WORKER_LOG="/tmp/spawn_claude_worker_$$.log"
 cat > "$WORKER_SCRIPT" <<EOF
 #!/bin/bash
 set -euo pipefail
@@ -147,7 +152,7 @@ source "${CLARVIS_WORKSPACE:-$HOME/.openclaw/workspace}"/scripts/cron/cron_env.s
 GLOBAL_LOCK="/tmp/clarvis_claude_global.lock"
 echo "\$\$ \$(date -u +%Y-%m-%dT%H:%M:%S)" > "\$GLOBAL_LOCK"
 cleanup() {
-  rm -f "\$GLOBAL_LOCK" "$WORKER_SCRIPT"
+  rm -f "\$GLOBAL_LOCK" "$WORKER_SCRIPT" "$OUTPUT_FILE" "$TASK_FILE" "$WORKER_LOG"
 }
 trap cleanup EXIT
 unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT 2>/dev/null || true
@@ -175,37 +180,66 @@ engine.end_run('$QUEUE_RUN_ID', outcome='success' if \$RESULT == 0 else ('timeou
 " 2>/dev/null && echo "[\$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] Queue V2: ended run $QUEUE_RUN_ID (\$RESULT)" >> "\$LOGFILE" || true
 fi
 tail -c 2000 "$OUTPUT_FILE" >> "\$LOGFILE" 2>/dev/null || true
+# === TELEGRAM DELIVERY ===
+# Disable errexit for delivery/cleanup — these are best-effort, must not kill the worker
+set +e
 if [ "$SEND_TG" = "true" ]; then
-python3 - "$OUTPUT_FILE" "\$RESULT" "${TASK:0:80}" "$TG_CHAT_ID" "$TG_TOPIC" << 'PYEOF'
+  TASK_SHORT=\$(cat "$TASK_FILE" 2>/dev/null || echo "(task text unavailable)")
+  python3 - "$OUTPUT_FILE" "\$RESULT" "\$TASK_SHORT" "$TG_CHAT_ID" "$TG_TOPIC" "\$LOGFILE" << 'PYEOF'
 import json, urllib.request, urllib.parse, sys, os
-output_file = sys.argv[1]
-exit_code = int(sys.argv[2])
-task_short = sys.argv[3]
-chat_id = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4] else os.environ.get("CLARVIS_TG_CHAT_ID", "")
-topic_id = sys.argv[5] if len(sys.argv) > 5 and sys.argv[5] else ""
-token = os.environ.get("CLARVIS_TG_BOT_TOKEN", "")
-if not token:
-    _oc = os.environ.get('OPENCLAW_HOME', os.path.expanduser('~/.openclaw'))
-    with open(os.path.join(_oc, 'openclaw.json')) as f:
-        config = json.load(f)
-    token = config['channels']['telegram']['botToken']
-status = "TIMEOUT" if exit_code == 124 else ("FAIL" if exit_code != 0 else "OK")
-emoji = "\u23f0" if exit_code == 124 else ("\u274c" if exit_code != 0 else "\u2705")
+
+logfile = sys.argv[6] if len(sys.argv) > 6 else ""
+
+def log(msg):
+    if logfile:
+        try:
+            with open(logfile, "a") as f:
+                from datetime import datetime, timezone
+                ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+                f.write(f"[{ts}] [spawn_claude] {msg}\n")
+        except Exception:
+            pass
+
 try:
-    with open(output_file) as f:
-        content = f.read()
-    summary = content[-1500:] if content else "(no output)"
-except Exception:
-    summary = "(output file missing)"
-msg = f"{emoji} Claude Code Spawn: {status}\n\n\U0001f4cb Task: {task_short}\n\n\U0001f4dd Result:\n{summary}"
-if len(msg) > 4000:
-    msg = msg[:3997] + "..."
-params = {"chat_id": chat_id, "text": msg}
-if topic_id and topic_id != "1":
-    params["message_thread_id"] = topic_id
-data = urllib.parse.urlencode(params)
-req = urllib.request.Request(f"https://api.telegram.org/bot{token}/sendMessage", data=data.encode())
-urllib.request.urlopen(req, timeout=10)
+    output_file = sys.argv[1]
+    exit_code = int(sys.argv[2])
+    task_short = sys.argv[3]
+    chat_id = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4] else os.environ.get("CLARVIS_TG_CHAT_ID", "")
+    topic_id = sys.argv[5] if len(sys.argv) > 5 and sys.argv[5] else ""
+    token = os.environ.get("CLARVIS_TG_BOT_TOKEN", "")
+    if not token:
+        try:
+            _oc = os.environ.get('OPENCLAW_HOME', os.path.expanduser('~/.openclaw'))
+            with open(os.path.join(_oc, 'openclaw.json')) as f:
+                config = json.load(f)
+            token = config['channels']['telegram']['botToken']
+        except Exception as e:
+            log(f"TG SKIP: no token (env empty, openclaw.json failed: {e})")
+            sys.exit(0)
+    if not chat_id:
+        log("TG SKIP: no chat_id configured")
+        sys.exit(0)
+
+    status = "TIMEOUT" if exit_code == 124 else ("FAIL" if exit_code != 0 else "OK")
+    emoji = "\u23f0" if exit_code == 124 else ("\u274c" if exit_code != 0 else "\u2705")
+    try:
+        with open(output_file) as f:
+            content = f.read()
+        summary = content[-1500:] if content else "(no output)"
+    except Exception:
+        summary = "(output file missing)"
+    msg = f"{emoji} Claude Code Spawn: {status}\n\n\U0001f4cb Task: {task_short}\n\n\U0001f4dd Result:\n{summary}"
+    if len(msg) > 4000:
+        msg = msg[:3997] + "..."
+    params = {"chat_id": chat_id, "text": msg}
+    if topic_id and topic_id != "1":
+        params["message_thread_id"] = topic_id
+    data = urllib.parse.urlencode(params)
+    req = urllib.request.Request(f"https://api.telegram.org/bot{token}/sendMessage", data=data.encode())
+    resp = urllib.request.urlopen(req, timeout=15)
+    log(f"TG OK: {status} delivered to chat={chat_id} (HTTP {resp.status})")
+except Exception as e:
+    log(f"TG FAIL: {e}")
 PYEOF
 fi
 if [ "$ISOLATED" = "true" ] && [ -n "$WORKTREE_PATH" ]; then
@@ -213,7 +247,7 @@ if [ "$ISOLATED" = "true" ] && [ -n "$WORKTREE_PATH" ]; then
   STAGED=\$(git -C "$WORKTREE_PATH" diff --stat --cached HEAD 2>/dev/null || echo "")
   if [ -n "\$CHANGES" ] || [ -n "\$STAGED" ]; then
     git -C "$WORKTREE_PATH" add -A 2>/dev/null || true
-    git -C "$WORKTREE_PATH" commit -m "Agent work: ${TASK:0:60}" 2>/dev/null || true
+    git -C "$WORKTREE_PATH" commit -m "Agent work: \$(cat "$TASK_FILE" 2>/dev/null | head -c 60)" 2>/dev/null || true
     echo "[\$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] ISOLATED: changes committed to $WORKTREE_BRANCH" >> "\$LOGFILE"
 
     # === Clone-Test-Verify gate (ROADMAP Phase 3.2) ===
@@ -231,7 +265,7 @@ if [ "$ISOLATED" = "true" ] && [ -n "$WORKTREE_PATH" ]; then
     git -C "$CLARVIS_WORKSPACE" branch -D "$WORKTREE_BRANCH" 2>/dev/null || true
   fi
 fi
-rm -f "$OUTPUT_FILE"
+echo "[\$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] Worker cleanup complete" >> "\$LOGFILE"
 exit \$RESULT
 EOF
 chmod +x "$WORKER_SCRIPT"

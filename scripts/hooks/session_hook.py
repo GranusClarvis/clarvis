@@ -13,10 +13,6 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-_workspace = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
-if _workspace not in sys.path:
-    sys.path.insert(0, _workspace)
-
 from clarvis.brain import brain
 from clarvis.cognition.attention import attention
 
@@ -58,8 +54,9 @@ def session_open(session_key=None):
 
     # 5. Theory of Mind: generate proactive suggestions and push to spotlight
     try:
-        sys.path.insert(0, os.path.join(_workspace, "scripts", "cognition"))
-        from theory_of_mind import tom
+        from clarvis._script_loader import load as _load_script
+        _tom_mod = _load_script("theory_of_mind", "cognition")
+        tom = _tom_mod.tom
         suggestions = tom.generate_suggestions()
         pushed = tom.push_to_spotlight(suggestions)
         if suggestions:

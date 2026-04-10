@@ -41,6 +41,167 @@ TYPE_DIR_MAP = {
     "transcript": "concepts",
 }
 
+# ============================================================
+# Tag Taxonomy (Rule N1 from schema_rules.md)
+# ============================================================
+
+# Valid top-level categories per schema_rules.md
+TAG_CATEGORIES = {"ai", "memory", "cognition", "infra", "project", "research", "web3", "agent"}
+
+# Keyword → category/topic mapping for normalizing raw concepts
+_TAG_KEYWORD_MAP: dict[str, str] = {
+    # ai/
+    "llm": "ai/llm",
+    "large language model": "ai/llm",
+    "transformer": "ai/transformer",
+    "attention mechanism": "ai/attention",
+    "retrieval augmented generation": "ai/retrieval-augmented-generation",
+    "rag": "ai/retrieval-augmented-generation",
+    "embedding": "ai/embeddings",
+    "embeddings": "ai/embeddings",
+    "fine-tuning": "ai/fine-tuning",
+    "finetuning": "ai/fine-tuning",
+    "reinforcement learning": "ai/reinforcement-learning",
+    "machine learning": "ai/machine-learning",
+    "ml": "ai/machine-learning",
+    "neural network": "ai/neural-networks",
+    "deep learning": "ai/deep-learning",
+    "benchmark": "ai/benchmark",
+    "model": "ai/model",
+    "prompt": "ai/prompting",
+    "prompting": "ai/prompting",
+    "diffusion": "ai/diffusion",
+    "vision": "ai/vision",
+    "nlp": "ai/nlp",
+    "natural language": "ai/nlp",
+    # memory/
+    "memory": "memory/general",
+    "episodic memory": "memory/episodic",
+    "episodic": "memory/episodic",
+    "working memory": "memory/working",
+    "long-term memory": "memory/long-term",
+    "retrieval": "memory/retrieval",
+    "knowledge graph": "memory/knowledge-graph",
+    "vector store": "memory/vector-store",
+    "vector database": "memory/vector-store",
+    "chromadb": "memory/chromadb",
+    # cognition/
+    "cognition": "cognition/general",
+    "cognitive architecture": "cognition/architecture",
+    "reasoning": "cognition/reasoning",
+    "metacognition": "cognition/metacognition",
+    "attention": "cognition/attention",
+    "global workspace theory": "cognition/global-workspace-theory",
+    "gwt": "cognition/global-workspace-theory",
+    "consciousness": "cognition/consciousness",
+    "integrated information theory": "cognition/integrated-information-theory",
+    "iit": "cognition/integrated-information-theory",
+    "reflection": "cognition/reflection",
+    # infra/
+    "infrastructure": "infra/general",
+    "deployment": "infra/deployment",
+    "docker": "infra/docker",
+    "kubernetes": "infra/kubernetes",
+    "ci/cd": "infra/ci-cd",
+    "monitoring": "infra/monitoring",
+    "database": "infra/database",
+    "sqlite": "infra/sqlite",
+    "cron": "infra/cron",
+    # project/
+    "clarvis": "project/clarvis",
+    # research/
+    "paper": "research/paper",
+    "survey": "research/survey",
+    "experiment": "research/experiment",
+    "research": "research/general",
+    # web3/
+    "blockchain": "web3/blockchain",
+    "smart contract": "web3/smart-contracts",
+    "defi": "web3/defi",
+    "ethereum": "web3/ethereum",
+    "solidity": "web3/solidity",
+    "monad": "web3/monad",
+    # agent/
+    "agent": "agent/general",
+    "multi-agent": "agent/multi-agent",
+    "tool use": "agent/tool-use",
+    "orchestration": "agent/orchestration",
+    "autonomous": "agent/autonomous",
+}
+
+
+def normalize_tag(raw: str) -> str:
+    """Normalize a raw concept/tag string to category/topic taxonomy format.
+
+    If the tag already matches category/topic format, validate and return it.
+    Otherwise, look up in the keyword map, then fall back to uncategorized/{slug}.
+    """
+    raw = raw.strip()
+    if not raw:
+        return "uncategorized/unknown"
+
+    # Already in category/topic format?
+    if "/" in raw:
+        parts = raw.split("/", 1)
+        cat = parts[0].lower().strip()
+        topic = re.sub(r"[^a-z0-9]+", "-", parts[1].lower().strip()).strip("-")
+        if cat in TAG_CATEGORIES:
+            return f"{cat}/{topic}" if topic else f"{cat}/general"
+        # Unknown category — keep as uncategorized
+        slug = re.sub(r"[^a-z0-9]+", "-", raw.lower()).strip("-")
+        return f"uncategorized/{slug}"
+
+    # Lookup in keyword map (case-insensitive)
+    lower = raw.lower().strip()
+    if lower in _TAG_KEYWORD_MAP:
+        return _TAG_KEYWORD_MAP[lower]
+
+    # Try partial matching: check if any keyword is contained in the raw tag
+    for keyword, tag in _TAG_KEYWORD_MAP.items():
+        if keyword in lower:
+            return tag
+
+    # Fallback: uncategorized/{slug}
+    slug = re.sub(r"[^a-z0-9]+", "-", lower).strip("-")
+    return f"uncategorized/{slug}" if slug else "uncategorized/unknown"
+
+
+def normalize_tags(raw_tags: list[str]) -> list[str]:
+    """Normalize a list of raw tags, deduplicate, return sorted."""
+    seen = set()
+    result = []
+    for raw in raw_tags:
+        norm = normalize_tag(raw)
+        if norm not in seen:
+            seen.add(norm)
+            result.append(norm)
+    return sorted(result)
+
+
+def is_taxonomy_tag(tag: str) -> bool:
+    """Check if a tag follows the category/topic taxonomy."""
+    if "/" not in tag:
+        return False
+    cat = tag.split("/", 1)[0]
+    return cat in TAG_CATEGORIES
+
+
+# ============================================================
+# Confidence Auto-Upgrade (Rule N4)
+# ============================================================
+
+def compute_confidence(sources: list[str], verified_count: int = 0) -> str:
+    """Compute confidence level based on source count.
+
+    Rule N4: 0 sources=low, 1=medium, 2+=medium, 3+ verified=high.
+    """
+    n = len([s for s in sources if s and str(s).strip()])
+    if n == 0:
+        return "low"
+    if verified_count >= 3:
+        return "high"
+    return "medium"
+
 
 # ============================================================
 # Source Registry (read-only access — writes go through wiki_ingest.py)
@@ -231,6 +392,9 @@ def generate_repo_page(record: dict, raw_text: str) -> tuple[str, str]:
     langs_yaml = json.dumps(languages) if languages else '["Unknown"]'
     langs_str = ", ".join(languages) if languages else "Unknown"
 
+    repo_tag = normalize_tag(f"project/{_slugify(title)}")
+    repo_sources = [canonical_url, raw_path]
+    confidence = compute_confidence(repo_sources)
     content = f"""---
 title: "{title}"
 slug: "{slug}"
@@ -239,12 +403,12 @@ created: {TODAY}
 updated: {TODAY}
 status: draft
 tags:
-  - project/{_slugify(title)}
+  - {repo_tag}
 aliases: []
 sources:
   - {canonical_url}
   - {raw_path}
-confidence: medium
+confidence: {confidence}
 repo_url: "{canonical_url}"
 language: {langs_yaml}
 maintained: true
@@ -332,6 +496,9 @@ def generate_paper_page(record: dict, raw_text: str) -> tuple[str, str]:
     authors_yaml = json.dumps(authors[:5]) if authors else '["Unknown"]'
     authors_str = "; ".join(authors[:3]) if authors else "Unknown"
 
+    paper_tag = normalize_tag("research/paper")
+    paper_sources = [raw_path, source_url]
+    confidence = compute_confidence(paper_sources)
     content = f"""---
 title: "{title}"
 slug: "{slug}"
@@ -340,12 +507,12 @@ created: {TODAY}
 updated: {TODAY}
 status: draft
 tags:
-  - research/paper
+  - {paper_tag}
 aliases: []
 sources:
   - {raw_path}
   - {source_url}
-confidence: medium
+confidence: {confidence}
 authors: {authors_yaml}
 year: {year}
 venue: "Unknown"
@@ -414,7 +581,10 @@ def generate_concept_page(record: dict, raw_text: str) -> tuple[str, str]:
             summary = stripped[:500]
             break
 
-    tags_str = "\n".join(f"  - {t}" for t in (concepts[:3] if concepts else ["research/general"]))
+    normalized = normalize_tags(concepts[:5]) if concepts else ["research/general"]
+    tags_str = "\n".join(f"  - {t}" for t in normalized)
+    concept_sources = [raw_path, source_url]
+    confidence = compute_confidence(concept_sources)
 
     content = f"""---
 title: "{title}"
@@ -429,7 +599,7 @@ aliases: []
 sources:
   - {raw_path}
   - {source_url}
-confidence: medium
+confidence: {confidence}
 ---
 
 # {title}
@@ -523,6 +693,14 @@ def update_existing_page(page_info: dict, record: dict, raw_text: str, dry_run: 
 
     # Update the 'updated' date in frontmatter
     existing = re.sub(r'updated: \d{4}-\d{2}-\d{2}', f'updated: {TODAY}', existing, count=1)
+
+    # Recompute confidence based on updated source count (Rule N4)
+    fm = _parse_frontmatter(existing)
+    if fm:
+        all_sources = fm.get("sources", [])
+        new_confidence = compute_confidence(all_sources)
+        existing = re.sub(r'confidence: \w+', f'confidence: {new_confidence}', existing, count=1)
+        changes.append(f"Confidence: {new_confidence}")
 
     if changes and not dry_run:
         page_path.write_text(existing, encoding="utf-8")
