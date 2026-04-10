@@ -333,7 +333,10 @@ def benchmark_episodes():
             "forgotten_memories": stats.get("forgotten_memories", 0),
         }
     except Exception as e:
-        return {"total_episodes": 0, "success_rate": 0.0, "action_accuracy": 0.0, "error": str(e)}
+        # Return empty dict (no keys) so refresh falls back to previous stored values
+        # instead of overwriting with 0.0 which tanks PI
+        print(f"  WARN: benchmark_episodes failed (EpisodicMemory init?): {e}", file=sys.stderr)
+        return {"error": str(e)}
 
 
 def benchmark_context_quality():
@@ -1156,8 +1159,54 @@ def run_refresh_benchmark():
         "code_quality_score":   quality.get("code_quality_score", 0.5),
     })
 
+    # --- PI Anomaly Guard ---
+    # If a core metric drops >50% from previous measurement, retain previous
+    # value with a stale flag rather than silently recording the collapse.
+    # This prevents single bad measurements (e.g. EpisodicMemory init failure
+    # returning 0.0) from tanking PI.
+    _PI_GUARDED_METRICS = {
+        "episode_success_rate": 0.5,
+        "action_accuracy": 0.5,
+        "retrieval_hit_rate": 0.5,
+        "phi": 0.5,
+        "task_quality_score": 0.5,
+    }
+    pi_anomalies = []
+    for metric_key, max_drop_ratio in _PI_GUARDED_METRICS.items():
+        prev_val = prev_metrics.get(metric_key)
+        new_val = metrics.get(metric_key)
+        if prev_val is not None and prev_val > 0.1 and new_val is not None:
+            drop = prev_val - new_val
+            if drop > prev_val * max_drop_ratio:
+                pi_anomalies.append({
+                    "metric": metric_key,
+                    "prev": prev_val,
+                    "new": new_val,
+                    "drop_pct": round(drop / prev_val * 100, 1),
+                })
+                # Retain previous value
+                metrics[metric_key] = prev_val
+                print(f"  PI_ANOMALY: {metric_key} dropped {prev_val:.3f}→{new_val:.3f} "
+                      f"({round(drop / prev_val * 100, 1)}%), retaining previous value",
+                      file=sys.stderr)
+
+    if pi_anomalies:
+        # Log anomalies to alerts file
+        anomaly_record = {
+            "timestamp": timestamp,
+            "type": "PI_ANOMALY",
+            "anomalies": pi_anomalies,
+        }
+        try:
+            with open(ALERTS_FILE, "a") as f:
+                f.write(json.dumps(anomaly_record) + "\n")
+        except Exception:
+            pass  # Best-effort alerting
+
     details = dict(prev_details)
     details.update({"speed": speed, "brain_stats": brain_stats, "episodes": episodes, "quality": quality})
+    if pi_anomalies:
+        details["pi_anomalies"] = pi_anomalies
 
     return _build_report(timestamp, bench_duration, metrics, details, report_type="refresh")
 

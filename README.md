@@ -18,11 +18,11 @@ Most AI agents are stateless — brilliant in the moment, amnesiac by default. C
 
 **What makes it different:**
 
-- **Persistent vector memory** — ChromaDB + SQLite graph, ~3,800 vectors, ~138k edges, all local
-- **Autonomous execution** — 40+ cron jobs: research, reflection, planning, self-benchmarking
-- **Dual-layer architecture** — conscious (chat) + subconscious (background evolution)
-- **Self-measurement** — 8-dimension Performance Index, Brier-scored calibration, CLR benchmarks
-- **Cognitive architecture** — GWT attention, Hebbian learning, episodic memory, working memory buffers
+- **Persistent vector memory** — ChromaDB + SQLite graph, ~3,800 vectors, ~138k edges, all local ([`clarvis/brain/`](clarvis/brain/))
+- **Autonomous execution** — 40+ cron jobs: research, reflection, planning, self-benchmarking ([`scripts/cron/`](scripts/cron/))
+- **Dual-layer architecture** — conscious (chat) + subconscious (background evolution) ([Architecture](https://granusclarvis.github.io/clarvis/architecture.html))
+- **Self-measurement** — 8-dimension Performance Index, Brier-scored calibration, CLR benchmarks ([`clarvis/metrics/`](clarvis/metrics/))
+- **Cognitive architecture** — GWT attention, Hebbian learning, episodic memory, working memory buffers ([`clarvis/cognition/`](clarvis/cognition/))
 
 ---
 
@@ -54,17 +54,52 @@ python3 -m clarvis demo
 
 ---
 
+## Feature Matrix
+
+| Capability | Status | CLI / Entry Point | Source |
+|-----------|--------|-------------------|--------|
+| **Semantic vector memory** | Stable | `clarvis brain search "query"` | [`clarvis/brain/`](clarvis/brain/) |
+| **Relationship graph** | Stable | `clarvis brain health` | SQLite+WAL (~138k edges) |
+| **Episodic memory** | Stable | stored per task execution | [`clarvis/memory/`](clarvis/memory/) |
+| **Procedural memory** | Stable | extracted from episodes | [`clarvis/memory/procedural_memory.py`](clarvis/memory/procedural_memory.py) |
+| **Working memory buffers** | Stable | `scripts/brain_mem/cognitive_workspace.py stats` | [`scripts/brain_mem/cognitive_workspace.py`](scripts/brain_mem/cognitive_workspace.py) |
+| **Hebbian learning** | Stable | automatic on co-activation | [`clarvis/brain/hebbian.py`](clarvis/brain/hebbian.py) |
+| **Autonomous execution** | Stable | 40+ cron jobs via system crontab | [`scripts/cron/`](scripts/cron/) |
+| **Heartbeat pipeline** | Stable | `clarvis heartbeat gate` / `run` | [`clarvis/heartbeat/`](clarvis/heartbeat/) |
+| **Research ingestion** | Stable | 2x/day cron + wiki pipeline | [`scripts/cron/cron_research.sh`](scripts/cron/cron_research.sh) |
+| **Knowledge wiki** | Stable | `clarvis wiki search "topic"` | [`clarvis/wiki/`](clarvis/wiki/) |
+| **GWT attention** | Stable | codelet competition in preflight | [`clarvis/cognition/attention.py`](clarvis/cognition/attention.py) |
+| **Confidence calibration** | Active | Brier score tracking | [`clarvis/cognition/confidence.py`](clarvis/cognition/confidence.py) |
+| **Context assembly** | Stable | DYCP + MMR + token budgets | [`clarvis/context/`](clarvis/context/) |
+| **Performance Index** | Stable | `clarvis bench run` | [`scripts/metrics/performance_benchmark.py`](scripts/metrics/performance_benchmark.py) |
+| **CLR benchmark** | Stable | `clarvis bench clr` | [`scripts/cron/cron_clr_benchmark.sh`](scripts/cron/cron_clr_benchmark.sh) |
+| **Phi metric** | Stable | `clarvis metrics phi` | [`clarvis/metrics/phi.py`](clarvis/metrics/phi.py) |
+| **Self-model** | Stable | `clarvis metrics self-model` | [`clarvis/metrics/`](clarvis/metrics/) |
+| **Task routing** | Stable | 14-dimension complexity scoring | [`clarvis/orch/router.py`](clarvis/orch/router.py) |
+| **Evolution queue** | Stable | `clarvis queue show` | [`clarvis/queue/`](clarvis/queue/) |
+| **Cron orchestration** | Stable | `clarvis cron list` / `status` | [`clarvis/cron/`](clarvis/cron/) |
+| **Cost tracking** | Stable | `clarvis cost report` | [`clarvis/orch/cost_tracker.py`](clarvis/orch/cost_tracker.py) |
+| **Budget alerts** | Stable | `scripts/infra/budget_alert.py --status` | [`scripts/infra/budget_alert.py`](scripts/infra/budget_alert.py) |
+| **Project agents** | Active | `scripts/agents/project_agent.py list` | [`scripts/agents/`](scripts/agents/) |
+| **Browser automation** | Active | dual-engine (Agent-Browser + Playwright) | [`scripts/tools/clarvis_browser.py`](scripts/tools/clarvis_browser.py) |
+| **Telegram messaging** | Stable | `/costs`, `/budget`, `/spawn` bot commands | [`scripts/infra/cost_tracker.py`](scripts/infra/cost_tracker.py) |
+| **Public website** | Active | [granusclarvis.github.io/clarvis](https://granusclarvis.github.io/clarvis/) | [`website/`](website/) |
+| **Status JSON** | Stable | auto-generated daily | [`scripts/infra/generate_status_json.py`](scripts/infra/generate_status_json.py) |
+| **Demo** | Stable | `clarvis demo` (no data needed) | [`clarvis/cli.py`](clarvis/cli.py) |
+
+---
+
 ## What Clarvis Can Do
 
 ### Memory System
 
 | Capability | What It Does | Powered By |
 |-----------|-------------|------------|
-| **Semantic search** | Find memories by meaning, not keywords | ChromaDB + ONNX MiniLM embeddings |
+| **Semantic search** | Find memories by meaning, not keywords | ChromaDB + ONNX MiniLM embeddings ([`clarvis/brain/`](clarvis/brain/)) |
 | **Relationship graph** | Traverse connections between concepts | SQLite+WAL graph (~138k edges) |
-| **Episodic memory** | Recall past task executions with outcomes | Structured episode store |
-| **Procedural memory** | Reusable step-by-step workflows | Extracted procedures collection |
-| **Working memory** | Session-aware buffers with dormant reactivation | Baddeley-inspired cognitive workspace |
+| **Episodic memory** | Recall past task executions with outcomes | [`clarvis/memory/`](clarvis/memory/) |
+| **Procedural memory** | Reusable step-by-step workflows | [`clarvis/memory/procedural_memory.py`](clarvis/memory/procedural_memory.py) |
+| **Working memory** | Session-aware buffers with dormant reactivation | [`scripts/brain_mem/cognitive_workspace.py`](scripts/brain_mem/cognitive_workspace.py) |
 | **Hebbian learning** | Strengthen connections between co-activated memories | STDP-style weight updates |
 | **Memory consolidation** | Dedup, merge, prune, and archive memories | Attention-guided consolidation pipeline |
 
@@ -78,7 +113,7 @@ capture("learned something new")             # Auto-classify and store
 
 ### Autonomous Execution
 
-Clarvis runs 40+ scheduled jobs via system crontab:
+Clarvis runs 40+ scheduled jobs via system crontab ([`scripts/cron/`](scripts/cron/)):
 
 | Schedule | Job | What Happens |
 |----------|-----|-------------|
@@ -96,28 +131,28 @@ Each execution cycle produces a structured **episode** — what was attempted, w
 
 ### Cognitive Architecture
 
-- **GWT Attention** — Global Workspace Theory salience scoring with codelet competition
+- **GWT Attention** — Global Workspace Theory salience scoring with codelet competition ([`clarvis/cognition/attention.py`](clarvis/cognition/attention.py))
 - **Retrieval Gate** — 3-tier routing (SKIP / LIGHT / DEEP) to avoid unnecessary memory queries
-- **Confidence Calibration** — Bayesian calibration with Brier scoring and prediction tracking
-- **Context Assembly** — Dynamic context pruning (DYCP), MMR re-ranking, token budgets per tier
-- **Somatic Markers** — Emotional valence tagging on memories (approach/avoid signals)
-- **Operating Modes** — Full autonomy / Architecture-only / Passive (user-directed)
+- **Confidence Calibration** — Bayesian calibration with Brier scoring ([`clarvis/cognition/confidence.py`](clarvis/cognition/confidence.py))
+- **Context Assembly** — Dynamic context pruning (DYCP), MMR re-ranking, token budgets per tier ([`clarvis/context/`](clarvis/context/))
+- **Somatic Markers** — Emotional valence tagging on memories ([`scripts/brain_mem/somatic_markers.py`](scripts/brain_mem/somatic_markers.py))
+- **Operating Modes** — Full autonomy / Architecture-only / Passive ([`clarvis/runtime/`](clarvis/runtime/))
 
 ### Metrics & Self-Measurement
 
-| Metric | What It Measures | Method |
-|--------|-----------------|--------|
-| **Performance Index** | Composite 0.0–1.0 operational health | 8-dimension weighted score |
-| **Phi** | Integrated information (IIT consciousness proxy) | Graph + memory integration |
-| **CLR** | Architecture health across 7 dimensions | Automated benchmark suite |
-| **BEAM** | 5 extended cognitive abilities | Benchmark adapter |
-| **LongMemEval** | Long-term memory retrieval quality | 5-ability evaluation |
-| **Brier Score** | Prediction calibration accuracy | Rolling 30-day window |
-| **Self-Model** | 7 capability domains with calibrated confidence | Introspective assessment |
+| Metric | What It Measures | CLI | Source |
+|--------|-----------------|-----|--------|
+| **Performance Index** | Composite 0.0–1.0 operational health | `clarvis bench run` | [`scripts/metrics/performance_benchmark.py`](scripts/metrics/performance_benchmark.py) |
+| **Phi** | Integrated information (IIT proxy) | `clarvis metrics phi` | [`clarvis/metrics/phi.py`](clarvis/metrics/phi.py) |
+| **CLR** | Architecture health (7 dimensions) | `clarvis bench clr` | [`scripts/cron/cron_clr_benchmark.sh`](scripts/cron/cron_clr_benchmark.sh) |
+| **BEAM** | 5 extended cognitive abilities | benchmark adapter | [`clarvis/metrics/`](clarvis/metrics/) |
+| **LongMemEval** | Long-term retrieval quality | benchmark adapter | [`clarvis/metrics/`](clarvis/metrics/) |
+| **Brier Score** | Prediction calibration accuracy | rolling 30-day window | [`clarvis/cognition/confidence.py`](clarvis/cognition/confidence.py) |
+| **Self-Model** | 7 capability domains | `clarvis metrics self-model` | [`clarvis/metrics/`](clarvis/metrics/) |
 
 ### Task Routing
 
-14-dimension complexity scorer routes tasks to the optimal model:
+14-dimension complexity scorer routes tasks to the optimal model ([`clarvis/orch/router.py`](clarvis/orch/router.py)):
 
 | Tier | Model | When |
 |------|-------|------|
@@ -129,7 +164,7 @@ Each execution cycle produces a structured **episode** — what was attempted, w
 
 ### Agent Orchestration
 
-Clarvis delegates work to specialized project agents in isolated workspaces:
+Clarvis delegates work to specialized project agents in isolated workspaces ([`scripts/agents/project_agent.py`](scripts/agents/project_agent.py)):
 
 ```
 Clarvis (orchestrator)
@@ -143,7 +178,7 @@ Each agent has its own brain, hard isolation (embedding overlap < 0.05), and ret
 
 ### Browser Automation
 
-Dual-engine browser stack via `scripts/clarvis_browser.py`:
+Dual-engine browser stack ([`scripts/tools/clarvis_browser.py`](scripts/tools/clarvis_browser.py)):
 
 | Engine | Technology | Use Case |
 |--------|-----------|----------|
@@ -171,11 +206,11 @@ Dual-engine browser stack via `scripts/clarvis_browser.py`:
 └─────────────────────────────────────────────────────────┘
 ```
 
-**Conscious layer** — handles direct conversation via Telegram/Discord, reads digests of background work, spawns Claude Code for complex tasks.
+**Conscious layer** — handles direct conversation via Telegram/Discord, reads digests of background work, spawns Claude Code for complex tasks. Gateway config: [`openclaw.json`](../../openclaw.json).
 
-**Subconscious layer** — runs autonomously via system crontab. Morning planning → research → evolution → implementation → evening assessment → reflection. Results surface through `memory/cron/digest.md`.
+**Subconscious layer** — runs autonomously via system crontab ([`scripts/cron/`](scripts/cron/)). Morning planning → research → evolution → implementation → evening assessment → reflection. Results surface through `memory/cron/digest.md`.
 
-**Heartbeat pipeline** — the core autonomous action cycle:
+**Heartbeat pipeline** — the core autonomous action cycle ([`clarvis/heartbeat/`](clarvis/heartbeat/)):
 
 ```
 gate ──► preflight ──► execute ──► postflight
@@ -289,14 +324,14 @@ Tests use a `tmp_brain()` fixture with fast hash-based embeddings (no ONNX neede
 
 **Phase 3 — Autonomy Expansion** (Phases 1–2 complete).
 
-| System | Status |
-|--------|--------|
-| ClarvisDB Brain | Stable — 10 collections, ~3,800 vectors, ~138k graph edges |
-| Heartbeat Pipeline | Stable — 12x/day autonomous execution |
-| Agent Orchestrator | Active — multi-project delegation with isolated workspaces |
-| Metrics & Self-Model | Stable — 7 capability domains, 8-dimension PI |
-| Context Quality | Strong — DYCP compression, MMR re-ranking |
-| Cognitive Workspace | Active — 91% dormant reuse rate |
+| System | Status | Verify |
+|--------|--------|--------|
+| ClarvisDB Brain | Stable — 10 collections, ~3,800 vectors, ~138k graph edges | `clarvis brain health` |
+| Heartbeat Pipeline | Stable — 12x/day autonomous execution | `clarvis heartbeat gate` |
+| Agent Orchestrator | Active — multi-project delegation with isolated workspaces | [`scripts/agents/`](scripts/agents/) |
+| Metrics & Self-Model | Stable — 7 capability domains, 8-dimension PI | `clarvis bench run` |
+| Context Quality | Strong — DYCP compression, MMR re-ranking | [`clarvis/context/`](clarvis/context/) |
+| Cognitive Workspace | Active — 91% dormant reuse rate | [`scripts/brain_mem/cognitive_workspace.py`](scripts/brain_mem/cognitive_workspace.py) |
 
 See [ROADMAP.md](ROADMAP.md) for the full evolution plan.
 

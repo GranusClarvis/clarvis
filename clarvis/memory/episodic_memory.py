@@ -61,13 +61,22 @@ class EpisodicMemory:
             try:
                 with open(EPISODES_FILE) as f:
                     return json.load(f)
-            except (json.JSONDecodeError, ValueError):
-                # Corrupted file — try backup
+            except (json.JSONDecodeError, ValueError) as e:
+                # Corrupted file — preserve for forensics, try backup
+                corrupt_path = EPISODES_FILE.with_suffix(".json.corrupt.bak")
+                try:
+                    import shutil
+                    shutil.copy2(EPISODES_FILE, corrupt_path)
+                except OSError:
+                    pass
+                print(f"[EpisodicMemory] WARNING: episodes.json corrupt ({e}), saved to {corrupt_path.name}", file=sys.stderr)
                 bak = EPISODES_FILE.with_suffix(".json.bak")
                 if bak.exists():
                     try:
                         with open(bak) as f:
-                            return json.load(f)
+                            data = json.load(f)
+                        print(f"[EpisodicMemory] Recovered {len(data)} episodes from .bak", file=sys.stderr)
+                        return data
                     except (json.JSONDecodeError, ValueError):
                         pass
                 return []
