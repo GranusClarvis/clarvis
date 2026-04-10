@@ -273,9 +273,8 @@ ss -tlnp 2>/dev/null | grep -q ":18789 " && GATEWAY_STATUS="up"
 
 # Brain count (fast — just a ChromaDB count)
 BRAIN_COUNT=$(cd "$CLARVIS_WORKSPACE" && python3 -c "
-import sys; sys.path.insert(0, 'scripts')
 try:
-    from brain import get_brain
+    from clarvis.brain import get_brain
     print(get_brain().stats()['total_memories'])
 except Exception:
     print('null')

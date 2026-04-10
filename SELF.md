@@ -113,7 +113,7 @@ cp -r ~/.openclaw/workspace ~/test-workspace
 claude -p "make the changes..." --dangerously-skip-permissions --cwd ~/test-workspace
 
 # Verify the test copy works
-python3 -c "import sys; sys.path.insert(0, '${HOME}/test-workspace/scripts'); from brain import brain; print(brain.stats())"
+CLARVIS_WORKSPACE=~/test-workspace python3 -c "from clarvis.brain import brain; print(brain.stats())"
 
 # If good, apply to live
 cp ~/test-workspace/scripts/changed_file.py ~/.openclaw/workspace/scripts/
@@ -161,16 +161,23 @@ systemctl --user restart openclaw-gateway.service
 - Major structural changes to the workspace
 
 ### Spine Modules (`clarvis/`)
-The `clarvis` package is the consolidated spine — all core subsystems:
-- `clarvis.brain` — ChromaDB vector memory, Hebbian learning, graph, search
-- `clarvis.orch` — Cost tracking, queue engine v2, task routing
-- `clarvis.cognition` — Reasoning chains, metacognition, attention, confidence
-- `clarvis.heartbeat` — Gate, preflight context assembly
-- `clarvis.metrics` — CLR benchmark, ablation testing
-- `clarvis.context` — Adaptive MMR, context compression, assembly
-- `clarvis.learning` — Meta-learning from episodes
+The `clarvis` package is the consolidated spine — all core subsystems (125 .py files, 14 subpackages):
+- `clarvis.brain` (19 files) — ChromaDB vector memory, Hebbian learning, graph, search, hooks
+- `clarvis.metrics` (18 files) — CLR benchmark, ablation testing, self-model
+- `clarvis.cognition` (13 files) — Reasoning chains, metacognition, attention, confidence
+- `clarvis.orch` (11 files) — Cost tracking, queue engine v2, task routing
+- `clarvis.heartbeat` (10 files) — Gate, hooks, runner, adapters
+- `clarvis.context` (10 files) — Adaptive MMR, context compression, assembly, prompt building
+- `clarvis.memory` (9 files) — Episodic, procedural, working memory, consolidation
+- `clarvis.queue` (3 files) — Queue state machine
+- `clarvis.adapters` (3 files) — External integrations
+- `clarvis.wiki` (2 files) — Canonical page model, retrieval
+- `clarvis.runtime` (2 files) — Execution monitor
+- `clarvis.learning` (2 files) — Meta-learning from episodes
+- `clarvis.compat` (2 files) — Backwards compatibility shims
+- Root CLI files (21 files) — `cli.py`, `cli_brain.py`, `cli_wiki.py`, etc.
 
-CLI: `python3 -m clarvis <subcommand>` (brain, heartbeat, cron, queue, cost, bench, maintenance)
+CLI: `python3 -m clarvis <subcommand>` (brain, heartbeat, cron, queue, cost, bench, wiki, maintenance)
 
 ---
 

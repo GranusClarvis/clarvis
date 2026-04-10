@@ -401,7 +401,7 @@ def aggregate_procedures() -> dict:
     """
     try:
         from clarvis.memory.procedural_memory import list_procedures, store_procedure
-        from brain import brain, PROCEDURES
+        from clarvis.brain import brain, PROCEDURES
     except ImportError as e:
         return {"error": f"Import failed: {e}"}
 

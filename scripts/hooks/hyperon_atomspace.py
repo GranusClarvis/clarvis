@@ -568,7 +568,7 @@ class AtomSpace:
         Converts flat graph edges into typed AtomSpace links.
         """
         try:
-            from brain import brain
+            from clarvis.brain import brain
         except ImportError:
             return {"error": "brain not available"}
 

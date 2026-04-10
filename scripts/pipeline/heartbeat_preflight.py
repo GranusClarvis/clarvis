@@ -649,7 +649,7 @@ def _preflight_procedural(result, next_task):
 def _collect_extra_procedures(procs_for_injection, next_task):
     """Find up to 2nd procedure match via brain query for injection."""
     try:
-        from brain import brain as _brain_proc, PROCEDURES as _PROCEDURES
+        from clarvis.brain import brain as _brain_proc, PROCEDURES as _PROCEDURES
         extra = _brain_proc.recall(next_task, collections=[_PROCEDURES], n=3,
                                    caller="preflight_proc_inject")
         existing_ids = {p.get("id") for p in procs_for_injection}
@@ -924,7 +924,7 @@ def _preflight_brain_bridge(result, next_task, _rt, retrieval_tier_info):
 def _brain_legacy_fallback(next_task, _rt):
     """Legacy brain recall fallback when brain_preflight_context unavailable."""
     try:
-        from brain import get_brain, LEARNINGS
+        from clarvis.brain import get_brain, LEARNINGS
         b = get_brain()
         _n = 3 if _rt == "LIGHT_RETRIEVAL" else 5
         learnings = b.recall(next_task, collections=[LEARNINGS], n=_n, min_importance=0.3)
@@ -941,7 +941,7 @@ def _preflight_retrieval_eval(result, next_task, _rt, brain_ctx):
     """§8.6: CRAG-style retrieval eval with corrective retry."""
     try:
         from clarvis.brain.retrieval_eval import adaptive_recall
-        from brain import get_brain as _get_brain_for_retry
+        from clarvis.brain import get_brain as _get_brain_for_retry
         eval_results = brain_ctx.get("raw_results", []) if brain_preflight_context and brain_ctx else []
         if eval_results and isinstance(eval_results, list) and len(eval_results) > 0:
             b_retry = _get_brain_for_retry()
@@ -1024,7 +1024,7 @@ def _run_synaptic_spread(next_task, introspection_text, recalled_memory_ids=None
         recalled_ids = [mid["id"] for mid in recalled_memory_ids if mid.get("id")]
     elif introspect_for_task and introspection_text:
         try:
-            from brain import get_brain, LEARNINGS
+            from clarvis.brain import get_brain, LEARNINGS
             b_syn = get_brain()
             syn_results = b_syn.recall(next_task, collections=[LEARNINGS], n=5, min_importance=0.3)
             if syn_results:
@@ -1038,7 +1038,7 @@ def _run_synaptic_spread(next_task, introspection_text, recalled_memory_ids=None
         return ""
     lines = []
     try:
-        from brain import get_brain
+        from clarvis.brain import get_brain
         b_syn = get_brain()
     except Exception:
         b_syn = None

@@ -218,7 +218,7 @@ def review_and_generate() -> dict:
 
     # Store review in brain
     try:
-        from brain import brain
+        from clarvis.brain import brain
         summary_parts = []
         for domain, stats in domain_stats.items():
             summary_parts.append(f"{domain}: {stats['accuracy']:.0%} ({stats['total']} predictions)")

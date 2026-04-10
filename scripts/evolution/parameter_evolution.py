@@ -299,7 +299,7 @@ def evaluate_config(semantic_w, importance_w, collection_boost, max_dist):
 
     Returns precision@3 and recall.
     """
-    from brain import brain
+    from clarvis.brain import brain
     from retrieval_benchmark import BENCHMARK_PAIRS, check_hit
 
     # Import smart_recall components

@@ -28,7 +28,7 @@ GOLD_FILE = WORKSPACE / "data" / "wiki_eval" / "gold_questions.json"
 HISTORY_FILE = WORKSPACE / "data" / "wiki_eval" / "history.jsonl"
 LATEST_FILE = WORKSPACE / "data" / "wiki_eval" / "latest.json"
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+from clarvis._script_loader import load as _load_script
 
 
 def _load_gold():
@@ -41,7 +41,7 @@ def _load_gold():
 
 def _wiki_retrieve(query: str, max_pages: int = 5) -> dict:
     """Wiki-first retrieval via wiki_retrieval.py."""
-    from wiki_retrieval import wiki_retrieve
+    wiki_retrieve = _load_script("wiki_retrieval", "wiki").wiki_retrieve
     t0 = time.monotonic()
     result = wiki_retrieve(query, max_pages=max_pages, expand_graph=True,
                            include_raw=True, fallback_broad=True)

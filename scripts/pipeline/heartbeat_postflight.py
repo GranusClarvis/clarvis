@@ -24,8 +24,7 @@ import sys
 import time
 from datetime import datetime, timezone
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import _paths  # noqa: F401 — registers all script subdirs on sys.path
+from clarvis._script_loader import load as _load_script
 
 # === LIFECYCLE HOOKS: explicit registration replaces import-time wiring ===
 try:
@@ -50,12 +49,12 @@ except ImportError:
     conf_auto_resolve = None
 
 try:
-    from prediction_resolver import resolve_with_episodes as pred_resolve_enhanced
+    pred_resolve_enhanced = _load_script("prediction_resolver", "cognition").resolve_with_episodes
 except ImportError:
     pred_resolve_enhanced = None
 
 try:
-    from reasoning_chain_hook import close_chain
+    close_chain = _load_script("reasoning_chain_hook", "cognition").close_chain
 except ImportError:
     close_chain = None
 
@@ -927,7 +926,7 @@ def _pf_self_test(ctx, _pf_errors):
             selftest_result["pytest_summary"] = pytest_proc.stdout.strip().split('\n')[-1] if pytest_proc.stdout.strip() else ""
 
             try:
-                from brain import brain as brain_instance
+                from clarvis.brain import brain as brain_instance
                 hc = brain_instance.health_check()
                 selftest_result["brain_healthy"] = hc.get("status") == "healthy"
                 selftest_result["brain_memories"] = hc.get("total_memories", 0)
@@ -969,7 +968,7 @@ def _pf_self_test(ctx, _pf_errors):
 def _store_regression_alert(task, selftest_result, brain_ok):
     """Store regression alert in brain and push P0 fix task."""
     try:
-        from brain import brain as brain_instance
+        from clarvis.brain import brain as brain_instance
         alert = (f"REGRESSION ALERT: Self-test failed after task '{task[:80]}'. "
                  f"pytest_exit={selftest_result.get('pytest_exit')}, brain_ok={brain_ok}. "
                  f"pytest: {selftest_result.get('pytest_summary', 'N/A')}")

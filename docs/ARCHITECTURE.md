@@ -5,7 +5,7 @@
 > See `clarvis/brain/`, `clarvis/orch/cost_tracker.py`, `clarvis/cognition/metacognition.py`.
 
 
-_Updated 2026-03-04. Reflects post-Phase 7 spine reality._
+_Updated 2026-04-10. Reflects post-migration end state (all 9 phases complete)._
 
 ---
 
@@ -35,68 +35,52 @@ User ←→ Telegram/Discord
 The spine is the single source of truth for all core logic. All `scripts/` wrappers delegate here.
 
 ```
-clarvis/
-├── __init__.py                  # Package root, version
-├── __main__.py                  # python3 -m clarvis
-├── cli.py                       # Unified CLI (lazy subcommand loading)
-├── cli_brain.py                 # clarvis brain health|stats|optimize-full|backfill
-├── cli_bench.py                 # clarvis bench run|profile|compare
-├── cli_cron.py                  # clarvis cron autonomous|morning|evolution|...
-├── cli_heartbeat.py             # clarvis heartbeat gate|preflight|full
-├── cli_queue.py                 # clarvis queue next|list|mark-complete
+clarvis/                          # 125 .py files, 14 subpackages
+├── __init__.py, __main__.py      # Package root + entry point
+├── cli.py                        # Unified CLI (lazy subcommand loading)
+├── cli_brain.py, cli_bench.py, cli_cron.py, cli_heartbeat.py,
+│   cli_queue.py, cli_wiki.py, cli_cost.py, cli_maintenance.py  # CLI modules
+├── _script_loader.py             # importlib-based script loader (no sys.path hacks)
 │
-├── brain/                       # Layer 0: Core data (ChromaDB + graph)
-│   ├── __init__.py              # ClarvisBrain (mixin composition), singletons
-│   ├── constants.py             # Paths, collection names, query routing
-│   ├── graph.py                 # GraphMixin: relationships, traversal, edge decay
-│   ├── search.py                # SearchMixin: recall, embedding cache, parallel query
-│   ├── store.py                 # StoreMixin: storage, stats, reconsolidation
-│   └── hooks.py                 # Hook registration (recall scorers/boosters/observers)
-│
-├── memory/                      # Layer 1: Memory systems
-│   ├── episodic_memory.py       # ACT-R episode encoding
-│   ├── procedural_memory.py     # Skill chains
-│   ├── working_memory.py        # Task-focused buffer with decay
-│   ├── hebbian_memory.py        # Co-occurrence learning
-│   └── memory_consolidation.py  # REM consolidation, spaced repetition
-│
-├── cognition/                   # Layer 2: Cognitive processes
-│   ├── attention.py             # GWT spotlight, salience, codelets
-│   ├── confidence.py            # Prediction tracking, Bayesian calibration
-│   └── thought_protocol.py      # ThoughtScript DSL, signal vectors
-│
-├── context/                     # Layer 2: Context management
-│   └── compressor.py            # TF-IDF, MMR reranking, tiered compression
-│
-├── metrics/                     # Layer 2: Observability
-│   ├── benchmark.py             # Performance Index (PI), 8 dimensions
-│   └── self_model.py            # 7 capability domains, self-assessment
-│
-├── heartbeat/                   # Layer 3: Lifecycle orchestration
-│   ├── gate.py                  # Zero-LLM pre-check
-│   ├── hooks.py                 # HookRegistry + HookPhase
-│   ├── runner.py                # Gate execution wrapper
-│   └── adapters.py              # Postflight hook adapters (7 hooks)
-│
-└── orch/                        # Layer 3: Task routing + orchestration
-    ├── router.py                # Task classification + OpenRouter model routing
-    └── task_selector.py         # Attention-based queue scoring
+├── brain/          (19 files)    # Layer 0: ChromaDB + graph (mixin composition)
+├── memory/         (9 files)     # Layer 1: Episodic, procedural, working, Hebbian, consolidation
+├── cognition/      (13 files)    # Layer 2: Attention, confidence, reasoning, obligations, SOAR
+├── context/        (10 files)    # Layer 2: Compression, assembly, prompt building/optimization
+├── metrics/        (18 files)    # Layer 2: PI benchmark, CLR, ablation, self-model
+├── heartbeat/      (10 files)    # Layer 3: Gate, hooks, runner, adapters
+├── orch/           (11 files)    # Layer 3: Cost tracking, queue engine v2, task routing
+├── queue/          (3 files)     # Queue state machine
+├── wiki/           (2 files)     # Canonical page model, retrieval
+├── runtime/        (2 files)     # Execution monitor
+├── learning/       (2 files)     # Meta-learning from episodes
+├── adapters/       (3 files)     # External integrations
+└── compat/         (2 files)     # Backwards compatibility shims
 ```
 
-### `scripts/` — CLI Wrappers + Cron Orchestrators
+### `scripts/` — Operational Entry Points (~104 .py files, 10 subdirectories)
 
-Scripts are **thin wrappers** that delegate to `clarvis.*` spine modules, plus Bash cron orchestrators.
+All scripts import from `clarvis.*` for library code. Cross-script imports use `clarvis._script_loader.load()`.
 
-- **Thin wrappers**: `brain.py`, `task_selector.py`, `task_router.py`, etc. — import from spine, keep CLI `main()`.
+```
+scripts/
+├── agents/       (4 files)     # project_agent, agent_orchestrator, pr_factory, agent_lifecycle
+├── brain_mem/    (10 files)    # brain.py (CLI), brain_hygiene, graph_compaction, retrieval tools
+├── cognition/    (11 files)    # absolute_zero, dream_engine, causal_model, reflection, etc.
+├── cron/         (1 file)      # cron_doctor.py (25 .sh launchers live alongside)
+├── evolution/    (13 files)    # evolution_loop, research_to_queue, task_selector, etc.
+├── hooks/        (12 files)    # session_hook, temporal_self, goal_*, canonical_state, etc.
+├── infra/        (9 files)     # backup, health, install, cost_checkpoint, graph_cutover
+├── metrics/      (14 files)    # dashboard, benchmarks, brain_eval, self_report, etc.
+├── pipeline/     (5 files)     # heartbeat_preflight, postflight, evolution_preflight
+├── tools/        (11 files)    # context_compressor, tool_maker, ast_surgery, browser_agent
+├── wiki/         (13 files)    # wiki_ingest, query, compile, lint, sync, eval, hooks
+└── _paths.py                   # Legacy path utility (used only by test infrastructure)
+```
+
 - **Cron orchestrators**: `cron_autonomous.sh`, `cron_morning.sh`, etc. — spawn Claude Code via `spawn_claude.sh`.
-- **Heartbeat pipeline**: `heartbeat_gate.py` → `heartbeat_preflight.py` → Claude Code → `heartbeat_postflight.py`.
-- **Deprecated**: `scripts/deprecated/` — old modules, not imported, not tested.
+- **Heartbeat pipeline**: `heartbeat_preflight.py` → Claude Code → `heartbeat_postflight.py`.
 
-### `packages/` — Standalone Python Packages
-
-- `clarvis-db` — ChromaDB vector memory with Hebbian learning (has tests)
-- `clarvis-cost` — Cost tracking (estimated + real API)
-- `clarvis-reasoning` — Meta-cognitive reasoning quality assessment
+> **Note:** The `packages/` directory (clarvis-db, clarvis-cost, clarvis-reasoning) was consolidated into the spine and removed (2026-04-03).
 
 ### `tests/` — Test Suite
 
@@ -176,11 +160,7 @@ ChromaDB + ONNX MiniLM embeddings, fully local. 10 collections:
 
 ### Graph Storage
 
-The relationship graph supports dual backends, controlled by `CLARVIS_GRAPH_BACKEND` env var:
-- **JSON** (default): `data/clarvisdb/relationships.json` — loaded into memory, O(n) traversal
-- **SQLite+WAL**: `data/clarvisdb/graph.db` — indexed (B-tree), ACID, hot-backup, O(log n) traversal
-
-When `CLARVIS_GRAPH_BACKEND=sqlite`: reads use SQLite indices, writes dual-write to both JSON and SQLite. Key files:
+The relationship graph uses SQLite+WAL as its sole runtime backend (`data/clarvisdb/graph.db`). Indexed (B-tree), ACID, hot-backup, O(log n) traversal. JSON graph file retained as archival snapshot only. Key files:
 - `clarvis/brain/graph.py` — `GraphMixin` with dual-write logic
 - `clarvis/brain/graph_store_sqlite.py` — `GraphStoreSQLite` (schema, CRUD, decay, import/export)
 - `scripts/graph_migrate_to_sqlite.py` — migration tool (`--safe` for snapshot+verify)
@@ -204,7 +184,7 @@ Graph: 85k+ edges (Hebbian + cross-collection + intra-similar). Recall pipeline:
 7. `clarvis queue status`
 8. `clarvis cron list`
 
-**pytest**: configured via `pyproject.toml` — `testpaths = ["tests", "packages"]`, `norecursedirs` excludes scripts/, data/, etc.
+**pytest**: configured via `pyproject.toml` — `testpaths = ["tests"]`, `norecursedirs` excludes scripts/, data/, etc.
 
 ---
 

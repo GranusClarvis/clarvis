@@ -637,7 +637,7 @@ def store_insights(insights: list, dry_run: bool = False) -> int:
 
     # Layer 1: Load normalized texts from both autonomous-learning AND clarvis-learnings
     try:
-        from brain import LEARNINGS
+        from clarvis.brain import LEARNINGS
     except ImportError:
         LEARNINGS = "clarvis-learnings"
     existing_texts = _load_existing_texts(AUTONOMOUS_LEARNING, LEARNINGS)
@@ -751,7 +751,7 @@ def distill_procedures(session_records: list, dry_run: bool = False) -> int:
 
     Returns count of procedures stored.
     """
-    from brain import PROCEDURES
+    from clarvis.brain import PROCEDURES
 
     # Group successful sessions by task type keywords
     type_groups: dict[str, list] = {}

@@ -37,8 +37,8 @@ DISPOSITION_LOG = os.path.join(WORKSPACE, "data", "research_dispositions.jsonl")
 
 # Wiki bridge: register papers in wiki source registry during scan
 try:
-    sys.path.insert(0, os.path.join(WORKSPACE, "scripts", "wiki"))
-    from wiki_hooks import research_paper_to_wiki
+    from clarvis._script_loader import load as _load_script
+    research_paper_to_wiki = _load_script("wiki_hooks", "wiki").research_paper_to_wiki
 except ImportError:
     research_paper_to_wiki = None
 

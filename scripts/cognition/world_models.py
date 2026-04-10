@@ -963,7 +963,7 @@ if __name__ == "__main__":
 
         # Store summary in brain
         try:
-            from brain import brain
+            from clarvis.brain import brain
             summary = (
                 f"[WORLD MODEL] Trained on {results['n_episodes']} episodes. "
                 f"System momentum: {results['system_state'].get('momentum', '?')}. "

@@ -30,7 +30,6 @@ _brain = None
 def _get_brain():
     global _brain
     if _brain is None:
-        sys.path.insert(0, str(WORKSPACE))
         from clarvis.brain import brain as b
         _brain = b
     return _brain

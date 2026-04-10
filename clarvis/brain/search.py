@@ -566,8 +566,14 @@ class SearchMixin:
             def sort_key(x):
                 dist = x.get("distance")
                 sem = 1.0 / (1.0 + dist) if dist is not None else 0.5
-                imp = x["metadata"].get("importance", 0.5)
-                boost = x["metadata"].get("_attention_boost", 0)
+                try:
+                    imp = float(x["metadata"].get("importance", 0.5))
+                except (TypeError, ValueError):
+                    imp = 0.5
+                try:
+                    boost = float(x["metadata"].get("_attention_boost", 0))
+                except (TypeError, ValueError):
+                    boost = 0
                 base = sem * 0.85 + (imp + boost) * 0.15
                 if rw > 0:
                     return base * (1 - blend) + x.get("_recency_score", 0.0) * blend

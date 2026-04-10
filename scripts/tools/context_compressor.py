@@ -492,7 +492,7 @@ def generate_context_brief(queue_file=QUEUE_FILE):
 
     # Current brain stats (lightweight)
     try:
-        from brain import brain
+        from clarvis.brain import brain
         stats = brain.stats()
         brief_parts.append(f"Brain: {stats['total_memories']} memories, {stats['graph_edges']} edges")
     except Exception:
@@ -1056,7 +1056,7 @@ def _get_brain_size():
     """Get total brain memory count (cached per process)."""
     if not hasattr(_get_brain_size, '_cached'):
         try:
-            from brain import brain
+            from clarvis.brain import brain
             stats = brain.stats()
             _get_brain_size._cached = stats.get('total_memories', 2000)
         except Exception:
@@ -1299,7 +1299,7 @@ def _write_archive(archived_lines, archive_file, stats, keep_days):
         f.write(header)
         f.writelines(archived_lines)
     try:
-        from brain import brain
+        from clarvis.brain import brain
         brain.store(
             f"Archived {stats['archived']} completed tasks from QUEUE.md "
             f"(older than {keep_days} days). Saved {stats['bytes_saved']} bytes.",

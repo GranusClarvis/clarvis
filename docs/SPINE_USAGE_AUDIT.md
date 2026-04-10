@@ -1,4 +1,6 @@
-# Spine & Scripts Architecture Audit
+# ~~Spine & Scripts Architecture Audit~~ — SUPERSEDED
+
+> **SUPERSEDED (2026-04-10):** This audit was a pre-migration snapshot from 2026-03-23. The 10-phase spine migration is now complete. For the current architecture, see `docs/ARCHITECTURE.md` and `docs/SPINE_MIGRATION_COMPLETE.md`. Retained for historical reference only.
 
 > **ERRATA (2026-04-03):** Some classifications in this audit were corrected in `docs/SPINE_CLEANUP_PLAN.md` — 8 scripts initially classified as dead/unused are actually production-wired via heartbeat, and 4 confirmed-dead scripts have since been deleted. See the cleanup plan for authoritative status.
 

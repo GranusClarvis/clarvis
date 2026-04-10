@@ -268,8 +268,9 @@ def operator_drop(path_or_url: str, source_type: str | None = None, title: str |
     """
     try:
         # Import wiki_ingest functions
-        sys.path.insert(0, str(Path(__file__).parent))
-        from wiki_ingest import ingest_file, ingest_url, ingest_repo
+        from clarvis._script_loader import load as _load_script
+        _wi = _load_script("wiki_ingest", "wiki")
+        ingest_file, ingest_url, ingest_repo = _wi.ingest_file, _wi.ingest_url, _wi.ingest_repo
 
         if path_or_url.startswith("http://") or path_or_url.startswith("https://"):
             if "github.com" in path_or_url:

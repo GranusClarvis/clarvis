@@ -4,31 +4,31 @@
     "pending_mode": null
   },
   "queue": {
-    "pending": 92,
+    "pending": 79,
     "in_progress": 0,
-    "done": 1
+    "done": 0
   },
   "benchmarks": {
     "clr": {
-      "clr": 0.725,
+      "clr": 0.853,
       "baseline_clr": 0.19,
-      "value_add": 0.535,
+      "value_add": 0.663,
       "gate_pass": true,
       "dimensions": {
-        "memory_quality": 0.923,
-        "retrieval_precision": 1.0,
-        "prompt_context": 0.508,
-        "task_success": 0.5,
-        "autonomy": 0.411,
-        "efficiency": 0.986,
-        "integration_dynamics": 0.86
+        "memory_quality": 0.919,
+        "retrieval_precision": 0.902,
+        "prompt_context": 0.764,
+        "task_success": 0.836,
+        "autonomy": 0.764,
+        "efficiency": 0.987,
+        "integration_dynamics": 0.857
       },
-      "timestamp": "2026-04-09T05:45:24.334290+00:00"
+      "timestamp": "2026-04-10T05:45:28.246182+00:00"
     },
     "pi": {
-      "pi": 0.7013,
+      "pi": 0.9994,
       "dimensions": 15,
-      "timestamp": "2026-04-09T05:45:01.761896+00:00"
+      "timestamp": "2026-04-10T05:45:01.669815+00:00"
     }
   },
   "phi": {
@@ -37,14 +37,14 @@
   },
   "bloat_score": 0.0,
   "brain": {
-    "total_memories": 2888,
+    "total_memories": 2955,
     "collections": 10
   },
   "episodes": {
-    "success_rate": 0.94,
-    "total": 369,
+    "success_rate": 0.941,
+    "total": 374,
     "breakdown": {
-      "success": 347,
+      "success": 352,
       "soft_failure": 0,
       "failure": 11,
       "timeout": 9
@@ -52,10 +52,6 @@
   },
   "uptime_since": "2026-02-18 12:20:55",
   "recent_completions": [
-    {
-      "tag": "RESEARCH_RETRIEVAL_OPTIMIZATION",
-      "status": "success"
-    },
     {
       "tag": "SPINE_PROXY_REPLACEMENT",
       "status": "success"
@@ -71,7 +67,11 @@
     {
       "tag": "CRON_CANONICAL_ENTRYPOINTS",
       "status": "success"
+    },
+    {
+      "tag": "OSR_GIT_HISTORY_SCRUB",
+      "status": "success"
     }
   ],
-  "updated_at": "2026-04-09T17:10:55.231754+00:00"
+  "updated_at": "2026-04-10T05:50:02.405193+00:00"
 }

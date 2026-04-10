@@ -708,7 +708,7 @@ def save_report(profiles, proposals, test_results=None):
 def store_to_brain(report):
     """Store surgery report as a learning in brain."""
     try:
-        from brain import brain
+        from clarvis.brain import brain
         summary = (
             f"AST self-surgery scan: {report['files_scanned']} files, "
             f"{report['total_lines']} lines, avg quality {report['avg_quality']:.3f}. "

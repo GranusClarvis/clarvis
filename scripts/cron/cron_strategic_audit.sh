@@ -127,9 +127,8 @@ AUDIT_START=$SECONDS
 # === V2 RUN RECORD: START ===
 V2_RUN_ID=$(python3 -c "
 import sys, os
-sys.path.insert(0, os.path.join(os.environ.get('CLARVIS_WORKSPACE', os.getcwd()), 'clarvis', 'queue'))
 try:
-    from engine import QueueEngine
+    from clarvis.orch.queue_engine import QueueEngine
     qe = QueueEngine()
     rid = qe.start_external_run('[STRATEGIC_AUDIT] Deep strategic audit session', source='cron_strategic_audit')
     if rid:
@@ -256,9 +255,8 @@ AUDIT_DURATION=$((SECONDS - AUDIT_START))
 if [ -n "$V2_RUN_ID" ]; then
     python3 -c "
 import sys, os
-sys.path.insert(0, os.path.join(os.environ.get('CLARVIS_WORKSPACE', os.getcwd()), 'clarvis', 'queue'))
 try:
-    from engine import QueueEngine
+    from clarvis.orch.queue_engine import QueueEngine
     qe = QueueEngine()
     outcome = 'success' if $AUDIT_EXIT == 0 else 'failure'
     qe.end_run('$V2_RUN_ID', outcome, exit_code=$AUDIT_EXIT, duration_s=$AUDIT_DURATION)
