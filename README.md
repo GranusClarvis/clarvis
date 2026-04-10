@@ -191,93 +191,105 @@ Dual-engine browser stack ([`scripts/tools/clarvis_browser.py`](scripts/tools/cl
 
 ### Dual-Layer Overview
 
-```
-╔══════════════════════════════════════════════════════════════════╗
-║  CONSCIOUS LAYER (OpenClaw Gateway · port 18789)                ║
-║  ┌──────────┐    ┌──────────┐    ┌──────────────────┐          ║
-║  │ Telegram │◄──►│ Chat LLM │───►│ Claude Code      │          ║
-║  │ Discord  │    │ (M2.5)   │    │ (heavy tasks)    │          ║
-║  └──────────┘    └────┬─────┘    └──────────────────┘          ║
-║                       │ reads digest.md                         ║
-╠═══════════════════════╪════════════════════════════════════════╣
-║  SUBCONSCIOUS LAYER   │  (system crontab · 40+ jobs)           ║
-║                       ▼                                         ║
-║  ┌─────────┐   ┌──────────┐   ┌──────────┐   ┌────────────┐  ║
-║  │ Morning │──►│Evolution │──►│ Research │──►│  Evening   │  ║
-║  │ Planning│   │ 12x/day  │   │  2x/day  │   │ Assessment │  ║
-║  └─────────┘   └────┬─────┘   └──────────┘   └────────────┘  ║
-║                     │                                           ║
-║              ┌──────▼──────┐                                   ║
-║              │  Heartbeat  │ (gate → preflight → exec → post)  ║
-║              │  Pipeline   │                                    ║
-║              └──────┬──────┘                                   ║
-╠═════════════════════╪══════════════════════════════════════════╣
-║  SPINE PACKAGE      │  (clarvis/ · 14 subpackages)             ║
-║  brain · memory · cognition · context · metrics · heartbeat    ║
-║  orch · queue · wiki · runtime · cron · cli                    ║
-╠═════════════════════╪══════════════════════════════════════════╣
-║  STORAGE            ▼  (fully local, no cloud dependencies)    ║
-║  ChromaDB (10 collections) · SQLite graph · Episodes · JSONL   ║
-╚══════════════════════════════════════════════════════════════════╝
+```mermaid
+graph TB
+    subgraph conscious["🔵 CONSCIOUS LAYER — OpenClaw Gateway · port 18789"]
+        TG["Telegram / Discord"] <-->|chat| LLM["Chat LLM (M2.5)"]
+        LLM -->|heavy tasks| CC["Claude Code (Opus)"]
+    end
+
+    subgraph subconscious["🟣 SUBCONSCIOUS LAYER — system crontab · 40+ jobs"]
+        MP["Morning Planning"] --> EV["Evolution (12×/day)"]
+        EV --> RS["Research (2×/day)"]
+        RS --> EA["Evening Assessment"]
+        EV --> HB["Heartbeat Pipeline"]
+        HB -->|"gate → preflight → exec → postflight"| EP["Episodes + Learnings"]
+    end
+
+    subgraph spine["📦 SPINE PACKAGE — clarvis/ · 14 subpackages"]
+        MODS["brain · memory · cognition · context · metrics · heartbeat\north · queue · wiki · runtime · cron · cli"]
+    end
+
+    subgraph storage["💾 STORAGE — fully local, no cloud dependencies"]
+        DB["ChromaDB (10 collections) · SQLite graph · Episodes · JSONL"]
+    end
+
+    LLM -.->|reads digest.md| EP
+    EP --> MODS
+    MODS --> DB
 ```
 
 ### Heartbeat Pipeline (core action cycle)
 
-```
-┌──────────┐     ┌───────────────┐     ┌───────────┐     ┌──────────────┐
-│   GATE   │────►│   PREFLIGHT   │────►│  EXECUTE  │────►│  POSTFLIGHT  │
-│          │     │               │     │           │     │              │
-│ Zero-LLM │     │ GWT attention │     │ Claude    │     │ Encode       │
-│ pre-check│     │ Task picking  │     │ Code runs │     │ episode      │
-│ Exit 0/1 │     │ Context build │     │ the task  │     │ Store learn  │
-│          │     │ Brain search  │     │           │     │ Update PI    │
-│          │     │ Episode recall│     │           │     │ Calibrate    │
-└──────────┘     └───────────────┘     └───────────┘     └──────────────┘
+```mermaid
+graph LR
+    GATE["⛩️ GATE\n─────────\nZero-LLM pre-check\nExit 0 = WAKE\nExit 1 = SKIP"]
+    PRE["🔍 PREFLIGHT\n─────────\nGWT attention scoring\nTask selection\nContext assembly\nBrain search\nEpisode recall"]
+    EXEC["⚡ EXECUTE\n─────────\nClaude Code\nruns the selected\ntask"]
+    POST["📝 POSTFLIGHT\n─────────\nEncode episode\nStore learnings\nUpdate PI\nCalibrate confidence"]
+
+    GATE -->|WAKE| PRE --> EXEC --> POST
+    POST -.->|feeds next cycle| GATE
 ```
 
 ### Memory System
 
-```
-┌──────────────────────────────────────────────────────────┐
-│                    MEMORY SYSTEM                          │
-│                                                          │
-│  ┌─────────────────────┐    ┌─────────────────────────┐ │
-│  │   ChromaDB Brain    │    │    SQLite Graph          │ │
-│  │  10 collections     │◄──►│  ~138k edges             │ │
-│  │  ~3,800 vectors     │    │  Hebbian weights         │ │
-│  │  ONNX MiniLM embed  │    │  STDP learning           │ │
-│  └────────┬────────────┘    └─────────────────────────┘ │
-│           │                                              │
-│  ┌────────▼────────┐  ┌──────────┐  ┌───────────────┐  │
-│  │   Episodic      │  │Procedural│  │   Working      │  │
-│  │   Memory        │  │  Memory  │  │   Memory       │  │
-│  │ (task episodes) │  │ (reusable│  │ (3-tier buffer │  │
-│  │                 │  │  steps)  │  │  active/work/  │  │
-│  │                 │  │          │  │  dormant)      │  │
-│  └─────────────────┘  └──────────┘  └───────────────┘  │
-│                                                          │
-│  ┌──────────────────────────────────────────────────┐   │
-│  │            Cognitive Architecture                 │   │
-│  │  GWT Attention · Confidence Calibration           │   │
-│  │  Reasoning Chains · Somatic Markers               │   │
-│  │  Context Assembly (DYCP + MMR + token budgets)    │   │
-│  └──────────────────────────────────────────────────┘   │
-└──────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    subgraph core["Core Storage"]
+        CHROMA["ChromaDB Brain\n10 collections · ~3,800 vectors\nONNX MiniLM embeddings"]
+        GRAPH["SQLite Graph\n~138k edges\nHebbian weights · STDP learning"]
+        CHROMA <-->|"co-activation\nstrengthening"| GRAPH
+    end
+
+    subgraph types["Memory Types"]
+        EPISODIC["📖 Episodic\nTask execution\nrecords + outcomes"]
+        PROCEDURAL["📋 Procedural\nReusable step-by-step\nworkflows"]
+        WORKING["🧠 Working Memory\n3-tier buffer:\nactive → working → dormant"]
+    end
+
+    subgraph cognitive["Cognitive Architecture"]
+        GWT["GWT Attention"] ~~~ CONF["Confidence\nCalibration"]
+        REASON["Reasoning\nChains"] ~~~ SOMATIC["Somatic\nMarkers"]
+        CTX["Context Assembly — DYCP + MMR + token budgets"]
+    end
+
+    core --> types
+    types --> cognitive
+    cognitive -->|retrieval + assembly| core
 ```
 
 ### Capability Map
 
-```
-AUTONOMOUS OPERATION          MEMORY & LEARNING          SELF-MEASUREMENT
-├─ 40+ cron jobs              ├─ Semantic vector search   ├─ Performance Index (8-dim)
-├─ Heartbeat pipeline         ├─ Graph traversal          ├─ Phi (IIT proxy)
-├─ Evolution queue            ├─ Episodic recall          ├─ CLR benchmark (7-dim)
-├─ Task routing (5 tiers)     ├─ Procedural extraction    ├─ Brier score calibration
-├─ Morning plan → evening     ├─ Hebbian learning         ├─ Self-model (7 domains)
-│  assessment cycle           ├─ Working memory buffers   ├─ BEAM (5 abilities)
-├─ Research ingestion         ├─ Knowledge wiki           └─ LongMemEval
-├─ Implementation sprints     └─ Reasoning synthesis
-└─ Strategic audits
+```mermaid
+mindmap
+  root((Clarvis))
+    🔄 Autonomous Operation
+      40+ cron jobs
+      Heartbeat pipeline
+      Evolution queue
+      Task routing — 5 tiers
+      Daily planning cycle
+      Research ingestion
+      Implementation sprints
+      Strategic audits
+    🧠 Memory & Learning
+      Semantic vector search
+      Graph traversal — 138k edges
+      Episodic recall
+      Procedural extraction
+      Hebbian learning
+      Working memory buffers
+      Knowledge wiki
+      Reasoning synthesis
+    📊 Self-Measurement
+      Performance Index — 8 dims
+      Phi — IIT proxy
+      CLR benchmark — 7 dims
+      Brier score calibration
+      Self-model — 7 domains
+      BEAM — 5 abilities
+      LongMemEval
 ```
 
 **Conscious layer** — handles direct conversation via Telegram/Discord, reads digests of background work, spawns Claude Code for complex tasks.

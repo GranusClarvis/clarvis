@@ -15,7 +15,6 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 - [ ] [REASONING_CAPABILITY_SPRINT] Dedicate 2+ evolution cycles to reasoning chain improvements, deliberate practice on hard problems, or synthesis loop implementation. Last 20 commits are all infrastructure — zero target reasoning depth or novel cognition. (2026-04-10: 15 new challenges seeded, 5 are reasoning-depth focused, 2 are synthesis — pipeline now primed for reasoning work.)
 
 ### SWO / Clarvis Brand Integration
-- [x] [SWO_WEBSITE_HOME_REDESIGN] Redesign `website/static/index.html` toward the SWO style brief while keeping it readable and technical. (2026-04-10: SWO palette, Press Start 2P, constellation icons, gold accent, CRT scanline, footer SWO link)
 - [ ] [SWO_WEBSITE_SECTION_SYSTEM] Create a coherent section system across website pages: hero, capabilities, architecture, benchmarks, repos, roadmap, FAQ/footer. Use consistent cards, spacing, badges, diagrams, and CTA patterns.
 - [ ] [SWO_WEBSITE_COMPARISON_SURFACE] Add a tasteful comparison surface on the site (or README) explaining why Clarvis is not just another chat harness. Focus on architecture and operational differences, not chest-beating.
 - [ ] [SWO_WEBSITE_VISUAL_POLISH_PASS] Apply the SWO brand tokens already planned in `docs/SWO_CLARVIS_REDESIGN_CONCEPT.md`: palette, typography discipline, cards, badges, and subtle motifs. Keep it premium, not noisy.
