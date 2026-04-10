@@ -18,15 +18,15 @@
   <a href="/roadmap">Roadmap</a>
 </nav>
 
-<div class="hero">
+<div class="page-header">
   <h1>Capabilities</h1>
   <p class="subtitle">What Clarvis can do today &mdash; and the subsystem that powers each capability.</p>
 </div>
 
 <!-- Memory System -->
-<section class="section-divider">
+<section class="section">
   <h2>Memory System</h2>
-  <p class="identity">
+  <p class="section-intro">
     Clarvis treats memory as the core primitive. Every interaction, task execution, and insight
     is stored in a hybrid vector-graph system that persists across sessions indefinitely.
     All memory and embeddings are fully local &mdash; no API calls for retrieval.
@@ -116,9 +116,9 @@
 </section>
 
 <!-- Autonomous Execution -->
-<section class="section-divider">
+<section class="section">
   <h2>Autonomous Execution</h2>
-  <p class="identity">
+  <p class="section-intro">
     Clarvis runs 40+ scheduled jobs via system crontab. The <strong>Heartbeat Pipeline</strong>
     is the core autonomous action cycle: a zero-LLM gate check, attention-scored task selection,
     context assembly, execution via Claude Code, then episode encoding back into the brain.
@@ -172,9 +172,9 @@
 </section>
 
 <!-- Cognitive Architecture -->
-<section class="section-divider">
+<section class="section">
   <h2>Cognitive Architecture</h2>
-  <p class="identity">
+  <p class="section-intro">
     Clarvis implements mechanisms from cognitive science: Global Workspace Theory for attention,
     Bayesian confidence calibration, somatic markers for emotional valence, and context relevance
     scoring. These aren't metaphors &mdash; they're working systems that affect runtime behavior.
@@ -247,9 +247,9 @@
 </section>
 
 <!-- Self-Measurement -->
-<section class="section-divider">
+<section class="section">
   <h2>Self-Measurement</h2>
-  <p class="identity">
+  <p class="section-intro">
     Clarvis measures itself across multiple dimensions and uses those measurements to identify
     weaknesses and prioritize improvement. Every benchmark is reproducible and stored as
     structured data for historical comparison.
@@ -320,9 +320,9 @@
 </section>
 
 <!-- Task Routing & Orchestration -->
-<section class="section-divider">
+<section class="section">
   <h2>Task Routing &amp; Orchestration</h2>
-  <p class="identity">
+  <p class="section-intro">
     Not every task needs the same model. Clarvis scores task complexity across 14 dimensions
     and routes to the optimal model for cost and quality. It can also delegate to specialized
     project agents running in isolated workspaces.
@@ -374,9 +374,9 @@
 </section>
 
 <!-- Browser & Tools -->
-<section class="section-divider">
+<section class="section">
   <h2>Browser &amp; Tools</h2>
-  <p class="identity">
+  <p class="section-intro">
     Clarvis can browse the web, interact with pages, and persist sessions across runs.
     The dual-engine stack provides both token efficiency and full browser automation.
   </p>
@@ -405,9 +405,9 @@
 </section>
 
 <!-- Operator Surfaces -->
-<section class="section-divider">
+<section class="section">
   <h2>Operator Surfaces</h2>
-  <p class="identity">
+  <p class="section-intro">
     Clarvis exposes its state through multiple surfaces so the operator always knows what's
     happening. Everything is inspectable &mdash; no black boxes.
   </p>
@@ -455,8 +455,18 @@
   </div>
 </section>
 
+<div class="cta-section">
+  <h2>Under the Hood</h2>
+  <p>See how these capabilities are wired together, or check the live benchmarks.</p>
+  <div class="cta-links">
+    <a href="/architecture" class="btn-ghost">Architecture</a>
+    <a href="/benchmarks" class="btn-ghost">Benchmarks</a>
+    <a href="https://github.com/GranusClarvis/clarvis" class="btn-primary">View on GitHub</a>
+  </div>
+</div>
+
 <footer>
-  <p>Built by <a href="https://github.com/GranusClarvis">Granus Labs</a> &middot; <a href="https://github.com/GranusClarvis/clarvis">Source</a> &middot; MIT License</p>
+  <p><a href="https://starworldorder.com">Star World Order</a> &middot; <a href="https://github.com/GranusClarvis/clarvis">Source</a> &middot; MIT License &middot; Built by <a href="https://github.com/GranusClarvis">Granus Labs</a></p>
 </footer>
 
 </body>

@@ -17,12 +17,14 @@
   <a href="/roadmap">Roadmap</a>
 </nav>
 
-<h1>Benchmarks</h1>
-<p class="subtitle">Live signals from Clarvis's self-evaluation systems.</p>
+<div class="page-header">
+  <h1>Benchmarks</h1>
+  <p class="subtitle">Live signals from Clarvis's self-evaluation systems.</p>
+</div>
 
-<section class="status-section">
+<section class="section">
   <h2>CLR &mdash; Clarvis Learning Rate</h2>
-  <p class="identity">
+  <p class="section-intro">
     CLR measures how effectively Clarvis learns and retains information over time.
     It evaluates retrieval quality, context assembly, reasoning accuracy, and
     operational health across multiple dimensions. The <strong>gate pass</strong> indicates
@@ -60,9 +62,9 @@
   <div id="clr-dimensions" class="status-grid" style="margin-top: var(--space-md);"></div>
 </section>
 
-<section class="status-section">
+<section class="section">
   <h2>PI &mdash; Performance Index</h2>
-  <p class="identity">
+  <p class="section-intro">
     Composite operational health score across 8 dimensions: brain speed, retrieval quality,
     efficiency, accuracy, results quality, bloat control, context quality, and load scaling.
     Range: 0.0 to 1.0.
@@ -84,17 +86,27 @@
   </div>
 </section>
 
-<div class="section-divider">
+<section class="section">
   <h2>Why Gate Pass Matters</h2>
-  <p class="identity">
+  <p class="section-intro">
     Gate pass is a binary quality threshold. When CLR score drops below the gate threshold,
     autonomous evolution pauses and the system enters a maintenance-first mode until quality
     recovers. This prevents the agent from compounding errors during degraded operation.
   </p>
+</section>
+
+<div class="cta-section">
+  <h2>See the Architecture</h2>
+  <p>Understand the systems behind these numbers.</p>
+  <div class="cta-links">
+    <a href="/architecture" class="btn-ghost">Architecture</a>
+    <a href="/capabilities" class="btn-ghost">Capabilities</a>
+    <a href="https://github.com/GranusClarvis/clarvis" class="btn-primary">View on GitHub</a>
+  </div>
 </div>
 
 <footer>
-  <p>Built by <a href="https://github.com/GranusClarvis">Granus Labs</a> &middot; <a href="https://github.com/GranusClarvis/clarvis">Source</a> &middot; MIT License</p>
+  <p><a href="https://starworldorder.com">Star World Order</a> &middot; <a href="https://github.com/GranusClarvis/clarvis">Source</a> &middot; MIT License &middot; Built by <a href="https://github.com/GranusClarvis">Granus Labs</a></p>
 </footer>
 
 <script>

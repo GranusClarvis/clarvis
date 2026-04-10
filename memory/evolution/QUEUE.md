@@ -6,7 +6,6 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 
 ## P0 — Current Sprint
 
-- [ ] [POSTFLIGHT_HOOK_NAMEERROR_2026-04-10] Investigate and fix postflight hook failures reporting `name 'sys' is not defined` for `perf_benchmark`, `latency_budget`, and `structural_health`. The current tracked benchmark files import `sys`, so this likely indicates stale hook resolution, wrong module targets, or loading an untracked script path. Add a reproducible test for the hook registry/module loader path.
 
 ## P1 — This Week
 
@@ -15,7 +14,6 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 - [ ] [REASONING_CAPABILITY_SPRINT] Dedicate 2+ evolution cycles to reasoning chain improvements, deliberate practice on hard problems, or synthesis loop implementation. Last 20 commits are all infrastructure — zero target reasoning depth or novel cognition. (2026-04-10: 15 new challenges seeded, 5 are reasoning-depth focused, 2 are synthesis — pipeline now primed for reasoning work.)
 
 ### SWO / Clarvis Brand Integration
-- [ ] [SWO_WEBSITE_SECTION_SYSTEM] Create a coherent section system across website pages: hero, capabilities, architecture, benchmarks, repos, roadmap, FAQ/footer. Use consistent cards, spacing, badges, diagrams, and CTA patterns.
 - [ ] [SWO_WEBSITE_COMPARISON_SURFACE] Add a tasteful comparison surface on the site (or README) explaining why Clarvis is not just another chat harness. Focus on architecture and operational differences, not chest-beating.
 - [ ] [SWO_WEBSITE_VISUAL_POLISH_PASS] Apply the SWO brand tokens already planned in `docs/SWO_CLARVIS_REDESIGN_CONCEPT.md`: palette, typography discipline, cards, badges, and subtle motifs. Keep it premium, not noisy.
 - [ ] [SWO_WEBSITE_GRAPHICS_AND_DATA] Add maintainable visuals/graphs for key sections: memory architecture, heartbeat loop, benchmark/performance view, and public status. Prefer generated/static assets that can be updated, not hand-wavy mockups.
@@ -49,9 +47,6 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 - [ ] [INSTALL_MD_TIGHTENING] Refactor `docs/INSTALL.md` into the single canonical install guide. Keep install profiles, first-run flow, and support-level summary; remove duplicated deep harness caveats that belong elsewhere.
 - [ ] [SUPPORT_MATRIX_DOC] Create `docs/SUPPORT_MATRIX.md` with brutally clear support levels for each path: standalone, OpenClaw, Clarvis-on-OpenClaw, Hermes, Clarvis-on-Hermes, local-only, and Docker. Use `SUPPORTED / PARTIAL / EXPERIMENTAL / UNSUPPORTED` with evidence links.
 - [ ] [INSTALL_MATRIX_PROMOTION] Promote `docs/INSTALL_MATRIX.md` as the source of truth for validation criteria. Make sure README/install docs link to it whenever claims are made about harness support or fresh-install readiness.
-- [ ] [FRICTION_REPORT_SCOPE_CLEANUP] Keep `docs/INSTALL_FRICTION_REPORT.md`, but tighten it into a rolling engineering blocker report: what broke, why, workaround, fix owner, and release impact. It should not try to be a user guide.
-- [ ] [VALIDATION_REPORTS_FOLDER] Create a dedicated `docs/validation/` area (or equivalent) for dated install/e2e evidence. Move one-off reports like `HERMES_FRESH_INSTALL_REPORT.md` out of the main public docs root.
-- [ ] [HERMES_REPORT_RELOCATION] Re-home `docs/HERMES_FRESH_INSTALL_REPORT.md` into the validation/reports area with a dated filename and short index note. Keep the evidence, reduce root-doc clutter.
 - [ ] [OPENCLAW_RUNTIME_GUIDE_SCOPE] Refocus `docs/USER_GUIDE_OPENCLAW.md` into a runtime/operator guide only: usage, autonomy, commands, troubleshooting, and runtime expectations. Strip install duplication.
 - [ ] [HERMES_RUNTIME_GUIDE_SCOPE] Refocus `docs/USER_GUIDE_HERMES.md` into a runtime/operator guide only, and add a prominent support-status banner at the top if Hermes remains partial/experimental.
 - [ ] [INSTALL_DOC_CROSS_LINKING] Add intentional cross-links between README, INSTALL, SUPPORT_MATRIX, INSTALL_MATRIX, friction report, and harness runtime guides so users can move from marketing surface → install path → validation reality without confusion.
@@ -70,28 +65,24 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 ### Calibration / Brier Score (weakest metric — all-time Brier=0.1148 vs target 0.1, 7-day=0.2400)
 - [ ] [BRIER_7D_REGRESSION_DIAGNOSIS] Diagnose why 7-day Brier (0.2400) is 2x worse than all-time (0.1148). Analyze `data/calibration/predictions.jsonl` for recent mispredictions — identify which task types or confidence bands are miscalibrated. Fix the confidence estimator or recalibration logic.
 - [ ] [CALIBRATION_CONFIDENCE_BAND_AUDIT] Audit confidence bands in heartbeat preflight — current threshold (0.825) may be too coarse. Implement per-domain confidence adjustments based on historical accuracy by task type (research vs code vs maintenance).
-- [ ] [CALIBRATION_BAND_GRANULARITY] Only 2 confidence bands are used system-wide (0.8 and 0.9). Add at least 0.7 and 0.85 bands so the system can express genuine uncertainty instead of rounding everything to one of two values. Update `heartbeat_preflight.py` and `clarvis_confidence.py`.
-- [ ] [CALIBRATION_FEEDBACK_CLOSE_LOOP] Ensure prediction outcomes are written back to `predictions.jsonl` with `resolved: true` field — current records lack this field, making it harder for downstream tools to distinguish resolved from pending. Standardize the schema.
+- [ ] [CALIBRATION_BAND_GRANULARITY] _(Updated 2026-04-10: actual distribution is 0.78-0.91 across 10 distinct values, not "only 0.8 and 0.9" — recalibration is working. Real gap: no values below 0.78 even for novel tasks. Merge with CALIBRATION_LOW_CONFIDENCE_EXPRESSION.)_ Add low-confidence expression (0.65-0.75) for novel/exploratory tasks. Update `heartbeat_preflight.py` and `clarvis/cognition/confidence.py`.
 - [ ] [CALIBRATION_OVERCONFIDENCE_PENALTY] The system predicts 0.88 avg confidence but fails 12.2% of the time — each failure costs (0.88)^2=0.77 in Brier penalty. Add a failure-pattern detector to `clarvis_confidence.py` that lowers confidence for task types with >10% historical failure rate (currently: all types use uniform ~0.88). Use rolling 30-day accuracy by task_type to set per-type base confidence.
 - [ ] [CALIBRATION_LOW_CONFIDENCE_EXPRESSION] The system never emits confidence below 0.8, even for novel or ambiguous tasks. Add explicit low-confidence paths in `heartbeat_preflight.py`: if task has no prior episodes, no matching procedures, or is tagged as exploratory/research, set confidence to 0.65-0.75 instead of the default 0.88.
 - [ ] [REASONING_CHAIN_DEPTH_ENFORCEMENT] Reasoning chains capability is weakest at 0.80. Audit `clarvis/cognition/reasoning.py` and `reasoning_chains.py` for single-step chains — enforce minimum 3-step reasoning for P0/P1 tasks. Add a post-chain quality gate that rejects chains with fewer than 2 meaningful steps and logs the rejection reason.
 - [ ] [CRON_BRIER_CALIBRATION_REPORT] Non-Python: add a weekly cron entry (Sun ~06:45) that runs a shell script computing Brier score (7-day and all-time), confidence band distribution, and failure-rate-by-type — writes a one-page calibration report to `memory/cron/calibration_report.md`. Wire into digest so the conscious layer sees calibration drift early.
 
 ### CLR Autonomy Dimension (critically low: 0.025)
-- [ ] [CLR_AUTONOMY_DIGEST_FRESHNESS] CLR autonomy score is 0.025 because digest age=23.4h. Ensure `cron_report_*.sh` and `digest_writer.py` reliably update `memory/cron/digest.md` — add staleness alert to watchdog if digest is >6h old.
 
 ### Adaptive RAG Pipeline
 - [ ] [RAG_PHASE1_GATE] Implement GATE phase of adaptive RAG — query classification before retrieval. Design: `docs/ADAPTIVE_RAG_PLAN.md`.
 
 ### Cron Schedule Hygiene (non-Python)
-- [ ] [CRON_SCHEDULE_DRIFT_AUDIT] Non-code: diff system crontab against CLAUDE.md schedule table. Fix any drift (missing jobs, wrong times, stale entries). Verify all 30+ entries match documented schedule.
 
 ### Episode Success Rate Recovery & Benchmark Accuracy (2026-04-09 evolution)
 
 ### Task Quality Score (currently 0.35, target 0.70)
 
 ### Cron / Non-Python (2026-04-09 evolution)
-- [ ] [CRON_PI_ANOMALY_ALERT] Non-Python: add a shell check to `cron_pi_refresh.sh` that compares new PI against previous and sends a Telegram alert if PI drops >0.15 in a single refresh. Pattern: `jq '.pi.pi' data/performance_metrics.json`, compare, alert via `curl` to Telegram bot. Prevents silent PI collapses from going unnoticed until the next evolution cycle.
 
 ---
 

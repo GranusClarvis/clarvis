@@ -17,61 +17,65 @@
   <a href="/roadmap">Roadmap</a>
 </nav>
 
-<h1>Repositories</h1>
-<p class="subtitle">Clarvis is split into two repositories with clearly defined boundaries.</p>
-
-<div class="repo-card">
-  <div class="repo-header">
-    <span class="repo-name">clarvis</span>
-    <span class="badge badge-stabilizing">stabilizing</span>
-  </div>
-  <p class="repo-desc">
-    Autonomous cognitive agent runtime &mdash; spine, heartbeat, CLI, metrics, orchestration, and cron infrastructure.
-  </p>
-  <dl class="repo-details">
-    <dt>GitHub</dt>
-    <dd><a href="https://github.com/GranusClarvis/clarvis">github.com/GranusClarvis/clarvis</a></dd>
-    <dt>Contains</dt>
-    <dd>
-      <code>clarvis/</code> spine (brain, heartbeat, cognition, context, metrics, runtime, orchestration),
-      operational scripts, tests, skills, architecture docs, identity docs
-    </dd>
-    <dt>Language</dt>
-    <dd>Python 3.10+</dd>
-    <dt>License</dt>
-    <dd>MIT</dd>
-  </dl>
+<div class="page-header">
+  <h1>Repositories</h1>
+  <p class="subtitle">Clarvis is split into two repositories with clearly defined boundaries.</p>
 </div>
 
-<div class="repo-card">
-  <div class="repo-header">
-    <span class="repo-name">clarvis-db</span>
-    <span class="badge badge-stabilizing">stabilizing</span>
+<section class="section">
+  <div class="repo-card">
+    <div class="repo-header">
+      <span class="repo-name">clarvis</span>
+      <span class="badge badge-stabilizing">stabilizing</span>
+    </div>
+    <p class="repo-desc">
+      Autonomous cognitive agent runtime &mdash; spine, heartbeat, CLI, metrics, orchestration, and cron infrastructure.
+    </p>
+    <dl class="repo-details">
+      <dt>GitHub</dt>
+      <dd><a href="https://github.com/GranusClarvis/clarvis">github.com/GranusClarvis/clarvis</a></dd>
+      <dt>Contains</dt>
+      <dd>
+        <code>clarvis/</code> spine (brain, heartbeat, cognition, context, metrics, runtime, orchestration),
+        operational scripts, tests, skills, architecture docs, identity docs
+      </dd>
+      <dt>Language</dt>
+      <dd>Python 3.10+</dd>
+      <dt>License</dt>
+      <dd>MIT</dd>
+    </dl>
   </div>
-  <p class="repo-desc">
-    Standalone vector memory package &mdash; ChromaDB with Hebbian learning, STDP synapses, and graph relations.
-    Independently useful for any agent system that needs associative memory with biological learning dynamics.
-  </p>
-  <dl class="repo-details">
-    <dt>GitHub</dt>
-    <dd><a href="https://github.com/GranusClarvis/clarvis-db">github.com/GranusClarvis/clarvis-db</a></dd>
-    <dt>Contains</dt>
-    <dd><code>clarvis_db/</code> core library, tests, documented API boundary</dd>
-    <dt>Language</dt>
-    <dd>Python 3.10+</dd>
-    <dt>License</dt>
-    <dd>MIT</dd>
-    <dt>API Surface</dt>
-    <dd>
-      <code>remember()</code>, <code>search()</code>, <code>capture()</code>,
-      retrieval evaluation, retrieval feedback, retrieval tracing
-    </dd>
-  </dl>
-</div>
 
-<div class="boundary-section">
+  <div class="repo-card">
+    <div class="repo-header">
+      <span class="repo-name">clarvis-db</span>
+      <span class="badge badge-stabilizing">stabilizing</span>
+    </div>
+    <p class="repo-desc">
+      Standalone vector memory package &mdash; ChromaDB with Hebbian learning, STDP synapses, and graph relations.
+      Independently useful for any agent system that needs associative memory with biological learning dynamics.
+    </p>
+    <dl class="repo-details">
+      <dt>GitHub</dt>
+      <dd><a href="https://github.com/GranusClarvis/clarvis-db">github.com/GranusClarvis/clarvis-db</a></dd>
+      <dt>Contains</dt>
+      <dd><code>clarvis_db/</code> core library, tests, documented API boundary</dd>
+      <dt>Language</dt>
+      <dd>Python 3.10+</dd>
+      <dt>License</dt>
+      <dd>MIT</dd>
+      <dt>API Surface</dt>
+      <dd>
+        <code>remember()</code>, <code>search()</code>, <code>capture()</code>,
+        retrieval evaluation, retrieval feedback, retrieval tracing
+      </dd>
+    </dl>
+  </div>
+</section>
+
+<section class="section">
   <h2>Extraction Status</h2>
-  <p>
+  <p class="section-intro">
     <code>clarvis-db</code> is being extracted from the main repository into a standalone package.
     The API boundary is documented and stable. Remaining work: CI pipeline, credential scrub, and public README.
   </p>
@@ -97,22 +101,31 @@
       </tr>
     </tbody>
   </table>
-</div>
+</section>
 
-<div class="boundary-section">
+<section class="section">
   <h2>Anti-Sprawl Policy</h2>
-  <p>New packages or repos are only created when all of the following are true:</p>
-  <ul class="policy-list">
+  <p class="section-intro">New packages or repos are only created when all of the following are true:</p>
+  <ul class="clean-list">
     <li>At least 2 independent consumers exist</li>
     <li>Clean, documented API boundary stable for 14+ days</li>
     <li>Meaningful test coverage (behavior, not just imports)</li>
     <li>Independent release cadence from the main repo</li>
     <li>Substantial logic &mdash; not a re-export wrapper</li>
   </ul>
+</section>
+
+<div class="cta-section">
+  <h2>Get the Code</h2>
+  <p>Both repositories are MIT-licensed and open for contribution.</p>
+  <div class="cta-links">
+    <a href="https://github.com/GranusClarvis/clarvis" class="btn-primary">clarvis</a>
+    <a href="https://github.com/GranusClarvis/clarvis-db" class="btn-ghost">clarvis-db</a>
+  </div>
 </div>
 
 <footer>
-  <p>Built by <a href="https://github.com/GranusClarvis">Granus Labs</a> &middot; <a href="https://github.com/GranusClarvis/clarvis">Source</a> &middot; MIT License</p>
+  <p><a href="https://starworldorder.com">Star World Order</a> &middot; <a href="https://github.com/GranusClarvis/clarvis">Source</a> &middot; MIT License &middot; Built by <a href="https://github.com/GranusClarvis">Granus Labs</a></p>
 </footer>
 
 </body>

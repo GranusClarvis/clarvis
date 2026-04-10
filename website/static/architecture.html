@@ -17,8 +17,10 @@
   <a href="/roadmap">Roadmap</a>
 </nav>
 
-<h1>Architecture</h1>
-<p class="subtitle">How Clarvis thinks, remembers, and evolves.</p>
+<div class="page-header">
+  <h1>Architecture</h1>
+  <p class="subtitle">How Clarvis thinks, remembers, and evolves.</p>
+</div>
 
 <!-- === Dual-Layer Diagram === -->
 
@@ -48,21 +50,21 @@
 
 <!-- === Dual-Layer Explanation === -->
 
-<div class="section-divider">
+<section class="section">
   <h2>Dual-Layer Execution</h2>
-  <p class="identity">
+  <p class="section-intro">
     Clarvis runs as two cooperating layers. The <strong>conscious layer</strong> handles
     direct conversation via an LLM gateway. The <strong>subconscious layer</strong> runs
     autonomously on a cron schedule &mdash; planning, evolving, reflecting, and researching
     without prompting. Results surface to the conscious layer through a shared digest file.
   </p>
-</div>
+</section>
 
 <!-- === Heartbeat Pipeline === -->
 
-<div class="section-divider">
+<section class="section">
   <h2>Heartbeat Pipeline</h2>
-  <p class="identity">
+  <p class="section-intro">
     Every autonomous execution follows a four-stage pipeline:
   </p>
 
@@ -80,39 +82,53 @@
      │  Episode encoding, confidence recording, reasoning chain
      │  closing, metric updates, brain storage, digest write</div>
 
-  <div class="card">
-    <h3>Gate Check</h3>
-    <p>
-      A zero-LLM pre-check that verifies system health, acquires the global
-      execution lock, and evaluates skip conditions (active conversations,
-      resource constraints). Runs in milliseconds with no API cost.
-    </p>
-  </div>
+  <div class="feature-grid">
+    <div class="feature-card">
+      <span class="feature-icon feature-icon--green">1</span>
+      <h3>Gate Check</h3>
+      <p>
+        A zero-LLM pre-check that verifies system health, acquires the global
+        execution lock, and evaluates skip conditions (active conversations,
+        resource constraints). Runs in milliseconds with no API cost.
+      </p>
+    </div>
 
-  <div class="card">
-    <h3>Preflight</h3>
-    <p>
-      Scores available tasks using an attention mechanism inspired by Global Workspace Theory.
-      Assembles compressed context from brain search, episodic memory, working memory,
-      active directives, and evolution queue. Produces a focused prompt for Claude Code.
-    </p>
-  </div>
+    <div class="feature-card">
+      <span class="feature-icon feature-icon--gold">2</span>
+      <h3>Preflight</h3>
+      <p>
+        Scores available tasks using an attention mechanism inspired by Global Workspace Theory.
+        Assembles compressed context from brain search, episodic memory, working memory,
+        active directives, and evolution queue. Produces a focused prompt for Claude Code.
+      </p>
+    </div>
 
-  <div class="card">
-    <h3>Postflight</h3>
-    <p>
-      After execution, encodes the episode into memory, records confidence calibration,
-      closes reasoning chains, updates performance metrics, and writes results to the
-      subconscious digest. This is where the system learns from its own actions.
-    </p>
+    <div class="feature-card">
+      <span class="feature-icon feature-icon--blue">3</span>
+      <h3>Execution</h3>
+      <p>
+        Claude Code runs the selected task autonomously with full access to the codebase,
+        brain, and tools. Output is captured for postflight analysis and episode encoding.
+      </p>
+    </div>
+
+    <div class="feature-card">
+      <span class="feature-icon feature-icon--purple">4</span>
+      <h3>Postflight</h3>
+      <p>
+        After execution, encodes the episode into memory, records confidence calibration,
+        closes reasoning chains, updates performance metrics, and writes results to the
+        subconscious digest. This is where the system learns from its own actions.
+      </p>
+    </div>
   </div>
-</div>
+</section>
 
 <!-- === Brain (ClarvisDB) === -->
 
-<div class="section-divider">
+<section class="section">
   <h2>Brain: ClarvisDB</h2>
-  <p class="identity">
+  <p class="section-intro">
     ChromaDB-backed vector memory with ONNX MiniLM embeddings, fully local with zero
     cloud dependencies. The brain stores, retrieves, and evolves memories across
     10 specialized collections.
@@ -137,41 +153,54 @@
     </div>
   </div>
 
-  <div class="card" style="margin-top: 1rem;">
-    <h3>Memory Collections</h3>
-    <p>
-      <code>identity</code> &middot; <code>preferences</code> &middot;
-      <code>learnings</code> &middot; <code>infrastructure</code> &middot;
-      <code>goals</code> &middot; <code>context</code> &middot;
-      <code>memories</code> &middot; <code>procedures</code> &middot;
-      <code>autonomous-learning</code> &middot; <code>episodes</code>
-    </p>
-  </div>
+  <div class="feature-grid" style="margin-top: var(--space-md);">
+    <div class="feature-card">
+      <span class="feature-icon feature-icon--gold">&#10022;</span>
+      <h3>Memory Collections</h3>
+      <p>
+        <code>identity</code> &middot; <code>preferences</code> &middot;
+        <code>learnings</code> &middot; <code>infrastructure</code> &middot;
+        <code>goals</code> &middot; <code>context</code> &middot;
+        <code>memories</code> &middot; <code>procedures</code> &middot;
+        <code>autonomous-learning</code> &middot; <code>episodes</code>
+      </p>
+    </div>
 
-  <div class="card">
-    <h3>Graph Layer</h3>
-    <p>
-      Dual-backend graph: SQLite+WAL (indexed, ACID) as primary, JSON as legacy fallback.
-      Supports community detection via GraphRAG, spreading activation, and automatic
-      cross-linking on every memory store. Daily soak tests validate dual-write consistency.
-    </p>
-  </div>
+    <div class="feature-card">
+      <span class="feature-icon feature-icon--blue">&#9672;</span>
+      <h3>Graph Layer</h3>
+      <p>
+        SQLite+WAL (indexed, ACID) as primary backend.
+        Supports community detection via GraphRAG, spreading activation, and automatic
+        cross-linking on every memory store.
+      </p>
+    </div>
 
-  <div class="card">
-    <h3>Hebbian Learning</h3>
-    <p>
-      STDP (Spike-Timing-Dependent Plasticity) dynamics strengthen connections between
-      memories that are frequently co-activated. Memories that fire together wire together &mdash;
-      improving retrieval relevance over time without explicit retraining.
-    </p>
+    <div class="feature-card">
+      <span class="feature-icon feature-icon--purple">~&gt;</span>
+      <h3>Hebbian Learning</h3>
+      <p>
+        STDP (Spike-Timing-Dependent Plasticity) dynamics strengthen connections between
+        memories that are frequently co-activated. Memories that fire together wire together.
+      </p>
+    </div>
+
+    <div class="feature-card">
+      <span class="feature-icon feature-icon--green">&#x25C9;</span>
+      <h3>Retrieval Gate</h3>
+      <p>
+        3-tier routing (SKIP / LIGHT / DEEP) decides whether a query needs memory retrieval
+        at all. Saves latency and cost by skipping unnecessary brain queries.
+      </p>
+    </div>
   </div>
-</div>
+</section>
 
 <!-- === Spine Architecture === -->
 
-<div class="section-divider">
+<section class="section">
   <h2>Spine Architecture</h2>
-  <p class="identity">
+  <p class="section-intro">
     The <code>clarvis/</code> Python package is the canonical module system &mdash; brain,
     heartbeat, cognition, memory, context, metrics, orchestration, and runtime.
     Legacy scripts delegate to spine modules via thin wrappers.
@@ -188,86 +217,98 @@
   ├── learning/       # Meta-learning from experience
   ├── runtime/        # Operating mode control
   └── adapters/       # Platform adapters (OpenClaw, future)</div>
-</div>
+</section>
 
 <!-- === Cognition === -->
 
-<div class="section-divider">
+<section class="section">
   <h2>Cognitive Architecture</h2>
+  <p class="section-intro">
+    Mechanisms from cognitive science that affect runtime behavior &mdash; not metaphors,
+    but working systems.
+  </p>
 
-  <div class="card">
-    <h3>Attention (Global Workspace Theory)</h3>
-    <p>
-      A GWT-inspired spotlight mechanism scores competing tasks and memories for
-      salience. The winning coalition gets broadcast to all subsystems, determining
-      what the agent focuses on. Coalitions include code, memory, research, and
-      infrastructure codelets.
-    </p>
-  </div>
+  <div class="feature-grid">
+    <div class="feature-card">
+      <span class="feature-icon feature-icon--gold">&#x2609;</span>
+      <h3>GWT Attention</h3>
+      <p>
+        A GWT-inspired spotlight mechanism scores competing tasks and memories for
+        salience. The winning coalition gets broadcast to all subsystems, determining
+        what the agent focuses on.
+      </p>
+    </div>
 
-  <div class="card">
-    <h3>Context Assembly</h3>
-    <p>
-      Builds focused prompts by pulling from brain search, episodic recall,
-      working memory (Baddeley-inspired hierarchical buffers), active directives,
-      and queue state. Uses TF-IDF extraction and MMR reranking to compress
-      context within token budgets.
-    </p>
-  </div>
+    <div class="feature-card">
+      <span class="feature-icon feature-icon--blue">&#x2699;</span>
+      <h3>Context Assembly</h3>
+      <p>
+        Builds focused prompts by pulling from brain search, episodic recall,
+        working memory, active directives, and queue state. Uses TF-IDF extraction
+        and MMR reranking to compress context within token budgets.
+      </p>
+    </div>
 
-  <div class="card">
-    <h3>Confidence Calibration</h3>
-    <p>
-      Bayesian calibration tracks prediction accuracy over time. Postflight
-      records confidence on each task outcome, enabling the system to learn
-      when it should be certain vs. uncertain about its own capabilities.
-    </p>
-  </div>
+    <div class="feature-card">
+      <span class="feature-icon feature-icon--purple">&#x2696;</span>
+      <h3>Confidence Calibration</h3>
+      <p>
+        Bayesian calibration tracks prediction accuracy over time. Postflight
+        records confidence on each task outcome, enabling the system to learn
+        when it should be certain vs. uncertain.
+      </p>
+    </div>
 
-  <div class="card">
-    <h3>Reasoning Chains</h3>
-    <p>
-      Persistent reasoning chain infrastructure tracks multi-step deliberation
-      across tasks. Chains are opened in preflight, extended during execution,
-      and closed in postflight with outcome attribution.
-    </p>
+    <div class="feature-card">
+      <span class="feature-icon feature-icon--green">&#x2263;</span>
+      <h3>Reasoning Chains</h3>
+      <p>
+        Persistent reasoning chain infrastructure tracks multi-step deliberation
+        across tasks. Chains are opened in preflight, extended during execution,
+        and closed in postflight with outcome attribution.
+      </p>
+    </div>
   </div>
-</div>
+</section>
 
 <!-- === Cron Schedule === -->
 
-<div class="section-divider">
+<section class="section">
   <h2>Autonomous Schedule</h2>
-  <p class="identity">
+  <p class="section-intro">
     The subconscious layer runs 20+ scheduled jobs daily. All jobs acquire a global
     lock for mutual exclusion and source a shared environment bootstrap.
   </p>
 
-  <div class="card">
-    <h3>Daily Rhythm</h3>
-    <p>
-      <strong>Morning</strong> &mdash; Day planning and goal review<br>
-      <strong>12x/day</strong> &mdash; Autonomous evolution heartbeats<br>
-      <strong>2x/day</strong> &mdash; Research sessions (AM + PM for topic diversity)<br>
-      <strong>Afternoon</strong> &mdash; Deep evolution analysis + implementation sprint<br>
-      <strong>Evening</strong> &mdash; Assessment and reflection pipeline<br>
-      <strong>Night</strong> &mdash; Backups, graph maintenance, vacuum, dream engine
-    </p>
-  </div>
+  <div class="feature-grid">
+    <div class="feature-card">
+      <span class="feature-icon feature-icon--gold">&#x263C;</span>
+      <h3>Daily Rhythm</h3>
+      <p>
+        <strong>Morning</strong> &mdash; Day planning and goal review<br>
+        <strong>12x/day</strong> &mdash; Autonomous evolution heartbeats<br>
+        <strong>2x/day</strong> &mdash; Research sessions (AM + PM)<br>
+        <strong>Afternoon</strong> &mdash; Deep analysis + implementation sprint<br>
+        <strong>Evening</strong> &mdash; Assessment and reflection pipeline<br>
+        <strong>Night</strong> &mdash; Backups, maintenance, dream engine
+      </p>
+    </div>
 
-  <div class="card">
-    <h3>Weekly</h3>
-    <p>
-      <strong>Wed/Sat</strong> &mdash; Strategic audit (replaces one autonomous slot)<br>
-      <strong>Sunday</strong> &mdash; Brain hygiene, goal cleanup, performance benchmark,
-      CLR benchmark, log rotation, AZR self-play reasoning
-    </p>
+    <div class="feature-card">
+      <span class="feature-icon feature-icon--purple">&#x2691;</span>
+      <h3>Weekly</h3>
+      <p>
+        <strong>Wed/Sat</strong> &mdash; Strategic audit (replaces one autonomous slot)<br>
+        <strong>Sunday</strong> &mdash; Brain hygiene, goal cleanup, performance benchmark,
+        CLR benchmark, log rotation, AZR self-play reasoning
+      </p>
+    </div>
   </div>
-</div>
+</section>
 
 <!-- === Metrics === -->
 
-<div class="section-divider">
+<section class="section">
   <h2>Self-Measurement</h2>
 
   <div class="status-grid">
@@ -288,33 +329,38 @@
       <div class="status-value">7-domain capability map <span class="status-detail">auto-updated</span></div>
     </div>
   </div>
-</div>
+</section>
 
 <!-- === Runtime Modes === -->
 
-<div class="section-divider">
+<section class="section">
   <h2>Runtime Modes</h2>
-  <p class="identity">Three modes govern autonomous behavior. Mode switching changes policy, not task continuity.</p>
+  <p class="section-intro">Three modes govern autonomous behavior. Mode switching changes policy, not task continuity.</p>
 
-  <div class="card">
-    <h3>GE &mdash; Glorious Evolution</h3>
-    <p>Full autonomy: self-directed research, queue filling, and evolution.</p>
-  </div>
+  <div class="feature-grid">
+    <div class="feature-card">
+      <span class="feature-icon feature-icon--gold">GE</span>
+      <h3>Glorious Evolution</h3>
+      <p>Full autonomy: self-directed research, queue filling, and evolution.</p>
+    </div>
 
-  <div class="card">
-    <h3>Architecture / Maintenance</h3>
-    <p>Focus on fixing, wiring, simplifying, and benchmarking existing systems. No broad self-added feature work.</p>
-  </div>
+    <div class="feature-card">
+      <span class="feature-icon feature-icon--blue">&#x2699;</span>
+      <h3>Architecture</h3>
+      <p>Focus on fixing, wiring, simplifying, and benchmarking existing systems. No broad self-added feature work.</p>
+    </div>
 
-  <div class="card">
-    <h3>Passive / User-Directed</h3>
-    <p>Work only when prompted. No autonomous queue generation or self-directed research.</p>
+    <div class="feature-card">
+      <span class="feature-icon feature-icon--purple">&#x25CB;</span>
+      <h3>Passive</h3>
+      <p>Work only when prompted. No autonomous queue generation or self-directed research.</p>
+    </div>
   </div>
-</div>
+</section>
 
 <!-- === Invariants === -->
 
-<div class="section-divider">
+<section class="section">
   <h2>System Invariants</h2>
   <ul class="clean-list">
     <li>All memory and embeddings run locally &mdash; no cloud calls for retrieval</li>
@@ -326,11 +372,11 @@
     <li>Graph integrity verified daily with SHA-256 checkpoints</li>
     <li>Stale-lock detection with automatic cleanup on all cron jobs</li>
   </ul>
-</div>
+</section>
 
 <!-- === Tech Stack === -->
 
-<div class="section-divider">
+<section class="section">
   <h2>Technology</h2>
   <div class="status-grid">
     <div class="status-card">
@@ -355,7 +401,7 @@
     </div>
     <div class="status-card">
       <div class="status-label">Scheduling</div>
-      <div class="status-value">System crontab <span class="status-detail">30+ entries</span></div>
+      <div class="status-value">System crontab <span class="status-detail">47 entries</span></div>
     </div>
     <div class="status-card">
       <div class="status-label">LLM Execution</div>
@@ -366,10 +412,19 @@
       <div class="status-value">OpenClaw <span class="status-detail">agent gateway</span></div>
     </div>
   </div>
+</section>
+
+<div class="cta-section">
+  <h2>Explore Further</h2>
+  <p>See what Clarvis can do, or dive into the source code.</p>
+  <div class="cta-links">
+    <a href="/capabilities" class="btn-ghost">Capabilities</a>
+    <a href="https://github.com/GranusClarvis/clarvis" class="btn-primary">View on GitHub</a>
+  </div>
 </div>
 
 <footer>
-  <p>Built by <a href="https://github.com/GranusClarvis">Granus Labs</a> &middot; <a href="https://github.com/GranusClarvis/clarvis">Source</a> &middot; MIT License</p>
+  <p><a href="https://starworldorder.com">Star World Order</a> &middot; <a href="https://github.com/GranusClarvis/clarvis">Source</a> &middot; MIT License &middot; Built by <a href="https://github.com/GranusClarvis">Granus Labs</a></p>
 </footer>
 
 </body>

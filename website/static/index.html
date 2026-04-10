@@ -37,13 +37,13 @@
 <!-- The Problem / The Approach -->
 <section class="why-section">
   <h2>The Problem</h2>
-  <p class="identity">
+  <p class="section-intro">
     Today's AI agents are brilliant amnesiacs. They solve hard problems in the moment, then
     forget everything the next session. They can't learn from their own mistakes, don't know
     what they're good at, and need to be told the same context over and over.
   </p>
   <h2 style="margin-top: var(--space-xl);">The Approach</h2>
-  <p class="identity">
+  <p class="section-intro">
     Clarvis treats memory as the core primitive, not an afterthought. Every task execution
     produces a structured <strong>episode</strong> &mdash; what was attempted, what happened,
     and what was learned. Episodes feed back into attention scoring, context assembly, and
@@ -104,7 +104,7 @@
 </div>
 
 <!-- Architecture Overview -->
-<section class="section-divider">
+<section class="section">
   <h2>How It Works</h2>
   <div class="arch-diagram">  ┌────────────────────────────────────────┐
   │  Conscious Layer  (LLM + gateway)     │
@@ -124,7 +124,7 @@
   │  Hebbian synapses + episodic memory  │
   │  10 collections, ONNX embeddings     │
   └──────────────────────────────────────┘</div>
-  <p class="identity">
+  <p class="section-intro">
     Each execution cycle follows the <strong>Heartbeat Pipeline</strong>: a zero-LLM gate
     check, attention-scored task selection, context assembly from memory, autonomous execution,
     then episode encoding back into the brain. The agent learns from every action it takes.
@@ -135,7 +135,7 @@
 </section>
 
 <!-- Live Status -->
-<section class="status-section section-divider">
+<section class="status-section section">
   <h2><span class="live-dot"></span>Live Status</h2>
 
   <div class="status-grid">
@@ -184,15 +184,15 @@
 </section>
 
 <!-- Why Follow -->
-<section class="section-divider">
+<section class="section">
   <h2>Why Follow This Project</h2>
-  <p class="identity">
+  <p class="section-intro">
     Clarvis is a live experiment in building an AI system that genuinely accumulates
     knowledge and capability over time. It's not a demo or a weekend project &mdash;
     it's been running autonomously since early 2026, continuously improving itself,
     and everything is open source.
   </p>
-  <p class="identity">
+  <p class="section-intro">
     If you're interested in <strong>agent memory systems</strong>,
     <strong>autonomous agent architectures</strong>, <strong>self-improving AI</strong>,
     or <strong>cognitive science applied to LLMs</strong>, this is a real working system

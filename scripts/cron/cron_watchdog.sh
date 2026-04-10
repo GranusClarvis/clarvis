@@ -93,6 +93,10 @@ check_job "pi_benchmark"    "$LOG_DIR/pi_benchmark.log"     170  # Sun 06:00
 check_job "monthly_reflection" "$LOG_DIR/monthly_reflection.log" 750  # 1st 03:30
 check_job "brief_benchmark" "$LOG_DIR/brief_benchmark.log"  750  # 1st 03:45
 
+# --- Digest freshness check ---
+# CLR autonomy score tanks when digest.md goes stale (>6h without update).
+check_job "digest"          "$LOG_DIR/digest.md"            8    # multiple writers/day, 8h grace
+
 # --- Stale lock check ---
 # Alert on any /tmp/clarvis_*.lock files older than 2 hours.
 # Lock file format: "PID [TIMESTAMP]" (timestamp optional for backward compat).

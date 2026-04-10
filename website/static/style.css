@@ -127,6 +127,7 @@ h2 {
   animation: fadeUp 500ms ease 100ms both;
 }
 
+/* Legacy alias — pages migrating to .section-intro */
 .identity {
   color: var(--text-muted);
   margin-bottom: var(--space-xl);
@@ -452,12 +453,81 @@ dl.details dt {
 }
 dl.details dd { margin-left: 0; }
 
-/* ─── Section divider ─── */
+/* ─── Page Header (sub-pages) ─── */
 
+.page-header {
+  padding: var(--space-xl) 0 var(--space-lg);
+  margin-bottom: var(--space-lg);
+  border-bottom: 1px solid var(--border-subtle);
+  animation: fadeUp 500ms ease;
+}
+.page-header h1 {
+  font-size: 2rem;
+  letter-spacing: -0.02em;
+  margin-bottom: var(--space-xs);
+}
+.page-header .subtitle {
+  margin-bottom: 0;
+}
+
+/* ─── Section (consistent content block) ─── */
+
+.section {
+  margin-top: var(--space-2xl);
+  padding-top: var(--space-xl);
+  border-top: 1px solid var(--border-subtle);
+}
+.section:first-of-type {
+  margin-top: var(--space-lg);
+  padding-top: 0;
+  border-top: none;
+}
+
+/* Legacy alias — existing pages use .section-divider */
 .section-divider {
   margin-top: var(--space-2xl);
   padding-top: var(--space-xl);
   border-top: 1px solid var(--border-subtle);
+}
+
+/* ─── Section intro paragraph ─── */
+
+.section-intro {
+  color: var(--text-muted);
+  margin-bottom: var(--space-xl);
+  font-size: 0.9375rem;
+  line-height: 1.75;
+}
+.section-intro strong {
+  color: var(--text);
+  font-weight: 500;
+}
+
+/* ─── CTA Section (bottom of page, before footer) ─── */
+
+.cta-section {
+  margin-top: var(--space-2xl);
+  padding: var(--space-xl) 0;
+  border-top: 1px solid var(--border-subtle);
+  text-align: center;
+}
+.cta-section h2 {
+  margin-bottom: var(--space-sm);
+}
+.cta-section p {
+  color: var(--text-muted);
+  font-size: 0.9375rem;
+  margin-bottom: var(--space-lg);
+  max-width: 520px;
+  margin-left: auto;
+  margin-right: auto;
+  line-height: 1.7;
+}
+.cta-links {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-md);
+  flex-wrap: wrap;
 }
 
 /* ─── Lists ─── */

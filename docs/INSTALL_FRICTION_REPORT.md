@@ -1,6 +1,7 @@
 # Install Friction Report — 2026-04-06
 
-_What breaks, what needs manual intervention, what must be automated, and what blocks "instant usable" status._
+_Rolling engineering blocker report: what broke, why, workaround, fix owner, and release impact._
+_For install guides, see `INSTALL.md`. For validation evidence, see `validation/`._
 
 Based on: OpenClaw fresh install (2026-04-05), Hermes fresh install (2026-04-05), Clarvis overlay install (2026-04-06), isolated cron e2e tests (2026-04-06), and fresh-install smoke suite (2026-04-06).
 
@@ -10,13 +11,13 @@ Based on: OpenClaw fresh install (2026-04-05), Hermes fresh install (2026-04-05)
 
 **Clarvis overlay install works well.** Core imports, CLI, memory paths, cron wiring, and autonomous pipeline guards all pass in isolation (59/61 smoke checks, 19/19 e2e tests). The friction is concentrated in **harness integration** (OpenClaw/Hermes) and **model selection**, not in Clarvis itself.
 
-| Install Path | Status | Blockers |
-|---|---|---|
-| Clarvis standalone (venv) | **PASS** | None — `pip install -e .` + `setup.sh` works clean |
-| Clarvis + OpenClaw | **PARTIAL** | Auth field mismatch, model OOM, health-check port |
-| Clarvis + Hermes | **PARTIAL** | `hermes-agent` ignores CLI flags, model too slow |
-| Cron/autonomy | **PASS** | All guards work in isolation; cron install is opt-in |
-| Zero-API-key (local only) | **PASS** | Brain/imports/CLI all work; Ollama inference works |
+| Install Path | Status | Blockers | Fix Owner | Release Impact |
+|---|---|---|---|---|
+| Clarvis standalone (venv) | **PASS** | None | — | Ship |
+| Clarvis + OpenClaw | **PARTIAL** | Auth field mismatch, model OOM, health-check port | Upstream (OpenClaw) + Clarvis installer | Blocks "works on OpenClaw" claim |
+| Clarvis + Hermes | **PARTIAL** | `hermes-agent` ignores CLI flags, model too slow | Upstream (Hermes) | Blocks "works on Hermes" claim |
+| Cron/autonomy | **PASS** | All guards work in isolation; cron install is opt-in | — | Ship |
+| Zero-API-key (local only) | **PASS** | Brain/imports/CLI all work; Ollama inference works | — | Ship |
 
 ---
 
@@ -104,14 +105,5 @@ Smoke test `--isolated` mode: CLAUDE.md is WARN because it lives at repo root's 
 
 ---
 
-## Recommended Priority Order
-
-1. **[GUIDED_INSTALLER_FLOW]** — Wrap all manual steps (auth, model, cron, port) into `clarvis install` interactive flow
-2. **[POST_INSTALL_DOCTOR]** — Auto-run `clarvis doctor` after install with PASS/WARN/FAIL per component
-3. **[LOCAL_MODEL_QUICKSTART]** — Document which models actually work on 8/16/32 GB machines
-4. **[CRON_OPT_IN_OUT_INSTALL]** — Make cron an explicit choice with safe defaults
-5. **[USER_GUIDE_OPENCLAW]** — Document the auth field name, port config, and first-run flow
-
----
-
-_Report generated from automated test runs on 2026-04-06. All test artifacts in `scripts/infra/`, `tests/`, and `memory/research/`._
+_Report generated from automated test runs on 2026-04-06. All test artifacts in `scripts/infra/`, `tests/`, and `memory/research/`.
+Priority queue for fixes tracked in `memory/evolution/QUEUE.md` (E2E_* and INSTALL_* items)._
