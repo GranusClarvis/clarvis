@@ -157,6 +157,49 @@ def _get_graph_neighbors(memory_id: str, max_hops: int = 1) -> list[dict]:
     return neighbors[:20]
 
 
+def _wiki_filtered_query(query: str, max_pages: int) -> list[dict]:
+    """Query ChromaDB directly with document filter to find wiki memories only.
+
+    Uses where_document={"$contains": "Wiki:"} to restrict to wiki memories
+    (all wiki summaries start with "Wiki: {title}" from _build_summary).
+    This avoids post-hoc filtering which loses wiki results to non-wiki competition.
+    """
+    brain = _get_brain()
+    col = brain.collections.get("clarvis-learnings")
+    if col is None:
+        return []
+
+    try:
+        results = col.query(
+            query_texts=[query],
+            n_results=max_pages,
+            where_document={"$contains": "Wiki:"},
+            include=["documents", "metadatas", "distances"],
+        )
+    except Exception:
+        return []
+
+    hits = []
+    if not (results.get("ids") and results["ids"][0]):
+        return hits
+
+    for i, mid in enumerate(results["ids"][0]):
+        meta = results["metadatas"][0][i] if results.get("metadatas") else {}
+        distance = results["distances"][0][i] if results.get("distances") else 999
+        slug = None
+        if mid.startswith("wiki_"):
+            slug = mid[5:]
+        elif meta.get("source", "").startswith("wiki/"):
+            slug = meta["source"][5:]
+        if slug:
+            hits.append({
+                "slug": slug,
+                "distance": distance,
+                "memory_id": mid,
+            })
+    return hits
+
+
 def wiki_retrieve(query: str, max_pages: int = 5, expand_graph: bool = True,
                   include_raw: bool = False, fallback_broad: bool = True) -> dict:
     """Wiki-first retrieval: search wiki memories, expand via graph, load evidence.
@@ -171,26 +214,9 @@ def wiki_retrieve(query: str, max_pages: int = 5, expand_graph: bool = True,
     """
     brain = _get_brain()
 
-    # Step 1: Semantic search in brain, targeting wiki memories
-    all_results = brain.recall(query, n=max_pages * 3,
-                               collections=["clarvis-learnings"],
-                               caller="wiki_retrieval")
-
-    # Separate wiki hits from non-wiki
-    wiki_hits = []
-    seen_slugs = set()
-    for r in all_results:
-        if _is_wiki_memory(r):
-            slug = _slug_from_result(r)
-            if slug and slug not in seen_slugs:
-                seen_slugs.add(slug)
-                wiki_hits.append({
-                    "slug": slug,
-                    "distance": r.get("distance", 999),
-                    "memory_id": r.get("id"),
-                })
-                if len(wiki_hits) >= max_pages:
-                    break
+    # Step 1: Wiki-filtered semantic search (direct ChromaDB query with document filter)
+    wiki_hits = _wiki_filtered_query(query, max_pages)
+    seen_slugs = {h["slug"] for h in wiki_hits}
 
     # Enrich wiki hits with page content
     enriched_hits = []

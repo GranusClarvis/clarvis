@@ -1,8 +1,143 @@
 {
-  "version": "1.0",
+  "version": "2.0",
   "description": "External challenge feed for Clarvis evolution loop. Challenges from benchmarks, research papers, and coding tasks that test novel problem-solving beyond self-generated work.",
-  "updated": "2026-03-30",
+  "updated": "2026-04-10",
   "challenges": [
+    {
+      "id": "reasoning-depth-01",
+      "title": "Multi-step logical deduction: solve a constraint satisfaction puzzle",
+      "description": "Implement a solver for a 5-variable constraint satisfaction problem (CSP) using backtracking with arc consistency (AC-3). Create 3 test puzzles of increasing difficulty (easy: 3 constraints, medium: 7, hard: 12). Measure: nodes explored, backtracks, solve time. Compare against brute-force baseline.",
+      "source": "reasoning",
+      "category": "reasoning",
+      "difficulty": "hard",
+      "tags": ["reasoning", "csp", "constraint-satisfaction", "backtracking"]
+    },
+    {
+      "id": "reasoning-depth-02",
+      "title": "Implement analogical reasoning between brain memories",
+      "description": "Build an analogy engine: given a source pair (A:B), find the best matching target pair (C:D) from brain memories. Use embedding offsets (B-A ≈ D-C) to detect structural analogies. Test on 10 analogy queries against ClarvisDB. Report analogy accuracy and whether the engine discovers non-obvious connections.",
+      "source": "reasoning",
+      "category": "reasoning",
+      "difficulty": "hard",
+      "tags": ["reasoning", "analogy", "embeddings"]
+    },
+    {
+      "id": "reasoning-depth-03",
+      "title": "Implement Socratic self-questioning for reasoning chains",
+      "description": "Add a Socratic questioning layer to reasoning_chains.py: after each reasoning step, auto-generate one devil's advocate question ('But what if...?', 'How do we know...?'). If the question reveals a weakness, add a correction step. Test on 5 recent reasoning chains: measure whether Socratic questioning catches logical gaps.",
+      "source": "reasoning",
+      "category": "reasoning",
+      "difficulty": "medium",
+      "tags": ["reasoning", "socratic", "metacognition"]
+    },
+    {
+      "id": "reasoning-depth-04",
+      "title": "Build a causal inference engine for episode outcome analysis",
+      "description": "Given episode data (task, actions, outcome), build a lightweight causal model: which actions most influence success/failure? Use counterfactual analysis (if action X hadn't happened, would outcome change?). Apply to last 50 episodes. Report top 5 causal factors for success and failure.",
+      "source": "reasoning",
+      "category": "reasoning",
+      "difficulty": "hard",
+      "tags": ["reasoning", "causal-inference", "episodes"]
+    },
+    {
+      "id": "reasoning-depth-05",
+      "title": "Implement argument mapping for wiki claims",
+      "description": "Build an argument mapper: given a wiki page with Key Claims, extract the argument structure (premises → conclusion, supports/rebuts relations). Output a directed graph of arguments. Visualize as ASCII art. Test on 3 wiki pages. Identify unsupported claims (conclusions without premises).",
+      "source": "reasoning",
+      "category": "reasoning",
+      "difficulty": "medium",
+      "tags": ["reasoning", "argumentation", "wiki"]
+    },
+    {
+      "id": "synthesis-01",
+      "title": "Cross-domain knowledge synthesis: find unexpected connections",
+      "description": "Build a synthesis engine: take 2 random wiki pages from different domains, compute their embedding centroid, search the brain for memories near that centroid, and write a synthesis note connecting the domains. Test 5 random pairs. Score each synthesis on novelty (not obvious from either page alone) and coherence.",
+      "source": "research",
+      "category": "synthesis",
+      "difficulty": "hard",
+      "tags": ["synthesis", "cross-domain", "creativity"]
+    },
+    {
+      "id": "coding-challenge-06",
+      "title": "Implement a persistent skip list with O(log n) search",
+      "description": "Build a persistent (immutable) skip list data structure supporting insert, delete, and search in O(log n). Each modification returns a new version while sharing structure with previous versions. Include a version history that allows querying any past state. Benchmark against Python's sorted containers.",
+      "source": "coding",
+      "category": "data-structures",
+      "difficulty": "hard",
+      "tags": ["data-structure", "persistence", "skip-list"]
+    },
+    {
+      "id": "coding-challenge-07",
+      "title": "Build a minimal theorem prover for propositional logic",
+      "description": "Implement a resolution-based theorem prover for propositional logic: parse formulas (AND, OR, NOT, IMPLIES), convert to CNF, apply resolution rule until proven or saturated. Support: modus ponens, contradiction detection, proof trace output. Test with 10 theorems from classical logic.",
+      "source": "coding",
+      "category": "logic",
+      "difficulty": "hard",
+      "tags": ["logic", "theorem-prover", "resolution"]
+    },
+    {
+      "id": "coding-challenge-08",
+      "title": "Implement Levin search for small program synthesis",
+      "description": "Build a Levin universal search: enumerate programs in a minimal language (arithmetic + conditionals + loops), ordered by length, with runtime budget proportional to 2^(-length). Synthesize programs for 5 input-output specifications (e.g., double, factorial, fibonacci). Measure: programs explored, time to solution.",
+      "source": "coding",
+      "category": "program-synthesis",
+      "difficulty": "hard",
+      "tags": ["program-synthesis", "levin-search", "ait"]
+    },
+    {
+      "id": "bench-calibration-01",
+      "title": "Build a calibration curve plotter from prediction history",
+      "description": "Read data/calibration/predictions.jsonl, bin predictions by confidence (0.5-0.6, 0.6-0.7, ..., 0.9-1.0), compute actual success rate per bin. Plot as ASCII calibration curve. Compute ECE (Expected Calibration Error). Identify the most miscalibrated bin and suggest a correction factor.",
+      "source": "benchmark",
+      "category": "calibration",
+      "difficulty": "medium",
+      "tags": ["calibration", "brier", "evaluation"]
+    },
+    {
+      "id": "bench-memory-01",
+      "title": "Implement a memory consolidation quality test",
+      "description": "Test whether brain.optimize_full() actually improves retrieval quality. Methodology: (1) baseline retrieval on 20 gold queries, (2) run optimize_full, (3) re-test same queries. Measure: nDCG change, latency change, memory count change. Report whether consolidation helps or hurts.",
+      "source": "benchmark",
+      "category": "memory",
+      "difficulty": "medium",
+      "tags": ["memory", "consolidation", "evaluation"]
+    },
+    {
+      "id": "coding-challenge-09",
+      "title": "Implement a regex engine from scratch (Thompson NFA)",
+      "description": "Build a regex engine using Thompson's NFA construction: support concatenation, alternation (|), Kleene star (*), plus (+), optional (?), and character classes [a-z]. Convert regex to NFA, simulate NFA for matching. Test against 20 patterns with known match/no-match inputs. Compare correctness against Python re module.",
+      "source": "coding",
+      "category": "compilers",
+      "difficulty": "hard",
+      "tags": ["regex", "nfa", "compiler"]
+    },
+    {
+      "id": "reasoning-meta-01",
+      "title": "Implement a confidence calibration feedback loop",
+      "description": "Build a feedback loop: after each episode, compare predicted confidence vs actual outcome. Maintain a rolling accuracy-by-confidence-band table. When a band is consistently overconfident (predicted 0.9 but actual 0.7), auto-adjust future predictions downward. Integrate with clarvis_confidence.py. Test with historical data.",
+      "source": "reasoning",
+      "category": "metacognition",
+      "difficulty": "medium",
+      "tags": ["calibration", "metacognition", "confidence"]
+    },
+    {
+      "id": "synthesis-02",
+      "title": "Implement contradiction detection across wiki pages",
+      "description": "Build a contradiction detector: for each pair of wiki pages that share a tag, compare their Key Claims via embedding similarity. Flag pairs where claims are semantically similar but contain negation or opposing terms. Test across all current wiki pages. Report found contradictions with evidence.",
+      "source": "research",
+      "category": "synthesis",
+      "difficulty": "medium",
+      "tags": ["synthesis", "contradiction", "wiki", "consistency"]
+    },
+    {
+      "id": "coding-challenge-10",
+      "title": "Implement A* search with multiple heuristics on a graph puzzle",
+      "description": "Build A* search for the 15-puzzle (4x4 sliding tile puzzle). Implement 3 heuristics: Manhattan distance, linear conflict, and pattern database (3x3 corner). Compare: nodes expanded, solution length, time. Demonstrate that better heuristics dramatically reduce search space. Solve 5 random instances.",
+      "source": "coding",
+      "category": "search",
+      "difficulty": "hard",
+      "tags": ["search", "a-star", "heuristics", "puzzle"]
+    },
     {
       "id": "bench-retrieval-01",
       "title": "Implement BEIR-style retrieval benchmark for ClarvisDB",

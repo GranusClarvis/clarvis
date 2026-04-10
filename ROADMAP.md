@@ -46,24 +46,24 @@ Clarvis should grow into:
 - likely first extraction candidate: **ClarvisDB** (vector memory with graph associations)
 - a public website presenting Clarvis, linked repos, current work, and benchmarks
 
-## Current State (2026-04-06)
+## Current State (2026-04-10)
 
 | Capability | Status | Summary |
 |-----------|--------|---------|
-| **Brain (ClarvisDB)** | 98% | memory_quality=0.97, retrieval_precision=1.00 |
-| **Session Continuity** | 78% | autonomy=0.78 |
-| **Heartbeat Evolution** | 78% | task_success=0.78 |
-| **Self-Awareness** | 88% | Phi=0.729 |
-| **Task Tracking** | 77% | task_success=0.78, prompt_context=0.74 |
+| **Brain (ClarvisDB)** | 91% | memory_quality=0.92, retrieval_precision=0.90 |
+| **Session Continuity** | 76% | autonomy=0.76 |
+| **Heartbeat Evolution** | 84% | task_success=0.84 |
+| **Self-Awareness** | 87% | Phi=0.721 |
+| **Task Tracking** | 81% | task_success=0.84, prompt_context=0.76 |
 | **Reflection** | 94% | reflection log fresh (0d old) |
 | **Confidence Gating** | 95% | 50/50 recent predictions resolved |
-| **Attention & Working Memory** | 84% | prompt_context=0.74 |
-| **Reasoning Chains** | 100% | 267 chain files |
+| **Attention & Working Memory** | 86% | prompt_context=0.76 |
+| **Reasoning Chains** | 100% | 331 chain files |
 | **Knowledge Synthesis** | 95% | stable — conceptual framework still WIP |
-| **Procedural Memory** | 92% | 179 procedures |
-| **Context Quality** | 84% | prompt_context=0.74, efficiency=0.98 |
+| **Procedural Memory** | 92% | 158 procedures |
+| **Context Quality** | 85% | prompt_context=0.76, efficiency=0.99 |
 | **Monitoring** | 95% | health log fresh (0h old) |
-| **Episodic Memory** | 96% | 432 episodes |
+| **Episodic Memory** | 96% | 376 episodes |
 | **Self-Surgery** | 92% | spine module healthy |
 | **Cognitive Workspace** | 88% | 0 items across buffers |
 | **ACT-R Activation** | 88% | stable |

@@ -15,7 +15,6 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 ### Research Pipeline Simplification / Completion Integrity (2026-04-07)
 
 ### LLM Wiki / Obsidian Knowledge Layer (2026-04-07)
-- [x] [SPINE_ARCHITECTURE_REVIEW] (2026-04-10) Review complete → `docs/SPINE_ARCHITECTURE_REVIEW_2026-04-10.md`. Key findings: 2.5k lines dead code (soar, synaptic_memory, metacognition), brain/__init__.py monolith (723 lines), 11/17 metrics modules experimental. 7 concrete action items prioritized.
 
 ## P1 — This Week
 
@@ -32,14 +31,12 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 
 ### SWO / Clarvis Brand Integration
 - [ ] [LLM_BRAIN_REVIEW 2026-04-08] [LLM_BRAIN_REVIEW] Implement timestamp-weighted retrieval for temporal queries — detect recency intent ('last 24h', 'recently', 'today') and boost results by freshness — Probe 6 is a total miss. Temporal queries are common in agent operation (digest generation, evening reviews) and currently return stale results.
-- [x] [SWO_README_PUBLIC_SURFACE_REWRITE] (2026-04-10) README.md fully rewritten: clean hero, capability tables by subsystem, skimmable structure, CLI reference, architecture diagram, install profiles, status table, documentation links. 584→~330 lines, denser and more scannable.
 - [ ] [SWO_README_FEATURE_MATRIX] Add a clear feature matrix showing what Clarvis can do today: memory, autonomous execution, research, browser use, messaging, benchmarking, queueing, cron orchestration, cognition/metrics, project agents, and public website/status surfaces.
 - [ ] [SWO_README_COMPETITIVE_COMPARISON] Add a restrained comparison section against typical harnesses/agent shells: where Clarvis is stronger (persistent local memory, autonomous background loops, typed metrics, queue/cron integration, inspectability) and where it is intentionally different. No marketing sludge.
 - [ ] [SWO_README_VISUALS] Add clean visuals to the README: one architecture diagram, one heartbeat/evolution flow, one memory-system diagram, and one compact capability map. Keep diagrams maintainable and truthful.
 - [ ] [SWO_README_PROOF_LINKING] Every major README claim should point to a real surface: CLI command, docs page, benchmark file, website page, or source module. No aspirational claims without evidence.
 - [ ] [SWO_WEBSITE_HOME_REDESIGN] Redesign `website/static/index.html` toward the SWO style brief while keeping it readable and technical. Improve hierarchy, section flow, feature framing, and visual polish without making it look like a game splash screen.
 - [ ] [SWO_WEBSITE_SECTION_SYSTEM] Create a coherent section system across website pages: hero, capabilities, architecture, benchmarks, repos, roadmap, FAQ/footer. Use consistent cards, spacing, badges, diagrams, and CTA patterns.
-- [x] [SWO_WEBSITE_CLARVIS_CAPABILITIES_PAGE] (2026-04-10) Created `website/static/capabilities.html` with 7 sections: Memory System (8 cards), Autonomous Execution (4), Cognitive Architecture (6), Self-Measurement (6), Task Routing (4), Browser & Tools (2), Operator Surfaces (4). Each card shows subsystem. Added route + nav to all pages.
 - [ ] [SWO_WEBSITE_COMPARISON_SURFACE] Add a tasteful comparison surface on the site (or README) explaining why Clarvis is not just another chat harness. Focus on architecture and operational differences, not chest-beating.
 - [ ] [SWO_WEBSITE_VISUAL_POLISH_PASS] Apply the SWO brand tokens already planned in `docs/SWO_CLARVIS_REDESIGN_CONCEPT.md`: palette, typography discipline, cards, badges, and subtle motifs. Keep it premium, not noisy.
 - [ ] [SWO_WEBSITE_GRAPHICS_AND_DATA] Add maintainable visuals/graphs for key sections: memory architecture, heartbeat loop, benchmark/performance view, and public status. Prefer generated/static assets that can be updated, not hand-wavy mockups.
