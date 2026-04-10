@@ -227,6 +227,22 @@ def backfill():
     print(f"  Total edges: {s['graph_edges']}")
 
 
+@app.command("backfill-epochs")
+def backfill_epochs(dry_run: bool = False):
+    """Backfill created_epoch for memories with created_at but missing/zero epoch."""
+    b = _get_brain()
+    result = b.backfill_epochs(dry_run=dry_run)
+    mode = "DRY RUN" if dry_run else "APPLIED"
+    print(f"Epoch backfill ({mode}):")
+    for col, info in result.items():
+        if col == "total_fixed":
+            continue
+        if isinstance(info, dict) and info.get("fixable", 0) > 0:
+            fixed = info.get("fixed", "-")
+            print(f"  {col}: {info['fixable']} fixable, {fixed} fixed")
+    print(f"  Total fixed: {result.get('total_fixed', 0)}")
+
+
 @app.command()
 def recent(days: int = 7):
     """Show recent memories (default: last 7 days)."""

@@ -342,6 +342,15 @@ class SearchMixin:
         if auto_cal_epoch is not None:
             calendar_epoch = auto_cal_epoch
 
+        # Strong temporal queries: force-include EPISODES and CONTEXT
+        # (accomplishments, sessions, tasks live here)
+        if auto_recency >= 0.5:
+            from .constants import EPISODES, CONTEXT, AUTONOMOUS_LEARNING
+            temporal_cols = {EPISODES, CONTEXT, AUTONOMOUS_LEARNING}
+            for tc in temporal_cols:
+                if tc not in collections:
+                    collections.append(tc)
+
         # Temporal queries benefit from more results (timeline, not single answer)
         if since_days is not None and n <= 5:
             n = 15
@@ -513,6 +522,13 @@ class SearchMixin:
 
     # --- recall helper: score + sort ---
 
+    # Collections that contain activity records (episodes, sessions, tasks).
+    # These get a scoring boost in temporal queries because they directly
+    # answer "what happened" questions, even when semantically distant.
+    _TEMPORAL_ACTIVITY_COLLECTIONS = frozenset({
+        "clarvis-episodes", "clarvis-context", "autonomous-learning",
+    })
+
     def _score_and_sort(self, all_results, recency_weight, attention_boost, filter_bridges):
         """Apply hooks, recency scoring, sorting, and filtering to results."""
         # Hook: attention boost (with timeout + circuit breaker)
@@ -554,12 +570,19 @@ class SearchMixin:
         else:
             blend = rw * 0.4
 
+        # Temporal activity boost: episodes/context contain actual accomplishment
+        # records ("what happened") but are often semantically distant from temporal
+        # queries. Boost their score so they surface alongside learnings/memories.
+        _temporal_boost = 0.15 if rw >= 0.5 else 0.0
+
         # Sort by actr score or distance-based fallback, blended with recency
         if scored:
             if rw > 0:
                 all_results.sort(
                     key=lambda x: x.get("_actr_score", 0) * (1 - blend)
-                    + x.get("_recency_score", 0) * blend, reverse=True)
+                    + x.get("_recency_score", 0) * blend
+                    + (_temporal_boost if x.get("collection") in self._TEMPORAL_ACTIVITY_COLLECTIONS else 0),
+                    reverse=True)
             else:
                 all_results.sort(key=lambda x: x.get("_actr_score", 0), reverse=True)
         else:
@@ -575,8 +598,10 @@ class SearchMixin:
                 except (TypeError, ValueError):
                     boost = 0
                 base = sem * 0.85 + (imp + boost) * 0.15
+                # Activity collection boost for temporal queries
+                activity_boost = _temporal_boost if x.get("collection") in self._TEMPORAL_ACTIVITY_COLLECTIONS else 0
                 if rw > 0:
-                    return base * (1 - blend) + x.get("_recency_score", 0.0) * blend
+                    return base * (1 - blend) + x.get("_recency_score", 0.0) * blend + activity_boost
                 return base
             all_results.sort(key=sort_key, reverse=True)
 
@@ -653,9 +678,14 @@ class SearchMixin:
             valid_collections, query, query_embedding, n,
             cutoff_epoch, cutoff_date, min_importance, include_related)
 
-        # Phase 4b: Chronological fallback for strong temporal queries
+        # Phase 4b: Chronological supplement for temporal queries
+        # For strong temporal intent (recency >= 0.7), always supplement to
+        # ensure recent episodes/context surface even if semantically distant.
+        # For moderate temporal intent, only supplement if results are sparse.
         temporal_target = n * len(valid_collections)
-        if cutoff_epoch and recency_weight >= 0.5 and len(all_results) < temporal_target:
+        if cutoff_epoch and recency_weight >= 0.7:
+            self._supplement_chronological(all_results, valid_collections, cutoff_epoch, n)
+        elif cutoff_epoch and recency_weight >= 0.5 and len(all_results) < temporal_target:
             self._supplement_chronological(all_results, valid_collections, cutoff_epoch, n)
 
         # Phase 4c: Cross-collection dedup — same document text from

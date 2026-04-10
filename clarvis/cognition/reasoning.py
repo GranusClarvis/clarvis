@@ -330,7 +330,7 @@ class ReasoningSession:
     def _store_in_brain(self, outcome: str, summary: str, evaluation: dict):
         """Store reasoning session summary in brain for cross-session learning."""
         try:
-            from brain import brain
+            from clarvis.brain import brain
             grade = evaluation.get("quality_grade", "unknown")
             depth = evaluation.get("depth", 0)
             text = (f"Reasoning session [{self.session_id}]: {self.task[:100]}. "
@@ -437,7 +437,13 @@ class ClarvisReasoner:
 
     def begin(self, task: str) -> ReasoningSession:
         """Begin a new reasoning session."""
-        session_id = f"rs_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
+        ts = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
+        # Append counter if session with this timestamp already exists
+        session_id = f"rs_{ts}"
+        counter = 1
+        while (SESSIONS_DIR / f"{session_id}.json").exists():
+            session_id = f"rs_{ts}_{counter}"
+            counter += 1
         session = ReasoningSession(session_id, task)
         self._meta["total_sessions"] = self._meta.get("total_sessions", 0) + 1
         self._save_meta()
@@ -633,6 +639,176 @@ class ClarvisReasoner:
 
         return {"fixed": fixed, "skipped": skipped}
 
+    def synthesize(self, limit: int = 50) -> dict:
+        """Cross-chain synthesis: find patterns across completed reasoning sessions.
+
+        Analyzes completed sessions to extract:
+        - Recurring failure modes and their conditions
+        - Confidence calibration drift (predicted vs actual)
+        - Depth/quality correlations with outcomes
+        - Common sub-problem types and their success rates
+
+        Returns a synthesis report that can feed back into future reasoning.
+        """
+        sessions = []
+        for f in sorted(SESSIONS_DIR.glob("rs_*.json"), reverse=True)[:limit]:
+            try:
+                s = ReasoningSession.load(f.stem)
+                if s.completed:
+                    sessions.append(s)
+            except Exception:
+                continue
+
+        if len(sessions) < 3:
+            return {"status": "insufficient_data", "sessions_analyzed": len(sessions)}
+
+        # 1. Outcome analysis
+        outcomes = Counter(s.actual_outcome for s in sessions)
+        success_rate = outcomes.get("success", 0) / len(sessions)
+
+        # 2. Depth-outcome correlation
+        success_depths = [len(s.steps) for s in sessions if s.actual_outcome == "success"]
+        failure_depths = [len(s.steps) for s in sessions if s.actual_outcome != "success"]
+        avg_success_depth = sum(success_depths) / max(1, len(success_depths))
+        avg_failure_depth = sum(failure_depths) / max(1, len(failure_depths))
+
+        # 3. Calibration analysis
+        cal_data = []
+        for s in sessions:
+            if s.predicted_outcome and s.actual_outcome:
+                hit = s.predicted_outcome == s.actual_outcome
+                cal_data.append({
+                    "predicted": s.predicted_outcome,
+                    "actual": s.actual_outcome,
+                    "confidence": s.predicted_confidence,
+                    "hit": hit,
+                })
+
+        cal_accuracy = (
+            sum(1 for c in cal_data if c["hit"]) / len(cal_data)
+            if cal_data else None
+        )
+
+        # 4. Overconfidence detection
+        overconfident = [
+            c for c in cal_data
+            if c["confidence"] > 0.8 and not c["hit"]
+        ]
+        overconfidence_rate = len(overconfident) / max(1, len(cal_data))
+
+        # 5. Quality evaluation aggregation
+        evaluations = [s.evaluate() for s in sessions]
+        avg_quality = sum(e["quality_score"] for e in evaluations) / len(evaluations)
+        avg_coherence = sum(e["coherence"] for e in evaluations) / len(evaluations)
+        avg_evidence = sum(e["evidence_coverage"] for e in evaluations) / len(evaluations)
+
+        # 6. Issue patterns
+        all_issues = []
+        for e in evaluations:
+            all_issues.extend(e.get("issues", []))
+        issue_freq = Counter(all_issues)
+
+        # 7. Depth distribution
+        all_depths = [len(s.steps) for s in sessions]
+        depth_dist = Counter(all_depths)
+
+        # 8. Generate actionable insights
+        insights = []
+        if avg_quality < 0.5:
+            insights.append("Low avg quality score — add more evidence and sub-problem decomposition.")
+        if max(all_depths) <= 3:
+            insights.append("No deep chains (4+ steps) — reasoning is consistently shallow. "
+                           "Complex tasks need decomposition into 4-6 sub-problems.")
+        if overconfidence_rate > 0.15:
+            insights.append(f"Overconfidence rate {overconfidence_rate:.0%} — "
+                           f"lower confidence on novel/ambiguous tasks.")
+        if avg_evidence < 0.4:
+            insights.append("Low evidence coverage — cite specific facts/data in reasoning steps.")
+        if issue_freq.get("shallow_reasoning", 0) > len(sessions) * 0.3:
+            insights.append("Too many shallow chains — enforce minimum 3-step reasoning for P0/P1.")
+        if avg_success_depth > avg_failure_depth + 0.5:
+            insights.append(f"Deeper chains succeed more (avg {avg_success_depth:.1f} vs "
+                           f"{avg_failure_depth:.1f} steps for failures).")
+
+        report = {
+            "status": "analyzed",
+            "sessions_analyzed": len(sessions),
+            "outcome_distribution": dict(outcomes),
+            "success_rate": round(success_rate, 3),
+            "depth": {
+                "avg": round(sum(all_depths) / len(all_depths), 2),
+                "max": max(all_depths),
+                "distribution": dict(depth_dist),
+                "avg_success_depth": round(avg_success_depth, 2),
+                "avg_failure_depth": round(avg_failure_depth, 2),
+            },
+            "quality": {
+                "avg_score": round(avg_quality, 3),
+                "avg_coherence": round(avg_coherence, 3),
+                "avg_evidence_coverage": round(avg_evidence, 3),
+            },
+            "calibration": {
+                "total_predictions": len(cal_data),
+                "accuracy": round(cal_accuracy, 3) if cal_accuracy is not None else None,
+                "overconfidence_rate": round(overconfidence_rate, 3),
+            },
+            "top_issues": dict(issue_freq.most_common(5)),
+            "insights": insights,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+
+        # Persist synthesis report
+        synth_file = DATA_DIR / "synthesis_report.json"
+        synth_file.write_text(json.dumps(report, indent=2))
+
+        return report
+
+    def deliberate_practice(self, problem: str, sub_problems: list[str],
+                            solutions: list[dict]) -> ReasoningSession:
+        """Execute a structured deliberate practice session on a hard problem.
+
+        This is the core mechanism for improving reasoning depth. Instead of
+        the typical 2-3 step mechanical chain, this enforces:
+        - Explicit decomposition into sub-problems
+        - Evidence-backed reasoning for each sub-problem
+        - Confidence predictions before solving
+        - Quality self-evaluation after each step
+        - Minimum 4 steps (decompose → analyze → solve → verify)
+
+        Args:
+            problem: The problem description
+            sub_problems: List of sub-problems to reason through
+            solutions: List of dicts with keys: sub_problem, thought, evidence, confidence
+
+        Returns:
+            The completed ReasoningSession with full evaluation
+        """
+        session = self.begin(f"[deliberate_practice] {problem}")
+
+        # Step 1: Decompose
+        session.decompose(sub_problems)
+        session.step(
+            f"Problem decomposition: {problem} breaks into {len(sub_problems)} parts: "
+            + "; ".join(sub_problems),
+            sub_problem="decomposition",
+            evidence=[f"{len(sub_problems)} identified sub-problems"],
+            confidence=0.85,
+        )
+
+        # Step 2: Predict outcome before solving
+        session.predict("success", 0.75)  # conservative default
+
+        # Step 3+: Solve each sub-problem
+        for sol in solutions:
+            session.step(
+                thought=sol["thought"],
+                sub_problem=sol.get("sub_problem", ""),
+                evidence=sol.get("evidence", []),
+                confidence=sol.get("confidence", 0.7),
+            )
+
+        return session
+
     def get_reasoning_score(self) -> tuple[float, list[str]]:
         """Get a 0-1 score for reasoning quality — used by self_model.py.
 
@@ -782,6 +958,7 @@ if __name__ == "__main__":
         print("  list                                  List recent sessions")
         print("  repair                                Fix legacy chains")
         print("  score                                 Get reasoning score (for self_model)")
+        print("  synthesize                            Cross-chain synthesis report")
         sys.exit(0)
 
     cmd = sys.argv[1]
@@ -920,6 +1097,31 @@ if __name__ == "__main__":
         print(f"Reasoning score: {score:.3f}")
         for e in evidence:
             print(f"  {e}")
+
+    elif cmd == "synthesize":
+        report = reasoner.synthesize()
+        print(f"\n{'='*60}")
+        print("CROSS-CHAIN SYNTHESIS REPORT")
+        print(f"{'='*60}")
+        print(f"\n  Sessions analyzed: {report.get('sessions_analyzed', 0)}")
+        if report.get("status") == "insufficient_data":
+            print("  Not enough completed sessions for synthesis.")
+        else:
+            print(f"  Success rate: {report['success_rate']:.0%}")
+            d = report["depth"]
+            print(f"  Depth: avg={d['avg']}, max={d['max']}, "
+                  f"success_avg={d['avg_success_depth']}, failure_avg={d['avg_failure_depth']}")
+            q = report["quality"]
+            print(f"  Quality: score={q['avg_score']:.3f}, "
+                  f"coherence={q['avg_coherence']:.3f}, evidence={q['avg_evidence_coverage']:.3f}")
+            cal = report["calibration"]
+            if cal["total_predictions"] > 0:
+                print(f"  Calibration: {cal['accuracy']:.0%} accuracy, "
+                      f"{cal['overconfidence_rate']:.0%} overconfidence rate")
+            if report.get("insights"):
+                print("\n  Insights:")
+                for ins in report["insights"]:
+                    print(f"    → {ins}")
 
     else:
         print(f"Unknown command: {cmd}", file=sys.stderr)

@@ -10,14 +10,10 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 
 ### Strategic Audit Structural Fixes (2026-04-08 audit)
 - [ ] [LLM_BRAIN_REVIEW 2026-04-09] [LLM_BRAIN_REVIEW] Add temporal indexing or a recency-boosted retrieval path for queries containing time signals ('last 24 hours', 'recently', 'today') — e.g., filter by metadata timestamp before semantic ranking — Temporal queries (Probe 6) consistently return zero relevant results. An agent that cannot recall what it did yesterday has a fundamental operational gap.
-- [x] [DEAD_CODE_TARGETED_AUDIT] ~~DONE 2026-04-10~~ Audited all 98 .py files across 11 scripts/ subdirectories. Checked each against crontab, cron orchestrators, spine imports, script_loader refs, test files, and docs. Result: zero dead files found — prior purges (2026-04-02, 04-03) were thorough. 3 borderline candidates (clone_test_verify.py, graph_migrate_to_sqlite.py, wiki_eval.py) all verified as actively referenced.
 - [ ] [REASONING_CAPABILITY_SPRINT] Dedicate 2+ evolution cycles to reasoning chain improvements, deliberate practice on hard problems, or synthesis loop implementation. Last 20 commits are all infrastructure — zero target reasoning depth or novel cognition. (2026-04-10: 15 new challenges seeded, 5 are reasoning-depth focused, 2 are synthesis — pipeline now primed for reasoning work.)
 
 ### SWO / Clarvis Brand Integration
-- [x] [SWO_README_FEATURE_MATRIX] ~~DONE 2026-04-10~~ Added 30-row feature matrix to README with Status, CLI/Entry Point, and Source columns covering all capabilities: memory, autonomy, research, wiki, cognition, metrics, routing, queue, cron, cost, agents, browser, messaging, website, status, and demo.
-- [ ] [SWO_README_COMPETITIVE_COMPARISON] Add a restrained comparison section against typical harnesses/agent shells: where Clarvis is stronger (persistent local memory, autonomous background loops, typed metrics, queue/cron integration, inspectability) and where it is intentionally different. No marketing sludge.
 - [ ] [SWO_README_VISUALS] Add clean visuals to the README: one architecture diagram, one heartbeat/evolution flow, one memory-system diagram, and one compact capability map. Keep diagrams maintainable and truthful.
-- [x] [SWO_README_PROOF_LINKING] ~~DONE 2026-04-10~~ Added proof-links throughout README: hero bullet points link to source dirs, "What Clarvis Can Do" tables include Source/Powered By links, architecture section links to spine packages, metrics table adds CLI column, current status table adds Verify column. Every major claim now points to a CLI command, source module, or docs page.
 - [ ] [SWO_WEBSITE_HOME_REDESIGN] Redesign `website/static/index.html` toward the SWO style brief while keeping it readable and technical. Improve hierarchy, section flow, feature framing, and visual polish without making it look like a game splash screen.
 - [ ] [SWO_WEBSITE_SECTION_SYSTEM] Create a coherent section system across website pages: hero, capabilities, architecture, benchmarks, repos, roadmap, FAQ/footer. Use consistent cards, spacing, badges, diagrams, and CTA patterns.
 - [ ] [SWO_WEBSITE_COMPARISON_SURFACE] Add a tasteful comparison surface on the site (or README) explaining why Clarvis is not just another chat harness. Focus on architecture and operational differences, not chest-beating.
@@ -91,12 +87,8 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 - [ ] [CRON_SCHEDULE_DRIFT_AUDIT] Non-code: diff system crontab against CLAUDE.md schedule table. Fix any drift (missing jobs, wrong times, stale entries). Verify all 30+ entries match documented schedule.
 
 ### Episode Success Rate Recovery & Benchmark Accuracy (2026-04-09 evolution)
-- [x] [FIX_BENCHMARK_EPISODE_MEASUREMENT] ~~DONE 2026-04-10~~ Metrics already recovered (PI=0.9994, episode_success_rate=0.941). Fixed `benchmark_episodes()` to return empty dict on init failure (preserves previous values instead of writing 0.0).
-- [x] [EPISODE_CORRUPTION_RESILIENCE] ~~DONE 2026-04-10~~ Added corrupt-file preservation (.corrupt.bak) and stderr warnings to `episodic_memory.py _load()`. Existing .bak fallback was already present; now also saves forensic copy of corrupt file.
-- [x] [PI_REFRESH_STALENESS_GUARD] ~~DONE 2026-04-10~~ Added PI anomaly guard to `run_refresh_benchmark()`: if any core metric (episode_success_rate, action_accuracy, retrieval_hit_rate, phi, task_quality_score) drops >50% from previous, retains previous value and logs PI_ANOMALY to alerts file. 3 unit tests in `tests/test_pi_anomaly_guard.py`.
 
 ### Task Quality Score (currently 0.35, target 0.70)
-- [x] [TASK_QUALITY_SCORE_DIAGNOSIS] ~~DONE 2026-04-10~~ The 0.35 was caused by the same episode measurement bug that tanked PI on 2026-04-09 (fixed in [FIX_BENCHMARK_EPISODE_MEASUREMENT]). Current task_quality_score=0.865 (target 0.70, PASS). History confirms: 0.855→0.846→0.35(bug)→0.865(fixed). No quality computation bug — was measurement artifact only.
 
 ### Cron / Non-Python (2026-04-09 evolution)
 - [ ] [CRON_PI_ANOMALY_ALERT] Non-Python: add a shell check to `cron_pi_refresh.sh` that compares new PI against previous and sends a Telegram alert if PI drops >0.15 in a single refresh. Pattern: `jq '.pi.pi' data/performance_metrics.json`, compare, alert via `curl` to Telegram bot. Prevents silent PI collapses from going unnoticed until the next evolution cycle.

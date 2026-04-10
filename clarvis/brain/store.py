@@ -847,6 +847,70 @@ class StoreMixin:
         result["stats"] = self.stats()
         return result
 
+    # === TEMPORAL INDEXING MAINTENANCE ===
+
+    def backfill_epochs(self, dry_run=True):
+        """Backfill created_epoch for memories that have created_at but missing/zero epoch.
+
+        This ensures all memories participate in temporal WHERE-clause filters.
+        Returns dict with counts per collection.
+        """
+        from datetime import datetime as _dt, timezone as _tz
+
+        results = {}
+        total_fixed = 0
+
+        for col_name, col in self.collections.items():
+            try:
+                all_data = col.get(include=["metadatas"])
+            except Exception:
+                continue
+
+            if not all_data.get("ids"):
+                continue
+
+            fix_ids = []
+            fix_metas = []
+
+            for i, mid in enumerate(all_data["ids"]):
+                meta = all_data["metadatas"][i] if all_data.get("metadatas") else {}
+                epoch = meta.get("created_epoch")
+                created_at = meta.get("created_at")
+
+                # Skip if epoch already valid
+                if epoch and epoch > 0:
+                    continue
+
+                # Try to parse created_at to derive epoch
+                if created_at:
+                    try:
+                        dt = _dt.fromisoformat(created_at)
+                        if dt.tzinfo is None:
+                            dt = dt.replace(tzinfo=_tz.utc)
+                        derived_epoch = int(dt.timestamp())
+                        if derived_epoch > 0:
+                            new_meta = dict(meta)
+                            new_meta["created_epoch"] = derived_epoch
+                            fix_ids.append(mid)
+                            fix_metas.append(new_meta)
+                    except (ValueError, TypeError):
+                        pass
+
+            results[col_name] = {"fixable": len(fix_ids)}
+
+            if not dry_run and fix_ids:
+                try:
+                    col.update(ids=fix_ids, metadatas=fix_metas)
+                    results[col_name]["fixed"] = len(fix_ids)
+                    total_fixed += len(fix_ids)
+                except Exception as e:
+                    results[col_name]["error"] = str(e)
+
+        results["total_fixed"] = total_fixed
+        if not dry_run:
+            self._invalidate_cache()
+        return results
+
     # === CACHE MANAGEMENT ===
 
     def _invalidate_cache(self, collection=None):

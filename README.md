@@ -189,36 +189,100 @@ Dual-engine browser stack ([`scripts/tools/clarvis_browser.py`](scripts/tools/cl
 
 ## Architecture
 
+### Dual-Layer Overview
+
 ```
-┌─────────────────────────────────────────────────────────┐
-│  Conscious Layer (OpenClaw Gateway · port 18789)        │
-│  Chat LLM ← Telegram/Discord → spawns Claude Code      │
-├─────────────────────────────────────────────────────────┤
-│  Subconscious Layer (system crontab · 40+ jobs)         │
-│  Cron orchestrators → Heartbeat pipeline → Claude Code  │
-├─────────────────────────────────────────────────────────┤
-│  clarvis/ Spine Package (14 subpackages)                │
-│  brain · memory · cognition · context · metrics         │
-│  heartbeat · orch · queue · wiki · runtime · ...        │
-├─────────────────────────────────────────────────────────┤
-│  Storage (fully local)                                  │
-│  ChromaDB (10 collections) · SQLite graph · Episodes    │
-└─────────────────────────────────────────────────────────┘
+╔══════════════════════════════════════════════════════════════════╗
+║  CONSCIOUS LAYER (OpenClaw Gateway · port 18789)                ║
+║  ┌──────────┐    ┌──────────┐    ┌──────────────────┐          ║
+║  │ Telegram │◄──►│ Chat LLM │───►│ Claude Code      │          ║
+║  │ Discord  │    │ (M2.5)   │    │ (heavy tasks)    │          ║
+║  └──────────┘    └────┬─────┘    └──────────────────┘          ║
+║                       │ reads digest.md                         ║
+╠═══════════════════════╪════════════════════════════════════════╣
+║  SUBCONSCIOUS LAYER   │  (system crontab · 40+ jobs)           ║
+║                       ▼                                         ║
+║  ┌─────────┐   ┌──────────┐   ┌──────────┐   ┌────────────┐  ║
+║  │ Morning │──►│Evolution │──►│ Research │──►│  Evening   │  ║
+║  │ Planning│   │ 12x/day  │   │  2x/day  │   │ Assessment │  ║
+║  └─────────┘   └────┬─────┘   └──────────┘   └────────────┘  ║
+║                     │                                           ║
+║              ┌──────▼──────┐                                   ║
+║              │  Heartbeat  │ (gate → preflight → exec → post)  ║
+║              │  Pipeline   │                                    ║
+║              └──────┬──────┘                                   ║
+╠═════════════════════╪══════════════════════════════════════════╣
+║  SPINE PACKAGE      │  (clarvis/ · 14 subpackages)             ║
+║  brain · memory · cognition · context · metrics · heartbeat    ║
+║  orch · queue · wiki · runtime · cron · cli                    ║
+╠═════════════════════╪══════════════════════════════════════════╣
+║  STORAGE            ▼  (fully local, no cloud dependencies)    ║
+║  ChromaDB (10 collections) · SQLite graph · Episodes · JSONL   ║
+╚══════════════════════════════════════════════════════════════════╝
 ```
 
-**Conscious layer** — handles direct conversation via Telegram/Discord, reads digests of background work, spawns Claude Code for complex tasks. Gateway config: [`openclaw.json`](../../openclaw.json).
+### Heartbeat Pipeline (core action cycle)
+
+```
+┌──────────┐     ┌───────────────┐     ┌───────────┐     ┌──────────────┐
+│   GATE   │────►│   PREFLIGHT   │────►│  EXECUTE  │────►│  POSTFLIGHT  │
+│          │     │               │     │           │     │              │
+│ Zero-LLM │     │ GWT attention │     │ Claude    │     │ Encode       │
+│ pre-check│     │ Task picking  │     │ Code runs │     │ episode      │
+│ Exit 0/1 │     │ Context build │     │ the task  │     │ Store learn  │
+│          │     │ Brain search  │     │           │     │ Update PI    │
+│          │     │ Episode recall│     │           │     │ Calibrate    │
+└──────────┘     └───────────────┘     └───────────┘     └──────────────┘
+```
+
+### Memory System
+
+```
+┌──────────────────────────────────────────────────────────┐
+│                    MEMORY SYSTEM                          │
+│                                                          │
+│  ┌─────────────────────┐    ┌─────────────────────────┐ │
+│  │   ChromaDB Brain    │    │    SQLite Graph          │ │
+│  │  10 collections     │◄──►│  ~138k edges             │ │
+│  │  ~3,800 vectors     │    │  Hebbian weights         │ │
+│  │  ONNX MiniLM embed  │    │  STDP learning           │ │
+│  └────────┬────────────┘    └─────────────────────────┘ │
+│           │                                              │
+│  ┌────────▼────────┐  ┌──────────┐  ┌───────────────┐  │
+│  │   Episodic      │  │Procedural│  │   Working      │  │
+│  │   Memory        │  │  Memory  │  │   Memory       │  │
+│  │ (task episodes) │  │ (reusable│  │ (3-tier buffer │  │
+│  │                 │  │  steps)  │  │  active/work/  │  │
+│  │                 │  │          │  │  dormant)      │  │
+│  └─────────────────┘  └──────────┘  └───────────────┘  │
+│                                                          │
+│  ┌──────────────────────────────────────────────────┐   │
+│  │            Cognitive Architecture                 │   │
+│  │  GWT Attention · Confidence Calibration           │   │
+│  │  Reasoning Chains · Somatic Markers               │   │
+│  │  Context Assembly (DYCP + MMR + token budgets)    │   │
+│  └──────────────────────────────────────────────────┘   │
+└──────────────────────────────────────────────────────────┘
+```
+
+### Capability Map
+
+```
+AUTONOMOUS OPERATION          MEMORY & LEARNING          SELF-MEASUREMENT
+├─ 40+ cron jobs              ├─ Semantic vector search   ├─ Performance Index (8-dim)
+├─ Heartbeat pipeline         ├─ Graph traversal          ├─ Phi (IIT proxy)
+├─ Evolution queue            ├─ Episodic recall          ├─ CLR benchmark (7-dim)
+├─ Task routing (5 tiers)     ├─ Procedural extraction    ├─ Brier score calibration
+├─ Morning plan → evening     ├─ Hebbian learning         ├─ Self-model (7 domains)
+│  assessment cycle           ├─ Working memory buffers   ├─ BEAM (5 abilities)
+├─ Research ingestion         ├─ Knowledge wiki           └─ LongMemEval
+├─ Implementation sprints     └─ Reasoning synthesis
+└─ Strategic audits
+```
+
+**Conscious layer** — handles direct conversation via Telegram/Discord, reads digests of background work, spawns Claude Code for complex tasks.
 
 **Subconscious layer** — runs autonomously via system crontab ([`scripts/cron/`](scripts/cron/)). Morning planning → research → evolution → implementation → evening assessment → reflection. Results surface through `memory/cron/digest.md`.
-
-**Heartbeat pipeline** — the core autonomous action cycle ([`clarvis/heartbeat/`](clarvis/heartbeat/)):
-
-```
-gate ──► preflight ──► execute ──► postflight
- │          │            │            │
- zero-LLM   attention    Claude Code  encode episode
- pre-check  + task pick  runs task    + store learnings
-             + context                + update metrics
-```
 
 ### Project Structure
 
@@ -352,6 +416,29 @@ Clarvis is a **self-contained cognitive agent**, not a framework. It runs on its
 - `python3 -m clarvis bench` — benchmarks and metrics
 - `python3 -m clarvis demo` — demo walkthrough
 - All tests (`python3 -m pytest`)
+
+---
+
+## How Clarvis Differs from Typical Agent Shells
+
+Most agent harnesses are session-scoped wrappers around an LLM — they start, run, and forget. Clarvis is architecturally different in ways that matter for long-running autonomous operation:
+
+| Dimension | Typical Agent Shell | Clarvis |
+|-----------|-------------------|---------|
+| **Memory** | In-context only, lost on restart | Persistent vector DB + graph (~3,800 vectors, ~138k edges), survives reboots |
+| **Execution** | User-triggered, one-shot | 40+ autonomous cron jobs, runs 24/7 without prompting |
+| **Self-measurement** | None or manual eval | 8-dimension Performance Index, Brier-scored calibration, CLR benchmarks — all automated |
+| **Learning** | No cross-session learning | Episodic memory, Hebbian weight updates, cross-chain reasoning synthesis |
+| **Task management** | Ad-hoc or external | Built-in evolution queue with priority tiers, heartbeat-driven task selection |
+| **Inspectability** | Opaque or log-only | Structured episodes, reasoning chains with quality grades, typed metrics history |
+| **Background work** | None | Subconscious layer: research, reflection, planning, self-benchmarking — all on schedule |
+
+**Where Clarvis is intentionally different (not better, different):**
+
+- **Single-host, not distributed** — designed for one dedicated server, not horizontal scaling. This makes the memory system simpler and fully local.
+- **Self-referential, not general-purpose** — the cognitive architecture (GWT attention, somatic markers, confidence calibration) is built for an agent that improves itself, not for wrapping arbitrary tools.
+- **Opinionated stack** — requires ChromaDB, SQLite, systemd, cron. Not a drop-in replacement for lightweight chat wrappers.
+- **Autonomous by default** — the system does work without being asked. This is a feature for long-running agents and a mismatch for on-demand tooling.
 
 ---
 
