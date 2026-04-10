@@ -1,15 +1,21 @@
 """Clarvis Wiki CLI — knowledge vault management.
 
-Subcommands:
-    clarvis wiki ingest file <path>
-    clarvis wiki ingest url <url>
-    clarvis wiki query "question"
-    clarvis wiki lint
-    clarvis wiki rebuild-index
-    clarvis wiki backfill
-    clarvis wiki compile
-    clarvis wiki sync
-    clarvis wiki status
+Operator workflow (see docs/WIKI_OPERATOR_WORKFLOW.md):
+    clarvis wiki drop <source>              # Ingest + compile in one step
+    clarvis wiki query "question"           # Ask the wiki, save answer
+    clarvis wiki promote <slug>             # Promote answer to wiki page
+    clarvis wiki obsidian [page]            # Open in Obsidian
+    clarvis wiki render slides "topic"      # Generate slides/memo/plan
+    clarvis wiki lint                       # Health checks + fixes
+
+Other commands:
+    clarvis wiki ingest file|url|repo|paper # Granular ingest
+    clarvis wiki compile                    # Compile raw → wiki
+    clarvis wiki rebuild-index              # Regenerate indexes
+    clarvis wiki backfill                   # Backfill from research
+    clarvis wiki sync                       # Sync to brain
+    clarvis wiki maintenance                # Automated maintenance
+    clarvis wiki status                     # Vault statistics
 """
 
 import subprocess
@@ -114,9 +120,9 @@ def drop(
     to ingest acts as the promotion gate — no further qualification needed.
     """
     try:
-        import sys as _sys
-        _sys.path.insert(0, str(SCRIPTS))
-        from wiki_hooks import operator_drop
+        from clarvis._script_loader import load as _load_script
+        _wiki_hooks = _load_script("wiki_hooks", "wiki")
+        operator_drop = _wiki_hooks.operator_drop
         result = operator_drop(source, source_type=type, title=title)
         if "error" in result:
             typer.echo(f"Error: {result['error']}", err=True)
@@ -246,8 +252,6 @@ def sync(
         typer.echo("Sync completed with warnings.", err=True)
 
 
-# ── status ────────────────────────────────────────────────────
-
 # ── maintenance ────────────────────────────────────────────────
 
 @app.command("maintenance")
@@ -263,6 +267,199 @@ def maintenance(
     if dry_run:
         args.append("--dry-run")
     _run("wiki_maintenance.py", args)
+
+
+# ── status ────────────────────────────────────────────────────
+
+# ── render ────────────────────────────────────────────────────
+
+@app.command("render")
+def render(
+    format: str = typer.Argument(..., help="Output format: markdown|memo|plan|slides"),
+    question: str = typer.Argument(..., help="Topic or question to render"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Preview without saving"),
+    no_link: bool = typer.Option(False, "--no-link", help="Don't create wiki backlink"),
+):
+    """Render wiki content as markdown, memo, plan, or slides."""
+    args = [format, question]
+    if dry_run:
+        args.append("--dry-run")
+    if no_link:
+        args.append("--no-link")
+    _run("wiki_render.py", args)
+
+
+@app.command("render-list")
+def render_list():
+    """List saved rendered outputs."""
+    _run("wiki_render.py", ["list"])
+
+
+@app.command("render-formats")
+def render_formats():
+    """Show available render output formats."""
+    _run("wiki_render.py", ["formats"])
+
+
+# ── promote ──────────────────────────────────────────────────
+
+@app.command("promote")
+def promote(
+    slug: str = typer.Argument(..., help="Answer/synthesis slug to promote to wiki page"),
+    section: str = typer.Option("syntheses", "--section", "-s",
+                                help="Target wiki section: concepts|syntheses|procedures"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Preview without writing"),
+):
+    """Promote a saved answer or synthesis into a canonical wiki page.
+
+    Takes an answer from knowledge/outputs/ or wiki/questions/ and creates
+    or merges it into a permanent wiki page in the target section.
+    """
+    import os
+    from pathlib import Path as P
+
+    workspace = P(os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace"))
+    knowledge = workspace / "knowledge"
+
+    # Find the source artifact
+    source_path = None
+    for search_dir in [
+        knowledge / "outputs" / "answers",
+        knowledge / "outputs" / "memos",
+        knowledge / "outputs" / "plans",
+        knowledge / "outputs" / "slides",
+        knowledge / "wiki" / "questions",
+        knowledge / "wiki" / "syntheses",
+    ]:
+        if not search_dir.exists():
+            continue
+        candidate = search_dir / f"{slug}.md"
+        if candidate.exists():
+            source_path = candidate
+            break
+        # Try partial match
+        for f in search_dir.glob(f"*{slug}*.md"):
+            source_path = f
+            break
+        if source_path:
+            break
+
+    if not source_path:
+        typer.echo(f"Error: No artifact found matching slug '{slug}'", err=True)
+        typer.echo("Hint: use 'clarvis wiki list-answers' or 'clarvis wiki render-list' to see available slugs.", err=True)
+        raise typer.Exit(1)
+
+    content = source_path.read_text()
+
+    # Extract title from first heading or frontmatter
+    import re
+    title = slug
+    for line in content.split("\n"):
+        line = line.strip()
+        if line.startswith("# ") and not line.startswith("# ---"):
+            title = line[2:].strip()
+            break
+        if line.startswith("title:"):
+            title = line.split(":", 1)[1].strip().strip('"').strip("'")
+            break
+
+    target_slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:60]
+    target_dir = knowledge / "wiki" / section
+    target_path = target_dir / f"{target_slug}.md"
+
+    if dry_run:
+        typer.echo(f"[DRY RUN] Would promote:")
+        typer.echo(f"  From: {source_path.relative_to(workspace)}")
+        typer.echo(f"  To:   {target_path.relative_to(workspace)}")
+        typer.echo(f"  Title: {title}")
+        typer.echo(f"  Section: {section}")
+        return
+
+    target_dir.mkdir(parents=True, exist_ok=True)
+    import datetime
+    now = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M")
+
+    # Build wiki page with proper frontmatter
+    wiki_content = f"""---
+title: "{title}"
+slug: {target_slug}
+type: {section.rstrip('s') if section.endswith('s') else section}
+tags: []
+sources: ["{source_path.relative_to(knowledge)}"]
+confidence: medium
+created: {now}
+updated: {now}
+---
+
+{content}
+"""
+    if target_path.exists():
+        typer.echo(f"Warning: {target_path.relative_to(workspace)} already exists — appending as update.", err=True)
+        existing = target_path.read_text()
+        wiki_content = existing.rstrip() + f"\n\n---\n\n## Update ({now})\n\n{content}\n"
+
+    target_path.write_text(wiki_content)
+    typer.echo(f"Promoted: {source_path.relative_to(workspace)}")
+    typer.echo(f"      →  {target_path.relative_to(workspace)}")
+    typer.echo(f"  Title: {title}")
+
+
+# ── obsidian ─────────────────────────────────────────────────
+
+@app.command("obsidian")
+def obsidian(
+    page: str = typer.Argument(None, help="Wiki page slug or path to open (omit for vault root)"),
+):
+    """Open a wiki page (or the vault root) in Obsidian.
+
+    Requires Obsidian to be installed with the knowledge/ vault configured.
+    Falls back to printing the file path if Obsidian is not available.
+    """
+    import os
+    import shutil
+    from pathlib import Path as P
+
+    workspace = P(os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace"))
+    knowledge = workspace / "knowledge"
+
+    if page is None:
+        target = knowledge / "wiki"
+    elif "/" in page and (knowledge / page).exists():
+        target = knowledge / page
+    else:
+        # Search wiki sections for the slug
+        target = None
+        for section in ["concepts", "projects", "people", "syntheses", "questions",
+                        "timelines", "procedures"]:
+            candidate = knowledge / "wiki" / section / f"{page}.md"
+            if candidate.exists():
+                target = candidate
+                break
+        if target is None:
+            # Try glob
+            matches = list((knowledge / "wiki").rglob(f"*{page}*.md"))
+            if matches:
+                target = matches[0]
+            else:
+                typer.echo(f"Error: No wiki page found matching '{page}'", err=True)
+                raise typer.Exit(1)
+
+    # Try xdg-open (Linux), open (macOS), or obsidian:// URI
+    abs_path = str(target.resolve())
+    obsidian_bin = shutil.which("obsidian")
+
+    if obsidian_bin:
+        import subprocess
+        subprocess.Popen([obsidian_bin, abs_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        typer.echo(f"Opened in Obsidian: {target.relative_to(workspace)}")
+    else:
+        # Print path for manual use / Obsidian URI scheme
+        vault_name = "knowledge"
+        if target.is_file():
+            rel = target.relative_to(knowledge)
+            obsidian_uri = f"obsidian://open?vault={vault_name}&file={rel}"
+            typer.echo(f"Obsidian URI: {obsidian_uri}")
+        typer.echo(f"File path: {abs_path}")
 
 
 # ── status ────────────────────────────────────────────────────

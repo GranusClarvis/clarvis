@@ -360,10 +360,16 @@ def compute_phi(brain=None):
     """Compute the composite Phi metric.
 
     Phi = weighted combination of:
-      - Intra-collection link density  (weight 0.20)
-      - Cross-collection edges         (weight 0.20)
-      - Semantic cross-collection      (weight 0.35)
-      - Collection reachability        (weight 0.25)
+      - Intra-collection link density  (weight 0.25)
+      - Cross-collection edges         (weight 0.25)
+      - Semantic cross-collection      (weight 0.40)
+      - Collection reachability        (weight 0.10)
+
+    Reachability was downweighted from 0.25 to 0.10 (2026-04-10) because
+    it is permanently locked at 1.0 in practice (all 10 collections are
+    graph-reachable), inflating Phi by a fixed 0.25 that masks real
+    integration changes.  The freed weight is redistributed to the three
+    components that actually vary.
 
     Returns dict with phi, components, raw details, and interpretation.
     """
@@ -394,10 +400,10 @@ def compute_phi(brain=None):
     cr_score, cr_reach = collection_reachability(nodes, adj)
 
     phi = (
-        0.20 * ic_normalized +
-        0.20 * cc_score +
-        0.35 * sc_score +
-        0.25 * cr_score
+        0.25 * ic_normalized +
+        0.25 * cc_score +
+        0.40 * sc_score +
+        0.10 * cr_score
     )
 
     return {
