@@ -6,24 +6,16 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 
 ## P0 — Current Sprint (2026-04-11)
 
-- [x] [REASONING_CAPABILITY_SPRINT] Deliberate reasoning practice — execute seeded reasoning-depth challenges. (2026-04-11: Implemented Socratic self-questioning layer — socratic_challenge() + step_with_socratic() on ReasoningSession. 8 assumption trigger patterns, evidence gap detection, confidence calibration challenges, logical disconnection detection. Integrated into deliberate_practice(). Executed reasoning-depth-03 formally: quality=GOOD, score=0.953, 6 steps, 100% evidence coverage.)
 
 ## P1 — This Week
 
 ### Strategic Audit Structural Fixes (2026-04-08 audit)
 - [ ] [LLM_BRAIN_REVIEW 2026-04-09] [LLM_BRAIN_REVIEW] Add temporal indexing or a recency-boosted retrieval path for queries containing time signals ('last 24 hours', 'recently', 'today') — e.g., filter by metadata timestamp before semantic ranking — Temporal queries (Probe 6) consistently return zero relevant results. An agent that cannot recall what it did yesterday has a fundamental operational gap.
-- [x] [REASONING_CAPABILITY_SPRINT] Dedicate 2+ evolution cycles to reasoning chain improvements, deliberate practice on hard problems, or synthesis loop implementation. (2026-04-11: Socratic self-questioning implemented — this is the first reasoning-depth capability addition. Pipeline now producing GOOD-grade chains.)
 
 ### SWO / Clarvis Brand Integration
 
 ### Fresh-Install / Isolation Validation
-- [ ] [E2E_CLARVIS_ON_OPENCLOW_OVERLAY] Layer Clarvis onto that fresh OpenClaw install exactly as a new user would. Validate install script, verify script, CLI health, brain health, demo flow, queue access, heartbeat gate/preflight, cron minimal install, public status/feed generation, and that the OpenClaw gateway still works after overlay.
 - [ ] [E2E_HERMES_FRESH_ISOLATED] Run a truly fresh isolated Hermes install in `/tmp` or equivalent, with isolated venv/config/session dirs. Validate install, main entry points, config bootstrap, session persistence, basic chat loop, local-model path, and identify the exact supported invocation path (`hermes` vs `run_agent.py`) without hand-wavy workarounds.
-- [ ] [E2E_FEATURE_MATRIX_BY_HARNESS] Produce a harness-by-feature matrix for OpenClaw and Hermes: install, chat, memory, brain search, queue, heartbeat, cron autonomy, browser flows, messaging, local-model-only mode, install doctor, public status, and website/public feed generation. Mark each as PASS / PARTIAL / FAIL with evidence.
-- [x] [E2E_INSTALL_DOCTOR] Create or strengthen a post-install doctor command/report that gives PASS/WARN/FAIL across harness boot, model connectivity, brain deps, cron readiness, file paths, and feature availability. (2026-04-11: Added 2 new check sections — Feature Availability (heartbeat pipeline, reasoning engine, queue, cognitive workspace, context compressor, calibration, PI) and Model Connectivity (OpenRouter API, Telegram bot). Now 48 checks total.)
-- [x] [E2E_RELEASE_GATE_OPENCLOW] Add a release gate for OpenClaw support: no public claim of “works on fresh OpenClaw” unless the isolated end-to-end suite passes with saved artifacts/logs. (2026-04-11: Created scripts/infra/release_gate_openclaw.sh — runs doctor + isolated smoke test + OpenClaw-specific checks. Saves artifacts to docs/validation/openclaw_<timestamp>/. PASS verdict on first run.)
-- [ ] [E2E_RELEASE_GATE_HERMES] Add a release gate for Hermes support: no public claim of “works on Hermes” unless the isolated end-to-end suite passes with saved artifacts/logs and a documented supported path.
-- [ ] [E2E_TEST_ARTIFACTS_AND_REPORTS] Standardize test artifacts: logs, configs, screenshots if needed, pass/fail summaries, timing, and exact commands run. Store them in a predictable location so future regressions are comparable.
 - [ ] [E2E_KNOWN_LIMITATIONS_DOC] After running the full validation, write one brutally honest support matrix: what is fully supported, what is partial, what is experimental, and what is explicitly unsupported. Open source should promise only what we can reproduce.
 - [ ] [E2E_INSTALL_REGRESSION_SUITE] Package the core fresh-install validations into repeatable scripts/tests that can be rerun before release and after major installer/harness changes. The goal is not one heroic manual run, but a durable regression suite.
 

@@ -4,7 +4,7 @@
     "pending_mode": null
   },
   "queue": {
-    "pending": 45,
+    "pending": 35,
     "in_progress": 0,
     "done": 0
   },
@@ -37,14 +37,14 @@
   },
   "bloat_score": 0.2,
   "brain": {
-    "total_memories": 3113,
+    "total_memories": 3172,
     "collections": 10
   },
   "episodes": {
-    "success_rate": 0.943,
-    "total": 386,
+    "success_rate": 0.944,
+    "total": 390,
     "breakdown": {
-      "success": 364,
+      "success": 368,
       "soft_failure": 0,
       "failure": 11,
       "timeout": 9
@@ -73,5 +73,5 @@
       "status": "success"
     }
   ],
-  "updated_at": "2026-04-11T05:50:03.603933+00:00"
+  "updated_at": "2026-04-11T12:03:07.542225+00:00"
 }

@@ -79,6 +79,15 @@ JUDGED_QUERIES = [
      "expect": ["queue", "pending", "task", "p1", "p2"], "cat": "cross-domain"},
     {"q": "What did Clarvis learn recently?", "domain": "learnings",
      "expect": ["learn", "insight", "discover"], "cat": "cross-domain"},
+    # Temporal retrieval (Probe 6 — explicit recency queries)
+    {"q": "What did I do today?", "domain": "context",
+     "expect": ["episode", "task", "success", "fail", "sprint", "implementation"], "cat": "temporal"},
+    {"q": "What happened in the last 24 hours?", "domain": "context",
+     "expect": ["episode", "task", "learn", "success", "fail"], "cat": "temporal"},
+    {"q": "What was the most recent task completed?", "domain": "context",
+     "expect": ["episode", "task", "success", "completed", "sprint"], "cat": "temporal"},
+    {"q": "What did Clarvis learn yesterday?", "domain": "learnings",
+     "expect": ["learn", "insight", "episode", "discover"], "cat": "temporal"},
 ]
 
 

@@ -1,0 +1,71 @@
+[hooks] Registered 7/7 hooks
+=== Clarvis Doctor ===
+Workspace: /home/agent/.openclaw/workspace
+
+Core Imports:
+  PASS  import clarvis
+  PASS  import clarvis.cli
+  PASS  import clarvis.heartbeat
+  PASS  import clarvis.cognition
+  PASS  import clarvis.context
+  PASS  import clarvis.runtime
+  PASS  import cost tracker
+  PASS  import queue engine
+  PASS  import reasoning
+
+CLI:
+  PASS  clarvis --help
+  PASS  clarvis brain --help
+  PASS  clarvis cron --help
+  PASS  clarvis heartbeat --help
+  PASS  clarvis mode --help
+  PASS  clarvis queue --help
+
+Brain:
+  PASS  chromadb importable
+  PASS  onnxruntime importable
+  PASS  brain.stats() (3173 memories)
+  PASS  clarvis brain health
+
+Memory Paths:
+  PASS  dir memory/
+  PASS  dir memory/cron/
+  PASS  dir memory/evolution/
+  PASS  dir data/
+  PASS  dir data/clarvisdb/
+  PASS  dir monitoring/
+  PASS  dir scripts/cron/
+  PASS  file .env
+  PASS  file QUEUE.md
+
+Cron Readiness:
+  PASS  script cron_env.sh
+  PASS  script lock_helper.sh
+  PASS  script cron_autonomous.sh
+  PASS  script cron_morning.sh
+  PASS  script cron_evening.sh
+  PASS  crontab managed block (47 active entries)
+
+Model Wiring:
+  WARN  OpenRouter API key (not found in .env (needed for Claude Code spawning))
+  WARN  Telegram bot token (not found in .env (needed for reports))
+  PASS  Claude Code binary (/home/agent/.local/bin/claude)
+
+Feature Availability:
+  PASS  feature: heartbeat gate
+  PASS  feature: heartbeat preflight
+  PASS  feature: heartbeat postflight
+  PASS  feature: reasoning engine (474 sessions)
+  PASS  feature: queue engine
+  PASS  feature: cognitive workspace
+  PASS  feature: context compressor
+  PASS  feature: calibration (350 predictions)
+  PASS  feature: performance index
+
+Model Connectivity:
+  WARN  connectivity: OpenRouter API (no key configured)
+  WARN  connectivity: Telegram bot (no token configured)
+
+=== Results: 44 passed, 0 failed, 4 warnings (of 48 checks) ===
+
+All critical checks passed. Warnings are optional features.

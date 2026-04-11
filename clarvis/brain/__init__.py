@@ -697,6 +697,15 @@ def search(query, n=5, min_importance=None, collections=None, since_days=None,
     return results
 
 
+def temporal_search(query, n=10, since_days=None):
+    """Search with explicit recency bias — use for 'what happened recently' queries.
+
+    Shorthand for search() with recency_weight=0.8 and temporal-first retrieval.
+    If since_days is None, auto-detects from query (e.g. 'today' → 1 day).
+    """
+    return search(query, n=n, since_days=since_days, recency_weight=0.8)
+
+
 def synthesize(query, n=10, collections=None):
     """Synthesize conclusions across multiple memories for a topic.
 

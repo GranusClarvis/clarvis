@@ -1,0 +1,17 @@
+{
+  "gate": "hermes_release",
+  "timestamp": "20260411_120709",
+  "commit": "d97619a",
+  "verdict": "PASS",
+  "overlay_exit": 0,
+  "overlay_passed": 17,
+  "overlay_failed": 0,
+  "overlay_warnings": 0,
+  "adapter_ok": true,
+  "gate_d_passed": 4,
+  "gate_d_total": 4,
+  "quick_mode": true,
+  "skip_hermes": true,
+  "artifacts_dir": "/home/agent/.openclaw/workspace/docs/validation/hermes_20260411_120709",
+  "note": "Hermes support is EXPERIMENTAL. Full claim requires overlay test without --quick or --skip-hermes."
+}

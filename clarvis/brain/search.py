@@ -136,6 +136,19 @@ _TEMPORAL_PATTERNS = [
     (re.compile(r'\blatest\b', re.I), lambda m: (7, 0.6)),
     # "what happened" (implicitly temporal)
     (re.compile(r'\bwhat\s+happened\b', re.I), lambda m: (7, 0.5)),
+    # "last <noun>" without number — e.g. "last heartbeat", "the last task"
+    # Negative lookbehind excludes "at last", "long last" false positives.
+    (re.compile(r'(?<!\bat\s)(?<!\blong\s)(?:(?:the|my|our|its)\s+)?last\s+(?!few|couple|several|but|resort)\w+', re.I),
+     lambda m: (3, 0.7)),
+    # "most recent <noun>"
+    (re.compile(r'\bmost\s+recent\b', re.I), lambda m: (3, 0.8)),
+    # "new/newer/newest"
+    (re.compile(r'\bnewest\b', re.I), lambda m: (7, 0.6)),
+    # "since <day>" — e.g. "since Monday", "since yesterday"
+    (re.compile(r'\bsince\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b', re.I),
+     lambda m: (7, 0.5)),
+    # "just now", "just did"
+    (re.compile(r'\bjust\s+(?:now|did|happened|completed|finished|ran)\b', re.I), lambda m: (1, 0.9)),
 ]
 
 # Calendar-aware patterns: "today" and "yesterday" use calendar-day boundaries
@@ -520,6 +533,84 @@ class SearchMixin:
                     "_chrono_fallback": True,
                 })
 
+    # --- recall helper: temporal-first retrieval ---
+
+    def _temporal_first_retrieval(self, valid_collections, query, query_embedding,
+                                  cutoff_epoch, n):
+        """Retrieve memories by recency first, then re-rank with semantic similarity.
+
+        For strong temporal queries ('what did I do today', 'last heartbeat'),
+        semantic search often fails because the query text is distant from the
+        stored content. This path fetches the N most recent memories within the
+        time window, then applies a light semantic re-rank to surface the most
+        relevant ones.
+
+        Returns a list of result dicts sorted by combined (recency + semantic) score.
+        """
+        all_items = []
+        now_ts = datetime.now(timezone.utc).timestamp()
+
+        for col_name in valid_collections:
+            col = self.collections[col_name]
+            try:
+                chrono = col.get(
+                    where={"created_epoch": {"$gte": cutoff_epoch}},
+                    limit=n * 5,
+                    include=["documents", "metadatas", "embeddings"],
+                )
+            except Exception:
+                # Fallback: some collections may not support the where clause
+                continue
+            if not chrono.get("ids"):
+                continue
+
+            for i, mid in enumerate(chrono["ids"]):
+                meta = chrono["metadatas"][i] if chrono.get("metadatas") else {}
+                doc = chrono["documents"][i] if chrono.get("documents") else ""
+                if not doc:
+                    continue
+
+                # Compute recency score (newer = higher)
+                epoch = meta.get("created_epoch", 0)
+                if epoch and epoch > 0:
+                    age_s = max(0, now_ts - epoch)
+                    # Scale: 0-86400s (1 day) maps to 1.0-0.5
+                    recency = max(0.0, 1.0 - age_s / (7 * 86400))
+                else:
+                    recency = 0.0
+
+                # Compute semantic similarity if embedding available
+                sem_score = 0.5  # default neutral
+                embs = chrono.get("embeddings")
+                has_embs = embs is not None and (hasattr(embs, '__len__') and len(embs) > i)
+                if query_embedding is not None and has_embs:
+                    doc_emb = embs[i]
+                    if doc_emb is not None:
+                        try:
+                            # Cosine similarity approximation from L2 distance
+                            # (ONNX MiniLM embeddings are normalized)
+                            dist_sq = sum((a - b) ** 2 for a, b in zip(query_embedding, doc_emb))
+                            l2_dist = dist_sq ** 0.5
+                            sem_score = 1.0 / (1.0 + l2_dist)
+                        except (TypeError, ValueError):
+                            pass
+
+                # Combined score: 60% recency, 40% semantic for temporal-first
+                combined = recency * 0.6 + sem_score * 0.4
+
+                all_items.append({
+                    "document": doc, "metadata": meta, "collection": col_name,
+                    "id": mid, "distance": None, "related": [],
+                    "_recency_score": recency,
+                    "_semantic_score": sem_score,
+                    "_temporal_first": True,
+                })
+                all_items[-1]["_combined_temporal_score"] = combined
+
+        # Sort by combined score (recency-dominant)
+        all_items.sort(key=lambda x: x.get("_combined_temporal_score", 0), reverse=True)
+        return all_items
+
     # --- recall helper: score + sort ---
 
     # Collections that contain activity records (episodes, sessions, tasks).
@@ -555,11 +646,23 @@ class SearchMixin:
             else:
                 max_age = 90 * 86400
             for r in all_results:
-                created = r["metadata"].get("created_at", "")
+                # Skip if temporal-first path already computed recency
+                if r.get("_temporal_first") and r.get("_recency_score", 0) > 0:
+                    continue
+                meta = r.get("metadata", {})
+                created = meta.get("created_at", "")
+                epoch = meta.get("created_epoch", 0)
+                age_s = None
                 try:
-                    age_s = now_ts - datetime.fromisoformat(created).timestamp()
-                    r["_recency_score"] = max(0.0, 1.0 - age_s / max_age)
+                    if created:
+                        age_s = now_ts - datetime.fromisoformat(created).timestamp()
+                    elif epoch and epoch > 0:
+                        age_s = now_ts - epoch
                 except (ValueError, TypeError):
+                    pass
+                if age_s is not None:
+                    r["_recency_score"] = max(0.0, 1.0 - age_s / max_age)
+                else:
                     r["_recency_score"] = 0.0
 
         # Recency blending factor
@@ -674,9 +777,28 @@ class SearchMixin:
 
         # Phase 4: Fetch from collections
         _t_fetch = time.monotonic()
+
+        # Phase 4a: Temporal-first retrieval for strong temporal queries.
+        # When recency_weight >= 0.7 and we have a time cutoff, semantic search
+        # often fails because query text is distant from stored content (e.g.,
+        # "what did I do today" vs "Episode: [CALIBRATION_OVERCONFIDENCE_PENALTY]").
+        # Retrieve by timestamp first, then re-rank with light semantic scoring.
+        temporal_first_results = []
+        if cutoff_epoch and recency_weight >= 0.7:
+            temporal_first_results = self._temporal_first_retrieval(
+                valid_collections, query, query_embedding, cutoff_epoch, n)
+
         all_results = self._dispatch_collection_queries(
             valid_collections, query, query_embedding, n,
             cutoff_epoch, cutoff_date, min_importance, include_related)
+
+        # Merge temporal-first results into semantic results (dedup by ID)
+        if temporal_first_results:
+            existing_ids = {r.get("id") for r in all_results}
+            for tr in temporal_first_results:
+                if tr.get("id") not in existing_ids:
+                    all_results.append(tr)
+                    existing_ids.add(tr.get("id"))
 
         # Phase 4b: Chronological supplement for temporal queries
         # For strong temporal intent (recency >= 0.7), always supplement to

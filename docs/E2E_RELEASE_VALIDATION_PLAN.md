@@ -149,7 +149,7 @@ Phase 5: Release gate decision
 | C5 | Brain health | YES | `clarvis brain health` | OK | Error |
 | C6 | Demo flow | YES | `clarvis demo` | Store+recall works | Crash |
 | C7 | Gateway survives | YES | `curl http://localhost:28789/health` | Still HTTP 200 | Broken |
-| C8 | Cron dry-run | YES | `clarvis cron install minimal --dry-run` | Shows entries | Error |
+| C8 | Cron dry-run | YES | `clarvis cron install minimal` | Shows entries (dry-run is default) | Error |
 | C9 | Smoke suite | YES | `fresh_install_smoke.sh --isolated` | 0 FAIL | Any FAIL |
 | C10 | Overlay test | YES | `test_overlay_install.sh` | 0 FAIL | Any FAIL |
 | C11 | Open-source smoke | NO | `pytest tests/test_open_source_smoke.py` | All green | Failures |
