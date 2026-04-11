@@ -518,7 +518,9 @@ def run_cron():
 
     # Write digest entry
     try:
-        from digest_writer import write_digest
+        from clarvis._script_loader import load as _load_script
+        _dw = _load_script("digest_writer", "tools")
+        write_digest = _dw.write_digest
         assessment = result["assessment"]
         retrieval = result["retrieval"]
         summary = (

@@ -7,6 +7,10 @@
 
 Complete walkthrough for installing and verifying Clarvis on a fresh machine.
 
+> **Before choosing a profile**, check the [Support Matrix](SUPPORT_MATRIX.md) for what's
+> fully supported vs experimental. For validation criteria, see [Install Matrix](INSTALL_MATRIX.md).
+> For known blockers, see [Friction Report](INSTALL_FRICTION_REPORT.md).
+
 ## Prerequisites
 
 | Requirement | Minimum | Recommended | Check |

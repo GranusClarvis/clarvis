@@ -267,6 +267,76 @@ def _sqlite_health_metrics(store, brain):
     }
 
 
+def _sqlite_prune_high_degree(store, max_degree=150, dry_run=False):
+    """Prune weak edges from high-degree nodes to cap density (SQL).
+
+    For each node with more than max_degree edges, removes the weakest
+    edges (by weight) from pruneable types until degree <= max_degree.
+    """
+    conn = store._conn
+    # Find high-degree nodes (either side of an edge)
+    rows = conn.execute("""
+        SELECT node_id, cnt FROM (
+            SELECT from_id AS node_id, COUNT(*) AS cnt FROM edges GROUP BY from_id
+            UNION ALL
+            SELECT to_id AS node_id, COUNT(*) AS cnt FROM edges GROUP BY to_id
+        ) GROUP BY node_id HAVING SUM(cnt) > ?
+    """, (max_degree,)).fetchall()
+
+    if not rows:
+        return {"pruned": 0, "nodes_affected": 0}
+
+    pruneable_types = {
+        "cross_collection", "transitive_cross", "hebbian_association",
+        "similar_to", "boosted_bridge", "mirror_bridge",
+        "semantic_bridge", "bridged_similarity",
+    }
+    type_placeholders = ",".join("?" for _ in pruneable_types)
+    type_list = list(pruneable_types)
+
+    total_pruned = 0
+    nodes_affected = 0
+
+    for row in rows:
+        node_id = row[0]
+        # Get total degree for this node
+        deg = conn.execute(
+            "SELECT COUNT(*) FROM edges WHERE from_id = ? OR to_id = ?",
+            (node_id, node_id),
+        ).fetchone()[0]
+
+        if deg <= max_degree:
+            continue
+
+        excess = deg - max_degree
+        # Get pruneable edges sorted by weight ascending (weakest first)
+        candidates = conn.execute(
+            f"SELECT id FROM edges WHERE (from_id = ? OR to_id = ?) "
+            f"AND type IN ({type_placeholders}) ORDER BY weight ASC LIMIT ?",
+            [node_id, node_id] + type_list + [excess],
+        ).fetchall()
+
+        if not candidates:
+            continue
+
+        nodes_affected += 1
+        if dry_run:
+            total_pruned += len(candidates)
+            continue
+
+        ids_to_delete = [c[0] for c in candidates]
+        for i in range(0, len(ids_to_delete), 500):
+            chunk = ids_to_delete[i:i+500]
+            placeholders = ",".join("?" for _ in chunk)
+            conn.execute(f"DELETE FROM edges WHERE id IN ({placeholders})", chunk)
+        total_pruned += len(ids_to_delete)
+
+    if not dry_run and total_pruned > 0:
+        conn.commit()
+
+    return {"pruned": total_pruned, "nodes_affected": nodes_affected}
+
+
 def _sqlite_nearest_neighbor_edges(store, brain, k=5, sample_per_col=80, dry_run=False):
     """Create intra-collection edges between nearest neighbors in each collection.
 
@@ -368,11 +438,25 @@ def run_compaction_sqlite(brain, dry_run=False):
     orphan_nodes = _sqlite_remove_orphan_nodes(store, all_ids, dry_run=dry_run)
     print(f"Orphan nodes removed: {orphan_nodes}")
 
-    # 5. Nearest-neighbor intra-collection edges (boost intra-density)
+    # 5. Decay edge weights and prune weak edges
+    decay_types = {"hebbian_association", "cross_collection", "transitive_cross",
+                   "similar_to", "boosted_bridge", "mirror_bridge",
+                   "semantic_bridge", "bridged_similarity"}
+    decay_result = store.decay_edges(
+        half_life_days=30, prune_below=0.02,
+        decay_types=decay_types, dry_run=dry_run,
+    )
+    print(f"Edge decay: {decay_result['decayed']} decayed, {decay_result['pruned']} pruned")
+
+    # 6. Prune high-degree nodes (cap at 150 edges per node)
+    hd_result = _sqlite_prune_high_degree(store, max_degree=150, dry_run=dry_run)
+    print(f"High-degree pruning: {hd_result['pruned']} edges from {hd_result['nodes_affected']} nodes")
+
+    # 7. Nearest-neighbor intra-collection edges (boost intra-density)
     nn_edges = _sqlite_nearest_neighbor_edges(store, brain, dry_run=dry_run)
     print(f"Nearest-neighbor edges added: {nn_edges}")
 
-    # 6. Health metrics
+    # 8. Health metrics
     metrics = _sqlite_health_metrics(store, brain)
     elapsed = round(time.time() - t0, 1)
     print("\n=== Graph Health ===")
@@ -388,6 +472,9 @@ def run_compaction_sqlite(brain, dry_run=False):
         "duplicates_removed": 0,
         "nodes_backfilled": backfilled,
         "orphan_nodes_removed": orphan_nodes,
+        "edges_decayed": decay_result["decayed"],
+        "edges_decay_pruned": decay_result["pruned"],
+        "high_degree_pruned": hd_result["pruned"],
         "nn_edges_added": nn_edges,
         "health": metrics,
         "elapsed_s": elapsed,

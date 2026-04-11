@@ -6,29 +6,27 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 
 ## P0 — Current Sprint (2026-04-11)
 
+- [ ] [PHI_REACHABILITY_WEIGHT_DEPLOY] **(Audit 2026-04-11, flagged 3 consecutive audits)** Deploy the already-coded Phi reachability weight change (0.25→0.10) in `clarvis/metrics/phi.py`. The fix exists in code comments but was never applied to actual scoring — all 64 historical values use old weights. Reachability is permanently 1.0, inflating Phi by ~35%. Apply the weight, recalculate baseline, update any threshold alerts.
+- [ ] [ISOLATION_GUARD_SELFTEST_FIX] Fix `scripts/infra/isolation_guard.sh` self-test harness — remove the pipeline-to-`read` pattern that can mask subshell results, and make the self-tests assert actual pass/fail outcomes robustly.
 
 ## P1 — This Week
 
-### Strategic Audit Structural Fixes (2026-04-08 audit)
+### Strategic Audit Structural Fixes (2026-04-11 audit)
+- [ ] [COGNITIVE_STACK_AB_TEST] **(Audit 2026-04-11)** Run controlled A/B test on the cognitive architecture: execute 5 reasoning challenges with full cognitive stack enabled, 5 with modules ablated (raw retrieval + LLM only). Score outcomes with human-readable quality metrics. Determine whether the 22-module cognitive architecture produces measurably better reasoning. CLR ablation currently shows zero delta regardless of module — this test resolves whether that's a measurement failure or a capability failure.
+- [ ] [DEAD_SCRIPT_PURGE] **(Audit 2026-04-11)** Remove 88 unused scripts (59% of codebase). Verify no imports reference them first. Priority targets: wiki/ (12 files), infra/ (23 files), hooks/ (10 files), cognition/ (9 files). This is safe, high-ROI complexity reduction.
 - [ ] [LLM_BRAIN_REVIEW 2026-04-09] [LLM_BRAIN_REVIEW] Add temporal indexing or a recency-boosted retrieval path for queries containing time signals ('last 24 hours', 'recently', 'today') — e.g., filter by metadata timestamp before semantic ranking — Temporal queries (Probe 6) consistently return zero relevant results. An agent that cannot recall what it did yesterday has a fundamental operational gap.
-
-### SWO / Clarvis Brand Integration
 
 ### Fresh-Install / Isolation Validation
 - [ ] [E2E_HERMES_FRESH_ISOLATED] Run a truly fresh isolated Hermes install in `/tmp` or equivalent, with isolated venv/config/session dirs. Validate install, main entry points, config bootstrap, session persistence, basic chat loop, local-model path, and identify the exact supported invocation path (`hermes` vs `run_agent.py`) without hand-wavy workarounds.
-- [ ] [E2E_KNOWN_LIMITATIONS_DOC] After running the full validation, write one brutally honest support matrix: what is fully supported, what is partial, what is experimental, and what is explicitly unsupported. Open source should promise only what we can reproduce.
-- [ ] [E2E_INSTALL_REGRESSION_SUITE] Package the core fresh-install validations into repeatable scripts/tests that can be rerun before release and after major installer/harness changes. The goal is not one heroic manual run, but a durable regression suite.
 
-### Install Docs / Support Surface Consolidation (2026-04-07)
-- [ ] [INSTALL_DOC_STACK_CONSOLIDATION] Define the final install/support doc stack and the role of each file: `INSTALL.md` (front door), `INSTALL_MATRIX.md` (validation spec), `INSTALL_FRICTION_REPORT.md` (engineering reality), harness runtime guides, and dated validation reports. Remove overlap by design.
+### Install Docs / Support Surface Consolidation (2026-04-07) — DEPRIORITIZED by audit 2026-04-11, move to P2 when reasoning work is complete
 - [ ] [INSTALL_MD_TIGHTENING] Refactor `docs/INSTALL.md` into the single canonical install guide. Keep install profiles, first-run flow, and support-level summary; remove duplicated deep harness caveats that belong elsewhere.
-- [ ] [SUPPORT_MATRIX_DOC] Create `docs/SUPPORT_MATRIX.md` with brutally clear support levels for each path: standalone, OpenClaw, Clarvis-on-OpenClaw, Hermes, Clarvis-on-Hermes, local-only, and Docker. Use `SUPPORTED / PARTIAL / EXPERIMENTAL / UNSUPPORTED` with evidence links.
 - [ ] [INSTALL_MATRIX_PROMOTION] Promote `docs/INSTALL_MATRIX.md` as the source of truth for validation criteria. Make sure README/install docs link to it whenever claims are made about harness support or fresh-install readiness.
 - [ ] [OPENCLAW_RUNTIME_GUIDE_SCOPE] Refocus `docs/USER_GUIDE_OPENCLAW.md` into a runtime/operator guide only: usage, autonomy, commands, troubleshooting, and runtime expectations. Strip install duplication.
 - [ ] [HERMES_RUNTIME_GUIDE_SCOPE] Refocus `docs/USER_GUIDE_HERMES.md` into a runtime/operator guide only, and add a prominent support-status banner at the top if Hermes remains partial/experimental.
 - [ ] [INSTALL_DOC_CROSS_LINKING] Add intentional cross-links between README, INSTALL, SUPPORT_MATRIX, INSTALL_MATRIX, friction report, and harness runtime guides so users can move from marketing surface → install path → validation reality without confusion.
 - [ ] [INSTALL_CLAIM_DISCIPLINE] Audit all public claims in README/docs/site about install ease, harness support, and local-only operation. Every claim must map to a tested path or be downgraded in wording.
-- [ ] [INSTALL_DOCS_PRUNE] Remove or archive redundant install-related content once the new stack is in place. Goal: fewer docs, clearer roles, lower drift.
+- [ ] [INSTALL_DOCS_PRUNE] _(Blocked: prerequisite tasks INSTALL_MD_TIGHTENING, INSTALL_MATRIX_PROMOTION, etc. not done yet)_ Remove or archive redundant install-related content once the new stack is in place. Goal: fewer docs, clearer roles, lower drift.
 - [ ] [RELEASE_VALIDATION_SUMMARY_DOC] Add a single `docs/validation/RELEASE_VALIDATION_SUMMARY.md` summarizing what was tested, what passed, what partially passed, and what can be claimed publicly at the current release.
 
 ---
@@ -65,6 +63,8 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 ## Partial Items (tracked, not actively worked)
 
 ### External Challenges
+
+- [ ] [EXTERNAL_CHALLENGE:synthesis-02] Implement contradiction detection across wiki pages — Build a contradiction detector: for each pair of wiki pages that share a tag, compare their Key Claims via embedding similarity. Flag pairs where claims are semantically similar but contain negation o
 
 - [ ] [EXTERNAL_CHALLENGE:reasoning-depth-02] Implement analogical reasoning between brain memories — Build an analogy engine: given a source pair (A:B), find the best matching target pair (C:D) from brain memories. Use embedding offsets (B-A ≈ D-C) to detect structural analogies. Test on 10 analogy q
 

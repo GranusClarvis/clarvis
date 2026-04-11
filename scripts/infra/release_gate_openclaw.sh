@@ -51,9 +51,15 @@ DOCTOR_TOTAL=0
 
 # ── Step 1: Run clarvis doctor (non-isolated — checks real install) ──────
 echo "[1/3] Running clarvis doctor..."
-python3 -m clarvis doctor --json 2>/dev/null > "$ARTIFACT_DIR/doctor.json" || true
-python3 -m clarvis doctor --profile openclaw 2>/dev/null > "$ARTIFACT_DIR/doctor.txt" || true
-DOCTOR_EXIT=$?
+DOCTOR_JSON_EXIT=0
+python3 -m clarvis doctor --json 2>/dev/null > "$ARTIFACT_DIR/doctor.json" || DOCTOR_JSON_EXIT=$?
+
+DOCTOR_EXIT=0
+python3 -m clarvis doctor --profile openclaw 2>/dev/null > "$ARTIFACT_DIR/doctor.txt" || DOCTOR_EXIT=$?
+
+if [ "$DOCTOR_JSON_EXIT" -ne 0 ] && [ "$DOCTOR_EXIT" -eq 0 ]; then
+    DOCTOR_EXIT=$DOCTOR_JSON_EXIT
+fi
 
 # Parse doctor results
 if [ -f "$ARTIFACT_DIR/doctor.json" ]; then
@@ -64,6 +70,11 @@ if [ -f "$ARTIFACT_DIR/doctor.json" ]; then
     echo "  Doctor: ${DOCTOR_PASS}/${DOCTOR_TOTAL} passed, ${DOCTOR_FAILS} failed, ${DOCTOR_WARNS} warnings"
 else
     echo "  Doctor: FAILED to produce JSON output"
+    GATE_PASS=false
+fi
+
+if [ "$DOCTOR_EXIT" -ne 0 ]; then
+    echo "  FAIL: Doctor execution failed (exit code $DOCTOR_EXIT)"
     GATE_PASS=false
 fi
 
