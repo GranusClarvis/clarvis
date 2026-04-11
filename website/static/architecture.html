@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Architecture — Clarvis</title>
+<meta name="theme-color" content="#0a0a1a">
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -24,29 +25,34 @@
 
 <!-- === Dual-Layer Diagram === -->
 
-<div class="arch-diagram">                    ┌──────────────────────────────────┐
-                    │         Conscious Layer          │
-                    │  LLM gateway (Node.js, systemd)  │
-                    │  Chat: Telegram, Discord         │
-                    │  Skills &amp; command routing         │
-                    │  Reads subconscious digest       │
-                    └───────────────┬──────────────────┘
-                                    │ spawns
-                    ┌───────────────▼──────────────────┐
-                    │       Subconscious Layer          │
-                    │  20+ cron-scheduled jobs          │
-                    │  Heartbeat pipeline               │
-                    │  (gate → preflight → exec → post) │
-                    │  Writes digest for conscious      │
-                    └───────────────┬──────────────────┘
-                                    │ reads/writes
-                    ┌───────────────▼──────────────────┐
-                    │       Brain (ClarvisDB)           │
-                    │  ChromaDB + ONNX MiniLM (local)  │
-                    │  10 collections, 3400+ memories   │
-                    │  Graph: SQLite+WAL (indexed,ACID) │
-                    │  Hebbian learning (STDP synapses) │
-                    └──────────────────────────────────┘</div>
+<div class="arch-svg-wrap">
+  <svg viewBox="0 0 480 340" xmlns="http://www.w3.org/2000/svg" class="arch-svg" role="img" aria-label="Dual-layer architecture diagram">
+    <!-- Conscious Layer -->
+    <rect x="60" y="10" width="360" height="72" rx="8" fill="#0d0d1f" stroke="#ffd700" stroke-width="1.5" opacity="0.95"/>
+    <text x="240" y="34" text-anchor="middle" fill="#ffd700" font-family="'Press Start 2P', monospace" font-size="8" letter-spacing="0.5">CONSCIOUS LAYER</text>
+    <text x="240" y="52" text-anchor="middle" fill="#8a8a9a" font-family="'JetBrains Mono', monospace" font-size="10">LLM gateway · Chat · Skill routing</text>
+    <text x="240" y="68" text-anchor="middle" fill="#55556a" font-family="'JetBrains Mono', monospace" font-size="9">Telegram, Discord · Reads subconscious digest</text>
+    <!-- Arrow 1 -->
+    <line x1="240" y1="82" x2="240" y2="118" stroke="#ffd700" stroke-width="1" stroke-dasharray="4,3" opacity="0.5"/>
+    <polygon points="234,114 240,124 246,114" fill="#ffd700" opacity="0.6"/>
+    <text x="260" y="106" fill="#55556a" font-family="'JetBrains Mono', monospace" font-size="8">spawns</text>
+    <!-- Subconscious Layer -->
+    <rect x="60" y="124" width="360" height="82" rx="8" fill="#0d0d1f" stroke="#9966ff" stroke-width="1.5" opacity="0.95"/>
+    <text x="240" y="148" text-anchor="middle" fill="#9966ff" font-family="'Press Start 2P', monospace" font-size="8" letter-spacing="0.5">SUBCONSCIOUS LAYER</text>
+    <text x="240" y="168" text-anchor="middle" fill="#8a8a9a" font-family="'JetBrains Mono', monospace" font-size="10">Heartbeat: Gate → Preflight → Execute → Learn</text>
+    <text x="240" y="186" text-anchor="middle" fill="#55556a" font-family="'JetBrains Mono', monospace" font-size="9">47 cron jobs · Writes digest for conscious layer</text>
+    <!-- Arrow 2 -->
+    <line x1="240" y1="206" x2="240" y2="238" stroke="#9966ff" stroke-width="1" stroke-dasharray="4,3" opacity="0.5"/>
+    <polygon points="234,234 240,244 246,234" fill="#9966ff" opacity="0.6"/>
+    <text x="260" y="226" fill="#55556a" font-family="'JetBrains Mono', monospace" font-size="8">reads/writes</text>
+    <!-- Brain -->
+    <rect x="60" y="244" width="360" height="86" rx="8" fill="#0d0d1f" stroke="#4488ff" stroke-width="1.5" opacity="0.95"/>
+    <text x="240" y="268" text-anchor="middle" fill="#4488ff" font-family="'Press Start 2P', monospace" font-size="8" letter-spacing="0.5">CLARVISDB BRAIN</text>
+    <text x="240" y="288" text-anchor="middle" fill="#8a8a9a" font-family="'JetBrains Mono', monospace" font-size="10">ChromaDB + ONNX MiniLM · SQLite+WAL graph</text>
+    <text x="240" y="306" text-anchor="middle" fill="#55556a" font-family="'JetBrains Mono', monospace" font-size="9">10 collections · 3,400+ memories · 134k+ edges</text>
+    <text x="240" y="322" text-anchor="middle" fill="#55556a" font-family="'JetBrains Mono', monospace" font-size="9">Hebbian learning (STDP synapses) · All local</text>
+  </svg>
+</div>
 
 <!-- === Dual-Layer Explanation === -->
 
@@ -68,19 +74,53 @@
     Every autonomous execution follows a four-stage pipeline:
   </p>
 
-  <div class="arch-diagram">  1. Gate Check (zero-LLM)
-     │  Health verification, lock acquisition, skip conditions
-     ▼
-  2. Preflight
-     │  Attention scoring, task selection, context assembly,
-     │  brain search, episodic recall, working memory
-     ▼
-  3. Execution
-     │  Claude Code runs the selected task autonomously
-     ▼
-  4. Postflight
-     │  Episode encoding, confidence recording, reasoning chain
-     │  closing, metric updates, brain storage, digest write</div>
+  <div class="arch-svg-wrap">
+    <svg viewBox="0 0 520 280" xmlns="http://www.w3.org/2000/svg" class="arch-svg" role="img" aria-label="Heartbeat pipeline diagram">
+      <!-- Step 1: Gate -->
+      <rect x="10" y="20" width="110" height="56" rx="6" fill="#0d0d1f" stroke="#44ff88" stroke-width="1.2"/>
+      <text x="65" y="40" text-anchor="middle" fill="#44ff88" font-family="'Press Start 2P', monospace" font-size="7">1. GATE</text>
+      <text x="65" y="56" text-anchor="middle" fill="#8a8a9a" font-family="'JetBrains Mono', monospace" font-size="8">Zero-LLM</text>
+      <text x="65" y="68" text-anchor="middle" fill="#55556a" font-family="'JetBrains Mono', monospace" font-size="7">Health + Lock</text>
+      <!-- Arrow -->
+      <line x1="120" y1="48" x2="145" y2="48" stroke="#44ff88" stroke-width="1" opacity="0.5"/>
+      <polygon points="142,44 150,48 142,52" fill="#44ff88" opacity="0.6"/>
+      <!-- Step 2: Preflight -->
+      <rect x="150" y="20" width="110" height="56" rx="6" fill="#0d0d1f" stroke="#ffd700" stroke-width="1.2"/>
+      <text x="205" y="40" text-anchor="middle" fill="#ffd700" font-family="'Press Start 2P', monospace" font-size="7">2. PREFLIGHT</text>
+      <text x="205" y="56" text-anchor="middle" fill="#8a8a9a" font-family="'JetBrains Mono', monospace" font-size="8">Attention + Context</text>
+      <text x="205" y="68" text-anchor="middle" fill="#55556a" font-family="'JetBrains Mono', monospace" font-size="7">Task selection</text>
+      <!-- Arrow -->
+      <line x1="260" y1="48" x2="285" y2="48" stroke="#ffd700" stroke-width="1" opacity="0.5"/>
+      <polygon points="282,44 290,48 282,52" fill="#ffd700" opacity="0.6"/>
+      <!-- Step 3: Execution -->
+      <rect x="290" y="20" width="110" height="56" rx="6" fill="#0d0d1f" stroke="#4488ff" stroke-width="1.2"/>
+      <text x="345" y="40" text-anchor="middle" fill="#4488ff" font-family="'Press Start 2P', monospace" font-size="7">3. EXECUTE</text>
+      <text x="345" y="56" text-anchor="middle" fill="#8a8a9a" font-family="'JetBrains Mono', monospace" font-size="8">Claude Code</text>
+      <text x="345" y="68" text-anchor="middle" fill="#55556a" font-family="'JetBrains Mono', monospace" font-size="7">Autonomous task</text>
+      <!-- Arrow -->
+      <line x1="400" y1="48" x2="425" y2="48" stroke="#4488ff" stroke-width="1" opacity="0.5"/>
+      <polygon points="422,44 430,48 422,52" fill="#4488ff" opacity="0.6"/>
+      <!-- Step 4: Postflight -->
+      <rect x="430" y="20" width="80" height="56" rx="6" fill="#0d0d1f" stroke="#9966ff" stroke-width="1.2"/>
+      <text x="470" y="40" text-anchor="middle" fill="#9966ff" font-family="'Press Start 2P', monospace" font-size="6">4. POST</text>
+      <text x="470" y="56" text-anchor="middle" fill="#8a8a9a" font-family="'JetBrains Mono', monospace" font-size="8">Learn</text>
+      <text x="470" y="68" text-anchor="middle" fill="#55556a" font-family="'JetBrains Mono', monospace" font-size="7">Episode + Metrics</text>
+      <!-- Feedback loop arrow (postflight back to brain) -->
+      <path d="M 470 76 L 470 110 Q 470 120 460 120 L 80 120 Q 65 120 65 110 L 65 76" fill="none" stroke="#9966ff" stroke-width="0.8" stroke-dasharray="4,3" opacity="0.35"/>
+      <polygon points="61,80 65,70 69,80" fill="#9966ff" opacity="0.4"/>
+      <text x="260" y="116" text-anchor="middle" fill="#55556a" font-family="'JetBrains Mono', monospace" font-size="7" opacity="0.7">episode → brain → next heartbeat</text>
+      <!-- Brain connection below -->
+      <rect x="130" y="150" width="260" height="50" rx="6" fill="#0d0d1f" stroke="#4488ff" stroke-width="1" stroke-dasharray="3,2" opacity="0.6"/>
+      <text x="260" y="172" text-anchor="middle" fill="#4488ff" font-family="'Press Start 2P', monospace" font-size="6" opacity="0.7">CLARVISDB</text>
+      <text x="260" y="190" text-anchor="middle" fill="#55556a" font-family="'JetBrains Mono', monospace" font-size="8">Search · Store · Graph · Hebbian update</text>
+      <!-- Connections to brain -->
+      <line x1="205" y1="76" x2="205" y2="150" stroke="#ffd700" stroke-width="0.6" stroke-dasharray="3,3" opacity="0.3"/>
+      <line x1="345" y1="76" x2="345" y2="150" stroke="#4488ff" stroke-width="0.6" stroke-dasharray="3,3" opacity="0.3"/>
+      <!-- Labels for connections -->
+      <text x="195" y="135" text-anchor="end" fill="#ffd700" font-family="'JetBrains Mono', monospace" font-size="7" opacity="0.5">recall</text>
+      <text x="355" y="135" text-anchor="start" fill="#4488ff" font-family="'JetBrains Mono', monospace" font-size="7" opacity="0.5">read/write</text>
+    </svg>
+  </div>
 
   <div class="feature-grid">
     <div class="feature-card">
@@ -134,23 +174,42 @@
     10 specialized collections.
   </p>
 
-  <div class="status-grid">
-    <div class="status-card">
-      <div class="status-label">Collections</div>
-      <div class="status-value"><span class="stat-number">10</span> <span class="status-detail">specialized stores</span></div>
-    </div>
-    <div class="status-card">
-      <div class="status-label">Memories</div>
-      <div class="status-value"><span class="stat-number">3,400+</span></div>
-    </div>
-    <div class="status-card">
-      <div class="status-label">Graph Edges</div>
-      <div class="status-value"><span class="stat-number">134k+</span> <span class="status-detail">relation links</span></div>
-    </div>
-    <div class="status-card">
-      <div class="status-label">Embeddings</div>
-      <div class="status-value">ONNX MiniLM <span class="status-detail">local CPU</span></div>
-    </div>
+  <div class="arch-svg-wrap" style="margin-bottom: var(--space-md);">
+    <svg viewBox="0 0 500 180" xmlns="http://www.w3.org/2000/svg" class="arch-svg" role="img" aria-label="Memory architecture diagram">
+      <!-- Central brain node -->
+      <rect x="180" y="10" width="140" height="40" rx="6" fill="#0d0d1f" stroke="#4488ff" stroke-width="1.5"/>
+      <text x="250" y="35" text-anchor="middle" fill="#4488ff" font-family="'Press Start 2P', monospace" font-size="7">CLARVISDB</text>
+      <!-- Vector Store -->
+      <rect x="10" y="75" width="100" height="44" rx="5" fill="#0d0d1f" stroke="#ffd700" stroke-width="1"/>
+      <text x="60" y="93" text-anchor="middle" fill="#ffd700" font-family="'JetBrains Mono', monospace" font-size="8" font-weight="bold">ChromaDB</text>
+      <text x="60" y="108" text-anchor="middle" fill="#55556a" font-family="'JetBrains Mono', monospace" font-size="7">10 collections</text>
+      <!-- Graph -->
+      <rect x="130" y="75" width="100" height="44" rx="5" fill="#0d0d1f" stroke="#9966ff" stroke-width="1"/>
+      <text x="180" y="93" text-anchor="middle" fill="#9966ff" font-family="'JetBrains Mono', monospace" font-size="8" font-weight="bold">Graph</text>
+      <text x="180" y="108" text-anchor="middle" fill="#55556a" font-family="'JetBrains Mono', monospace" font-size="7">SQLite + WAL</text>
+      <!-- Hebbian -->
+      <rect x="250" y="75" width="100" height="44" rx="5" fill="#0d0d1f" stroke="#9966ff" stroke-width="1"/>
+      <text x="300" y="93" text-anchor="middle" fill="#9966ff" font-family="'JetBrains Mono', monospace" font-size="8" font-weight="bold">Hebbian</text>
+      <text x="300" y="108" text-anchor="middle" fill="#55556a" font-family="'JetBrains Mono', monospace" font-size="7">STDP synapses</text>
+      <!-- Embeddings -->
+      <rect x="370" y="75" width="120" height="44" rx="5" fill="#0d0d1f" stroke="#44ff88" stroke-width="1"/>
+      <text x="430" y="93" text-anchor="middle" fill="#44ff88" font-family="'JetBrains Mono', monospace" font-size="8" font-weight="bold">ONNX MiniLM</text>
+      <text x="430" y="108" text-anchor="middle" fill="#55556a" font-family="'JetBrains Mono', monospace" font-size="7">Local CPU</text>
+      <!-- Connections -->
+      <line x1="60" y1="75" x2="200" y2="50" stroke="#ffd700" stroke-width="0.7" opacity="0.4"/>
+      <line x1="180" y1="75" x2="230" y2="50" stroke="#9966ff" stroke-width="0.7" opacity="0.4"/>
+      <line x1="300" y1="75" x2="270" y2="50" stroke="#9966ff" stroke-width="0.7" opacity="0.4"/>
+      <line x1="430" y1="75" x2="300" y2="50" stroke="#44ff88" stroke-width="0.7" opacity="0.4"/>
+      <!-- Stats row -->
+      <text x="60" y="145" text-anchor="middle" fill="#ffd700" font-family="'JetBrains Mono', monospace" font-size="11" font-weight="bold">3,400+</text>
+      <text x="60" y="160" text-anchor="middle" fill="#55556a" font-family="'JetBrains Mono', monospace" font-size="7">memories</text>
+      <text x="180" y="145" text-anchor="middle" fill="#9966ff" font-family="'JetBrains Mono', monospace" font-size="11" font-weight="bold">134k+</text>
+      <text x="180" y="160" text-anchor="middle" fill="#55556a" font-family="'JetBrains Mono', monospace" font-size="7">graph edges</text>
+      <text x="300" y="145" text-anchor="middle" fill="#9966ff" font-family="'JetBrains Mono', monospace" font-size="11" font-weight="bold">STDP</text>
+      <text x="300" y="160" text-anchor="middle" fill="#55556a" font-family="'JetBrains Mono', monospace" font-size="7">fire together, wire</text>
+      <text x="430" y="145" text-anchor="middle" fill="#44ff88" font-family="'JetBrains Mono', monospace" font-size="11" font-weight="bold">~269ms</text>
+      <text x="430" y="160" text-anchor="middle" fill="#55556a" font-family="'JetBrains Mono', monospace" font-size="7">avg retrieval</text>
+    </svg>
   </div>
 
   <div class="feature-grid" style="margin-top: var(--space-md);">

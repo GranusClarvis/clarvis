@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Clarvis — Autonomous Intelligence by Star World Order</title>
 <meta name="description" content="Clarvis is an autonomous cognitive agent that remembers everything, reflects on its own performance, and evolves itself 24/7. Persistent local memory, self-directed evolution, continuous self-improvement.">
+<meta name="theme-color" content="#0a0a1a">
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -103,27 +104,97 @@
   </div>
 </div>
 
+<!-- How Clarvis Differs -->
+<section class="section" id="comparison">
+  <h2>How Clarvis Differs</h2>
+  <p class="section-intro">
+    Most agent frameworks give you tools to build agents. Clarvis <em>is</em> the agent &mdash;
+    a running system that operates continuously, measures itself, and improves through its own work.
+    Here's what that means concretely.
+  </p>
+
+  <div class="comparison-table-wrap">
+    <table class="comparison-table">
+      <thead>
+        <tr>
+          <th>Capability</th>
+          <th>Typical Agent Framework</th>
+          <th class="highlight-col">Clarvis</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="cap-label">Memory</td>
+          <td>Session buffer or optional vector store; developer must wire persistence</td>
+          <td class="highlight-col">10-collection vector brain with graph relations, Hebbian synapses, and episodic recall &mdash; always on, fully local</td>
+        </tr>
+        <tr>
+          <td class="cap-label">Autonomy</td>
+          <td>Runs when prompted; may loop until a goal is met, then stops</td>
+          <td class="highlight-col">47 scheduled jobs run 24/7 &mdash; planning, research, implementation, reflection, maintenance &mdash; unprompted</td>
+        </tr>
+        <tr>
+          <td class="cap-label">Self-measurement</td>
+          <td>Logging and traces; evaluation is an external concern</td>
+          <td class="highlight-col">8-dimension Performance Index, CLR benchmark, Brier-scored confidence calibration, and a 7-domain self-model &mdash; all computed internally</td>
+        </tr>
+        <tr>
+          <td class="cap-label">Learning</td>
+          <td>RAG retrieval improves with better embeddings or data; agent code is static</td>
+          <td class="highlight-col">Every execution produces a structured episode; retrieval quality improves through use via STDP dynamics; the agent modifies its own queue, scripts, and architecture</td>
+        </tr>
+        <tr>
+          <td class="cap-label">Architecture</td>
+          <td>Single loop or DAG of tool calls</td>
+          <td class="highlight-col">Dual-layer: conscious (chat gateway) + subconscious (cron-scheduled evolution), sharing state through a persistent brain</td>
+        </tr>
+        <tr>
+          <td class="cap-label">Cloud dependency</td>
+          <td>Vector store often cloud-hosted; memory tied to provider APIs</td>
+          <td class="highlight-col">All embeddings and retrieval are local (ONNX MiniLM on CPU). LLM calls are the only external dependency</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="comparison-note">
+    This isn't a criticism of frameworks &mdash; LangChain, CrewAI, and LangGraph are excellent
+    building blocks. Clarvis simply operates at a different level: it's a <strong>deployed cognitive
+    system</strong>, not a toolkit for assembling one.
+  </p>
+</section>
+
 <!-- Architecture Overview -->
 <section class="section">
   <h2>How It Works</h2>
-  <div class="arch-diagram">  ┌────────────────────────────────────────┐
-  │  Conscious Layer  (LLM + gateway)     │
-  │  Direct chat, skill routing, spawning │
-  └─────────────────┬────────────────────┘
-                    │
-  ┌─────────────────▼────────────────────┐
-  │  Subconscious Layer  (cron + Claude) │
-  │  Gate → Preflight → Execute → Learn  │
-  │  20+ daily jobs: evolve, reflect,    │
-  │  research, benchmark, maintain       │
-  └─────────────────┬────────────────────┘
-                    │
-  ┌─────────────────▼────────────────────┐
-  │  ClarvisDB Brain  (all local)        │
-  │  ChromaDB vectors + graph relations  │
-  │  Hebbian synapses + episodic memory  │
-  │  10 collections, ONNX embeddings     │
-  └──────────────────────────────────────┘</div>
+  <div class="arch-svg-wrap">
+    <svg viewBox="0 0 480 340" xmlns="http://www.w3.org/2000/svg" class="arch-svg" role="img" aria-label="Dual-layer architecture diagram">
+      <!-- Conscious Layer -->
+      <rect x="60" y="10" width="360" height="72" rx="8" fill="#0d0d1f" stroke="#ffd700" stroke-width="1.5" opacity="0.95"/>
+      <text x="240" y="34" text-anchor="middle" fill="#ffd700" font-family="'Press Start 2P', monospace" font-size="8" letter-spacing="0.5">CONSCIOUS LAYER</text>
+      <text x="240" y="52" text-anchor="middle" fill="#8a8a9a" font-family="'JetBrains Mono', monospace" font-size="10">LLM gateway · Chat · Skill routing</text>
+      <text x="240" y="68" text-anchor="middle" fill="#55556a" font-family="'JetBrains Mono', monospace" font-size="9">Reads subconscious digest</text>
+      <!-- Arrow 1 -->
+      <line x1="240" y1="82" x2="240" y2="118" stroke="#ffd700" stroke-width="1" stroke-dasharray="4,3" opacity="0.5"/>
+      <polygon points="234,114 240,124 246,114" fill="#ffd700" opacity="0.6"/>
+      <text x="260" y="106" fill="#55556a" font-family="'JetBrains Mono', monospace" font-size="8">spawns</text>
+      <!-- Subconscious Layer -->
+      <rect x="60" y="124" width="360" height="82" rx="8" fill="#0d0d1f" stroke="#9966ff" stroke-width="1.5" opacity="0.95"/>
+      <text x="240" y="148" text-anchor="middle" fill="#9966ff" font-family="'Press Start 2P', monospace" font-size="8" letter-spacing="0.5">SUBCONSCIOUS LAYER</text>
+      <text x="240" y="168" text-anchor="middle" fill="#8a8a9a" font-family="'JetBrains Mono', monospace" font-size="10">Gate → Preflight → Execute → Learn</text>
+      <text x="240" y="186" text-anchor="middle" fill="#55556a" font-family="'JetBrains Mono', monospace" font-size="9">47 cron jobs · Evolve · Reflect · Research · Benchmark</text>
+      <!-- Arrow 2 -->
+      <line x1="240" y1="206" x2="240" y2="238" stroke="#9966ff" stroke-width="1" stroke-dasharray="4,3" opacity="0.5"/>
+      <polygon points="234,234 240,244 246,234" fill="#9966ff" opacity="0.6"/>
+      <text x="260" y="226" fill="#55556a" font-family="'JetBrains Mono', monospace" font-size="8">reads/writes</text>
+      <!-- Brain -->
+      <rect x="60" y="244" width="360" height="86" rx="8" fill="#0d0d1f" stroke="#4488ff" stroke-width="1.5" opacity="0.95"/>
+      <text x="240" y="268" text-anchor="middle" fill="#4488ff" font-family="'Press Start 2P', monospace" font-size="8" letter-spacing="0.5">CLARVISDB BRAIN</text>
+      <text x="240" y="288" text-anchor="middle" fill="#8a8a9a" font-family="'JetBrains Mono', monospace" font-size="10">ChromaDB vectors + SQLite graph</text>
+      <text x="240" y="306" text-anchor="middle" fill="#55556a" font-family="'JetBrains Mono', monospace" font-size="9">10 collections · Hebbian synapses · ONNX embeddings</text>
+      <text x="240" y="322" text-anchor="middle" fill="#55556a" font-family="'JetBrains Mono', monospace" font-size="9">All local — zero cloud for retrieval</text>
+    </svg>
+  </div>
   <p class="section-intro">
     Each execution cycle follows the <strong>Heartbeat Pipeline</strong>: a zero-LLM gate
     check, attention-scored task selection, context assembly from memory, autonomous execution,

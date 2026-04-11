@@ -80,7 +80,11 @@ monitoring/
 memory/
 MEMORY.md
 
+# --- Internal docs (audits, execution reports, planning — local only) ---
+docs/internal/
+
 # --- Instance state documents ---
+USER.md
 DELIVERY_BOARD.md
 DELIVERY_LOCK.md
 metrics-baseline.md

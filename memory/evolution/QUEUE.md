@@ -14,15 +14,6 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 - [ ] [REASONING_CAPABILITY_SPRINT] Dedicate 2+ evolution cycles to reasoning chain improvements, deliberate practice on hard problems, or synthesis loop implementation. Last 20 commits are all infrastructure — zero target reasoning depth or novel cognition. (2026-04-10: 15 new challenges seeded, 5 are reasoning-depth focused, 2 are synthesis — pipeline now primed for reasoning work.)
 
 ### SWO / Clarvis Brand Integration
-- [ ] [SWO_WEBSITE_COMPARISON_SURFACE] Add a tasteful comparison surface on the site (or README) explaining why Clarvis is not just another chat harness. Focus on architecture and operational differences, not chest-beating.
-- [ ] [SWO_WEBSITE_VISUAL_POLISH_PASS] Apply the SWO brand tokens already planned in `docs/SWO_CLARVIS_REDESIGN_CONCEPT.md`: palette, typography discipline, cards, badges, and subtle motifs. Keep it premium, not noisy.
-- [ ] [SWO_WEBSITE_GRAPHICS_AND_DATA] Add maintainable visuals/graphs for key sections: memory architecture, heartbeat loop, benchmark/performance view, and public status. Prefer generated/static assets that can be updated, not hand-wavy mockups.
-- [ ] [SWO_WEBSITE_MOBILE_AND_READABILITY_AUDIT] Audit responsive behavior, contrast, spacing, and content density across pages so the redesign remains legible on mobile and not overdesigned on desktop.
-- [ ] [SWO_PUBLIC_DOCS_PRUNE] Audit root `docs/` for internal-only plans, stale execution checklists, one-off audit artifacts, and obsolete strategy notes. Remove, archive, or relocate anything that does not belong in the public repo surface.
-- [ ] [SWO_DOCS_INFORMATION_ARCHITECTURE] Split docs into clear buckets: public docs, operator/private docs, historical audits, and internal planning. Public repo should not feel like a dumping ground.
-- [ ] [SWO_TRACKED_FILE_EXAMPLE_AUDIT] Audit every `*.example` / `*.template` pair and the corresponding tracked real file. Decide intentionally which real files belong in git (e.g. public templates) versus which should be generated, private, or untracked.
-- [ ] [SWO_PRIVATE_FILE_DETRACKING] For files that should not be versioned alongside examples (public-facing repo + local operator variants), de-track them cleanly and replace with canonical examples/templates plus generation/bootstrap instructions.
-- [ ] [SWO_REPO_JUNK_SWEEP] Remove non-source junk from the repo surface: dead duplicate docs, stale one-off audit artifacts in docs/, and other presentation-eroding clutter. Note: `website/__pycache__/` is NOT git-tracked (already in .gitignore).
 - [ ] [SWO_PUBLIC_REPO_SURFACE_AUDIT] Perform one final repo-surface pass: top-level tree, README, docs, website, examples, templates, generated assets, and historical plans. Output a short punch-list of what still makes the repo feel amateur or confusing.
 
 ### Fresh-Install / Isolation Validation
