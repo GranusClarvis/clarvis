@@ -15,6 +15,11 @@
 #
 # Exit: 0 = all guards pass, 1 = guard tripped (test must not proceed)
 
+# Detect --self-test early so guard failures don't exit before we reach the test harness
+if [ "${1:-}" = "--self-test" ] 2>/dev/null; then
+    _GUARD_SELF_TEST=1
+fi
+
 _GUARD_PASS=0
 _GUARD_FAIL=0
 _GUARD_ERRORS=()
@@ -130,14 +135,14 @@ if [ "${1:-}" = "--self-test" ] 2>/dev/null; then
     }
 
     # Test 1: Should FAIL with no env vars set
-    (
+    result=$(
         unset CLARVIS_E2E_ISOLATED CLARVIS_WORKSPACE CLARVIS_E2E_PORT CLARVIS_AUTH_DIR OPENCLAW_GATEWAY_PID
         export _GUARD_SELF_TEST=1
         _GUARD_PASS=0 _GUARD_FAIL=0 _GUARD_ERRORS=()
         source "${BASH_SOURCE[0]}" 2>/dev/null
         echo "$_GUARD_RESULT"
-    ) | read -r result
-    _st_check "Rejects bare environment" "fail" "${result:-fail}"
+    )
+    _st_check "Rejects bare environment" "fail" "${result:-unknown}"
 
     # Test 2: Should PASS with correct isolation vars
     result=$(

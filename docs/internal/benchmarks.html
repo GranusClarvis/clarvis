@@ -4,106 +4,82 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Benchmarks — Clarvis</title>
-<meta name="theme-color" content="#0a0a1a">
-<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
 
 <nav>
-  <a href="/">Home</a>
-  <a href="/architecture">Architecture</a>
-  <a href="/capabilities">Capabilities</a>
-  <a href="/repos">Repos</a>
-  <a href="/benchmarks" aria-current="page">Benchmarks</a>
-  <a href="/roadmap">Roadmap</a>
+  <a href="index.html">Home</a>
+  <a href="architecture.html">Architecture</a>
+  <a href="repos.html">Repos</a>
+  <a href="benchmarks.html" aria-current="page">Benchmarks</a>
+  <a href="roadmap.html">Roadmap</a>
 </nav>
 
-<div class="page-header">
-  <h1>Benchmarks</h1>
-  <p class="subtitle">Live signals from Clarvis's self-evaluation systems.</p>
-</div>
+<h1>Benchmarks</h1>
+<p class="subtitle">Live signals from Clarvis's self-evaluation systems.</p>
 
-<section class="section">
+<section class="status-section">
   <h2>CLR &mdash; Clarvis Learning Rate</h2>
-  <p class="section-intro">
-    CLR measures how effectively Clarvis learns and retains information over time.
-    It evaluates retrieval quality, context assembly, reasoning accuracy, and
-    operational health across multiple dimensions. The <strong>gate pass</strong> indicates
-    whether the system meets minimum quality thresholds for autonomous operation.
-  </p>
+  <p class="identity">CLR measures how effectively Clarvis learns and retains information over time. It evaluates retrieval quality, context assembly, reasoning accuracy, and operational health across multiple dimensions. The <strong>gate pass</strong> indicates whether the system meets minimum quality thresholds for autonomous operation.</p>
 
   <div class="status-grid">
     <div class="status-card">
       <div class="status-label">CLR Score</div>
-      <div class="status-value" id="clr-value">
-        <span class="stat-number">--</span>
-      </div>
+      <div class="status-value" id="clr-value"><span class="stat-number">--</span></div>
     </div>
     <div class="status-card">
       <div class="status-label">Value Add</div>
-      <div class="status-value" id="clr-value-add">
-        <span class="stat-number">--</span>
-        <span class="status-detail">above baseline</span>
-      </div>
+      <div class="status-value" id="clr-value-add"><span class="stat-number">--</span> <span class="status-detail">above baseline</span></div>
     </div>
     <div class="status-card">
       <div class="status-label">Gate Pass</div>
-      <div class="status-value" id="clr-gate">
-        <span class="stat-number">--</span>
-      </div>
+      <div class="status-value" id="clr-gate"><span class="stat-number">--</span></div>
     </div>
     <div class="status-card">
       <div class="status-label">Last Updated</div>
-      <div class="status-value" id="clr-updated">
-        <span class="status-detail">--</span>
-      </div>
+      <div class="status-value" id="clr-updated"><span class="status-detail">--</span></div>
     </div>
   </div>
 
   <div id="clr-dimensions" class="status-grid" style="margin-top: var(--space-md);"></div>
 </section>
 
-<section class="section">
+<section class="status-section">
   <h2>PI &mdash; Performance Index</h2>
-  <p class="section-intro">
-    Composite operational health score across 8 dimensions: brain speed, retrieval quality,
-    efficiency, accuracy, results quality, bloat control, context quality, and load scaling.
-    Range: 0.0 to 1.0.
-  </p>
+  <p class="identity">Composite operational health score across 8 dimensions: brain speed, retrieval quality, efficiency, accuracy, results quality, bloat control, context quality, and load scaling. Range: 0.0 to 1.0.</p>
 
   <div class="status-grid">
     <div class="status-card">
       <div class="status-label">PI Score</div>
-      <div class="status-value" id="pi-value">
-        <span class="stat-number">--</span>
-      </div>
+      <div class="status-value" id="pi-value"><span class="stat-number">--</span></div>
     </div>
     <div class="status-card">
       <div class="status-label">Dimensions</div>
-      <div class="status-value" id="pi-dimensions">
-        <span class="stat-number">8</span>
-      </div>
+      <div class="status-value" id="pi-dimensions"><span class="stat-number">8</span></div>
     </div>
   </div>
 </section>
 
-<section class="section">
-  <h2>Why Gate Pass Matters</h2>
-  <p class="section-intro">
-    Gate pass is a binary quality threshold. When CLR score drops below the gate threshold,
-    autonomous evolution pauses and the system enters a maintenance-first mode until quality
-    recovers. This prevents the agent from compounding errors during degraded operation.
-  </p>
+<section class="status-section">
+  <h2>Episodes</h2>
+  <p class="identity">Every autonomous task produces an episode. Success rate tracks how often tasks complete without errors.</p>
+
+  <div class="status-grid">
+    <div class="status-card">
+      <div class="status-label">Success Rate</div>
+      <div class="status-value" id="ep-rate"><span class="stat-number">--</span></div>
+    </div>
+    <div class="status-card">
+      <div class="status-label">Total Episodes</div>
+      <div class="status-value" id="ep-total"><span class="stat-number">--</span></div>
+    </div>
+  </div>
 </section>
 
-<div class="cta-section">
-  <h2>See the Architecture</h2>
-  <p>Understand the systems behind these numbers.</p>
-  <div class="cta-links">
-    <a href="/architecture" class="btn-ghost">Architecture</a>
-    <a href="/capabilities" class="btn-ghost">Capabilities</a>
-    <a href="https://github.com/GranusClarvis/clarvis" class="btn-primary">View on GitHub</a>
-  </div>
+<div class="section-divider">
+  <h2>Why Gate Pass Matters</h2>
+  <p class="identity">Gate pass is a binary quality threshold. When CLR score drops below the gate threshold, autonomous evolution pauses and the system enters a maintenance-first mode until quality recovers. This prevents the agent from compounding errors during degraded operation.</p>
 </div>
 
 <footer>
@@ -112,8 +88,6 @@
 
 <script>
 (function() {
-  var API = '/api/public/status';
-
   function update(data) {
     if (data.benchmarks && data.benchmarks.clr) {
       var c = data.benchmarks.clr;
@@ -150,15 +124,21 @@
       document.getElementById('pi-dimensions').innerHTML =
         '<span class="stat-number">' + p.dimensions + '</span>';
     }
+    if (data.episodes) {
+      var rate = (data.episodes.success_rate * 100).toFixed(1);
+      var color = data.episodes.success_rate >= 0.85 ? 'var(--green)' : data.episodes.success_rate >= 0.70 ? 'var(--yellow)' : 'var(--red)';
+      document.getElementById('ep-rate').innerHTML =
+        '<span class="stat-number" style="color:' + color + '">' + rate + '%</span>';
+      document.getElementById('ep-total').innerHTML =
+        '<span class="stat-number">' + data.episodes.total + '</span>';
+    }
   }
 
   function poll() {
-    fetch(API).then(function(r) { return r.json(); }).then(update).catch(function() {
-      fetch('/static/status.json').then(function(r) { return r.json(); }).then(update).catch(function() {});
-    });
+    fetch('status.json').then(function(r) { return r.json(); }).then(update).catch(function() {});
   }
   poll();
-  setInterval(poll, 20000);
+  setInterval(poll, 30000);
 })();
 </script>
 
