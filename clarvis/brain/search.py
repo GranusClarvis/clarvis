@@ -726,6 +726,12 @@ class SearchMixin:
             except Exception:
                 _log.debug("Graph expansion failed", exc_info=True)
 
+        # Phase 6b: Re-rank after expansions so new results are properly sorted
+        if (cross_collection_expand or graph_expand) and len(final_results) > len(all_results[:n * len(collections)]):
+            final_results = self._score_and_sort(
+                final_results, recency_weight, attention_boost, filter_bridges)
+            final_results = final_results[:n * len(collections)]
+
         # Phase 7: Observers + reconsolidation + cache
         self._fire_recall_observers(query, final_results, caller)
         now_mono = time.monotonic()

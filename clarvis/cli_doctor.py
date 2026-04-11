@@ -11,6 +11,8 @@ Produces PASS/WARN/FAIL for:
   - Memory paths and data directories
   - Cron readiness (scripts, crontab)
   - Model wiring (API keys, endpoints)
+  - Feature availability (heartbeat, reasoning, queue, calibration, PI)
+  - Model connectivity (OpenRouter API, Telegram bot)
   - Harness integration (OpenClaw, Hermes, Ollama)
 """
 
@@ -212,6 +214,114 @@ def _check_cron_readiness(r: _Results):
         r.warned("crontab", "no crontab configured")
 
 
+def _check_feature_availability(r: _Results):
+    """Check which Clarvis features are operational."""
+    # Heartbeat pipeline
+    for script, label in [
+        ("pipeline/heartbeat_gate.py", "heartbeat gate"),
+        ("pipeline/heartbeat_preflight.py", "heartbeat preflight"),
+        ("pipeline/heartbeat_postflight.py", "heartbeat postflight"),
+    ]:
+        if (WORKSPACE / "scripts" / script).is_file():
+            r.passed(f"feature: {label}")
+        else:
+            r.warned(f"feature: {label}", f"scripts/{script} missing")
+
+    # Reasoning engine
+    try:
+        from clarvis.cognition.reasoning import reasoner
+        meta = reasoner._load_meta()
+        total = meta.get("total_sessions", 0)
+        r.passed("feature: reasoning engine", f"{total} sessions")
+    except Exception as e:
+        r.warned("feature: reasoning engine", str(e)[:60])
+
+    # Queue engine
+    try:
+        from clarvis.orch.queue_engine import QueueEngine
+        r.passed("feature: queue engine")
+    except Exception:
+        r.warned("feature: queue engine", "import failed")
+
+    # Cognitive workspace
+    cw_state = WORKSPACE / "data" / "cognitive_workspace" / "workspace_state.json"
+    if cw_state.is_file():
+        r.passed("feature: cognitive workspace")
+    else:
+        r.warned("feature: cognitive workspace", "no state file")
+
+    # Context compressor
+    if _try_import("clarvis.context"):
+        r.passed("feature: context compressor")
+    else:
+        r.warned("feature: context compressor")
+
+    # Confidence/calibration
+    cal_file = WORKSPACE / "data" / "calibration" / "predictions.jsonl"
+    if cal_file.is_file():
+        try:
+            line_count = sum(1 for _ in open(cal_file))
+            r.passed("feature: calibration", f"{line_count} predictions")
+        except Exception:
+            r.passed("feature: calibration")
+    else:
+        r.warned("feature: calibration", "no predictions file")
+
+    # Performance benchmark
+    pi_file = WORKSPACE / "data" / "performance_metrics.json"
+    if pi_file.is_file():
+        r.passed("feature: performance index")
+    else:
+        r.warned("feature: performance index", "no metrics file")
+
+
+def _check_model_connectivity(r: _Results):
+    """Test actual model API connectivity (non-destructive)."""
+    env_file = WORKSPACE / ".env"
+    if not env_file.is_file():
+        r.warned("connectivity: .env", "missing")
+        return
+
+    # Load env vars from .env
+    env_vars = {}
+    for line in env_file.read_text().splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            key, _, val = line.partition("=")
+            env_vars[key.strip()] = val.strip().strip('"').strip("'")
+
+    # Test OpenRouter connectivity (lightweight models endpoint)
+    api_key = env_vars.get("OPENROUTER_API_KEY", "")
+    if api_key and api_key.startswith("sk-or-"):
+        ok, out = _run_quiet([
+            "curl", "-sf", "-o", "/dev/null", "-w", "%{http_code}",
+            "-H", f"Authorization: Bearer {api_key}",
+            "https://openrouter.ai/api/v1/models"
+        ], timeout=10)
+        if ok and out.strip() == "200":
+            r.passed("connectivity: OpenRouter API")
+        elif ok:
+            r.warned("connectivity: OpenRouter API", f"HTTP {out.strip()}")
+        else:
+            r.warned("connectivity: OpenRouter API", "unreachable or key invalid")
+    else:
+        r.warned("connectivity: OpenRouter API", "no key configured")
+
+    # Test Telegram bot (getMe — no side effects)
+    tg_token = env_vars.get("TELEGRAM_BOT_TOKEN", "")
+    if tg_token:
+        ok, out = _run_quiet([
+            "curl", "-sf",
+            f"https://api.telegram.org/bot{tg_token}/getMe"
+        ], timeout=10)
+        if ok and "ok" in out.lower():
+            r.passed("connectivity: Telegram bot")
+        else:
+            r.warned("connectivity: Telegram bot", "API call failed")
+    else:
+        r.warned("connectivity: Telegram bot", "no token configured")
+
+
 def _check_model_wiring(r: _Results):
     """Check API key and model endpoint availability."""
     # Check .env for key indicators
@@ -319,6 +429,8 @@ def doctor(
         ("Memory Paths", _check_memory_paths),
         ("Cron Readiness", _check_cron_readiness),
         ("Model Wiring", _check_model_wiring),
+        ("Feature Availability", _check_feature_availability),
+        ("Model Connectivity", _check_model_connectivity),
     ]
 
     for section_name, check_fn in sections:

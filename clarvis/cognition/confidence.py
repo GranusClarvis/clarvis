@@ -6,13 +6,24 @@ Track predictions with numeric confidence, record outcomes, measure calibration.
 
 import json
 import os
+import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 
 CALIBRATION_DIR = os.path.join(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")), "data", "calibration")
 PREDICTIONS_FILE = f"{CALIBRATION_DIR}/predictions.jsonl"
 os.makedirs(CALIBRATION_DIR, exist_ok=True)
+
+# Domain classification patterns for failure-pattern detection
+_DOMAIN_PATTERNS = {
+    "bug_fix": [r"[Ff]ix", r"[Bb]ug", r"[Dd]ebug", r"[Pp]atch"],
+    "integration": [r"[Ii]ntegrat", r"[Ww]ire", r"[Cc]onnect"],
+    "new_capability": [r"[Bb]uild[\s_]", r"[Cc]reate[\s_]", r"[Ii]mplement"],
+    "analysis": [r"[Rr]eview", r"[Aa]nalyz", r"[Aa]ssess", r"[Rr]un[\s_]"],
+    "optimization": [r"[Oo]ptimiz", r"[Rr]efactor", r"[Ii]mprov"],
+    "research": [r"[Rr]esearch", r"[Ss]tudy", r"[Aa]nalysis"],
+}
 
 # In-memory prediction cache — avoids re-reading JSONL on every call.
 # Invalidated on writes (predict, outcome, _save_predictions).
@@ -51,6 +62,36 @@ def _save_predictions(entries):
             f.write(json.dumps(entry) + "\n")
     _predictions_cache = list(entries)  # update cache in-place
     _predictions_cache_mtime = os.path.getmtime(PREDICTIONS_FILE)
+
+
+def _classify_domain(event_name: str) -> str:
+    """Classify an event name into a task domain."""
+    for domain, patterns in _DOMAIN_PATTERNS.items():
+        for pattern in patterns:
+            if re.search(pattern, event_name):
+                return domain
+    return "general"
+
+
+def _domain_failure_rate(domain: str, window_days: int = 30, min_samples: int = 5):
+    """Compute rolling failure rate for a task domain.
+
+    Returns (failure_rate, sample_count) or (None, 0) if insufficient data.
+    Uses only resolved, non-stale predictions within the window.
+    """
+    entries = _load_predictions()
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=window_days)).isoformat()
+    resolved = [
+        e for e in entries
+        if e.get("correct") is not None
+        and e.get("outcome") != "stale"
+        and e.get("timestamp", "") >= cutoff
+        and _classify_domain(e["event"]) == domain
+    ]
+    if len(resolved) < min_samples:
+        return None, len(resolved)
+    failures = sum(1 for e in resolved if not e["correct"])
+    return failures / len(resolved), len(resolved)
 
 
 def _band_accuracy(band_lo, band_hi, min_samples=5, recency_weight=True):
@@ -138,6 +179,22 @@ def predict(event: str, expected: str, confidence: float) -> dict:
             print(f"Recalibrated: {original_confidence:.0%} → {confidence:.0%} "
                   f"(band 90-100% accuracy={acc:.0%}, n={n}, gap={gap:.0%})", file=sys.stderr)
 
+    # Domain failure-pattern penalty: lower confidence for task types with
+    # >10% historical failure rate in the last 30 days. Closes 70% of the gap
+    # between predicted confidence and actual domain accuracy.
+    domain = _classify_domain(event)
+    fail_rate, domain_n = _domain_failure_rate(domain)
+    if fail_rate is not None and fail_rate > 0.10:
+        domain_acc = 1.0 - fail_rate
+        if confidence > domain_acc:
+            pre_penalty = confidence
+            penalty = (confidence - domain_acc) * 0.7
+            confidence = max(0.3, confidence - penalty)
+            recalibrated = True
+            print(f"Domain penalty: {domain} fail_rate={fail_rate:.0%} "
+                  f"(n={domain_n}) → confidence {pre_penalty:.0%} → "
+                  f"{confidence:.0%}", file=sys.stderr)
+
     entry = {
         "event": event,
         "expected": expected,
@@ -146,9 +203,13 @@ def predict(event: str, expected: str, confidence: float) -> dict:
         "outcome": None,  # filled by outcome()
         "correct": None,  # filled by outcome()
     }
+    domain_penalized = fail_rate is not None and fail_rate > 0.10
     if recalibrated:
         entry["original_confidence"] = original_confidence
         entry["recalibrated"] = True
+    if domain_penalized:
+        entry["domain"] = domain
+        entry["domain_fail_rate"] = round(fail_rate, 3)
 
     with open(PREDICTIONS_FILE, "a") as f:
         f.write(json.dumps(entry) + "\n")

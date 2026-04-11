@@ -256,6 +256,132 @@ class ReasoningSession:
             "flag_counts": dict(flag_counts),
         }
 
+    def socratic_challenge(self, step_num: int = -1) -> list[str]:
+        """Generate devil's advocate questions for a reasoning step.
+
+        Implements Socratic self-questioning: after each reasoning step,
+        auto-generate probing questions that challenge assumptions, test
+        logical gaps, and surface hidden premises.
+
+        Args:
+            step_num: Which step to challenge (-1 for the latest).
+
+        Returns:
+            List of 2-4 challenging questions.
+        """
+        if not self.steps:
+            return ["No steps to challenge."]
+
+        if step_num < 0:
+            step_num = len(self.steps) + step_num
+        if step_num < 0 or step_num >= len(self.steps):
+            return ["Invalid step number."]
+
+        target = self.steps[step_num]
+        thought = target.thought
+        evidence = target.evidence
+        confidence = target.confidence
+        questions: list[str] = []
+
+        # 1. Challenge hidden assumptions
+        # Look for causal claims, universals, and certainty markers
+        assumption_triggers = [
+            ("because", "What if the causal link '{trigger_context}' is spurious — could a confounding factor explain this?"),
+            ("always", "You claim something 'always' holds — what is a concrete counterexample where it might fail?"),
+            ("never", "You claim something 'never' occurs — under what edge conditions could it happen?"),
+            ("clearly", "What is 'clear' here might be an assumption — what evidence would disprove this?"),
+            ("obviously", "If this were truly obvious, why reason about it? What non-obvious alternative exists?"),
+            ("must", "What constraint makes this necessary? Could a different design remove that constraint?"),
+            ("should", "Says who? What principle or evidence supports this normative claim?"),
+            ("best", "Best by what metric? Under what conditions would a different option be 'best'?"),
+        ]
+        thought_lower = thought.lower()
+        for trigger, q_template in assumption_triggers:
+            if trigger in thought_lower:
+                # Extract context around trigger word
+                idx = thought_lower.index(trigger)
+                ctx_start = max(0, idx - 30)
+                ctx_end = min(len(thought), idx + len(trigger) + 30)
+                trigger_context = thought[ctx_start:ctx_end].strip()
+                questions.append(q_template.format(trigger_context=trigger_context))
+                if len(questions) >= 2:
+                    break
+
+        # 2. Evidence gap detection
+        if not evidence:
+            questions.append(
+                "This step has no cited evidence. What specific data, precedent, or "
+                "observation would you need to verify this claim?"
+            )
+        elif len(evidence) == 1:
+            questions.append(
+                f"You rely on a single piece of evidence ('{evidence[0][:60]}'). "
+                f"What independent evidence would corroborate or contradict it?"
+            )
+
+        # 3. Confidence calibration challenge
+        if confidence > 0.85:
+            questions.append(
+                f"Confidence is {confidence:.0%} — what would need to be true for "
+                f"this to be wrong? What's the strongest argument against your position?"
+            )
+        elif confidence < 0.5:
+            questions.append(
+                f"Confidence is only {confidence:.0%} — what additional information "
+                f"would raise it above 0.8? Is proceeding on low confidence justified?"
+            )
+
+        # 4. Logical gap: check if step connects to prior steps
+        if step_num > 0:
+            prev = self.steps[step_num - 1]
+            prev_words = set(prev.thought.lower().split()) - {
+                "the", "a", "an", "is", "are", "to", "of", "in", "for", "and", "or"
+            }
+            curr_words = set(thought_lower.split()) - {
+                "the", "a", "an", "is", "are", "to", "of", "in", "for", "and", "or"
+            }
+            overlap = len(prev_words & curr_words) / max(1, len(prev_words | curr_words))
+            if overlap < 0.05:
+                questions.append(
+                    "This step seems disconnected from the previous one. "
+                    "What logical bridge connects them? Is there a missing intermediate step?"
+                )
+
+        # 5. Alternative path question (always useful)
+        if len(questions) < 2:
+            questions.append(
+                "What is the strongest alternative approach you haven't considered? "
+                "Why might it outperform the current reasoning path?"
+            )
+
+        # Cap at 4 questions
+        questions = questions[:4]
+
+        # Record as meta-observation
+        self._meta_observe(
+            "socratic_challenge",
+            f"Step {step_num}: generated {len(questions)} devil's advocate questions"
+        )
+        self._save()
+
+        return questions
+
+    def step_with_socratic(self, thought: str, sub_problem: str = "",
+                           evidence: list = None, confidence: float = 0.5
+                           ) -> tuple["ReasoningStep", list[str]]:
+        """Add a reasoning step and immediately generate Socratic challenges.
+
+        This combines step() + socratic_challenge() for deliberate practice
+        workflows where each step should be scrutinized.
+
+        Returns:
+            (step, questions) — the step and its devil's advocate questions.
+        """
+        rs = self.step(thought, sub_problem=sub_problem,
+                       evidence=evidence, confidence=confidence)
+        questions = self.socratic_challenge(rs.step_num)
+        return rs, questions
+
     def _check_step_quality(self, step: ReasoningStep) -> list[str]:
         """Check a single step for quality issues."""
         flags = []
@@ -798,14 +924,21 @@ class ClarvisReasoner:
         # Step 2: Predict outcome before solving
         session.predict("success", 0.75)  # conservative default
 
-        # Step 3+: Solve each sub-problem
+        # Step 3+: Solve each sub-problem with Socratic challenges
         for sol in solutions:
-            session.step(
+            _step, challenges = session.step_with_socratic(
                 thought=sol["thought"],
                 sub_problem=sol.get("sub_problem", ""),
                 evidence=sol.get("evidence", []),
                 confidence=sol.get("confidence", 0.7),
             )
+            # Record challenges as meta-observations for review
+            if challenges:
+                session._meta_observe(
+                    "socratic_questions",
+                    f"[{sol.get('sub_problem', 'step')}] " + " | ".join(challenges[:3])
+                )
+                session._save()
 
         return session
 
@@ -957,6 +1090,7 @@ if __name__ == "__main__":
         print("  stats                                 Show reasoning statistics")
         print("  list                                  List recent sessions")
         print("  repair                                Fix legacy chains")
+        print("  socratic <id> [step]                  Socratic self-questioning for a step")
         print("  score                                 Get reasoning score (for self_model)")
         print("  synthesize                            Cross-chain synthesis report")
         sys.exit(0)
@@ -1097,6 +1231,18 @@ if __name__ == "__main__":
         print(f"Reasoning score: {score:.3f}")
         for e in evidence:
             print(f"  {e}")
+
+    elif cmd == "socratic":
+        session_id = sys.argv[2] if len(sys.argv) > 2 else ""
+        step_num = int(sys.argv[3]) if len(sys.argv) > 3 else -1
+        if not session_id:
+            print("Usage: socratic <session_id> [step_num]", file=sys.stderr)
+            sys.exit(1)
+        session = reasoner.load_session(session_id)
+        questions = session.socratic_challenge(step_num)
+        print(f"\nSocratic challenges for step {step_num} of {session_id}:")
+        for i, q in enumerate(questions, 1):
+            print(f"  {i}. {q}")
 
     elif cmd == "synthesize":
         report = reasoner.synthesize()
