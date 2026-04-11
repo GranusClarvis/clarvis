@@ -46,6 +46,14 @@ FAIL=0
 WARN=0
 STEPS=()
 
+# Enforce isolation guards — abort if any production resource could be touched
+export CLARVIS_E2E_ISOLATED=1
+export CLARVIS_WORKSPACE="$TESTDIR/workspace"
+export CLARVIS_E2E_PORT="${CLARVIS_E2E_PORT:-28789}"
+if [ -f "$REPO_ROOT/scripts/infra/isolation_guard.sh" ]; then
+    source "$REPO_ROOT/scripts/infra/isolation_guard.sh"
+fi
+
 cleanup() {
     if [ "$KEEP" -eq 0 ] && [ -d "$TESTDIR" ]; then
         rm -rf "$TESTDIR"

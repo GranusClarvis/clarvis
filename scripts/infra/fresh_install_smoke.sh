@@ -70,6 +70,13 @@ if [ "$ISOLATED" -eq 1 ]; then
     echo "- [ ] [SMOKE_TEST] Smoke test task." >> "$WORKSPACE/memory/evolution/QUEUE.md"
     export CLARVIS_WORKSPACE="$WORKSPACE"
     CLEANUP_WORKSPACE=1
+
+    # Enforce isolation guards — abort if any production resource could be touched
+    export CLARVIS_E2E_ISOLATED=1
+    export CLARVIS_E2E_PORT="${CLARVIS_E2E_PORT:-28789}"
+    if [ -f "$SCRIPT_DIR/isolation_guard.sh" ]; then
+        source "$SCRIPT_DIR/isolation_guard.sh"
+    fi
 else
     WORKSPACE="$REPO_ROOT"
     export CLARVIS_WORKSPACE="$WORKSPACE"

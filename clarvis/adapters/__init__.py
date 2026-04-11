@@ -1,4 +1,4 @@
-"""Host adapters (OpenClaw-only for now; others added when real consumers exist)."""
+"""Host adapters for Clarvis memory/context portability (OpenClaw, Hermes)."""
 
 from __future__ import annotations
 
@@ -10,7 +10,10 @@ def get_adapter(host: str, **kwargs) -> HostAdapter:
     if host_key == "openclaw":
         from clarvis.adapters.openclaw import OpenClawAdapter
         return OpenClawAdapter()
-    raise ValueError(f"Unknown host adapter: {host}. Available: openclaw")
+    if host_key == "hermes":
+        from clarvis.adapters.hermes import HermesAdapter
+        return HermesAdapter()
+    raise ValueError(f"Unknown host adapter: {host}. Available: openclaw, hermes")
 
 
 __all__ = [

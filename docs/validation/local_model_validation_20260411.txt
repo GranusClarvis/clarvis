@@ -1,0 +1,33 @@
+Local Model Only (Zero-API-Key) Validation Report
+Date: 2026-04-11T07:12Z
+Commit: 445eab9
+Ollama: active, model qwen3-vl:4b (3.3GB, CPU-only)
+
+=== PASS: Works without API keys ===
+  ✓ All core Python imports (clarvis, cli, heartbeat, cognition, context, runtime)
+  ✓ CLI (--help, mode, heartbeat, brain, cron)
+  ✓ Brain operations (search, stats, store) — local ONNX + ChromaDB
+  ✓ Heartbeat gate (zero-LLM decision: wake/skip)
+  ✓ Cognition modules (attention, reasoning)
+  ✓ Cost tracking (local event logging)
+  ✓ Cron wiring, script syntax, lock system
+  ✓ OpenClaw gateway boot + health (Ollama auth profile)
+  ✓ OpenClaw gateway RPC call (health endpoint)
+  ✓ OpenClaw chat round-trip via Ollama (response received)
+  ✓ Ollama local inference (curl API: generate)
+  ✓ Fresh install smoke (56/56 pass, 3 skipped)
+  ✓ Zero-API test suite (9/9 pass)
+
+=== DEGRADED: Requires external API keys ===
+  ✗ External model chat (OpenRouter, Anthropic, etc.)
+  ✗ Claude Code spawning (autonomous evolution, cron_autonomous.sh)
+  ✗ Telegram cost reporting (OpenRouter real API data)
+  ✗ Browser agent LLM mode (Gemini via OpenRouter)
+  ✗ Task router external model selection (needs OPENROUTER_API_KEY)
+  ✗ Research ingestion via LLM (needs API key)
+
+=== VERDICT ===
+Local-model-only path: FULLY SUPPORTED for core Clarvis features.
+External model features: GRACEFUL DEGRADATION (no crashes, features simply unavailable).
+Claim "local-first" is justified for: install, brain, CLI, heartbeat, cognition.
+Claim "local-first" is NOT justified for: autonomous evolution, research, multi-model routing.

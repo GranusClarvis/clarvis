@@ -10,22 +10,16 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 ## P1 — This Week
 
 ### Strategic Audit Structural Fixes (2026-04-08 audit)
+- [ ] [LLM_BRAIN_REVIEW 2026-04-11] [LLM_BRAIN_REVIEW] Investigate the ranking anomaly where higher-distance results appear before lower-distance results (Probe 3: dist=0.703 before dist=0.523) — may indicate a cross-collection merge sorting bug — If results aren't sorted by relevance, retrieval quality is degraded even when the right memories exist. This could explain why some probes have good memories buried below noise.
 - [ ] [LLM_BRAIN_REVIEW 2026-04-09] [LLM_BRAIN_REVIEW] Add temporal indexing or a recency-boosted retrieval path for queries containing time signals ('last 24 hours', 'recently', 'today') — e.g., filter by metadata timestamp before semantic ranking — Temporal queries (Probe 6) consistently return zero relevant results. An agent that cannot recall what it did yesterday has a fundamental operational gap.
 - [ ] [REASONING_CAPABILITY_SPRINT] Dedicate 2+ evolution cycles to reasoning chain improvements, deliberate practice on hard problems, or synthesis loop implementation. Last 20 commits are all infrastructure — zero target reasoning depth or novel cognition. (2026-04-10: 15 new challenges seeded, 5 are reasoning-depth focused, 2 are synthesis — pipeline now primed for reasoning work.)
 
 ### SWO / Clarvis Brand Integration
-- [ ] [SWO_PUBLIC_REPO_SURFACE_AUDIT] Perform one final repo-surface pass: top-level tree, README, docs, website, examples, templates, generated assets, and historical plans. Output a short punch-list of what still makes the repo feel amateur or confusing.
 
 ### Fresh-Install / Isolation Validation
-- [ ] [E2E_INSTALL_VALIDATION_PLAN] Consolidate existing install-validation artifacts (`docs/INSTALL_MATRIX.md`, `docs/INSTALL_FRICTION_REPORT.md`, `docs/HERMES_FRESH_INSTALL_REPORT.md`) into one execution plan for full end-to-end release validation. Define exact environments, pass/fail gates, and which features are mandatory on each harness.
-- [ ] [E2E_OPENCLOW_FRESH_ISOLATED] Run a truly fresh isolated OpenClaw install in `/tmp` or equivalent test root using a non-default port, isolated npm prefix, isolated config, and isolated Python env. Validate onboarding, gateway boot, config creation, local-model path, chat round-trip, clean shutdown, and zero contamination of production Clarvis.
 - [ ] [E2E_CLARVIS_ON_OPENCLOW_OVERLAY] Layer Clarvis onto that fresh OpenClaw install exactly as a new user would. Validate install script, verify script, CLI health, brain health, demo flow, queue access, heartbeat gate/preflight, cron minimal install, public status/feed generation, and that the OpenClaw gateway still works after overlay.
 - [ ] [E2E_HERMES_FRESH_ISOLATED] Run a truly fresh isolated Hermes install in `/tmp` or equivalent, with isolated venv/config/session dirs. Validate install, main entry points, config bootstrap, session persistence, basic chat loop, local-model path, and identify the exact supported invocation path (`hermes` vs `run_agent.py`) without hand-wavy workarounds.
-- [ ] [E2E_CLARVIS_ON_HERMES_OVERLAY] Define and test the real Clarvis-on-Hermes integration path, not just repo coexistence. Verify what actually works: install/bootstrap, persona/system-prompt integration, memory/brain access, CLI/tooling usage, and any harness-specific wrappers needed for a usable operator experience.
 - [ ] [E2E_FEATURE_MATRIX_BY_HARNESS] Produce a harness-by-feature matrix for OpenClaw and Hermes: install, chat, memory, brain search, queue, heartbeat, cron autonomy, browser flows, messaging, local-model-only mode, install doctor, public status, and website/public feed generation. Mark each as PASS / PARTIAL / FAIL with evidence.
-- [ ] [E2E_LOCAL_MODEL_ONLY_VALIDATION] Verify the zero-API-key path end to end on both supported harnesses where applicable. Explicitly test what works with only local models and what degrades gracefully. No marketing claims about “local-first” without this proof.
-- [ ] [E2E_ISOLATION_GUARDS] Add hard safety guards to all fresh-install tests so they cannot touch production ports, crontab, workspace, gateway, or auth files. Test harness validation is worthless if it can silently borrow the real environment.
-- [ ] [E2E_FIRST_RUN_UX_AUDIT] Audit the first-run experience as if you were a stranger: missing prompts, hidden flags, port assumptions, auth gotchas, model-selection confusion, interactive-only steps, and any point where a human has to “just know” something undocumented.
 - [ ] [E2E_INSTALL_DOCTOR] Create or strengthen a post-install doctor command/report that gives PASS/WARN/FAIL across harness boot, model connectivity, brain deps, cron readiness, file paths, and feature availability. This should be the canonical “is this install actually good?” command.
 - [ ] [E2E_RELEASE_GATE_OPENCLOW] Add a release gate for OpenClaw support: no public claim of “works on fresh OpenClaw” unless the isolated end-to-end suite passes with saved artifacts/logs.
 - [ ] [E2E_RELEASE_GATE_HERMES] Add a release gate for Hermes support: no public claim of “works on Hermes” unless the isolated end-to-end suite passes with saved artifacts/logs and a documented supported path.
@@ -80,6 +74,8 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 ## Partial Items (tracked, not actively worked)
 
 ### External Challenges
+
+- [ ] [EXTERNAL_CHALLENGE:reasoning-depth-02] Implement analogical reasoning between brain memories — Build an analogy engine: given a source pair (A:B), find the best matching target pair (C:D) from brain memories. Use embedding offsets (B-A ≈ D-C) to detect structural analogies. Test on 10 analogy q
 
 - [ ] [EXTERNAL_CHALLENGE:reasoning-depth-05] Implement argument mapping for wiki claims — Build an argument mapper: given a wiki page with Key Claims, extract the argument structure (premises → conclusion, supports/rebuts relations). Output a directed graph of arguments. Visualize as ASCII
 

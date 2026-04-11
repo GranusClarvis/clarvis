@@ -1,0 +1,77 @@
+First-Run UX Audit Report
+Date: 2026-04-11T07:14Z
+Commit: 445eab9
+Auditor: Claude Code Opus (E2E session)
+
+=== FRICTION POINTS BY SEVERITY ===
+
+HIGH:
+  1. --accept-risk flag undiscoverable — not in INSTALL.md, only in error output
+     Files: INSTALL.md (missing), openclaw onboard --help (present but buried)
+     Impact: Non-interactive onboard fails; user must read error to discover flag
+
+  2. Model selection unclear for first-time users
+     Files: INSTALL.md:96-102, INSTALL_FRICTION_REPORT.md:38-41
+     Impact: User picks model without knowing RAM needs; qwen3-vl:4b claims 3.3GB
+     but needs 40.7GB total. No pre-flight memory check in install.sh
+
+MEDIUM:
+  3. Port 18789 hardcoded in 21+ files, no conflict check in install.sh
+     Files: README.md, IDENTITY.md, SOUL.md, safe_update.sh, etc.
+     Impact: Silent failure if port already in use
+
+  4. PEP 668 buried in INSTALL.md troubleshooting section (line 271)
+     Impact: Ubuntu 24.04+ users hit confusing pip error before finding workaround
+
+  5. Cron presets: interactive mode shows only 2 of 4 available presets
+     Files: install.sh:251-257
+     Impact: Users don't discover "full" or "research" presets
+
+  6. setup.sh vs install.sh relationship unclear
+     Files: setup.sh:1-4
+     Impact: User picks wrong entry point
+
+  7. .env.example lacks guidance sections (Required vs Optional)
+     Files: .env.example:16-24
+     Impact: User unsure what to fill in, what "leave blank" means
+
+  8. Cron defaults silent in non-interactive mode
+     Files: install.sh:293-298
+     Impact: User expects autonomy but CRON="none" by default
+
+  9. --skip-health needed on non-default port but undocumented
+     Files: E2E_RELEASE_VALIDATION_PLAN.md:123 (known blocker #5)
+     Impact: Health check fails on custom port installations
+
+LOW:
+  10. INSTALL_FRICTION_REPORT.md not linked from main install docs
+  11. Brain checks optional but suggested in next-steps output
+  12. CLARVIS_WORKSPACE defaults to /home/agent/.openclaw/workspace — doesn't exist on fresh machine
+  13. Profile detection in verify_install.sh doesn't warn on unknown profiles
+
+=== CONCRETE RECOMMENDATIONS (prioritized) ===
+
+P0 (should fix before public release):
+  - Document --accept-risk in INSTALL.md OpenClaw section
+  - Add port-conflict check to install.sh before gateway start
+  - Move PEP 668 to Prerequisites in INSTALL.md
+  - Add RAM pre-flight check before Ollama model selection
+
+P1 (improve UX):
+  - Show all 4 cron presets in interactive mode
+  - Add section headings to .env.example (Required / Optional / Advanced)
+  - Clarify setup.sh vs install.sh in README
+  - Link INSTALL_FRICTION_REPORT.md from INSTALL.md header
+
+P2 (nice to have):
+  - Add --skip-verify flag to install.sh for CI
+  - Add clarvis doctor command (install verify + brain + cron + port check)
+  - Document --skip-health for non-default port installations
+
+=== WHAT WORKS WELL ===
+  ✓ install.sh profile system is well-designed
+  ✓ isolation_guard.sh prevents production contamination
+  ✓ verify_install.sh catches most import/CLI issues
+  ✓ .env.example exists and covers all variables
+  ✓ Non-interactive mode covers all install paths
+  ✓ PEP 668 is handled in install.sh (just not documented upfront)
