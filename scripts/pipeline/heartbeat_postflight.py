@@ -1351,7 +1351,7 @@ def _pf_gates(ctx, _pf_errors):
     timings = {}
     selftest_result = ctx["selftest_result"]
 
-    # §7.45 Performance gate
+    # §7.45 Performance gate + benchmark delta check
     t745 = time.monotonic()
     _code_mod = selftest_result.get("code_modified", False) or selftest_result.get("ran", False)
     if perf_gate_run and _code_mod and ctx["exit_code"] == 0:
@@ -1362,6 +1362,40 @@ def _pf_gates(ctx, _pf_errors):
             else:
                 failed_gates = [g["gate"] for g in gate_report.get("gates", []) if not g["passed"]]
                 log(f"PERF GATE: FAIL — {', '.join(failed_gates)} ({gate_report['elapsed_s']}s)")
+
+            # §7.451 Benchmark delta gate — compare current PI against last recorded
+            _DELTA_THRESHOLD = 0.05
+            try:
+                pi_gate = next((g for g in gate_report.get("gates", []) if g["gate"] == "performance_pi"), None)
+                current_pi = pi_gate["detail"]["pi"] if pi_gate else None
+                if current_pi is not None:
+                    _perf_hist = os.path.join(ctx["WORKSPACE"], "data", "performance_history.jsonl")
+                    prev_pi = None
+                    if os.path.exists(_perf_hist):
+                        with open(_perf_hist) as _phf:
+                            for _line in reversed(_phf.readlines()):
+                                _entry = json.loads(_line)
+                                _pi_val = _entry.get("pi")
+                                if isinstance(_pi_val, dict):
+                                    _pi_val = _pi_val.get("pi")
+                                if _pi_val is not None and isinstance(_pi_val, (int, float)):
+                                    prev_pi = _pi_val
+                                    break
+                    if prev_pi is not None:
+                        delta = current_pi - prev_pi
+                        if delta < -_DELTA_THRESHOLD:
+                            log(f"BENCHMARK DELTA GATE: FAIL — PI dropped {prev_pi:.3f} → {current_pi:.3f} (delta={delta:+.3f}, threshold={_DELTA_THRESHOLD})")
+                            from clarvis.queue.writer import add_task
+                            add_task(
+                                f"[BENCHMARK_REGRESSION] PI dropped {prev_pi:.3f} → {current_pi:.3f} "
+                                f"(delta={delta:+.3f}) after task: {ctx['task'][:80]}. "
+                                f"Investigate which metric regressed and fix.",
+                                priority="P1", source="benchmark_delta_gate",
+                            )
+                        else:
+                            log(f"BENCHMARK DELTA GATE: PASS — PI {prev_pi:.3f} → {current_pi:.3f} (delta={delta:+.3f})")
+            except Exception as e:
+                log(f"Benchmark delta gate failed: {e}")
         except Exception as e:
             log(f"Performance gate failed: {e}")
     timings["perf_gate"] = round(time.monotonic() - t745, 3)

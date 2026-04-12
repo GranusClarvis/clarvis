@@ -35,7 +35,7 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 ## P2 — When Idle
 
 ### Deep Cognition (Phase 4-5 gaps)
-- [ ] [COGNITION_GATE_PROMOTION] Gate promotion of self-improvements — require benchmark delta before accepting code changes.
+- [x] [COGNITION_GATE_PROMOTION] _(2026-04-12)_ Added §7.451 benchmark delta gate in heartbeat_postflight.py. Compares current PI against last recorded PI after code-modifying tasks. If PI drops >0.05, injects P1 repair task to QUEUE.md. Runs inside existing perf gate flow.
 - [ ] [COGNITION_CONCEPTUAL_FRAMEWORK] Knowledge synthesis beyond keyword matching — conceptual framework building.
 
 ### Calibration / Brier Score (weakest metric — all-time Brier=0.1148 vs target 0.1, 7-day=0.2400)
