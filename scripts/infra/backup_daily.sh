@@ -278,10 +278,16 @@ if [ "$DOW" -eq 7 ]; then
 fi
 
 # --- Write manifest ---
+# Re-hash backup copies (not live files) for DB files backed up via sqlite3 .backup,
+# since .backup produces a consistent snapshot that differs from the live WAL file hash.
 log "Writing manifest..."
 MANIFEST_ENTRIES=""
 for path in "${!CURRENT_FILES[@]}"; do
   hash="${CURRENT_FILES[$path]}"
+  # For files that were copied to the backup dir, use the backup copy's hash
+  if [ -f "$BACKUP_DIR/$path" ]; then
+    hash=$(sha256_file "$BACKUP_DIR/$path")
+  fi
   size=$(stat -c%s "$WORKSPACE/$path" 2>/dev/null || echo 0)
   if [ -n "$MANIFEST_ENTRIES" ]; then
     MANIFEST_ENTRIES="$MANIFEST_ENTRIES,"

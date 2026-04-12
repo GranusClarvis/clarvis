@@ -4,47 +4,47 @@
     "pending_mode": null
   },
   "queue": {
-    "pending": 35,
+    "pending": 36,
     "in_progress": 0,
-    "done": 0
+    "done": 3
   },
   "benchmarks": {
     "clr": {
-      "clr": 0.873,
+      "clr": 0.848,
       "baseline_clr": 0.19,
-      "value_add": 0.683,
+      "value_add": 0.658,
       "gate_pass": true,
       "dimensions": {
-        "memory_quality": 0.921,
-        "retrieval_precision": 0.902,
-        "prompt_context": 0.772,
-        "task_success": 0.838,
-        "autonomy": 0.923,
-        "efficiency": 0.987,
-        "integration_dynamics": 0.858
+        "memory_quality": 0.828,
+        "retrieval_precision": 0.863,
+        "prompt_context": 0.762,
+        "task_success": 0.837,
+        "autonomy": 0.965,
+        "efficiency": 0.986,
+        "integration_dynamics": 0.826
       },
-      "timestamp": "2026-04-11T05:45:32.180740+00:00"
+      "timestamp": "2026-04-12T10:43:29.435322+00:00"
     },
     "pi": {
-      "pi": 0.9994,
+      "pi": 0.9619,
       "dimensions": 15,
-      "timestamp": "2026-04-11T05:45:01.470688+00:00"
+      "timestamp": "2026-04-12T10:43:38.680585+00:00"
     }
   },
   "phi": {
-    "current": 0.7212,
-    "timestamp": "2026-04-07T18:00:03.953968+00:00"
+    "current": 0.6187,
+    "timestamp": "2026-04-11T20:02:31.641798+00:00"
   },
-  "bloat_score": 0.2,
+  "bloat_score": 0.0,
   "brain": {
-    "total_memories": 3172,
+    "total_memories": 2861,
     "collections": 10
   },
   "episodes": {
-    "success_rate": 0.944,
-    "total": 390,
+    "success_rate": 0.942,
+    "total": 394,
     "breakdown": {
-      "success": 368,
+      "success": 371,
       "soft_failure": 0,
       "failure": 11,
       "timeout": 9
@@ -53,25 +53,25 @@
   "uptime_since": "2026-02-18 12:20:55",
   "recent_completions": [
     {
+      "tag": "ISOLATION_GUARD_SELFTEST_FIX",
+      "status": "success"
+    },
+    {
+      "tag": "COGNITIVE_STACK_AB_TEST",
+      "status": "success"
+    },
+    {
+      "tag": "CALIBRATION_LOW_CONFIDENCE_EXPRESSION",
+      "status": "success"
+    },
+    {
       "tag": "SPINE_PROXY_REPLACEMENT",
       "status": "success"
     },
     {
       "tag": "SPINE_HOOK_DEPS_MIGRATE",
       "status": "success"
-    },
-    {
-      "tag": "QUEUE_AUTO_ARCHIVE",
-      "status": "success"
-    },
-    {
-      "tag": "CRON_CANONICAL_ENTRYPOINTS",
-      "status": "success"
-    },
-    {
-      "tag": "OSR_GIT_HISTORY_SCRUB",
-      "status": "success"
     }
   ],
-  "updated_at": "2026-04-11T12:03:07.542225+00:00"
+  "updated_at": "2026-04-12T11:02:44.857780+00:00"
 }

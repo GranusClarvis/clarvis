@@ -622,7 +622,7 @@ def check_chromadb_health(dry_run: bool = False) -> dict:
     3. If .recover fails, try restoring from latest backup
     4. Returns a result dict with success/failure details
     """
-    result = {"action": "chromadb_health_check", "job": "chromadb"}
+    result = {"action": "chromadb_health_check", "job": "chromadb", "type": "chromadb_health"}
     data_dir = WORKSPACE / "data" / "clarvisdb"
 
     # Step 1: Try brain health check

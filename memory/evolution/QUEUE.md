@@ -6,7 +6,6 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 
 ## P0 — Current Sprint (2026-04-12)
 
-- [x] [PHI_REACHABILITY_WEIGHT_DEPLOY] **(Done 2026-04-12)** Verified: weights already at 0.25/0.25/0.40/0.10 in `compute_phi()`. Updated benchmark target 0.70→0.65, critical 0.30→0.25. Fixed test expectations. Recorded fresh Phi=0.6191. History entry 65 recorded with new weights.
 
 ## P1 — This Week
 
@@ -35,7 +34,6 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 ## P2 — When Idle
 
 ### Deep Cognition (Phase 4-5 gaps)
-- [x] [COGNITION_GATE_PROMOTION] _(2026-04-12)_ Added §7.451 benchmark delta gate in heartbeat_postflight.py. Compares current PI against last recorded PI after code-modifying tasks. If PI drops >0.05, injects P1 repair task to QUEUE.md. Runs inside existing perf gate flow.
 - [ ] [COGNITION_CONCEPTUAL_FRAMEWORK] Knowledge synthesis beyond keyword matching — conceptual framework building.
 
 ### Calibration / Brier Score (weakest metric — all-time Brier=0.1148 vs target 0.1, 7-day=0.2400)
