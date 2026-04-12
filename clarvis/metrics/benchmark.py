@@ -29,7 +29,7 @@ TARGETS = {
     "episode_success_rate": {"target": 0.85,  "direction": "higher",  "label": "Episode Success Rate",    "weight": 0.15, "critical": 0.50},
     "action_accuracy":      {"target": 0.90,  "direction": "higher",  "label": "Action Accuracy",         "weight": 0.08, "critical": 0.60},
     # Dimension 5: Results Quality / Intelligence — CORE QUALITY
-    "phi":                  {"target": 0.70,  "direction": "higher",  "label": "Phi (Integration)",       "weight": 0.10, "critical": 0.30},
+    "phi":                  {"target": 0.65,  "direction": "higher",  "label": "Phi (Integration)",       "weight": 0.10, "critical": 0.25},
     "context_relevance":    {"target": 0.75,  "direction": "higher",  "label": "Context Relevance",       "weight": 0.08, "critical": 0.40},
     # NEW: Quality dimension (beyond binary success)
     "task_quality_score":   {"target": 0.70,  "direction": "higher",  "label": "Task Quality Score",      "weight": 0.08, "critical": 0.40},

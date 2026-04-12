@@ -159,7 +159,7 @@ class TestComputePI:
             "heartbeat_overhead_s": 12.0,
             "episode_success_rate": 0.85,
             "action_accuracy": 0.90,
-            "phi": 0.70,
+            "phi": 0.65,
             "context_relevance": 0.75,
             "task_quality_score": 0.70,
             "code_quality_score": 0.75,
@@ -210,7 +210,7 @@ class TestComputePI:
             heartbeat_overhead_s=30.0,
             episode_success_rate=0.50,
             action_accuracy=0.60,
-            phi=0.30,
+            phi=0.25,
             context_relevance=0.40,
             task_quality_score=0.40,
             code_quality_score=0.45,
@@ -233,7 +233,7 @@ class TestComputePI:
             heartbeat_overhead_s=21.0,  # midpoint of 12-30
             episode_success_rate=0.675, # midpoint of 0.50-0.85
             action_accuracy=0.75,       # midpoint of 0.60-0.90
-            phi=0.50,                   # midpoint of 0.30-0.70
+            phi=0.45,                   # midpoint of 0.25-0.65
             context_relevance=0.575,    # midpoint of 0.40-0.75
             task_quality_score=0.55,    # midpoint of 0.40-0.70
             code_quality_score=0.60,    # midpoint of 0.45-0.75
