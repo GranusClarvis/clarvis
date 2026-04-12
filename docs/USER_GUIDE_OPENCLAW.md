@@ -1,4 +1,6 @@
-# Clarvis on OpenClaw — User Guide
+# Clarvis on OpenClaw — Runtime & Operator Guide
+
+> **Scope**: This guide covers day-to-day usage, autonomy, commands, and troubleshooting for a running Clarvis-on-OpenClaw deployment. For installation, see [`docs/INSTALL.md`](INSTALL.md). For install path validation, see [`docs/SUPPORT_MATRIX.md`](SUPPORT_MATRIX.md).
 
 ## What is Clarvis?
 
@@ -136,3 +138,25 @@ python3 scripts/agents/project_agent.py spawn <name> "task"  # Spawn agent
 **Brain errors**: Run `python3 -m clarvis brain health` for diagnostics. If ChromaDB is corrupt, backups are at `~/backups/clarvis-db/`.
 
 **Cost concerns**: Run `/costs` to see real spend. Budget alerts fire automatically when thresholds are crossed.
+
+**Cron not running**: Verify with `clarvis cron status`. Install a preset with `clarvis cron install recommended --apply`. Check logs in `monitoring/`.
+
+## Runtime Expectations
+
+After a successful install (`bash scripts/install.sh --profile openclaw`), you should see:
+
+- **Gateway**: `systemctl --user status openclaw-gateway.service` shows active. Chat responds in Telegram/Discord.
+- **Brain**: `python3 -m clarvis brain health` reports healthy. Fresh installs start with 0 memories — the brain grows over time.
+- **Cron**: If enabled, `clarvis cron status` shows last-run timestamps. First autonomous cycle runs within hours.
+- **Costs**: Stay near zero with local Ollama model. Claude Code spawning via `/spawn` uses OpenRouter API credits.
+- **Logs**: `monitoring/` directory accumulates health and watchdog logs. Digest at `memory/cron/digest.md`.
+
+### Cron Management
+
+```bash
+clarvis cron presets                      # List available presets
+clarvis cron install recommended          # Dry-run preview
+clarvis cron install recommended --apply  # Install into system crontab
+clarvis cron status                       # Last-run timestamps
+clarvis cron remove --apply               # Remove managed entries
+```

@@ -713,8 +713,16 @@ def _preflight_confidence_world_model(result, next_task, task_section):
                 task_lower = next_task.lower()[:50]
                 ep_count = sum(
                     1 for ep in em.episodes
-                    if task_lower in ep.get("task", "").lower()
-                    or ep.get("task", "").lower()[:40] in task_lower
+                    if (
+                        # Both strings must be non-trivial to avoid
+                        # empty/short strings matching everything
+                        len(task_lower) >= 6
+                        and len(ep.get("task", "")) >= 6
+                        and (
+                            task_lower in ep.get("task", "").lower()
+                            or ep.get("task", "").lower()[:40] in task_lower
+                        )
+                    )
                 )
             except Exception:
                 pass

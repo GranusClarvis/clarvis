@@ -1,0 +1,196 @@
+{
+  "gate": "e2e_clarvis_on_openclaw_fresh",
+  "timestamp": "20260412_170512",
+  "verdict": "PASS",
+  "passed": 42,
+  "failed": 0,
+  "warnings": 3,
+  "skipped": 0,
+  "total": 45,
+  "port": 28789,
+  "quick_mode": false,
+  "test_root": "/tmp/e2e-clarvis-openclaw-20260412_170512",
+  "results": [
+    {
+      "status": "PASS",
+      "criterion": "A1: Ollama API reachable"
+    },
+    {
+      "status": "PASS",
+      "criterion": "A2: openclaw --help responds"
+    },
+    {
+      "status": "WARN",
+      "criterion": "A3: onboard exit 1 but config is valid"
+    },
+    {
+      "status": "PASS",
+      "criterion": "B1: Repo cloned to isolated workspace"
+    },
+    {
+      "status": "PASS",
+      "criterion": "B2: install.sh --profile openclaw completed successfully"
+    },
+    {
+      "status": "PASS",
+      "criterion": "B3: .env created by install.sh"
+    },
+    {
+      "status": "PASS",
+      "criterion": "C1: import clarvis"
+    },
+    {
+      "status": "PASS",
+      "criterion": "C1: import clarvis.cli"
+    },
+    {
+      "status": "PASS",
+      "criterion": "C1: import clarvis.runtime"
+    },
+    {
+      "status": "PASS",
+      "criterion": "C1: import clarvis.runtime.mode"
+    },
+    {
+      "status": "PASS",
+      "criterion": "C1: import clarvis.heartbeat"
+    },
+    {
+      "status": "PASS",
+      "criterion": "C1: import clarvis.cognition"
+    },
+    {
+      "status": "PASS",
+      "criterion": "C1: import clarvis.context"
+    },
+    {
+      "status": "PASS",
+      "criterion": "C1: import clarvis.orch.cost_tracker"
+    },
+    {
+      "status": "PASS",
+      "criterion": "C1: import clarvis.compat.contracts"
+    },
+    {
+      "status": "PASS",
+      "criterion": "C1: import clarvis.adapters"
+    },
+    {
+      "status": "PASS",
+      "criterion": "C1: import clarvis.adapters.openclaw"
+    },
+    {
+      "status": "PASS",
+      "criterion": "C1: import clarvis.queue.writer"
+    },
+    {
+      "status": "PASS",
+      "criterion": "C2: clarvis --help"
+    },
+    {
+      "status": "PASS",
+      "criterion": "C2: clarvis mode --help"
+    },
+    {
+      "status": "PASS",
+      "criterion": "C2: clarvis heartbeat --help"
+    },
+    {
+      "status": "PASS",
+      "criterion": "C2: clarvis cron --help"
+    },
+    {
+      "status": "PASS",
+      "criterion": "C3: brain imports"
+    },
+    {
+      "status": "PASS",
+      "criterion": "C3: chromadb importable"
+    },
+    {
+      "status": "PASS",
+      "criterion": "C3: brain health on fresh DB"
+    },
+    {
+      "status": "WARN",
+      "criterion": "C3: brain store/recall returned: ERROR"
+    },
+    {
+      "status": "PASS",
+      "criterion": "C4: heartbeat gate exits 0 (WAKE)"
+    },
+    {
+      "status": "PASS",
+      "criterion": "C5: cron_env.sh exists"
+    },
+    {
+      "status": "PASS",
+      "criterion": "C5: cron_autonomous.sh exists"
+    },
+    {
+      "status": "PASS",
+      "criterion": "C5: lock_helper.sh exists"
+    },
+    {
+      "status": "PASS",
+      "criterion": "C5: cron_morning.sh exists"
+    },
+    {
+      "status": "PASS",
+      "criterion": "C5: cron_evening.sh exists"
+    },
+    {
+      "status": "PASS",
+      "criterion": "C5: cron_reflection.sh exists"
+    },
+    {
+      "status": "PASS",
+      "criterion": "C5: all cron scripts pass bash -n"
+    },
+    {
+      "status": "PASS",
+      "criterion": "C5: cron_env.sh sources correctly"
+    },
+    {
+      "status": "PASS",
+      "criterion": "C6: OpenClawAdapter importable"
+    },
+    {
+      "status": "WARN",
+      "criterion": "C7: CLAUDE.md missing"
+    },
+    {
+      "status": "PASS",
+      "criterion": "C7: AGENTS.md present"
+    },
+    {
+      "status": "PASS",
+      "criterion": "C7: SOUL.md present"
+    },
+    {
+      "status": "PASS",
+      "criterion": "C7: SELF.md present"
+    },
+    {
+      "status": "PASS",
+      "criterion": "C7: HEARTBEAT.md present"
+    },
+    {
+      "status": "PASS",
+      "criterion": "C8: queue.writer.add_task importable"
+    },
+    {
+      "status": "PASS",
+      "criterion": "C9: verify_install.sh passed (18 checks)"
+    },
+    {
+      "status": "PASS",
+      "criterion": "D1: Gateway responding on port 28789"
+    },
+    {
+      "status": "PASS",
+      "criterion": "D2: Gateway shut down cleanly"
+    }
+  ],
+  "friction": []
+}

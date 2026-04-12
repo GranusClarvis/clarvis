@@ -288,7 +288,12 @@ for path in "${!CURRENT_FILES[@]}"; do
   if [ -f "$BACKUP_DIR/$path" ]; then
     hash=$(sha256_file "$BACKUP_DIR/$path")
   fi
-  size=$(stat -c%s "$WORKSPACE/$path" 2>/dev/null || echo 0)
+  # Use backup copy's size when available (consistent with re-hashed checksum)
+  if [ -f "$BACKUP_DIR/$path" ]; then
+    size=$(stat -c%s "$BACKUP_DIR/$path" 2>/dev/null || echo 0)
+  else
+    size=$(stat -c%s "$WORKSPACE/$path" 2>/dev/null || echo 0)
+  fi
   if [ -n "$MANIFEST_ENTRIES" ]; then
     MANIFEST_ENTRIES="$MANIFEST_ENTRIES,"
   fi

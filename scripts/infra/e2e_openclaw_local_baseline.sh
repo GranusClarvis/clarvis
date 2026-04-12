@@ -318,10 +318,12 @@ else
         CHAT_RESPONSE="$(cat "$TEST_ROOT/chat_response.txt")"
     fi
 
-    if [ -n "$CHAT_RESPONSE" ] && [ "$CHAT_EXIT" -eq 0 ]; then
-        pass "C4: Chat round-trip returned response (${#CHAT_RESPONSE} chars)"
+    if echo "$CHAT_RESPONSE" | grep -qF "OPENCLAW_E2E_OK"; then
+        pass "C4: Chat round-trip returned sentinel OPENCLAW_E2E_OK (${#CHAT_RESPONSE} chars)"
+    elif [ -n "$CHAT_RESPONSE" ] && [ "$CHAT_EXIT" -eq 0 ]; then
+        warn "C4: Chat returned response (${#CHAT_RESPONSE} chars) but missing OPENCLAW_E2E_OK sentinel"
     elif [ -n "$CHAT_RESPONSE" ]; then
-        warn "C4: Chat returned response but exit $CHAT_EXIT"
+        warn "C4: Chat returned response but exit $CHAT_EXIT, missing sentinel"
     else
         # Fallback: test Ollama directly (proves local model works even if gateway routing is incomplete)
         echo "  Gateway chat failed; testing Ollama directly..."

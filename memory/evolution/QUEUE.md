@@ -10,16 +10,15 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 ## P1 — This Week
 
 ### Strategic Audit Structural Fixes (2026-04-11 audit)
-- [ ] [LLM_BRAIN_REVIEW 2026-04-09] [LLM_BRAIN_REVIEW] Add temporal indexing or a recency-boosted retrieval path for queries containing time signals ('last 24 hours', 'recently', 'today') — e.g., filter by metadata timestamp before semantic ranking — Temporal queries (Probe 6) consistently return zero relevant results. An agent that cannot recall what it did yesterday has a fundamental operational gap.
+- [ ] [SELF_REPRESENTATION_IMPORT_RECOVERY] Fix `self_representation` module import failures in the GWT broadcast path so self-model context is present during preflight instead of silently degrading on missing-module errors.
+- [ ] [DIGEST_OBSERVABILITY_GAP_AUDIT] Audit why several recent daily logs show missing digest entries or weak end-of-day visibility. Produce one canonical failure map across cron writers, digest generation, and daily-log hydration, then patch the highest-confidence cause.
+- [ ] [PYTEST_CAPTURE_TIMEOUT_TUNING] The postflight test capture path is still timing out at 60s on `pytest -m 'not slow'`. Profile the suite, split expensive subsets, or raise/report budget sanely so validation stops producing low-signal timeout noise.
 
 ### Fresh-Install / Isolation Validation
 - [ ] [E2E_HERMES_FRESH_ISOLATED] Run a truly fresh isolated Hermes install in `/tmp` or equivalent, with isolated venv/config/session dirs and the local LLM only. Validate install, main entry points, config bootstrap, session persistence, basic chat loop, and identify the exact supported invocation path (`hermes` vs `run_agent.py`) with no hand-wavy workarounds.
-- [ ] [E2E_CLARVIS_ON_OPENCLAW_FRESH] Starting from a fresh isolated OpenClaw install already wired to the local LLM, install Clarvis using the public install script exactly as a user would. Then run full end-to-end validation of core Clarvis features and document friction, failures, unsupported paths, and required manual steps.
-- [ ] [E2E_CLARVIS_ON_HERMES_FRESH] Starting from a fresh isolated Hermes install already wired to the local LLM, install Clarvis using the public install script exactly as a user would. Then run full end-to-end validation of core Clarvis features and document friction, failures, unsupported paths, and required manual steps.
 - [ ] [ADOPTION_MATRIX_LOCAL_HARNESS] Produce a single adoption matrix for fresh installs: OpenClaw base, Hermes base, Clarvis-on-OpenClaw, Clarvis-on-Hermes. For each, record local-LLM-only status, exact invocation path, install friction, first-run success, end-to-end feature coverage, and whether the path is honestly claimable for users.
 
 ### Install Docs / Support Surface Consolidation (2026-04-07) — DEPRIORITIZED by audit 2026-04-11, move to P2 when reasoning work is complete
-- [ ] [OPENCLAW_RUNTIME_GUIDE_SCOPE] Refocus `docs/USER_GUIDE_OPENCLAW.md` into a runtime/operator guide only: usage, autonomy, commands, troubleshooting, and runtime expectations. Strip install duplication.
 - [ ] [HERMES_RUNTIME_GUIDE_SCOPE] Refocus `docs/USER_GUIDE_HERMES.md` into a runtime/operator guide only, and add a prominent support-status banner at the top if Hermes remains partial/experimental.
 - [ ] [INSTALL_DOC_CROSS_LINKING] Add intentional cross-links between README, INSTALL, SUPPORT_MATRIX, INSTALL_MATRIX, friction report, and harness runtime guides so users can move from marketing surface → install path → validation reality without confusion.
 - [ ] [INSTALL_CLAIM_DISCIPLINE] Audit all public claims in README/docs/site about install ease, harness support, and local-only operation. Every claim must map to a tested path or be downgraded in wording.
@@ -64,6 +63,8 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 ## Partial Items (tracked, not actively worked)
 
 ### External Challenges
+
+- [ ] [EXTERNAL_CHALLENGE:coding-challenge-07] Build a minimal theorem prover for propositional logic — Implement a resolution-based theorem prover for propositional logic: parse formulas (AND, OR, NOT, IMPLIES), convert to CNF, apply resolution rule until proven or saturated. Support: modus ponens, con
 
 - [ ] [EXTERNAL_CHALLENGE:coding-challenge-10] Implement A* search with multiple heuristics on a graph puzzle — Build A* search for the 15-puzzle (4x4 sliding tile puzzle). Implement 3 heuristics: Manhattan distance, linear conflict, and pattern database (3x3 corner). Compare: nodes expanded, solution length, t
 
