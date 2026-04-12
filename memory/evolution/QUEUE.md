@@ -7,7 +7,7 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 ## P0 — Current Sprint (2026-04-11)
 
 - [ ] [PHI_REACHABILITY_WEIGHT_DEPLOY] **(Audit 2026-04-11, flagged 3 consecutive audits)** Deploy the already-coded Phi reachability weight change (0.25→0.10) in `clarvis/metrics/phi.py`. The fix exists in code comments but was never applied to actual scoring — all 64 historical values use old weights. Reachability is permanently 1.0, inflating Phi by ~35%. Apply the weight, recalculate baseline, update any threshold alerts.
-- [ ] [ISOLATION_GUARD_SELFTEST_FIX] Fix `scripts/infra/isolation_guard.sh` self-test harness — remove the pipeline-to-`read` pattern that can mask subshell results, and make the self-tests assert actual pass/fail outcomes robustly.
+- [x] [ISOLATION_GUARD_SELFTEST_FIX] _(2026-04-12)_ Replaced subshell stdout-capture pattern with subprocess exit-code checks. Added test 5 (auth dir). All 5 tests pass.
 
 ## P1 — This Week
 
@@ -67,6 +67,8 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 ## Partial Items (tracked, not actively worked)
 
 ### External Challenges
+
+- [ ] [EXTERNAL_CHALLENGE:coding-challenge-10] Implement A* search with multiple heuristics on a graph puzzle — Build A* search for the 15-puzzle (4x4 sliding tile puzzle). Implement 3 heuristics: Manhattan distance, linear conflict, and pattern database (3x3 corner). Compare: nodes expanded, solution length, t
 
 - [ ] [EXTERNAL_CHALLENGE:synthesis-02] Implement contradiction detection across wiki pages — Build a contradiction detector: for each pair of wiki pages that share a tag, compare their Key Claims via embedding similarity. Flag pairs where claims are semantically similar but contain negation o
 

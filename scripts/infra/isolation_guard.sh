@@ -115,6 +115,9 @@ else
 fi
 
 # ── Self-test mode ───────────────────────────────────────────────────
+# Each test runs the guard script as a subprocess (no --self-test flag)
+# and checks the exit code directly.  Exit 1 = guards tripped (reject),
+# exit 0 = guards passed (accept).  No subshell stdout parsing needed.
 if [ "${1:-}" = "--self-test" ] 2>/dev/null; then
     echo ""
     echo "=== Isolation Guard Self-Test ==="
@@ -122,66 +125,56 @@ if [ "${1:-}" = "--self-test" ] 2>/dev/null; then
 
     _SELF_TEST_PASS=0
     _SELF_TEST_FAIL=0
+    _SELF_TEST_SCRIPT="${BASH_SOURCE[0]}"
 
-    _st_check() {
-        local name="$1" expected="$2" actual="$3"
-        if [ "$expected" = "$actual" ]; then
-            echo "  PASS  $name"
+    _st_assert_exit() {
+        local name="$1" expected_exit="$2" actual_exit="$3"
+        if [ "$expected_exit" -eq "$actual_exit" ]; then
+            echo "  PASS  $name (exit=$actual_exit)"
             _SELF_TEST_PASS=$((_SELF_TEST_PASS + 1))
         else
-            echo "  FAIL  $name (expected=$expected, got=$actual)"
+            echo "  FAIL  $name (expected exit=$expected_exit, got exit=$actual_exit)"
             _SELF_TEST_FAIL=$((_SELF_TEST_FAIL + 1))
         fi
     }
 
-    # Test 1: Should FAIL with no env vars set
-    result=$(
-        unset CLARVIS_E2E_ISOLATED CLARVIS_WORKSPACE CLARVIS_E2E_PORT CLARVIS_AUTH_DIR OPENCLAW_GATEWAY_PID
-        export _GUARD_SELF_TEST=1
-        _GUARD_PASS=0 _GUARD_FAIL=0 _GUARD_ERRORS=()
-        source "${BASH_SOURCE[0]}" 2>/dev/null
-        echo "$_GUARD_RESULT"
-    )
-    _st_check "Rejects bare environment" "fail" "${result:-unknown}"
+    # Test 1: Should REJECT (exit 1) with no isolation env vars
+    env -i HOME="$HOME" PATH="$PATH" \
+        bash "$_SELF_TEST_SCRIPT" >/dev/null 2>&1
+    _st_assert_exit "Rejects bare environment" 1 $?
 
-    # Test 2: Should PASS with correct isolation vars
-    result=$(
-        export CLARVIS_E2E_ISOLATED=1
-        export CLARVIS_WORKSPACE="/tmp/clarvis-e2e-test/workspace"
-        export CLARVIS_E2E_PORT=28789
-        unset CLARVIS_AUTH_DIR OPENCLAW_GATEWAY_PID
-        export _GUARD_SELF_TEST=1
-        _GUARD_PASS=0 _GUARD_FAIL=0 _GUARD_ERRORS=()
-        source "${BASH_SOURCE[0]}" 2>/dev/null
-        echo "$_GUARD_RESULT"
-    )
-    _st_check "Accepts isolated environment" "pass" "${result:-unknown}"
+    # Test 2: Should ACCEPT (exit 0) with correct isolation vars
+    env -i HOME="$HOME" PATH="$PATH" \
+        CLARVIS_E2E_ISOLATED=1 \
+        CLARVIS_WORKSPACE="/tmp/clarvis-e2e-test/workspace" \
+        CLARVIS_E2E_PORT=28789 \
+        bash "$_SELF_TEST_SCRIPT" >/dev/null 2>&1
+    _st_assert_exit "Accepts isolated environment" 0 $?
 
-    # Test 3: Should FAIL with production workspace
-    result=$(
-        export CLARVIS_E2E_ISOLATED=1
-        export CLARVIS_WORKSPACE="/home/agent/.openclaw/workspace"
-        export CLARVIS_E2E_PORT=28789
-        unset CLARVIS_AUTH_DIR OPENCLAW_GATEWAY_PID
-        export _GUARD_SELF_TEST=1
-        _GUARD_PASS=0 _GUARD_FAIL=0 _GUARD_ERRORS=()
-        source "${BASH_SOURCE[0]}" 2>/dev/null
-        echo "$_GUARD_RESULT"
-    )
-    _st_check "Rejects production workspace" "fail" "${result:-unknown}"
+    # Test 3: Should REJECT (exit 1) with production workspace
+    env -i HOME="$HOME" PATH="$PATH" \
+        CLARVIS_E2E_ISOLATED=1 \
+        CLARVIS_WORKSPACE="/home/agent/.openclaw/workspace" \
+        CLARVIS_E2E_PORT=28789 \
+        bash "$_SELF_TEST_SCRIPT" >/dev/null 2>&1
+    _st_assert_exit "Rejects production workspace" 1 $?
 
-    # Test 4: Should FAIL with production port
-    result=$(
-        export CLARVIS_E2E_ISOLATED=1
-        export CLARVIS_WORKSPACE="/tmp/clarvis-e2e-test/workspace"
-        export CLARVIS_E2E_PORT=18789
-        unset CLARVIS_AUTH_DIR OPENCLAW_GATEWAY_PID
-        export _GUARD_SELF_TEST=1
-        _GUARD_PASS=0 _GUARD_FAIL=0 _GUARD_ERRORS=()
-        source "${BASH_SOURCE[0]}" 2>/dev/null
-        echo "$_GUARD_RESULT"
-    )
-    _st_check "Rejects production port" "fail" "${result:-unknown}"
+    # Test 4: Should REJECT (exit 1) with production port
+    env -i HOME="$HOME" PATH="$PATH" \
+        CLARVIS_E2E_ISOLATED=1 \
+        CLARVIS_WORKSPACE="/tmp/clarvis-e2e-test/workspace" \
+        CLARVIS_E2E_PORT=18789 \
+        bash "$_SELF_TEST_SCRIPT" >/dev/null 2>&1
+    _st_assert_exit "Rejects production port" 1 $?
+
+    # Test 5: Should REJECT (exit 1) with production auth dir
+    env -i HOME="$HOME" PATH="$PATH" \
+        CLARVIS_E2E_ISOLATED=1 \
+        CLARVIS_WORKSPACE="/tmp/clarvis-e2e-test/workspace" \
+        CLARVIS_E2E_PORT=28789 \
+        CLARVIS_AUTH_DIR="/home/agent/.openclaw/agents" \
+        bash "$_SELF_TEST_SCRIPT" >/dev/null 2>&1
+    _st_assert_exit "Rejects production auth dir" 1 $?
 
     echo ""
     echo "Self-test: $_SELF_TEST_PASS passed, $_SELF_TEST_FAIL failed"
