@@ -128,7 +128,7 @@ def _band_accuracy(band_lo, band_hi, min_samples=5, recency_weight=True):
     return correct_w / total_w, len(resolved)
 
 
-def predict(event: str, expected: str, confidence: float) -> dict:
+def predict(event: str, expected: str, confidence: float, _task_aware: bool = False) -> dict:
     """
     Log a prediction.
 
@@ -136,6 +136,9 @@ def predict(event: str, expected: str, confidence: float) -> dict:
         event: What you're predicting about (e.g. "deploy_success")
         expected: What you think will happen (e.g. "no errors")
         confidence: 0.0 to 1.0 how confident you are
+        _task_aware: If True, confidence was already adjusted by task_aware_confidence();
+                     skip the underconfidence boost in the 0.6-0.8 band to preserve
+                     intentional low-confidence signals for novel tasks.
     """
     global _predictions_cache, _predictions_cache_mtime
     confidence = max(0.0, min(1.0, float(confidence)))
@@ -143,11 +146,13 @@ def predict(event: str, expected: str, confidence: float) -> dict:
     # Confidence recalibration: adjust in poorly-calibrated bands
     original_confidence = confidence
     recalibrated = False
-    if 0.6 <= confidence < 0.8:
+    if 0.6 <= confidence < 0.8 and not _task_aware:
         # Underconfidence correction: if actual accuracy is much higher than
         # predicted, boost confidence toward the actual rate.
         # 2026-03-17 reflection: 60-80% band has +18% gap (88% actual vs 70%
         # predicted). Increased boost cap 0.10→0.12, trigger 0.85→0.83.
+        # NOTE: skipped when _task_aware=True, because the low confidence is
+        # intentional (novel/research/exploratory task), not miscalibration.
         acc, n = _band_accuracy(0.6, 0.8)
         if acc is not None and acc > 0.83:
             boost = min(0.12, (acc - 0.70) * 0.55)
@@ -356,6 +361,74 @@ def calibration(max_age_days: int | None = None) -> dict:
         result["brier_score_weighted"] = round(weighted_sum / weight_total, 4)
 
     return result
+
+
+def task_aware_confidence(
+    base_confidence: float,
+    has_procedure: bool = True,
+    procedure_success_rate: float | None = None,
+    episode_count: int | None = None,
+    is_research: bool = False,
+    is_exploratory: bool = False,
+    task_text: str = "",
+) -> float:
+    """Adjust confidence based on task-specific signals.
+
+    The global dynamic_confidence() returns the same score for every task.
+    This function applies task-level adjustments so novel, ambiguous, or
+    exploratory tasks emit lower confidence (0.65-0.75), improving Brier
+    calibration.
+
+    Args:
+        base_confidence: Starting confidence from dynamic_confidence()
+        has_procedure: Whether a matching procedure was found
+        procedure_success_rate: Historical success rate of matched procedure (0-1)
+        episode_count: Number of similar prior episodes (None = unknown)
+        is_research: Task is a research session
+        is_exploratory: Task is tagged exploratory/experimental
+        task_text: Raw task description for novelty detection
+
+    Returns:
+        Adjusted confidence (0.3-0.95)
+    """
+    conf = base_confidence
+
+    # --- Novelty penalty: no prior episodes means we haven't done this before ---
+    if episode_count is not None:
+        if episode_count == 0:
+            # Completely novel task — significant penalty
+            conf -= 0.15
+        elif episode_count <= 2:
+            # Very few prior episodes — moderate penalty
+            conf -= 0.08
+
+    # --- No procedure match: we don't have a playbook ---
+    if not has_procedure:
+        conf -= 0.07
+    elif procedure_success_rate is not None and procedure_success_rate < 0.7:
+        # Procedure exists but has poor track record
+        conf -= 0.05
+
+    # --- Research/exploratory tasks: inherently uncertain ---
+    if is_research:
+        conf -= 0.10
+    elif is_exploratory:
+        conf -= 0.08
+
+    # --- Text-based novelty markers ---
+    task_lower = task_text.lower() if task_text else ""
+    novelty_markers = [
+        "first time", "experimental", "prototype", "proof of concept",
+        "investigate", "diagnose", "unknown", "never done", "new approach",
+        "try ", "attempt", "explore", "spike",
+    ]
+    if any(marker in task_lower for marker in novelty_markers):
+        conf -= 0.05
+
+    # Clamp: floor at 0.55 (still useful), ceiling preserves base
+    conf = max(0.55, min(base_confidence, conf))
+
+    return round(conf, 3)
 
 
 def predict_specific(domain: str) -> dict | None:

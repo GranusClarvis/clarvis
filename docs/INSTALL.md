@@ -1,10 +1,5 @@
 # Clarvis Installation Guide
 
-> **Note (2026-04-03):** The `packages/` directory (clarvis-db, clarvis-cost, clarvis-reasoning) has been
-> consolidated into the `clarvis/` spine module. References to standalone packages below are historical.
-> See `clarvis/brain/`, `clarvis/orch/cost_tracker.py`, `clarvis/cognition/metacognition.py`.
-
-
 Complete walkthrough for installing and verifying Clarvis on a fresh machine.
 
 > **Before choosing a profile**, check the [Support Matrix](SUPPORT_MATRIX.md) for what's
@@ -199,8 +194,7 @@ bash scripts/verify_install.sh
 ```
 
 The verifier checks:
-- **Core imports** — All `clarvis.*` modules load
-- **Sub-packages** — `clarvis_db`, `clarvis_cost`, `clarvis_reasoning`
+- **Core imports** — All `clarvis.*` spine modules load
 - **CLI** — All subcommands respond to `--help`
 - **Brain** — ChromaDB + ONNX importable, brain health passes
 - **Tests** — Canonical `pytest` discovery runs successfully
@@ -265,14 +259,15 @@ review or `crontab scripts/crontab.reference` if you prefer direct control.
 
 | Problem | Fix |
 |---------|-----|
-| `ModuleNotFoundError: clarvis_cost` | Sub-packages must install before main: `bash scripts/install.sh` |
 | `ModuleNotFoundError: chromadb` | Install brain extras: `pip install -e ".[brain]"` |
 | `clarvis: command not found` | Ensure pip's bin dir is in PATH, or use `python3 -m clarvis` |
 | Brain health shows 0 memories | Normal on fresh install — memories accumulate through use |
 | Pytest import errors | Run `bash scripts/verify_install.sh` to diagnose |
-| OpenClaw gateway won't start | Check Node.js version (`node -v` >= 18), check `openclaw.json` |
 | Docker build fails | Ensure Docker daemon running, check disk space |
 | `python -m build` fails (PEP 668) | On PEP 668 systems (Ubuntu 24.04+), use `python -m build --no-isolation`. CI uses `actions/setup-python` where isolation works. |
+
+For runtime troubleshooting (gateway issues, cron failures, etc.), see the
+[OpenClaw User Guide](USER_GUIDE_OPENCLAW.md) or [Hermes User Guide](USER_GUIDE_HERMES.md).
 
 ## Upgrading
 
@@ -290,7 +285,7 @@ bash scripts/safe_update.sh           # apply with backup + health checks
 ## Uninstalling
 
 ```bash
-pip uninstall clarvis clarvis-db clarvis-cost clarvis-reasoning
+pip uninstall clarvis
 # Remove data (optional):
 rm -rf data/clarvisdb data/clarvisdb-local
 ```

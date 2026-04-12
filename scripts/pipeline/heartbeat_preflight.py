@@ -57,10 +57,11 @@ except (ImportError, FileNotFoundError):
     open_chain = None
 
 try:
-    from clarvis.cognition.confidence import predict as conf_predict, dynamic_confidence
+    from clarvis.cognition.confidence import predict as conf_predict, dynamic_confidence, task_aware_confidence
 except ImportError:
     conf_predict = None
     dynamic_confidence = None
+    task_aware_confidence = None
 
 try:
     from clarvis.memory.episodic_memory import EpisodicMemory
@@ -692,12 +693,56 @@ def _preflight_confidence_world_model(result, next_task, task_section):
     if dynamic_confidence:
         try:
             dyn_conf = dynamic_confidence()
-            result["prediction_confidence"] = dyn_conf
         except Exception:
             pass
+
+    # --- Task-aware confidence adjustment ---
+    # Use procedure match (already computed) and quick episode count to
+    # produce lower confidence for novel/ambiguous tasks.
+    if task_aware_confidence:
+        has_proc = result.get("procedure") is not None
+        proc_sr = None
+        if has_proc and result.get("procedure"):
+            proc_sr = result["procedure"].get("success_rate")
+
+        # Quick episode count: lightweight check before full episodic recall
+        ep_count = None
+        if EpisodicMemory:
+            try:
+                em = EpisodicMemory()
+                task_lower = next_task.lower()[:50]
+                ep_count = sum(
+                    1 for ep in em.episodes
+                    if task_lower in ep.get("task", "").lower()
+                    or ep.get("task", "").lower()[:40] in task_lower
+                )
+            except Exception:
+                pass
+
+        task_lower = next_task.lower()
+        is_research = "research" in task_lower or task_section == "Research Sessions"
+        is_exploratory = any(
+            kw in task_lower
+            for kw in ["exploratory", "experimental", "spike", "investigate", "diagnose", "a/b test", "ab test"]
+        )
+
+        dyn_conf = task_aware_confidence(
+            base_confidence=dyn_conf,
+            has_procedure=has_proc,
+            procedure_success_rate=proc_sr,
+            episode_count=ep_count,
+            is_research=is_research,
+            is_exploratory=is_exploratory,
+            task_text=next_task,
+        )
+        log(f"Task-aware confidence: {dyn_conf:.2f} (proc={has_proc}, "
+            f"ep_count={ep_count}, research={is_research}, exploratory={is_exploratory})")
+
+    result["prediction_confidence"] = dyn_conf
+    _was_task_aware = task_aware_confidence is not None
     if conf_predict:
         try:
-            conf_predict(task_event, "success", dyn_conf)
+            conf_predict(task_event, "success", dyn_conf, _task_aware=_was_task_aware)
             log(f"Prediction logged: {task_event} @ {dyn_conf:.0%}")
         except Exception as e:
             log(f"Prediction logging failed: {e}")
