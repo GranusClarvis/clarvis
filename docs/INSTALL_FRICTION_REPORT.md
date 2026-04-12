@@ -1,7 +1,9 @@
 # Install Friction Report — 2026-04-06
 
 _Rolling engineering blocker report: what broke, why, workaround, fix owner, and release impact._
-_For install guides, see `INSTALL.md`. For validation evidence, see `validation/`._
+_For install guides, see [INSTALL.md](INSTALL.md). For validation evidence, see `validation/`._
+_For support status, see [SUPPORT_MATRIX.md](SUPPORT_MATRIX.md). For validation criteria, see [INSTALL_MATRIX.md](INSTALL_MATRIX.md)._
+_For runtime operation after install, see [USER_GUIDE_OPENCLAW.md](USER_GUIDE_OPENCLAW.md) or [USER_GUIDE_HERMES.md](USER_GUIDE_HERMES.md)._
 
 Based on: OpenClaw fresh install (2026-04-05), Hermes fresh install (2026-04-05), Clarvis overlay install (2026-04-06), isolated cron e2e tests (2026-04-06), and fresh-install smoke suite (2026-04-06).
 

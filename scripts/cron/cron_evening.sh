@@ -16,7 +16,14 @@ emit_dashboard_event task_started --task-name "Evening assessment" --section cro
 # === PHI METRIC: RECORD AND ACT ===
 # Record phi metric AND act on it: drops trigger cross-linking, rises log positive episodes
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Recording phi metric and acting on changes..." >> "$LOGFILE"
-PHI_OUTPUT=$(python3 -m clarvis.metrics.phi act 2>&1)
+PHI_OUTPUT=$(python3 -c "
+from clarvis.metrics.phi import record_phi, act_on_phi
+r = record_phi()
+a = act_on_phi(r)
+print(f'Phi={r[\"phi\"]:.4f}')
+for action in a['actions']:
+    print(f'  {action}')
+" 2>&1)
 PHI_EXIT=$?
 echo "$PHI_OUTPUT" >> "$LOGFILE"
 
@@ -28,7 +35,7 @@ fi
 # Run self_model.py daily update — scores capabilities, tracks diffs, alerts on degradation
 # NEW: domains below 0.4 auto-generate P0 remediation tasks in QUEUE.md (sense-assess-act loop)
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running daily capability assessment (with auto-remediation)..." >> "$LOGFILE"
-ASSESSMENT_OUTPUT=$(python3 -m clarvis.metrics.self_model daily 2>&1)
+ASSESSMENT_OUTPUT=$(python3 -c "from clarvis.metrics.self_model import daily_update; daily_update()" 2>&1)
 ASSESSMENT_EXIT=$?
 echo "$ASSESSMENT_OUTPUT" >> "$LOGFILE"
 
@@ -116,8 +123,10 @@ STATIC2
 fi
 
 # === DIGEST: Write first-person summary for M2.5 agent ===
-PHI_DIGEST=$(echo "$PHI_OUTPUT" | grep -oP 'Phi\s*=\s*[\d.]+' | head -1 || echo "Phi not measured")
-ASSESSMENT_DIGEST=$(echo "$ASSESSMENT_OUTPUT" | grep -oP '^\s+\S.*:\s[\d.]+' | head -7 | tr '\n' '; ' || echo "assessment unavailable")
+PHI_DIGEST=$(echo "$PHI_OUTPUT" | grep -oP 'Phi\s*=\s*[\d.]+' | head -1)
+[ -z "$PHI_DIGEST" ] && PHI_DIGEST="Phi not measured"
+ASSESSMENT_DIGEST=$(echo "$ASSESSMENT_OUTPUT" | grep -oP '^\s{2}[A-Z][^:]+:\s[\d.]+' | head -7 | tr '\n' '; ')
+[ -z "$ASSESSMENT_DIGEST" ] && ASSESSMENT_DIGEST="assessment unavailable"
 python3 "$CLARVIS_WORKSPACE/scripts/tools/digest_writer.py" evening \
     "Evening assessment complete. $PHI_DIGEST. Capability scores: $ASSESSMENT_DIGEST. Ran retrieval benchmark, self-report, and dashboard regeneration. Evening code audit ${AUDIT_SKIPPED:+skipped (lock held)}${AUDIT_SKIPPED:-done}." \
     >> "$LOGFILE" 2>&1 || true

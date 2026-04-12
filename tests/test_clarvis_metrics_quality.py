@@ -1,4 +1,8 @@
-"""Tests for clarvis.metrics.quality module."""
+"""Tests for clarvis.metrics.quality module.
+
+Tests that call production quality functions (git log scanning, file I/O) are
+marked slow — they exceed the 15s per-test budget in the postflight self-test.
+"""
 
 import pytest
 import tempfile
@@ -16,6 +20,7 @@ from clarvis.metrics.quality import (
 )
 
 
+@pytest.mark.slow
 class TestComputeTaskQualityScore:
     """Tests for compute_task_quality_score function."""
 
@@ -38,6 +43,7 @@ class TestComputeTaskQualityScore:
             assert 0 <= score <= 1, f"Score {score} out of range"
 
 
+@pytest.mark.slow
 class TestComputeCodeQualityScore:
     """Tests for compute_code_quality_score function."""
 
@@ -67,6 +73,7 @@ class TestComputeCodeQualityScore:
         assert isinstance(components, dict)
 
 
+@pytest.mark.slow
 class TestComputeSemanticDepth:
     """Tests for compute_semantic_depth function."""
 
@@ -81,6 +88,7 @@ class TestComputeSemanticDepth:
         assert 'depth_score' in result or 'score' in result
 
 
+@pytest.mark.slow
 class TestComputeEfficiencyScore:
     """Tests for compute_efficiency_score function."""
 
@@ -95,6 +103,7 @@ class TestComputeEfficiencyScore:
         assert 'efficiency_score' in result or 'score' in result
 
 
+@pytest.mark.slow
 class TestGetAllQualityMetrics:
     """Tests for get_all_quality_metrics function."""
 

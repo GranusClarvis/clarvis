@@ -849,6 +849,7 @@ class TestGraphSaveMerge:
         assert len(result["edges"]) >= 1
 
 
+@pytest.mark.timeout(30)
 class TestBulkCrossLink:
     def test_bulk_cross_link_empty_brain(self, brain_instance):
         """Empty brain should return zero new edges."""

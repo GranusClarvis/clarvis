@@ -1,8 +1,22 @@
-# Clarvis on Hermes — User Guide
+# Clarvis on Hermes — Runtime / Operator Guide
 
-## What is Hermes?
+> **Support Status: Experimental / Partial**
+> Hermes integration is not production-ready. The OpenClaw gateway remains the
+> primary supported harness. Key gaps: `hermes-agent` CLI flag handling, local
+> model performance, incomplete cron migration, no Telegram/Discord gateway.
+> See [Limitations](#limitations) and the
+> [Support Matrix](SUPPORT_MATRIX.md) for details.
 
-[Hermes Agent](https://github.com/NousResearch/hermes-agent) is NousResearch's Python-based agent harness. It provides a CLI, session management, skill system, and self-evolution framework. Clarvis can run on Hermes as an alternative to the OpenClaw gateway.
+---
+
+## Overview
+
+[Hermes Agent](https://github.com/NousResearch/hermes-agent) is NousResearch's
+Python-based agent harness. Clarvis can run on Hermes as an alternative to the
+OpenClaw gateway for development, testing, and local-only setups.
+
+For installation instructions, see [INSTALL.md](../INSTALL.md).
+For harness comparison, see [SUPPORT_MATRIX.md](SUPPORT_MATRIX.md).
 
 ## Key Differences from OpenClaw
 
@@ -14,45 +28,10 @@
 | **Session storage** | OpenClaw sessions | `~/.hermes/sessions/` (SQLite) |
 | **Skills** | OpenClaw SKILL.md format | Hermes Skills Hub format |
 | **Daemon mode** | `systemctl --user` | Not daemon by default |
-| **Identity** | `SOUL.md` in workspace | `~/.hermes/SOUL.md` (auto-generated) |
 | **Config** | `openclaw.json` | `~/.hermes/config.yaml` + `.env` |
 | **Cron/autonomy** | System crontab (30+ jobs) | `hermes cron` (built-in scheduler) |
 
-## Installation
-
-### Prerequisites
-
-| Requirement | Version | Notes |
-|-------------|---------|-------|
-| Python | 3.10+ | 3.12 recommended |
-| pip | 21+ | |
-| git | 2.x | |
-| SQLite | 3.35+ | FTS5 for session search |
-
-### Install Steps
-
-```bash
-git clone https://github.com/NousResearch/hermes-agent.git
-cd hermes-agent
-pip install -e .
-
-# Configure model provider
-hermes config set model "your-model"
-hermes config set provider "openrouter"  # or ollama, anthropic, etc.
-
-# Verify
-hermes doctor    # Comprehensive diagnostic
-hermes status    # Overview of config and services
-```
-
-### Migration from OpenClaw
-
-Hermes includes a migration tool:
-```bash
-hermes claw migrate   # Import OpenClaw settings, memories, skills, API keys
-```
-
-## How to Use Clarvis on Hermes
+## Runtime Operations
 
 ### CLI Interaction
 
@@ -62,7 +41,9 @@ hermes run "your task"   # One-shot task execution
 hermes sessions list     # List saved sessions
 ```
 
-**Important**: Use the `hermes` CLI (not `hermes-agent`) for programmatic use — `hermes` correctly reads `config.yaml`, while `hermes-agent` has flag-handling bugs (see Limitations below).
+**Important**: Use the `hermes` CLI (not `hermes-agent`) — `hermes` correctly
+reads `config.yaml`, while `hermes-agent` has flag-handling bugs (see
+[Limitations](#limitations)).
 
 ### Useful Commands
 
@@ -77,7 +58,8 @@ hermes sessions list     # List saved sessions
 
 ### Clarvis Brain Access
 
-The Clarvis brain works identically on both harnesses — it reads from `CLARVIS_WORKSPACE`:
+The Clarvis brain works identically on both harnesses — it reads from
+`CLARVIS_WORKSPACE`:
 
 ```bash
 export CLARVIS_WORKSPACE=/path/to/clarvis/workspace
@@ -85,43 +67,7 @@ python3 -m clarvis brain search "query"
 python3 -m clarvis brain health
 ```
 
-## Limitations
-
-### Known Issues
-
-1. **`hermes-agent` CLI ignores flags** (HIGH): The `hermes-agent` entry point does not respect `--model`, `--base_url`, or `--api_key` flags. It auto-detects OAuth tokens from the environment instead.
-   - **Workaround**: Use `hermes` CLI or invoke `python run_agent.py` directly with flags.
-
-2. **Local models are slow** (MEDIUM): qwen3-vl:4b at ~7 tok/s on CPU cannot complete tool-calling loops in reasonable time. The model's thinking tokens consume the budget before producing content.
-   - **Recommendation**: Use a faster model (qwen2.5:7b, llama3.2:3b) or a GPU, or route through OpenRouter.
-
-3. **No headless `.env` setup** (LOW): `hermes setup` requires an interactive terminal. For headless/CI, manually create `~/.hermes/.env` or copy from `.env.example`.
-
-4. **Auth token confusion** (LOW): Hermes auto-detects and stores Claude Code OAuth tokens in `~/.hermes/auth.json`, which may not work for Hermes itself.
-
-### What's Not Available on Hermes
-
-- **Telegram/Discord integration**: No built-in chat gateway — Hermes is CLI/programmatic only.
-- **OpenClaw skills**: Clarvis's 19 OpenClaw-format skills don't directly port to Hermes Skills Hub.
-- **systemd daemon mode**: Hermes doesn't run as a persistent service by default.
-- **Cron autonomy**: While Hermes has `hermes cron`, the full 30+ job schedule from OpenClaw needs manual migration.
-
-## Recommended Usage Patterns
-
-### When to Use Hermes over OpenClaw
-
-- **Development/testing**: Hermes's Python-native CLI is faster for iterating on Clarvis modules.
-- **Programmatic integration**: Import Hermes as a Python library for embedding in other tools.
-- **Local-only setups**: Hermes + Ollama works without any cloud API keys.
-- **Profile isolation**: `hermes profile` enables running multiple agent personalities on one machine.
-
-### When to Stay on OpenClaw
-
-- **Production chat**: Telegram/Discord gateway is mature and stable.
-- **Full autonomy**: The 30+ cron job schedule is battle-tested on OpenClaw.
-- **Multi-model routing**: OpenClaw's gateway handles model routing centrally.
-
-## Configuration Reference
+## Configuration
 
 ### `~/.hermes/config.yaml`
 ```yaml
@@ -144,3 +90,36 @@ hermes profile create dev
 hermes profile use dev
 # Separate sessions, config, and memories
 ```
+
+## Limitations
+
+### Known Issues
+
+1. **`hermes-agent` CLI ignores flags** (HIGH): The `hermes-agent` entry point
+   does not respect `--model`, `--base_url`, or `--api_key` flags.
+   - **Workaround**: Use `hermes` CLI or invoke `python run_agent.py` directly.
+
+2. **Local models are slow** (MEDIUM): qwen3-vl:4b at ~7 tok/s on CPU cannot
+   complete tool-calling loops in reasonable time.
+   - **Recommendation**: Use a faster model or route through OpenRouter.
+
+3. **No headless `.env` setup** (LOW): `hermes setup` requires an interactive
+   terminal. For headless/CI, manually create `~/.hermes/.env`.
+
+4. **Auth token confusion** (LOW): Hermes auto-detects Claude Code OAuth tokens
+   in `~/.hermes/auth.json`, which may not work for Hermes itself.
+
+### What's Not Available on Hermes
+
+- **Telegram/Discord integration**: No built-in chat gateway.
+- **OpenClaw skills**: Clarvis's 19 OpenClaw-format skills don't directly port.
+- **systemd daemon mode**: Hermes doesn't run as a persistent service.
+- **Cron autonomy**: Full 30+ job schedule needs manual migration.
+
+## When to Use Hermes vs OpenClaw
+
+**Use Hermes** for development/testing, programmatic integration, local-only
+setups (Hermes + Ollama), or profile isolation.
+
+**Stay on OpenClaw** for production chat (Telegram/Discord), full cron
+autonomy, or multi-model routing.

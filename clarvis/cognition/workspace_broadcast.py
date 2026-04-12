@@ -218,8 +218,9 @@ class WorkspaceBroadcast:
 
         # --- Self-representation: current self-state ---
         try:
-            from self_representation import encode_self_state
-            state = encode_self_state()
+            from clarvis._script_loader import load as _load_script
+            _self_rep = _load_script("self_representation", "metrics")
+            state = _self_rep.encode_self_state()
             if state and isinstance(state, dict):
                 z = state.get("z", {})
                 if z:

@@ -2,6 +2,11 @@
 
 > Defines the supported install paths, prerequisites, local-model-only mode, and pass/fail
 > criteria for "usable without extra hassle." Each path is independently testable.
+>
+> **See also:** [INSTALL.md](INSTALL.md) (how to install),
+> [SUPPORT_MATRIX.md](SUPPORT_MATRIX.md) (what's supported),
+> [INSTALL_FRICTION_REPORT.md](INSTALL_FRICTION_REPORT.md) (known blockers),
+> [USER_GUIDE_OPENCLAW.md](USER_GUIDE_OPENCLAW.md) / [USER_GUIDE_HERMES.md](USER_GUIDE_HERMES.md) (runtime guides).
 
 ## Install Paths
 

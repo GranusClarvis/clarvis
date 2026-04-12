@@ -288,12 +288,14 @@ It is intentionally opinionated. It prefers continuity over minimalism and struc
 
 ## Documentation
 
-- [Install Guide](docs/INSTALL.md)
+- [Install Guide](docs/INSTALL.md) — step-by-step install for all profiles
 - [Install Matrix](docs/INSTALL_MATRIX.md) — validation criteria for fresh installs
-- [Support Matrix](docs/SUPPORT_MATRIX.md)
+- [Support Matrix](docs/SUPPORT_MATRIX.md) — what works, what's experimental, what's broken
+- [Friction Report](docs/INSTALL_FRICTION_REPORT.md) — known install blockers and workarounds
+- [OpenClaw Runtime Guide](docs/USER_GUIDE_OPENCLAW.md) — day-to-day ops on OpenClaw
+- [Hermes Runtime Guide](docs/USER_GUIDE_HERMES.md) — runtime ops on Hermes (experimental)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Launch Packet](docs/LAUNCH_PACKET.md)
-- [Gap Audit](docs/OPEN_SOURCE_GAP_AUDIT.md)
 - [Roadmap](ROADMAP.md)
 
 ---

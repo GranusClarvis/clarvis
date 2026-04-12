@@ -145,4 +145,6 @@ When you change support status:
 
 _See also: [INSTALL.md](INSTALL.md) (how to install), [INSTALL_MATRIX.md](INSTALL_MATRIX.md) (validation criteria),
 [INSTALL_FRICTION_REPORT.md](INSTALL_FRICTION_REPORT.md) (engineering blockers),
-[E2E_RELEASE_VALIDATION_PLAN.md](E2E_RELEASE_VALIDATION_PLAN.md) (full validation procedure)._
+[E2E_RELEASE_VALIDATION_PLAN.md](E2E_RELEASE_VALIDATION_PLAN.md) (full validation procedure),
+[USER_GUIDE_OPENCLAW.md](USER_GUIDE_OPENCLAW.md) (OpenClaw runtime ops),
+[USER_GUIDE_HERMES.md](USER_GUIDE_HERMES.md) (Hermes runtime ops, experimental)._

@@ -10,17 +10,12 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 ## P1 — This Week
 
 ### Strategic Audit Structural Fixes (2026-04-11 audit)
-- [ ] [SELF_REPRESENTATION_IMPORT_RECOVERY] Fix `self_representation` module import failures in the GWT broadcast path so self-model context is present during preflight instead of silently degrading on missing-module errors.
-- [ ] [DIGEST_OBSERVABILITY_GAP_AUDIT] Audit why several recent daily logs show missing digest entries or weak end-of-day visibility. Produce one canonical failure map across cron writers, digest generation, and daily-log hydration, then patch the highest-confidence cause.
-- [ ] [PYTEST_CAPTURE_TIMEOUT_TUNING] The postflight test capture path is still timing out at 60s on `pytest -m 'not slow'`. Profile the suite, split expensive subsets, or raise/report budget sanely so validation stops producing low-signal timeout noise.
 
 ### Fresh-Install / Isolation Validation
 - [ ] [E2E_HERMES_FRESH_ISOLATED] Run a truly fresh isolated Hermes install in `/tmp` or equivalent, with isolated venv/config/session dirs and the local LLM only. Validate install, main entry points, config bootstrap, session persistence, basic chat loop, and identify the exact supported invocation path (`hermes` vs `run_agent.py`) with no hand-wavy workarounds.
 - [ ] [ADOPTION_MATRIX_LOCAL_HARNESS] Produce a single adoption matrix for fresh installs: OpenClaw base, Hermes base, Clarvis-on-OpenClaw, Clarvis-on-Hermes. For each, record local-LLM-only status, exact invocation path, install friction, first-run success, end-to-end feature coverage, and whether the path is honestly claimable for users.
 
 ### Install Docs / Support Surface Consolidation (2026-04-07) — DEPRIORITIZED by audit 2026-04-11, move to P2 when reasoning work is complete
-- [ ] [HERMES_RUNTIME_GUIDE_SCOPE] Refocus `docs/USER_GUIDE_HERMES.md` into a runtime/operator guide only, and add a prominent support-status banner at the top if Hermes remains partial/experimental.
-- [ ] [INSTALL_DOC_CROSS_LINKING] Add intentional cross-links between README, INSTALL, SUPPORT_MATRIX, INSTALL_MATRIX, friction report, and harness runtime guides so users can move from marketing surface → install path → validation reality without confusion.
 - [ ] [INSTALL_CLAIM_DISCIPLINE] Audit all public claims in README/docs/site about install ease, harness support, and local-only operation. Every claim must map to a tested path or be downgraded in wording.
 - [ ] [INSTALL_DOCS_PRUNE] _(Blocked: prerequisite tasks INSTALL_MD_TIGHTENING, INSTALL_MATRIX_PROMOTION, etc. not done yet)_ Remove or archive redundant install-related content once the new stack is in place. Goal: fewer docs, clearer roles, lower drift.
 - [ ] [RELEASE_VALIDATION_SUMMARY_DOC] Add a single `docs/validation/RELEASE_VALIDATION_SUMMARY.md` summarizing what was tested, what passed, what partially passed, and what can be claimed publicly at the current release.

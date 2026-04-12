@@ -236,6 +236,7 @@ requires_brain = pytest.mark.skipif(
 )
 
 
+@pytest.mark.slow
 @requires_brain
 class TestWikiRetrievalIntegration:
     """Integration tests that exercise actual wiki retrieval vs baseline."""
@@ -279,6 +280,7 @@ class TestWikiRetrievalIntegration:
         assert score >= 0.0, f"Usefulness score negative for {gold['id']}"
 
 
+@pytest.mark.slow
 @requires_brain
 class TestEvalSuiteAggregates:
     """Run the full eval suite and check aggregate quality."""

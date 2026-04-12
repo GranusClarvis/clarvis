@@ -108,8 +108,9 @@ SyntaxError: '(' was never closed
         assert result.get("retry") == False
 
 
+@pytest.mark.slow
 class TestQualityMetrics:
-    """Tests for clarvis/metrics/quality.py"""
+    """Tests for clarvis/metrics/quality.py — calls production quality functions (slow I/O)."""
 
     def test_compute_task_quality_score(self):
         """Test compute_task_quality_score returns valid score"""

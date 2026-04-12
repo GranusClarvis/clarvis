@@ -123,8 +123,9 @@ except ImportError:
     meta_gradient_adapt = None
 
 try:
-    from self_representation import postflight_update as self_rep_update
-except ImportError:
+    _self_rep_mod = _load_script("self_representation", "metrics")
+    self_rep_update = _self_rep_mod.postflight_update
+except (ImportError, Exception):
     self_rep_update = None
 
 try:
@@ -921,11 +922,17 @@ def _pf_self_test(ctx, _pf_errors):
             selftest_result["ran"] = True
             selftest_result["code_modified"] = True
 
-            pytest_proc = subprocess.run(
-                ["python3", "-m", "pytest", "tests/", "-q", "--tb=short", "-m", "not slow"],
-                cwd=WORKSPACE, capture_output=True, text=True, timeout=60)
-            selftest_result["pytest_exit"] = pytest_proc.returncode
-            selftest_result["pytest_summary"] = pytest_proc.stdout.strip().split('\n')[-1] if pytest_proc.stdout.strip() else ""
+            try:
+                pytest_proc = subprocess.run(
+                    ["python3", "-m", "pytest", "tests/", "-q", "--tb=short",
+                     "-m", "not slow", "--timeout=10"],
+                    cwd=WORKSPACE, capture_output=True, text=True, timeout=150)
+                selftest_result["pytest_exit"] = pytest_proc.returncode
+                selftest_result["pytest_summary"] = pytest_proc.stdout.strip().split('\n')[-1] if pytest_proc.stdout.strip() else ""
+            except subprocess.TimeoutExpired:
+                selftest_result["pytest_exit"] = 124
+                selftest_result["pytest_summary"] = "timeout (subprocess exceeded 150s budget)"
+                log("Self-test pytest timed out at 150s — suite may need further splitting")
 
             try:
                 from clarvis.brain import brain as brain_instance
@@ -1020,9 +1027,14 @@ def _refresh_stale_test_results(WORKSPACE):
     if not _stale:
         return
     import subprocess as _sp74
-    _pr = _sp74.run(
-        ["python3", "-m", "pytest", "tests/", "-q", "--tb=no", "-m", "not slow"],
-        cwd=WORKSPACE, capture_output=True, text=True, timeout=60)
+    try:
+        _pr = _sp74.run(
+            ["python3", "-m", "pytest", "tests/", "-q", "--tb=no",
+             "-m", "not slow", "--timeout=10"],
+            cwd=WORKSPACE, capture_output=True, text=True, timeout=150)
+    except _sp74.TimeoutExpired:
+        log("Stale test refresh timed out at 90s — skipping")
+        return
     import re as _re74b
     _m = _re74b.search(r'(\d+) passed', _pr.stdout)
     _p = int(_m.group(1)) if _m else 0

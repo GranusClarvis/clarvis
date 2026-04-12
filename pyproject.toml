@@ -39,6 +39,8 @@ ignore = []
 addopts = "--import-mode=importlib"
 testpaths = ["tests"]
 norecursedirs = ["data", "memory", "monitoring", "skills", "docs", ".git"]
+timeout = 15
+timeout_method = "signal"
 markers = [
     "slow: marks tests that need ChromaDB (deselect with '-m \"not slow\"')",
 ]

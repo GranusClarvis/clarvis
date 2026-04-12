@@ -102,8 +102,9 @@ class TestWorktreeLifecycle:
         assert isinstance(wts, list)
 
 
+@pytest.mark.slow
 class TestRunTestsMainWorkspace:
-    """Run tests against the main workspace (read-only, no worktree)."""
+    """Run tests against the main workspace (read-only, no worktree) — runs nested test suite."""
 
     def test_run_tests_main_workspace(self, ctv):
         """Verify the test runner works against main workspace."""
@@ -119,8 +120,9 @@ class TestRunTestsMainWorkspace:
         assert import_result["exit_code"] == 0
 
 
+@pytest.mark.slow
 class TestVerify:
-    """Test the full verify flow."""
+    """Test the full verify flow — runs nested test suite."""
 
     def test_verify_main_workspace(self, ctv):
         """Verify against main workspace returns recommendation."""
