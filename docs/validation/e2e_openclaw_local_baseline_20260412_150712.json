@@ -1,0 +1,49 @@
+{
+  "gate": "e2e_openclaw_local_baseline",
+  "timestamp": "20260412_150712",
+  "verdict": "PASS",
+  "passed": 8,
+  "failed": 0,
+  "warnings": 1,
+  "port": 28789,
+  "ollama_model": "qwen3-vl:4b",
+  "test_root": "/tmp/e2e-openclaw-20260412_150712",
+  "results": [
+    {
+      "status": "PASS",
+      "criterion": "Ollama API reachable"
+    },
+    {
+      "status": "PASS",
+      "criterion": "C1: openclaw --help responds"
+    },
+    {
+      "status": "WARN",
+      "criterion": "C2: openclaw onboard exit 1 (config+workspace created, gateway self-test failed)"
+    },
+    {
+      "status": "PASS",
+      "criterion": "C5: openclaw.json exists and is valid JSON (/tmp/e2e-openclaw-20260412_150712/openclaw-home/openclaw.json)"
+    },
+    {
+      "status": "PASS",
+      "criterion": "C3: Gateway responding on port 28789"
+    },
+    {
+      "status": "PASS",
+      "criterion": "C4: Chat round-trip returned response (1160 chars)"
+    },
+    {
+      "status": "PASS",
+      "criterion": "C6: No external API key required (local Ollama model)"
+    },
+    {
+      "status": "PASS",
+      "criterion": "C7: Gateway shut down cleanly (SIGTERM)"
+    },
+    {
+      "status": "PASS",
+      "criterion": "C7: No orphan processes on port 28789"
+    }
+  ]
+}

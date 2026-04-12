@@ -10,18 +10,15 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 ## P1 — This Week
 
 ### Strategic Audit Structural Fixes (2026-04-11 audit)
-- [ ] [DEAD_SCRIPT_PURGE] **(Audit 2026-04-11, rescoped 2026-04-12)** Original claim of 88 unused scripts was incorrect — thorough reference analysis (crontab, imports, script_loader, spine, tests, docs) found ALL scripts in priority dirs (wiki/13, infra/27, hooks/13, cognition/12) have ≥1 external reference. Rescope: identify scripts whose ONLY references are in docs/archive (not code/cron), and target those. `collect_test_artifacts.sh` is the clearest candidate (archive-only ref).
 - [ ] [LLM_BRAIN_REVIEW 2026-04-09] [LLM_BRAIN_REVIEW] Add temporal indexing or a recency-boosted retrieval path for queries containing time signals ('last 24 hours', 'recently', 'today') — e.g., filter by metadata timestamp before semantic ranking — Temporal queries (Probe 6) consistently return zero relevant results. An agent that cannot recall what it did yesterday has a fundamental operational gap.
 
 ### Fresh-Install / Isolation Validation
-- [ ] [E2E_OPENCLAW_LOCAL_BASELINE] Run a truly fresh isolated OpenClaw install in `/tmp` or equivalent, wired to the local LLM only. Validate gateway boot, health, local-model chat round-trip, profile/config bootstrap, and produce a clear PASS/FAIL baseline specifically for “can Clarvis be installed on top of this as a new user would do it?”.
 - [ ] [E2E_HERMES_FRESH_ISOLATED] Run a truly fresh isolated Hermes install in `/tmp` or equivalent, with isolated venv/config/session dirs and the local LLM only. Validate install, main entry points, config bootstrap, session persistence, basic chat loop, and identify the exact supported invocation path (`hermes` vs `run_agent.py`) with no hand-wavy workarounds.
 - [ ] [E2E_CLARVIS_ON_OPENCLAW_FRESH] Starting from a fresh isolated OpenClaw install already wired to the local LLM, install Clarvis using the public install script exactly as a user would. Then run full end-to-end validation of core Clarvis features and document friction, failures, unsupported paths, and required manual steps.
 - [ ] [E2E_CLARVIS_ON_HERMES_FRESH] Starting from a fresh isolated Hermes install already wired to the local LLM, install Clarvis using the public install script exactly as a user would. Then run full end-to-end validation of core Clarvis features and document friction, failures, unsupported paths, and required manual steps.
 - [ ] [ADOPTION_MATRIX_LOCAL_HARNESS] Produce a single adoption matrix for fresh installs: OpenClaw base, Hermes base, Clarvis-on-OpenClaw, Clarvis-on-Hermes. For each, record local-LLM-only status, exact invocation path, install friction, first-run success, end-to-end feature coverage, and whether the path is honestly claimable for users.
 
 ### Install Docs / Support Surface Consolidation (2026-04-07) — DEPRIORITIZED by audit 2026-04-11, move to P2 when reasoning work is complete
-- [ ] [INSTALL_MATRIX_PROMOTION] Promote `docs/INSTALL_MATRIX.md` as the source of truth for validation criteria. Make sure README/install docs link to it whenever claims are made about harness support or fresh-install readiness.
 - [ ] [OPENCLAW_RUNTIME_GUIDE_SCOPE] Refocus `docs/USER_GUIDE_OPENCLAW.md` into a runtime/operator guide only: usage, autonomy, commands, troubleshooting, and runtime expectations. Strip install duplication.
 - [ ] [HERMES_RUNTIME_GUIDE_SCOPE] Refocus `docs/USER_GUIDE_HERMES.md` into a runtime/operator guide only, and add a prominent support-status banner at the top if Hermes remains partial/experimental.
 - [ ] [INSTALL_DOC_CROSS_LINKING] Add intentional cross-links between README, INSTALL, SUPPORT_MATRIX, INSTALL_MATRIX, friction report, and harness runtime guides so users can move from marketing surface → install path → validation reality without confusion.
@@ -32,6 +29,12 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 ---
 
 ## P2 — When Idle
+
+### Phi Recovery (0.620→0.65 target, added 2026-04-12)
+- [ ] [PHI_INTRA_DENSITY_BOOST] **(Phi bottleneck)** Intra-collection density is 0.380 — by far the weakest Phi component. The 3 worst collections: clarvis-learnings (0.283), autonomous-learning (0.286), clarvis-memories (0.319). Write a targeted script that iterates each collection, finds semantically similar memory pairs (cosine >0.6) that lack a graph edge, and adds intra-collection edges. Cap at 500 new edges per collection to avoid bloat. Verify Phi improves after.
+- [ ] [PHI_DEDUP_101_CLEANUP] Brain health reports 101 potential duplicates. Near-duplicate memories with slightly different wording dilute intra-collection density (two nodes, no edge, similar embedding). Run `clarvis brain optimize-full` or a targeted dedup pass, then re-measure Phi to confirm density improvement.
+- [ ] [BRAIN_STORE_RECALL_FIX] Brain health check reports "store/recall test: unhealthy". Diagnose why the basic store→retrieve round-trip fails. This is a fundamental integrity issue — fix before any Phi optimization work can be trusted.
+- [ ] [PHI_WEEKLY_TREND_CRON] **(Non-Python)** Add a weekly cron entry (Sun ~06:10) that runs a shell script: compute Phi, extract per-component scores, compare to last week's values, and write a one-page trend report to `memory/cron/phi_trend_report.md`. Alert to Telegram if Phi drops >0.03 in a week. Wire into digest.
 
 ### Deep Cognition (Phase 4-5 gaps)
 - [ ] [COGNITION_CONCEPTUAL_FRAMEWORK] Knowledge synthesis beyond keyword matching — conceptual framework building.

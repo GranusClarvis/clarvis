@@ -124,16 +124,10 @@ Manual harness checks: 11/13 pass (2 OpenClaw blockers from upstream).
 ## How to Re-Validate
 
 ```bash
-# Full regression suite (recommended before any release claim)
-bash scripts/infra/regression_suite.sh --all
-
-# Individual gates
+# Individual gates (recommended before any release claim)
 bash scripts/infra/release_gate_openclaw.sh    # OpenClaw claim gate
 bash scripts/infra/release_gate_hermes.sh      # Hermes claim gate
 bash scripts/infra/fresh_install_smoke.sh      # Core smoke (no harness)
-
-# Quick check (< 2 min)
-bash scripts/infra/regression_suite.sh --quick
 ```
 
 ---

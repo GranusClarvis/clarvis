@@ -14,7 +14,7 @@
 | **[E2E_RELEASE_VALIDATION_PLAN.md](E2E_RELEASE_VALIDATION_PLAN.md)** | Full validation procedure. Environments, isolation guards, execution order, pass/fail gates. The runbook for running a validation. | Release manager | Clarvis team | Validation process changes |
 | **[USER_GUIDE_OPENCLAW.md](USER_GUIDE_OPENCLAW.md)** | Runtime operator guide for OpenClaw. Usage, commands, autonomy, troubleshooting. Not install. | Running OpenClaw users | Clarvis team | Feature changes |
 | **[USER_GUIDE_HERMES.md](USER_GUIDE_HERMES.md)** | Runtime operator guide for Hermes. Usage, session mgmt, troubleshooting. Must have support-status banner. | Running Hermes users | Clarvis team | Feature changes |
-| `docs/validation/*.md` | Dated validation reports. Evidence trail. Never edited after creation. | Auditors, release managers | Automated (regression_suite.sh) | Each validation run |
+| `docs/validation/*.md` | Dated validation reports. Evidence trail. Never edited after creation. | Auditors, release managers | Automated (release gates) | Each validation run |
 
 ## What Goes Where (Decision Matrix)
 

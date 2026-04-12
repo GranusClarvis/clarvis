@@ -81,6 +81,7 @@ python3 -m clarvis demo
 ```
 
 For the full install guide and profile matrix, see [docs/INSTALL.md](docs/INSTALL.md).
+For validation criteria and tested install paths, see [docs/INSTALL_MATRIX.md](docs/INSTALL_MATRIX.md).
 
 ---
 
@@ -288,6 +289,8 @@ It is intentionally opinionated. It prefers continuity over minimalism and struc
 ## Documentation
 
 - [Install Guide](docs/INSTALL.md)
+- [Install Matrix](docs/INSTALL_MATRIX.md) — validation criteria for fresh installs
+- [Support Matrix](docs/SUPPORT_MATRIX.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Launch Packet](docs/LAUNCH_PACKET.md)
 - [Gap Audit](docs/OPEN_SOURCE_GAP_AUDIT.md)
