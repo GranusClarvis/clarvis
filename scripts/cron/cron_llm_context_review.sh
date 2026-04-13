@@ -8,7 +8,7 @@
 #
 # Parallels cron_llm_brain_review.sh but for the context/prompt pipeline.
 #
-# Schedule: 06:30 daily (after brain review at 06:15, before autonomous runs)
+# Schedule: 06:25 daily (after brain review at 06:15, before CLR Sun 06:30)
 # Duration: ~90s typical (collect: 10s + Claude: ~60s + process: 5s)
 # Locks: local + global Claude lock (spawns Claude Code)
 # =============================================================================

@@ -62,6 +62,7 @@ CRON_LOG_ROTATION = {
     "memory/cron/project_agents.log": 200_000,
     # --- Evaluation / benchmarks ---
     "memory/cron/llm_brain_review.log": 100_000,
+    "memory/cron/llm_context_review.log": 100_000,
     "memory/cron/brain_eval.log": 100_000,
     "memory/cron/pi_refresh.log": 100_000,
     "memory/cron/pi_benchmark.log": 100_000,

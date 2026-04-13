@@ -191,6 +191,13 @@ JOBS = {
         "max_age_hours": 26,
         "timeout": 600,
     },
+    "llm_context_review": {
+        "script": "scripts/cron/cron_llm_context_review.sh",
+        "log": "memory/cron/llm_context_review.log",
+        "lock": None,
+        "max_age_hours": 26,
+        "timeout": 600,
+    },
     "status_json": {
         "script": None,
         "command": ["python3", "scripts/infra/generate_status_json.py"],

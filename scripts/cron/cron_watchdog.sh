@@ -79,6 +79,7 @@ check_job "orchestrator"    "$LOG_DIR/orchestrator.log"     26   # daily at 19:3
 check_job "pi_refresh"      "$LOG_DIR/pi_refresh.log"       26   # daily at 05:45
 check_job "brain_eval"      "$LOG_DIR/brain_eval.log"       26   # daily at 06:05
 check_job "llm_brain_review" "$LOG_DIR/llm_brain_review.log" 26  # daily at 06:15
+check_job "llm_context_review" "$LOG_DIR/llm_context_review.log" 26 # daily at 06:25
 check_job "status_json"     "$LOG_DIR/status_json.log"      26   # daily at 05:50
 check_job "relevance_refresh" "$LOG_DIR/relevance_refresh.log" 26 # daily at 02:40
 check_job "calibration_report" "$LOG_DIR/calibration_report.log" 170 # Sun 06:45
@@ -228,6 +229,7 @@ if [ "$FAILURES" -gt 0 ]; then
   recheck_job "$LOG_DIR/pi_refresh.log" 26
   recheck_job "$LOG_DIR/brain_eval.log" 26
   recheck_job "$LOG_DIR/llm_brain_review.log" 26
+  recheck_job "$LOG_DIR/llm_context_review.log" 26
   recheck_job "$LOG_DIR/status_json.log" 26
   recheck_job "$LOG_DIR/relevance_refresh.log" 26
   recheck_job "$LOG_DIR/cleanup.log" 170
