@@ -1,7 +1,7 @@
 # Support Matrix — Clarvis
 
-> **Last validated:** 2026-04-06 (smoke suite + manual harness tests)
-> **Last updated:** 2026-04-11
+> **Last validated:** 2026-04-12 (E2E fresh install on OpenClaw + Hermes)
+> **Last updated:** 2026-04-12
 > **Commit:** See `git log --oneline -1` at time of validation
 >
 > This document is the **single source of truth** for what Clarvis supports.
@@ -27,9 +27,9 @@
 |---|---|---|---|
 | **Clarvis standalone** (venv, no harness) | **SUPPORTED** | 59/61 smoke, 27/27 overlay, 19/19 cron e2e | None. Core path. |
 | **Clarvis + OpenClaw** (overlay) | **PARTIAL** | 5/7 manual checks pass | Auth field mismatch (upstream), health-check port hardcoded (upstream) |
-| **Clarvis + Hermes** (overlay) | **EXPERIMENTAL** | 6/6 Hermes criteria pass, but CLI flags broken | `hermes-agent` ignores CLI flags (upstream), model too slow on CPU |
+| **Clarvis + Hermes** (overlay) | **EXPERIMENTAL** | 38/39 E2E checks pass (2026-04-12) | `hermes-agent` ignores CLI flags (upstream), PyPI absent, local model too slow on CPU |
 | **Zero-API-key** (local Ollama only) | **SUPPORTED** | 12/12 local model harness | Brain, CLI, imports all work locally. Cron/autonomy needs API. |
-| **Docker** | **UNSUPPORTED** | No Dockerfile exists | Not tested, not packaged. |
+| **Docker** | **EXPERIMENTAL** | Dockerfile + docker-compose.yml exist; contributor quickstart only | Not tested for production. No CI coverage. |
 | **Windows native** | **UNSUPPORTED** | Never tested | Use WSL2 instead. |
 | **macOS** | **EXPERIMENTAL** | Not regularly tested | Should work (Python + SQLite), but no CI coverage. |
 
@@ -82,7 +82,7 @@
 | 4 | `--accept-risk` flag undiscoverable in `--help` | MEDIUM | OpenClaw onboard | Upstream | Document prominently |
 | 5 | Health-check port hardcoded to 18789 | MEDIUM | OpenClaw non-default port | Upstream | Pass `--skip-health` |
 | 6 | PEP 668 on Ubuntu 24.04+ | LOW | System Python installs | Clarvis | Use venv (installer handles this) |
-| 7 | Hermes `.env` requires interactive TTY | MEDIUM | Hermes headless/CI | Clarvis wrapper | Generate `.env` programmatically |
+| 7 | ~~Hermes `.env` requires interactive TTY~~ | ~~MEDIUM~~ | ~~Hermes headless/CI~~ | ~~Clarvis wrapper~~ | **FIXED** — `install.sh --profile hermes` now creates `~/.hermes/.env` + `config.yaml` headlessly |
 | 8 | Hermes model too slow on CPU for agent loop | MEDIUM | Hermes local-only | User | Use GPU or faster model |
 
 ---
@@ -91,7 +91,7 @@
 
 These are not bugs — they are conscious scope boundaries:
 
-1. **Docker deployment** — No Dockerfile. No plans unless community demand.
+1. **Docker production deployment** — Dockerfile exists for contributor quickstart only. Not tested for production.
 2. **Windows native** — Not tested, not planned. WSL2 is the path.
 3. **Python < 3.10** — Hard requirement (match statements, type hints).
 4. **Hermes as primary harness** — Experimental overlay only. OpenClaw is the reference.
@@ -112,12 +112,12 @@ These are not bugs — they are conscious scope boundaries:
 | `test_overlay_install.sh` | 27 | 27 | 0 | 0 | 2026-04-06 |
 | `test_cron_isolated_e2e.py` | 19 | 19 | 0 | 0 | 2026-04-06 |
 | `local_model_harness.sh test` | 12 | 12 | 0 | 0 | 2026-04-06 |
-| OpenClaw fresh install (manual) | 7 | 5 | 2 | 0 | 2026-04-05 |
-| Hermes fresh install (manual) | 6 | 6 | 0 | 0 | 2026-04-05 |
+| `e2e_clarvis_on_openclaw_fresh.sh` | 45 | 42 | 0 | 3 | 2026-04-12 |
+| `e2e_clarvis_on_hermes_fresh.sh` | 39 | 38 | 0 | 1 | 2026-04-12 |
 | `test_open_source_smoke.py` | varies | all | 0 | 0 | 2026-04-06 |
 
-**Total automated checks: 119+ pass, 0 fail, 1 warn.**
-Manual harness checks: 11/13 pass (2 OpenClaw blockers from upstream).
+**Total automated checks: 203+ pass, 0 fail, 5 warn.**
+E2E harness checks: 80/84 pass (4 warnings, 0 failures).
 
 ---
 
@@ -143,7 +143,8 @@ When you change support status:
 
 ---
 
-_See also: [INSTALL.md](INSTALL.md) (how to install), [INSTALL_MATRIX.md](INSTALL_MATRIX.md) (validation criteria),
+_See also: [ADOPTION_MATRIX.md](ADOPTION_MATRIX.md) (fresh install truth table),
+[INSTALL.md](INSTALL.md) (how to install), [INSTALL_MATRIX.md](INSTALL_MATRIX.md) (validation criteria),
 [INSTALL_FRICTION_REPORT.md](INSTALL_FRICTION_REPORT.md) (engineering blockers),
 [E2E_RELEASE_VALIDATION_PLAN.md](E2E_RELEASE_VALIDATION_PLAN.md) (full validation procedure),
 [USER_GUIDE_OPENCLAW.md](USER_GUIDE_OPENCLAW.md) (OpenClaw runtime ops),

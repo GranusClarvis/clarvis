@@ -79,10 +79,14 @@ Requires:      Linux with systemd, Node.js 18+, Claude Code CLI
 Best for:      Production-like deployment on a dedicated host
 ```
 
-### 5. Hermes Agent
+### 5. Hermes Agent _(EXPERIMENTAL)_
 
 Standalone + NousResearch Hermes agent harness. Alternative to OpenClaw for
 users who prefer the Hermes tool ecosystem.
+
+> **Status: EXPERIMENTAL.** See [Support Matrix](SUPPORT_MATRIX.md) for known blockers
+> (PyPI absent, CLI flag issues, local model performance). Not claimable as a
+> production alternative to OpenClaw without qualification.
 
 ```
 What you get:  Everything in Standalone + hermes-agent package
@@ -100,9 +104,10 @@ Requires:      Ollama installed, ~3.3 GB for recommended model
 Best for:      Air-gapped environments, privacy-sensitive deployments, cost=0
 ```
 
-### 7. Docker
+### 7. Docker _(EXPERIMENTAL — contributor quickstart only)_
 
 Containerized setup for development and testing. Stateless by design.
+Not tested for production deployment.
 
 ```
 What you get:  Full Python stack in a container, persistent brain volume
@@ -186,11 +191,11 @@ bash scripts/install.sh --profile fullstack --no-cron      # Fullstack without c
 
 ## First-Run Validation
 
-After installation, the installer runs `scripts/verify_install.sh` automatically.
+After installation, the installer runs `scripts/infra/verify_install.sh` automatically.
 You can also run it manually:
 
 ```bash
-bash scripts/verify_install.sh
+bash scripts/infra/verify_install.sh
 ```
 
 The verifier checks:
@@ -262,7 +267,7 @@ review or `crontab scripts/crontab.reference` if you prefer direct control.
 | `ModuleNotFoundError: chromadb` | Install brain extras: `pip install -e ".[brain]"` |
 | `clarvis: command not found` | Ensure pip's bin dir is in PATH, or use `python3 -m clarvis` |
 | Brain health shows 0 memories | Normal on fresh install — memories accumulate through use |
-| Pytest import errors | Run `bash scripts/verify_install.sh` to diagnose |
+| Pytest import errors | Run `bash scripts/infra/verify_install.sh` to diagnose |
 | Docker build fails | Ensure Docker daemon running, check disk space |
 | `python -m build` fails (PEP 668) | On PEP 668 systems (Ubuntu 24.04+), use `python -m build --no-isolation`. CI uses `actions/setup-python` where isolation works. |
 

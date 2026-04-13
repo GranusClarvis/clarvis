@@ -4,9 +4,9 @@
     "pending_mode": null
   },
   "queue": {
-    "pending": 36,
+    "pending": 33,
     "in_progress": 0,
-    "done": 3
+    "done": 5
   },
   "benchmarks": {
     "clr": {
@@ -26,52 +26,52 @@
       "timestamp": "2026-04-12T10:43:29.435322+00:00"
     },
     "pi": {
-      "pi": 0.9619,
+      "pi": 0.9745,
       "dimensions": 15,
-      "timestamp": "2026-04-12T10:43:38.680585+00:00"
+      "timestamp": "2026-04-13T00:00:53.463040+00:00"
     }
   },
   "phi": {
-    "current": 0.6187,
-    "timestamp": "2026-04-11T20:02:31.641798+00:00"
+    "current": 0.62,
+    "timestamp": "2026-04-12T20:08:56.642919+00:00"
   },
   "bloat_score": 0.0,
   "brain": {
-    "total_memories": 2861,
+    "total_memories": 2978,
     "collections": 10
   },
   "episodes": {
-    "success_rate": 0.942,
-    "total": 394,
+    "success_rate": 0.938,
+    "total": 402,
     "breakdown": {
-      "success": 371,
+      "success": 377,
       "soft_failure": 0,
       "failure": 11,
-      "timeout": 9
+      "timeout": 10
     }
   },
   "uptime_since": "2026-02-18 12:20:55",
   "recent_completions": [
     {
-      "tag": "ISOLATION_GUARD_SELFTEST_FIX",
+      "tag": "E2E_HERMES_FRESH_ISOLATED",
       "status": "success"
     },
     {
-      "tag": "COGNITIVE_STACK_AB_TEST",
+      "tag": "HERMES_INSTALLER_SUPPORT_GATE",
       "status": "success"
     },
     {
-      "tag": "CALIBRATION_LOW_CONFIDENCE_EXPRESSION",
+      "tag": "HERMES_RUNTIME_SUPPORT_UPGRADE",
       "status": "success"
     },
     {
-      "tag": "SPINE_PROXY_REPLACEMENT",
+      "tag": "HERMES_BOUNDARY_SUPPORT_DECISION",
       "status": "success"
     },
     {
-      "tag": "SPINE_HOOK_DEPS_MIGRATE",
+      "tag": "ADOPTION_MATRIX_LOCAL_HARNESS",
       "status": "success"
     }
   ],
-  "updated_at": "2026-04-12T11:02:44.857780+00:00"
+  "updated_at": "2026-04-13T00:33:39.845857+00:00"
 }

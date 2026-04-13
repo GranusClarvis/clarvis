@@ -70,7 +70,7 @@ bash scripts/install.sh --profile standalone
 
 ```bash
 pip install -e ".[brain]"
-bash scripts/verify_install.sh
+bash scripts/infra/verify_install.sh
 ```
 
 ### Sanity check
@@ -305,7 +305,7 @@ It is intentionally opinionated. It prefers continuity over minimalism and struc
 ```bash
 git clone git@github.com:GranusClarvis/clarvis.git
 cd clarvis
-bash scripts/setup.sh --dev --verify
+bash scripts/infra/setup.sh --dev --verify
 python3 -m pytest -m "not slow"
 ```
 

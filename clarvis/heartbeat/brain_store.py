@@ -34,7 +34,7 @@ def store_failure_lesson(task, exit_code, output_text, error_type,
 
     if brain_mod is None:
         try:
-            from brain import brain as brain_mod
+            from clarvis.brain import brain as brain_mod
         except ImportError:
             pass
     if not brain_mod:

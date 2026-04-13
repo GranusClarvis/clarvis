@@ -221,7 +221,7 @@ Carried forward from `INSTALL_FRICTION_REPORT.md` (2026-04-06):
 | 5 | Health-check port hardcoded 18789 | MEDIUM | `--skip-health` on non-default port | Upstream | Open |
 | 6 | PEP 668 on Ubuntu 24.04+ | LOW | `install.sh` handles it; use venv | Clarvis | Mitigated |
 | 7 | CLAUDE.md not in isolated workspace | LOW | Copy manually in test setup | Clarvis | Accepted |
-| 8 | Hermes `.env` requires TTY | MEDIUM | Generate `.env` programmatically | Clarvis wrapper | Open |
+| 8 | ~~Hermes `.env` requires TTY~~ | ~~MEDIUM~~ | ~~Generate `.env` programmatically~~ | ~~Clarvis wrapper~~ | **FIXED** (2026-04-12) |
 
 ---
 

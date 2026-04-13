@@ -62,9 +62,9 @@ Not discoverable from `--help`. User must read error output to learn the flag ex
 Smoke test `--isolated` mode: CLAUDE.md is WARN because it lives at repo root's parent (`../.openclaw/CLAUDE.md`), not in the workspace dir itself.
 **Impact:** Minor — only affects isolated testing, not real installs.
 
-### 8. Hermes `.env` requires interactive terminal
-`hermes setup` needs a TTY. No non-interactive bootstrap path for CI/headless installs.
-**Automation:** Clarvis installer should generate minimal `.env` for Hermes if needed.
+### ~~8. Hermes `.env` requires interactive terminal~~ — FIXED 2026-04-12
+~~`hermes setup` needs a TTY. No non-interactive bootstrap path for CI/headless installs.~~
+**Fixed:** `install.sh --profile hermes` now creates `~/.hermes/.env` + `config.yaml` headlessly.
 
 ---
 
@@ -76,7 +76,7 @@ Smoke test `--isolated` mode: CLAUDE.md is WARN because it lives at repo root's 
 | Model selection | User must know RAM requirements | Pre-flight check: `clarvis install` validates model fits in RAM |
 | Cron opt-in | `clarvis cron install <preset> --apply` | Guided installer asks "Enable autonomy? [y/N]" |
 | Port conflict detection | Silent failure | Installer checks port availability before starting gateway |
-| Hermes entry point workaround | User must discover `run_agent.py` | Clarvis wrapper detects Hermes and uses correct entry point |
+| Hermes entry point workaround | User must discover `hermes` CLI (not `hermes-agent`) | Clarvis wrapper detects Hermes and uses correct entry point |
 | Post-install verification | `verify_install.sh` exists but manual | `clarvis install` runs verification automatically |
 
 ---

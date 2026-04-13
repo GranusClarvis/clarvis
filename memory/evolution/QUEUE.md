@@ -12,13 +12,16 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 ### Strategic Audit Structural Fixes (2026-04-11 audit)
 
 ### Fresh-Install / Isolation Validation
-- [ ] [E2E_HERMES_FRESH_ISOLATED] Run a truly fresh isolated Hermes install in `/tmp` or equivalent, with isolated venv/config/session dirs and the local LLM only. Validate install, main entry points, config bootstrap, session persistence, basic chat loop, and identify the exact supported invocation path (`hermes` vs `run_agent.py`) with no hand-wavy workarounds.
-- [ ] [ADOPTION_MATRIX_LOCAL_HARNESS] Produce a single adoption matrix for fresh installs: OpenClaw base, Hermes base, Clarvis-on-OpenClaw, Clarvis-on-Hermes. For each, record local-LLM-only status, exact invocation path, install friction, first-run success, end-to-end feature coverage, and whether the path is honestly claimable for users.
 
 ### Install Docs / Support Surface Consolidation (2026-04-07) — DEPRIORITIZED by audit 2026-04-11, move to P2 when reasoning work is complete
-- [ ] [INSTALL_CLAIM_DISCIPLINE] Audit all public claims in README/docs/site about install ease, harness support, and local-only operation. Every claim must map to a tested path or be downgraded in wording.
-- [ ] [INSTALL_DOCS_PRUNE] _(Blocked: prerequisite tasks INSTALL_MD_TIGHTENING, INSTALL_MATRIX_PROMOTION, etc. not done yet)_ Remove or archive redundant install-related content once the new stack is in place. Goal: fewer docs, clearer roles, lower drift.
-- [ ] [RELEASE_VALIDATION_SUMMARY_DOC] Add a single `docs/validation/RELEASE_VALIDATION_SUMMARY.md` summarizing what was tested, what passed, what partially passed, and what can be claimed publicly at the current release.
+- [ ] [RUNTIME_AUDIT_FINDINGS_REVIEW] Convert the latest full Claude runtime audit into a detailed review doc with evidence for each finding: what is working, what is partially wired, what silently degrades, and what remains ambiguous. Include exact file paths, current behavior, confidence level, and whether the issue is architectural, operational, or merely cosmetic.
+- [ ] [RUNTIME_HARDENING_PLAN] Produce a proper remediation plan from the runtime audit findings: group issues by severity, define desired end-state, list exact code/docs/cron changes required, identify validation steps, and specify how to prove Clarvis is in a genuinely stable state after fixes.
+- [ ] [HEARTBEAT_GATE_WIRING_IN_AUTONOMOUS] Wire the heartbeat gate logic into `scripts/cron/cron_autonomous.sh` where it makes sense so expensive autonomous cycles can defer early when nothing meaningful changed. Preserve correctness; optimize for cost without suppressing real work.
+- [ ] [CLAUDE_MD_PATH_DRIFT_CLEANUP] Audit and fix stale script/path references in `CLAUDE.md` and any adjacent operator docs after the script reorganization into subdirs. Remove misleading paths so spawn/runtime instructions match reality.
+- [ ] [SIDECAR_PRUNING_SCHEDULE] Review sidecar growth and wire `prune_sidecar()` or equivalent maintenance into an actual scheduled path with sane thresholds, observability, and rollback safety. Goal: sidecar maintenance should be real, not theoretical.
+- [ ] [ACP_PROCESS_BASELINE_AUDIT] Audit the long-lived `claude-agent-acp` processes and establish a baseline: which are intentional persistent workers, expected RAM footprint, restart conditions, and leak-detection thresholds. Document how to distinguish healthy persistence from runaway residue.
+- [ ] [REASONING_CHAIN_DEPTH_REMEDIATION] The runtime audit says reasoning chains are technically working but shallow (only a tiny fraction reach 4+ meaningful steps). Design and implement a proper fix: define depth targets by task class, strengthen chain-quality gates, and verify measurable improvement without fake verbosity.
+- [ ] [PERFECT_STATE_ACCEPTANCE_CRITERIA] Define what "Clarvis in a perfect state" means operationally: cron health, queue flow, pre/postflight integrity, digest freshness, memory integrity, spine feature availability, alert hygiene, and runtime cleanliness. Turn this into a repeatable acceptance checklist + verification script/report.
 
 ---
 
