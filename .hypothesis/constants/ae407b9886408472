@@ -1,0 +1,4 @@
+# file: /home/agent/.openclaw/workspace/clarvis/brain/retrieval_feedback.py
+# hypothesis_version: 6.151.13
+
+[-0.5, -0.3, -0.2, -0.1, 0.0, 0.1, 0.2, 0.3, 0.35, 0.4, 0.5, 0.55, 0.6, 0.85, 1.0, -100, '.tmp', 'AMBIGUOUS', 'AMBIGUOUS_THRESHOLD', 'CLARVIS_WORKSPACE', 'CORRECT', 'CORRECT_THRESHOLD', 'ERROR', 'INCORRECT', 'NO_RESULTS', 'SKIPPED', '__main__', 'avg_recent_reward', 'confidence', 'current', 'data', 'ema_success_rate', 'ema_success_rates', 'failure', 'generated_at', 'last_suggestion_at', 'last_updated', 'max_score', 'none', 'note', 'outcome', 'parameter', 'reason', 'record', 'retrieval_quality', 'reward', 'reward_history', 'stats', 'success', 'suggested', 'suggestions', 'timeout', 'total_episodes', 'ts', 'verdict', 'verdict_counts', 'version', 'w']

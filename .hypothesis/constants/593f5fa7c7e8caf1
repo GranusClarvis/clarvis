@@ -1,0 +1,4 @@
+# file: /home/agent/.openclaw/workspace/clarvis/brain/secret_redaction.py
+# hypothesis_version: 6.151.13
+
+[', ', 'AKIA[0-9A-Z]{16}', '[REDACTED:API_KEY]', '[REDACTED:AWS_KEY]', '[REDACTED:BEARER]', '[REDACTED:DB_URL]', '[REDACTED:JWT]', 'aws_access_key', 'aws_secret_key', 'bearer_token', 'count', 'db_connection_string', 'generic_api_key', 'github_token', 'jwt_token', 'openai_key', 'openai_project_key', 'openrouter_key', 'patterns', 'private_key_block', 'redacted', 'secret_redaction', 'sk-[A-Za-z0-9]{20,}', 'slack_token', 'stripe_key', 'telegram_bot_token', 'text']

@@ -69,10 +69,19 @@ class StoreMixin:
 
         # --- Write-time dedup guard (only for auto-generated IDs) ---
         if not caller_provided_id:
-            existing = self._find_near_duplicate(text, collection)
-            if existing is not None:
-                self._boost_existing(existing, importance, collection)
-                return existing["id"]
+            # Fast path: bloom filter pre-check.  If the bloom filter says
+            # "definitely not present", skip the expensive ChromaDB query.
+            from .bloom_filter import get_filter
+            bf = get_filter(collection)
+            if bf.might_contain(text):
+                # Bloom says "maybe duplicate" → expensive ChromaDB check
+                existing = self._find_near_duplicate(text, collection)
+                if existing is not None:
+                    self._boost_existing(existing, importance, collection)
+                    bf.add(text)  # reinforce (text is confirmed present)
+                    return existing["id"]
+            # Text is new — add to bloom filter after storing
+            bf.add(text)
 
         now_utc = datetime.now(timezone.utc)
         metadata = {

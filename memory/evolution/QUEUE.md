@@ -21,7 +21,6 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 ### Cron Reliability (non-Python)
 
 ### Intelligence & Learning Goal (active goal: 58%)
-- [x] [LEARNING_STRATEGY_ANALYSIS_CRON] (2026-04-13) Added `learning-strategy` CLI mode to `scripts/cognition/knowledge_synthesis.py` + weekly cron at Sun 05:25. Classifies memories by source (episodes/research/reflection/coding/system), scores quality, writes strategy paragraph to digest.md and stores insight in brain.
 
 ### Strategic Audit Structural Fixes (2026-04-11 audit)
 
@@ -66,11 +65,8 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 
 
 
-- [x] [EXTERNAL_CHALLENGE:bench-code-01] (2026-04-13) Property-based test suite: `tests/test_graph_property.py` — 13 Hypothesis tests across 8 test classes verifying: edge dedup, bidirectional consistency, cycle traversal termination, remove consistency, count invariants, orphan detection, bulk integrity, decay correctness. All pass.
 
-- [ ] [EXTERNAL_CHALLENGE:coding-challenge-05] Implement a bloom filter for fast duplicate detection in brain.store() — Add a Bloom filter as a fast pre-check before the expensive ChromaDB cosine similarity dedup in brain.store(). Tune false positive rate to <1%. Measure: (a) how many expensive dedup calls are avoided,
 
-- [ ] [EXTERNAL_CHALLENGE:coding-challenge-03] Implement incremental TF-IDF for streaming document indexing — Build an incremental TF-IDF index that can add documents one at a time without recomputing the entire corpus. Support search queries returning top-k results. Compare accuracy against sklearn's TfidfVe
 
 ---
 

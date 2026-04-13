@@ -1,0 +1,4 @@
+# file: /home/agent/.openclaw/workspace/clarvis/adapters/__init__.py
+# hypothesis_version: 6.151.13
+
+['AdapterResult', 'HostAdapter', 'get_adapter', 'hermes', 'openclaw']

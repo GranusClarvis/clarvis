@@ -1,0 +1,4 @@
+# file: /home/agent/.openclaw/workspace/clarvis/cli_mode.py
+# hypothesis_version: 6.151.13
+
+[200, ', ', '--immediate', '--json', '--limit', '--reason', '-n', '-r', 'No mode history yet.', 'Print JSON output.', 'active_tasks', 'apply-pending', 'mode', 'pending_mode', 'pending_reason', 'pending_since', 'policies', 'previous_mode', 'reason', 'set', 'switched_at']

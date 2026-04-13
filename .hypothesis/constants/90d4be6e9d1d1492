@@ -1,0 +1,4 @@
+# file: /home/agent/.openclaw/workspace/clarvis/cli_brain.py
+# hypothesis_version: 6.151.13
+
+[0.02, 1.2, 100, ' *', '-', '--json', '--top', '-n', 'APPLIED', 'Applied', 'CLARVIS_WORKSPACE', 'DRY RUN', 'FAIL', 'Max goals to show.', 'Output as JSON.', 'PASS', 'already_seeded', 'backfill-epochs', 'collections', 'confidence', 'consolidation_error', 'document', 'duplicate_cluster', 'edge-decay', 'edges', 'error', 'errors', 'fixable', 'fixed', 'from', 'graph-verify', 'json_edge_types', 'list-collection', 'manual', 'message', 'mismatched_edges', 'nodes', 'optimize-full', 'parity_ok', 'potential_duplicates', 'potential_noise', 'related', 'sample_mismatched', 'search-json', 'sqlite_edge_types', 'status', 'success', 'to', 'total_fixed', 'update-meta', 'updated', 'valid_until', '—']

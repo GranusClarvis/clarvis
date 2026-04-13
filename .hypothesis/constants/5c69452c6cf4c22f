@@ -1,0 +1,4 @@
+# file: /home/agent/.openclaw/workspace/scripts/brain_mem/graph_compaction.py
+# hypothesis_version: 6.151.13
+
+[0.02, 0.8, 150, 500, ',', '--dry-run', '?', 'Backend: JSON', 'SELECT id FROM nodes', '__main__', 'added_at', 'backfilled', 'boosted_bridge', 'bridged_similarity', 'collection', 'cross_collection', 'decayed', 'density', 'duplicates_removed', 'edge_types', 'edges', 'edges_decay_pruned', 'edges_decayed', 'elapsed_s', 'embeddings', 'from', 'health', 'hebbian_association', 'high_degree_pruned', 'ids', 'mirror_bridge', 'nearest_neighbor', 'nn_edges_added', 'nodes', 'nodes_affected', 'nodes_backfilled', 'orphan_edges_removed', 'orphan_nodes_removed', 'pruned', 'semantic_bridge', 'similar_to', 'source', 'source_collection', 'target', 'target_collection', 'to', 'total_edges', 'total_memories', 'total_nodes', 'transitive_cross', 'type', 'unknown', 'w']

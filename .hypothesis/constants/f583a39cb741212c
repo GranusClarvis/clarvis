@@ -1,0 +1,4 @@
+# file: /home/agent/.openclaw/workspace/clarvis/cli_demo.py
+# hypothesis_version: 6.151.13
+
+[0.5, '  Next steps:', '--verbose', '-m', '-v', '...', '2. Store a memory', '3. Search memories', '4. CLI health', '5. Heartbeat gate', 'Brain is operational', 'Clarvis demo', 'FAIL', 'OK', 'SKIP', 'Show extra detail', 'Summary', 'WAKE', 'WARN', 'bench --help', 'brain --help', 'clarvis', 'document', 'gate', 'heartbeat', 'heartbeat --help']

@@ -1,0 +1,4 @@
+# file: /home/agent/.openclaw/workspace/scripts/pipeline/execution_monitor.py
+# hypothesis_version: 6.151.13
+
+[0.0, 0.6, 0.92, 1.0, 5.0, '%Y-%m-%dT%H:%M:%SZ', '-P', 'CLARVIS_WORKSPACE', 'D', 'Edit\\s+tool', 'R', 'Write\\s+tool', 'Z', '^RESULT:\\s+\\w+', '^\\s*\\d+\\s+passed', '__main__', 'a', 'aborted', 'checkpoint_count', 'checkpoint_details', 'checkpoint_timeline', 'checkpoints', 'elapsed_s', 'elapsed_secs', 'idle_polls', 'idle_polls_at_end', 'output_bytes', 'pgrep', 'progress_score', 'r', 'reason', 'reconsider', 'replace', 'tests?\\s+pass', 'timeout_s', 'timestamp', 'w', 'was_flagged']

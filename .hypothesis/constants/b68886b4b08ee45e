@@ -1,0 +1,4 @@
+# file: /home/agent/.openclaw/workspace/clarvis/brain/graph_store_sqlite.py
+# hypothesis_version: 6.151.13
+
+[0.0, 0.02, 0.5, 1.0, 86400.0, 5000, 15000, ' AND ', ' WHERE ', '+00:00', ',', '.', '.tmp', '?', 'SELECT * FROM nodes', 'Z', '_edge_count', 'added_at', 'avg_weight', 'backfilled', 'busy', 'cnt', 'collection', 'created_at', 'db_path', 'db_size_bytes', 'decayed', 'depth', 'duplicates_skipped', 'edge_types', 'edges', 'edges_imported', 'edges_in_json', 'from', 'from_id', 'from_id = ?', 'hebbian_association', 'id', 'last_decay', 'locked', 'node_collections', 'nodes', 'nodes_imported', 'nodes_in_json', 'ok', 'pruned', 'r', 'relationship', 'source_collection', 'target_collection', 'to', 'to_id', 'to_id = ?', 'total_after', 'total_before', 'type', 'type = ?', 'unknown', 'w', 'weight']

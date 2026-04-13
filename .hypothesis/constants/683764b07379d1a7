@@ -1,0 +1,4 @@
+# file: /home/agent/.openclaw/workspace/clarvis/cli_local.py
+# hypothesis_version: 6.151.13
+
+[600, '  Install Ollama:', '--user', '-sf', ':', 'CLARVIS_WORKSPACE', 'Next steps:', 'OLLAMA_BIN', 'OLLAMA_HOST', 'OLLAMA_MODEL', 'What needs API keys:', 'bash', 'curl', 'infra', 'list', 'ollama', 'ollama.service', 'pull', 'qwen3-vl:4b', 'scripts', 'start', 'status', 'stop', 'systemctl', 'test', 'test query']

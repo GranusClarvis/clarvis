@@ -1,0 +1,4 @@
+# file: /home/agent/.openclaw/workspace/scripts/pipeline/evolution_preflight.py
+# hypothesis_version: 6.151.13
+
+['CLARVIS_WORKSPACE', '^- \\[ \\]', '__main__', 'apply_calibration', 'brain_mem', 'calibration', 'capabilities', 'cognition', 'compressed_health', 'compressed_queue', 'compression', 'domain_review', 'episode_stats', 'goal_progress', 'goals', 'param_evolution', 'pending_count', 'phi_trend', 'prediction_review', 'retrieval', 'retrieval_quality', 'routing_stats', 'timings', 'total', 'utf-8']

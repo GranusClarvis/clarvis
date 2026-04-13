@@ -1,0 +1,4 @@
+# file: /home/agent/.openclaw/workspace/clarvis/orch/cost_api.py
+# hypothesis_version: 6.151.13
+
+[100, 'Authorization', 'Content-Type', 'OPENCLAW_HOME', 'OpenRouter Usage', 'application/json', 'created_at', 'daily', 'data', 'finish_reason', 'generation_time', 'id', 'is_free_tier', 'key', 'latency', 'limit', 'limit_remaining', 'model', 'monthly', 'openrouter:default', 'profiles', 'provider', 'provider_name', 'remaining', 'tokens_completion', 'tokens_prompt', 'total', 'total_cost', 'usage', 'usage_daily', 'usage_monthly', 'usage_weekly', 'weekly', '~/.openclaw']

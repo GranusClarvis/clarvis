@@ -1,0 +1,4 @@
+# file: /home/agent/.openclaw/workspace/clarvis/context/knowledge_synthesis.py
+# hypothesis_version: 6.151.13
+
+[0.15, 0.2, 0.4, 0.6, 1.0, 1.4, 2.0, 400, '[a-z_]{3,}', 'a', 'about', 'add', 'an', 'and', 'are', 'as', 'at', 'be', 'been', 'being', 'but', 'by', 'can', 'clarvis-episodes', 'clarvis-goals', 'clarvis-learnings', 'clarvis-procedures', 'collection', 'could', 'did', 'distance', 'do', 'document', 'does', 'else', 'ep', 'file', 'for', 'from', 'get', 'goal', 'had', 'has', 'have', 'if', 'in', 'into', 'is', 'it', 'its', 'knowledge_synthesis', 'learn', 'make', 'may', 'might', 'minimal', 'must', 'need', 'new', 'no', 'not', 'of', 'on', 'or', 'ought', 'out', 'proc', 'run', 'score', 'set', 'shall', 'should', 'so', 'standard', 'task', 'text', 'that', 'the', 'then', 'this', 'to', 'up', 'use', 'was', 'were', 'when', 'will', 'with', 'would', '…']

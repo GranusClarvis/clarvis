@@ -1,0 +1,4 @@
+# file: /home/agent/.openclaw/workspace/clarvis/cli_welcome.py
+# hypothesis_version: 6.151.13
+
+['  |  ', '--json', '--short', '-l', '-s', '.env', '=', 'CLARVIS_WORKSPACE', 'Cron: active', 'Cron: not installed', 'Output JSON.', 'brain', 'clarvis-managed', 'crontab', 'docker', 'fullstack', 'has_cron', 'minimal', 'openclaw', 'profile', 'workspace']

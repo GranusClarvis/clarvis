@@ -1,0 +1,4 @@
+# file: /home/agent/.openclaw/workspace/clarvis/heartbeat/gate.py
+# hypothesis_version: 6.151.13
+
+[0.0, 0.6, 256, 3600, '%Y-%m-%d', '.tmp', 'CLARVIS_WORKSPACE', 'changes', 'consecutive_skips', 'context_improvement', 'context_relevance', 'cron_completed', 'cron_runs', 'data', 'decision', 'dir_fingerprints', 'file_count', 'file_fingerprints', 'first_run', 'head_hash', 'last_check_day', 'last_check_time', 'last_decision', 'last_reason', 'latest_mtime', 'long_gap', 'max_skips', 'memory/cron', 'metrics', 'midnight_rollover', 'mode_passive', 'mtime', 'new:today_memory', 'priority_override', 'rb', 'reason', 'size', 'skip', 'today_memory', 'w', 'wake']

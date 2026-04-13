@@ -1,0 +1,4 @@
+# file: /home/agent/.openclaw/workspace/clarvis/context/prompt_optimizer.py
+# hypothesis_version: 6.151.13
+
+[-1.0, 0.0, 0.1, 1.0, 120, '=', 'CLARVIS_WORKSPACE', 'a', 'add', 'alpha', 'analyze', 'analyze_first', 'approach', 'benchmark', 'beta', 'broken', 'bug', 'bugfix', 'build', 'by_task_type', 'cleanup', 'combo', 'coverage', 'create', 'criteria_check', 'dive_in', 'duration_s', 'error', 'extract', 'failing', 'failure_guard', 'failures', 'fix', 'general', 'hygiene', 'implement', 'implementation', 'incremental', 'light', 'meta_instruction', 'minimal', 'n', 'none', 'optimization', 'optimize', 'outcome', 'output_focus', 'perf', 'pytest', 'quality_count', 'quality_score', 'read', 'refactor', 'refactoring', 'rename', 'research', 'review', 'speed', 'strong', 'success', 'success_framing', 'successes', 'survey', 'task_snippet', 'task_type', 'test', 'test_driven', 'testing', 'timestamp', 'total_duration', 'total_quality', 'variant_id', 'variant_stats.json', 'w', 'wire', '|']

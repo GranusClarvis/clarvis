@@ -1,0 +1,4 @@
+# file: /home/agent/.openclaw/workspace/clarvis/wiki/canonical.py
+# hypothesis_version: 6.151.13
+
+[0.0, 0.5, 0.6, 1.0, '\n---', '"', '"\n[]', '## Evidence', '## Update History', "'", '*.md', ',', '-', '- ', '---', 'CLARVIS_WORKSPACE', '[', '[]', '[^a-z0-9\\s]', '[^a-z0-9]+', '\\n## ', '\\s+', ']', 'action', 'aliases', 'aliases:', 'aliases:\n', 'aliases:\n  - "', 'aliases: \\[\\]\\n', 'changes', 'concept', 'concepts', 'draft', 'failed', 'index.md', 'knowledge', 'merged', 'paper', 'path', 'people', 'person', 'procedure', 'procedures', 'projects', 'question', 'questions', 'reason', 'redirect', 'redirect_path', 'replace', 'repo', 'slug', 'sources', 'sources:', 'sources:\n', 'status', 'syntheses', 'synthesis', 'tags', 'timeline', 'timelines', 'title', 'transcript', 'type', 'utf-8', 'web', 'wiki', 'would_merge']

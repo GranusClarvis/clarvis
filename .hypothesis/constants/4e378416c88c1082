@@ -1,0 +1,4 @@
+# file: /home/agent/.openclaw/workspace/clarvis/cli_heartbeat.py
+# hypothesis_version: 6.151.13
+
+['--dry-run', '--duration', '--output', '-d', '-o', 'CLARVIS_WORKSPACE', 'No task selected', 'context', 'heartbeat_postflight', 'heartbeat_preflight', 'pipeline', 'selected_task', 'skip']

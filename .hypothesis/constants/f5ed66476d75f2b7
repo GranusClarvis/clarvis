@@ -1,0 +1,4 @@
+# file: /home/agent/.openclaw/workspace/clarvis/heartbeat/episode_encoder.py
+# hypothesis_version: 6.151.13
+
+[-200, 200, 'SKIPPED', 'causal_links_created', 'duration_s', 'episodic', 'error_type', 'retrieval_verdict', 'success', 'task', 'task_outcome', 'task_section', 'tool_call_count', 'trajectory']

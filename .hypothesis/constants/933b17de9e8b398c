@@ -1,0 +1,4 @@
+# file: /home/agent/.openclaw/workspace/clarvis/heartbeat/brain_store.py
+# hypothesis_version: 6.151.13
+
+[0.4, 0.8, -300, 124, 250, 'P1', 'brain_bridge', 'brain_bridge_ctx', 'clarvis-learnings', 'collection', 'contradiction', 'evolved', 'failure', 'failure_lessons', 'id', 'lesson', 'no output', 'postflight_failure', 'reasoning_failure']

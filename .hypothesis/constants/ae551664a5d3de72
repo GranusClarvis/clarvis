@@ -1,0 +1,4 @@
+# file: /home/agent/.openclaw/workspace/clarvis/context/adaptive_mmr.py
+# hypothesis_version: 6.151.13
+
+[0.0, 0.03, 0.25, 0.4, 0.5, 0.6, 0.7, 0.85, 0.9, '.tmp', 'CLARVIS_WORKSPACE', 'add', 'analysis', 'analyze', 'archive', 'arxiv', 'assess', 'backup', 'base', 'benchmark', 'broken', 'bug', 'bugfix', 'build', 'cleanup', 'code', 'compact', 'compare', 'count', 'coverage', 'create', 'cron', 'data', 'digest', 'episodes', 'error', 'evaluate', 'explore', 'extract', 'failing', 'fix', 'health', 'implement', 'investigate', 'lambda', 'literature', 'maintain', 'maintenance', 'mean', 'mean_relevance', 'migrate', 'mmr_category', 'monitor', 'optimize', 'overall', 'paper', 'perf', 'pytest', 'read', 'refactor', 'rename', 'report', 'research', 'retrieval_quality', 'review', 'rotate', 'speed', 'status', 'survey', 'task', 'test', 'testing', 'ts', 'updated', 'vacuum', 'w', 'watchdog', 'wire']

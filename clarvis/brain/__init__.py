@@ -10,6 +10,7 @@ External modules (hebbian, actr, attention, retrieval_quality, memory_consolidat
 register hooks instead of being imported by brain — dependency inversion breaks the SCC.
 """
 
+import atexit
 import json as _json
 import logging
 import os
@@ -61,6 +62,7 @@ class ClarvisBrain(StoreMixin, GraphMixin, SearchMixin):
 
         self.client = get_chroma_client(self.data_dir)
         self._init_collections()
+        self._seed_bloom_filters()
         self._load_graph()
 
         # Caches
@@ -121,6 +123,16 @@ class ClarvisBrain(StoreMixin, GraphMixin, SearchMixin):
                 "Brain degraded mode: %d/%d collections failed: %s",
                 len(failed), len(ALL_COLLECTIONS), names,
             )
+
+    def _seed_bloom_filters(self):
+        """Seed bloom filters from existing collection data (lazy, on first init)."""
+        try:
+            from .bloom_filter import seed_filter, save_all
+            for name, col in self.collections.items():
+                seed_filter(name, col)
+            atexit.register(save_all)
+        except Exception as e:
+            _logger.warning("Bloom filter seeding failed (non-fatal): %s", e)
 
     # --- Hook registration API ---
 

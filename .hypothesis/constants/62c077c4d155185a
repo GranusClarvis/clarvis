@@ -1,0 +1,4 @@
+# file: /home/agent/.openclaw/workspace/clarvis/orch/pr_rules.py
+# hypothesis_version: 6.151.13
+
+['### Done Definition', '### Truthfulness', '### Two-PR Policy', 'A', 'B', 'C']

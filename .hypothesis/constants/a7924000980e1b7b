@@ -1,0 +1,4 @@
+# file: /home/agent/.openclaw/workspace/clarvis/orch/cost_optimizer.py
+# hypothesis_version: 6.151.13
+
+[1.5, 3.0, 100, 300, 500, 1000, 1500, 1800, 2000, 4000, 200000, '_total', 'action', 'budget', 'compress', 'compressed_tokens', 'compression_ratio', 'created_at', 'entries', 'episodic_hints', 'health_metrics', 'issues', 'ok', 'output_reserved', 'over_budget', 'queue_context', 'raw_tokens', 'reduction_pct', 'system_prompt', 'task_description', 'tokens', 'tokens_saved', 'total_hits', 'total_tokens', 'trim', 'ttl_seconds', 'utilization_pct', 'w', 'waste_pct']
