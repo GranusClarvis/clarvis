@@ -49,7 +49,7 @@ echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] GATE: wake — proceeding with autonomous 
 #           context_compressor, task_router — all in ONE import + execution.
 # ============================================================================
 # === PRE-HEARTBEAT: Self-healing — detect and kill stuck agents ===
-STUCK_COUNT=$(python3 "$SCRIPTS/agents/agent_orchestrator.py" detect-stuck 2>/dev/null | grep -c "STUCK:" 2>/dev/null || true)
+STUCK_COUNT=$(python3 "$SCRIPTS/agents/agent_orchestrator.py" detect-stuck 2>> "$LOGFILE" | grep -c "STUCK:" 2>/dev/null || true)
 STUCK_COUNT=${STUCK_COUNT:-0}
 STUCK_COUNT=$(echo "$STUCK_COUNT" | tr -d '[:space:]' | head -c 5)
 if [ "$STUCK_COUNT" -gt 0 ] 2>/dev/null; then

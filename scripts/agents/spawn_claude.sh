@@ -90,7 +90,7 @@ fi
 
 # Get context brief from prompt builder (enriches prompt with brain, goals, episodes)
 SCRIPTS_DIR="$CLARVIS_WORKSPACE/scripts"
-CONTEXT_BRIEF=$(python3 "$SCRIPTS_DIR/tools/prompt_builder.py" context-brief --task "$TASK" --tier standard 2>/dev/null || echo "")
+CONTEXT_BRIEF=$(python3 "$SCRIPTS_DIR/tools/prompt_builder.py" context-brief --task "$TASK" --tier standard 2>> "$LOGFILE" || echo "")
 
 # Write prompt to file using Python (shell-safe; avoids quoting issues)
 python3 - "$TASK" "$WORK_DIR" "$CONTEXT_BRIEF" "$PROMPT_FILE" <<'PY'

@@ -17,10 +17,9 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 ### Reasoning Chain Depth (capability score: 0.80, Phase 4.2 gap)
 
 ### Conceptual Framework Activation (Phase 4.3 gap — "beyond keyword matching")
-- [x] [CONCEPTUAL_FRAMEWORK_WIRING] (2026-04-13) Wired `get_relevant_frameworks(task)` into `clarvis/context/assembly.py` `_build_brief_end()`. Added function to `conceptual_framework.py`. Verified: framework section appears in generated briefs, all 88 assembly tests pass.
 
 ### Cron Reliability (non-Python)
-- [ ] [CRON_TIMEOUT_AUDIT] (Bash/shell) Audit all cron shell scripts for timeout handling — grep for scripts missing `timeout` wrapping on Claude Code spawns, scripts without lock-file cleanup on SIGTERM, and scripts that silently swallow errors. Produce a checklist of fixes. Target: every spawner script has proper timeout + trap + lock cleanup.
+- [x] [CRON_TIMEOUT_AUDIT] (2026-04-13) All 13 Claude spawners have timeout+trap+lock. Fixed 3 P0 silent-error issues (spawn_claude.sh, cron_autonomous.sh, cron_pi_refresh.sh). Audit doc: docs/CRON_TIMEOUT_AUDIT_2026-04-13.md
 
 ### Intelligence & Learning Goal (active goal: 58%)
 - [ ] [LEARNING_STRATEGY_ANALYSIS_CRON] Create a weekly cron entry that runs `knowledge_synthesis.py` with a learning-strategy analysis mode — review what was learned in the past 7 days, identify which learning sources (episodes, research, reflection, coding challenges) produced the highest-quality memories, and write a 1-paragraph strategy adjustment to `memory/cron/digest.md`. Target: learning compounding becomes measurable week-over-week.
@@ -59,7 +58,6 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 
 ### External Challenges
 
-- [x] [EXTERNAL_CHALLENGE:synthesis-01] (2026-04-13) Built `scripts/challenges/cross_domain_synthesis.py` — fetches random Wikipedia pairs, computes embedding centroid, searches brain, writes synthesis notes. Tested 5 pairs: avg composite=0.92, 100% cross-domain.
 
 
 
@@ -67,16 +65,14 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 
 
 
-- [ ] [EXTERNAL_CHALLENGE:coding-challenge-09] Implement a regex engine from scratch (Thompson NFA) — Build a regex engine using Thompson's NFA construction: support concatenation, alternation (|), Kleene star (*), plus (+), optional (?), and character classes [a-z]. Convert regex to NFA, simulate NFA
+- [x] [EXTERNAL_CHALLENGE:coding-challenge-09] (2026-04-13) Already implemented in scripts/challenges/thompson_nfa.py — 50/50 tests pass. Supports concat, alt, star, plus, optional, char classes.
 
-- [x] [EXTERNAL_CHALLENGE:coding-challenge-04] (2026-04-13) Built `scripts/challenges/git_diff_analyzer.py` — heuristic hunk classifier (path/message/content/structural signals). 16/16 tests pass, analyzed 20 real commits.
 
 - [ ] [EXTERNAL_CHALLENGE:bench-code-01] Write a property-based test suite for ClarvisDB graph operations — Use Hypothesis library to generate random graph operations (add_edge, remove_edge, traverse) and verify invariants: no orphan edges after cleanup, bidirectional consistency, cycle detection correctnes
 
 - [ ] [EXTERNAL_CHALLENGE:coding-challenge-05] Implement a bloom filter for fast duplicate detection in brain.store() — Add a Bloom filter as a fast pre-check before the expensive ChromaDB cosine similarity dedup in brain.store(). Tune false positive rate to <1%. Measure: (a) how many expensive dedup calls are avoided,
 
 - [ ] [EXTERNAL_CHALLENGE:coding-challenge-03] Implement incremental TF-IDF for streaming document indexing — Build an incremental TF-IDF index that can add documents one at a time without recomputing the entire corpus. Support search queries returning top-k results. Compare accuracy against sklearn's TfidfVe
-- [x] [EXTERNAL_CHALLENGE:coding-challenge-next] (2026-04-13) Completed coding-challenge-04 (git-diff semantic analyzer).
 
 ---
 

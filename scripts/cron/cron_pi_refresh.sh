@@ -57,7 +57,8 @@ try:
             rec = json.loads(line)
             if rec.get("type") == "PI_ANOMALY" and rec.get("timestamp", "") >= cutoff:
                 recent.append(rec)
-except Exception:
+except Exception as e:
+    print(f"[PI-REFRESH] WARN: Failed to read alerts file: {e}", file=sys.stderr)
     sys.exit(0)
 
 if not recent:
