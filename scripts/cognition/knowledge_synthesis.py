@@ -245,10 +245,253 @@ def run_synthesis_cycle():
     return {'keyword_connections': connections[:10], 'semantic_bridges': bridges[:5], 'stored': stored, 'failed': failed}
 
 
+# ---------------------------------------------------------------------------
+# Learning Strategy Analysis — weekly review of learning source effectiveness
+# ---------------------------------------------------------------------------
+
+# Source categories: map metadata 'source' values + tags to human-readable buckets
+_SOURCE_BUCKETS = {
+    'episodes': {'episodic_memory', 'episode'},
+    'research': {'research', 'research_discovery'},
+    'reflection': {'reflection', 'self_reflection', 'meta_learning',
+                   'synthesis', 'self-assessment', 'self_representation',
+                   'phi_metric', 'internal'},
+    'coding': {'conversation', 'code', 'implementation', 'tool_extraction',
+               'procedural_memory', 'manual'},
+    'system': {'system', 'canonical', 'migration', 'seed',
+               'workspace_broadcast', 'refresh_priorities.py'},
+}
+
+
+def _classify_source(metadata: dict) -> str:
+    """Classify a memory into a learning source bucket."""
+    source = (metadata.get('source') or '').lower()
+    tags_raw = metadata.get('tags', '[]')
+    if isinstance(tags_raw, str):
+        try:
+            import json as _json
+            tags = set(t.lower() for t in _json.loads(tags_raw))
+        except (ValueError, TypeError):
+            tags = set()
+    elif isinstance(tags_raw, list):
+        tags = set(t.lower() for t in tags_raw)
+    else:
+        tags = set()
+
+    all_signals = {source} | tags
+
+    for bucket, keywords in _SOURCE_BUCKETS.items():
+        if all_signals & keywords:
+            return bucket
+    return 'other'
+
+
+def _quality_score(metadata: dict) -> float:
+    """Compute a quality score for a memory based on usage signals.
+
+    Higher = more useful memory. Combines:
+    - importance (current, after decay)
+    - access_count (how often retrieved)
+    - recall_success (how often it actually helped)
+    """
+    importance = float(metadata.get('importance', 0.5))
+    access_count = int(metadata.get('access_count', 0))
+    recall_success = int(metadata.get('recall_success', 0))
+
+    # Normalize: importance 0-1, access log-scaled, recall log-scaled
+    import math
+    access_score = min(1.0, math.log1p(access_count) / 5.0)  # ~150 accesses = 1.0
+    recall_score = min(1.0, math.log1p(recall_success) / 2.5)  # ~12 recalls = 1.0
+
+    return 0.4 * importance + 0.35 * access_score + 0.25 * recall_score
+
+
+def learning_strategy_analysis(days: int = 7) -> dict:
+    """Analyze learning effectiveness over the past N days.
+
+    Reviews memories created in the window, categorizes by source,
+    scores quality, and produces a strategy adjustment paragraph.
+
+    Returns dict with analysis results and the strategy paragraph.
+    """
+    import time
+    import json as _json
+    from collections import defaultdict as _defaultdict
+
+    cutoff_epoch = time.time() - (days * 86400)
+    print(f"=== Learning Strategy Analysis (past {days} days) ===\n")
+
+    # Collect recent memories from all collections
+    all_memories = load_all_memories()
+    recent = []
+    for mem in all_memories:
+        meta = mem.get('metadata', {})
+        created_epoch = meta.get('created_epoch', 0)
+        if isinstance(created_epoch, str):
+            try:
+                created_epoch = float(created_epoch)
+            except (ValueError, TypeError):
+                created_epoch = 0
+        if created_epoch >= cutoff_epoch:
+            recent.append(mem)
+
+    print(f"Total memories: {len(all_memories)}, recent ({days}d): {len(recent)}\n")
+
+    if not recent:
+        paragraph = (
+            f"No new memories created in the past {days} days. "
+            "Learning pipeline may be stalled — check cron execution and brain.store() calls."
+        )
+        return {'recent_count': 0, 'buckets': {}, 'strategy': paragraph}
+
+    # Bucket analysis
+    buckets = _defaultdict(lambda: {'count': 0, 'quality_scores': [], 'collections': set()})
+    for mem in recent:
+        meta = mem.get('metadata', {})
+        bucket = _classify_source(meta)
+        quality = _quality_score(meta)
+        buckets[bucket]['count'] += 1
+        buckets[bucket]['quality_scores'].append(quality)
+        buckets[bucket]['collections'].add(mem.get('collection', 'unknown'))
+
+    # Compute per-bucket stats
+    bucket_stats = {}
+    for bucket, data in sorted(buckets.items(), key=lambda x: -x[1]['count']):
+        scores = data['quality_scores']
+        avg_quality = sum(scores) / len(scores) if scores else 0
+        bucket_stats[bucket] = {
+            'count': data['count'],
+            'avg_quality': round(avg_quality, 3),
+            'max_quality': round(max(scores), 3) if scores else 0,
+            'collections': sorted(data['collections']),
+            'share_pct': round(100 * data['count'] / len(recent), 1),
+        }
+        print(f"  {bucket:12s}: {data['count']:3d} memories, "
+              f"avg_quality={avg_quality:.3f}, "
+              f"share={bucket_stats[bucket]['share_pct']}%")
+
+    # Identify best and worst sources
+    ranked = sorted(bucket_stats.items(), key=lambda x: -x[1]['avg_quality'])
+    best_source = ranked[0] if ranked else ('none', {'avg_quality': 0, 'count': 0})
+    worst_source = ranked[-1] if len(ranked) > 1 else ('none', {'avg_quality': 0, 'count': 0})
+
+    # Generate strategy paragraph
+    total = len(recent)
+    best_name, best_data = best_source
+    worst_name, worst_data = worst_source
+
+    paragraph_parts = [
+        f"Weekly learning review ({days}d window, {total} new memories)."
+    ]
+
+    if best_data['avg_quality'] > 0:
+        paragraph_parts.append(
+            f"Highest-quality source: {best_name} "
+            f"(avg={best_data['avg_quality']:.3f}, {best_data['count']} memories, "
+            f"{best_data['share_pct']}% of total)."
+        )
+
+    if worst_name != best_name and worst_data['count'] > 0:
+        paragraph_parts.append(
+            f"Lowest-quality source: {worst_name} "
+            f"(avg={worst_data['avg_quality']:.3f}, {worst_data['count']} memories)."
+        )
+
+    # Strategy adjustment recommendation
+    if best_name == 'episodes' and best_data['avg_quality'] > 0.3:
+        paragraph_parts.append(
+            "Strategy: episodes are the strongest learning channel — "
+            "continue prioritizing task execution with clear success/failure encoding."
+        )
+    elif best_name == 'research':
+        paragraph_parts.append(
+            "Strategy: research sessions produce high-quality memories — "
+            "consider increasing research frequency or depth."
+        )
+    elif best_name == 'reflection':
+        paragraph_parts.append(
+            "Strategy: reflection is the top learning source — "
+            "the synthesis pipeline is working well. Maintain current reflection depth."
+        )
+    elif best_name == 'coding':
+        paragraph_parts.append(
+            "Strategy: coding/conversation sessions produce the best memories — "
+            "continue hands-on implementation focus."
+        )
+    else:
+        paragraph_parts.append(
+            f"Strategy: {best_name} leads quality. Investigate why other channels lag."
+        )
+
+    # Check for imbalance
+    if len(ranked) >= 2:
+        top_share = ranked[0][1]['share_pct']
+        if top_share > 70:
+            paragraph_parts.append(
+                f"Warning: {ranked[0][0]} dominates at {top_share}% — "
+                "diversify learning sources for more robust knowledge."
+            )
+
+    paragraph = " ".join(paragraph_parts)
+    print(f"\n--- Strategy ---\n{paragraph}\n")
+
+    return {
+        'recent_count': total,
+        'buckets': dict(bucket_stats),
+        'best_source': best_name,
+        'worst_source': worst_name,
+        'strategy': paragraph,
+    }
+
+
+def run_learning_strategy_and_digest(days: int = 7):
+    """Run learning strategy analysis and write results to digest + brain."""
+    results = learning_strategy_analysis(days)
+
+    # Write strategy to digest
+    try:
+        sys.path.insert(0, os.path.join(os.environ.get('CLARVIS_WORKSPACE',
+            os.path.expanduser('~/.openclaw/workspace')), 'scripts'))
+        from tools.digest_writer import write_digest
+        write_digest('reflection', results['strategy'])
+        print("Strategy written to digest.md")
+    except Exception as e:
+        logger.warning("Could not write to digest: %s", e)
+
+    # Store analysis insight in brain
+    if results['recent_count'] > 0:
+        try:
+            from datetime import datetime, timezone
+            now = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+            insight = (
+                f"Learning strategy analysis ({now}): "
+                f"{results['recent_count']} memories in {days}d. "
+                f"Best source: {results.get('best_source', 'unknown')} "
+                f"(avg quality {results.get('buckets', {}).get(results.get('best_source', ''), {}).get('avg_quality', '?')}). "
+                f"Worst: {results.get('worst_source', 'unknown')}."
+            )
+            brain.store(
+                insight,
+                collection='clarvis-learnings',
+                importance=0.7,
+                tags=['meta-learning', 'learning-strategy', 'weekly-analysis'],
+            )
+            print(f"Stored insight in brain: {insight[:80]}...")
+        except Exception as e:
+            logger.warning("Could not store brain insight: %s", e)
+
+    return results
+
+
 if __name__ == "__main__":
-    results = run_synthesis_cycle()
-    print("\n--- Top 3 Cross-Domain Concepts ---")
-    for c in results['keyword_connections'][:3]:
-        colls = ', '.join(c['collections'])
-        print(f"  '{c['concept']}' → {c['cross_domain_strength']} collections, "
-              f"{c['total_memories']} memories ({colls})")
+    import sys as _sys
+    if len(_sys.argv) > 1 and _sys.argv[1] == 'learning-strategy':
+        days = int(_sys.argv[2]) if len(_sys.argv) > 2 else 7
+        run_learning_strategy_and_digest(days)
+    else:
+        results = run_synthesis_cycle()
+        print("\n--- Top 3 Cross-Domain Concepts ---")
+        for c in results['keyword_connections'][:3]:
+            colls = ', '.join(c['collections'])
+            print(f"  '{c['concept']}' → {c['cross_domain_strength']} collections, "
+                  f"{c['total_memories']} memories ({colls})")

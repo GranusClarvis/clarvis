@@ -19,10 +19,9 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 ### Conceptual Framework Activation (Phase 4.3 gap — "beyond keyword matching")
 
 ### Cron Reliability (non-Python)
-- [x] [CRON_TIMEOUT_AUDIT] (2026-04-13) All 13 Claude spawners have timeout+trap+lock. Fixed 3 P0 silent-error issues (spawn_claude.sh, cron_autonomous.sh, cron_pi_refresh.sh). Audit doc: docs/CRON_TIMEOUT_AUDIT_2026-04-13.md
 
 ### Intelligence & Learning Goal (active goal: 58%)
-- [ ] [LEARNING_STRATEGY_ANALYSIS_CRON] Create a weekly cron entry that runs `knowledge_synthesis.py` with a learning-strategy analysis mode — review what was learned in the past 7 days, identify which learning sources (episodes, research, reflection, coding challenges) produced the highest-quality memories, and write a 1-paragraph strategy adjustment to `memory/cron/digest.md`. Target: learning compounding becomes measurable week-over-week.
+- [x] [LEARNING_STRATEGY_ANALYSIS_CRON] (2026-04-13) Added `learning-strategy` CLI mode to `scripts/cognition/knowledge_synthesis.py` + weekly cron at Sun 05:25. Classifies memories by source (episodes/research/reflection/coding/system), scores quality, writes strategy paragraph to digest.md and stores insight in brain.
 
 ### Strategic Audit Structural Fixes (2026-04-11 audit)
 
@@ -65,10 +64,9 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 
 
 
-- [x] [EXTERNAL_CHALLENGE:coding-challenge-09] (2026-04-13) Already implemented in scripts/challenges/thompson_nfa.py — 50/50 tests pass. Supports concat, alt, star, plus, optional, char classes.
 
 
-- [ ] [EXTERNAL_CHALLENGE:bench-code-01] Write a property-based test suite for ClarvisDB graph operations — Use Hypothesis library to generate random graph operations (add_edge, remove_edge, traverse) and verify invariants: no orphan edges after cleanup, bidirectional consistency, cycle detection correctnes
+- [x] [EXTERNAL_CHALLENGE:bench-code-01] (2026-04-13) Property-based test suite: `tests/test_graph_property.py` — 13 Hypothesis tests across 8 test classes verifying: edge dedup, bidirectional consistency, cycle traversal termination, remove consistency, count invariants, orphan detection, bulk integrity, decay correctness. All pass.
 
 - [ ] [EXTERNAL_CHALLENGE:coding-challenge-05] Implement a bloom filter for fast duplicate detection in brain.store() — Add a Bloom filter as a fast pre-check before the expensive ChromaDB cosine similarity dedup in brain.store(). Tune false positive rate to <1%. Measure: (a) how many expensive dedup calls are avoided,
 
