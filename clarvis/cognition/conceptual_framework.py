@@ -496,6 +496,59 @@ def concept_neighbors(concept_id: str) -> List[Dict]:
     return neighbors
 
 
+def get_relevant_frameworks(task: str, max_frameworks: int = 3) -> str:
+    """Find concepts relevant to a task and format as context for reasoning.
+
+    Returns a compact text block listing relevant concepts, their keywords,
+    and cross-domain connections — suitable for inclusion in a context brief.
+    Returns empty string if no concepts are available or relevant.
+    """
+    concepts = get_concepts()
+    if not concepts:
+        return ""
+
+    task_lower = task.lower()
+    task_terms = set(_extract_terms(task_lower))
+
+    # Score each concept by keyword overlap with task
+    scored = []
+    for c in concepts:
+        kws = set(c.get("keywords", []))
+        overlap = len(task_terms & kws)
+        # Also check substring match of concept label in task
+        label_match = 1 if c.get("label", "").lower() in task_lower else 0
+        # Cross-domain concepts get a small bonus (they bridge knowledge)
+        cross_bonus = 0.5 if c.get("cross_domain") else 0
+        score = overlap + label_match + cross_bonus
+        if score > 0:
+            scored.append((score, c))
+
+    if not scored:
+        return ""
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    top = scored[:max_frameworks]
+
+    lines = []
+    for score, c in top:
+        kws = ", ".join(c.get("keywords", [])[:5])
+        cols = ", ".join(c.get("collections", []))
+        label = c.get("label", c.get("id", "?"))
+        line = f"  [{label}] keywords={kws}"
+        if c.get("cross_domain"):
+            line += f" (cross-domain: {cols})"
+        lines.append(line)
+
+    # Add neighbor info for top concept
+    top_id = top[0][1].get("id", "")
+    neighbors = concept_neighbors(top_id)
+    if neighbors:
+        neighbor_names = [n["concept"] for n in neighbors[:3]]
+        lines.append(f"  Related concepts: {', '.join(neighbor_names)}")
+
+    return "\n".join(lines)
+
+
 def stats() -> Dict:
     """Return framework health stats."""
     concepts = get_concepts()

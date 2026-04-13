@@ -34,6 +34,11 @@ try:
 except ImportError:
     synthesize_knowledge = None
 
+try:
+    from clarvis.cognition.conceptual_framework import get_relevant_frameworks
+except ImportError:
+    get_relevant_frameworks = None
+
 logger = logging.getLogger(__name__)
 
 WORKSPACE = os.environ.get(
@@ -1505,6 +1510,14 @@ def _build_brief_end(current_task, tier, budget, episodic_hints, section_weights
                 parts.append("KNOWLEDGE SYNTHESIS:\n" + knowledge_section)
         except Exception:
             logger.debug("Failed to synthesize knowledge", exc_info=True)
+
+    if get_relevant_frameworks and tier != "minimal":
+        try:
+            frameworks_text = get_relevant_frameworks(current_task, max_frameworks=3)
+            if frameworks_text and frameworks_text.strip():
+                parts.append("CONCEPTUAL FRAMEWORKS:\n" + frameworks_text)
+        except Exception:
+            logger.debug("Failed to get conceptual frameworks", exc_info=True)
 
     if budget.get("reasoning_scaffold", 0) > 0:
         scaffold = build_reasoning_scaffold(tier=tier, task_text=current_task)
