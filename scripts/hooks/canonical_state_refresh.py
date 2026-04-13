@@ -142,7 +142,14 @@ def metric_reasoning_chains() -> tuple[int, str]:
 
 
 def metric_knowledge_synthesis() -> tuple[int, str]:
-    return 95, "stable — conceptual framework still WIP"
+    try:
+        from clarvis.cognition.conceptual_framework import stats
+        s = stats()
+        if s["status"] == "ready" and s["total_concepts"] > 0:
+            return 100, f"{s['total_concepts']} concepts, {s['cross_domain_concepts']} cross-domain, {s['total_edges']} edges"
+        return 95, "conceptual framework built but empty"
+    except Exception:
+        return 90, "conceptual framework module available, not yet built"
 
 
 def metric_procedural_memory() -> tuple[int, str]:

@@ -45,3 +45,7 @@ from .workspace_broadcast import (  # noqa: F401
 from .obligations import (  # noqa: F401
     ObligationTracker, seed_defaults, run_verification,
 )
+from .conceptual_framework import (  # noqa: F401
+    build_concepts, get_concepts, find_concept, concept_search,
+    concept_neighbors, stats as concept_stats,
+)

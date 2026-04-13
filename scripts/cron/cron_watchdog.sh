@@ -81,6 +81,7 @@ check_job "brain_eval"      "$LOG_DIR/brain_eval.log"       26   # daily at 06:0
 check_job "llm_brain_review" "$LOG_DIR/llm_brain_review.log" 26  # daily at 06:15
 check_job "status_json"     "$LOG_DIR/status_json.log"      26   # daily at 05:50
 check_job "relevance_refresh" "$LOG_DIR/relevance_refresh.log" 26 # daily at 02:40
+check_job "calibration_report" "$LOG_DIR/calibration_report.log" 170 # Sun 06:45
 # Weekly jobs
 check_job "cleanup"         "$LOG_DIR/cleanup.log"          170  # Sun 05:30
 check_job "absolute_zero"   "$LOG_DIR/absolute_zero.log"    170  # Sun 03:00
@@ -236,6 +237,7 @@ if [ "$FAILURES" -gt 0 ]; then
   recheck_job "$LOG_DIR/brain_hygiene.log" 170
   recheck_job "$LOG_DIR/data_lifecycle.log" 170
   recheck_job "$LOG_DIR/pi_benchmark.log" 170
+  recheck_job "$LOG_DIR/calibration_report.log" 170
   recheck_job "$LOG_DIR/monthly_reflection.log" 750
   recheck_job "$LOG_DIR/brief_benchmark.log" 750
 
@@ -249,9 +251,50 @@ if [ "$FAILURES" -gt 0 ]; then
   FAILURES=$STILL_FAILING
 fi
 
-# --- Send alert if failures STILL detected after recovery ---
+# --- Send alert if failures STILL detected after recovery (with dedup) ---
+# Only send Telegram alert when:
+#   1. The set of failing jobs changes (new failures or recoveries), OR
+#   2. It's the first alert of the day (daily reminder at most), OR
+#   3. No alert was sent yet for the current failure set
+ALERT_STATE_FILE="$CLARVIS_WORKSPACE/data/watchdog_alert_state.json"
+CURRENT_FAILURES=$(echo -e "$REPORT" | grep -E "^MISSED|^STALE" | sort | md5sum | awk '{print $1}')
+SHOULD_ALERT=false
+
 if [ "$FAILURES" -gt 0 ] && [ "$ALERT_MODE" = true ]; then
-  ALERT_MSG="⚠️ Cron Watchdog Alert
+  if [ -f "$ALERT_STATE_FILE" ]; then
+    PREV_HASH=$(python3 -c "
+import json
+try:
+    s = json.load(open('$ALERT_STATE_FILE'))
+    print(s.get('failure_hash', ''))
+except: print('')
+" 2>/dev/null)
+    PREV_DATE=$(python3 -c "
+import json
+try:
+    s = json.load(open('$ALERT_STATE_FILE'))
+    print(s.get('date', ''))
+except: print('')
+" 2>/dev/null)
+    TODAY=$(date -u +%Y-%m-%d)
+    if [ "$CURRENT_FAILURES" != "$PREV_HASH" ]; then
+      SHOULD_ALERT=true  # Failure set changed
+    elif [ "$TODAY" != "$PREV_DATE" ]; then
+      SHOULD_ALERT=true  # First alert of a new day (daily reminder)
+    fi
+  else
+    SHOULD_ALERT=true  # No prior state — first alert
+  fi
+
+  # Save current state regardless
+  python3 -c "
+import json
+state = {'failure_hash': '$CURRENT_FAILURES', 'date': '$(date -u +%Y-%m-%d)', 'failures': $FAILURES, 'timestamp': '$(date -u +%Y-%m-%dT%H:%M:%S)'}
+json.dump(state, open('$ALERT_STATE_FILE', 'w'), indent=2)
+" 2>/dev/null
+
+  if [ "$SHOULD_ALERT" = true ]; then
+    ALERT_MSG="⚠️ Cron Watchdog Alert
 
 ${FAILURES} cron job(s) still failing after auto-recovery:
 
@@ -260,7 +303,7 @@ $(echo -e "$REPORT" | grep -E "MISSED|STALE")
 Recovery log: memory/cron/doctor.log
 Watchdog log: memory/cron/watchdog.log"
 
-  python3 << PYEOF
+    python3 << PYEOF
 import json, urllib.request, urllib.parse, os
 try:
     token = os.environ.get("CLARVIS_TG_BOT_TOKEN", "")
@@ -277,6 +320,45 @@ try:
 except Exception as e:
     print(f"Alert send failed: {e}")
 PYEOF
+  else
+    echo "Alert suppressed (same failures as last alert, same day)"
+  fi
+fi
+
+# Send recovery notification when failures clear after a previous alert
+if [ "$FAILURES" -eq 0 ] && [ "$ALERT_MODE" = true ] && [ -f "$ALERT_STATE_FILE" ]; then
+  PREV_FAILURES=$(python3 -c "
+import json
+try:
+    s = json.load(open('$ALERT_STATE_FILE'))
+    print(s.get('failures', 0))
+except: print(0)
+" 2>/dev/null)
+  if [ "$PREV_FAILURES" -gt 0 ]; then
+    python3 << PYEOF
+import json, urllib.request, urllib.parse, os
+try:
+    token = os.environ.get("CLARVIS_TG_BOT_TOKEN", "")
+    if not token:
+        with open(os.path.expanduser('~/.openclaw/openclaw.json')) as f:
+            config = json.load(f)
+        token = config['channels']['telegram']['botToken']
+    chat_id = os.environ.get("CLARVIS_TG_CHAT_ID", "")
+    msg = "✅ Cron Watchdog: All jobs recovered. No failures detected."
+    data = urllib.parse.urlencode({"chat_id": chat_id, "text": msg})
+    req = urllib.request.Request(f"https://api.telegram.org/bot{token}/sendMessage", data=data.encode())
+    urllib.request.urlopen(req, timeout=10)
+    print("Recovery notification sent to Telegram")
+except Exception as e:
+    print(f"Recovery notification failed: {e}")
+PYEOF
+    # Reset state
+    python3 -c "
+import json
+state = {'failure_hash': '', 'date': '$(date -u +%Y-%m-%d)', 'failures': 0, 'timestamp': '$(date -u +%Y-%m-%dT%H:%M:%S)'}
+json.dump(state, open('$ALERT_STATE_FILE', 'w'), indent=2)
+" 2>/dev/null
+  fi
 fi
 
 exit $FAILURES
