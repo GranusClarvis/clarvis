@@ -80,18 +80,32 @@ monitoring/
 memory/
 MEMORY.md
 
-# --- Internal docs (audits, execution reports, planning — local only) ---
+# --- Internal / instance-specific docs (not needed for fresh installs) ---
 docs/internal/
 docs/knowledge/
 docs/validation/
-
-# --- One-off docs that don't need tracking ---
 docs/ADOPTION_MATRIX.md
 docs/DATA_LAYOUT.md
 docs/DO_NOT_TOUCH_REGISTRY.md
+docs/DOC_STACK.md
 docs/E2E_RELEASE_VALIDATION_PLAN.md
 docs/GRAPH_SQLITE_CUTOVER_2026-03-29.md
+docs/HERMES_STATUS.md
 docs/INSTALL_FRICTION_REPORT.md
+docs/REPO_BOUNDARY.md
+docs/RESEARCH_REOPEN_POLICY.md
+docs/SAFETY_INVARIANTS.md
+docs/STYLEGUIDE.md
+docs/UPDATE_PROCEDURE.md
+docs/WHAT_IS_CLARVIS.md
+
+# --- Instance-specific root docs ---
+AGENTS.md
+IDENTITY.md
+SOUL.md
+
+# --- Knowledge base (instance-specific research, wiki, raw sources) ---
+knowledge/
 
 # --- Instance state documents ---
 USER.md
