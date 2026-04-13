@@ -19,6 +19,13 @@ set_script_timeout 2400 "$LOGFILE"
 acquire_local_lock "/tmp/clarvis_evolution.lock" "$LOGFILE" 3600
 acquire_global_claude_lock "$LOGFILE"
 
+# Check if queue auto-fill is enabled — skip entirely if OFF (saves Claude spawn cost)
+QUEUE_ENABLED=$(python3 -c "from clarvis.research_config import is_enabled; print('yes' if is_enabled('queue_auto_fill') else 'no')" 2>/dev/null || echo "yes")
+if [ "$QUEUE_ENABLED" = "no" ]; then
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Queue auto-fill OFF — skipping evolution analysis" >> "$LOGFILE"
+    exit 0
+fi
+
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Evolution analysis starting (optimized) ===" >> "$LOGFILE"
 emit_dashboard_event task_started --task-name "Evolution analysis" --section cron_evolution --executor claude-opus
 

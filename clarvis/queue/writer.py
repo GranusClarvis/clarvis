@@ -285,9 +285,20 @@ def add_tasks(tasks: list, priority: str = "P0", source: str = "unknown") -> lis
     except ImportError:
         pass  # Mode system not installed yet — allow all
 
+    # Queue auto-fill gate: block all non-user auto-injection when OFF.
+    # User-directed sources (manual, cli, telegram, etc.) always pass.
+    _USER_SOURCES = frozenset({"manual", "user", "cli", "telegram", "discord", "chat", "human", "prompt"})
+    _RESEARCH_SOURCES = frozenset({"research_bridge", "research_discovery", "research"})
+    if source.lower() not in _USER_SOURCES and source.lower() not in _RESEARCH_SOURCES:
+        try:
+            from clarvis.research_config import is_enabled
+            if not is_enabled("queue_auto_fill"):
+                return []
+        except ImportError:
+            pass  # Config module not available — allow (backward compat)
+
     # Research gate: block research-source injections when research auto-fill is OFF.
     # This prevents any code path from sneaking research tasks into the queue.
-    _RESEARCH_SOURCES = frozenset({"research_bridge", "research_discovery", "research"})
     if source.lower() in _RESEARCH_SOURCES:
         try:
             from clarvis.research_config import is_enabled
