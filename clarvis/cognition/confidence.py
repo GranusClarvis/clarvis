@@ -94,6 +94,18 @@ def _domain_failure_rate(domain: str, window_days: int = 30, min_samples: int = 
     return failures / len(resolved), len(resolved)
 
 
+def _domain_accuracy(domain: str, window_days: int = 30, min_samples: int = 5):
+    """Compute rolling accuracy for a task domain.
+
+    Returns (accuracy, sample_count) or (None, 0) if insufficient data.
+    Unlike _domain_failure_rate, returns accuracy directly for ceiling computation.
+    """
+    rate, n = _domain_failure_rate(domain, window_days, min_samples)
+    if rate is None:
+        return None, n
+    return 1.0 - rate, n
+
+
 def _band_accuracy(band_lo, band_hi, min_samples=5, recency_weight=True):
     """Compute historical accuracy for predictions in a given confidence band.
 
@@ -184,14 +196,26 @@ def predict(event: str, expected: str, confidence: float, _task_aware: bool = Fa
             print(f"Recalibrated: {original_confidence:.0%} → {confidence:.0%} "
                   f"(band 90-100% accuracy={acc:.0%}, n={n}, gap={gap:.0%})", file=sys.stderr)
 
-    # Domain failure-pattern penalty: lower confidence for task types with
-    # >10% historical failure rate in the last 30 days. Closes 70% of the gap
-    # between predicted confidence and actual domain accuracy.
+    # Per-domain confidence adjustment: use empirical domain accuracy as
+    # a ceiling. This replaces the coarse global 0.825 threshold with
+    # data-driven per-domain ceilings. If a domain has 80% accuracy,
+    # confidence for that domain should not exceed ~85% (accuracy + 5% margin).
     domain = _classify_domain(event)
-    fail_rate, domain_n = _domain_failure_rate(domain)
-    if fail_rate is not None and fail_rate > 0.10:
-        domain_acc = 1.0 - fail_rate
-        if confidence > domain_acc:
+    domain_acc, domain_n = _domain_accuracy(domain)
+    if domain_acc is not None:
+        # Domain ceiling: cap confidence at empirical accuracy + 5% margin
+        domain_ceiling = min(0.95, domain_acc + 0.05)
+        if confidence > domain_ceiling and domain_n >= 8:
+            pre_ceiling = confidence
+            confidence = domain_ceiling
+            recalibrated = True
+            print(f"Domain ceiling: {domain} acc={domain_acc:.0%} "
+                  f"(n={domain_n}) → ceiling {domain_ceiling:.0%}, "
+                  f"confidence {pre_ceiling:.0%} → {confidence:.0%}", file=sys.stderr)
+
+        # Stronger penalty for high failure rate domains (>10%)
+        fail_rate = 1.0 - domain_acc
+        if fail_rate > 0.10 and confidence > domain_acc:
             pre_penalty = confidence
             penalty = (confidence - domain_acc) * 0.7
             confidence = max(0.3, confidence - penalty)

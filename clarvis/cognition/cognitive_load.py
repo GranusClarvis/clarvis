@@ -48,14 +48,22 @@ def _now_utc():
 # --- Metric 1: Failure Rate (from watchdog.log) ---
 
 def measure_failure_rate(hours=24):
-    """Count watchdog failures in last N hours. Returns 0.0-1.0."""
+    """Measure failure severity from watchdog logs. Returns 0.0-1.0.
+
+    Uses the LATEST watchdog check's failure count as a ratio of total
+    monitored jobs, rather than the fraction of checks that had any failure.
+    This prevents a single persistent stale job from inflating the score to 1.0.
+    """
     log_path = CRON_LOG_DIR / "watchdog.log"
     if not log_path.exists():
         return 0.0
 
     cutoff = _now_utc() - timedelta(hours=hours)
-    total_checks = 0
-    failed_checks = 0
+    latest_failures = 0
+    latest_ts = None
+
+    # Total monitored jobs in watchdog (count of check_job calls)
+    TOTAL_MONITORED_JOBS = 30  # approximate count from watchdog script
 
     try:
         lines = log_path.read_text().strip().split("\n")
@@ -69,15 +77,16 @@ def measure_failure_rate(hours=24):
         ts = _parse_timestamp(m.group(1))
         if ts is None or ts < cutoff:
             continue
-        total_checks += 1
-        failures = int(m.group(2))
-        if failures > 0:
-            failed_checks += 1
+        # Keep the latest check's failure count
+        if latest_ts is None or ts >= latest_ts:
+            latest_ts = ts
+            latest_failures = int(m.group(2))
 
-    if total_checks == 0:
+    if latest_ts is None:
         return 0.0
 
-    return min(1.0, failed_checks / total_checks)
+    # Return ratio of failing jobs to total, not binary "any failure" metric
+    return min(1.0, latest_failures / TOTAL_MONITORED_JOBS)
 
 
 # --- Metric 2: Queue Velocity ---
@@ -105,7 +114,13 @@ def measure_queue_velocity():
 # --- Metric 3: Cron Execution Times ---
 
 def measure_cron_times(hours=24):
-    """Analyze autonomous.log for task durations and timeouts. Returns 0.0-1.0."""
+    """Analyze autonomous.log for task durations and timeouts. Returns 0.0-1.0.
+
+    Only counts actual EXECUTING→TIMEOUT/COMPLETED cycles, not heartbeat
+    deferrals (which log "All N candidates deferred" without EXECUTING).
+    Heartbeat cycles that correctly defer all tasks are normal operation,
+    not a sign of cron stress.
+    """
     log_path = CRON_LOG_DIR / "autonomous.log"
     if not log_path.exists():
         return 0.0
@@ -114,6 +129,7 @@ def measure_cron_times(hours=24):
     durations = []
     timeouts = 0
     total_tasks = 0
+    total_cycles = 0  # Total heartbeat cycles (including deferrals)
 
     try:
         lines = log_path.read_text().strip().split("\n")
@@ -132,7 +148,9 @@ def measure_cron_times(hours=24):
                 last_execute_ts = ts
             continue
 
-        if "EXECUTING:" in line:
+        if "GATE: wake" in line or "Heartbeat starting" in line:
+            total_cycles += 1
+        elif "EXECUTING:" in line:
             last_execute_ts = ts
             total_tasks += 1
         elif "COMPLETED:" in line and last_execute_ts:
@@ -140,15 +158,19 @@ def measure_cron_times(hours=24):
             if 0 < duration < 7200:
                 durations.append(duration)
             last_execute_ts = None
-        elif "TIMEOUT" in line:
-            timeouts += 1
-            total_tasks = max(total_tasks, 1)
-            last_execute_ts = None
+        elif "TIMEOUT" in line and "TIMEOUT" not in line.split(":")[-1] if "skip" in line.lower() else True:
+            # Only count actual execution timeouts, not log lines about timeout classifications
+            if last_execute_ts is not None:
+                timeouts += 1
+                last_execute_ts = None
         elif "FAILED" in line:
             last_execute_ts = None
 
+    # If no tasks were actually executed, cron stress is low (deferrals ≠ stress)
     if total_tasks == 0:
-        return 0.0
+        # If cycles ran but nothing executed, it's a deferral situation, not stress
+        # Return a small value so it doesn't dominate the score
+        return 0.1 if total_cycles > 0 else 0.0
 
     timeout_ratio = timeouts / total_tasks if total_tasks > 0 else 0.0
 

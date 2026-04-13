@@ -24,6 +24,25 @@ acquire_local_lock "/tmp/clarvis_autonomous.lock" "$LOGFILE" 2400
 acquire_global_claude_lock "$LOGFILE" "queue"
 
 # ============================================================================
+# PHASE 0: HEARTBEAT GATE — Zero-LLM pre-check (skip if nothing changed)
+# Saves cost by deferring when digest/queue/memory haven't changed since last run.
+# Force-wakes on: first run, 4h+ gap, midnight rollover, max consecutive skips (4).
+# ============================================================================
+GATE_DECISION=$(python3 -c "
+from clarvis.heartbeat.gate import run_gate
+decision, output = run_gate()
+print(decision)
+import json, sys
+print(json.dumps(output), file=sys.stderr)
+" 2>> "$LOGFILE")
+
+if [ "$GATE_DECISION" = "skip" ]; then
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] GATE: skip — deferring autonomous cycle (nothing changed)" >> "$LOGFILE"
+    exit 0
+fi
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] GATE: wake — proceeding with autonomous cycle" >> "$LOGFILE"
+
+# ============================================================================
 # PHASE 1: BATCHED PRE-FLIGHT (single Python process)
 # Replaces: attention load/tick, task_selector, cognitive_load, procedural_memory,
 #           reasoning_chain open, confidence predict, episodic recall,

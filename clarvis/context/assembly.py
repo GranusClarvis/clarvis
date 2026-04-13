@@ -1050,13 +1050,13 @@ def _format_recovery_lines(recovery_pairs):
         return []
     lines = ["  RECOVERY:"]
     for fail_ep, succ_ep in recovery_pairs[:2]:
-        fail_task = fail_ep.get("task", "")[:70]
-        fail_err = fail_ep.get("error", "")[:40] or "failed"
-        succ_lesson = succ_ep.get("lesson", "")
+        fail_task = (fail_ep.get("task") or "")[:70]
+        fail_err = (fail_ep.get("error") or "")[:40] or "failed"
+        succ_lesson = succ_ep.get("lesson") or ""
         if succ_lesson and succ_lesson.lower() not in ("success", ""):
             fix_str = succ_lesson[:60]
         else:
-            fix_str = succ_ep.get("task", "")[:60]
+            fix_str = (succ_ep.get("task") or "")[:60]
         lines.append(f"    fail: {fail_task} ({fail_err})")
         if fix_str.strip():
             lines.append(f"    fix: {fix_str}")

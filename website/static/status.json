@@ -4,47 +4,47 @@
     "pending_mode": null
   },
   "queue": {
-    "pending": 33,
+    "pending": 23,
     "in_progress": 0,
-    "done": 5
+    "done": 8
   },
   "benchmarks": {
     "clr": {
-      "clr": 0.848,
+      "clr": 0.844,
       "baseline_clr": 0.19,
-      "value_add": 0.658,
+      "value_add": 0.654,
       "gate_pass": true,
       "dimensions": {
-        "memory_quality": 0.828,
-        "retrieval_precision": 0.863,
-        "prompt_context": 0.762,
-        "task_success": 0.837,
-        "autonomy": 0.965,
-        "efficiency": 0.986,
-        "integration_dynamics": 0.826
+        "memory_quality": 0.842,
+        "retrieval_precision": 0.882,
+        "prompt_context": 0.764,
+        "task_success": 0.835,
+        "autonomy": 0.86,
+        "efficiency": 0.985,
+        "integration_dynamics": 0.838
       },
-      "timestamp": "2026-04-12T10:43:29.435322+00:00"
+      "timestamp": "2026-04-13T05:45:41.175947+00:00"
     },
     "pi": {
-      "pi": 0.9745,
+      "pi": 0.9744,
       "dimensions": 15,
-      "timestamp": "2026-04-13T00:00:53.463040+00:00"
+      "timestamp": "2026-04-13T05:45:02.144092+00:00"
     }
   },
   "phi": {
     "current": 0.62,
     "timestamp": "2026-04-12T20:08:56.642919+00:00"
   },
-  "bloat_score": 0.0,
+  "bloat_score": 0.2,
   "brain": {
-    "total_memories": 2978,
+    "total_memories": 3045,
     "collections": 10
   },
   "episodes": {
     "success_rate": 0.938,
-    "total": 402,
+    "total": 403,
     "breakdown": {
-      "success": 377,
+      "success": 378,
       "soft_failure": 0,
       "failure": 11,
       "timeout": 10
@@ -53,25 +53,25 @@
   "uptime_since": "2026-02-18 12:20:55",
   "recent_completions": [
     {
-      "tag": "E2E_HERMES_FRESH_ISOLATED",
+      "tag": "RUNTIME_AUDIT_FINDINGS_REVIEW",
       "status": "success"
     },
     {
-      "tag": "HERMES_INSTALLER_SUPPORT_GATE",
+      "tag": "RUNTIME_HARDENING_PLAN",
       "status": "success"
     },
     {
-      "tag": "HERMES_RUNTIME_SUPPORT_UPGRADE",
+      "tag": "HEARTBEAT_GATE_WIRING_IN_AUTONOMOUS",
       "status": "success"
     },
     {
-      "tag": "HERMES_BOUNDARY_SUPPORT_DECISION",
+      "tag": "CLAUDE_MD_PATH_DRIFT_CLEANUP",
       "status": "success"
     },
     {
-      "tag": "ADOPTION_MATRIX_LOCAL_HARNESS",
+      "tag": "SIDECAR_PRUNING_SCHEDULE",
       "status": "success"
     }
   ],
-  "updated_at": "2026-04-13T00:33:39.845857+00:00"
+  "updated_at": "2026-04-13T05:50:03.466594+00:00"
 }

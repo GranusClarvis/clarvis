@@ -19,4 +19,13 @@ trap 'rm -f "$LOCKFILE"' EXIT
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Weekly cleanup started ==="
 python3 "$CLARVIS_WORKSPACE/scripts/infra/cleanup_policy.py"
+
+# Sidecar pruning: remove old succeeded/removed entries from queue_state.json
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Pruning sidecar (removed >30d, succeeded >90d)..."
+python3 -c "
+from clarvis.queue.writer import prune_sidecar
+result = prune_sidecar(removed_days=30, succeeded_days=90)
+print(f'Sidecar pruned: removed={result[\"removed\"]}, succeeded={result[\"succeeded\"]}, before={result[\"total_before\"]}, after={result[\"total_after\"]}')
+" 2>&1 || echo "WARN: Sidecar pruning failed"
+
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Weekly cleanup finished ==="

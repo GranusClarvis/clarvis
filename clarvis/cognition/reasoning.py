@@ -47,6 +47,7 @@ CLI:
 """
 
 import json
+import logging
 import math
 import sys
 from collections import Counter
@@ -61,6 +62,18 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 SESSIONS_DIR = DATA_DIR / "sessions"
 SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
 META_FILE = DATA_DIR / "reasoning_meta.json"
+REJECTION_LOG = DATA_DIR / "shallow_rejections.jsonl"
+
+# Minimum chain depth targets by task priority.
+# Chains below these thresholds are flagged as shallow on completion.
+MIN_CHAIN_DEPTH = {
+    "P0": 3,   # Critical tasks must have ≥3 meaningful steps
+    "P1": 3,   # Weekly tasks must have ≥3 meaningful steps
+    "P2": 2,   # Idle tasks need ≥2 steps
+    "default": 2,
+}
+
+_logger = logging.getLogger("clarvis.cognition.reasoning")
 
 
 class ReasoningStep:
@@ -147,11 +160,39 @@ class ReasoningSession:
                           f"Predicted outcome: {outcome} (confidence: {confidence:.2f})")
         self._save()
 
-    def complete(self, outcome: str, summary: str = ""):
-        """Complete the session with the actual outcome."""
+    def validate_depth(self, priority: str = "default") -> tuple:
+        """Check if chain meets minimum depth for its task priority.
+
+        Returns:
+            (ok: bool, message: str)
+        """
+        min_depth = MIN_CHAIN_DEPTH.get(priority, MIN_CHAIN_DEPTH["default"])
+        # Count meaningful steps (exclude steps flagged as shallow or with trivial content)
+        meaningful = sum(
+            1 for s in self.steps
+            if len(s.thought.strip()) > 20 and "shallow" not in s.quality_flags
+        )
+        if meaningful >= min_depth:
+            return True, f"Depth OK: {meaningful} meaningful steps (min {min_depth} for {priority})"
+        return False, f"Shallow chain: {meaningful} meaningful steps, need {min_depth} for {priority}"
+
+    def complete(self, outcome: str, summary: str = "", priority: str = "default"):
+        """Complete the session with the actual outcome.
+
+        Shallow chains (below MIN_CHAIN_DEPTH for priority) are logged to
+        REJECTION_LOG and excluded from brain storage to avoid polluting
+        long-term memory with low-quality reasoning.
+        """
         self.actual_outcome = outcome
         self.summary = summary
         self.completed = True
+
+        # Depth enforcement: reject shallow chains from brain storage
+        depth_ok, depth_msg = self.validate_depth(priority)
+        if not depth_ok:
+            _logger.warning("Chain %s REJECTED: %s", self.session_id, depth_msg)
+            self._meta_observe("depth_rejection", depth_msg)
+            self._log_shallow_rejection(priority, depth_msg)
 
         # Record calibration data
         if self.predicted_outcome:
@@ -167,8 +208,11 @@ class ReasoningSession:
 
         self._save()
 
-        # Store in brain if available
-        self._store_in_brain(outcome, summary, evaluation)
+        # Store in brain ONLY if chain meets depth requirements
+        if depth_ok:
+            self._store_in_brain(outcome, summary, evaluation)
+        else:
+            _logger.info("Chain %s: skipping brain storage (shallow)", self.session_id)
 
     def evaluate(self) -> dict:
         """Meta-cognitive evaluation of reasoning quality."""
@@ -207,8 +251,10 @@ class ReasoningSession:
 
         # Issues
         issues = []
-        if depth < 2:
+        if depth < MIN_CHAIN_DEPTH["default"]:
             issues.append("shallow_reasoning")
+        elif depth < MIN_CHAIN_DEPTH.get("P1", 3):
+            issues.append("below_target_depth")
         if evidence_coverage < 0.3:
             issues.append("low_evidence")
         if flag_counts.get("circular", 0) > 0:
@@ -472,6 +518,32 @@ class ReasoningSession:
             )
         except Exception:
             pass
+
+    def _log_shallow_rejection(self, priority: str, depth_msg: str):
+        """Log a shallow chain rejection to REJECTION_LOG for tracking."""
+        entry = {
+            "session_id": self.session_id,
+            "task": self.task[:150],
+            "priority": priority,
+            "outcome": self.actual_outcome,
+            "depth": len(self.steps),
+            "meaningful_steps": sum(
+                1 for s in self.steps
+                if len(s.thought.strip()) > 20 and "shallow" not in s.quality_flags
+            ),
+            "min_required": MIN_CHAIN_DEPTH.get(priority, MIN_CHAIN_DEPTH["default"]),
+            "reason": depth_msg,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        try:
+            with open(REJECTION_LOG, "a") as f:
+                f.write(json.dumps(entry) + "\n")
+            # Cap at 500 entries
+            lines = REJECTION_LOG.read_text().strip().split("\n")
+            if len(lines) > 500:
+                REJECTION_LOG.write_text("\n".join(lines[-500:]) + "\n")
+        except Exception as e:
+            _logger.debug("Failed to log shallow rejection: %s", e)
 
     def _save(self):
         """Persist session to disk."""

@@ -292,7 +292,11 @@ def close_chain(chain_id: str, result: str, task_text: str, exit_code: str = "0"
                 )
                 session.complete(result, outcome_text[:200])
                 ev = session.evaluate()
-                print(f"REASONING_SESSION: {session_id} closed, grade={ev.get('quality_grade')}", file=sys.stderr)
+                depth_ok, depth_msg = session.validate_depth("P1")
+                grade_info = f"grade={ev.get('quality_grade')}, depth={ev.get('depth')}"
+                if not depth_ok:
+                    grade_info += f" SHALLOW({depth_msg})"
+                print(f"REASONING_SESSION: {session_id} closed, {grade_info}", file=sys.stderr)
         except Exception as e:
             print(f"ClarvisReasoning close error: {e}", file=sys.stderr)
 
