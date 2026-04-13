@@ -3,8 +3,7 @@
 Complete walkthrough for installing and verifying Clarvis on a fresh machine.
 
 > **Before choosing a profile**, check the [Support Matrix](SUPPORT_MATRIX.md) for what's
-> fully supported vs experimental. For validation criteria, see [Install Matrix](INSTALL_MATRIX.md).
-> For known blockers, see [Friction Report](INSTALL_FRICTION_REPORT.md).
+> fully supported vs experimental, including known blockers.
 
 ## Prerequisites
 
@@ -284,7 +283,75 @@ review or `crontab scripts/crontab.reference` if you prefer direct control.
 | `python -m build` fails (PEP 668) | On PEP 668 systems (Ubuntu 24.04+), use `python -m build --no-isolation`. CI uses `actions/setup-python` where isolation works. |
 
 For runtime troubleshooting (gateway issues, cron failures, etc.), see the
-[OpenClaw User Guide](USER_GUIDE_OPENCLAW.md) or [Hermes User Guide](USER_GUIDE_HERMES.md).
+[OpenClaw User Guide](USER_GUIDE_OPENCLAW.md) or [Runbook](RUNBOOK.md).
+
+## Validation Criteria
+
+Each install path has pass/fail criteria for "usable without extra hassle."
+
+### Clarvis-on-OpenClaw
+
+| # | Criterion | Pass | Fail |
+|---|-----------|------|------|
+| 1 | `bash scripts/infra/install.sh` completes | Exits 0 | Error |
+| 2 | `bash scripts/infra/verify_install.sh` passes | 0 failures | Any FAIL |
+| 3 | `clarvis demo` runs end-to-end | Output shows store+recall | Crash |
+| 4 | `clarvis brain health` reports OK | Health pass | Error |
+| 5 | OpenClaw gateway still works after install | Chat functional | Gateway broken |
+| 6 | `clarvis cron install minimal --apply` succeeds | Cron entries visible | Error |
+
+### Clarvis-on-Hermes
+
+| # | Criterion | Pass | Fail |
+|---|-----------|------|------|
+| 1 | `pip install -e .` completes | Exits 0 | Dependency error |
+| 2 | `hermes` CLI responds after overlay | Help shown | Import error |
+| 3 | All 12 Clarvis spine imports work | Imports clean | Any failure |
+| 4 | `clarvis brain health` reports OK | Health pass | Error |
+| 5 | `hermes chat -q "hello" --provider <provider>` works | Response received | Timeout |
+
+### What "Usable" Means
+
+1. **Zero manual JSON editing** — installer handles config creation
+2. **No hidden dependencies** — all requirements caught by prereq check or clear error
+3. **First command works** — `clarvis demo` succeeds immediately after install
+4. **Clear error on missing optional** — "ChromaDB not installed, brain features disabled" not a traceback
+5. **Uninstall is clean** — no orphan processes, cron entries, or broken system state
+
+For full test evidence, see [Support Matrix](SUPPORT_MATRIX.md).
+
+## Hermes Runtime Notes
+
+> **Status: EXPERIMENTAL.** See [Support Matrix](SUPPORT_MATRIX.md) for details.
+
+Clarvis can run on [Hermes Agent](https://github.com/NousResearch/hermes-agent) as an
+alternative to OpenClaw. The brain, CLI, and heartbeat work identically on both harnesses.
+
+### Key Differences from OpenClaw
+
+| Aspect | OpenClaw | Hermes |
+|--------|----------|--------|
+| Runtime | Node.js gateway (systemd) | Python CLI |
+| Chat | Telegram/Discord | Terminal or programmatic |
+| Config | `openclaw.json` | `~/.hermes/config.yaml` |
+| Cron | System crontab (30+ jobs) | `hermes cron` (built-in) |
+
+### Using Hermes Chat
+
+```bash
+# Use the hermes CLI (not hermes-agent — it has upstream flag bugs)
+hermes chat -q "your question" --provider openrouter -m "model/name" --max-turns 1
+hermes chat              # Interactive session
+hermes doctor            # Full diagnostic
+hermes status            # Current config summary
+```
+
+### What's Not Available on Hermes
+
+- Telegram/Discord integration (no built-in chat gateway)
+- OpenClaw skill format (doesn't port to Hermes Skills Hub)
+- systemd daemon mode
+- Full cron autonomy (needs manual migration to `hermes cron`)
 
 ## Upgrading
 

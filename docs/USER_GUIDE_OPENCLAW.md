@@ -77,46 +77,15 @@ All cron jobs respect mutual exclusion locks — only one Claude Code instance r
 
 ## Features
 
-### Brain (ClarvisDB)
-Persistent vector memory with 10 collections, 3400+ memories, and 106k+ graph edges. Fully local (ChromaDB + ONNX MiniLM embeddings).
+For full operational commands (brain, cost tracking, benchmarks, backups, etc.),
+see the [Runbook](RUNBOOK.md).
 
-```bash
-python3 -m clarvis brain health          # Full health report
-python3 -m clarvis brain search "query"  # Semantic search
-python3 -m clarvis brain stats           # Quick counts
-python3 -m clarvis brain optimize-full   # Maintenance cycle
-```
-
-### Cost Tracking
-Tracks real API spend via OpenRouter. Budget alerts via Telegram.
-
-```bash
-python3 scripts/cost_tracker.py telegram   # Usage report
-python3 scripts/budget_alert.py --status   # Budget status
-```
-
-### Claude Code Delegation
-Clarvis spawns Claude Code (Opus 4.6) for complex tasks:
-- From chat: `/spawn <task description>`
-- From cron: automatic via heartbeat pipeline
-- Manual: `workspace/scripts/spawn_claude.sh "task" 1200`
-
-Results are delivered to Telegram and stored in brain memory.
-
-### Performance Tracking
-8-dimension Performance Index (PI): brain speed, retrieval quality, efficiency, accuracy, results quality, bloat, context quality, load scaling.
-
-```bash
-python3 scripts/performance_benchmark.py pi    # Current PI score
-python3 scripts/performance_benchmark.py record # Full benchmark
-```
-
-### Project Agents
-Clarvis can delegate to specialized project agents in isolated workspaces:
-```bash
-python3 scripts/agents/project_agent.py list   # List agents
-python3 scripts/agents/project_agent.py spawn <name> "task"  # Spawn agent
-```
+Key capabilities:
+- **Brain (ClarvisDB)**: Persistent vector memory, 10 collections, fully local
+- **Cost Tracking**: Real API spend via OpenRouter, budget alerts via Telegram
+- **Claude Code Delegation**: `/spawn <task>` from chat, automatic via heartbeat
+- **Performance Index**: 8-dimension PI score for operational health
+- **Project Agents**: Delegate to specialized agents in isolated workspaces
 
 ## What Clarvis Adds Over Baseline OpenClaw
 

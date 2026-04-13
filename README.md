@@ -80,8 +80,7 @@ python3 -m clarvis brain health
 python3 -m clarvis demo
 ```
 
-For the full install guide and profile matrix, see [docs/INSTALL.md](docs/INSTALL.md).
-For validation criteria and tested install paths, see [docs/INSTALL_MATRIX.md](docs/INSTALL_MATRIX.md).
+For the full install guide, profiles, and validation criteria, see [docs/INSTALL.md](docs/INSTALL.md).
 
 ---
 
@@ -288,15 +287,12 @@ It is intentionally opinionated. It prefers continuity over minimalism and struc
 
 ## Documentation
 
-- [Install Guide](docs/INSTALL.md) — step-by-step install for all profiles
-- [Install Matrix](docs/INSTALL_MATRIX.md) — validation criteria for fresh installs
-- [Support Matrix](docs/SUPPORT_MATRIX.md) — what works, what's experimental, what's broken
-- [Friction Report](docs/INSTALL_FRICTION_REPORT.md) — known install blockers and workarounds
-- [OpenClaw Runtime Guide](docs/USER_GUIDE_OPENCLAW.md) — day-to-day ops on OpenClaw
-- [Hermes Runtime Guide](docs/USER_GUIDE_HERMES.md) — runtime ops on Hermes (experimental)
-- [Architecture](docs/ARCHITECTURE.md)
-- [Launch Packet](docs/LAUNCH_PACKET.md)
-- [Roadmap](ROADMAP.md)
+- [Install Guide](docs/INSTALL.md) — profiles, setup, validation criteria, Hermes notes
+- [Support Matrix](docs/SUPPORT_MATRIX.md) — what works, what's experimental, known blockers
+- [Architecture](docs/ARCHITECTURE.md) — technical architecture and package layout
+- [Runbook](docs/RUNBOOK.md) — operational commands and troubleshooting
+- [OpenClaw Guide](docs/USER_GUIDE_OPENCLAW.md) — day-to-day ops on OpenClaw
+- [Contributing](docs/CONTRIBUTING.md) — code structure, imports, testing
 
 ---
 

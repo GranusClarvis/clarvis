@@ -1,11 +1,6 @@
 # Clarvis Architecture
 
-> **Note (2026-04-03):** The `packages/` directory (clarvis-db, clarvis-cost, clarvis-reasoning) has been
-> consolidated into the `clarvis/` spine module. References to standalone packages below are historical.
-> See `clarvis/brain/`, `clarvis/orch/cost_tracker.py`, `clarvis/cognition/metacognition.py`.
-
-
-_Updated 2026-04-10. Reflects post-migration end state (all 9 phases complete)._
+_Updated 2026-04-13._
 
 ---
 
@@ -79,8 +74,6 @@ scripts/
 
 - **Cron orchestrators**: `cron_autonomous.sh`, `cron_morning.sh`, etc. — spawn Claude Code via `spawn_claude.sh`.
 - **Heartbeat pipeline**: `heartbeat_preflight.py` → Claude Code → `heartbeat_postflight.py`.
-
-> **Note:** The `packages/` directory (clarvis-db, clarvis-cost, clarvis-reasoning) was consolidated into the spine and removed (2026-04-03).
 
 ### `tests/` — Test Suite
 
