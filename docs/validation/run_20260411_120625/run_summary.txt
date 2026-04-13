@@ -1,9 +1,0 @@
-E2E Test Run: 20260411_120625
-Commit: d97619a (main)
-Overall: PASS
-
-Gate C (Overlay): 23 pass, 0 fail, 0 warn
-Hermes Gate: PASS
-Gateway: healthy
-
-Artifacts: /home/agent/.openclaw/workspace/docs/validation/run_20260411_120625

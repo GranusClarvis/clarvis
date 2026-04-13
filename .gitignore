@@ -82,6 +82,16 @@ MEMORY.md
 
 # --- Internal docs (audits, execution reports, planning — local only) ---
 docs/internal/
+docs/knowledge/
+docs/validation/
+
+# --- One-off docs that don't need tracking ---
+docs/ADOPTION_MATRIX.md
+docs/DATA_LAYOUT.md
+docs/DO_NOT_TOUCH_REGISTRY.md
+docs/E2E_RELEASE_VALIDATION_PLAN.md
+docs/GRAPH_SQLITE_CUTOVER_2026-03-29.md
+docs/INSTALL_FRICTION_REPORT.md
 
 # --- Instance state documents ---
 USER.md
