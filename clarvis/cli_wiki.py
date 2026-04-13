@@ -269,6 +269,47 @@ def maintenance(
     _run("wiki_maintenance.py", args)
 
 
+# ── contradiction ─────────────────────────────────────────────
+
+@app.command("argument-map")
+def argument_map(
+    action: str = typer.Argument("map-all", help="map <slug> | map-all | ascii <slug>"),
+    slug: str = typer.Argument(None, help="Wiki page slug (for map/ascii)"),
+    min_claims: int = typer.Option(2, "--min-claims", help="Min claims for map-all"),
+    json_output: bool = typer.Option(False, "--json", help="JSON output"),
+    no_embeddings: bool = typer.Option(False, "--no-embeddings", help="Skip embedding relations"),
+):
+    """Extract argument structure (premises → conclusions) from wiki pages."""
+    args = [action]
+    if slug:
+        args.append(slug)
+    if action == "map-all":
+        args += ["--min-claims", str(min_claims)]
+    if json_output:
+        args.append("--json")
+    if no_embeddings:
+        args.append("--no-embeddings")
+    _run("wiki_argument_map.py", args)
+
+
+@app.command("contradiction")
+def contradiction(
+    action: str = typer.Argument("detect", help="detect|summary"),
+    threshold: float = typer.Option(0.65, "--threshold", "-t",
+                                    help="Min embedding similarity (default: 0.65)"),
+    min_opposition: float = typer.Option(0.1, "--min-opposition",
+                                         help="Min opposition score (default: 0.1)"),
+    json_output: bool = typer.Option(False, "--json", help="JSON output"),
+):
+    """Detect contradictions across wiki pages sharing tags."""
+    args = [action]
+    if action == "detect":
+        args += ["--threshold", str(threshold), "--min-opposition", str(min_opposition)]
+        if json_output:
+            args.append("--json")
+    _run("wiki_contradiction.py", args)
+
+
 # ── status ────────────────────────────────────────────────────
 
 # ── render ────────────────────────────────────────────────────

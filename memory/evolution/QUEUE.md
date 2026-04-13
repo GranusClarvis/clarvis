@@ -11,6 +11,20 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 
 ## P1 — This Week
 
+### Phi Recovery — Intra-Collection Density (weakest Phi sub-component: 0.38)
+- [ ] [PHI_INTRA_DENSITY_BOOST] Boost intra-collection density by running targeted auto_link within each collection — identify the 3 collections with lowest internal edge density, then create semantically valid intra-collection edges using pairwise similarity above 0.75 threshold. Measure: intra_collection_density component must rise from 0.38 toward 0.50+. Verify with `python3 -m clarvis brain health`.
+
+### Reasoning Chain Depth (capability score: 0.80, Phase 4.2 gap)
+
+### Conceptual Framework Activation (Phase 4.3 gap — "beyond keyword matching")
+- [ ] [CONCEPTUAL_FRAMEWORK_WIRING] Wire `clarvis.cognition.conceptual_framework` into heartbeat preflight context — the module exists but is not called during task execution. Add a conceptual_framework.get_relevant_frameworks(task) call to preflight context assembly so reasoning benefits from cross-domain concept maps. Verify: preflight output includes framework context for at least 1 test task.
+
+### Cron Reliability (non-Python)
+- [ ] [CRON_TIMEOUT_AUDIT] (Bash/shell) Audit all cron shell scripts for timeout handling — grep for scripts missing `timeout` wrapping on Claude Code spawns, scripts without lock-file cleanup on SIGTERM, and scripts that silently swallow errors. Produce a checklist of fixes. Target: every spawner script has proper timeout + trap + lock cleanup.
+
+### Intelligence & Learning Goal (active goal: 58%)
+- [ ] [LEARNING_STRATEGY_ANALYSIS_CRON] Create a weekly cron entry that runs `knowledge_synthesis.py` with a learning-strategy analysis mode — review what was learned in the past 7 days, identify which learning sources (episodes, research, reflection, coding challenges) produced the highest-quality memories, and write a 1-paragraph strategy adjustment to `memory/cron/digest.md`. Target: learning compounding becomes measurable week-over-week.
+
 ### Strategic Audit Structural Fixes (2026-04-11 audit)
 
 ### Fresh-Install / Isolation Validation
@@ -48,11 +62,8 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 
 
 
-- [ ] [EXTERNAL_CHALLENGE:synthesis-02] Implement contradiction detection across wiki pages — Build a contradiction detector: for each pair of wiki pages that share a tag, compare their Key Claims via embedding similarity. Flag pairs where claims are semantically similar but contain negation o
 
-- [ ] [EXTERNAL_CHALLENGE:reasoning-depth-02] Implement analogical reasoning between brain memories — Build an analogy engine: given a source pair (A:B), find the best matching target pair (C:D) from brain memories. Use embedding offsets (B-A ≈ D-C) to detect structural analogies. Test on 10 analogy q
 
-- [ ] [EXTERNAL_CHALLENGE:reasoning-depth-05] Implement argument mapping for wiki claims — Build an argument mapper: given a wiki page with Key Claims, extract the argument structure (premises → conclusion, supports/rebuts relations). Output a directed graph of arguments. Visualize as ASCII
 
 - [ ] [EXTERNAL_CHALLENGE:coding-challenge-09] Implement a regex engine from scratch (Thompson NFA) — Build a regex engine using Thompson's NFA construction: support concatenation, alternation (|), Kleene star (*), plus (+), optional (?), and character classes [a-z]. Convert regex to NFA, simulate NFA
 
