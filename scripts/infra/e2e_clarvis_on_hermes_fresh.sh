@@ -366,9 +366,48 @@ else
 fi
 echo ""
 
-# ═══════════════════════════════════════════════���════════════════════════════
+# ── C11: Chat round-trip via OpenRouter ──
+echo -e "${B}[C11] Chat round-trip (OpenRouter)${Z}"
+_OR_KEY="${OPENROUTER_API_KEY:-}"
+if [ -n "$_OR_KEY" ]; then
+    # Direct OpenRouter API test to validate model access works
+    _CHAT_RESP=$(curl -sf --max-time 30 https://openrouter.ai/api/v1/chat/completions \
+        -H "Authorization: Bearer $_OR_KEY" \
+        -H "Content-Type: application/json" \
+        -d '{"model":"minimax/minimax-m2.5","messages":[{"role":"user","content":"Say hello in one sentence"}],"max_tokens":200}' 2>&1 || true)
+    _CHAT_CONTENT=$(echo "$_CHAT_RESP" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['choices'][0]['message'].get('content',''))" 2>/dev/null || true)
+    if [ -n "$_CHAT_CONTENT" ] && [ "$_CHAT_CONTENT" != "None" ]; then
+        pass "C11: OpenRouter chat round-trip OK (${#_CHAT_CONTENT} chars via MiniMax M2.5)"
+        echo "$_CHAT_CONTENT" > "$TEST_ROOT/artifacts/chat_response.txt"
+    else
+        warn "C11: OpenRouter responded but content empty or missing"
+        echo "$_CHAT_RESP" > "$TEST_ROOT/artifacts/chat_response_raw.txt"
+    fi
+
+    # If hermes CLI is available, test a real chat round-trip
+    if command -v hermes &>/dev/null; then
+        _HERMES_RESP=$(timeout 90 hermes chat -q "Say hello in one sentence" \
+            --provider openrouter -m "minimax/minimax-m2.5" --max-turns 1 -Q 2>&1 || true)
+        if echo "$_HERMES_RESP" | grep -qi "hello\|hi\|greet\|help"; then
+            pass "C11: Hermes CLI chat round-trip OK"
+            echo "$_HERMES_RESP" > "$TEST_ROOT/artifacts/hermes_chat_response.txt"
+        elif [ -n "$_HERMES_RESP" ]; then
+            warn "C11: Hermes CLI responded (${#_HERMES_RESP} chars) but no greeting detected"
+            echo "$_HERMES_RESP" > "$TEST_ROOT/artifacts/hermes_chat_response.txt"
+        else
+            warn "C11: Hermes CLI chat returned empty"
+        fi
+    else
+        skip_it "C11: Hermes CLI not available for chat test"
+    fi
+else
+    skip_it "C11: Chat round-trip (no OPENROUTER_API_KEY set)"
+fi
+echo ""
+
+# ════════════════════════════════════════════════════════════════════════════
 # SUMMARY & ARTIFACTS
-# ══════════════════════��════════════════════════════════���════════════════════
+# ════════════════════════════════════════════════════════════════════════════
 TOTAL=$((PASS + FAIL + WARN + SKIP))
 echo -e "${B}╔═══════════════════════════��═══════════════════════════════╗${Z}"
 echo -e "${B}║  Results: ${G}$PASS passed${Z}, ${R}$FAIL failed${Z}, ${Y}$WARN warnings${Z}, ${C}$SKIP skipped${Z} (of $TOTAL) ║"

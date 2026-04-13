@@ -216,6 +216,22 @@ def optimize_full():
 
 
 @app.command()
+def seed(force: bool = False):
+    """Seed brain with initial memories for fresh installs."""
+    from clarvis.brain.seed import seed_initial_memories
+
+    result = seed_initial_memories(force=force)
+    if result["status"] == "already_seeded":
+        print("Brain already seeded — use --force to re-seed.")
+        return
+    print(f"Seeded {result['seeded']}/{result['total']} memories "
+          f"({result['skipped']} skipped)")
+    if result.get("errors"):
+        for err in result["errors"]:
+            print(f"  WARNING: {err}")
+
+
+@app.command()
 def backfill():
     """Backfill missing graph nodes from edges."""
     b = _get_brain()

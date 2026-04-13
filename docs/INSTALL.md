@@ -22,6 +22,13 @@ Optional (depends on profile):
 - **Docker** — only for Docker profile
 - **systemd** — only for Full Stack profile (Linux)
 
+> **Ubuntu 24.04+ / PEP 668:** If pip refuses to install with "externally-managed-environment",
+> the installer handles this automatically. You can also use a virtualenv or pass
+> `--break-system-packages` manually.
+
+> **OpenClaw non-interactive onboarding:** Use `openclaw onboard --non-interactive --accept-risk`
+> for automated setups. The `--accept-risk` flag is required for headless installs.
+
 ## Quick Start
 
 ```bash
@@ -165,9 +172,11 @@ The installer (`scripts/install.sh`) runs these steps:
 3. **Cron preference** — Interactive prompt or `--cron <preset>` / `--no-cron` flag
 4. **Package installation** — Main package with appropriate extras
 5. **Environment setup** — Creates `.env` with profile tag, sets `CLARVIS_WORKSPACE`
-6. **Profile-specific setup** — Gateway config, Hermes install, Ollama check, cron install, or Docker build
-7. **Cron schedule** — Installs selected cron preset (if any)
-8. **First-run validation** — Automatic verification with PASS/WARN/FAIL summary
+6. **LLM check** — Detects existing API keys; LLM setup is your harness's job (OpenClaw/Hermes/Ollama)
+7. **Profile-specific setup** — Gateway config (with port check), Hermes install, Ollama check, cron install, or Docker build
+8. **Cron schedule** — Installs selected cron preset (if any)
+9. **Brain seed** — Populates initial memories so searches return useful content from day one
+10. **First-run validation** — Automatic verification with PASS/WARN/FAIL summary
 
 ### Non-interactive Mode
 
@@ -187,6 +196,9 @@ bash scripts/install.sh --profile standalone --dev         # Include ruff + pyte
 bash scripts/install.sh --profile standalone --cron minimal  # Add monitoring cron
 bash scripts/install.sh --profile fullstack --cron full    # Full cron schedule
 bash scripts/install.sh --profile fullstack --no-cron      # Fullstack without cron
+
+# LLM keys are configured through your harness or .env, not the installer
+# See your profile's .env template for available variables
 ```
 
 ## First-Run Validation
@@ -266,7 +278,7 @@ review or `crontab scripts/crontab.reference` if you prefer direct control.
 |---------|-----|
 | `ModuleNotFoundError: chromadb` | Install brain extras: `pip install -e ".[brain]"` |
 | `clarvis: command not found` | Ensure pip's bin dir is in PATH, or use `python3 -m clarvis` |
-| Brain health shows 0 memories | Normal on fresh install — memories accumulate through use |
+| Brain health shows 0 memories | Run `clarvis brain seed` to populate initial memories |
 | Pytest import errors | Run `bash scripts/infra/verify_install.sh` to diagnose |
 | Docker build fails | Ensure Docker daemon running, check disk space |
 | `python -m build` fails (PEP 668) | On PEP 668 systems (Ubuntu 24.04+), use `python -m build --no-isolation`. CI uses `actions/setup-python` where isolation works. |

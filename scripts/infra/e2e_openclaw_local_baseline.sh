@@ -340,6 +340,23 @@ else
 fi
 echo ""
 
+# ── Criterion 4b: OpenRouter chat round-trip (optional) ──────────────────
+_OR_KEY="${OPENROUTER_API_KEY:-}"
+if [ -n "$_OR_KEY" ]; then
+    echo -e "${B}[4b] Chat round-trip (OpenRouter)${Z}"
+    _CHAT_RESP=$(curl -sf --max-time 30 https://openrouter.ai/api/v1/chat/completions \
+        -H "Authorization: Bearer $_OR_KEY" \
+        -H "Content-Type: application/json" \
+        -d '{"model":"minimax/minimax-m2.5","messages":[{"role":"user","content":"Say hello in one sentence"}],"max_tokens":200}' 2>&1 || true)
+    _CHAT_CONTENT=$(echo "$_CHAT_RESP" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['choices'][0]['message'].get('content',''))" 2>/dev/null || true)
+    if [ -n "$_CHAT_CONTENT" ] && [ "$_CHAT_CONTENT" != "None" ]; then
+        pass "C4b: OpenRouter chat OK (${#_CHAT_CONTENT} chars via MiniMax M2.5)"
+    else
+        warn "C4b: OpenRouter chat returned empty content"
+    fi
+    echo ""
+fi
+
 # ── Criterion 6: No API key required for local-model path ──────────────
 echo -e "${B}[6/7] No API key required${Z}"
 

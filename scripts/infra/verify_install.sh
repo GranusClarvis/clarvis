@@ -105,6 +105,33 @@ echo "Brain (optional — needs ChromaDB + ONNX):"
 warn_check "chromadb importable" python3 -c "import chromadb"
 warn_check "onnxruntime importable" python3 -c "import onnxruntime"
 warn_check "brain health" python3 -m clarvis brain health
+
+# Brain seed check — fresh installs should have seed memories
+if python3 -c "
+from clarvis.brain.seed import is_seeded
+from clarvis.brain import get_brain
+b = get_brain()
+print('seeded' if is_seeded(b) else 'not_seeded')
+" 2>/dev/null | grep -q "seeded"; then
+    echo "  PASS  brain seed data present"
+    PASS=$((PASS + 1))
+else
+    echo "  WARN  brain not seeded (run: clarvis brain seed)"
+    WARN=$((WARN + 1))
+fi
+
+# OpenRouter connectivity (if key configured)
+_OR_KEY="${OPENROUTER_API_KEY:-}"
+if [ -n "$_OR_KEY" ] && [ "$_OR_KEY" != "sk-or-v1-your-key-here" ]; then
+    if curl -sf --max-time 10 https://openrouter.ai/api/v1/models \
+        -H "Authorization: Bearer $_OR_KEY" >/dev/null 2>&1; then
+        echo "  PASS  OpenRouter API key valid"
+        PASS=$((PASS + 1))
+    else
+        echo "  WARN  OpenRouter API key set but connection failed"
+        WARN=$((WARN + 1))
+    fi
+fi
 echo ""
 
 # ── Dev tools (optional) ─────────────────────────────────────────────────

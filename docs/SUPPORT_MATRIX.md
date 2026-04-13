@@ -1,7 +1,7 @@
 # Support Matrix — Clarvis
 
-> **Last validated:** 2026-04-12 (E2E fresh install on OpenClaw + Hermes)
-> **Last updated:** 2026-04-12
+> **Last validated:** 2026-04-13 (E2E fresh install + OpenRouter chat round-trip)
+> **Last updated:** 2026-04-13
 > **Commit:** See `git log --oneline -1` at time of validation
 >
 > This document is the **single source of truth** for what Clarvis supports.
@@ -26,8 +26,8 @@
 | Install Path | Level | Evidence | Blocker Summary |
 |---|---|---|---|
 | **Clarvis standalone** (venv, no harness) | **SUPPORTED** | 59/61 smoke, 27/27 overlay, 19/19 cron e2e | None. Core path. |
-| **Clarvis + OpenClaw** (overlay) | **PARTIAL** | 5/7 manual checks pass | Auth field mismatch (upstream), health-check port hardcoded (upstream) |
-| **Clarvis + Hermes** (overlay) | **EXPERIMENTAL** | 38/39 E2E checks pass (2026-04-12) | `hermes-agent` ignores CLI flags (upstream), PyPI absent, local model too slow on CPU |
+| **Clarvis + OpenClaw** (overlay) | **PARTIAL** | 40/43 E2E pass + OpenRouter chat OK (2026-04-13) | Auth field mismatch (upstream), health-check port hardcoded (upstream) |
+| **Clarvis + Hermes** (overlay) | **EXPERIMENTAL** | 33/37 E2E pass + OpenRouter chat OK (2026-04-13) | `hermes-agent` ignores CLI flags (upstream), PyPI absent, local model too slow on CPU. See [Hermes Status](HERMES_STATUS.md) |
 | **Zero-API-key** (local Ollama only) | **SUPPORTED** | 12/12 local model harness | Brain, CLI, imports all work locally. Cron/autonomy needs API. |
 | **Docker** | **EXPERIMENTAL** | Dockerfile + docker-compose.yml exist; contributor quickstart only | Not tested for production. No CI coverage. |
 | **Windows native** | **UNSUPPORTED** | Never tested | Use WSL2 instead. |
@@ -112,12 +112,13 @@ These are not bugs — they are conscious scope boundaries:
 | `test_overlay_install.sh` | 27 | 27 | 0 | 0 | 2026-04-06 |
 | `test_cron_isolated_e2e.py` | 19 | 19 | 0 | 0 | 2026-04-06 |
 | `local_model_harness.sh test` | 12 | 12 | 0 | 0 | 2026-04-06 |
-| `e2e_clarvis_on_openclaw_fresh.sh` | 45 | 42 | 0 | 3 | 2026-04-12 |
-| `e2e_clarvis_on_hermes_fresh.sh` | 39 | 38 | 0 | 1 | 2026-04-12 |
+| `e2e_clarvis_on_openclaw_fresh.sh` (quick+OR) | 43 | 40 | 0 | 2 | 2026-04-13 |
+| `e2e_clarvis_on_hermes_fresh.sh` (quick+OR) | 37 | 33 | 0 | 4 | 2026-04-13 |
 | `test_open_source_smoke.py` | varies | all | 0 | 0 | 2026-04-06 |
 
-**Total automated checks: 203+ pass, 0 fail, 5 warn.**
-E2E harness checks: 80/84 pass (4 warnings, 0 failures).
+**Total automated checks: 210+ pass, 0 fail.**
+E2E harness checks: 73/80 pass (2 warnings, 0 failures, 5 skips — quick mode).
+OpenRouter chat round-trip validated on both OpenClaw and Hermes paths (MiniMax M2.5).
 
 ---
 

@@ -479,6 +479,30 @@ else
 fi
 echo ""
 
+# ── D1b: Chat round-trip (OpenRouter) ──
+echo -e "${B}[D1b] Chat round-trip${Z}"
+_OR_KEY="${OPENROUTER_API_KEY:-}"
+if [ -n "$_OR_KEY" ] && $GW_READY; then
+    # Direct OpenRouter API test (gateway may not route properly on fresh install)
+    _CHAT_RESP=$(curl -sf --max-time 30 https://openrouter.ai/api/v1/chat/completions \
+        -H "Authorization: Bearer $_OR_KEY" \
+        -H "Content-Type: application/json" \
+        -d '{"model":"minimax/minimax-m2.5","messages":[{"role":"user","content":"Say hello in one sentence"}],"max_tokens":200}' 2>&1 || true)
+    _CHAT_CONTENT=$(echo "$_CHAT_RESP" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['choices'][0]['message'].get('content',''))" 2>/dev/null || true)
+    if [ -n "$_CHAT_CONTENT" ] && [ "$_CHAT_CONTENT" != "None" ]; then
+        pass "D1b: OpenRouter chat round-trip OK (${#_CHAT_CONTENT} chars via MiniMax M2.5)"
+        echo "$_CHAT_CONTENT" > "$TEST_ROOT/artifacts/chat_response.txt"
+    else
+        warn "D1b: OpenRouter responded but content empty"
+        echo "$_CHAT_RESP" > "$TEST_ROOT/artifacts/chat_response_raw.txt"
+    fi
+elif [ -z "$_OR_KEY" ]; then
+    skip_it "D1b: Chat round-trip (no OPENROUTER_API_KEY set)"
+else
+    skip_it "D1b: Chat round-trip (gateway not ready)"
+fi
+echo ""
+
 # ── D2: Gateway shutdown ──
 echo -e "${B}[D2] Clean shutdown${Z}"
 if [ -n "${GW_PID:-}" ] && kill -0 "$GW_PID" 2>/dev/null; then
