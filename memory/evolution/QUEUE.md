@@ -12,6 +12,9 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 ## P1 — This Week
 
 ### Phi Recovery — Intra-Collection Density (weakest Phi sub-component: 0.38)
+- [x] [REFLECTION 2026-04-13] Review task_selector.py scoring weights — 2026-04-14 done: added socratic/conceptual/lida/obligation/cognitive-load to AGI_KEYWORDS, density/intra/graph-edge to INTEGRATION_KEYWORDS
+- [ ] [REFLECTION 2026-04-13] Simplify or merge overlapping scripts — 163 scripts audited 2026-04-14: candidates for merge include retrieval_benchmark+retrieval_quality+retrieval_experiment (brain_mem/), prediction_resolver+prediction_review (cognition/), meta_gradient_rl+parameter_evolution (evolution/). Needs dedicated session.
+- [ ] [REFLECTION 2026-04-13] Deep self-analysis: What capability gap is most limiting? Design an experiment to address it
 - [ ] [PHI_INTRA_DENSITY_BOOST] Boost intra-collection density by running targeted auto_link within each collection — identify the 3 collections with lowest internal edge density, then create semantically valid intra-collection edges using pairwise similarity above 0.75 threshold. Measure: intra_collection_density component must rise from 0.38 toward 0.50+. Verify with `python3 -m clarvis brain health`.
 
 ### Reasoning Chain Depth (capability score: 0.80, Phase 4.2 gap)
@@ -55,6 +58,8 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 ## Partial Items (tracked, not actively worked)
 
 ### External Challenges
+
+- [x] [EXTERNAL_CHALLENGE:reasoning-depth-03] Implement Socratic self-questioning for reasoning chains — 2026-04-14 done: 6 template-based Socratic probes + weakness detection in add_step(), 12 tests pass
 
 
 

@@ -52,12 +52,15 @@ AGI_KEYWORDS = [
     "agi", "consciousness", "attention", "working memory", "self model",
     "reasoning", "phi", "neural", "meta-cognition", "awareness", "gwt",
     "spotlight", "global workspace", "prediction", "calibration",
+    "socratic", "conceptual", "framework", "obligation", "cognitive load",
+    "lida", "codelet", "coalition", "workspace broadcast",
 ]
 
 # Keywords that signal integration work (connecting existing components)
 INTEGRATION_KEYWORDS = [
     "wire", "integrate", "connect", "hook", "persistent", "feedback loop",
     "into cron", "into daily", "run daily", "automat",
+    "density", "intra", "graph edge", "cross-collection",
 ]
 
 # Keywords that signal architectural or strategic work (non-Python improvements)
