@@ -8,16 +8,12 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 
 
 ### Today's Priorities (2026-04-14)
-- [x] **PRIORITY 1: [PHI_INTRA_DENSITY_BOOST]** Boost intra-collection density — 1,127 edges added across learnings/memories/episodes/identity/goals/context/autonomous-learning (2026-04-14). Total intra_similar edges now 19,309.
-- [x] **PRIORITY 2: [REFLECTION 2026-04-13] Script merge** — Audited 2026-04-14: no function overlap found between merge candidates. retrieval_quality.py is already a bridge (18 lines). Only retrieval_benchmark.py is actively called (cron_evening.sh). Others (retrieval_experiment, prediction_resolver/review, meta_gradient_rl, parameter_evolution) are dormant — no active shell callers. Low-value merge; recommend deletion audit instead.
 - [ ] **PRIORITY 3: [REFLECTION 2026-04-13] Capability gap experiment** — Deep self-analysis: identify most limiting capability gap, design targeted experiment.
 
 ## P1 — This Week
 
 ### Phi Recovery — Intra-Collection Density (weakest Phi sub-component: 0.38)
-- [x] [REFLECTION 2026-04-13] Simplify or merge overlapping scripts — audited 2026-04-14: no function overlap. Most candidates are dormant (no active callers). See P0 Script merge item for details.
 - [ ] [REFLECTION 2026-04-13] Deep self-analysis: What capability gap is most limiting? Design an experiment to address it
-- [x] [PHI_INTRA_DENSITY_BOOST] Boost intra-collection density — done 2026-04-14 via intra_density_boost.py (threshold=0.6, cap=500/collection). 1,127 new edges added.
 
 ### Reasoning Chain Depth (capability score: 0.80, Phase 4.2 gap)
 
@@ -61,7 +57,6 @@ _Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
 
 ### External Challenges
 
-- [x] [EXTERNAL_CHALLENGE:reasoning-depth-01] Multi-step logical deduction: CSP solver with AC-3 + backtracking implemented (2026-04-14). 3 puzzles (easy/3, medium/7, hard/12 constraints), 19 tests pass. Files: scripts/reasoning/csp_solver.py, tests/test_csp_solver.py
 
 
 

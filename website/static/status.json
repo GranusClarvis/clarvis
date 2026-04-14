@@ -4,47 +4,47 @@
     "pending_mode": null
   },
   "queue": {
-    "pending": 23,
+    "pending": 3,
     "in_progress": 0,
-    "done": 8
+    "done": 0
   },
   "benchmarks": {
     "clr": {
-      "clr": 0.844,
+      "clr": 0.848,
       "baseline_clr": 0.19,
-      "value_add": 0.654,
+      "value_add": 0.658,
       "gate_pass": true,
       "dimensions": {
-        "memory_quality": 0.842,
-        "retrieval_precision": 0.882,
-        "prompt_context": 0.764,
+        "memory_quality": 0.885,
+        "retrieval_precision": 0.873,
+        "prompt_context": 0.772,
         "task_success": 0.835,
-        "autonomy": 0.86,
-        "efficiency": 0.985,
-        "integration_dynamics": 0.838
+        "autonomy": 0.835,
+        "efficiency": 0.987,
+        "integration_dynamics": 0.834
       },
-      "timestamp": "2026-04-13T05:45:41.175947+00:00"
+      "timestamp": "2026-04-14T05:45:34.330231+00:00"
     },
     "pi": {
-      "pi": 0.9744,
+      "pi": 0.9926,
       "dimensions": 15,
-      "timestamp": "2026-04-13T05:45:02.144092+00:00"
+      "timestamp": "2026-04-14T05:45:02.094275+00:00"
     }
   },
   "phi": {
-    "current": 0.62,
-    "timestamp": "2026-04-12T20:08:56.642919+00:00"
+    "current": 0.6276,
+    "timestamp": "2026-04-13T18:00:03.446821+00:00"
   },
-  "bloat_score": 0.2,
+  "bloat_score": 0.0,
   "brain": {
-    "total_memories": 3045,
+    "total_memories": 2938,
     "collections": 10
   },
   "episodes": {
-    "success_rate": 0.938,
-    "total": 403,
+    "success_rate": 0.937,
+    "total": 411,
     "breakdown": {
-      "success": 378,
+      "success": 385,
       "soft_failure": 0,
       "failure": 11,
       "timeout": 10
@@ -53,25 +53,25 @@
   "uptime_since": "2026-02-18 12:20:55",
   "recent_completions": [
     {
-      "tag": "RUNTIME_AUDIT_FINDINGS_REVIEW",
+      "tag": "SPINE_PROXY_REPLACEMENT",
       "status": "success"
     },
     {
-      "tag": "RUNTIME_HARDENING_PLAN",
+      "tag": "SPINE_HOOK_DEPS_MIGRATE",
       "status": "success"
     },
     {
-      "tag": "HEARTBEAT_GATE_WIRING_IN_AUTONOMOUS",
+      "tag": "QUEUE_AUTO_ARCHIVE",
       "status": "success"
     },
     {
-      "tag": "CLAUDE_MD_PATH_DRIFT_CLEANUP",
+      "tag": "CRON_CANONICAL_ENTRYPOINTS",
       "status": "success"
     },
     {
-      "tag": "SIDECAR_PRUNING_SCHEDULE",
+      "tag": "OSR_GIT_HISTORY_SCRUB",
       "status": "success"
     }
   ],
-  "updated_at": "2026-04-13T05:50:03.466594+00:00"
+  "updated_at": "2026-04-14T05:50:02.944501+00:00"
 }
