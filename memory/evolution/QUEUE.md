@@ -9,8 +9,7 @@ _Caps: P0 ≤ 10, P1 ≤ 15. Triage before adding. See docs/PROJECT_LANES.md for
 
 ### Critical Pipeline Fixes
 
-- [ ] **[FIX_REFLECTION_4_MISSING_SCRIPTS]** `cron_reflection.sh` lines 71/74/77-78/87 call 4 scripts deleted during spine migration: `memory_consolidation.py`, `hebbian_memory.py`, `synaptic_memory.py`, `episodic_memory.py`. The 21:00 reflection pipeline silently skips 4 of 8 steps every night. Create thin wrappers delegating to `clarvis.brain` spine equivalents, or remove dead `run_step` calls and document the reduced pipeline.
-- [ ] **[FIX_POSTFLIGHT_BARE_IMPORTS]** `heartbeat_postflight.py` lines 86/91/96 do bare imports (`evolution_loop`, `extract_steps`, `benchmark_brief`) that all fail silently. Three capabilities disabled on every heartbeat: evolution loop integration, procedural step extraction, inline benchmarking. Replace with `clarvis._script_loader.load()` per project convention.
+- [x] **[FIX_POSTFLIGHT_BARE_IMPORTS]** _(2026-04-15)_ Fixed 8 bare imports in `heartbeat_postflight.py` → `_load_script()`. All now resolve: evolution_loop, extract_steps, benchmark_brief + 5 bonus (performance_benchmark, performance_gate, latency_budget, world_models, meta_gradient_rl).
 
 ### Execution Governance (added 2026-04-15 — prevents SWO-style drift)
 
@@ -25,10 +24,8 @@ _Caps: P0 ≤ 10, P1 ≤ 15. Triage before adding. See docs/PROJECT_LANES.md for
 
 _SWO tasks tracked here. When project lane is active, these get priority. See also: memory/evolution/SWO_TRACKER.md_
 
-- [ ] **[SANCTUARY_ACTIVE_COMPANION_API]** Add endpoints/loaders for: eligible owned Star Skrumpeys, selecting active companion, fetching sanctuary state, and switching active companion while preserving per-wallet+per-Skrumpey progress.
-- [ ] **[SANCTUARY_BOOTSTRAP_STATE]** First-time Sanctuary bootstrap path: initialize a companion profile from owned Star metadata and create sane default state/journal/room placeholders.
-- [ ] **[SANCTUARY_TEST_FIXTURES]** Create SWO fixtures/seeds for wallet ownership, companion state, switching, and unauthorized-access cases so future PRs have stable tests.
-- [ ] **[SANCTUARY_SUBSITE_SHELL]** Build `/sanctuary` route shell with holder gating for interactables, public-view mode for the world layer, and navigation entry from existing SWO surfaces.
+- [x] **[SANCTUARY_TEST_FIXTURES]** _(2026-04-15)_ Created `lib/sanctuary/__tests__/fixtures.ts` (shared db factory, wallets, tokens) + `sanctuary.test.ts` (18 tests: ownership, state, switching, unauthorized access). All 32 sanctuary tests pass.
+- [x] **[SANCTUARY_SUBSITE_SHELL]** _(2026-04-15)_ Built `/sanctuary` route: `page.tsx` + `SanctuaryContent.tsx` with AccessGate holder gating, public world map view, companion panel, journal panel. Added nav links in Header.tsx (desktop + mobile). Types clean, 101 tests pass.
 - [ ] **[SANCTUARY_COMPANION_PANEL]** V1 companion dashboard: active Skrumpey, name, level, bond, mood, traits shell, current activity, journal snippet, and quick actions.
 
 ### Clarvis Maintenance — Keep Alive

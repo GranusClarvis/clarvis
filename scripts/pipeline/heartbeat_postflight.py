@@ -83,43 +83,43 @@ except ImportError:
     classify_task = None
 
 try:
-    from evolution_loop import EvolutionLoop
-except ImportError:
+    EvolutionLoop = _load_script("evolution_loop", "evolution").EvolutionLoop
+except (ImportError, Exception):
     EvolutionLoop = None
 
 try:
-    from extract_steps import extract_steps
-except ImportError:
+    extract_steps = _load_script("extract_steps", "tools").extract_steps
+except (ImportError, Exception):
     extract_steps = None
 
 try:
-    from benchmark_brief import record as benchmark_record
-except ImportError:
+    benchmark_record = _load_script("benchmark_brief", "metrics").record
+except (ImportError, Exception):
     benchmark_record = None
 
 try:
-    from performance_benchmark import run_heartbeat_check as perf_heartbeat_check
-except ImportError:
+    perf_heartbeat_check = _load_script("performance_benchmark", "metrics").run_heartbeat_check
+except (ImportError, Exception):
     perf_heartbeat_check = None
 
 try:
-    from performance_gate import run_gate as perf_gate_run
-except ImportError:
+    perf_gate_run = _load_script("performance_gate", "metrics").run_gate
+except (ImportError, Exception):
     perf_gate_run = None
 
 try:
-    from latency_budget import quick_check as latency_quick_check
-except ImportError:
+    latency_quick_check = _load_script("latency_budget", "metrics").quick_check
+except (ImportError, Exception):
     latency_quick_check = None
 
 try:
-    from world_models import HierarchicalWorldModel
-except ImportError:
+    HierarchicalWorldModel = _load_script("world_models", "cognition").HierarchicalWorldModel
+except (ImportError, Exception):
     HierarchicalWorldModel = None
 
 try:
-    from meta_gradient_rl import adapt as meta_gradient_adapt
-except ImportError:
+    meta_gradient_adapt = _load_script("meta_gradient_rl", "evolution").adapt
+except (ImportError, Exception):
     meta_gradient_adapt = None
 
 try:
