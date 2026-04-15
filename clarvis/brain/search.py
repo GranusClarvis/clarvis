@@ -93,7 +93,11 @@ def _run_hook_with_timeout(fn, args, timeout_s):
             _record_hook_result(fn, False)
             future.cancel()
             return False
-        except Exception:
+        except Exception as exc:
+            from clarvis.brain.hooks import HookDisabledError
+            if isinstance(exc, HookDisabledError):
+                _log.debug("Hook %s intentionally disabled", _hook_id(fn))
+                return False
             _log.debug("Hook %s failed", _hook_id(fn), exc_info=True)
             _record_hook_result(fn, False)
             return False

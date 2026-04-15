@@ -16,6 +16,10 @@ import time
 _log = logging.getLogger("clarvis.brain.hooks")
 
 
+class HookDisabledError(Exception):
+    """Raised when a hook is intentionally disabled (not a real failure)."""
+
+
 def _make_actr_scorer():
     """Create an ACT-R scorer hook: fn(results) -> mutates with _actr_score.
 
@@ -28,7 +32,7 @@ def _make_actr_scorer():
 
     def scorer(results):
         if os.environ.get("CLARVIS_ACTR_RECALL") != "1":
-            raise RuntimeError("ACTR scoring disabled (set CLARVIS_ACTR_RECALL=1)")
+            raise HookDisabledError("ACTR scoring disabled (set CLARVIS_ACTR_RECALL=1)")
         for r in results:
             boost = r["metadata"].get("_attention_boost", 0)
             r["_actr_score"] = actr_score(r) + boost * 0.15

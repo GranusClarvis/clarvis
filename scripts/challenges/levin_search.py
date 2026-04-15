@@ -273,7 +273,7 @@ def levin_search(
             for inp, expected_out in spec.items():
                 er = execute(program, inp, max_steps=step_budget)
                 total_exec_steps += er.steps
-                if er.output != expected_out:
+                if not er.halted or er.output != expected_out:
                     matches = False
                     break
 
@@ -334,12 +334,12 @@ def levin_search_phased(
             program = list(combo)
 
             touches_r1 = False
-            for instr in program:
+            for idx, instr in enumerate(program):
                 if instr.op in output_affecting_ops and instr.arg1 == 1:
                     touches_r1 = True
                     break
                 if instr.op == Op.LOOP:
-                    body_start = program.index(instr) + 1
+                    body_start = idx + 1
                     body_end = body_start + instr.arg2
                     for bi in program[body_start:body_end]:
                         if bi.op in output_affecting_ops and bi.arg1 == 1:
@@ -365,7 +365,7 @@ def levin_search_phased(
             for inp, expected_out in spec.items():
                 er = execute(program, inp, max_steps=step_budget)
                 result.total_steps += er.steps
-                if er.output != expected_out:
+                if not er.halted or er.output != expected_out:
                     matches = False
                     break
 

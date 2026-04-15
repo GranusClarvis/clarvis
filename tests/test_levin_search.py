@@ -155,6 +155,47 @@ class TestLevinSearch:
         assert not r.found
 
 
+class TestBugFixes:
+    def test_loop_body_index_with_duplicate_instructions(self):
+        """Regression: program.index(instr) found wrong position with repeats."""
+        loop_r0 = Instr(Op.LOOP, 0, 1)
+        inc_r1 = Instr(Op.INC, 1)
+        program = [loop_r0, inc_r1, loop_r0, inc_r1]
+        r = execute(program, 3)
+        assert r.output == 6
+
+    def test_phased_prune_does_not_misindex_loop_body(self):
+        """Regression: levin_search_phased used program.index() for LOOP body scan."""
+        spec = {0: 0, 1: 1, 2: 2, 3: 3}
+        r = levin_search_phased(spec, max_program_len=3)
+        assert r.found
+        for inp, exp in spec.items():
+            er = execute(r.program, inp)
+            assert er.halted or er.output == exp
+
+    def test_nonhalt_not_accepted_as_match(self):
+        """Regression: timed-out programs with correct r1 were accepted.
+
+        A program that produces the right output but doesn't halt (step limit
+        exhausted) must NOT be accepted by the search.
+        """
+        prog = [Instr(Op.INC, 1), Instr(Op.JNZ, 1, 0)]
+        r = execute(prog, 0, max_steps=20)
+        assert not r.halted
+        assert r.output == 1
+
+        # Verify directly: execute with tight budget produces correct output but not halted
+        prog2 = [Instr(Op.CPY, 2, 0), Instr(Op.LOOP, 2, 1), Instr(Op.INC, 1)]
+        r2 = execute(prog2, 10000, max_steps=5)
+        assert not r2.halted
+        # The search must require halted=True, so a non-halting match is rejected
+        spec = {10000: r2.output}
+        result = levin_search(spec, max_program_len=1, total_budget=5)
+        if result.found:
+            er = execute(result.program, 10000, max_steps=10000)
+            assert er.halted, "Accepted program must actually halt"
+
+
 class TestParseSpec:
     def test_simple(self):
         assert parse_spec("0:0,1:2,2:4") == {0: 0, 1: 2, 2: 4}

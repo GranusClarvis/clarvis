@@ -144,15 +144,27 @@ def save_snapshot(stats: dict):
 
 
 def load_previous_snapshot() -> dict | None:
-    """Load the previous health snapshot for regression comparison."""
+    """Load the second-to-last snapshot (for cmd_run, which appends a new one first)."""
     if not SNAPSHOT_FILE.exists():
         return None
     lines = SNAPSHOT_FILE.read_text().strip().split("\n")
-    # Get second-to-last (the one before current run)
     if len(lines) < 2:
         return None
     try:
         return json.loads(lines[-2])
+    except (json.JSONDecodeError, IndexError):
+        return None
+
+
+def load_latest_snapshot() -> dict | None:
+    """Load the most recent health snapshot."""
+    if not SNAPSHOT_FILE.exists():
+        return None
+    lines = SNAPSHOT_FILE.read_text().strip().split("\n")
+    if not lines:
+        return None
+    try:
+        return json.loads(lines[-1])
     except (json.JSONDecodeError, IndexError):
         return None
 
@@ -273,7 +285,21 @@ def cmd_check():
         print("ERROR: Could not get brain stats")
         sys.exit(1)
 
-    previous = load_previous_snapshot()
+    previous = load_latest_snapshot()
+
+    # Skip regression comparison if the snapshot is stale (>3 days old).
+    # Stale snapshots cause false positives after legitimate dedup/cleanup.
+    if previous:
+        snap_ts = previous.get("timestamp", "")
+        try:
+            snap_dt = datetime.fromisoformat(snap_ts)
+            age_days = (datetime.now(timezone.utc) - snap_dt).total_seconds() / 86400
+            if age_days > 3:
+                _log(f"Snapshot is {age_days:.0f}d old — skipping regression comparison")
+                previous = None
+        except (ValueError, TypeError):
+            previous = None
+
     issues = check_regressions(stats, previous)
 
     if issues:

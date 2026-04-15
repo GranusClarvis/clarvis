@@ -49,8 +49,8 @@ BACKOFF_CAP = 2
 # Tasks stuck in "running" for longer than this are auto-recovered to "failed"
 STUCK_RUNNING_HOURS = 3
 
-# Tag extraction pattern: [TAG] at start of task text
-_TAG_RE = re.compile(r"^\[([A-Z][A-Za-z0-9_:.-]+)\]")
+# Tag extraction pattern: [TAG] at start of task text, optionally wrapped in markdown bold (**[TAG]**)
+_TAG_RE = re.compile(r"^(?:\*\*)?(\[[A-Z][A-Za-z0-9_:.-]+\])(?:\*\*)?")
 
 
 def _now_iso() -> str:
@@ -58,9 +58,12 @@ def _now_iso() -> str:
 
 
 def _extract_tag(text: str) -> Optional[str]:
-    """Extract [TAG] from task text. Returns None if no tag."""
+    """Extract [TAG] from task text. Handles optional **bold** markdown wrapping."""
     m = _TAG_RE.match(text.strip())
-    return m.group(1) if m else None
+    if m:
+        bracket_group = m.group(1)
+        return bracket_group[1:-1]  # strip surrounding []
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -565,12 +568,12 @@ class QueueEngine:
             content = f.read()
 
         tag_pattern = re.compile(
-            rf"^(- \[) \] (\[{re.escape(tag)}\].*)$", re.MULTILINE
+            rf"^(- \[) \] (\*\*)?(\[{re.escape(tag)}\].*)$", re.MULTILINE
         )
         suffix = f" ({annotation})" if annotation else ""
 
         new_content, count = tag_pattern.subn(
-            rf"\g<1>x] \g<2>{suffix}", content, count=1
+            rf"\g<1>x] \g<2>\g<3>{suffix}", content, count=1
         )
         if count > 0:
             with open(self.queue_file, "w") as f:
@@ -584,7 +587,7 @@ class QueueEngine:
             content = f.read()
 
         tag_pattern = re.compile(
-            rf"^(- \[ \] \[{re.escape(tag)}\].*)$", re.MULTILINE
+            rf"^(- \[ \] (?:\*\*)?\[{re.escape(tag)}\].*)$", re.MULTILINE
         )
         reason_short = reason[:100] if reason else "max retries"
         annotation = f" *(deferred: {reason_short})*"

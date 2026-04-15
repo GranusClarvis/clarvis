@@ -47,6 +47,12 @@ DELIVERY_LOCK_FILE = os.path.join(_WS, "DELIVERY_LOCK.md")
 QUALITY_GATE_FILE = os.path.join(_WS, "data", "memory_quality_gate.json")
 EPISODES_FILE = os.path.join(_WS, "data", "episodes.json")
 
+# Project Lane — operator-directed project boost (see docs/PROJECT_LANES.md).
+# When CLARVIS_PROJECT_LANE is set (e.g. "SWO"), tasks containing [PROJECT:<lane>]
+# get a +0.3 scoring boost so project work wins over internal experimentation.
+_PROJECT_LANE = os.environ.get("CLARVIS_PROJECT_LANE", "").strip()
+PROJECT_LANE_BOOST = 0.3
+
 # Keywords that signal AGI/consciousness relevance (high-value work)
 AGI_KEYWORDS = [
     "agi", "consciousness", "attention", "working memory", "self model",
@@ -90,6 +96,19 @@ CONTEXT_IMPROVEMENT_KEYWORDS = [
     "section", "ranking", "top-3", "preflight", "brain",
 ]
 CONTEXT_RELEVANCE_THRESHOLD = 0.60
+
+
+def _project_lane_boost(task_text, subsection=""):
+    """Return PROJECT_LANE_BOOST if the task matches the active project lane, else 0."""
+    if not _PROJECT_LANE:
+        return 0.0
+    lane_upper = _PROJECT_LANE.upper()
+    combined = (task_text + " " + subsection).upper()
+    if f"PROJECT:{lane_upper}" in combined or f"({lane_upper})" in combined:
+        return PROJECT_LANE_BOOST
+    if f"[{lane_upper}]" in combined:
+        return PROJECT_LANE_BOOST
+    return 0.0
 
 
 def _compute_novelty(task_text, recent_tasks, min_words=3):
@@ -147,6 +166,7 @@ def parse_tasks(queue_file=QUEUE_FILE):
     """Parse unchecked tasks from QUEUE.md with their priority section."""
     tasks = []
     current_section = "P2"
+    current_subsection = ""
 
     with open(queue_file, 'r') as f:
         for line_num, line in enumerate(f, 1):
@@ -155,12 +175,18 @@ def parse_tasks(queue_file=QUEUE_FILE):
             # Detect section headers
             if '## P0' in line:
                 current_section = "P0"
+                current_subsection = ""
             elif '## P1' in line:
                 current_section = "P1"
+                current_subsection = ""
             elif '## P2' in line:
                 current_section = "P2"
+                current_subsection = ""
             elif '## Completed' in line:
                 current_section = "completed"
+                current_subsection = ""
+            elif stripped.startswith("###"):
+                current_subsection = stripped
 
             # Match unchecked tasks
             match = re.match(r'^- \[ \] (.+)$', stripped)
@@ -169,6 +195,7 @@ def parse_tasks(queue_file=QUEUE_FILE):
                     "line_num": line_num,
                     "text": match.group(1),
                     "section": current_section,
+                    "subsection": current_subsection,
                 })
 
     return tasks
@@ -310,7 +337,8 @@ def _compute_relevance(text_lower, context, recent_text):
 
 
 def _compute_task_boosts(text, text_lower, theme_words, spotlight_texts,
-                         failure_docs, recent_completed, cr_boost_active, codelet_result):
+                         failure_docs, recent_completed, cr_boost_active, codelet_result,
+                         subsection=""):
     """Compute all boost/penalty factors for a task. Returns dict of factors."""
     agi_boost = _keyword_boost(text_lower, AGI_KEYWORDS, 0.3)
     integration_boost = _keyword_boost(text_lower, INTEGRATION_KEYWORDS, 0.2)
@@ -349,14 +377,16 @@ def _compute_task_boosts(text, text_lower, theme_words, spotlight_texts,
     if cr_boost_active:
         cr_boost = _keyword_boost(text_lower, CONTEXT_IMPROVEMENT_KEYWORDS, 0.35)
 
-    total_boost = agi_boost + integration_boost + architectural_boost - failure_penalty + improve_bias + cr_boost
+    project_boost = _project_lane_boost(text, subsection)
+    total_boost = agi_boost + integration_boost + architectural_boost - failure_penalty + improve_bias + cr_boost + project_boost
 
     return {
         "agi_boost": agi_boost, "integration_boost": integration_boost,
         "architectural_boost": architectural_boost, "spotlight_align": spotlight_align,
         "somatic_bias": somatic_bias, "somatic_signal": somatic_signal,
         "codelet_bias": codelet_bias, "failure_penalty": failure_penalty,
-        "novelty": novelty, "improve_bias": improve_bias, "total_boost": total_boost,
+        "novelty": novelty, "improve_bias": improve_bias,
+        "project_lane_boost": project_boost, "total_boost": total_boost,
     }
 
 
@@ -365,12 +395,14 @@ def _score_single_task(task, context, recent_text, theme_words, spotlight_texts,
     """Score a single task on all 9 factors. Returns scored dict."""
     text = task["text"]
     section = task["section"]
+    subsection = task.get("subsection", "")
     text_lower = text.lower()
 
     section_importance = {"P0": 0.9, "P1": 0.6, "P2": 0.3}.get(section, 0.3)
     ctx_rel, rec_rel, relevance = _compute_relevance(text_lower, context, recent_text)
     b = _compute_task_boosts(text, text_lower, theme_words, spotlight_texts,
-                             failure_docs, recent_completed, cr_boost_active, codelet_result)
+                             failure_docs, recent_completed, cr_boost_active, codelet_result,
+                             subsection=subsection)
 
     effective_relevance = min(1.0, relevance + b["spotlight_align"] * 0.15)
     item = attention.submit(
@@ -407,6 +439,7 @@ def _score_single_task(task, context, recent_text, theme_words, spotlight_texts,
             "codelet_bias": round(b["codelet_bias"], 4),
             "failure_penalty": round(b["failure_penalty"], 3),
             "improve_bias": round(b["improve_bias"], 3),
+            "project_lane_boost": round(b["project_lane_boost"], 3),
             "novelty": round(b["novelty"], 4),
             "base_salience": round(salience, 4),
         }

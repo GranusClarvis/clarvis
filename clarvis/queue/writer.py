@@ -102,11 +102,17 @@ def _sync_sidecar_complete(tag: str) -> None:
 
 
 def _extract_tag_from_text(text: str) -> Optional[str]:
-    """Extract [TAG] from task text for sidecar sync."""
-    m = re.match(r"\[([A-Z][A-Za-z0-9_:.-]+)\]", text.strip())
-    return m.group(1) if m else None
+    """Extract [TAG] from task text for sidecar sync. Handles **bold** wrapping."""
+    m = re.match(r"(?:\*\*)?(\[([A-Z][A-Za-z0-9_:.-]+)\])(?:\*\*)?", text.strip())
+    return m.group(2) if m else None
 MAX_AUTO_TASKS_PER_DAY = 5
 SIMILARITY_THRESHOLD = 0.5  # Word overlap ratio to consider a duplicate
+
+# Priority section caps per docs/PROJECT_LANES.md Rule 4.
+# Auto-injected tasks are refused when a section exceeds its cap.
+# Manual/user sources bypass caps.
+P0_CAP = 10
+P1_CAP = 15
 
 # Patterns that identify structural/line-count refactor tasks.
 # Auto-generated tasks matching these are blocked unless from a safe source.
@@ -119,6 +125,25 @@ _STRUCTURAL_PATTERNS = re.compile(
     r'(?:reduce\s+func\w*\s+to\s+(?:target\s+)?line)|'
     r'(?:DECOMPOSE_LONG_FUNCTIONS)'
 )
+
+
+def _count_unchecked_by_section(content: str) -> dict[str, int]:
+    """Count unchecked tasks per priority section in QUEUE.md."""
+    counts: dict[str, int] = {"P0": 0, "P1": 0, "P2": 0}
+    current = "P2"
+    for line in content.split("\n"):
+        stripped = line.strip()
+        if stripped.startswith("## P0"):
+            current = "P0"
+        elif stripped.startswith("## P1"):
+            current = "P1"
+        elif stripped.startswith("## P2"):
+            current = "P2"
+        elif stripped.startswith("## "):
+            current = None
+        elif current and re.match(r"^- \[ \] ", stripped):
+            counts[current] = counts.get(current, 0) + 1
+    return counts
 
 
 def _is_structural_refactor_task(task: str) -> bool:
@@ -337,6 +362,16 @@ def add_tasks(tasks: list, priority: str = "P0", source: str = "unknown") -> lis
 
         # Read existing queue items + archive for deduplication
         content = _read_queue()
+
+        # Priority cap enforcement (Rule 4, docs/PROJECT_LANES.md).
+        # Auto-injected tasks are refused when the target section exceeds its cap.
+        # User/manual sources bypass caps so the operator can always add tasks.
+        if source.lower() not in _USER_SOURCES:
+            section_counts = _count_unchecked_by_section(content)
+            cap = {"P0": P0_CAP, "P1": P1_CAP}.get(priority)
+            if cap is not None and section_counts.get(priority, 0) >= cap:
+                return []
+
         existing_items = _extract_all_items(content)
 
         # Also check archive to prevent re-adding completed/researched topics
@@ -520,12 +555,12 @@ def mark_task_complete(task_text: str, annotation: str, queue_file: str = QUEUE_
         lines = f.readlines()
 
     task_prefix = task_text[:60]
-    m = re.match(r"\[([^\]]+)\]", task_text.strip())
-    tag = m.group(1) if m else None
+    m = re.match(r"(?:\*\*)?(\[([^\]]+)\])", task_text.strip())
+    tag = m.group(2) if m else None
 
     # Pass 1: Find unchecked items and mark them
     if tag:
-        tag_re = re.compile(rf"^\- \[ \] \[{re.escape(tag)}\](?=\s|$)")
+        tag_re = re.compile(rf"^\- \[ \] (?:\*\*)?\[{re.escape(tag)}\](?=\s|$|\*)")
         for i, line in enumerate(lines):
             if tag_re.search(line):
                 lines[i] = line.replace("- [ ] ", "- [x] ", 1).rstrip() + f" ({annotation})\n"
@@ -546,7 +581,7 @@ def mark_task_complete(task_text: str, annotation: str, queue_file: str = QUEUE_
 
     # Pass 2: Check if already marked [x] (Claude Code may have marked it during its run)
     if tag:
-        done_re = re.compile(rf"^\- \[x\] \[{re.escape(tag)}\](?=\s|$)")
+        done_re = re.compile(rf"^\- \[x\] (?:\*\*)?\[{re.escape(tag)}\](?=\s|$|\*)")
         for line in lines:
             if done_re.search(line):
                 _sync_sidecar_complete(tag)
@@ -660,7 +695,7 @@ def mark_task_in_progress(tag: str) -> bool:
 
         for i, line in enumerate(lines):
             # Match unchecked task with the given tag
-            m = re.match(rf'^- \[\s*\] .*\[{re.escape(tag)}\]', line.strip())
+            m = re.match(rf'^- \[\s*\] .*(?:\*\*)?\[{re.escape(tag)}\]', line.strip())
             if m:
                 found = True
                 # Change [ ] to [~]
@@ -741,3 +776,103 @@ def tasks_added_today() -> int:
     if state["date"] != today:
         return 0
     return state["tasks_added_today"]
+
+
+def enforce_stale_demotions(stale_hours: int = 48) -> list[str]:
+    """Demote in-progress ([~]) tasks that have been stalled for >stale_hours.
+
+    Per docs/PROJECT_LANES.md Rule 5: tasks in-progress for 48h without a
+    commit, PR, or artifact get demoted to P2 with a [STALLED] tag.
+
+    Returns list of demoted task descriptions.
+    """
+    lock_path = QUEUE_FILE + ".lock"
+    os.makedirs(os.path.dirname(lock_path), exist_ok=True)
+    lock_fd = open(lock_path, "w")
+    try:
+        _flock_with_timeout(lock_fd)
+        content = _read_queue()
+        if not content:
+            return []
+
+        lines = content.split("\n")
+        now = datetime.now(timezone.utc)
+        demoted = []
+        in_progress_lines = []
+        p2_insert_idx = None
+
+        current_section = "P2"
+        for i, line in enumerate(lines):
+            if "## P0" in line:
+                current_section = "P0"
+            elif "## P1" in line:
+                current_section = "P1"
+            elif "## P2" in line:
+                current_section = "P2"
+                p2_insert_idx = i + 1
+
+            if current_section in ("P0", "P1") and re.match(r"^- \[~\] ", line.strip()):
+                date_match = re.search(r"(\d{4}-\d{2}-\d{2})", line)
+                if date_match:
+                    try:
+                        task_date = datetime.strptime(date_match.group(1), "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                        age_hours = (now - task_date).total_seconds() / 3600
+                        if age_hours >= stale_hours:
+                            in_progress_lines.append(i)
+                    except ValueError:
+                        pass
+
+        if not in_progress_lines or p2_insert_idx is None:
+            return []
+
+        for idx in reversed(in_progress_lines):
+            original = lines.pop(idx)
+            task_text = re.sub(r"^- \[~\] ", "", original.strip())
+            if "[STALLED]" not in task_text:
+                task_text = f"[STALLED] {task_text}"
+            demoted_line = f"- [ ] {task_text}"
+            demoted.append(task_text)
+            if p2_insert_idx > idx:
+                p2_insert_idx -= 1
+            lines.insert(p2_insert_idx, demoted_line)
+
+        if demoted:
+            with open(QUEUE_FILE, "w") as f:
+                f.write("\n".join(lines))
+
+        return demoted
+
+    finally:
+        fcntl.flock(lock_fd, fcntl.LOCK_UN)
+        lock_fd.close()
+
+
+def queue_health() -> dict:
+    """Return queue health metrics for governance monitoring.
+
+    Returns dict with section counts, cap status, and stale task count.
+    """
+    content = _read_queue()
+    counts = _count_unchecked_by_section(content)
+    stale = 0
+    now = datetime.now(timezone.utc)
+    for line in content.split("\n"):
+        if re.match(r"^- \[~\] ", line.strip()):
+            date_match = re.search(r"(\d{4}-\d{2}-\d{2})", line)
+            if date_match:
+                try:
+                    task_date = datetime.strptime(date_match.group(1), "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                    if (now - task_date).total_seconds() / 3600 >= 48:
+                        stale += 1
+                except ValueError:
+                    pass
+    return {
+        "p0_count": counts.get("P0", 0),
+        "p1_count": counts.get("P1", 0),
+        "p2_count": counts.get("P2", 0),
+        "p0_cap": P0_CAP,
+        "p1_cap": P1_CAP,
+        "p0_over_cap": counts.get("P0", 0) > P0_CAP,
+        "p1_over_cap": counts.get("P1", 0) > P1_CAP,
+        "stale_in_progress": stale,
+    }

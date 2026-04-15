@@ -172,6 +172,27 @@ else
     ((FAILURES++)) || true
 fi
 
+# --- Queue governance health check ---
+QH=$(python3 -c "
+from clarvis.queue import queue_health
+h = queue_health()
+parts = []
+if h['p0_over_cap']:
+    parts.append(f\"P0 over cap ({h['p0_count']}/{h['p0_cap']})\")
+if h['p1_over_cap']:
+    parts.append(f\"P1 over cap ({h['p1_count']}/{h['p1_cap']})\")
+if h['stale_in_progress'] > 0:
+    parts.append(f\"{h['stale_in_progress']} stale in-progress\")
+if parts:
+    print('WARN    ' + ', '.join(parts))
+else:
+    print(f\"OK      P0={h['p0_count']}/{h['p0_cap']} P1={h['p1_count']}/{h['p1_cap']} stale={h['stale_in_progress']}\")
+" 2>/dev/null || echo "MISSED  queue_health — import failed")
+REPORT="${REPORT}${QH/WARN/WARN   }\n"
+if echo "$QH" | grep -q "^WARN"; then
+    ((FAILURES++)) || true
+fi
+
 # --- Output report ---
 TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%S)
 echo "[$TIMESTAMP] Watchdog check: $FAILURES failures" >> "$WATCHDOG_LOG"

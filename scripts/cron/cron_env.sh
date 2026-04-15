@@ -50,6 +50,13 @@ export OMP_NUM_THREADS=4
 export CLARVIS_GRAPH_BACKEND="sqlite"
 export CLARVIS_GRAPH_DUAL_WRITE="0"
 
+# Project Lane — operator-directed project override.
+# When set, tasks tagged [PROJECT:<value>] get +0.3 scoring boost in task_selector,
+# ensuring operator-assigned project work wins over internal experimentation.
+# Set to empty string or unset to disable. See docs/PROJECT_LANES.md.
+# Examples: "SWO", "SANCTUARY", ""
+export CLARVIS_PROJECT_LANE="${CLARVIS_PROJECT_LANE:-SWO}"
+
 # Shared helper: get current weakest performance metric (fast, reads cached file)
 get_weakest_metric() {
     python3 "$CLARVIS_WORKSPACE/scripts/metrics/performance_benchmark.py" weakest 2>/dev/null || echo "unknown"

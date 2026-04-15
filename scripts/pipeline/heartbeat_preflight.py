@@ -92,6 +92,11 @@ except ImportError:
     queue_engine = None
 
 try:
+    from clarvis.queue import enforce_stale_demotions
+except ImportError:
+    enforce_stale_demotions = None
+
+try:
     from world_models import predict_task_outcome as wm_predict
 except ImportError:
     wm_predict = None
@@ -486,6 +491,15 @@ def _preflight_select_task(result, codelet_result, t0):
     Returns (next_task, task_section, best_salience) or sets result status and returns None.
     """
     t2 = time.monotonic()
+
+    if enforce_stale_demotions:
+        try:
+            demoted = enforce_stale_demotions()
+            if demoted:
+                log(f"Governance: demoted {len(demoted)} stale task(s) to P2")
+        except Exception as e:
+            log(f"Stale demotion check failed (non-fatal): {e}")
+
     candidates, early_status = _gather_candidates(codelet_result)
 
     if early_status:
