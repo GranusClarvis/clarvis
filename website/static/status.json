@@ -4,7 +4,7 @@
     "pending_mode": null
   },
   "queue": {
-    "pending": 3,
+    "pending": 67,
     "in_progress": 0,
     "done": 0
   },
@@ -15,20 +15,20 @@
       "value_add": 0.658,
       "gate_pass": true,
       "dimensions": {
-        "memory_quality": 0.885,
-        "retrieval_precision": 0.873,
-        "prompt_context": 0.772,
+        "memory_quality": 0.877,
+        "retrieval_precision": 0.868,
+        "prompt_context": 0.788,
         "task_success": 0.835,
-        "autonomy": 0.835,
+        "autonomy": 0.818,
         "efficiency": 0.987,
-        "integration_dynamics": 0.834
+        "integration_dynamics": 0.842
       },
-      "timestamp": "2026-04-14T05:45:34.330231+00:00"
+      "timestamp": "2026-04-15T05:45:32.378123+00:00"
     },
     "pi": {
       "pi": 0.9926,
       "dimensions": 15,
-      "timestamp": "2026-04-14T05:45:02.094275+00:00"
+      "timestamp": "2026-04-15T05:45:02.329155+00:00"
     }
   },
   "phi": {
@@ -37,14 +37,14 @@
   },
   "bloat_score": 0.0,
   "brain": {
-    "total_memories": 2938,
+    "total_memories": 2950,
     "collections": 10
   },
   "episodes": {
     "success_rate": 0.937,
-    "total": 411,
+    "total": 414,
     "breakdown": {
-      "success": 385,
+      "success": 388,
       "soft_failure": 0,
       "failure": 11,
       "timeout": 10
@@ -73,5 +73,5 @@
       "status": "success"
     }
   ],
-  "updated_at": "2026-04-14T05:50:02.944501+00:00"
+  "updated_at": "2026-04-15T05:50:03.499493+00:00"
 }

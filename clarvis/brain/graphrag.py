@@ -55,7 +55,7 @@ def _load_graph():
     Uses SQLite export when CLARVIS_GRAPH_BACKEND=sqlite and graph.db exists,
     otherwise falls back to reading relationships.json directly.
     """
-    backend = os.environ.get("CLARVIS_GRAPH_BACKEND", "json")
+    backend = os.environ.get("CLARVIS_GRAPH_BACKEND", "sqlite")
     sqlite_path = DATA_DIR / "graph.db"
     if backend == "sqlite" and sqlite_path.exists():
         from clarvis.brain.graph_store_sqlite import GraphStoreSQLite

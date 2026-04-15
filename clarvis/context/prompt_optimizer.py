@@ -76,7 +76,11 @@ VARIANT_DIMENSIONS = {
 DEFAULT_COMBO = {
     "approach": "analyze_first",
     "success_framing": "criteria_check",
-    "failure_guard": "strong",
+    "failure_guard": "none",
+}
+
+ALPHA_PRIORS = {
+    "failure_guard": {"strong": 1.0, "light": 1.0, "none": 5.0},
 }
 
 MIN_OBSERVATIONS = 3
@@ -97,9 +101,11 @@ def _load_stats():
 
     stats = {}
     for dim, variants in VARIANT_DIMENSIONS.items():
+        dim_priors = ALPHA_PRIORS.get(dim, {})
         stats[dim] = {}
         for v_name in variants:
-            stats[dim][v_name] = {"alpha": 1.0, "beta": 1.0, "n": 0,
+            alpha_prior = dim_priors.get(v_name, 1.0)
+            stats[dim][v_name] = {"alpha": alpha_prior, "beta": 1.0, "n": 0,
                                   "total_duration": 0, "successes": 0, "failures": 0,
                                   "total_quality": 0.0, "quality_count": 0,
                                   "by_task_type": {}}
