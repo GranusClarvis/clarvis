@@ -122,4 +122,5 @@ docs/status.json
 # --- Transient state ---
 *.lock
 .pytest_cache/
+.hypothesis/
 .pi/

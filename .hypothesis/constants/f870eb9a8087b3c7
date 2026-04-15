@@ -1,4 +1,0 @@
-# file: /home/agent/.openclaw/workspace/clarvis/cli_cost.py
-# hypothesis_version: 6.151.13
-
-[5.0, '\nBy model:', '\nBy source:', '#', ', ', 'CLARVIS_WORKSPACE', 'by_model', 'by_source', 'cost', 'costs.jsonl', 'data', 'day', 'week']

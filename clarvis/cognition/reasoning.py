@@ -1079,12 +1079,17 @@ class ClarvisReasoner:
         if quality_count > 0:
             evidence.append(f"{quality_count} quality chains (log scale) (+{quality_score:.2f})")
 
-        # Chain depth — rewards chains that go beyond the 2-step minimum
-        deep_count = deep_sessions + deep_legacy
-        depth_score = min(0.15, deep_count / max(quality_count, 1) * 0.15)
+        # Chain depth — score sessions separately from legacy (legacy chains never get deeper)
+        # Use session-only depth ratio when sessions exist, since legacy chains are frozen
+        if good_sessions > 0:
+            depth_ratio = deep_sessions / good_sessions
+            depth_score = min(0.15, depth_ratio * 0.15)
+        else:
+            deep_count = deep_sessions + deep_legacy
+            depth_ratio = deep_count / max(quality_count, 1)
+            depth_score = min(0.15, depth_ratio * 0.15)
         score += depth_score
-        if deep_count > 0:
-            evidence.append(f"{deep_count}/{quality_count} deep chains (4+ steps) (+{depth_score:.2f})")
+        evidence.append(f"{deep_sessions}/{good_sessions} deep sessions (4+ steps) (+{depth_score:.2f})")
 
         # Today's quality ratio (0-0.3) — require at least 3 chains for full score
         if today_count > 0:

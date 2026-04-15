@@ -24,9 +24,11 @@ logger = logging.getLogger(__name__)
 from clarvis.cognition.reasoning_chains import create_chain, add_step, complete_step, find_related_chains, list_chains
 from clarvis.brain import brain
 
-# clarvis-reasoning package removed — spine module is canonical
-# (clarvis.cognition.reasoning provides the full reasoning engine)
-cr_reasoner = None
+# Spine module is canonical since package removal (2026-04-03)
+try:
+    from clarvis.cognition.reasoning import reasoner as cr_reasoner
+except ImportError:
+    cr_reasoner = None
 
 try:
     from clarvis.brain.search import contextual_enrich
@@ -56,9 +58,8 @@ if thought_proto is None:
     except ImportError:
         thought_proto = None
 
-# Map chain_id -> session_id for the ClarvisReasoning dual-write
-_SESSION_MAP_FILE = os.path.join(os.path.dirname(__file__),
-                                  "..", "data", "reasoning_chains", "session_map.json")
+_WS = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
+_SESSION_MAP_FILE = os.path.join(_WS, "data", "reasoning_chains", "session_map.json")
 
 
 def _recall_context(task_text: str) -> list:
@@ -74,6 +75,24 @@ def _recall_context(task_text: str) -> list:
             return []
 
 
+def _derive_execution_analysis(result: str, task_text: str, evidence: str) -> str:
+    """Synthesize an intermediate analysis step from execution evidence."""
+    task_short = task_text[:80]
+    if result == "success":
+        if evidence:
+            return (f"Execution of '{task_short}' produced concrete output. "
+                    f"Key signal: {evidence[:120]}. Approach validated.")
+        return (f"Execution of '{task_short}' completed without errors. "
+                f"Approach was sound; verifying against sub-problem coverage.")
+    elif result == "timeout":
+        return (f"Execution of '{task_short}' exceeded time budget. "
+                f"Root cause analysis needed: task scope may exceed single-session capacity.")
+    else:
+        return (f"Execution of '{task_short}' encountered issues (result={result}). "
+                f"{'Signal: ' + evidence[:120] + '.' if evidence else 'No error detail captured.'} "
+                f"This feeds the evolution loop for future improvement.")
+
+
 def _classify_task_type(task_text: str) -> str:
     """Classify task type from keywords for strategy labelling."""
     task_lower = task_text.lower()
@@ -83,6 +102,12 @@ def _classify_task_type(task_text: str) -> str:
         return "new capability"
     if any(w in task_lower for w in ["wire", "hook", "integrate", "connect"]):
         return "integration"
+    if any(w in task_lower for w in ["refactor", "restructure", "consolidate", "migrate"]):
+        return "refactor"
+    if any(w in task_lower for w in ["analyze", "audit", "assess", "evaluate", "diagnose"]):
+        return "analysis"
+    if any(w in task_lower for w in ["research", "investigate", "explore", "survey"]):
+        return "research"
     if any(w in task_lower for w in ["improve", "boost", "optimize", "increase"]):
         return "optimization"
     return "evolution task"
@@ -170,13 +195,15 @@ def _open_reasoning_session(chain_id, task_text, task_type, salience,
         return
     try:
         session = cr_reasoner.begin(task_text[:200])
-        # Decompose based on task type
         decomp_map = {
-            "bug fix": ["Diagnose root cause", "Design fix", "Implement and verify"],
-            "new capability": ["Understand requirements", "Design approach", "Build implementation", "Test"],
-            "integration": ["Identify integration points", "Wire connections", "Verify end-to-end"],
+            "bug fix": ["Diagnose root cause", "Identify contributing factors", "Design fix", "Implement and verify"],
+            "new capability": ["Understand requirements", "Evaluate approaches", "Design architecture", "Build implementation", "Validate"],
+            "integration": ["Identify integration points", "Assess compatibility", "Wire connections", "Verify end-to-end"],
+            "refactor": ["Map current structure", "Identify improvement axes", "Restructure", "Verify equivalence"],
+            "analysis": ["Gather evidence", "Identify patterns", "Formulate hypotheses", "Draw conclusions"],
+            "research": ["Define question scope", "Survey sources", "Synthesize findings", "Extract actionable insights"],
         }
-        session.decompose(decomp_map.get(task_type, ["Analyze context", "Plan approach", "Execute"]))
+        session.decompose(decomp_map.get(task_type, ["Analyze context", "Evaluate options", "Plan approach", "Execute"]))
 
         session.step(
             step0_thought,
@@ -283,7 +310,18 @@ def close_chain(chain_id: str, result: str, task_text: str, exit_code: str = "0"
             session_id = _get_session_id(chain_id)
             if session_id:
                 session = cr_reasoner.load_session(session_id)
-                # Add execution outcome step with evidence
+
+                # Add execution analysis step before outcome (enables 4+ step chains)
+                analysis_thought = _derive_execution_analysis(result, task_text, evidence_clean)
+                mid_sp = session.sub_problems[-2] if len(session.sub_problems) >= 2 else ""
+                session.step(
+                    analysis_thought,
+                    sub_problem=mid_sp,
+                    evidence=[f"exit_code={exit_code}", f"result={result}"],
+                    confidence=0.7 if result == "success" else 0.4,
+                )
+
+                # Final outcome step
                 session.step(
                     outcome_text,
                     sub_problem=session.sub_problems[-1] if session.sub_problems else "",

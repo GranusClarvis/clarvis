@@ -1,4 +1,0 @@
-# file: /home/agent/.openclaw/workspace/clarvis/research_config.py
-# hypothesis_version: 6.151.13
-
-['--path', '--reason', '--who', '.tmp', 'CLARVIS_WORKSPACE', 'OFF', 'ON', '__main__', 'cli', 'config_file', 'data', 'disable', 'effective', 'enable', 'paths', 'queue_auto_fill', 'raw', 'reason', 'research_auto_fill', 'research_config.json', 'status', 'system', 'unknown', 'updated_at', 'updated_by', 'w']

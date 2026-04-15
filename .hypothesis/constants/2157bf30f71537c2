@@ -1,4 +1,0 @@
-# file: /home/agent/.openclaw/workspace/clarvis/brain/bloom_filter.py
-# hypothesis_version: 6.151.13
-
-[0.005, 0.8, 1.5, 500, 5000, 10000, '-', '.meta.json', '1', '<QQ', 'CLARVIS_WORKSPACE', '_', '_BitArray', '_array', '_size', 'bits', 'bloom', 'checks', 'clarvisdb', 'data', 'definite_new', 'documents', 'estimated_fp_rate', 'expected', 'fill_ratio', 'fp_rate', 'hashes', 'item_count', 'items', 'k', 'm', 'maybe_duplicate', 'rb', 'replace', 'saved_at', 'skip_rate', 'target_fp_rate', 'utf-8', 'w', 'wb']

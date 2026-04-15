@@ -1,4 +1,0 @@
-# file: /home/agent/.openclaw/workspace/clarvis/orch/scoreboard.py
-# hypothesis_version: 6.151.13
-
-[0.0, 100, '/opt/clarvis-agents', '?', 'CLARVIS_WORKSPACE', 'a', 'active', 'agent', 'agent.json', 'agents', 'avg_latency_s', 'avg_seconds', 'composite_score', 'configs', 'cost', 'data', 'date', 'est_cost_usd', 'estimated_cost_usd', 'idle', 'latency', 'n/a', 'name', 'orchestrator', 'pr_rate', 'pr_success', 'project_agent', 'prs_created', 'scoreboard.jsonl', 'scripts', 'status', 'succeeded', 'success_rate', 'task_summaries', 'total_prs', 'total_successes', 'total_tasks', '~/agents']

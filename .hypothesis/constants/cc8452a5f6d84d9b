@@ -1,4 +1,0 @@
-# file: /home/agent/.openclaw/workspace/clarvis/brain/memory_evolution.py
-# hypothesis_version: 6.151.13
-
-[0.0, 0.02, 0.05, 0.3, 0.5, 1.0, '%Y%m%d_%H%M%S', "[a-z']+", '[a-z0-9]+', 'access_count', "aren't", 'broken', "can't", 'cannot', 'collection', 'contradiction', 'contradiction_check', 'contradiction_signal', 'created_at', 'deprecated', "didn't", 'distance', 'document', 'documents', "doesn't", "don't", 'error', 'errors', 'evolution_reason', 'evolved', 'evolved_from', 'evolved_into', 'false', "hadn't", "hasn't", "haven't", 'id', 'ids', 'importance', 'incorrect', "isn't", 'last_accessed', 'last_recall_success', 'metadatas', 'never', 'new_id', 'no', 'not', 'obsolete', 'old_id', 'reason', 'recall_success', 'removed', 'replaced', "shouldn't", 'source', 'superseded_at', 'superseded_by', 'tags', 'text', 'text_overlap', 'updated', "wasn't", "weren't", "won't", 'wrong']

@@ -1,4 +1,0 @@
-# file: /home/agent/.openclaw/workspace/clarvis/metrics/trajectory.py
-# hypothesis_version: 6.151.13
-
-[0.0, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.62, 0.65, 0.7, 0.75, 0.8, 1.0, 10.0, 300, 900, 1800, '1.0', 'AMBIGUOUS', 'CLARVIS_WORKSPACE', 'CORRECT', 'Component means:', 'ERROR', 'Gate: FAIL', 'Gate: PASS', 'INCORRECT', 'NO_RESULTS', 'Outcomes:', 'SKIPPED', 'a', 'avg_components', 'avg_score', 'completion', 'data', 'duration_s', 'efficiency', 'episodes', 'failure', 'failures', 'gate', 'history.jsonl', 'min_avg_score', 'min_episodes', 'min_pass_rate', 'no trajectory data', 'outcomes', 'pass', 'pass_rate', 'retrieval_alignment', 'retrieval_verdict', 'schema_version', 'success', 'task_outcome', 'timeout', 'tool_call_count', 'trajectory_eval', 'trajectory_score', 'trajectory_shape', 'ts', 'unknown', 'validation']

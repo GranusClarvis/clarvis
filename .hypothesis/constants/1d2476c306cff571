@@ -1,4 +1,0 @@
-# file: /home/agent/.openclaw/workspace/clarvis/brain/retrieval_gate.py
-# hypothesis_version: 6.151.13
-
-['BACKUP', 'CLEANUP', 'CRON_CLEANUP', 'DEEP_RETRIEVAL', 'EVOLUTION_ANALYSIS', 'GRAPH_CHECKPOINT', 'GRAPH_COMPACTION', 'GRAPH_VACUUM', 'HEALTH', 'INTRA_DENSITY_BOOST', 'LIGHT_RETRIEVAL', 'NO_RETRIEVAL', 'RECALL_GRAPH_CONTEXT', 'RESEARCH_DISCOVERY', 'SEMANTIC_BRIDGE', 'STRATEGIC_AUDIT', 'Usage:', 'WATCHDOG', '\\[([A-Z0-9_]+)\\]', '__main__', 'autonomous-learning', 'clarvis-context', 'clarvis-episodes', 'clarvis-goals', 'clarvis-identity', 'clarvis-learnings', 'clarvis-memories', 'clarvis-preferences', 'clarvis-procedures', 'classify', 'collections', 'dry-run', 'empty task', 'graph_expand', 'n_results', 'query_budget', 'reason', 'task', 'tier']

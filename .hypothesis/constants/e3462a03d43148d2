@@ -1,4 +1,0 @@
-# file: /home/agent/.openclaw/workspace/scripts/cognition/reasoning_chain_hook.py
-# hypothesis_version: 6.151.13
-
-[0.2, 0.3, 0.4, 0.5, 0.6, 0.85, 0.9, -300, -100, 100, 200, 300, '..', '0', '0.0', '?', 'Analyze context', 'Build implementation', 'Design approach', 'Design fix', 'Diagnose root cause', 'Execute', 'Execution failed', 'Execution succeeded', 'Implement and verify', 'P1', 'Plan approach', 'Test', 'Verify end-to-end', 'Wire connections', '__main__', 'add', 'boost', 'brain_mem', 'broken', 'bug', 'bug fix', 'build', 'close', 'connect', 'create', 'data', 'document', 'error', 'evolution task', 'fix', 'hook', 'implement', 'improve', 'increase', 'integrate', 'integration', 'low', 'medium', 'new capability', 'open', 'optimization', 'optimize', 'reasoning_chain_hook', 'reasoning_chains', 'related', 'retrieval_experiment', 'session_map.json', 'steps', 'success', 'text', 'title', 'unknown', 'w', 'wire']

@@ -1,4 +1,0 @@
-# file: /home/agent/.openclaw/workspace/clarvis/brain/actr_activation.py
-# hypothesis_version: 6.151.13
-
-[-999.0, -20.0, -5.0, -3.0, -2.0, -1.0, 0.0, 1e-10, 0.001, 0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.5, 0.7, 0.9, 1.0, 1.6, 2.0, 3.0, 20.0, 60.0, 3600.0, -900, -100, 600, 1000, 1200, 1800, 2400, 3000, 3600, 5400, 7200, 86400, '+00:00', ',', 'Commands:', 'Z', '__main__', '_actr_activation', '_actr_score', 'access_count', 'access_times', 'activation', 'benchmark', 'collection', 'created_at', 'demo', 'distance', 'documents', 'id', 'ids', 'importance', 'last_accessed', 'metadata', 'metadatas', 'preview', 'tags', 'test']

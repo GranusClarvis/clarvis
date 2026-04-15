@@ -1,4 +1,0 @@
-# file: /home/agent/.openclaw/workspace/clarvis/brain/hooks.py
-# hypothesis_version: 6.151.13
-
-[0.05, 0.15, 0.3, 5.0, '1', 'C1', 'CLARVIS_ACTR_RECALL', '_actr_score', '_attention_boost', '_graphrag_community', '_graphrag_keywords', '_hooks_registered', 'actr_scorer', 'already_registered', 'archived', 'attention_booster', 'clarvis.brain.hooks', 'consolidation', 'content', 'document', 'duplicates_removed', 'graphrag_booster', 'hebbian', 'id', 'keywords', 'levels', 'metadata', 'node_community', 'noise_pruned', 'pruned', 'r', 'retrieval_quality', 'status', 'synaptic']

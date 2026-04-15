@@ -1,4 +1,0 @@
-# file: /home/agent/.openclaw/workspace/clarvis/compat/contracts.py
-# hypothesis_version: 6.151.13
-
-['all_passed', 'build_context', 'checks', 'get_brain', 'host', 'missing_brain_ops', 'missing_context_ops', 'notes', 'openclaw', 'pass', 'remember', 'search', 'search_memory', 'store_memory']

@@ -1,4 +1,0 @@
-# file: /home/agent/.openclaw/workspace/clarvis/cli_maintenance.py
-# hypothesis_version: 6.151.13
-
-['--dry-run', '--json', '--verbose', 'CLARVIS_WORKSPACE', 'Output raw JSON', 'Show skipped files', 'archive', 'audit', 'brain-hygiene', 'brain_hygiene', 'brain_mem', 'brief-benchmark', 'brief_benchmark', 'check', 'clean', 'cognition', 'data-lifecycle', 'data_lifecycle', 'deprecate', 'dream', 'dream_engine', 'dry-run', 'error', 'generate_status_json', 'goal-hygiene', 'goal_hygiene', 'graph-compaction', 'graph_compaction', 'hooks', 'infra', 'insights', 'metrics', 'rethink', 'run', 'sleep', 'snapshot', 'stats', 'status-json']

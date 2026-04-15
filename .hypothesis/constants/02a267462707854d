@@ -1,4 +1,0 @@
-# file: /home/agent/.openclaw/workspace/scripts/metrics/self_report.py
-# hypothesis_version: 6.151.13
-
-[0.6, 100, '%Y-%m-%d', '(\\d+)%', ':', 'CLARVIS_WORKSPACE', '__main__', 'clarvis-memories', 'collections', 'created_at', 'daily', 'date', 'document', 'goal_progress', 'goals', 'goals_history', 'graph_edges', 'last_run', 'memories', 'metadata', 'metrics', 'queue_completed', 'reflections', 'self-assessment', 'self-report', 'today_memories', 'total_memories', 'w', '—']

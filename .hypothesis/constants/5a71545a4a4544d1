@@ -1,4 +1,0 @@
-# file: /home/agent/.openclaw/workspace/clarvis/adapters/hermes.py
-# hypothesis_version: 6.151.13
-
-[0.8, '.hermes', 'HERMES_HOME', 'Hermes available', 'Hermes not found', 'brief', 'clarvis-memories', 'config.yaml', 'config_dir', 'config_exists', 'hermes', 'hermes_importable', 'memory_id', 'results', 'standard', 'tier']

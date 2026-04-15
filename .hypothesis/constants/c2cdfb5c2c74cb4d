@@ -1,4 +1,0 @@
-# file: /home/agent/.openclaw/workspace/clarvis/metrics/code_validation.py
-# hypothesis_version: 6.151.13
-
-[-3000, 100, '  ... (truncated)', '(\\d+)\\s+failed', '(\\d+)\\s+passed', '*', 'Multiple timeouts', 'Test failures', 'Unknown error', 'Validation issues:\n', 'alternative_approach', 'command not found', 'end_lineno', 'error_type', 'errors', 'escalate', 'give_up', 'has_errors', 'import', 'io', 'line', 'message', 'no such file', 'permission denied', 'r', 'reason', 'refinement', 'retry', 'runtime', 'same_approach', 'strategy', 'structure', 'summary', 'syntax', 'system', 'test', 'text', 'timeout', 'traceback', 'type', 'valid']

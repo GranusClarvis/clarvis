@@ -1,4 +1,0 @@
-# file: /home/agent/.openclaw/workspace/scripts/tools/extract_steps.py
-# hypothesis_version: 6.151.13
-
-['--file', '.', '[]', '\\s*;\\s*', '\\s+[—–]\\s+', '^test end.to.end$', '^write (the )?code$', '__main__']

@@ -1,4 +1,0 @@
-# file: /home/agent/.openclaw/workspace/clarvis/brain/constants.py
-# hypothesis_version: 6.151.13
-
-['CLARVIS_WORKSPACE', 'autonomous-learning', 'clarvis-context', 'clarvis-episodes', 'clarvis-goals', 'clarvis-identity', 'clarvis-learnings', 'clarvis-memories', 'clarvis-preferences', 'clarvis-procedures', 'clarvisdb', 'clarvisdb-local', 'data', 'graph.db', 'relationships.json', 'sqlite']

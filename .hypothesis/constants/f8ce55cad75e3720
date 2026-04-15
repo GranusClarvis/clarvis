@@ -1,4 +1,0 @@
-# file: /home/agent/.openclaw/workspace/clarvis/context/gc.py
-# hypothesis_version: 6.151.13
-
-[b'\n', 0.3, 100000, '%Y-%m-%d', '(\\d{4}-\\d{2}-\\d{2})', '*.log', '.gz', '2???-*.md', 'CLARVIS_WORKSPACE', 'QUEUE.md not found', '^- \\[ \\] ', '^- \\[x\\] (.+)$', 'a', 'archive', 'archive_event', 'archived', 'bytes_after', 'bytes_before', 'bytes_saved', 'context', 'date', 'error', 'files_gzipped', 'kept_completed', 'logs', 'logs_bytes_saved', 'logs_truncated', 'memory', 'memory/cron', 'pending', 'r', 'rb', 'total_bytes_saved', 'type', 'w', 'wb']

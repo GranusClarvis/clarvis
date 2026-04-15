@@ -1,4 +1,0 @@
-# file: /home/agent/.openclaw/workspace/clarvis/cli_metrics.py
-# hypothesis_version: 6.151.13
-
-[-0.01, 0.01, '#', '--oracle', '--quick', '--record', '--save/--no-save', '-q', '-r', 'Save results', 'clr', 'clr-benchmark', 'clr-trend', 'declining', 'improving', 'memory-audit', 'phi', 'pi', 'self-model', 'stable', 'timestamp', 'value_add']

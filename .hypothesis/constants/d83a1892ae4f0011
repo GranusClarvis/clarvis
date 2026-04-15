@@ -1,4 +1,0 @@
-# file: /home/agent/.openclaw/workspace/clarvis/cli_queue.py
-# hypothesis_version: 6.151.13
-
-[124, '## ', '## P0', '--duration', '--exit-code', '--priority', '--source', '-d', '-e', '-p', '-s', '?', 'CLARVIS_WORKSPACE', 'Duration in seconds', 'No P0 tasks pending.', 'No eligible tasks.', 'No queue file found.', 'P1', 'PASS', 'Process exit code', 'QUEUE.md', 'QUEUE_ARCHIVE.md', 'Source identifier', 'Unknown', '^- \\[ \\]', '^- \\[x\\]', 'cli', 'duration_s', 'end-external', 'engine-reconcile', 'engine-select', 'engine-stats', 'error', 'evolution', 'failure', 'failures', 'manual', 'memory', 'next', 'run-stats', 'runs', 'soak', 'start-external', 'success', 'timeout', 'verdict']

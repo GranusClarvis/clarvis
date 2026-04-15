@@ -1,4 +1,0 @@
-# file: /home/agent/.openclaw/workspace/clarvis/heartbeat/brain_bridge.py
-# hypothesis_version: 6.151.13
-
-[0.2, 0.3, 0.5, 0.7, 0.75, 0.8, 1.0, 1.1, -200, 100, 150, 160, '%Y-%m-%d %H:%M', 'CLARVIS_SESSION_ID', '[DREAM]', '[EPISODE]', '[LEARNING]', '[OUTCOME]', '[RESEARCH]', '[SYNTHESIS]', '_actr_score', '_contextual_document', 'actr_activation', 'actr_max', 'actr_mean', 'brain_timings', 'collection', 'context', 'distance', 'document', 'dream', 'episode', 'failure', 'goal', 'goals', 'goals_text', 'idle', 'knowledge', 'knowledge_hints', 'metadata', 'outcome', 'postflight', 'progress', 'raw_results', 'research', 'source', 'success', 'synthesis', 'tags', 'timeout', 'working_memory']

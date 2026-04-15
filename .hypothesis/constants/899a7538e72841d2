@@ -1,4 +1,0 @@
-# file: /home/agent/.openclaw/workspace/clarvis/memory/cognitive_workspace.py
-# hypothesis_version: 6.151.13
-
-[-0.05, -0.02, 0.0, 0.01, 0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.75, 1.0, 100, 120, 168, 600, 3600, '...', 'ACTIVE CONTEXT:', 'CLARVIS_WORKSPACE', 'DEGRADED', 'HEALTHY', 'WORKING CONTEXT:', '[a-z]{3,}', '\\s+', 'a', 'access_count', 'active', 'buffer_sizes', 'buffers', 'closed_items', 'cognitive_workspace', 'content', 'created_at', 'current_task', 'current_task_id', 'data', 'dormant', 'id', 'importance', 'issues', 'items', 'last_accessed', 'reactivated', 'relevance', 'reuse_count', 'reuse_hits', 'reuse_log.jsonl', 'reuse_rate', 'reuse_total', 'session_count', 'session_id', 'source', 'sources', 'spotlight', 'status', 'success', 'summary', 'task', 'task_context', 'task_history', 'task_history_len', 'task_id', 'task_outcome', 'tasks_used_in', 'tier', 'timestamp', 'total_items', 'unknown', 'updated_at', 'working', 'workspace_state.json']
