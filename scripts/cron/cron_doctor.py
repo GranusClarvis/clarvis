@@ -236,6 +236,13 @@ JOBS = {
         "max_age_hours": 170,
         "timeout": 600,
     },
+    "calibration_report": {
+        "script": "scripts/cron/cron_calibration_report.sh",
+        "log": "memory/cron/calibration_report.log",
+        "lock": "/tmp/clarvis_calibration_report.lock",
+        "max_age_hours": 170,
+        "timeout": 300,
+    },
     "goal_hygiene": {
         "script": None,
         "command": ["python3", "scripts/hooks/goal_hygiene.py", "clean"],
