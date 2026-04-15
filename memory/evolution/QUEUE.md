@@ -9,7 +9,6 @@ _Caps: P0 ≤ 10, P1 ≤ 15. Triage before adding. See docs/PROJECT_LANES.md for
 
 ### Critical Pipeline Fixes
 
-- [x] **[FIX_POSTFLIGHT_BARE_IMPORTS]** _(2026-04-15)_ Fixed 8 bare imports in `heartbeat_postflight.py` → `_load_script()`. All now resolve: evolution_loop, extract_steps, benchmark_brief + 5 bonus (performance_benchmark, performance_gate, latency_budget, world_models, meta_gradient_rl).
 
 ### Execution Governance (added 2026-04-15 — prevents SWO-style drift)
 
@@ -24,8 +23,6 @@ _Caps: P0 ≤ 10, P1 ≤ 15. Triage before adding. See docs/PROJECT_LANES.md for
 
 _SWO tasks tracked here. When project lane is active, these get priority. See also: memory/evolution/SWO_TRACKER.md_
 
-- [x] **[SANCTUARY_TEST_FIXTURES]** _(2026-04-15)_ Created `lib/sanctuary/__tests__/fixtures.ts` (shared db factory, wallets, tokens) + `sanctuary.test.ts` (18 tests: ownership, state, switching, unauthorized access). All 32 sanctuary tests pass.
-- [x] **[SANCTUARY_SUBSITE_SHELL]** _(2026-04-15)_ Built `/sanctuary` route: `page.tsx` + `SanctuaryContent.tsx` with AccessGate holder gating, public world map view, companion panel, journal panel. Added nav links in Header.tsx (desktop + mobile). Types clean, 101 tests pass.
 - [ ] **[SANCTUARY_COMPANION_PANEL]** V1 companion dashboard: active Skrumpey, name, level, bond, mood, traits shell, current activity, journal snippet, and quick actions.
 
 ### Clarvis Maintenance — Keep Alive
