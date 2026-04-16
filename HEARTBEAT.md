@@ -59,7 +59,7 @@ cat memory/cron/digest.md
 
 First, build enriched prompt:
 ```
-exec: python3 $CLARVIS_WORKSPACE/scripts/pipeline/prompt_builder.py build --task "Investigate this finding: [paste digest excerpt]" --tier standard
+exec: python3 $CLARVIS_WORKSPACE/scripts/tools/prompt_builder.py build --task "Investigate this finding: [paste digest excerpt]" --tier standard
 ```
 Then spawn Claude Code via ACP with the enriched prompt:
 ```
@@ -79,7 +79,7 @@ Read `memory/evolution/QUEUE.md`. Pick the highest priority uncompleted task.
 - **Small task (< 5 min)?** → Do it NOW. Mark done with date.
 - **Big task (> 5 min)?** → Spawn Claude Code via ACP:
   ```
-  Step 1: exec: python3 scripts/pipeline/prompt_builder.py build --task "[task description]" --tier standard
+  Step 1: exec: python3 scripts/tools/prompt_builder.py build --task "[task description]" --tier standard
   Step 2: sessions_spawn({runtime: "acp", agentId: "claude", task: "<enriched prompt>", thread: true})
   ```
   Or use `/spawn [task]` which routes through spawn_claude.sh with auto context injection.
@@ -106,7 +106,7 @@ Pick ONE per heartbeat:
 - Emails (gog): any urgent unread?
 - Calendar: anything in next 24h?
 - Git: any uncommitted changes in workspace?
-- Brain health: `python3 scripts/brain.py health` — check for anomalies
+- Brain health: `python3 -m clarvis brain health` — check for anomalies
 
 ### 7. Report
 - If you did real work: brief log to `memory/YYYY-MM-DD.md`
@@ -116,9 +116,9 @@ Pick ONE per heartbeat:
 ## Rules
 - ALWAYS read digest.md before acting — your subconscious may have already done the work
 - ALWAYS execute something from the evolution queue if items exist
-- Run `scripts/backup_daily.sh` BEFORE modifying your own core files (SOUL.md, AGENTS.md, BOOT.md)
+- Run `scripts/infra/backup_daily.sh` BEFORE modifying your own core files (SOUL.md, AGENTS.md, BOOT.md)
 - Small changes > big changes
-- If something breaks: `scripts/safe_update.sh --rollback`
+- If something breaks: `scripts/infra/safe_update.sh --rollback`
 - **Use Claude Code aggressively** — you're M2.5, Claude Code (Opus) is your deep thinking capability
 - Claude Code is your reasoning partner, not just a coding tool — spawn it to think, plan, analyze, debug, and build
 - When a problem needs more than quick pattern matching, spawn Claude Code and let it think deeply
@@ -131,13 +131,13 @@ Pick ONE per heartbeat:
 **If queue has < 3 pending tasks → IMMEDIATELY generate new ones.**
 - cron_autonomous.sh does this automatically when queue is empty
 - cron_evolution.sh (13:00 daily) checks and adds tasks if < 5 pending
-- cron_reflection.sh (21:00 daily) runs clarvis_reflection.py which generates tasks from lessons
+- cron_reflection.sh (21:00 daily) runs scripts/cognition/clarvis_reflection.py which generates tasks from lessons
 - During manual heartbeats: if queue < 3, spawn Claude Code to analyze gaps and add 3-5 tasks
 
 ### Idle Detection Rule
 **If no tasks were completed in the last 2 heartbeat cycles → do deep analysis.**
 Check `memory/cron/autonomous.log` — if last 2 entries are "No pending tasks" or "SKIP":
-1. Run `python3 scripts/clarvis_reflection.py` to force queue generation
+1. Run `python3 scripts/cognition/clarvis_reflection.py` to force queue generation
 2. If still empty, spawn Claude Code:
    ```bash
    cat > /tmp/claude_task.txt << 'ENDPROMPT'

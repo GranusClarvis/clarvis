@@ -23,14 +23,11 @@ _Caps: P0 ≤ 10, P1 ≤ 15. Triage before adding. See docs/PROJECT_LANES.md for
 
 _SWO tasks tracked here. When project lane is active, these get priority. See also: memory/evolution/SWO_TRACKER.md_
 
-- [x] **[SWO_ADMIN_NONCE_PERSIST]** (P1 from audit) SQLite-backed `admin_nonces` table + atomic `INSERT OR IGNORE` claim in `lib/adminAuth.ts`; 8 vitest cases incl. cross-instance replay. PR #180 (2026-04-16).
-- [x] **[SWO_CONTRACT_ARCHIVE]** (P2 from audit) Moved StarForge V1–V4 + Testing_casino to `contracts/archive/`; added `contracts/DEPLOYED.md` (version→address→network map + history) and `contracts/archive/README.md`. PR #181 (2026-04-16).
 
 
 ### Clarvis Maintenance — Keep Alive
 
-- [x] **[CLAUDE_SPAWN_LOCK_VISIBILITY]** Added pre-acquire lock check in `spawn_claude.sh`: on conflict prints `DEFERRED`/`QUEUED` status with `NOT_STARTED` to stdout+log and exits 75 (EX_TEMPFAIL) instead of silent exit 0. Smoke-tested with simulated held lock. (2026-04-16)
-- [ ] **[FIX_STALE_PATHS_HEARTBEAT_AGENTS]** Fix stale script paths in `HEARTBEAT.md` and `AGENTS.md`.
+- [x] **[FIX_STALE_PATHS_HEARTBEAT_AGENTS]** Fixed 14 stale paths: HEARTBEAT.md (prompt_builder x2, brain.py→`-m clarvis brain`, backup_daily, safe_update, clarvis_reflection x2) and AGENTS.md (directive_engine, obligation_tracker, prompt_builder x3, cost_tracker, cost_api→cost_tracker api, budget_alert, cron_autonomous x2). All targets verified to exist. (2026-04-16)
 - [ ] **[LLM_CONTEXT_REVIEW]** Raise DYCP_DEFAULT_SUPPRESS_CONTAINMENT_OVERRIDE from 0.10 to 0.20 for gwt_broadcast specifically.
 - [ ] **[REMOVE_NANO_BANANA_LEAKED_KEY]** _(security)_ Remove orphaned `nano-banana-pro` skill + leaked Google Cloud API key from `openclaw.json`.
 
@@ -145,6 +142,13 @@ _SWO tasks tracked here. When project lane is active, these get priority. See al
 - [ ] **[FIX_ORCHESTRATOR_KEYERROR_QUERY]** `cron_orchestrator.sh` triggers `KeyError: 'query'` 18x on 2026-03-25 — task objects passed to the orchestrator lack a `query` field after a schema change. Audit the task dict contract between `task_selector.py` and the orchestrator, add the missing field or a safe `.get()` fallback.
 - [ ] **[FIX_REPORT_EVENING_MISSING_RE_IMPORT]** `report_evening` cron heredoc hits `NameError: 're' is not defined` — the `import re` statement is unreachable in a conditional code path. Move the import to module top-level or add it inside the offending function.
 - [ ] **[FIX_OPENCLAW_TOPIC_STALE_PATHS]** `openclaw.json` topics 2 and 5 reference pre-reorg script paths (`scripts/cost_tracker.py`, `scripts/brain.py`, `scripts/prompt_builder.py`). Topic 2's stale `prompt_builder.py` path silently breaks ACP context injection for every spawned task. Update all systemPrompt paths to current `scripts/infra/`, `scripts/brain_mem/`, `scripts/tools/` locations.
+
+### 2026-04-16 evolution scan
+
+- [ ] **[PHI_PAIR_BRIDGE_PRIORITIZATION]** Identify the 5 collection pairs with BOTH lowest semantic similarity AND lowest edge count, then queue targeted bridge memories that cite concepts from both sides. Current bulk_cross_link treats all pairs equally; starved pairs (e.g. `clarvis-identity` ↔ `autonomous-learning`) need hand-authored bridges, not random sampling. Directly targets Phi=0.619 (weakest metric).
+- [ ] **[TEST_PHI_METRIC_REGRESSION_HARNESS]** Add `tests/test_phi_metric.py` that snapshots current phi subcomponent scores (intra_density, cross_connectivity, semantic_cross_collection, reachability) and fails if any regress >5%. Dual-purpose: bootstraps test capability (currently 0.00) AND guards the weakest metric against silent regressions introduced by graph compaction or hygiene passes.
+- [ ] **[HEARTBEAT_PHI_FAST_PATH_DOC]** _(non-Python — markdown)_ Update `HEARTBEAT.md` to document a Phi-below-target fast path: when `phi < 0.65`, heartbeat preflight MUST select a queued `PHI_*` task before running attention scoring. Codifies the policy so the behavior is durable across reorgs and visible to future operators. Pairs with the existing `act_on_phi` hook.
+- [ ] **[CRON_LANE_CONSOLIDATION_AUDIT]** _(non-Python — audit + docs)_ Audit all 47 cron entries in `crontab.reference`, classify each into a lane (brain/cognitive/maintenance/project/reporting), and produce `docs/CRON_LANES.md` mapping. Currently there's no single source of truth for "which cron touches Phi" vs "which cron rotates logs" — this blocks targeted Phi-recovery interventions and makes merge-freeze reasoning hard. Deliverable: docs + a linting comment block in crontab.reference.
 
 ---
 
