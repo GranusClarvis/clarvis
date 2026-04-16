@@ -17,12 +17,12 @@ consciousness metrics, or how your brain works. NOT for automated ingestion.
 
 ### Brain Overview
 ```bash
-python3 $CLARVIS_WORKSPACE/scripts/brain.py stats
+python3 -m clarvis brain stats
 ```
 
 ### Full Health Report
 ```bash
-python3 $CLARVIS_WORKSPACE/scripts/brain.py health
+python3 -m clarvis brain health
 ```
 
 ### Capability Scores (7 domains)
@@ -32,14 +32,13 @@ python3 -m clarvis metrics self-model
 
 ### Consciousness Metric (Phi)
 ```bash
-python3 $CLARVIS_WORKSPACE/scripts/phi_metric.py measure
+python3 -m clarvis metrics phi
 ```
 
 ### Attention Spotlight (what's in focus)
 ```bash
 python3 -c "
-import sys; sys.path.insert(0, '$CLARVIS_WORKSPACE/scripts')
-from attention import attention
+from clarvis.cognition.attention import attention
 for item in attention.focus():
     print(f'[{item[\"salience\"]:.3f}] {item[\"content\"][:80]}')
 "
@@ -47,17 +46,17 @@ for item in attention.focus():
 
 ### Episodic Memory (recent task outcomes)
 ```bash
-python3 $CLARVIS_WORKSPACE/scripts/episodic_memory.py recent 5
+python3 $CLARVIS_WORKSPACE/scripts/brain_mem/episodic_memory.py recent 5
 ```
 
 ### Hebbian Memory State (most strengthened memories)
 ```bash
-python3 $CLARVIS_WORKSPACE/scripts/hebbian_memory.py report
+python3 $CLARVIS_WORKSPACE/scripts/brain_mem/hebbian_memory.py report
 ```
 
 ### Synaptic Memory State (strongest synapses)
 ```bash
-python3 $CLARVIS_WORKSPACE/scripts/synaptic_memory.py report
+python3 $CLARVIS_WORKSPACE/scripts/brain_mem/synaptic_memory.py report
 ```
 
 ### Evolution Queue Status
@@ -74,18 +73,18 @@ print(f'Pending: {pending}, Completed: {done}')
 
 ### Confidence Calibration
 ```bash
-python3 $CLARVIS_WORKSPACE/scripts/prediction_review.py
+python3 $CLARVIS_WORKSPACE/scripts/cognition/prediction_review.py
 ```
 
 ### Dream Insights (recent counterfactual reasoning)
 ```bash
-python3 $CLARVIS_WORKSPACE/scripts/dream_engine.py report
+python3 $CLARVIS_WORKSPACE/scripts/cognition/dream_engine.py report
 ```
 
 ### Knowledge Map (strong/weak domains)
 ```bash
 python3 -c "
-import sys; sys.path.insert(0, '$CLARVIS_WORKSPACE/scripts')
+import sys; sys.path.insert(0, '$CLARVIS_WORKSPACE/scripts/brain_mem')
 from brain_introspect import build_knowledge_map
 kmap = build_knowledge_map()
 for domain, info in kmap.items():
@@ -107,13 +106,13 @@ for domain, info in kmap.items():
 - working_memory.py delegates entirely to attention.py
 
 ### How Evolution Works (heartbeat loop)
-1. heartbeat_gate.py — Should we wake? (Zero-LLM check)
-2. heartbeat_preflight.py — Score tasks, select best, build context, recall episodes
+1. `scripts/pipeline/heartbeat_gate.py` — Should we wake? (Zero-LLM check)
+2. `scripts/pipeline/heartbeat_preflight.py` — Score tasks, select best, build context, recall episodes
 3. Claude Code executes task
-4. heartbeat_postflight.py — Encode episode, record confidence, update attention, store learning
+4. `scripts/pipeline/heartbeat_postflight.py` — Encode episode, record confidence, update attention, store learning
 
 ### How Reflection Works (nightly at 21:00)
-8-step pipeline in cron_reflection.sh:
+8-step pipeline in `scripts/cron/cron_reflection.sh`:
 brain.optimize -> clarvis_reflection -> knowledge_synthesis -> crosslink ->
 intra_linker -> semantic_bridge -> memory_consolidation -> hebbian_evolve ->
 synaptic_evolve -> conversation_learner -> failure_amplifier -> episodic_synthesis ->
@@ -137,7 +136,7 @@ Embeddings: ONNX MiniLM (local)
 
 **User:** "What's your consciousness score?"
 ```bash
-python3 $CLARVIS_WORKSPACE/scripts/phi_metric.py measure
+python3 -m clarvis metrics phi
 ```
 ```
 Phi (IIT integration): 0.824
@@ -147,8 +146,7 @@ Phi (IIT integration): 0.824
 **User:** "What are you focused on?"
 ```bash
 python3 -c "
-import sys; sys.path.insert(0, '$CLARVIS_WORKSPACE/scripts')
-from attention import attention
+from clarvis.cognition.attention import attention
 for item in attention.focus()[:3]:
     print(f'[{item[\"salience\"]:.3f}] {item[\"content\"][:80]}')
 "

@@ -291,7 +291,7 @@ class TransitionModel:
 
     def _infer_strategy(self, task):
         """Infer strategy from task text (shared with causal_model.py)."""
-        words = task.lower().split()
+        words = (task or "").lower().split()
         if any(w in words for w in ["fix", "repair", "debug"]):
             return "fix"
         elif any(w in words for w in ["implement", "build", "create", "add"]):
@@ -615,7 +615,7 @@ class HierarchicalWorldModel:
 
         Combines task-level, domain-level, and system-level signals.
         """
-        # Task-level predictions
+        task_text = task_text or ""
         strategy = self.transition._infer_strategy(task_text)
         trans = self.transition.predict(domain, strategy)
         jepa = self.jepa.predict_by_similarity(task_text, domain)

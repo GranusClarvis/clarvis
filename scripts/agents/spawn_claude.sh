@@ -130,51 +130,54 @@ if [ -n "$QUEUE_RUN_ID" ]; then
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] Queue V2: started run $QUEUE_RUN_ID" >> "$LOGFILE"
 fi
 
-# === Global Claude lock visibility (pre-acquire check) ===
-# `acquire_global_claude_lock` silently exits 0 on conflict, which makes a
-# deferred spawn look identical to a successful one to callers. Before calling
-# it, surface the lock state to stdout + log with a distinct exit code so
-# callers can tell the task was DEFERRED / QUEUED / NOT_STARTED instead of
-# launched.
+# === Global Claude lock: pre-check only (no parent acquisition) ===
+# The lock is owned end-to-end by the detached worker: worker writes it on
+# startup, cleans it in its EXIT trap. The parent never owns the lock so there
+# is no window where parent's EXIT trap could delete it before the worker has
+# written its own PID. This closes the P0_SPAWN_CLAUDE_LOCK_HANDOFF_RACE.
+#
+# To prevent two spawners from both passing pre-check and both launching a
+# worker, we atomically claim the lock with the worker's PID immediately after
+# detaching it, using O_EXCL (set -C / noclobber). If we lose that race, we
+# abort our worker and report DEFERRED instead of silently exit 0.
 SPAWN_LOGFILE="/tmp/spawn_claude_$$.log"
 EX_DEFERRED=75  # EX_TEMPFAIL — caller should retry later
+
+_spawn_report_deferred() {
+    # $1=reason_label  $2=gpid  $3=gage_seconds
+    local label="$1" gpid="${2:-?}" gage="${3:-?}"
+    local status="DEFERRED" queue_ok="no"
+    if python3 -m clarvis queue add \
+         "Deferred spawn_claude: ${TASK:0:120}" \
+         --priority P0 --source spawn_claude_overlap_guard \
+         >> "$LOGFILE" 2>&1; then
+        status="QUEUED"
+        queue_ok="yes"
+    fi
+    local msg="[spawn_claude] ${status}: ${label} (PID ${gpid}, age=${gage}s) — task NOT_STARTED. queue=${queue_ok}"
+    echo "$msg"
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] $msg" >> "$LOGFILE"
+    if [ -n "${QUEUE_RUN_ID:-}" ]; then
+        python3 -c "
+from clarvis.queue.engine import engine
+engine.end_run('$QUEUE_RUN_ID', outcome='deferred', exit_code=$EX_DEFERRED, duration_s=0)
+" >> "$LOGFILE" 2>&1 || true
+    fi
+    rm -f "$PROMPT_FILE" "$TASK_FILE" 2>/dev/null || true
+}
+
 if [ -f "$GLOBAL_LOCK" ]; then
     GPID=$(_read_lock_pid "$GLOBAL_LOCK")
     GAGE=$(( $(date +%s) - $(stat -c %Y "$GLOBAL_LOCK" 2>/dev/null || echo 0) ))
     if [ -n "$GPID" ] && _is_clarvis_process "$GPID" && [ "$GAGE" -le 2400 ]; then
-        STATUS="DEFERRED"
-        # Best-effort queue insert so the deferred task isn't silently lost.
-        # Use |grep -v CODE-level python failure; don't let a queue error
-        # prevent us from reporting NOT_STARTED to the caller.
-        QUEUE_OK="no"
-        if python3 -m clarvis queue add \
-             "Deferred spawn_claude: ${TASK:0:120}" \
-             --priority P0 --source spawn_claude_overlap_guard \
-             >> "$LOGFILE" 2>&1; then
-            STATUS="QUEUED"
-            QUEUE_OK="yes"
-        fi
-        MSG="[spawn_claude] ${STATUS}: global Claude lock held by PID ${GPID} (age=${GAGE}s) — task NOT_STARTED. queue=${QUEUE_OK}"
-        echo "$MSG"
-        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] $MSG" >> "$LOGFILE"
-        # Close the queue V2 run record we opened earlier so we don't leave a
-        # half-open run for a task that never ran.
-        if [ -n "$QUEUE_RUN_ID" ]; then
-            python3 -c "
-from clarvis.queue.engine import engine
-engine.end_run('$QUEUE_RUN_ID', outcome='deferred', exit_code=$EX_DEFERRED, duration_s=0)
-" >> "$LOGFILE" 2>&1 || true
-        fi
-        rm -f "$PROMPT_FILE" "$TASK_FILE" 2>/dev/null || true
+        _spawn_report_deferred "global Claude lock held" "$GPID" "$GAGE"
         exit $EX_DEFERRED
-    elif [ -n "$GPID" ]; then
-        echo "[spawn_claude] NOT_STARTED_PRECHECK: stale lock found (PID $GPID not clarvis / age=${GAGE}s) — will reclaim"
-        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] Stale global lock pre-detected (PID $GPID, age=${GAGE}s)" >> "$LOGFILE"
+    else
+        # Orphaned (dead PID, non-clarvis, or aged past 2400s) — safe to reclaim.
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] Reclaiming stale global lock (PID=${GPID:-?}, age=${GAGE}s)" >> "$LOGFILE"
+        rm -f "$GLOBAL_LOCK"
     fi
 fi
-
-# Acquire global Claude lock — prevent concurrent Claude Code spawns
-acquire_global_claude_lock "$SPAWN_LOGFILE"
 
 # Immediate stdout feedback — so exec() monitoring sees output (prevents SIGTERM from no-output watchdog)
 echo "[spawn_claude] Spawned with ${TIMEOUT}s timeout ${CATEGORY_TAG}. Task: ${TASK:0:80}"
@@ -192,9 +195,26 @@ cat > "$WORKER_SCRIPT" <<EOF
 set -euo pipefail
 source "${CLARVIS_WORKSPACE:-$HOME/.openclaw/workspace}"/scripts/cron/cron_env.sh
 GLOBAL_LOCK="/tmp/clarvis_claude_global.lock"
-echo "\$\$ \$(date -u +%Y-%m-%dT%H:%M:%S)" > "\$GLOBAL_LOCK"
+_worker_owns_lock() {
+  # Parent atomically wrote the lock with our PID before exec'ing us.
+  # Verify the lock still names us before touching it (prevents deleting a
+  # lock installed by a winner in a lost-race scenario).
+  [ -f "\$GLOBAL_LOCK" ] || return 1
+  local owner
+  owner=\$(awk 'NR==1{print \$1}' "\$GLOBAL_LOCK" 2>/dev/null)
+  [ "\$owner" = "\$\$" ]
+}
+if ! _worker_owns_lock; then
+  echo "[\$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude_worker] ABORT: global lock not owned by PID \$\$ — lost race, exiting without cleanup" >> "${CLARVIS_WORKSPACE:-$HOME/.openclaw/workspace}/memory/cron/spawn_claude.log"
+  rm -f "$WORKER_SCRIPT" "$PROMPT_FILE" "$TASK_FILE" "$OUTPUT_FILE" "$WORKER_LOG" 2>/dev/null || true
+  exit 0
+fi
 cleanup() {
-  rm -f "\$GLOBAL_LOCK" "$WORKER_SCRIPT" "$OUTPUT_FILE" "$TASK_FILE" "$WORKER_LOG"
+  # Only remove the global lock if we still own it.
+  if _worker_owns_lock; then
+    rm -f "\$GLOBAL_LOCK"
+  fi
+  rm -f "$WORKER_SCRIPT" "$OUTPUT_FILE" "$TASK_FILE" "$WORKER_LOG"
 }
 trap cleanup EXIT
 unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT 2>/dev/null || true
@@ -313,9 +333,26 @@ EOF
 chmod +x "$WORKER_SCRIPT"
 nohup "$WORKER_SCRIPT" >/dev/null 2>&1 &
 WORKER_PID=$!
-echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] Worker detached pid=$WORKER_PID" >> "$CLARVIS_WORKSPACE/memory/cron/spawn_claude.log"
-# Note: global lock is written by the worker (line ~132) which also owns cleanup.
-# Do NOT write it here — that causes a race between parent and worker.
 
-# Parent exits immediately; detached worker handles Claude, Telegram delivery, and cleanup.
+# Atomic lock claim (O_EXCL). If a concurrent spawner also passed pre-check
+# and raced us here, noclobber redirect fails on the loser. We write the
+# worker's PID so the worker's _worker_owns_lock check passes (inside the
+# worker, `$$` equals `$!` here, since bash's `&` + nohup exec preserves PID).
+if ! ( set -C; echo "$WORKER_PID $(date -u +%Y-%m-%dT%H:%M:%S)" > "$GLOBAL_LOCK" ) 2>/dev/null; then
+    # Lost the race. Kill our worker before it writes the lock / spawns claude.
+    kill "$WORKER_PID" 2>/dev/null || true
+    # Give the worker a moment to die so its EXIT trap doesn't rm the lock
+    # that the winner just installed.
+    wait "$WORKER_PID" 2>/dev/null || true
+    RACE_GPID=$(_read_lock_pid "$GLOBAL_LOCK")
+    RACE_GAGE=$(( $(date +%s) - $(stat -c %Y "$GLOBAL_LOCK" 2>/dev/null || echo 0) ))
+    _spawn_report_deferred "post-precheck race lost to concurrent spawn" "$RACE_GPID" "$RACE_GAGE"
+    rm -f "$WORKER_SCRIPT" 2>/dev/null || true
+    exit $EX_DEFERRED
+fi
+
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] Worker detached pid=$WORKER_PID (global lock claimed atomically)" >> "$CLARVIS_WORKSPACE/memory/cron/spawn_claude.log"
+
+# Parent exits immediately; detached worker owns the global lock (writes on
+# startup, removes via EXIT trap) and handles Claude, Telegram, cleanup.
 exit 0

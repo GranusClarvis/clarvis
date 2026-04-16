@@ -20,53 +20,53 @@ Project agents are isolated Claude Code instances that work in their own git rep
 
 ### spawn — Delegate a task to an agent
 ```bash
-python3 $CLARVIS_WORKSPACE/scripts/project_agent.py spawn <agent-name> "<task description>" --timeout 1200
+python3 $CLARVIS_WORKSPACE/scripts/agents/project_agent.py spawn <agent-name> "<task description>" --timeout 1200
 # With extra context:
-python3 $CLARVIS_WORKSPACE/scripts/project_agent.py spawn <agent-name> "<task>" --context "PR #42 needs hotfix for auth bug"
+python3 $CLARVIS_WORKSPACE/scripts/agents/project_agent.py spawn <agent-name> "<task>" --context "PR #42 needs hotfix for auth bug"
 # With auto-retry on failure (max 2):
-python3 $CLARVIS_WORKSPACE/scripts/project_agent.py spawn <agent-name> "<task>" --retries 1
+python3 $CLARVIS_WORKSPACE/scripts/agents/project_agent.py spawn <agent-name> "<task>" --retries 1
 ```
 Returns JSON: `{task_id, agent, exit_code, elapsed, result: {status, pr_url, summary, files_changed, procedures, follow_ups, tests_passed}}`
 
 ### status — Check if an agent is running or idle
 ```bash
-python3 $CLARVIS_WORKSPACE/scripts/project_agent.py status <agent-name>
+python3 $CLARVIS_WORKSPACE/scripts/agents/project_agent.py status <agent-name>
 ```
 Returns JSON: `{name, status, last_run, last_task, tasks, successes}`
 
 ### promote — Pull results back to Clarvis
 ```bash
-python3 $CLARVIS_WORKSPACE/scripts/project_agent.py promote <agent-name>
+python3 $CLARVIS_WORKSPACE/scripts/agents/project_agent.py promote <agent-name>
 ```
 Collects unpromoted task summaries, extracts procedures and follow-ups, writes `memory/cron/agent_<name>_digest.md`, stores top procedures in Clarvis brain. Returns JSON: `{status, agent, count, procedures, brain_stored, digest}`
 
 ### list — Show all agents
 ```bash
-python3 $CLARVIS_WORKSPACE/scripts/project_agent.py list
+python3 $CLARVIS_WORKSPACE/scripts/agents/project_agent.py list
 ```
 Returns JSON array: `[{name, repo, branch, status, tasks, successes, prs, last_run}]`
 
 ### info — Detailed agent state
 ```bash
-python3 $CLARVIS_WORKSPACE/scripts/project_agent.py info <agent-name>
+python3 $CLARVIS_WORKSPACE/scripts/agents/project_agent.py info <agent-name>
 ```
 Returns JSON with full config, summaries, brain size, git status.
 
 ### create — Scaffold a new agent
 ```bash
-python3 $CLARVIS_WORKSPACE/scripts/project_agent.py create <name> --repo <git-url> --branch dev
+python3 $CLARVIS_WORKSPACE/scripts/agents/project_agent.py create <name> --repo <git-url> --branch dev
 ```
 Clones repo, initializes lite brain (5 collections), writes CLAUDE.md with constraints.
 
 ### benchmark — Run agent health metrics
 ```bash
-python3 $CLARVIS_WORKSPACE/scripts/project_agent.py benchmark <agent-name>
+python3 $CLARVIS_WORKSPACE/scripts/agents/project_agent.py benchmark <agent-name>
 ```
 Returns isolation, retrieval quality, and task success metrics.
 
 ### destroy — Remove an agent permanently
 ```bash
-python3 $CLARVIS_WORKSPACE/scripts/project_agent.py destroy <agent-name> --confirm
+python3 $CLARVIS_WORKSPACE/scripts/agents/project_agent.py destroy <agent-name> --confirm
 ```
 **Irreversible.** Requires `--confirm` flag.
 
@@ -81,7 +81,7 @@ python3 $CLARVIS_WORKSPACE/scripts/project_agent.py destroy <agent-name> --confi
 
 ## Rules
 
-- **Always use full path**: `python3 $CLARVIS_WORKSPACE/scripts/project_agent.py`
+- **Always use full path**: `python3 $CLARVIS_WORKSPACE/scripts/agents/project_agent.py`
 - **Default timeout for spawn is 1200s** (20 min). Use 1800s for large tasks. Minimum 600s.
 - **Tell the user** what agent you're spawning to and the task — spawn is async and takes minutes
 - **Promote after spawn** — results stay in the agent's workspace until promoted
@@ -99,10 +99,10 @@ Response: "Spawning task to **star-world-order** agent (20 min timeout) — fixi
 
 Then execute:
 ```bash
-python3 $CLARVIS_WORKSPACE/scripts/project_agent.py spawn star-world-order "Fix the failing CI tests in the auth module" --timeout 1200
+python3 $CLARVIS_WORKSPACE/scripts/agents/project_agent.py spawn star-world-order "Fix the failing CI tests in the auth module" --timeout 1200
 ```
 
 After completion, report the result and suggest promoting:
 ```bash
-python3 $CLARVIS_WORKSPACE/scripts/project_agent.py promote star-world-order
+python3 $CLARVIS_WORKSPACE/scripts/agents/project_agent.py promote star-world-order
 ```
