@@ -130,6 +130,27 @@ if [ -n "$QUEUE_RUN_ID" ]; then
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] Queue V2: started run $QUEUE_RUN_ID" >> "$LOGFILE"
 fi
 
+# Phase 0 audit trace — one per real Claude spawn. Fail-open.
+CLARVIS_AUDIT_TRACE_ID=$(python3 -c "
+import sys
+try:
+    from clarvis.audit import start_trace, toggle_snapshot
+    tid = start_trace(
+        source='spawn_claude',
+        cron_origin='${CRON_ORIGIN:-spawn_claude.sh}',
+        queue_run_id='${QUEUE_RUN_ID:-}',
+        task={'text': '''${TASK//\'/\'\\\'\'}'''[:500], 'category': '${CATEGORY:-}'},
+        feature_toggles=toggle_snapshot(),
+    )
+    sys.stdout.write(tid or '')
+except Exception:
+    sys.stdout.write('')
+" 2>/dev/null || echo "")
+export CLARVIS_AUDIT_TRACE_ID
+if [ -n "$CLARVIS_AUDIT_TRACE_ID" ]; then
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] audit_trace_id=$CLARVIS_AUDIT_TRACE_ID" >> "$LOGFILE"
+fi
+
 # === Global Claude lock: pre-check only (no parent acquisition) ===
 # The lock is owned end-to-end by the detached worker: worker writes it on
 # startup, cleans it in its EXIT trap. The parent never owns the lock so there
@@ -161,6 +182,12 @@ _spawn_report_deferred() {
         python3 -c "
 from clarvis.queue.engine import engine
 engine.end_run('$QUEUE_RUN_ID', outcome='deferred', exit_code=$EX_DEFERRED, duration_s=0)
+" >> "$LOGFILE" 2>&1 || true
+    fi
+    if [ -n "${CLARVIS_AUDIT_TRACE_ID:-}" ]; then
+        python3 -c "
+from clarvis.audit import finalize_trace
+finalize_trace('$CLARVIS_AUDIT_TRACE_ID', outcome='deferred', exit_code=$EX_DEFERRED, duration_s=0.0, extra={'execution': {'deferred_reason': '$label'}})
 " >> "$LOGFILE" 2>&1 || true
     fi
     rm -f "$PROMPT_FILE" "$TASK_FILE" 2>/dev/null || true
@@ -240,6 +267,29 @@ if [ -n "$QUEUE_RUN_ID" ]; then
 from clarvis.queue.engine import engine
 engine.end_run('$QUEUE_RUN_ID', outcome='success' if \$RESULT == 0 else ('timeout' if \$RESULT == 124 else 'failure'), exit_code=\$RESULT, duration_s=\$DURATION)
 " 2>/dev/null && echo "[\$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] Queue V2: ended run $QUEUE_RUN_ID (\$RESULT)" >> "\$LOGFILE" || true
+fi
+# Phase 0 audit: finalize the trace with terminal outcome.
+if [ -n "${CLARVIS_AUDIT_TRACE_ID:-}" ]; then
+  python3 - "\$RESULT" "\$DURATION" "$OUTPUT_FILE" <<'PYEOF' 2>> "\$LOGFILE" || true
+import os, sys
+exit_code = int(sys.argv[1])
+duration_s = float(sys.argv[2] or 0)
+output_file = sys.argv[3]
+tail = ""
+try:
+    with open(output_file) as f:
+        tail = f.read()[-2000:]
+except Exception:
+    pass
+outcome = "success" if exit_code == 0 else ("timeout" if exit_code == 124 else "failure")
+try:
+    from clarvis.audit import finalize_trace, update_trace
+    tid = os.environ.get("CLARVIS_AUDIT_TRACE_ID", "")
+    update_trace(tid, execution={"output_tail": tail, "exit_code": exit_code, "duration_s": duration_s})
+    finalize_trace(tid, outcome=outcome, exit_code=exit_code, duration_s=duration_s)
+except Exception as e:
+    sys.stderr.write(f"[spawn_claude audit finalize failed] {e}\n")
+PYEOF
 fi
 tail -c 2000 "$OUTPUT_FILE" >> "\$LOGFILE" 2>/dev/null || true
 # === TELEGRAM DELIVERY ===

@@ -127,6 +127,7 @@ class CostEntry:
     duration_s: float = 0.0   # API call duration
     generation_id: str = ""   # OpenRouter generation ID for detailed lookups
     estimated: bool = True    # False when cost comes from real API data
+    audit_trace_id: str = ""  # Phase 0 audit substrate — links spend to a spawn trace
 
     def to_dict(self) -> Dict:
         return asdict(self)
@@ -134,6 +135,17 @@ class CostEntry:
     @classmethod
     def from_dict(cls, d: Dict) -> CostEntry:
         return cls(**{k: v for k, v in d.items() if k in cls.__dataclass_fields__})
+
+
+def _resolve_audit_trace_id(explicit: str = "") -> str:
+    """Return the passed id, or fall back to the ambient audit trace id."""
+    if explicit:
+        return explicit
+    try:
+        from clarvis.audit import current_trace_id
+        return current_trace_id() or ""
+    except Exception:
+        return ""
 
 
 class CostTracker:
@@ -151,8 +163,14 @@ class CostTracker:
         source: str = "",
         task: str = "",
         duration_s: float = 0.0,
+        audit_trace_id: str = "",
     ) -> CostEntry:
-        """Log an API call and return the cost entry."""
+        """Log an API call and return the cost entry.
+
+        ``audit_trace_id`` is optional; when omitted, the Phase 0 audit
+        substrate's ambient id (env / process) is used so spend maps to a
+        spawn trace automatically.
+        """
         cost = estimate_cost(model, input_tokens, output_tokens)
         entry = CostEntry(
             timestamp=datetime.now(timezone.utc).isoformat(),
@@ -163,6 +181,7 @@ class CostTracker:
             source=source,
             task=task[:150],
             duration_s=round(duration_s, 2),
+            audit_trace_id=_resolve_audit_trace_id(audit_trace_id),
         )
         with open(self.log_path, "a") as f:
             f.write(json.dumps(entry.to_dict()) + "\n")
@@ -178,6 +197,7 @@ class CostTracker:
         task: str = "",
         duration_s: float = 0.0,
         generation_id: str = "",
+        audit_trace_id: str = "",
     ) -> CostEntry:
         """Log an API call with REAL cost from API response (not estimated).
 
@@ -194,6 +214,7 @@ class CostTracker:
             duration_s=round(duration_s, 2),
             generation_id=generation_id,
             estimated=False,
+            audit_trace_id=_resolve_audit_trace_id(audit_trace_id),
         )
         with open(self.log_path, "a") as f:
             f.write(json.dumps(entry.to_dict()) + "\n")

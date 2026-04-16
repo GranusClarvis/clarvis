@@ -2047,9 +2047,47 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
     stages_attempted, stages_ok, stages_failed, completeness = _compute_completeness(timings, _pf_errors)
     _persist_completeness(ctx, timings, _pf_errors, completeness, stages_attempted, stages_ok, stages_failed)
 
+    # Phase 0 audit: finalize the per-heartbeat trace opened by preflight.
+    audit_tid = preflight_data.get("audit_trace_id") or os.environ.get("CLARVIS_AUDIT_TRACE_ID", "")
+    if audit_tid:
+        try:
+            from clarvis.audit import finalize_trace, update_trace
+            outcome_status = "success"
+            ts = ctx.get("task_status", "")
+            if exit_code == 124 or ts == "timeout":
+                outcome_status = "timeout"
+            elif exit_code != 0 or ts not in ("success", "partial_success"):
+                outcome_status = "failure"
+            elif ts == "partial_success":
+                outcome_status = "partial_success"
+            update_trace(
+                audit_tid,
+                postflight={
+                    "task_status": ts,
+                    "error_type": ctx.get("error_type"),
+                    "completeness": round(completeness, 4),
+                    "stages_ok": stages_ok,
+                    "stages_failed": stages_failed,
+                    "worker_type": ctx.get("worker_type", "general"),
+                    "worker_validation": ctx.get("worker_validation", {}),
+                    "timings": dict(timings),
+                    "errors": list(_pf_errors),
+                },
+                execution={
+                    "duration_s": task_duration,
+                    "exit_code": exit_code,
+                    "output_chars": len(ctx.get("output_text") or ""),
+                },
+            )
+            finalize_trace(audit_tid, outcome=outcome_status,
+                           exit_code=exit_code, duration_s=task_duration)
+        except Exception as e:
+            log(f"audit trace finalize failed (non-fatal): {e}")
+
     return {"status": "ok", "task_status": ctx["task_status"], "timings": timings,
             "completeness": round(completeness, 4), "errors": _pf_errors,
             "error_type": ctx["error_type"],
+            "audit_trace_id": audit_tid,
             "worker_type": ctx.get("worker_type", "general"),
             "worker_validation": ctx.get("worker_validation", {})}
 

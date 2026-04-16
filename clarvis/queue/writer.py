@@ -114,6 +114,20 @@ SIMILARITY_THRESHOLD = 0.5  # Word overlap ratio to consider a duplicate
 P0_CAP = 10
 P1_CAP = 15
 
+# Phase 0 audit-program override: sources that record *evidence-backed* audit
+# findings (see docs/internal/audits/CLARVIS_DEEP_AUDIT_PLAN_2026-04-16.md §5)
+# may exceed caps so the audit cannot silently suppress required follow-ups.
+# A headroom ceiling still applies — absent ceiling, audit sources could
+# runaway-fill. Tasks added via these sources always carry an explicit
+# [AUDIT] or [AUDIT_PHASE_*] tag so they can be triaged later.
+AUDIT_SOURCES = frozenset({
+    "audit", "audit_phase_0", "audit_phase_1", "audit_phase_2",
+    "audit_phase_3", "audit_phase_4", "audit_phase_5", "audit_phase_6",
+    "audit_phase_7", "audit_phase_8", "audit_phase_9", "audit_phase_10",
+    "audit_phase_11", "audit_reconciliation", "audit_meta",
+})
+AUDIT_CAP_HEADROOM = 10  # above the P0/P1 cap; beyond this even audit tasks are rejected.
+
 # Patterns that identify structural/line-count refactor tasks.
 # Auto-generated tasks matching these are blocked unless from a safe source.
 _STRUCTURAL_PATTERNS = re.compile(
@@ -366,11 +380,20 @@ def add_tasks(tasks: list, priority: str = "P0", source: str = "unknown") -> lis
         # Priority cap enforcement (Rule 4, docs/PROJECT_LANES.md).
         # Auto-injected tasks are refused when the target section exceeds its cap.
         # User/manual sources bypass caps so the operator can always add tasks.
-        if source.lower() not in _USER_SOURCES:
+        # Audit-program sources (Phase 0 override) bypass the base cap up to
+        # AUDIT_CAP_HEADROOM — audit findings must not be silently suppressed
+        # just because the queue is full. See docs/internal/audits/
+        # CLARVIS_DEEP_AUDIT_PLAN_2026-04-16.md §5.
+        src_lc = source.lower()
+        if src_lc not in _USER_SOURCES:
             section_counts = _count_unchecked_by_section(content)
             cap = {"P0": P0_CAP, "P1": P1_CAP}.get(priority)
-            if cap is not None and section_counts.get(priority, 0) >= cap:
-                return []
+            if cap is not None:
+                cap_ceiling = cap
+                if src_lc in AUDIT_SOURCES:
+                    cap_ceiling = cap + AUDIT_CAP_HEADROOM
+                if section_counts.get(priority, 0) >= cap_ceiling:
+                    return []
 
         existing_items = _extract_all_items(content)
 

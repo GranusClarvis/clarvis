@@ -170,6 +170,10 @@ QUEUE_FILE = os.path.join(os.path.dirname(__file__), "..", "memory", "evolution"
 WORKSPACE = os.path.join(os.path.dirname(__file__), "..")
 LOCK_DIR = "/tmp"
 
+# Project-lane slot reservation state file
+_SLOT_STATE_FILE = os.path.join(os.path.dirname(__file__), "..", "data", "project_lane_slot.json")
+_PROJECT_LANE = os.environ.get("CLARVIS_PROJECT_LANE", "").strip()
+
 
 def _check_lock_conflict():
     """Check if a conflicting clarvis/claude lock is held.
@@ -423,12 +427,93 @@ def _preflight_attention(result):
     return codelet_result
 
 
+def _is_project_task(task_text, lane=None):
+    """Return True if task_text matches the active project lane."""
+    lane = lane or _PROJECT_LANE
+    if not lane:
+        return False
+    lane_upper = lane.upper()
+    text_upper = task_text.upper()
+    return (f"PROJECT:{lane_upper}" in text_upper
+            or f"({lane_upper})" in text_upper
+            or f"[{lane_upper}" in text_upper)
+
+
+def _get_project_slot_state():
+    """Read the alternating slot state. Returns dict with 'last_slot' ('project'|'general')."""
+    try:
+        with open(_SLOT_STATE_FILE) as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return {"last_slot": "general"}
+
+
+def _save_project_slot_state(slot_type, forced_fallback=False):
+    """Save the current slot type for next heartbeat's alternation."""
+    try:
+        state = {
+            "last_slot": slot_type,
+            "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "forced_fallback": forced_fallback,
+        }
+        os.makedirs(os.path.dirname(_SLOT_STATE_FILE), exist_ok=True)
+        with open(_SLOT_STATE_FILE, "w") as f:
+            json.dump(state, f)
+    except OSError as e:
+        log(f"Failed to save slot state: {e}")
+
+
+def _apply_project_slot_reservation(candidates):
+    """Apply hard 50% project-lane slot reservation.
+
+    When CLARVIS_PROJECT_LANE is set, alternates between project-only and general
+    heartbeat slots. On a project slot, project-tagged tasks are placed first in the
+    candidate list so _evaluate_candidates picks them. If no project task is eligible,
+    falls back to the full list (general selection).
+
+    Returns reordered candidates list.
+    """
+    if not _PROJECT_LANE:
+        return candidates
+
+    slot_state = _get_project_slot_state()
+    last_slot = slot_state.get("last_slot", "general")
+
+    # Alternate: if last was general, this one is project (and vice versa)
+    this_slot = "project" if last_slot != "project" else "general"
+
+    if this_slot == "project":
+        project_candidates = [c for c in candidates if _is_project_task(c.get("text", ""))]
+        if project_candidates:
+            # Project slot with eligible project tasks: project tasks first, then general
+            general_candidates = [c for c in candidates if not _is_project_task(c.get("text", ""))]
+            log(f"Project-lane slot: {len(project_candidates)} project task(s) prioritized "
+                f"(of {len(candidates)} total), lane={_PROJECT_LANE}")
+            _save_project_slot_state("project")
+            return project_candidates + general_candidates
+        else:
+            # No project tasks eligible — fallback to general, but still record as project
+            # so next slot alternates correctly
+            log(f"Project-lane slot: no eligible project tasks, falling back to general selection")
+            _save_project_slot_state("project", forced_fallback=True)
+            return candidates
+    else:
+        # General slot — no filtering, all candidates compete normally
+        log(f"General slot: all {len(candidates)} candidates eligible")
+        _save_project_slot_state("general")
+        return candidates
+
+
 def _gather_candidates(codelet_result):
     """Build ranked candidate list via Queue Engine V2 (primary) or legacy fallback.
 
     V2 path: queue_engine.ranked_eligible() reconciles QUEUE.md + sidecar,
     filters eligible tasks (pending/retryable, not in backoff/deferred/running),
     scores them, and returns them ranked.
+
+    Project-lane slot reservation: when CLARVIS_PROJECT_LANE is set, alternates
+    between project-only and general slots (hard 50% guarantee). Falls back to
+    general selection only if no project task is eligible on a project slot.
 
     Legacy fallback: only used when queue_engine is unavailable (import failed).
     """
@@ -453,6 +538,7 @@ def _gather_candidates(codelet_result):
                     "salience": task.get("score", 0.0),
                 })
             log(f"Queue V2: {len(candidates)} eligible candidate(s) from {len(eligible)} ranked")
+            candidates = _apply_project_slot_reservation(candidates)
             return candidates, None
         except Exception as e:
             log(f"Queue V2 ranked_eligible failed, falling back to legacy: {e}")
@@ -482,6 +568,8 @@ def _gather_candidates(codelet_result):
         except Exception as e:
             log(f"Legacy fallback task search failed: {e}")
 
+    if candidates:
+        candidates = _apply_project_slot_reservation(candidates)
     return candidates, None
 
 
@@ -501,6 +589,16 @@ def _preflight_select_task(result, codelet_result, t0):
             log(f"Stale demotion check failed (non-fatal): {e}")
 
     candidates, early_status = _gather_candidates(codelet_result)
+
+    # Record project-lane slot state for observability
+    if _PROJECT_LANE:
+        try:
+            slot_state = _get_project_slot_state()
+            result["project_lane"] = _PROJECT_LANE
+            result["project_slot"] = slot_state.get("last_slot", "unknown")
+            result["project_slot_forced_fallback"] = slot_state.get("forced_fallback", False)
+        except Exception:
+            pass
 
     if early_status:
         result["status"] = early_status
@@ -1388,8 +1486,77 @@ def _make_preflight_result():
         "route_tier": "complex", "route_executor": "claude", "route_score": 0.5,
         "route_reason": "unknown", "prompt_variant_id": "", "prompt_variant_task_type": "",
         "context_relevance_score": None, "priority_override": None,
+        "audit_trace_id": "",  # Phase 0: populated by start_trace() in run_preflight
         "timings": {},
     }
+
+
+def _start_audit_trace(result, cron_origin=""):
+    """Phase 0: open the per-heartbeat trace. Best-effort."""
+    try:
+        from clarvis.audit import start_trace, toggle_snapshot
+        tid = start_trace(
+            source="heartbeat",
+            cron_origin=cron_origin or os.environ.get("CRON_ORIGIN", "cron_autonomous.sh"),
+            task={},  # Task text fills in once selected.
+            feature_toggles=toggle_snapshot(),
+        )
+        if tid:
+            result["audit_trace_id"] = tid
+    except Exception as e:
+        log(f"audit trace start failed (non-fatal): {e}")
+
+
+def _finalize_preflight_trace(result, terminal=False, skip_reason=""):
+    """Phase 0: snapshot the preflight result into the trace.
+
+    If ``terminal`` is True, the trace is finalized with outcome=skipped —
+    used on preflight early-exit paths (no task selected, auth fail,
+    confidence defer) where no Claude spawn follows.
+    """
+    tid = result.get("audit_trace_id")
+    if not tid:
+        return
+    try:
+        from clarvis.audit import update_trace, finalize_trace
+        prompt_text = result.get("context_brief") or ""
+        prompt_chars = len(prompt_text)
+        update_trace(
+            tid,
+            task={
+                "text": (result.get("task") or "")[:500],
+                "section": result.get("task_section"),
+                "salience": result.get("task_salience"),
+            },
+            preflight={
+                "status": result.get("status"),
+                "confidence_tier": result.get("confidence_tier"),
+                "confidence_action": result.get("confidence_action"),
+                "route_tier": result.get("route_tier"),
+                "route_executor": result.get("route_executor"),
+                "route_score": result.get("route_score"),
+                "route_reason": result.get("route_reason"),
+                "procedure_id": result.get("procedure_id"),
+                "chain_id": result.get("chain_id"),
+                "prompt_variant_id": result.get("prompt_variant_id"),
+                "context_relevance_score": result.get("context_relevance_score"),
+                "priority_override": result.get("priority_override"),
+                "timings": dict(result.get("timings") or {}),
+                "prompt_chars": prompt_chars,
+            },
+            prompt={
+                "context_brief": prompt_text[:20000],  # cap — full replay uses replay.py
+                "chars": prompt_chars,
+            },
+        )
+        if terminal:
+            finalize_trace(
+                tid,
+                outcome="skipped",
+                extra={"execution": {"skip_reason": skip_reason or "preflight_early_exit"}},
+            )
+    except Exception as e:
+        log(f"audit trace preflight update failed (non-fatal): {e}")
 
 
 def _preflight_assemble_context(result, next_task, ctx):
@@ -1435,6 +1602,7 @@ def run_preflight(dry_run=False):
     log(f"All modules imported in {_import_time:.2f}s (single process)")
     t0 = time.monotonic()
     result = _make_preflight_result()
+    _start_audit_trace(result)
 
     # Populate context_relevance from gate/performance metrics (zero-LLM)
     try:
@@ -1450,15 +1618,18 @@ def run_preflight(dry_run=False):
     codelet_result = _preflight_attention(result)
     sel = _preflight_select_task(result, codelet_result, t0)
     if sel is None:
+        _finalize_preflight_trace(result, terminal=True, skip_reason="no_task_selected")
         return result
     next_task, task_section, best_salience = sel
     if dry_run:
         result["timings"]["total"] = round(time.monotonic() - t0, 3)
+        _finalize_preflight_trace(result, terminal=True, skip_reason="dry_run")
         return result
 
     # --- Auth pre-check: abort early if API token is invalid ---
     # Prevents "system" failures (expired OAuth) from polluting action accuracy
     if not _preflight_auth_check(result):
+        _finalize_preflight_trace(result, terminal=True, skip_reason="auth_failed")
         return result
 
     try:
@@ -1487,6 +1658,7 @@ def run_preflight(dry_run=False):
     dyn_conf = _preflight_confidence_world_model(result, next_task, task_section)
     dyn_conf = _preflight_confidence_tier(result, dyn_conf, next_task, t0)
     if dyn_conf is None:
+        _finalize_preflight_trace(result, terminal=True, skip_reason="confidence_defer")
         return result
 
     gwt_broadcast_text, retrieval_tier_info, _rt = _preflight_gwt_retrieval_gate(result, next_task)
@@ -1584,6 +1756,7 @@ def run_preflight(dry_run=False):
         pass
     result["timings"]["total"] = round(time.monotonic() - t0, 3)
     log(f"Pre-flight complete in {result['timings']['total']:.2f}s")
+    _finalize_preflight_trace(result)
     return result
 
 
