@@ -130,8 +130,50 @@ if [ -n "$QUEUE_RUN_ID" ]; then
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] Queue V2: started run $QUEUE_RUN_ID" >> "$LOGFILE"
 fi
 
-# Acquire global Claude lock — prevent concurrent Claude Code spawns
+# === Global Claude lock visibility (pre-acquire check) ===
+# `acquire_global_claude_lock` silently exits 0 on conflict, which makes a
+# deferred spawn look identical to a successful one to callers. Before calling
+# it, surface the lock state to stdout + log with a distinct exit code so
+# callers can tell the task was DEFERRED / QUEUED / NOT_STARTED instead of
+# launched.
 SPAWN_LOGFILE="/tmp/spawn_claude_$$.log"
+EX_DEFERRED=75  # EX_TEMPFAIL — caller should retry later
+if [ -f "$GLOBAL_LOCK" ]; then
+    GPID=$(_read_lock_pid "$GLOBAL_LOCK")
+    GAGE=$(( $(date +%s) - $(stat -c %Y "$GLOBAL_LOCK" 2>/dev/null || echo 0) ))
+    if [ -n "$GPID" ] && _is_clarvis_process "$GPID" && [ "$GAGE" -le 2400 ]; then
+        STATUS="DEFERRED"
+        # Best-effort queue insert so the deferred task isn't silently lost.
+        # Use |grep -v CODE-level python failure; don't let a queue error
+        # prevent us from reporting NOT_STARTED to the caller.
+        QUEUE_OK="no"
+        if python3 -m clarvis queue add \
+             "Deferred spawn_claude: ${TASK:0:120}" \
+             --priority P0 --source spawn_claude_overlap_guard \
+             >> "$LOGFILE" 2>&1; then
+            STATUS="QUEUED"
+            QUEUE_OK="yes"
+        fi
+        MSG="[spawn_claude] ${STATUS}: global Claude lock held by PID ${GPID} (age=${GAGE}s) — task NOT_STARTED. queue=${QUEUE_OK}"
+        echo "$MSG"
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] $MSG" >> "$LOGFILE"
+        # Close the queue V2 run record we opened earlier so we don't leave a
+        # half-open run for a task that never ran.
+        if [ -n "$QUEUE_RUN_ID" ]; then
+            python3 -c "
+from clarvis.queue.engine import engine
+engine.end_run('$QUEUE_RUN_ID', outcome='deferred', exit_code=$EX_DEFERRED, duration_s=0)
+" >> "$LOGFILE" 2>&1 || true
+        fi
+        rm -f "$PROMPT_FILE" "$TASK_FILE" 2>/dev/null || true
+        exit $EX_DEFERRED
+    elif [ -n "$GPID" ]; then
+        echo "[spawn_claude] NOT_STARTED_PRECHECK: stale lock found (PID $GPID not clarvis / age=${GAGE}s) — will reclaim"
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] Stale global lock pre-detected (PID $GPID, age=${GAGE}s)" >> "$LOGFILE"
+    fi
+fi
+
+# Acquire global Claude lock — prevent concurrent Claude Code spawns
 acquire_global_claude_lock "$SPAWN_LOGFILE"
 
 # Immediate stdout feedback — so exec() monitoring sees output (prevents SIGTERM from no-output watchdog)

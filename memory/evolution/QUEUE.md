@@ -23,19 +23,13 @@ _Caps: P0 ≤ 10, P1 ≤ 15. Triage before adding. See docs/PROJECT_LANES.md for
 
 _SWO tasks tracked here. When project lane is active, these get priority. See also: memory/evolution/SWO_TRACKER.md_
 
-- [x] **[SWO_FIX_CHAT_AUTH]** (P0 from audit) Add `verifyWalletAccess(request, senderAddress)` to `/api/chat` POST at `app/api/chat/route.ts:148` — currently allows posting as any wallet. (Done 2026-04-16, client helpers updated too)
-- [x] **[SWO_FIX_DM_AUTH]** (P0 from audit) Add `verifyWalletAccess(request, senderAddress)` to `/api/messages` POST/PATCH/DELETE at `app/api/messages/route.ts:103` — DM spoofing, read-state tampering, arbitrary message deletion. (Done 2026-04-16, POST added; PATCH/DELETE already had it)
-- [x] **[SWO_FIX_PRESENCE_AUTH]** (P0 from audit) Add `verifyWalletAccess(request, walletAddress)` to `/api/presence` POST and DELETE at `app/api/presence/route.ts:35` — spoof online presence, kick real users offline, override displayName/starVariant. (Done 2026-04-16, useStarPoints clients updated)
-- [ ] **[SWO_FIX_VOICE_AUTH]** (P0 from audit) Add `verifyWalletAccess(request, walletAddress)` to `/api/voice` POST/PATCH/DELETE at `app/api/voice/route.ts:47` — voice-session hijack, mute arbitrary participants.
-- [ ] **[SWO_FIX_RAFFLE_BONUSES]** (P0 from audit) Stop trusting client-supplied `discordBonus`/`engagementBonus` at `app/api/raffle/route.ts:396`. Compute server-side from `social_connections`; engagementBonus requires new `tweet_engagements` table populated by a verified job.
-- [ ] **[SWO_HARDEN_CRON_AUTH]** (P1 from audit) `lib/cronAuth.ts:18` bypasses auth when `NODE_ENV=development`. Remove dev bypass; replace `!==` compare with `crypto.timingSafeEqual`.
-- [ ] **[SWO_ADMIN_NONCE_PERSIST]** (P1 from audit) `lib/adminAuth.ts:12` uses in-memory `usedNonces` Map — replayable across serverless instances within 5-min window. Move to SQLite TTL table or Vercel KV.
-- [ ] **[SWO_CONTRACT_ARCHIVE]** (P2 from audit) Move `contracts/StarForge.sol` V1–V4 + `Testing_casino.sol` to `contracts/archive/`. Add `contracts/DEPLOYED.md` mapping {version → address → network}.
+- [x] **[SWO_ADMIN_NONCE_PERSIST]** (P1 from audit) SQLite-backed `admin_nonces` table + atomic `INSERT OR IGNORE` claim in `lib/adminAuth.ts`; 8 vitest cases incl. cross-instance replay. PR #180 (2026-04-16).
+- [x] **[SWO_CONTRACT_ARCHIVE]** (P2 from audit) Moved StarForge V1–V4 + Testing_casino to `contracts/archive/`; added `contracts/DEPLOYED.md` (version→address→network map + history) and `contracts/archive/README.md`. PR #181 (2026-04-16).
 
 
 ### Clarvis Maintenance — Keep Alive
 
-- [ ] **[CLAUDE_SPAWN_LOCK_VISIBILITY]** Fix `spawn_claude.sh` so a held global Claude lock is surfaced explicitly as `DEFERRED/QUEUED/NOT_STARTED` instead of looking like a successful spawn.
+- [x] **[CLAUDE_SPAWN_LOCK_VISIBILITY]** Added pre-acquire lock check in `spawn_claude.sh`: on conflict prints `DEFERRED`/`QUEUED` status with `NOT_STARTED` to stdout+log and exits 75 (EX_TEMPFAIL) instead of silent exit 0. Smoke-tested with simulated held lock. (2026-04-16)
 - [ ] **[FIX_STALE_PATHS_HEARTBEAT_AGENTS]** Fix stale script paths in `HEARTBEAT.md` and `AGENTS.md`.
 - [ ] **[LLM_CONTEXT_REVIEW]** Raise DYCP_DEFAULT_SUPPRESS_CONTAINMENT_OVERRIDE from 0.10 to 0.20 for gwt_broadcast specifically.
 - [ ] **[REMOVE_NANO_BANANA_LEAKED_KEY]** _(security)_ Remove orphaned `nano-banana-pro` skill + leaked Google Cloud API key from `openclaw.json`.
