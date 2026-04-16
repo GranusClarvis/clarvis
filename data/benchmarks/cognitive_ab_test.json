@@ -1,0 +1,391 @@
+{
+  "test_date": "2026-04-16 01:11",
+  "task_count": 5,
+  "results": [
+    {
+      "task_id": "fix_graph_verify",
+      "task_text": "Fix brain_hygiene.py crash when calling graph-verify",
+      "domain": "infrastructure",
+      "baseline": {
+        "variant": "baseline",
+        "brief_size_bytes": 4052,
+        "brief_lines": 25,
+        "retrieval_count": 20,
+        "avg_similarity": 0.0,
+        "top_similarity": 0,
+        "latency_s": 1.143,
+        "modules_used": [
+          "brain.recall"
+        ],
+        "brief_preview": "TASK: Fix brain_hygiene.py crash when calling graph-verify\n\nRELEVANT KNOWLEDGE:\n  [0.00] Graph verification has been failing since 2026-03-15 in brain_hygiene.py due to CLI/API contract mismatch: verify_graph_parity() returns sqlite-only keys but cli_brain.py graph-verify accessed removed\n  [0.00] S"
+      },
+      "full_stack": {
+        "variant": "full_stack",
+        "brief_size_bytes": 4447,
+        "brief_lines": 52,
+        "retrieval_count": 0,
+        "avg_similarity": 0,
+        "top_similarity": 0,
+        "latency_s": 6.322,
+        "modules_used": [
+          "task_selection",
+          "cognitive_load",
+          "procedural_memory",
+          "reasoning_chain",
+          "confidence",
+          "gwt_broadcast",
+          "episodic_memory"
+        ],
+        "confidence_tier": "HIGH",
+        "route_tier": "complex",
+        "timings": {
+          "attention_tick": 0.321,
+          "task_selection": 0.177,
+          "cognitive_load": 0.022,
+          "task_sizing": 0.014,
+          "verification": 0.0,
+          "procedural": 0.245,
+          "proc_injection_collect": 0.0,
+          "code_templates": 0.0,
+          "reasoning_open": 1.91,
+          "confidence": 0.907,
+          "world_model": 0.002,
+          "gwt_broadcast": 0.25,
+          "retrieval_gate": 0.0,
+          "brain_introspection": 0.0,
+          "synaptic_spread": 0.007,
+          "failure_avoidance": 0.024,
+          "episodic": 0.062,
+          "knowledge": 0.171,
+          "evidence_gate": 0.0,
+          "parallel_wall": 0.186,
+          "routing": 0.001,
+          "automation_insights": 0.0,
+          "prompt_optimizer": 0.0,
+          "cognitive_workspace": 0.056,
+          "obligation_check": 0.077,
+          "directive_engine": 0.0,
+          "context": 1.89,
+          "total": 6.177
+        },
+        "brief_preview": "CURRENT TASK: **[EXECUTE_3_REASONING_CHALLENGES]** 15 reasoning challenges seeded weeks ago, zero executed. Run 3 this week and record artifacts.\nAVOID THESE FAILURE PATTERNS:\n  - [timeout] [TEST 2026-03-11] [RETRIEVAL_RL_FEEDBACK_2] Implement: core \n  - [failure] [PHI_EMERGENCY_COMPACTION] Phi decl"
+      },
+      "delta": {
+        "brief_size_ratio": 1.1,
+        "latency_ratio": 5.53,
+        "extra_modules": 6
+      }
+    },
+    {
+      "task_id": "phi_cross_link",
+      "task_text": "Run targeted bulk_cross_link on all 45 collection pairs to boost Phi integration",
+      "domain": "memory",
+      "baseline": {
+        "variant": "baseline",
+        "brief_size_bytes": 4192,
+        "brief_lines": 25,
+        "retrieval_count": 20,
+        "avg_similarity": 0.0,
+        "top_similarity": 0,
+        "latency_s": 0.225,
+        "modules_used": [
+          "brain.recall"
+        ],
+        "brief_preview": "TASK: Run targeted bulk_cross_link on all 45 collection pairs to boost Phi integration\n\nRELEVANT KNOWLEDGE:\n  [0.00] Reasoning session [rs_20260325_150023]: [SEMANTIC_CROSS_COLLECTION_BOOST] Boost semantic_cross_collection score (0.588 \u2014 weakest Phi compone. Outcome: failure. Grade: good. Depth: 3 s"
+      },
+      "full_stack": {
+        "variant": "full_stack",
+        "brief_size_bytes": 4563,
+        "brief_lines": 53,
+        "retrieval_count": 0,
+        "avg_similarity": 0,
+        "top_similarity": 0,
+        "latency_s": 4.999,
+        "modules_used": [
+          "task_selection",
+          "cognitive_load",
+          "reasoning_chain",
+          "confidence",
+          "gwt_broadcast",
+          "episodic_memory"
+        ],
+        "confidence_tier": "HIGH",
+        "route_tier": "complex",
+        "timings": {
+          "attention_tick": 0.193,
+          "task_selection": 0.037,
+          "cognitive_load": 0.023,
+          "task_sizing": 0.013,
+          "verification": 0.0,
+          "procedural": 0.0,
+          "proc_injection_collect": 0.0,
+          "code_templates": 0.0,
+          "reasoning_open": 2.599,
+          "confidence": 0.149,
+          "world_model": 0.002,
+          "gwt_broadcast": 0.271,
+          "retrieval_gate": 0.0,
+          "brain_introspection": 0.0,
+          "episodic": 0.017,
+          "synaptic_spread": 0.033,
+          "failure_avoidance": 0.081,
+          "knowledge": 0.123,
+          "evidence_gate": 0.0,
+          "parallel_wall": 0.138,
+          "routing": 0.0,
+          "automation_insights": 0.0,
+          "prompt_optimizer": 0.0,
+          "cognitive_workspace": 0.029,
+          "obligation_check": 0.007,
+          "directive_engine": 0.0,
+          "context": 1.418,
+          "total": 4.999
+        },
+        "brief_preview": "CURRENT TASK: **[EXECUTE_3_REASONING_CHALLENGES]** 15 reasoning challenges seeded weeks ago, zero executed. Run 3 this week and record artifacts.\nAVOID THESE FAILURE PATTERNS:\n  - [timeout] [TEST 2026-03-11] [RETRIEVAL_RL_FEEDBACK_2] Implement: core \n  - [failure] [PHI_EMERGENCY_COMPACTION] Phi decl"
+      },
+      "delta": {
+        "brief_size_ratio": 1.09,
+        "latency_ratio": 22.22,
+        "extra_modules": 5
+      }
+    },
+    {
+      "task_id": "dream_engine_fix",
+      "task_text": "Fix dream_engine.py NoneType crash in compute_surprise()",
+      "domain": "code",
+      "baseline": {
+        "variant": "baseline",
+        "brief_size_bytes": 7973,
+        "brief_lines": 57,
+        "retrieval_count": 45,
+        "avg_similarity": 0.0,
+        "top_similarity": 0,
+        "latency_s": 0.145,
+        "modules_used": [
+          "brain.recall"
+        ],
+        "brief_preview": "TASK: Fix dream_engine.py NoneType crash in compute_surprise()\n\nRELEVANT KNOWLEDGE:\n  [0.00] REGRESSION ALERT: Self-test failed after task '[EXTERNAL_CHALLENGE:coding-challenge-05] Implement a bloom filter for fast dupli'. pytest_exit=1, brain_ok=False. pytest: 46 failed, 2425 passed, 3 skipp\n  [0.0"
+      },
+      "full_stack": {
+        "variant": "full_stack",
+        "brief_size_bytes": 4565,
+        "brief_lines": 53,
+        "retrieval_count": 0,
+        "avg_similarity": 0,
+        "top_similarity": 0,
+        "latency_s": 5.664,
+        "modules_used": [
+          "task_selection",
+          "cognitive_load",
+          "reasoning_chain",
+          "confidence",
+          "gwt_broadcast",
+          "episodic_memory"
+        ],
+        "confidence_tier": "HIGH",
+        "route_tier": "complex",
+        "timings": {
+          "attention_tick": 0.268,
+          "task_selection": 0.18,
+          "cognitive_load": 0.135,
+          "task_sizing": 0.008,
+          "verification": 0.0,
+          "procedural": 0.0,
+          "proc_injection_collect": 0.0,
+          "code_templates": 0.0,
+          "reasoning_open": 2.932,
+          "confidence": 0.151,
+          "world_model": 0.002,
+          "gwt_broadcast": 0.248,
+          "retrieval_gate": 0.0,
+          "brain_introspection": 0.0,
+          "synaptic_spread": 0.011,
+          "episodic": 0.017,
+          "failure_avoidance": 0.047,
+          "knowledge": 0.122,
+          "evidence_gate": 0.0,
+          "parallel_wall": 0.138,
+          "routing": 0.0,
+          "automation_insights": 0.0,
+          "prompt_optimizer": 0.0,
+          "cognitive_workspace": 0.03,
+          "obligation_check": 0.008,
+          "directive_engine": 0.0,
+          "context": 1.469,
+          "total": 5.664
+        },
+        "brief_preview": "CURRENT TASK: **[EXECUTE_3_REASONING_CHALLENGES]** 15 reasoning challenges seeded weeks ago, zero executed. Run 3 this week and record artifacts.\nAVOID THESE FAILURE PATTERNS:\n  - [timeout] [TEST 2026-03-11] [RETRIEVAL_RL_FEEDBACK_2] Implement: core \n  - [failure] [PHI_EMERGENCY_COMPACTION] Phi decl"
+      },
+      "delta": {
+        "brief_size_ratio": 0.57,
+        "latency_ratio": 39.06,
+        "extra_modules": 5
+      }
+    },
+    {
+      "task_id": "reasoning_depth",
+      "task_text": "Execute a multi-hop reasoning challenge requiring 3+ inference steps",
+      "domain": "research",
+      "baseline": {
+        "variant": "baseline",
+        "brief_size_bytes": 7564,
+        "brief_lines": 50,
+        "retrieval_count": 45,
+        "avg_similarity": 0.0,
+        "top_similarity": 0,
+        "latency_s": 0.146,
+        "modules_used": [
+          "brain.recall"
+        ],
+        "brief_preview": "TASK: Execute a multi-hop reasoning challenge requiring 3+ inference steps\n\nRELEVANT KNOWLEDGE:\n  [0.00] Episode: [EXTERNAL_CHALLENGE:reasoning-depth-01] Multi-step logical deduction: solve a constraint satisfactio -> success\n  [0.00] Episode: [REASONING_CAPABILITY_SPRINT] Deliberate reasoning pract"
+      },
+      "full_stack": {
+        "variant": "full_stack",
+        "brief_size_bytes": 4449,
+        "brief_lines": 52,
+        "retrieval_count": 0,
+        "avg_similarity": 0,
+        "top_similarity": 0,
+        "latency_s": 5.6,
+        "modules_used": [
+          "task_selection",
+          "cognitive_load",
+          "reasoning_chain",
+          "confidence",
+          "gwt_broadcast",
+          "episodic_memory"
+        ],
+        "confidence_tier": "HIGH",
+        "route_tier": "complex",
+        "timings": {
+          "attention_tick": 0.266,
+          "task_selection": 0.165,
+          "cognitive_load": 0.021,
+          "task_sizing": 0.014,
+          "verification": 0.0,
+          "procedural": 0.0,
+          "proc_injection_collect": 0.0,
+          "code_templates": 0.0,
+          "reasoning_open": 2.842,
+          "confidence": 0.183,
+          "world_model": 0.002,
+          "gwt_broadcast": 0.275,
+          "retrieval_gate": 0.0,
+          "brain_introspection": 0.0,
+          "episodic": 0.017,
+          "synaptic_spread": 0.069,
+          "knowledge": 0.111,
+          "evidence_gate": 0.0,
+          "failure_avoidance": 0.064,
+          "parallel_wall": 0.134,
+          "routing": 0.0,
+          "automation_insights": 0.0,
+          "prompt_optimizer": 0.0,
+          "cognitive_workspace": 0.03,
+          "obligation_check": 0.008,
+          "directive_engine": 0.0,
+          "context": 1.433,
+          "total": 5.599
+        },
+        "brief_preview": "CURRENT TASK: **[EXECUTE_3_REASONING_CHALLENGES]** 15 reasoning challenges seeded weeks ago, zero executed. Run 3 this week and record artifacts.\nAVOID THESE FAILURE PATTERNS:\n  - [timeout] [TEST 2026-03-11] [RETRIEVAL_RL_FEEDBACK_2] Implement: core \n  - [failure] [PHI_EMERGENCY_COMPACTION] Phi decl"
+      },
+      "delta": {
+        "brief_size_ratio": 0.59,
+        "latency_ratio": 38.36,
+        "extra_modules": 5
+      }
+    },
+    {
+      "task_id": "context_relevance",
+      "task_text": "Raise DYCP_DEFAULT_SUPPRESS_CONTAINMENT_OVERRIDE from 0.10 to 0.20 for gwt_broadcast",
+      "domain": "code",
+      "baseline": {
+        "variant": "baseline",
+        "brief_size_bytes": 7983,
+        "brief_lines": 57,
+        "retrieval_count": 45,
+        "avg_similarity": 0.0,
+        "top_similarity": 0,
+        "latency_s": 0.176,
+        "modules_used": [
+          "brain.recall"
+        ],
+        "brief_preview": "TASK: Raise DYCP_DEFAULT_SUPPRESS_CONTAINMENT_OVERRIDE from 0.10 to 0.20 for gwt_broadcast\n\nRELEVANT KNOWLEDGE:\n  [0.00] TIMEOUT (1500s): [SELF_REPRESENTATION_IMPORT_RECOVERY] Fix `self_representation` module import failures in the GWT broadcast path so self \u2014 exceeded time budget\n  [0.00] Episode: "
+      },
+      "full_stack": {
+        "variant": "full_stack",
+        "brief_size_bytes": 4354,
+        "brief_lines": 51,
+        "retrieval_count": 0,
+        "avg_similarity": 0,
+        "top_similarity": 0,
+        "latency_s": 5.801,
+        "modules_used": [
+          "task_selection",
+          "cognitive_load",
+          "reasoning_chain",
+          "confidence",
+          "gwt_broadcast",
+          "episodic_memory"
+        ],
+        "confidence_tier": "HIGH",
+        "route_tier": "complex",
+        "timings": {
+          "attention_tick": 0.288,
+          "task_selection": 0.031,
+          "cognitive_load": 0.022,
+          "task_sizing": 0.013,
+          "verification": 0.0,
+          "procedural": 0.0,
+          "proc_injection_collect": 0.0,
+          "code_templates": 0.0,
+          "reasoning_open": 3.212,
+          "confidence": 0.154,
+          "world_model": 0.002,
+          "gwt_broadcast": 0.325,
+          "retrieval_gate": 0.0,
+          "brain_introspection": 0.0,
+          "episodic": 0.017,
+          "synaptic_spread": 0.043,
+          "failure_avoidance": 0.049,
+          "knowledge": 0.121,
+          "evidence_gate": 0.0,
+          "parallel_wall": 0.136,
+          "routing": 0.0,
+          "automation_insights": 0.0,
+          "prompt_optimizer": 0.0,
+          "cognitive_workspace": 0.028,
+          "obligation_check": 0.006,
+          "directive_engine": 0.0,
+          "context": 1.437,
+          "total": 5.8
+        },
+        "brief_preview": "CURRENT TASK: **[EXECUTE_3_REASONING_CHALLENGES]** 15 reasoning challenges seeded weeks ago, zero executed. Run 3 this week and record artifacts.\nAVOID THESE FAILURE PATTERNS:\n  - [timeout] [TEST 2026-03-11] [RETRIEVAL_RL_FEEDBACK_2] Implement: core \n  - [failure] [PHI_EMERGENCY_COMPACTION] Phi decl"
+      },
+      "delta": {
+        "brief_size_ratio": 0.55,
+        "latency_ratio": 32.96,
+        "extra_modules": 5
+      }
+    }
+  ],
+  "summary": {
+    "question": "Does the 22-module architecture produce better reasoning than a simple pipeline?",
+    "baseline_avg_latency_s": 0.367,
+    "full_stack_avg_latency_s": 5.677,
+    "latency_overhead_s": 5.31,
+    "baseline_avg_brief_bytes": 6353,
+    "full_stack_avg_brief_bytes": 4476,
+    "context_enrichment_ratio": 0.7,
+    "modules_activated": [
+      "cognitive_load",
+      "confidence",
+      "episodic_memory",
+      "gwt_broadcast",
+      "procedural_memory",
+      "reasoning_chain",
+      "task_selection"
+    ],
+    "verdict": "pending_execution_quality_check"
+  }
+}

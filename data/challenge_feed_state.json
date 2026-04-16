@@ -1,0 +1,217 @@
+{
+  "completed": [
+    "coding-challenge-01",
+    "bench-context-01",
+    "bench-robustness-01",
+    "research-impl-01",
+    "research-impl-02",
+    "research-impl-04",
+    "research-impl-03",
+    "bench-latency-01",
+    "coding-challenge-02",
+    "bench-retrieval-01",
+    "bench-reasoning-01",
+    "coding-challenge-03",
+    "coding-challenge-05",
+    "bench-code-01",
+    "coding-challenge-04",
+    "coding-challenge-09",
+    "reasoning-depth-05",
+    "reasoning-depth-02",
+    "synthesis-02",
+    "coding-challenge-10",
+    "coding-challenge-07",
+    "bench-memory-01",
+    "synthesis-01",
+    "reasoning-depth-03",
+    "reasoning-depth-01",
+    "bench-calibration-01",
+    "coding-challenge-08",
+    "reasoning-depth-04",
+    "coding-challenge-06",
+    "reasoning-meta-01"
+  ],
+  "injections": [
+    {
+      "id": "coding-challenge-01",
+      "title": "Implement a lock-free concurrent ring buffer in Python",
+      "timestamp": 1774832607.4165404,
+      "date": "2026-03-30T01:03:27"
+    },
+    {
+      "id": "bench-context-01",
+      "title": "Measure context window utilization efficiency across 10 heartbeats",
+      "timestamp": 1774868401.7807682,
+      "date": "2026-03-30T11:00:01"
+    },
+    {
+      "id": "bench-robustness-01",
+      "title": "Chaos test: verify brain recovery after simulated corruption",
+      "timestamp": 1774918802.3120468,
+      "date": "2026-03-31T01:00:02"
+    },
+    {
+      "id": "research-impl-01",
+      "title": "Implement Sparse Priming Representations (SPR) for brain memory compression",
+      "timestamp": 1774954802.0651228,
+      "date": "2026-03-31T11:00:02"
+    },
+    {
+      "id": "research-impl-02",
+      "title": "Implement a simple Transformer attention visualization for brain search",
+      "timestamp": 1775005202.161003,
+      "date": "2026-04-01T01:00:02"
+    },
+    {
+      "id": "research-impl-04",
+      "title": "Implement chain-of-thought self-evaluation for episode quality scoring",
+      "timestamp": 1775034002.4783607,
+      "date": "2026-04-01T09:00:02"
+    },
+    {
+      "id": "research-impl-03",
+      "title": "Implement a simple MemoryBank with forgetting curve (Ebbinghaus)",
+      "timestamp": 1775091602.0648954,
+      "date": "2026-04-02T01:00:02"
+    },
+    {
+      "id": "bench-latency-01",
+      "title": "Profile and optimize the 3 slowest brain operations end-to-end",
+      "timestamp": 1775127602.4336274,
+      "date": "2026-04-02T11:00:02"
+    },
+    {
+      "id": "coding-challenge-02",
+      "title": "Build a minimal DAG task scheduler with dependency resolution",
+      "timestamp": 1775178002.175801,
+      "date": "2026-04-03T01:00:02"
+    },
+    {
+      "id": "bench-retrieval-01",
+      "title": "Implement BEIR-style retrieval benchmark for ClarvisDB",
+      "timestamp": 1775206802.4161005,
+      "date": "2026-04-03T09:00:02"
+    },
+    {
+      "id": "bench-reasoning-01",
+      "title": "Solve 5 ARC-AGI-style pattern completion puzzles programmatically",
+      "timestamp": 1775282401.841426,
+      "date": "2026-04-04T06:00:01"
+    },
+    {
+      "id": "coding-challenge-03",
+      "title": "Implement incremental TF-IDF for streaming document indexing",
+      "timestamp": 1775473201.9347622,
+      "date": "2026-04-06T11:00:01"
+    },
+    {
+      "id": "coding-challenge-05",
+      "title": "Implement a bloom filter for fast duplicate detection in brain.store()",
+      "timestamp": 1775505602.3501546,
+      "date": "2026-04-06T20:00:02"
+    },
+    {
+      "id": "bench-code-01",
+      "title": "Write a property-based test suite for ClarvisDB graph operations",
+      "timestamp": 1775541601.6741984,
+      "date": "2026-04-07T06:00:01"
+    },
+    {
+      "id": "coding-challenge-04",
+      "title": "Build a git-diff semantic analyzer that classifies changes",
+      "timestamp": 1775574002.479837,
+      "date": "2026-04-07T15:00:02"
+    },
+    {
+      "id": "coding-challenge-09",
+      "title": "Implement a regex engine from scratch (Thompson NFA)",
+      "timestamp": 1775805025.7302015,
+      "date": "2026-04-10T07:10:25"
+    },
+    {
+      "id": "reasoning-depth-05",
+      "title": "Implement argument mapping for wiki claims",
+      "timestamp": 1775840402.5709164,
+      "date": "2026-04-10T17:00:02"
+    },
+    {
+      "id": "reasoning-depth-02",
+      "title": "Implement analogical reasoning between brain memories",
+      "timestamp": 1775885405.0775218,
+      "date": "2026-04-11T05:30:05"
+    },
+    {
+      "id": "synthesis-02",
+      "title": "Implement contradiction detection across wiki pages",
+      "timestamp": 1775919602.0813596,
+      "date": "2026-04-11T15:00:02"
+    },
+    {
+      "id": "coding-challenge-10",
+      "title": "Implement A* search with multiple heuristics on a graph puzzle",
+      "timestamp": 1775988005.1235092,
+      "date": "2026-04-12T10:00:05"
+    },
+    {
+      "id": "coding-challenge-07",
+      "title": "Build a minimal theorem prover for propositional logic",
+      "timestamp": 1776020401.715158,
+      "date": "2026-04-12T19:00:01"
+    },
+    {
+      "id": "bench-memory-01",
+      "title": "Implement a memory consolidation quality test",
+      "timestamp": 1776058205.4309978,
+      "date": "2026-04-13T05:30:05"
+    },
+    {
+      "id": "synthesis-01",
+      "title": "Cross-domain knowledge synthesis: find unexpected connections",
+      "timestamp": 1776092402.5106297,
+      "date": "2026-04-13T15:00:02"
+    },
+    {
+      "id": "reasoning-depth-03",
+      "title": "Implement Socratic self-questioning for reasoning chains",
+      "timestamp": 1776128402.544599,
+      "date": "2026-04-14T01:00:02"
+    },
+    {
+      "id": "reasoning-depth-01",
+      "title": "Multi-step logical deduction: solve a constraint satisfaction puzzle",
+      "timestamp": 1776157202.9290977,
+      "date": "2026-04-14T09:00:02"
+    },
+    {
+      "id": "bench-calibration-01",
+      "title": "Build a calibration curve plotter from prediction history",
+      "timestamp": 1776214803.0588071,
+      "date": "2026-04-15T01:00:03"
+    },
+    {
+      "id": "coding-challenge-08",
+      "title": "Implement Levin search for small program synthesis",
+      "timestamp": 1776244016.344305,
+      "date": "2026-04-15T09:06:56"
+    },
+    {
+      "id": "reasoning-depth-04",
+      "title": "Build a causal inference engine for episode outcome analysis",
+      "timestamp": 1776301202.2912722,
+      "date": "2026-04-16T01:00:02"
+    },
+    {
+      "id": "coding-challenge-06",
+      "title": "Implement a persistent skip list with O(log n) search",
+      "timestamp": 1776302311.4068754,
+      "date": "2026-04-16T01:15:00"
+    },
+    {
+      "id": "reasoning-meta-01",
+      "title": "Implement a confidence calibration feedback loop (already existed in clarvis.cognition.confidence)",
+      "timestamp": 1776302311.406876,
+      "date": "2026-04-16T01:15:00"
+    }
+  ],
+  "gh_last_refresh": null
+}
