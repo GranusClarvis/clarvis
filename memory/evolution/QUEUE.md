@@ -27,9 +27,8 @@ _SWO tasks tracked here. When project lane is active, these get priority. See al
 
 ### Clarvis Maintenance — Keep Alive
 
-- [x] **[FIX_STALE_PATHS_HEARTBEAT_AGENTS]** Fixed 14 stale paths: HEARTBEAT.md (prompt_builder x2, brain.py→`-m clarvis brain`, backup_daily, safe_update, clarvis_reflection x2) and AGENTS.md (directive_engine, obligation_tracker, prompt_builder x3, cost_tracker, cost_api→cost_tracker api, budget_alert, cron_autonomous x2). All targets verified to exist. (2026-04-16)
 - [ ] **[LLM_CONTEXT_REVIEW]** Raise DYCP_DEFAULT_SUPPRESS_CONTAINMENT_OVERRIDE from 0.10 to 0.20 for gwt_broadcast specifically.
-- [ ] **[REMOVE_NANO_BANANA_LEAKED_KEY]** _(security)_ Remove orphaned `nano-banana-pro` skill + leaked Google Cloud API key from `openclaw.json`.
+- [x] **[REMOVE_NANO_BANANA_LEAKED_KEY]** Removed `nano-banana-pro` entry + leaked Google Cloud API key from `/home/agent/.openclaw/openclaw.json` (skills.entries). JSON validated. Backup: `openclaw.json.pre-nano-banana-removal.bak`. NOTE: operator should also revoke the key `AIzaSy...VdQg` in Google Cloud Console (still in git history/backups). No references found in workspace. (2026-04-16)
 
 ---
 
