@@ -23,7 +23,7 @@ _Caps: P0 ≤ 10, P1 ≤ 15. Triage before adding. See docs/PROJECT_LANES.md for
 
 _SWO tasks tracked here. When project lane is active, these get priority. See also: memory/evolution/SWO_TRACKER.md_
 
-- [ ] **[SANCTUARY_COMPANION_PANEL]** V1 companion dashboard: active Skrumpey, name, level, bond, mood, traits shell, current activity, journal snippet, and quick actions.
+- [x] **[SANCTUARY_COMPANION_PANEL]** V1 companion dashboard: active Skrumpey, name, level, bond, mood, traits shell, current activity, journal snippet, and quick actions. (2026-04-16, PR #178)
 
 ### Clarvis Maintenance — Keep Alive
 
@@ -152,6 +152,8 @@ _SWO tasks tracked here. When project lane is active, these get priority. See al
 ## Partial Items (tracked, not actively worked)
 
 ### External Challenges
+
+- [ ] [EXTERNAL_CHALLENGE:reasoning-depth-04] Build a causal inference engine for episode outcome analysis — Given episode data (task, actions, outcome), build a lightweight causal model: which actions most influence success/failure? Use counterfactual analysis (if action X hadn't happened, would outcome cha
 
 ---
 
