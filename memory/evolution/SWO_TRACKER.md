@@ -25,10 +25,18 @@ Planning docs, queue items, and brand positioning do NOT count as delivery.
 | 1 | #175 | ci: add test workflow | 2026-03-02 |
 | 2 | #178 | feat: V1 companion dashboard with quick actions | 2026-04-16 |
 
+## Pending PRs
+
+| # | PR | Title | State | Last Checked |
+|---|-----|-------|-------|--------------|
+| 1 | #177 | fix: verify governance voting power server-side | OPEN, MERGEABLE, CLEAN (no reviews) | 2026-04-16 — revalidated, vulnerability still on dev, comment posted |
+| 2 | #179 | fix(api): verify wallet signature on chat/messages/presence writes (P0) | OPEN | 2026-04-16 — closes SWO_FIX_CHAT_AUTH, SWO_FIX_DM_AUTH, SWO_FIX_PRESENCE_AUTH; clients updated to send x-wallet-auth |
+
 ## Delivered Artifacts (non-PR)
 
 | Date | Commit | Description |
 |------|--------|-------------|
+| 2026-04-16 | audit  | Security threat-surface audit: `memory/audits/swo_security_threat_surface_2026-04-16.md` (16 findings, 6 P0, 5-PR plan) |
 | 2026-04-10 | 378d7a1 | Website redesign — gold palette, Press Start 2P font |
 | 2026-04-05 | a5479fd | SWO ecosystem positioning doc |
 | 2026-04-03 | 09b0598 | SWO brand integration doc + LLM prompt evaluator |
