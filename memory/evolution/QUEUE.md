@@ -16,6 +16,7 @@ _Caps: P0 ≤ 10, P1 ≤ 15. Triage before adding. See docs/PROJECT_LANES.md for
 
 ### Bugs
 
+- [ ] **[P0_SPAWN_CLAUDE_LOCK_HANDOFF_RACE]** `scripts/agents/spawn_claude.sh` now pre-checks the global Claude lock, but still calls `acquire_global_claude_lock` in the parent and immediately exits after detaching the worker. Because the parent owns/cleans that lock before the worker fully takes over, there is a race window where concurrent spawns can slip through or a post-precheck conflict can still exit 0 silently. Make lock acquisition/handoff atomic in the worker or teach `acquire_global_claude_lock` to return a distinct deferred status instead of exiting 0. (Found in evening review 2026-04-16)
 
 ## P1 — This Week
 
@@ -27,8 +28,7 @@ _SWO tasks tracked here. When project lane is active, these get priority. See al
 
 ### Clarvis Maintenance — Keep Alive
 
-- [ ] **[LLM_CONTEXT_REVIEW]** Raise DYCP_DEFAULT_SUPPRESS_CONTAINMENT_OVERRIDE from 0.10 to 0.20 for gwt_broadcast specifically.
-- [x] **[REMOVE_NANO_BANANA_LEAKED_KEY]** Removed `nano-banana-pro` entry + leaked Google Cloud API key from `/home/agent/.openclaw/openclaw.json` (skills.entries). JSON validated. Backup: `openclaw.json.pre-nano-banana-removal.bak`. NOTE: operator should also revoke the key `AIzaSy...VdQg` in Google Cloud Console (still in git history/backups). No references found in workspace. (2026-04-16)
+- [x] **[LLM_CONTEXT_REVIEW]** Raise DYCP_DEFAULT_SUPPRESS_CONTAINMENT_OVERRIDE from 0.10 to 0.20 for gwt_broadcast specifically. (2026-04-16: added `DYCP_PER_SECTION_CONTAINMENT_OVERRIDE` dict in `clarvis/context/dycp.py`; default stays 0.10, gwt_broadcast now 0.20. Test added in `tests/test_assembly_calibration_freeze.py`.)
 
 ---
 
@@ -36,8 +36,8 @@ _SWO tasks tracked here. When project lane is active, these get priority. See al
 
 ### Phi Recovery (0.620→0.65 target)
 
-- [ ] **[PHI_EMERGENCY_CROSS_LINK_BLITZ]** Run targeted bulk_cross_link on all 45 collection pairs (Phi target).
-- [ ] Cross-collection semantic bridging for Phi integration — 5 lowest-similarity pairs.
+- [~] **[PHI_EMERGENCY_CROSS_LINK_BLITZ]** Run targeted bulk_cross_link on all 45 collection pairs (Phi target). (2026-04-16: started full-brain bulk_cross_link but process killed at ~5min when cron_autonomous started; +1357 edges committed before kill. Follow-up pair-targeted pass below supplanted the remainder.)
+- [x] Cross-collection semantic bridging for Phi integration — 5 lowest-similarity pairs. (2026-04-16: added `pair_targeted_cross_link` method in `clarvis/brain/graph.py`; ran against 5 lowest pairs (all involving clarvis-goals). +10365 semantic_bridge edges added. Phi 0.619→0.632.)
 - [ ] Boost intra-density for starved collections — `clarvis-identity` (0.26), `clarvis-goals` (0.27), `autonomous-learning` (0.29).
 - [ ] Expand clarvis-goals collection — add 10-15 goal memories referencing infra/identity/learning.
 - [ ] Tune graph compaction aggressiveness + add Phi-guard (skip if Phi < 0.65).

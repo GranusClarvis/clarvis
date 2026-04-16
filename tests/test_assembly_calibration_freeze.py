@@ -83,6 +83,15 @@ def test_default_suppress_containment_override_frozen():
     assert DYCP_DEFAULT_SUPPRESS_CONTAINMENT_OVERRIDE == 0.10
 
 
+def test_per_section_containment_override_gwt_broadcast():
+    from clarvis.context.dycp import DYCP_PER_SECTION_CONTAINMENT_OVERRIDE
+    assert DYCP_PER_SECTION_CONTAINMENT_OVERRIDE.get("gwt_broadcast") == 0.20, (
+        "gwt_broadcast needs a stricter containment threshold (0.20) than the "
+        "0.10 default — its generic winner/codelet tokens match many tasks "
+        "spuriously. Raised 2026-04-16 per LLM_CONTEXT_REVIEW."
+    )
+
+
 # ---------------------------------------------------------------------------
 # §3  Protected sections freeze — these must never be pruned
 # ---------------------------------------------------------------------------

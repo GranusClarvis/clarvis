@@ -456,6 +456,101 @@ class GraphMixin:
             "boosted_collections": [c for c, cnt in col_cross_counts.items() if cnt < boost_threshold],
         }
 
+    def pair_targeted_cross_link(self, pairs, max_distance=2.0,
+                                  max_links_per_memory=10, verbose=False):
+        """Densely cross-link a specific list of collection pairs.
+
+        For Phi recovery: targets the lowest-semantic-overlap pairs with
+        relaxed distance and higher link density than bulk_cross_link.
+        Creates 'semantic_bridge' edges (distinct from bulk_cross_link's
+        'cross_collection' edges) so compaction can treat them separately.
+
+        Args:
+            pairs: iterable of (col_a, col_b) tuples — order-insensitive.
+            max_distance: ChromaDB L2 distance ceiling (default 2.0, quite loose).
+            max_links_per_memory: caps links each source memory contributes.
+            verbose: print per-pair stats.
+
+        Returns:
+            dict with new_edges, pairs_processed, per_pair stats.
+        """
+        new_edges = 0
+        per_pair = {}
+        existing = self._existing_edge_pairs("semantic_bridge")
+        # Also consult cross_collection edges to avoid duplicate work
+        existing_cc = self._existing_edge_pairs("cross_collection")
+
+        for col_a, col_b in pairs:
+            if col_a == col_b:
+                continue
+            ca = self.collections.get(col_a)
+            cb = self.collections.get(col_b)
+            if ca is None or cb is None or ca.count() == 0 or cb.count() == 0:
+                continue
+
+            pair_new = 0
+            # bidirectional: a -> b and b -> a
+            for src_name, src_col, tgt_name, tgt_col in (
+                (col_a, ca, col_b, cb),
+                (col_b, cb, col_a, ca),
+            ):
+                results = src_col.get()
+                ids = results.get("ids", [])
+                docs = results.get("documents", [])
+                for mem_id, doc in zip(ids, docs):
+                    if not doc or len(doc) < 10:
+                        continue
+                    links_added = 0
+                    queries = [doc]
+                    syn = self._synonym_expand(doc)
+                    if syn:
+                        queries.append(syn)
+                    best = []
+                    for q in queries:
+                        try:
+                            xr = tgt_col.query(
+                                query_texts=[q],
+                                n_results=min(max_links_per_memory + 2, 10),
+                            )
+                            if xr["ids"] and xr["ids"][0]:
+                                for tid, tdist in zip(
+                                        xr["ids"][0], xr["distances"][0]):
+                                    if tdist >= max_distance:
+                                        continue
+                                    if (mem_id, tid) in existing:
+                                        continue
+                                    if (mem_id, tid) in existing_cc:
+                                        continue
+                                    best.append((tid, tdist))
+                        except Exception:
+                            continue
+                    seen = set()
+                    for tid, tdist in sorted(best, key=lambda x: x[1]):
+                        if tid in seen:
+                            continue
+                        seen.add(tid)
+                        self.add_relationship(
+                            mem_id, tid, "semantic_bridge",
+                            source_collection=src_name,
+                            target_collection=tgt_name,
+                        )
+                        existing.add((mem_id, tid))
+                        existing.add((tid, mem_id))
+                        new_edges += 1
+                        pair_new += 1
+                        links_added += 1
+                        if links_added >= max_links_per_memory:
+                            break
+            per_pair[f"{col_a} <-> {col_b}"] = pair_new
+            if verbose:
+                print(f"  {col_a} <-> {col_b}: +{pair_new} edges")
+
+        return {
+            "new_edges": new_edges,
+            "pairs_processed": len(per_pair),
+            "per_pair": per_pair,
+        }
+
     def bulk_intra_link(self, max_distance=1.2, max_links_per_memory=5,
                         collections=None, verbose=False):
         """Create intra-collection edges between semantically similar memories.

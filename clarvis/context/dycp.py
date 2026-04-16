@@ -72,6 +72,15 @@ DYCP_DEFAULT_SUPPRESS = frozenset({
 # tokens overlap significantly with a suppressed section, include it anyway.
 DYCP_DEFAULT_SUPPRESS_CONTAINMENT_OVERRIDE = 0.10
 
+# Per-section overrides: sections whose content words rarely match task tokens
+# need a higher bar before being included. gwt_broadcast (conscious workspace
+# broadcast) contains attention codelets and winner labels that often share
+# generic tokens with tasks without actually being relevant — require stronger
+# containment (0.20) to override suppression.
+DYCP_PER_SECTION_CONTAINMENT_OVERRIDE = {
+    "gwt_broadcast": 0.20,
+}
+
 # Threshold for dynamic hard-suppression feedback loop.  Sections with
 # 14-day recency-weighted mean below this are auto-suppressed (same as
 # HARD_SUPPRESS but computed from live data instead of hardcoded).
@@ -253,7 +262,10 @@ def should_suppress_section(section_name: str, task_text: str = "") -> bool:
     if not task_text:
         return True  # no task context → suppress by default
     containment = _dycp_task_containment_fast(section_name, task_text)
-    return containment < DYCP_DEFAULT_SUPPRESS_CONTAINMENT_OVERRIDE
+    threshold = DYCP_PER_SECTION_CONTAINMENT_OVERRIDE.get(
+        section_name, DYCP_DEFAULT_SUPPRESS_CONTAINMENT_OVERRIDE
+    )
+    return containment < threshold
 
 
 def _load_historical_section_means() -> dict:
