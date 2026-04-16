@@ -23,12 +23,13 @@ _Caps: P0 ≤ 10, P1 ≤ 15. Triage before adding. See docs/PROJECT_LANES.md for
 
 _SWO tasks tracked here. When project lane is active, these get priority. See also: memory/evolution/SWO_TRACKER.md_
 
-- [x] **[SANCTUARY_COMPANION_PANEL]** V1 companion dashboard: active Skrumpey, name, level, bond, mood, traits shell, current activity, journal snippet, and quick actions. (2026-04-16, PR #178)
+- [ ] **[SWO_PR177_REVALIDATION]** Re-check whether PR #177 (server-side governance voting power verification) is still valid against current SWO `dev` after recent repo changes. Confirm whether the original vulnerability path still exists or has already been superseded, evaluate mergeability/conflicts, and decide whether to revive, replace, or close it. Source context: PR #177 fixed client-supplied votingPower spoofing by verifying Star ownership on-chain. Source: `memory/cron/agent_star-world-order_digest.md#L1-L21`
+- [ ] **[SWO_SECURITY_THREAT_SURFACE_AUDIT]** Run a focused security audit of SWO: wallet auth, holder gating, governance/voting, raffle entry validation, marketplace/listing flows, server trust boundaries, API authorization, client-trust assumptions, contract/version drift, and obvious attack vectors or abuse paths. Output should become concrete reviewable tasks/PRs, not just a vague report.
+- [ ] **[SWO_SERVER_TRUST_BOUNDARY_AUDIT]** Identify every SWO endpoint or flow that currently trusts client-supplied values (wallet, voting power, tier, price, token eligibility, raffle entry counts, admin state). Mark which are server-verified vs spoofable and prioritize fixes.
+
 
 ### Clarvis Maintenance — Keep Alive
 
-- [x] **[COGNITIVE_STACK_AB_TEST]** Run 5 tasks with full cognitive stack vs raw retrieval+LLM. Measure output quality delta. Answers: does the 22-module architecture produce better reasoning than a simple pipeline? (2026-04-16: ran 5 tasks — full stack 15.5x slower (5.7s vs 0.4s) but produces 30% smaller, curated briefs (4.5KB vs 6.4KB) via section gating, DyCP pruning, and confidence filtering. 7 modules activated per task. Results: data/benchmarks/cognitive_ab_test.json)
-- [x] **[EXECUTE_3_REASONING_CHALLENGES]** 15 reasoning challenges seeded weeks ago, zero executed. Run 3 this week and record artifacts. (2026-04-16: 28/30 were already done. Executed remaining 2: coding-challenge-06 (persistent skip list, 51k ops/s, all tests pass) and reasoning-meta-01 (already implemented in clarvis.cognition.confidence — Brier scoring, band-level accuracy, auto-recalibration). All 30/30 now complete.)
 - [ ] **[CLAUDE_SPAWN_LOCK_VISIBILITY]** Fix `spawn_claude.sh` so a held global Claude lock is surfaced explicitly as `DEFERRED/QUEUED/NOT_STARTED` instead of looking like a successful spawn.
 - [ ] **[REASONING_DEPTH_EXPERIMENT_MEASURE]** Measure reasoning depth experiment results after 48h.
 - [ ] **[FIX_STALE_PATHS_HEARTBEAT_AGENTS]** Fix stale script paths in `HEARTBEAT.md` and `AGENTS.md`.
