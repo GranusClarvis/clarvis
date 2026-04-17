@@ -30,13 +30,17 @@ _Audit-phase override: while executing the deep Clarvis audit plan, do not suppr
 
 _SWO tasks tracked here. When project lane is active, these get priority. See also: memory/evolution/SWO_TRACKER.md_
 
-- [ ] **[SWO_MIRROR_BASELINE_VALIDATION]** Validate the new local SWO mirror end-to-end: service status, DB integrity, app reachable on 127.0.0.1:3080, and baseline `npm run lint`, `npm run type-check`, `npm run test`, `npm run build` from `/opt/star_world_order/PROD`. Record anything that differs from expected mirror behavior.
+- [x] **[SWO_MIRROR_BASELINE_VALIDATION]** (2026-04-17) Validated. Service: `star-world.service` active (running, Next.js 16.0.10 on 127.0.0.1:3080, 97.7MB RSS). App: reachable, serves HTML. DB: `data/swo.db` exists but is **empty (0 bytes)** — schema never initialized (`db:init` not run). type-check: PASS (clean). test: PASS (69/69, 2 files). build: PASS (all routes). lint: 46 errors / 121 warnings (167 total) — pre-existing, mostly `no-explicit-any` in scripts/ and test files. **Finding: DB not initialized — run `npm run db:init` to create schema. Non-blocking for app startup but social connections, chat, governance features will fail at runtime.**
 - [ ] **[SWO_PR178_LINT_CLEANUP]** Follow-up from SWO_MERGED_PR_VERIFICATION. Replace 28 `any` usages introduced by PR #178 in `lib/sanctuary/__tests__/sanctuary.test.ts` (13 sites), `lib/sanctuary/__tests__/db.test.ts`, and `lib/db.ts:274` with narrow sanctuary row types. `npm run lint` on those files currently reports 28 errors / 7 warnings; goal is zero errors in PR #178-added files. Small PR, no runtime impact.
 - [ ] **[SWO_PR177_REVALIDATION]** Re-check whether PR #177 (server-side governance voting power verification) is still valid against current SWO `dev` after recent repo changes. Confirm whether the original vulnerability path still exists or has already been superseded, evaluate mergeability/conflicts, and decide whether to revive, replace, or close it. Source context: PR #177 fixed client-supplied votingPower spoofing by verifying Star ownership on-chain. Source: `memory/cron/agent_star-world-order_digest.md#L1-L21`
 - [ ] **[SWO_SERVER_TRUST_BOUNDARY_AUDIT]** Identify every SWO endpoint or flow that currently trusts client-supplied values (wallet, voting power, tier, price, token eligibility, raffle entry counts, admin state). Mark which are server-verified vs spoofable and prioritize fixes.
 - [ ] **[SWO_SECURITY_THREAT_SURFACE_AUDIT]** Run a focused security audit of SWO: wallet auth, holder gating, governance/voting, raffle entry validation, marketplace/listing flows, server trust boundaries, API authorization, client-trust assumptions, contract/version drift, and obvious attack vectors or abuse paths. Output should become concrete reviewable tasks/PRs, not just a vague report.
 
 
+
+### Phase 8 Follow-ups (P1, added 2026-04-16)
+
+- [ ] **[PHASE8_PROJECT_AGENT_HEARTBEAT_INTEGRATION]** Wire `project_agent.py spawn` into the heartbeat execution path so project-lane slots can directly invoke the project agent rather than only selecting QUEUE.md items tagged `[SWO_*]`. Blocked by `PHASE6_PROJECT_LANE_SLOT_RESERVATION`. Closes Phase 8 Gap 1 (zero autonomous project PRs). Acceptance: at least 1 heartbeat in a 7-day window spawns the project agent and produces a branch or PR. Source: Phase 8 decision doc.
 
 ### Clarvis Maintenance — Keep Alive
 
@@ -122,6 +126,12 @@ _Demoted to P2 to bring P1 within 25-ceiling. All are review/sweep/benchmark tas
 - [ ] **[AUDIT_PHASE_4_5_GOALS_RESTRUCTURE]** Separate goal definitions from progress snapshots in clarvis-goals. Move progress percentages ("Autonomous Execution: 65%") and priority lists to clarvis-context. Keep only actual goal definitions. Provenance: Phase 4.5 taxonomy finding D3.
 - [ ] **[AUDIT_PHASE_4_5_EPISODE_LESSONS]** Extend heartbeat postflight to extract one-line lesson per episode. Currently 75% of episodes are bare "Episode: [TASK] → success/failure" with no reusable insight. Provenance: Phase 4.5 gap G3.
 - [ ] **[AUDIT_PHASE_4_5_COLLECTION_SCHEMA_DOC]** Add per-collection purpose/boundary documentation to `clarvis/brain/constants.py` (docstrings) and `CLAUDE.md`. Define what should and shouldn't go in each collection. Provenance: Phase 4.5 gap G5.
+
+### Phase 8 Follow-ups (P2, added 2026-04-16)
+
+- [ ] **[PHASE8_MIRROR_PRESUBMIT_GATE]** Add a pre-submit mirror validation step to `project_agent.py spawn` and the SWO PR workflow. Before opening a PR, run `tsc --noEmit` and `vitest run` against `/opt/star_world_order/PROD` with proposed changes. Cite results in PR body. Acceptance: next SWO PR includes a mirror validation section. Source: Phase 8 Gap 2.
+- [ ] **[PHASE8_STALE_PR_WATCHDOG]** Add a weekly check (to `cron_watchdog.sh` or `health_monitor.sh`) that lists open Clarvis-authored PRs older than 14 days. Alert via Telegram with PR number, age, and review status. Acceptance: alert fires for #175, #176, #177 on first run. Source: Phase 8 Gap 3.
+- [ ] **[PHASE8_LITEBRAIN_SEED_EXPANSION]** Expand SWO lite-brain seed data with architecture, security model, and API design documentation to improve P@1 from 0.632 toward ≥0.8. Run golden QA benchmark after seeding. Source: Phase 8 Gap 5.
 
 ### Deep Audit — Phases 12–15 Anchors (P2, added 2026-04-16 per meta-meta audit)
 
