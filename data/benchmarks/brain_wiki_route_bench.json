@@ -1,0 +1,210 @@
+{
+  "timestamp": "2026-04-17T06:10:26",
+  "results": [
+    {
+      "task": "code_fix",
+      "domain": "code",
+      "raw_brain": {
+        "route": "raw_brain",
+        "latency_ms": 151.3,
+        "result_count": 15,
+        "avg_distance": 1.1539,
+        "min_distance": 0.7553,
+        "unique_tokens": 160
+      },
+      "wiki_first": {
+        "route": "wiki_first",
+        "latency_ms": 2.0,
+        "result_count": 15,
+        "wiki_hits": 0,
+        "avg_distance": 1.1539,
+        "min_distance": 0.7553,
+        "unique_tokens": 160
+      },
+      "combined": {
+        "route": "combined",
+        "latency_ms": 346.6,
+        "has_goals": true,
+        "has_context": true,
+        "has_knowledge": true,
+        "has_working_memory": true,
+        "unique_tokens": 141,
+        "brain_timings": {
+          "goals": 0.015,
+          "context": 0.001,
+          "knowledge": 0.329,
+          "working_memory": 0.001
+        }
+      },
+      "minimal": {
+        "route": "minimal",
+        "latency_ms": 0.2,
+        "unique_tokens": 33
+      }
+    },
+    {
+      "task": "brain_maintenance",
+      "domain": "infrastructure",
+      "raw_brain": {
+        "route": "raw_brain",
+        "latency_ms": 304.4,
+        "result_count": 11,
+        "avg_distance": 1.0076,
+        "min_distance": 0.7245,
+        "unique_tokens": 161
+      },
+      "wiki_first": {
+        "route": "wiki_first",
+        "latency_ms": 1.2,
+        "result_count": 11,
+        "wiki_hits": 0,
+        "avg_distance": 1.0076,
+        "min_distance": 0.7245,
+        "unique_tokens": 161
+      },
+      "combined": {
+        "route": "combined",
+        "latency_ms": 48.2,
+        "has_goals": true,
+        "has_context": true,
+        "has_knowledge": true,
+        "has_working_memory": true,
+        "unique_tokens": 160,
+        "brain_timings": {
+          "goals": 0.002,
+          "context": 0.001,
+          "knowledge": 0.043,
+          "working_memory": 0.003
+        }
+      },
+      "minimal": {
+        "route": "minimal",
+        "latency_ms": 0.5,
+        "unique_tokens": 38
+      }
+    },
+    {
+      "task": "research",
+      "domain": "research",
+      "raw_brain": {
+        "route": "raw_brain",
+        "latency_ms": 203.0,
+        "result_count": 7,
+        "avg_distance": 1.0429,
+        "min_distance": 0.9704,
+        "unique_tokens": 89
+      },
+      "wiki_first": {
+        "route": "wiki_first",
+        "latency_ms": 16.6,
+        "result_count": 7,
+        "wiki_hits": 0,
+        "avg_distance": 1.0429,
+        "min_distance": 0.9704,
+        "unique_tokens": 89
+      },
+      "combined": {
+        "route": "combined",
+        "latency_ms": 42.9,
+        "has_goals": true,
+        "has_context": true,
+        "has_knowledge": true,
+        "has_working_memory": true,
+        "unique_tokens": 142,
+        "brain_timings": {
+          "goals": 0.002,
+          "context": 0.001,
+          "knowledge": 0.039,
+          "working_memory": 0.001
+        }
+      },
+      "minimal": {
+        "route": "minimal",
+        "latency_ms": 3.1,
+        "unique_tokens": 40
+      }
+    },
+    {
+      "task": "reflection",
+      "domain": "memory",
+      "raw_brain": {
+        "route": "raw_brain",
+        "latency_ms": 162.5,
+        "result_count": 75,
+        "avg_distance": 1.5211,
+        "min_distance": 0.9809,
+        "unique_tokens": 415
+      },
+      "wiki_first": {
+        "route": "wiki_first",
+        "latency_ms": 14.0,
+        "result_count": 75,
+        "wiki_hits": 0,
+        "avg_distance": 1.5211,
+        "min_distance": 0.9809,
+        "unique_tokens": 415
+      },
+      "combined": {
+        "route": "combined",
+        "latency_ms": 134.9,
+        "has_goals": true,
+        "has_context": true,
+        "has_knowledge": true,
+        "has_working_memory": true,
+        "unique_tokens": 122,
+        "brain_timings": {
+          "goals": 0.002,
+          "context": 0.001,
+          "knowledge": 0.131,
+          "working_memory": 0.001
+        }
+      },
+      "minimal": {
+        "route": "minimal",
+        "latency_ms": 0.4,
+        "unique_tokens": 37
+      }
+    },
+    {
+      "task": "project_delivery",
+      "domain": "code",
+      "raw_brain": {
+        "route": "raw_brain",
+        "latency_ms": 127.4,
+        "result_count": 10,
+        "avg_distance": 1.2451,
+        "min_distance": 1.0278,
+        "unique_tokens": 116
+      },
+      "wiki_first": {
+        "route": "wiki_first",
+        "latency_ms": 13.4,
+        "result_count": 10,
+        "wiki_hits": 0,
+        "avg_distance": 1.2451,
+        "min_distance": 1.0278,
+        "unique_tokens": 116
+      },
+      "combined": {
+        "route": "combined",
+        "latency_ms": 41.5,
+        "has_goals": true,
+        "has_context": true,
+        "has_knowledge": true,
+        "has_working_memory": true,
+        "unique_tokens": 125,
+        "brain_timings": {
+          "goals": 0.002,
+          "context": 0.001,
+          "knowledge": 0.038,
+          "working_memory": 0.001
+        }
+      },
+      "minimal": {
+        "route": "minimal",
+        "latency_ms": 0.6,
+        "unique_tokens": 37
+      }
+    }
+  ]
+}
