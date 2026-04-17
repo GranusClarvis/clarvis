@@ -541,9 +541,9 @@ def build_scorecard(days: int, rows: List[Dict[str, Any]]) -> Dict[str, Any]:
         "brain_effectiveness_latest": _effectiveness_snapshot(),
         "retrieval_quality_report": _load_json(REPORT_FILE) or {},
         "proxy_caveats": [
-            "Traces do not yet carry structured preflight.brain_retrieval lists; "
-            "attribution falls back to prompt-section heuristics. Follow-up queue "
-            "item requests structured wiring.",
+            "Heartbeat traces now carry structured preflight.brain_retrieval lists "
+            "(wired 2026-04-17). Older traces still fall back to prompt-section "
+            "heuristics. Min-sample gate requires ≥7 attributable traces.",
             "Response-span attribution is lexical-overlap only — a hand-labelled "
             "stratified sample is tracked as a separate follow-up.",
             "N of eligible Claude spawns inside the audit window is tiny while "

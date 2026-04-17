@@ -1062,6 +1062,7 @@ def _preflight_brain_bridge(result, next_task, _rt, retrieval_tier_info):
             _recalled_ids.append({"id": _mid, "collection": _mcol})
     if _recalled_ids:
         result["recalled_memory_ids"] = _recalled_ids
+
     result["timings"]["knowledge"] = round(time.monotonic() - t85, 3)
 
     # §8.5.1: Evidence scoring gate — pre-filter by cosine similarity (threshold 0.3)
@@ -1080,6 +1081,21 @@ def _preflight_brain_bridge(result, next_task, _rt, retrieval_tier_info):
             result["timings"]["evidence_gate"] = round(time.monotonic() - t_gate, 3)
         except Exception as e:
             log(f"Evidence gate failed (non-fatal): {e}")
+
+    # Phase 4 audit: structured brain retrieval payload for attribution.
+    # Built AFTER the evidence gate so only kept (non-discarded) results are traced.
+    _filtered_raw = brain_ctx.get("raw_results", []) if brain_preflight_context and brain_ctx else []
+    _brain_retrieval = []
+    for _rank, _mem in enumerate(_filtered_raw if isinstance(_filtered_raw, list) else []):
+        _brain_retrieval.append({
+            "memory_id": str(_mem.get("id") or ""),
+            "collection": str(_mem.get("collection") or ""),
+            "distance": _mem.get("distance"),
+            "text": str(_mem.get("document") or "")[:2000],
+            "rank": _rank,
+        })
+    if _brain_retrieval:
+        result["_brain_retrieval"] = _brain_retrieval
 
     # §8.6: Retrieval eval + adaptive retry
     _preflight_retrieval_eval(result, next_task, _rt, brain_ctx)
@@ -1521,6 +1537,8 @@ def _finalize_preflight_trace(result, terminal=False, skip_reason=""):
         from clarvis.audit import update_trace, finalize_trace
         prompt_text = result.get("context_brief") or ""
         prompt_chars = len(prompt_text)
+        # Phase 4: structured brain retrieval for attribution analysis
+        brain_retrieval = result.get("_brain_retrieval") or []
         update_trace(
             tid,
             task={
@@ -1543,6 +1561,7 @@ def _finalize_preflight_trace(result, terminal=False, skip_reason=""):
                 "priority_override": result.get("priority_override"),
                 "timings": dict(result.get("timings") or {}),
                 "prompt_chars": prompt_chars,
+                "brain_retrieval": brain_retrieval,
             },
             prompt={
                 "context_brief": prompt_text[:20000],  # cap — full replay uses replay.py
