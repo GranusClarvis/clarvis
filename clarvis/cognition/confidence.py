@@ -202,6 +202,7 @@ def predict(event: str, expected: str, confidence: float, _task_aware: bool = Fa
     # confidence for that domain should not exceed ~85% (accuracy + 5% margin).
     domain = _classify_domain(event)
     domain_acc, domain_n = _domain_accuracy(domain)
+    fail_rate = None
     if domain_acc is not None:
         # Domain ceiling: cap confidence at empirical accuracy + 5% margin
         domain_ceiling = min(0.95, domain_acc + 0.05)
@@ -223,6 +224,27 @@ def predict(event: str, expected: str, confidence: float, _task_aware: bool = Fa
             print(f"Domain penalty: {domain} fail_rate={fail_rate:.0%} "
                   f"(n={domain_n}) → confidence {pre_penalty:.0%} → "
                   f"{confidence:.0%}", file=sys.stderr)
+
+    # Hard cap: no prediction above 0.90 unless BOTH:
+    #   (a) domain has ≥20 resolved predictions with ≥90% accuracy, AND
+    #   (b) the 0.90-1.0 band itself has ≥90% accuracy.
+    # The band check catches overconfidence even in high-accuracy domains.
+    # (strategic audit 2026-04-18)
+    if confidence > 0.90:
+        band_acc, band_n = _band_accuracy(0.90, 1.01)
+        domain_ok = domain_acc is not None and domain_n >= 20 and domain_acc >= 0.90
+        band_ok = band_acc is not None and band_n >= 20 and band_acc >= 0.90
+        if not (domain_ok and band_ok):
+            pre_cap = confidence
+            confidence = 0.90
+            recalibrated = True
+            reasons = []
+            if not domain_ok:
+                reasons.append(f"domain {domain}: n={domain_n}, acc={domain_acc:.0%}" if domain_acc is not None else f"domain {domain}: no data")
+            if not band_ok:
+                reasons.append(f"band 0.9-1.0: n={band_n}, acc={band_acc:.0%}" if band_acc is not None else "band 0.9-1.0: no data")
+            print(f"Hard cap 0.90: {'; '.join(reasons)} → "
+                  f"confidence {pre_cap:.0%} → {confidence:.0%}", file=sys.stderr)
 
     entry = {
         "event": event,

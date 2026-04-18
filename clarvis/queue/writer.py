@@ -51,7 +51,7 @@ def _flock_with_timeout(fd, timeout_s=30):
 STATE_FILE = os.path.join(_WS, "data", "queue_writer_state.json")
 
 
-def _sync_sidecar_add(tags_and_priorities: list[tuple[str, str]]) -> None:
+def _sync_sidecar_add(tags_and_priorities: list[tuple[str, str]], source: str = "unknown") -> None:
     """Create sidecar entries for newly added tasks so they're immediately visible to the engine.
 
     Called after add_task()/add_tasks() writes to QUEUE.md. This prevents
@@ -61,6 +61,7 @@ def _sync_sidecar_add(tags_and_priorities: list[tuple[str, str]]) -> None:
 
     Args:
         tags_and_priorities: list of (tag, priority) tuples for newly added tasks.
+        source: provenance string propagated into the sidecar entry.
     """
     if not tags_and_priorities:
         return
@@ -70,7 +71,9 @@ def _sync_sidecar_add(tags_and_priorities: list[tuple[str, str]]) -> None:
         changed = False
         for tag, priority in tags_and_priorities:
             if tag and tag not in sidecar:
-                sidecar[tag] = _default_entry(tag, priority)
+                entry = _default_entry(tag, priority)
+                entry["source"] = source
+                sidecar[tag] = entry
                 changed = True
         if changed:
             _save_sidecar(sidecar)
@@ -448,12 +451,16 @@ def add_tasks(tasks: list, priority: str = "P0", source: str = "unknown") -> lis
         ):
             insert_idx += 1
 
-        # Build task lines with source tag
+        # Build task lines with provenance suffix (Phase 13 provenance)
         task_lines = []
         for task in new_tasks:
             # Strip existing checkbox prefix if present
             task_clean = re.sub(r'^- \[[ x~]\] ', '', task).strip()
-            task_lines.append(f"- [ ] [{source.upper()} {today}] {task_clean}")
+            # Strip legacy prefix-style provenance [SOURCE DATE] if present
+            task_clean = re.sub(r'^\[[A-Z_]+ \d{4}-\d{2}-\d{2}\]\s*', '', task_clean).strip()
+            # Strip existing provenance suffix to prevent duplication
+            task_clean = re.sub(r'\s*\(added: \d{4}-\d{2}-\d{2}, source: [^)]+\)\s*$', '', task_clean).strip()
+            task_lines.append(f"- [ ] {task_clean} (added: {today}, source: {source})")
 
         # Insert tasks
         for task_line in reversed(task_lines):
@@ -469,7 +476,7 @@ def add_tasks(tasks: list, priority: str = "P0", source: str = "unknown") -> lis
             tag = _extract_tag_from_text(task)
             if tag:
                 tags_priorities.append((tag, priority))
-        _sync_sidecar_add(tags_priorities)
+        _sync_sidecar_add(tags_priorities, source=source)
 
         # Update state
         state["tasks_added_today"] += len(new_tasks)
@@ -541,7 +548,7 @@ def ensure_subtasks_for_tag(parent_tag: str, subtasks: list[str], source: str = 
             if not st_clean:
                 continue
             # Keep indentation consistent with existing manual subtasks (2 spaces)
-            to_insert.append(f"  - [ ] [{source.upper()} {stamped}] {st_clean}")
+            to_insert.append(f"  - [ ] {st_clean} (added: {stamped}, source: {source})")
 
         if not to_insert:
             return False
@@ -899,3 +906,60 @@ def queue_health() -> dict:
         "p1_over_cap": counts.get("P1", 0) > P1_CAP,
         "stale_in_progress": stale,
     }
+
+
+def backfill_sidecar_sources() -> dict:
+    """Backfill sidecar entries that have source='unknown' using queue_runs.jsonl.
+
+    Returns dict with counts: {"backfilled": N, "still_unknown": N}.
+    """
+    import json as _json
+    runs_file = os.path.join(_WS, "data", "queue_runs.jsonl")
+    try:
+        from clarvis.queue.engine import _load_sidecar, _save_sidecar
+    except Exception:
+        return {"backfilled": 0, "still_unknown": 0, "error": "engine not available"}
+
+    # Build tag→source map from queue_runs.jsonl
+    tag_sources: dict[str, str] = {}
+    if os.path.exists(runs_file):
+        with open(runs_file) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    rec = _json.loads(line)
+                    tag = rec.get("tag", "")
+                    src = rec.get("source", "")
+                    if tag and src:
+                        tag_sources[tag] = src
+                except (ValueError, KeyError):
+                    continue
+
+    # Also infer source from QUEUE.md provenance suffixes
+    content = _read_queue()
+    if content:
+        for line in content.split("\n"):
+            m = re.search(r'\(added: \d{4}-\d{2}-\d{2}, source: ([^)]+)\)', line)
+            if m:
+                src = m.group(1)
+                tag_m = re.search(r'\[([A-Z][A-Z0-9_]+)\]', line)
+                if tag_m:
+                    tag_sources[tag_m.group(1)] = src
+
+    sidecar = _load_sidecar()
+    backfilled = 0
+    still_unknown = 0
+    for tag, entry in sidecar.items():
+        if entry.get("source", "unknown") == "unknown":
+            if tag in tag_sources:
+                entry["source"] = tag_sources[tag]
+                backfilled += 1
+            else:
+                still_unknown += 1
+
+    if backfilled:
+        _save_sidecar(sidecar)
+
+    return {"backfilled": backfilled, "still_unknown": still_unknown}

@@ -335,6 +335,7 @@ class ClarvisBrowser:
         # Inject cookies via agent-browser CLI (works for both engines)
         if self.has_agent_browser:
             loaded = 0
+            skipped = 0
             failed = 0
 
             async def _inject_one(cookie):
@@ -342,7 +343,7 @@ class ClarvisBrowser:
                 value = cookie.get("value", "")
                 domain = cookie.get("domain", "")
                 if not name or not domain:
-                    return True  # skip, count as ok
+                    return "skipped"  # malformed — don't count as loaded
 
                 args = ["cookies", "set", name, value]
 
@@ -385,11 +386,14 @@ class ClarvisBrowser:
                 for ok in results:
                     if ok is True:
                         loaded += 1
+                    elif ok == "skipped":
+                        skipped += 1
                     else:
                         failed += 1
 
-            logger.info("Session loaded: %d/%d cookies injected via agent-browser (%d failed)",
-                        loaded, loaded + failed, failed)
+            total = loaded + skipped + failed
+            logger.info("Session loaded: %d/%d cookies injected via agent-browser (%d skipped, %d failed)",
+                        loaded, total, skipped, failed)
         else:
             # No agent-browser — fall back to loading via Playwright
             logger.info("No agent-browser; loading session via Playwright fallback")

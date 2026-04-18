@@ -633,6 +633,12 @@ class CodeletCompetition:
             best_domain = max(activations, key=activations.get) if activations else "memory"
             winner = {"members": [best_domain], "score": activations.get(best_domain, 0.0)}
 
+        # Anti-starvation: ensure non-memory domains win >= 20% combined.
+        # If the winner is memory-only, check historical win share. If
+        # non-memory domains are starved, override with the strongest
+        # non-memory codelet (provided it has non-zero activation).
+        winner = self._apply_diversity_floor(winner, activations, coalition_scores)
+
         # Record win
         for domain in winner["members"]:
             self.codelets[domain].wins += 1
@@ -665,6 +671,53 @@ class CodeletCompetition:
             "domain_bias": domain_bias,
             "broadcast_items": broadcast_items[:5],
             "trends": {d: c.trend() for d, c in self.codelets.items()},
+        }
+
+    # Diversity floor: non-memory domains must win >= this fraction combined
+    DIVERSITY_FLOOR = 0.20
+    # Minimum recent history window for floor calculation
+    DIVERSITY_WINDOW = 20
+
+    def _apply_diversity_floor(self, winner, activations, coalition_scores):
+        """Override memory-only winner when non-memory domains are starved.
+
+        If memory has won > (1 - DIVERSITY_FLOOR) of the last DIVERSITY_WINDOW
+        competitions, and the current winner is memory-only, substitute the
+        strongest non-memory codelet with non-zero activation.
+        """
+        # Only intervene when memory is the sole winner
+        if set(winner["members"]) != {"memory"}:
+            return winner
+
+        total_wins = sum(c.wins for c in self.codelets.values())
+        if total_wins < self.DIVERSITY_WINDOW:
+            return winner  # not enough history
+
+        memory_wins = self.codelets["memory"].wins
+        non_memory_share = 1.0 - (memory_wins / total_wins)
+
+        if non_memory_share >= self.DIVERSITY_FLOOR:
+            return winner  # non-memory already has enough share
+
+        # Find strongest non-memory domain with activation > 0
+        non_memory = [
+            (d, a) for d, a in activations.items()
+            if d != "memory" and a > 0
+        ]
+        if not non_memory:
+            return winner  # no activated alternative
+
+        best_domain, best_act = max(non_memory, key=lambda x: x[1])
+
+        # Check coalition_scores for a non-memory coalition
+        for cid, info in coalition_scores.items():
+            if "memory" not in info["members"] and info["score"] > 0:
+                return info
+
+        return {
+            "members": [best_domain],
+            "score": best_act,
+            "diversity_override": True,
         }
 
     def _find_coalitions(self):

@@ -151,19 +151,32 @@ OPENROUTER_MODELS = {
     "web_search": "google/gemini-3-flash-preview",
 }
 
+# Phase 6 narrowing (2026-04-18): context-aware patterns replace broad keywords.
+# Prior FP rate: 90% (25/28 vision, 2/2 web). Bare words like "scan", "image",
+# "visual" triggered on code tasks ("scan repo for secrets", "visual dashboard").
+# Now each pattern requires vision/search-specific context nearby.
 VISION_PATTERNS = [
-    r"(?i)image", r"(?i)photo", r"(?i)picture", r"(?i)screenshot",
-    r"(?i)visual", r"(?i)diagram", r"(?i)chart",
-    r"(?i)look\s+at", r"(?i)what.*see", r"(?i)describe.*(?:image|photo)",
-    r"(?i)ocr\b", r"(?i)scan\b",
+    r"(?i)\bphoto\b",
+    r"(?i)\bpicture\b",
+    r"(?i)\bocr\b",
+    r"(?i)describe\s+(?:the\s+|this\s+|an?\s+)?(?:image|photo|picture|screenshot)",
+    r"(?i)(?:analyze|process|classify|recognize|read)\s+(?:the\s+|this\s+|an?\s+)?(?:image|photo|picture|screenshot)",
+    r"(?i)detect\s+(?:\w+\s+)?(?:in|from)\s+(?:the\s+|this\s+|an?\s+)?(?:image|photo|picture|screenshot)",
+    r"(?i)\b(?:image|photo)\s+(?:recognition|classification|detection|analysis|processing|segmentation)",
+    r"(?i)\bvisual\s+(?:recognition|question|inspection|analysis|grounding)",
+    r"(?i)what\s+(?:is|are)\s+(?:in|on)\s+(?:the\s+|this\s+)?(?:image|photo|picture|screenshot)",
+    r"(?i)(?:document|receipt|page)\s+scan",
+    r"(?i)look\s+at\s+(?:the\s+|this\s+)?(?:image|photo|picture|screenshot)",
 ]
 
 WEB_SEARCH_PATTERNS = [
     r"(?i)search\s+(?:the\s+)?(?:web|internet|online)",
-    r"(?i)look\s+up\b", r"(?i)find\s+(?:out|info|information)",
-    r"(?i)what\s+is\s+the\s+latest", r"(?i)current\s+(?:price|news|status)",
-    r"(?i)google\b", r"(?i)research\s+(?:online|web)",
-    r"(?i)fetch\s+(?:from|url|page|website)", r"(?i)browse\b",
+    r"(?i)look\s+up\b(?!\s+(?:the\s+)?(?:variable|function|class|method|definition|reference|import|module|file))",
+    r"(?i)find\s+(?:out|info|information)\s+(?:about|on|regarding)",
+    r"(?i)what\s+is\s+the\s+latest",
+    r"(?i)current\s+(?:price|news|stock)",
+    r"(?i)research\s+(?:online|web)",
+    r"(?i)fetch\s+(?:from\s+|the\s+)?(?:url|page|website|https?://)",
 ]
 
 
@@ -187,31 +200,40 @@ def classify_task(task_text, context=""):
     text_lower = text.lower()
     word_count = len(text.split())
 
-    # Vision tasks
-    for pattern in VISION_PATTERNS:
-        if re.search(pattern, task_text):
-            return {
-                "tier": "vision", "score": 0.30, "executor": "openrouter",
-                "dimensions": {}, "reason": f"Vision task pattern: {pattern}",
-                "model": OPENROUTER_MODELS["vision"],
-            }
-
-    # Web search tasks
-    for pattern in WEB_SEARCH_PATTERNS:
-        if re.search(pattern, task_text):
-            return {
-                "tier": "web_search", "score": 0.25, "executor": "openrouter",
-                "dimensions": {}, "reason": f"Web search pattern: {pattern}",
-                "model": OPENROUTER_MODELS["web_search"],
-            }
-
-    # Force Claude Code for code-heavy tasks
+    # Check for code-heavy signals first — these override vision/web routing.
+    # A task like "scan repo for secrets" should go to Claude, not a vision model.
+    _force_claude_match = None
     for pattern in FORCE_CLAUDE_PATTERNS:
         if re.search(pattern, task_text):
-            return {
-                "tier": "complex", "score": 0.70, "executor": "claude",
-                "dimensions": {}, "reason": f"Force-Claude pattern match: {pattern}",
-            }
+            _force_claude_match = pattern
+            break
+
+    # Vision tasks (only if not a code-heavy task)
+    if not _force_claude_match:
+        for pattern in VISION_PATTERNS:
+            if re.search(pattern, task_text):
+                return {
+                    "tier": "vision", "score": 0.30, "executor": "openrouter",
+                    "dimensions": {}, "reason": f"Vision task pattern: {pattern}",
+                    "model": OPENROUTER_MODELS["vision"],
+                }
+
+    # Web search tasks (only if not a code-heavy task)
+    if not _force_claude_match:
+        for pattern in WEB_SEARCH_PATTERNS:
+            if re.search(pattern, task_text):
+                return {
+                    "tier": "web_search", "score": 0.25, "executor": "openrouter",
+                    "dimensions": {}, "reason": f"Web search pattern: {pattern}",
+                    "model": OPENROUTER_MODELS["web_search"],
+                }
+
+    # Force Claude Code for code-heavy tasks
+    if _force_claude_match:
+        return {
+            "tier": "complex", "score": 0.70, "executor": "claude",
+            "dimensions": {}, "reason": f"Force-Claude pattern match: {_force_claude_match}",
+        }
 
     # Force simple for trivial tasks
     for pattern in FORCE_SIMPLE_PATTERNS:

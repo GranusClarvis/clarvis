@@ -157,21 +157,13 @@ if [ "$PREFLIGHT_EXIT" -eq 0 ]; then
     python3 "$SCRIPTS/pipeline/heartbeat_postflight.py" "$TASK_EXIT" "$TASK_OUTPUT_FILE" "$PREFLIGHT_FILE" "$TASK_DURATION" >> "$LOGFILE" 2>&1
 fi
 
-# Update digest
-SUMMARY=$(tail -c 500 "$TASK_OUTPUT_FILE" 2>/dev/null | tail -5)
-{
-    echo ""
-    echo "### Implementation Sprint — $(date -u +%H:%M) UTC"
-    echo ""
-    if [ "$TASK_EXIT" -eq 0 ]; then
-        echo "Sprint task: ${IMPL_TASK:0:100}. Result: success (${TASK_DURATION}s). Summary: ${SUMMARY:0:200}"
-    else
-        echo "Sprint FAILED: ${IMPL_TASK:0:100}. Exit=$TASK_EXIT (${TASK_DURATION}s)."
-    fi
-    echo ""
-    echo "---"
-    echo ""
-} >> "memory/cron/digest.md"
+# Update digest via digest_writer (consistent formatting + archival)
+SUMMARY=$(tail -c 500 "$TASK_OUTPUT_FILE" 2>/dev/null | tail -5 | tr '\n' ' ' | head -c 200)
+if [ "$TASK_EXIT" -eq 0 ]; then
+    python3 "$CLARVIS_WORKSPACE/scripts/tools/digest_writer.py" sprint "Sprint task: ${IMPL_TASK:0:100}. Result: success (${TASK_DURATION}s). Summary: ${SUMMARY}" >> "$LOGFILE" 2>&1 || true
+else
+    python3 "$CLARVIS_WORKSPACE/scripts/tools/digest_writer.py" sprint "Sprint FAILED: ${IMPL_TASK:0:100}. Exit=$TASK_EXIT (${TASK_DURATION}s)." >> "$LOGFILE" 2>&1 || true
+fi
 
 # Cost logging removed — postflight already logs cost for the spawned Claude session.
 # Duplicate logging here caused double-counting. (Fixed 2026-04-09, ref: SECOND_PASS_VALIDATION F4.6.2)

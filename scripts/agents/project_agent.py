@@ -2209,7 +2209,11 @@ def cmd_auto_golden_qa(name: str) -> dict:
             break
 
         # Embed candidate query
-        cand_emb = embed_fn([candidate["query"]])[0]
+        cand_query = candidate.get("query", "")
+        if not cand_query:
+            skipped_dedup += 1
+            continue
+        cand_emb = embed_fn([cand_query])[0]
 
         # Check similarity against all existing
         is_dup = False
@@ -2226,7 +2230,7 @@ def cmd_auto_golden_qa(name: str) -> dict:
         # Add to QA set
         existing_qa.append(candidate)
         existing_embeddings.append(cand_emb)
-        existing_queries.append(candidate["query"])
+        existing_queries.append(cand_query)
         added += 1
 
     # Save updated golden QA
@@ -2519,7 +2523,9 @@ def _benchmark_retrieval(name: str) -> dict:
     reciprocal_ranks = []
 
     for qa in qa_pairs:
-        query = qa["query"]
+        query = qa.get("query", "")
+        if not query:
+            continue
         expected = [e.lower() for e in qa.get("expected_docs", [])]
         collection = qa.get("collection")
 

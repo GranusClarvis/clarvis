@@ -81,7 +81,12 @@ def compute_pi(metrics):
         direction = meta["direction"]
         value = metrics.get(key)
 
-        if value is None or target is None:
+        if target is None:
+            continue
+        if value is None:
+            # Missing metrics still count toward PI with score=0 (fail).
+            # Skipping them inflates PI by shrinking the denominator.
+            total_weight += weight
             continue
 
         total_weight += weight

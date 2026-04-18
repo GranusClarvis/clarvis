@@ -38,7 +38,7 @@ fi
 FAILED_SSH=$(grep "Failed password" /var/log/auth.log 2>/dev/null | tail -5 | wc -l)
 
 # Check for unusual processes (exclude self and system)
-SUSPICIOUS=$(ps aux | grep -E "nc |netcat |nmap |masscan |hydra" | grep -v grep | wc -l)
+SUSPICIOUS=$(ps aux | grep -Ew "nc|netcat|nmap|masscan|hydra" | grep -v grep | wc -l)
 
 # === NETWORK EXPOSURE ===
 OPEN_PORTS=$(ss -tuln | awk 'NR>1 {print $1}' | sort -u | wc -l)
@@ -261,9 +261,9 @@ text = open(path, encoding="utf-8").read()
 in_p0 = in_p1 = False
 p0 = p1 = 0
 for line in text.splitlines():
-    if re.match(r"^## P0\b", line):
+    if re.match(r"^## P0 —", line):
         in_p0, in_p1 = True, False
-    elif re.match(r"^## P1\b", line):
+    elif re.match(r"^## P1 —", line):
         in_p0, in_p1 = False, True
     elif re.match(r"^## ", line):
         in_p0, in_p1 = False, False
@@ -346,16 +346,19 @@ except Exception:
 " 2>/dev/null)
 [ -z "$BRAIN_COUNT" ] && BRAIN_COUNT="null"
 
-# Cron health: count OK vs failed from recent cron log entries (last 24h)
+# Cron health: count OK vs failed from recent log entries (last 24h)
 CRON_OK=0
 CRON_FAIL=0
+TODAY=$(date '+%Y-%m-%d')
 if [ -f "$LOG_DIR/health.log" ]; then
-    TODAY=$(date '+%Y-%m-%d')
-    CRON_OK=$(grep -c -E "\[.*$TODAY.*\].*(completed|OK|success)" "$LOG_DIR/health.log" 2>/dev/null || true)
-    CRON_FAIL=$(grep -c -E "\[.*$TODAY.*\].*(FAIL|ERROR|CRITICAL)" "$LOG_DIR/alerts.log" 2>/dev/null || true)
-    CRON_OK=${CRON_OK:-0}
-    CRON_FAIL=${CRON_FAIL:-0}
+    # Count today's timestamped entries (each = one successful health check run)
+    CRON_OK=$(grep -c -E "^\[$TODAY" "$LOG_DIR/health.log" 2>/dev/null || true)
 fi
+if [ -f "$LOG_DIR/alerts.log" ]; then
+    CRON_FAIL=$(grep -c -E "^\[$TODAY.*\].*(FAIL|ERROR|CRITICAL)" "$LOG_DIR/alerts.log" 2>/dev/null || true)
+fi
+CRON_OK=${CRON_OK:-0}
+CRON_FAIL=${CRON_FAIL:-0}
 
 # Read cached PI value (computed hourly above)
 CACHED_PI="null"

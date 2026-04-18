@@ -1117,6 +1117,8 @@ def run_refresh_benchmark():
     brain_stats = _safe_bench(benchmark_brain_stats, "brain_stats")
     episodes = _safe_bench(benchmark_episodes, "episodes")
     quality = _safe_bench(benchmark_quality, "quality")
+    # Always recompute Phi fresh — previously cached, causing PI to freeze
+    phi_data = _safe_bench(benchmark_phi, "phi")
 
     bench_duration = round(time.monotonic() - t0, 2)
 
@@ -1157,6 +1159,7 @@ def run_refresh_benchmark():
         "bloat_score":          brain_stats.get("bloat_score", 0.0),
         "task_quality_score":   quality.get("task_quality_score", 0.5),
         "code_quality_score":   quality.get("code_quality_score", 0.5),
+        "phi":                 phi_data.get("phi", prev_metrics.get("phi", 0.0)),
     })
 
     # --- PI Anomaly Guard ---
@@ -1204,7 +1207,7 @@ def run_refresh_benchmark():
             pass  # Best-effort alerting
 
     details = dict(prev_details)
-    details.update({"speed": speed, "brain_stats": brain_stats, "episodes": episodes, "quality": quality})
+    details.update({"speed": speed, "brain_stats": brain_stats, "episodes": episodes, "quality": quality, "phi": phi_data})
     if pi_anomalies:
         details["pi_anomalies"] = pi_anomalies
 

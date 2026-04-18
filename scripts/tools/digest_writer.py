@@ -21,6 +21,7 @@ Or from Python:
 """
 
 import os
+import shutil
 import sys
 import json
 import fcntl
@@ -30,12 +31,17 @@ WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/
 DIGEST_FILE = os.path.join(WORKSPACE, "memory", "cron", "digest.md")
 DIGEST_STATE = os.path.join(WORKSPACE, "data", "digest_state.json")
 
+DIGEST_ARCHIVE_DIR = os.path.join(WORKSPACE, "memory", "cron", "archive")
+DIGEST_ARCHIVE_RETAIN_DAYS = 30
+
 SECTION_EMOJI = {
     "morning": "🌅",
     "autonomous": "⚡",
     "evolution": "🧬",
     "evening": "🌆",
     "reflection": "🔮",
+    "research": "🔬",
+    "sprint": "🏃",
 }
 
 
@@ -54,10 +60,49 @@ def _save_state(state):
         json.dump(state, f)
 
 
+def _archive_digest(previous_date: str):
+    """Archive the previous day's digest before resetting.
+
+    Copies digest.md to archive/digest-YYYY-MM-DD.md and prunes
+    files older than DIGEST_ARCHIVE_RETAIN_DAYS.
+    """
+    if not os.path.exists(DIGEST_FILE):
+        return
+    # Only archive if the file has real content (more than just the header)
+    try:
+        size = os.path.getsize(DIGEST_FILE)
+        if size < 100:
+            return
+    except OSError:
+        return
+
+    os.makedirs(DIGEST_ARCHIVE_DIR, exist_ok=True)
+    archive_path = os.path.join(DIGEST_ARCHIVE_DIR, f"digest-{previous_date}.md")
+    if not os.path.exists(archive_path):
+        shutil.copy2(DIGEST_FILE, archive_path)
+
+    # Prune old archives
+    from datetime import timedelta
+    cutoff = datetime.now(timezone.utc) - timedelta(days=DIGEST_ARCHIVE_RETAIN_DAYS)
+    cutoff_str = cutoff.strftime("%Y-%m-%d")
+    try:
+        for fname in os.listdir(DIGEST_ARCHIVE_DIR):
+            if fname.startswith("digest-") and fname.endswith(".md"):
+                date_part = fname[7:-3]  # extract YYYY-MM-DD
+                if date_part < cutoff_str:
+                    os.remove(os.path.join(DIGEST_ARCHIVE_DIR, fname))
+    except OSError:
+        pass
+
+
 def _reset_if_new_day(state):
-    """Reset digest file at the start of each day."""
+    """Reset digest file at the start of each day, archiving the previous day's digest."""
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     if state.get("last_reset") != today:
+        # Archive yesterday's digest before overwriting
+        previous_date = state.get("last_reset", today)
+        _archive_digest(previous_date)
+
         os.makedirs(os.path.dirname(DIGEST_FILE), exist_ok=True)
         with open(DIGEST_FILE, "w") as f:
             f.write(f"# Clarvis Daily Digest — {today}\n\n")

@@ -198,19 +198,11 @@ STATIC_FOOTER
     tail -c 1500 "$DISC_OUTPUT_FILE" >> "$LOGFILE" 2>/dev/null
 
     DISC_SUMMARY=$(tail -c 300 "$DISC_OUTPUT_FILE" 2>/dev/null | tail -3)
-    {
-        echo ""
-        echo "### Research Discovery — $(date -u +%H:%M) UTC"
-        echo ""
-        if [ "$DISC_EXIT" -eq 0 ]; then
-            echo "Discovered research topics (via fallback). Summary: ${DISC_SUMMARY:0:200}"
-        else
-            echo "Discovery FAILED. Exit=$DISC_EXIT (${DISC_DURATION}s)."
-        fi
-        echo ""
-        echo "---"
-        echo ""
-    } >> "memory/cron/digest.md"
+    if [ "$DISC_EXIT" -eq 0 ]; then
+        python3 "$CLARVIS_WORKSPACE/scripts/tools/digest_writer.py" research "Discovered research topics (via fallback). Summary: ${DISC_SUMMARY:0:200}" >> "$LOGFILE" 2>&1 || true
+    else
+        python3 "$CLARVIS_WORKSPACE/scripts/tools/digest_writer.py" research "Discovery FAILED. Exit=$DISC_EXIT (${DISC_DURATION}s)." >> "$LOGFILE" 2>&1 || true
+    fi
 
     rm -f "$DISC_OUTPUT_FILE"
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Research discovery fallback complete (${DISC_DURATION}s) ===" >> "$LOGFILE"
@@ -245,15 +237,7 @@ result = mark_task_complete(task, annotation, queue_file=queue_file, archive_fil
 print(f'Queue skip-mark result: {result}')
 archive_completed()
 PY
-    {
-        echo ""
-        echo "### Research — $(date -u +%H:%M) UTC"
-        echo ""
-        echo "SKIPPED (ALREADY_KNOWN): ${RESEARCH_TASK:0:100}. Duplicate topic detected by novelty gate."
-        echo ""
-        echo "---"
-        echo ""
-    } >> "memory/cron/digest.md"
+    python3 "$CLARVIS_WORKSPACE/scripts/tools/digest_writer.py" research "SKIPPED (ALREADY_KNOWN): ${RESEARCH_TASK:0:100}. Duplicate topic detected by novelty gate." >> "$LOGFILE" 2>&1 || true
     emit_dashboard_event task_completed --task-name "Research session" --section cron_research --status "skipped:duplicate" --duration-s "0"
     exit 0
 fi
@@ -380,22 +364,13 @@ echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] RESEARCH EXECUTION: exit=$TASK_EXIT durati
 # Log output (truncated)
 tail -c 2000 "$TASK_OUTPUT_FILE" >> "$LOGFILE" 2>/dev/null
 
-# Update digest
-SUMMARY=$(tail -c 500 "$TASK_OUTPUT_FILE" 2>/dev/null | tail -5)
-DIGEST_FILE="memory/cron/digest.md"
-{
-    echo ""
-    echo "### Research — $(date -u +%H:%M) UTC"
-    echo ""
-    if [ "$TASK_EXIT" -eq 0 ]; then
-        echo "Researched: ${RESEARCH_TASK:0:100}. Result: success (${TASK_DURATION}s). Summary: ${SUMMARY:0:200}"
-    else
-        echo "Research FAILED: ${RESEARCH_TASK:0:100}. Exit=$TASK_EXIT (${TASK_DURATION}s)."
-    fi
-    echo ""
-    echo "---"
-    echo ""
-} >> "$DIGEST_FILE"
+# Update digest via digest_writer (consistent formatting + archival)
+SUMMARY=$(tail -c 500 "$TASK_OUTPUT_FILE" 2>/dev/null | tail -5 | tr '\n' ' ' | head -c 200)
+if [ "$TASK_EXIT" -eq 0 ]; then
+    python3 "$CLARVIS_WORKSPACE/scripts/tools/digest_writer.py" research "Researched: ${RESEARCH_TASK:0:100}. Result: success (${TASK_DURATION}s). Summary: ${SUMMARY}" >> "$LOGFILE" 2>&1 || true
+else
+    python3 "$CLARVIS_WORKSPACE/scripts/tools/digest_writer.py" research "Research FAILED: ${RESEARCH_TASK:0:100}. Exit=$TASK_EXIT (${TASK_DURATION}s)." >> "$LOGFILE" 2>&1 || true
+fi
 
 # Deterministic queue completion: do NOT rely on Claude to remember to tick the box.
 if [ "$TASK_EXIT" -eq 0 ]; then

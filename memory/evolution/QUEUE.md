@@ -2,7 +2,7 @@
 
 _Pick from here every heartbeat. Small tasks: do now. Big tasks: spawn Claude Code._
 _Priority: P0 (do now) > P1 (this week) > P2 (when idle)_
-_Completed items archived by queue_auto_archive.py to QUEUE_ARCHIVE.md._
+_Completed items archived by `clarvis.queue.writer.archive_completed()` to QUEUE_ARCHIVE.md._
 _Caps: P0 ≤ 10, P1 ≤ 15. Triage before adding. See docs/PROJECT_LANES.md for rules._
 _Deep audit tracker: `docs/internal/audits/CLARVIS_DEEP_AUDIT_PLAN_2026-04-16.md` (existing P1 audit items map to phases there — do not duplicate). Quick-reference: `docs/internal/audits/AUDIT_INDEX.md`._
 
@@ -66,14 +66,11 @@ _Source: `docs/internal/audits/PROMPT_ASSEMBLY_SCORECARD_2026-04-16.md` + `docs/
 
 _Source: `docs/internal/audits/BRAIN_USEFULNESS_2026-04-16.md` + `docs/internal/audits/decisions/2026-04-16_phase4_brain_usefulness.md`. Phase 4 ruled INSUFFICIENT_DATA × 10 collections on the attribution gate — blocked by two Phase-0 capture gaps (listed below, the P0 item being the most severe). One independent REVISE flagged on routing. `scripts/audit/brain_attribution.py` + `data/audit/brain_attribution.jsonl` + `data/audit/brain_collection_scorecard.json` shipped. All items use `source="audit_phase_4"`._
 
-- [ ] **[AUDIT_PHASE_4_RE_RUN_AFTER_7D_TRACES]** On or after 2026-04-23, after `[AUDIT_PHASE_4_BRAIN_RETRIEVAL_TRACE_WIRING]` + `[AUDIT_PHASE_4_SPAWN_CLAUDE_PROMPT_CAPTURE]` have landed AND ≥ 7 attributable traces exist, re-run `python3 scripts/audit/brain_attribution.py run --days 30` and promote the per-collection verdicts from INSUFFICIENT_DATA to PASS / REVISE / DEMOTE_CANDIDATE. Record the updated rulings in a §9 addendum on `docs/internal/audits/BRAIN_USEFULNESS_2026-04-16.md`. No demotion action is permitted on a single window — per plan §3.1, DEMOTE requires two consecutive windows agreeing. Acceptance: rescore lands; headline reports `attributable_traces ≥ 7`.
 
 ### Deep Audit — Phase 6 Follow-ups (added 2026-04-16 via AUDIT_CAP_OVERRIDE)
 
 _Source: `docs/internal/audits/decisions/2026-04-16_phase6_execution_routing_queue.md`. Phase 6 ruled REVISE overall: router PASS (98.9% accuracy, PROMOTE candidate), autofill PASS (2.4% stale), caps REVISE (21/30 days), spawn PASS, slot share FAIL (12.5% vs 50%). All items use `source="audit_phase_6"`._
 
-- [ ] **[PHASE6_SIDECAR_SOURCE_PROPAGATION]** Fix `clarvis/queue/writer.py:_sync_sidecar_add()` to propagate the `source` argument into the sidecar record. Currently all 333 entries have `source: "unknown"`. Backfill existing entries from `data/queue_runs.jsonl` where a `source` field exists. Acceptance: new sidecar entries show correct source; `python3 -c "import json; d=json.load(open('data/queue_state.json')); print(sum(1 for v in d.values() if v.get('source','unknown')!='unknown'))"` returns > 0. Source: Phase 6 Gap 3.
-- [ ] **[PHASE6_ROUTER_KEYWORD_NARROWING]** Narrow `VISION_PATTERNS` and `WEB_SEARCH_PATTERNS` in `clarvis/orch/router.py:154-166` to reduce false-positive rate (currently 48.1% on non-Claude paths). Replace broad patterns (`r"(?i)image"`, `r"(?i)visual"`, `r"(?i)scan\b"`, `r"(?i)google\b"`) with context-aware patterns or add a "pattern-score confirmation" step. Acceptance: re-analyze `data/router_decisions.jsonl` false-positive count < 10%. Source: Phase 6 Gap 4.
 
 ### Deep Audit — Meta-Audit Follow-ups (added 2026-04-16 via AUDIT_CAP_OVERRIDE)
 
@@ -93,11 +90,14 @@ _Demoted to P2 to bring P1 within 25-ceiling. All are review/sweep/benchmark tas
 
 ### Phase 6 Follow-ups (P2, added 2026-04-16)
 
-- [ ] **[PHASE6_CODELET_DIVERSITY_FLOOR]** Add anti-starvation to codelet competition in `clarvis/cognition/attention.py`: ensure non-memory codelets (code, research, infrastructure) win at least 20% of competitions combined. Currently memory wins 86.4% (628/727). Implement via domain rotation or activation floor. Acceptance: after 50 compete() cycles, non-memory wins >= 20%. Source: Phase 6 Gap 6.
 - [ ] **[PHASE6_OPERATOR_VALUE_LABEL]** Design a mechanism for operator to label task outcomes as "high-value" / "neutral" / "low-value". Could be Telegram reaction on digest, `/rate` command, or QUEUE.md annotation. Without this, task-selector vs operator-value correlation is structurally unmeasurable. Source: Phase 6 Gap 5.
 
 ### Deep Audit — Meta-Audit Follow-ups (P2, added 2026-04-16 via AUDIT_CAP_OVERRIDE)
 
+
+### Graph Integration (P2, added 2026-04-18)
+
+- [ ] **[PHI_REMAINING_GAP]** Phi is 0.616 vs 0.65 target. Remaining gap is in cross_collection_connectivity (0.501) and episodes intra-density (0.42). Next steps: run full bulk_intra_link for episodes/learnings (needs longer timeout), investigate if cross_collection ratio can be improved by targeted bridging.
 
 ### Phase 4.5 Follow-ups (P2, added 2026-04-16)
 
@@ -145,19 +145,12 @@ _Source: `docs/internal/audits/COST_VALUE_2026-04-17.md`. Phase 14 ruled REVISE:
 
 _Source: `docs/internal/audits/PROPOSAL_QUALITY_2026-04-17.md`. Phase 13 ruled REVISE: proposal quality analytically strong but tracking broken (sidecar 0/394 useful), hallucination rate at boundary (10%), self-work bias structural._
 
-- [ ] **[PHASE13_EVOLUTION_HALLUCINATION_GUARD]** Add file/function existence validation to evolution-scan proposals before they're written to QUEUE.md. After Claude generates proposals in `cron_evolution.sh`, run a Python validator that checks each `[TASK]` description for file path references (`scripts/`, `clarvis/`, `data/`) and verifies they exist on disk. Log mismatches to `monitoring/evolution_hallucinations.log` and either fix the path or flag the item with `[UNVERIFIED]`. Acceptance: next 3 evolution scans show 0 hallucinated file references. Source: Phase 13 Gap G1.
-- [ ] **[PHASE13_QUEUE_ITEM_PROVENANCE]** Add creation timestamp and origin tag to QUEUE.md items when auto-generated. Extend `queue_writer.add_tasks()` to append ` (added: YYYY-MM-DD, source: <origin>)` to each new item. For evolution-scan items, the header already provides date; formalize with per-item metadata. Acceptance: next 5 auto-generated items carry provenance suffix. Source: Phase 13 Gap G4.
-- [ ] **[PHASE13_EVOLUTION_SCAN_DIGEST_BRIDGE]** Wire evolution scan diagnostic output (gap analysis, promotion recommendations) into the daily digest via `digest_writer.py`. Currently scan output is only in `memory/cron/evolution.log` where it may not be read. Acceptance: next evolution scan's gap table appears in digest.md. Source: Phase 13 Gap G5.
-- [ ] **[PHASE13_ARCHIVE_SCRIPT_GHOST_FIX]** Fix the ghost reference to `scripts/queue_auto_archive.py` in QUEUE.md header (line 5). Either create the script (migrating functionality from wherever archival actually happens) or update the header to reference the actual archival mechanism. Acceptance: QUEUE.md header references an existing file. Source: Phase 13 hallucination finding.
 - [ ] **[PHASE13_RESCORE_AFTER_SIDECAR]** After `[PHASE6_SIDECAR_SOURCE_PROPAGATION]` lands and 14 days of sidecar data accumulates, re-run Phase 13 survival and outcome measurements with real data instead of proxies. Update `data/audit/proposal_quality.jsonl` and scorecard. Acceptance: re-scored gates use sidecar data, not proxy estimates. Source: Phase 13 proxy limitation.
 
 ### Phase 12 Follow-ups (P2, added 2026-04-17)
 
 _Source: `docs/internal/audits/DUAL_LAYER_HANDOFF_2026-04-17.md`. Phase 12 found digest actionability at 56.5% (REVISE), spawn quality 85% (PASS). Digest archive missing, inconsistent writers, morning garble._
 
-- [ ] **[PHASE12_DIGEST_ARCHIVE]** Add daily digest archival to `scripts/tools/digest_writer.py`: before the midnight reset, copy `memory/cron/digest.md` to `memory/cron/archive/digest-YYYY-MM-DD.md`. Retain 30 days. Acceptance: after 2 daily resets, archive dir contains 2 dated files. Source: Phase 12 Gap 1.
-- [ ] **[PHASE12_DIGEST_WRITER_CONSOLIDATION]** Migrate `cron_research.sh` (lines 213, 256, 385) and `cron_implementation_sprint.sh` (line 174) to use `digest_writer.py` instead of direct `>> digest.md` append. Add "research" and "sprint" to SECTION_EMOJI. Acceptance: `grep -n 'digest.md' scripts/cron/cron_research.sh` returns only `digest_writer.py` calls. Source: Phase 12 Gap 3 + §7.4.
-- [ ] **[PHASE12_MORNING_DIGEST_GARBLE_FIX]** Debug `cron_morning.sh` line 45 — the `$PRIORITIES` variable concatenates with digest_writer summary, producing mid-sentence garble in the morning entry. Fix the variable truncation or reformulate the summary. Acceptance: morning digest entry starts with a coherent sentence. Source: Phase 12 Gap 4 + §7.3.
 - [ ] **[PHASE12_SPAWN_ENRICHMENT_TO_PROJECT_AGENTS]** Replicate `prompt_builder.py context-brief` enrichment to `project_agent.py spawn` so project agents benefit from brain retrieval, episodic hints, and worker templates. Currently project spawns use raw task text only. Acceptance: `project_agent.py spawn` includes context_brief in prompt. Source: Phase 12 PROMOTE candidate 1.
 
 ### Deep Audit Follow-ups (from Phase 1 — `docs/internal/audits/SCRIPT_WIRING_INVENTORY_2026-04-16.md`)
@@ -233,8 +226,6 @@ _Source: `source="audit_phase_4"`. P0+P1 items are co-located with their parent 
 - [ ] Remove stale `plugins.slots.contextEngine = "legacy"` from openclaw.json.
 - [ ] Add 3 unbounded monitoring logs to cleanup_policy.py rotation table.
 - [ ] Remove orphaned monitoring/cron_errors_daily.md or wire regeneration.
-- [ ] Fix health_monitor.sh suspicious-process regex false positives.
-- [ ] Fix broken cron_ok_count in health_monitor.sh.
 - [ ] Add state-change dedup guard for health_monitor.sh brain-hygiene alerts.
 - [ ] Purge ghost .pyc files for migrated scripts.
 - [ ] Archive or refresh stale consciousness-research plan.
@@ -294,8 +285,6 @@ _Source: `source="audit_phase_4"`. P0+P1 items are co-located with their parent 
 ## NEW ITEMS (2026-04-15 evolution scan)
 
 - [ ] **[PHI_INTRA_DENSITY_DECAY_RATE]** Intra-collection density degrades to ~0.38 between weekly Sunday hygiene runs, dragging Phi below 0.65. Add a lightweight daily intra-density boost pass (mid-week, ~04:50 CET after graph compaction) that targets the 3 most starved collections. This directly addresses the weakest metric (Phi=0.636) by closing the repair-vs-decay gap. Non-Python: requires a new cron entry + small bash wrapper.
-- [ ] **[FIX_ORCHESTRATOR_KEYERROR_QUERY]** `cron_orchestrator.sh` triggers `KeyError: 'query'` 18x on 2026-03-25 — task objects passed to the orchestrator lack a `query` field after a schema change. Audit the task dict contract between `task_selector.py` and the orchestrator, add the missing field or a safe `.get()` fallback.
-- [ ] **[FIX_REPORT_EVENING_MISSING_RE_IMPORT]** `report_evening` cron heredoc hits `NameError: 're' is not defined` — the `import re` statement is unreachable in a conditional code path. Move the import to module top-level or add it inside the offending function.
 - [ ] **[FIX_OPENCLAW_TOPIC_STALE_PATHS]** `openclaw.json` topics 2 and 5 reference pre-reorg script paths (`scripts/cost_tracker.py`, `scripts/brain.py`, `scripts/prompt_builder.py`). Topic 2's stale `prompt_builder.py` path silently breaks ACP context injection for every spawned task. Update all systemPrompt paths to current `scripts/infra/`, `scripts/brain_mem/`, `scripts/tools/` locations.
 
 ### 2026-04-16 evolution scan

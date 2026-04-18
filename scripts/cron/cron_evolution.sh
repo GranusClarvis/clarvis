@@ -135,18 +135,55 @@ EVO_OUTPUT_FILE=$(mktemp)
 run_claude_monitored 1200 "$EVO_OUTPUT_FILE" "$EVO_PROMPT_FILE" "$LOGFILE"
 CLAUDE_EXIT=$MONITORED_EXIT
 cat "$EVO_OUTPUT_FILE" >> "$LOGFILE"
-rm -f "$EVO_PROMPT_FILE" "$EVO_OUTPUT_FILE"
 
 # ============================================================================
-# DIGEST (lightweight — single subprocess, only on success)
+# HALLUCINATION GUARD — validate file paths in newly-added QUEUE.md items
 # ============================================================================
 if [ "$CLAUDE_EXIT" -eq 0 ]; then
-    python3 "$SCRIPTS/tools/digest_writer.py" evolution \
-        "Deep evolution analysis complete. ${PHI_SHORT:-Phi unknown}. Weakest: ${WEAKEST:-unknown}. $PENDING_COUNT tasks pending. Calibration: ${CALIBRATION_SHORT:-unknown}." \
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running evolution hallucination guard..." >> "$LOGFILE"
+    python3 "$SCRIPTS/evolution/evolution_hallucination_guard.py" \
+        --queue "$CLARVIS_WORKSPACE/memory/evolution/QUEUE.md" \
+        --workspace "$CLARVIS_WORKSPACE" >> "$LOGFILE" 2>&1
+    GUARD_EXIT=$?
+    if [ "$GUARD_EXIT" -ne 0 ]; then
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WARN: Hallucination guard flagged items (exit=$GUARD_EXIT)" >> "$LOGFILE"
+    fi
+fi
+
+# ============================================================================
+# DIGEST (lightweight — includes evolution scan diagnostic output)
+# ============================================================================
+if [ "$CLAUDE_EXIT" -eq 0 ]; then
+    # Extract structured analysis from Claude output for digest bridge
+    # The Claude prompt mandates: "ANALYSIS: <verdict>" then "TASKS ADDED: <count>"
+    EVO_ANALYSIS=$(grep -m1 '^ANALYSIS:' "$EVO_OUTPUT_FILE" 2>/dev/null | head -c 300 || echo "")
+    EVO_TASKS_ADDED=$(grep -m1 '^TASKS ADDED:' "$EVO_OUTPUT_FILE" 2>/dev/null | head -c 100 || echo "")
+    # Capture task list lines (- [ ] items written by the scan)
+    EVO_TASK_LIST=$(grep '^\- \[ \]' "$EVO_OUTPUT_FILE" 2>/dev/null | head -5 | head -c 500 || echo "")
+
+    # Build enriched digest entry with scan diagnostics
+    DIGEST_BODY="Deep evolution analysis complete. ${PHI_SHORT:-Phi unknown}. Weakest: ${WEAKEST:-unknown}. $PENDING_COUNT tasks pending. Calibration: ${CALIBRATION_SHORT:-unknown}."
+    if [ -n "$EVO_ANALYSIS" ]; then
+        DIGEST_BODY="$DIGEST_BODY
+$EVO_ANALYSIS"
+    fi
+    if [ -n "$EVO_TASKS_ADDED" ]; then
+        DIGEST_BODY="$DIGEST_BODY
+$EVO_TASKS_ADDED"
+    fi
+    if [ -n "$EVO_TASK_LIST" ]; then
+        DIGEST_BODY="$DIGEST_BODY
+New tasks:
+$EVO_TASK_LIST"
+    fi
+
+    python3 "$SCRIPTS/tools/digest_writer.py" evolution "$DIGEST_BODY" \
         >> "$LOGFILE" 2>&1 || true
 else
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WARN: Claude Code exited $CLAUDE_EXIT — skipping digest write" >> "$LOGFILE"
 fi
+
+rm -f "$EVO_PROMPT_FILE" "$EVO_OUTPUT_FILE"
 
 # Cleanup
 rm -f "$EVO_PREFLIGHT_FILE"

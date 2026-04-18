@@ -592,6 +592,10 @@ class GraphMixin:
         to find nearest neighbors, and create 'intra_similar' edges for
         pairs below max_distance. Skips bridge/boost memories.
 
+        Under-connected collections (existing intra-edge count below 70% of
+        median) get relaxed distance (+0.4) and more links per memory (+3)
+        to boost density where it's most needed.
+
         Args:
             max_distance: Maximum ChromaDB L2 distance to create an edge (default 1.2).
             max_links_per_memory: Max intra-edges per memory (default 5).
@@ -609,6 +613,15 @@ class GraphMixin:
         target_collections = collections or list(self.collections.keys())
         now_str = datetime.now(timezone.utc).isoformat()
 
+        # Count existing intra-similar edges per collection for boost targeting
+        col_intra_counts = self._edge_type_counts_by_collection("intra_similar")
+        if col_intra_counts:
+            sorted_counts = sorted(col_intra_counts.values())
+            median_count = sorted_counts[len(sorted_counts) // 2]
+        else:
+            median_count = 60
+        boost_threshold = median_count * 0.7
+
         # Collect for SQLite batch insert
         sqlite_nodes = []
         sqlite_edges = []
@@ -617,6 +630,10 @@ class GraphMixin:
             col = self.collections.get(col_name)
             if col is None or col.count() < 3:
                 continue
+
+            is_boosted = col_intra_counts.get(col_name, 0) < boost_threshold
+            col_max_distance = max_distance + 0.4 if is_boosted else max_distance
+            col_max_links = max_links_per_memory + 3 if is_boosted else max_links_per_memory
 
             collections_processed += 1
             results = col.get(include=["documents"])
@@ -634,7 +651,7 @@ class GraphMixin:
                 try:
                     qr = col.query(
                         query_texts=[doc],
-                        n_results=min(max_links_per_memory + 1, 10),
+                        n_results=min(col_max_links + 1, 12),
                         include=["distances"],
                     )
                 except Exception:
@@ -647,7 +664,7 @@ class GraphMixin:
                 for rid, dist in zip(qr["ids"][0], qr["distances"][0]):
                     if rid == mem_id:
                         continue
-                    if dist > max_distance:
+                    if dist > col_max_distance:
                         break
                     if (mem_id, rid) in existing_pairs:
                         continue
@@ -664,11 +681,12 @@ class GraphMixin:
                     col_new += 1
                     new_edges += 1
 
-                    if links_added >= max_links_per_memory:
+                    if links_added >= col_max_links:
                         break
 
             if verbose:
-                print(f"  {col_name}: {len(ids)} memories, {col_new} new intra-edges")
+                suffix = " (boosted)" if is_boosted else ""
+                print(f"  {col_name}: {len(ids)} memories, {col_new} new intra-edges{suffix}")
 
         if new_edges > 0:
             if self._sqlite_store is not None:

@@ -12,8 +12,8 @@
 # === Nightly (02:00-02:45) ===
 0 2 * * * $CLARVIS_WORKSPACE/scripts/infra/backup_daily.sh >> $CLARVIS_WORKSPACE/memory/cron/backup.log 2>&1
 30 2 * * * $CLARVIS_WORKSPACE/scripts/infra/backup_verify.sh >> $CLARVIS_WORKSPACE/memory/cron/backup_verify.log 2>&1
-45 2 * * * . $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh && timeout 900 python3 $CLARVIS_WORKSPACE/scripts/cognition/dream_engine.py dream >> $CLARVIS_WORKSPACE/memory/cron/dream.log 2>&1
-0 3 * * 0 $CLARVIS_WORKSPACE/scripts/cron/cron_absolute_zero.sh >> $CLARVIS_WORKSPACE/memory/cron/absolute_zero.log 2>&1
+45 2 * * 0 . $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh && timeout 900 python3 $CLARVIS_WORKSPACE/scripts/cognition/dream_engine.py dream >> $CLARVIS_WORKSPACE/memory/cron/dream.log 2>&1
+0 3 1-7 * 0 $CLARVIS_WORKSPACE/scripts/cron/cron_absolute_zero.sh >> $CLARVIS_WORKSPACE/memory/cron/absolute_zero.log 2>&1
 
 # === Maintenance window (04:00-05:00, shared maintenance lock) ===
 0 4 * * * $CLARVIS_WORKSPACE/scripts/cron/cron_graph_checkpoint.sh >> $CLARVIS_WORKSPACE/memory/cron/graph_checkpoint.log 2>&1

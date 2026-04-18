@@ -41,8 +41,14 @@ cat "$MORNING_OUTPUT_FILE" >> "$LOGFILE"
 
 if [ "$CLAUDE_EXIT" -eq 0 ]; then
     # === DIGEST: Write first-person summary for M2.5 agent ===
-    PRIORITIES=$(tail -c 500 "$MORNING_OUTPUT_FILE" 2>/dev/null | tr '\n' ' ' | sed 's/[^a-zA-Z0-9 _.,:;=+\-\/()@#%]//g' | tail -c 400)
-    python3 "$CLARVIS_WORKSPACE/scripts/tools/digest_writer.py" morning "I started my day and reviewed the evolution queue. $PRIORITIES" >> "$LOGFILE" 2>&1 || true
+    # Extract priority lines from Claude output (look for PRIORITY markers or numbered items)
+    PRIORITIES=$(grep -iE '^\s*(PRIORITY|[1-3][\.\)])' "$MORNING_OUTPUT_FILE" 2>/dev/null | head -3 | tr '\n' ' ' | sed 's/[^a-zA-Z0-9 _.,:;=+\-\/()@#%]//g' | head -c 400)
+    if [ -z "$PRIORITIES" ]; then
+        # Fallback: take last few lines, sanitized
+        PRIORITIES=$(tail -c 300 "$MORNING_OUTPUT_FILE" 2>/dev/null | tr '\n' ' ' | sed 's/[^a-zA-Z0-9 _.,:;=+\-\/()@#%]//g' | head -c 300)
+    fi
+    python3 "$CLARVIS_WORKSPACE/scripts/tools/digest_writer.py" morning "I reviewed the evolution queue and set today's priorities.
+$PRIORITIES" >> "$LOGFILE" 2>&1 || true
     emit_dashboard_event task_completed --task-name "Morning planning" --section cron_morning --status success
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Morning routine complete ===" >> "$LOGFILE"
 else

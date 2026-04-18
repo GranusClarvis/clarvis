@@ -431,6 +431,19 @@ class GraphStoreSQLite:
         ).fetchone()
         return row[0]
 
+    def prune_orphan_edges(self) -> int:
+        """Delete edges that reference non-existent nodes. Returns count removed."""
+        cur = self._conn.execute(
+            "DELETE FROM edges "
+            "WHERE NOT EXISTS (SELECT 1 FROM nodes n WHERE n.id = edges.from_id) "
+            "   OR NOT EXISTS (SELECT 1 FROM nodes n WHERE n.id = edges.to_id)"
+        )
+        removed = cur.rowcount
+        if removed:
+            self._conn.commit()
+            _log.info("Pruned %d orphan edges", removed)
+        return removed
+
     def integrity_check(self) -> bool:
         """Run PRAGMA integrity_check. Returns True if OK."""
         result = self._conn.execute("PRAGMA integrity_check").fetchone()
