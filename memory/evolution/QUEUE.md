@@ -51,7 +51,6 @@ _SWO tasks tracked here. When project lane is active, these get priority. See al
 
 _Recorded under the audit-cap override (§P0 banner). P1 is currently 19/15 in base terms but within the 25-ceiling for audit sources. These are justified Phase 0 follow-ups; closing them is a precondition for a valid Phase 0 PASS ruling and for downstream phases. See `docs/internal/audits/decisions/2026-04-16_phase0_instrumentation.md`._
 
-- [ ] **[AUDIT_PHASE_0_GATE_EVALUATION]** On or after 2026-04-23, run `python3 scripts/audit/trace_exporter.py gate --days 7` and record the verdict in the Phase 0 decision doc. If PASS, mark `[AUDIT_PHASE_0_INSTRUMENTATION]` [x] and unblock Phase 2. If FAIL, diagnose which spawn paths are missing traces (expected offenders: ad-hoc manual spawns, cron jobs that don't route through `spawn_claude.sh`), extend instrumentation, and reschedule the gate.
 
 ### Deep Audit — Phase 2 Follow-ups (added 2026-04-16 via AUDIT_CAP_OVERRIDE)
 
@@ -208,7 +207,6 @@ _Source: `source="audit_phase_4"`. P0+P1 items are co-located with their parent 
 ### Phi Monitoring / Validation (demoted to observability metric by Phase 11 synthesis — regression watch only, not a KPI or optimization target; overlaps Phase 9 REVISE ruling on phi_metric)
 
 - [~] **[PHI_EMERGENCY_CROSS_LINK_BLITZ]** Run targeted bulk_cross_link on all 45 collection pairs (Phi target). (2026-04-16: started full-brain bulk_cross_link but process killed at ~5min when cron_autonomous started; +1357 edges committed before kill. Follow-up pair-targeted pass below supplanted the remainder.)
-- [x] Expand clarvis-goals collection — add 10-15 goal memories referencing infra/identity/learning. (2026-04-18: added 13 goals covering infra resilience/security/backup/gateway/cron, identity self-model/coherence/ToM/dual-layer, and learning retention/bridges/research/dreams. Collection: 16→29.)
 - [ ] Tune graph compaction aggressiveness + add Phi-guard (skip if Phi < 0.65).
 - [ ] Add Phi-floor guard to graph_compaction.py before edge pruning.
 - [ ] Audit graph edge-type distribution for integration balance.
