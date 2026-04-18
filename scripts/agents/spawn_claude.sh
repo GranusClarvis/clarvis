@@ -149,6 +149,23 @@ except Exception:
 export CLARVIS_AUDIT_TRACE_ID
 if [ -n "$CLARVIS_AUDIT_TRACE_ID" ]; then
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] audit_trace_id=$CLARVIS_AUDIT_TRACE_ID" >> "$LOGFILE"
+    # Persist prompt.context_brief + prompt.task_text on the audit trace.
+    # This closes the Phase 4 capture gap: brain_attribution.py _fallback_retrievals()
+    # reads prompt.context_brief to score retrieval blocks.
+    python3 - "$CLARVIS_AUDIT_TRACE_ID" "$CONTEXT_BRIEF" "$TASK" <<'PYEOF' 2>> "$LOGFILE" || true
+import sys
+try:
+    from clarvis.audit import update_trace
+    tid = sys.argv[1]
+    context_brief = sys.argv[2]
+    task_text = sys.argv[3]
+    update_trace(tid, prompt={
+        "context_brief": context_brief,
+        "task_text": task_text[:2000],
+    })
+except Exception as e:
+    sys.stderr.write(f"[spawn_claude audit prompt capture failed] {e}\n")
+PYEOF
 fi
 
 # === Global Claude lock: pre-check only (no parent acquisition) ===

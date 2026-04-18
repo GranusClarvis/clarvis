@@ -30,7 +30,7 @@ Planning docs, queue items, and brand positioning do NOT count as delivery.
 
 | # | PR | Title | State | Last Checked |
 |---|-----|-------|-------|--------------|
-| 1 | #177 | fix: verify governance voting power server-side | OPEN, MERGEABLE, CLEAN (no reviews) | 2026-04-16 — revalidated, vulnerability still on dev, comment posted |
+| 1 | #177 | fix: verify governance voting power server-side | OPEN, MERGEABLE, CLEAN (no reviews) | 2026-04-18 — revalidated against e22cd21, vuln persists, 0 conflicts, verdict REVIVE |
 | 2 | #179 | fix(api): verify wallet signature on chat/messages/presence writes (P0) | OPEN | 2026-04-16 — closes SWO_FIX_CHAT_AUTH/DM/PRESENCE; follow-up commits 037066c/952e3fd/43ce164 also close SWO_FIX_VOICE_AUTH, SWO_FIX_RAFFLE_BONUSES, SWO_HARDEN_CRON_AUTH |
 | 3 | #180 | fix(adminAuth): persist used nonces in SQLite to prevent replay (P1) | OPEN | 2026-04-16 — closes SWO_ADMIN_NONCE_PERSIST; SQLite-backed nonce table + 8 vitest cases |
 | 4 | #181 | chore(contracts): archive StarForge V1-V4 + Testing_casino, add DEPLOYED.md (P2) | OPEN | 2026-04-16 — closes SWO_CONTRACT_ARCHIVE |

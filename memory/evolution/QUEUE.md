@@ -33,7 +33,6 @@ _Source: `docs/internal/audits/NEURO_FEATURE_DECISIONS_2026-04-17.md`. Phase 9 s
 
 _SWO tasks tracked here. When project lane is active, these get priority. See also: memory/evolution/SWO_TRACKER.md_
 
-- [ ] **[SWO_PR177_REVALIDATION]** Re-check whether PR #177 (server-side governance voting power verification) is still valid against current SWO `dev` after recent repo changes. Confirm whether the original vulnerability path still exists or has already been superseded, evaluate mergeability/conflicts, and decide whether to revive, replace, or close it. Source context: PR #177 fixed client-supplied votingPower spoofing by verifying Star ownership on-chain. Source: `memory/cron/agent_star-world-order_digest.md#L1-L21`
 - [ ] **[SWO_SECURITY_THREAT_SURFACE_AUDIT]** Run a focused security audit of SWO: wallet auth, holder gating, governance/voting, raffle entry validation, marketplace/listing flows, server trust boundaries, API authorization, client-trust assumptions, contract/version drift, and obvious attack vectors or abuse paths. Output should become concrete reviewable tasks/PRs, not just a vague report.
 
 
@@ -62,14 +61,11 @@ _Source: `docs/internal/audits/SPINE_MODULE_SCORECARD_2026-04-16.md` + `docs/int
 _Source: `docs/internal/audits/PROMPT_ASSEMBLY_SCORECARD_2026-04-16.md` + `docs/internal/audits/decisions/2026-04-16_phase3_prompt_assembly.md`. Phase 3 ruled 5×PASS across task types on 334 scored episodes; aggregate gate PASS. Open follow-ups address proxy limits (MISLEADING detection, trace-backed rescore) and one hand-label task. No assembly code paths were changed by this phase._
 
 - [ ] **[AUDIT_PHASE_3_HANDLABEL_40_TASKS]** Hand-label the 40-row stratified sample at `data/audit/prompt_utilization_handlabel_template.json` with per-section HELPFUL / NEUTRAL / MISLEADING / NOISE. Use `scripts/metrics/llm_context_review.py` LLM-judge pass OR operator pass — record provenance. Then extend `scripts/audit/prompt_utilization.py` with a hand-label-aware mode that overrides heuristic labels where hand-labels exist. Acceptance: template filled; re-run confirms proxy did not systematically hide MISLEADING cases (≥ 5 hand-label MISLEADING counts force scorecard re-ruling).
-- [ ] **[AUDIT_PHASE_3_TRACE_BACKED_RESCORE]** On or after 2026-04-23 (once Phase-0 PASS gate rules), re-run `python3 scripts/audit/prompt_utilization.py run` against the live trace stream (`data/audit/traces/`) instead of the pre-instrumentation corpus alone. Produce a corpus-vs-trace delta. Acceptance: new summary lands at `data/audit/prompt_utilization_summary.json`; scorecard gets a §9 addendum noting whether trace-backed view changes the ruling.
-- [ ] **[AUDIT_PHASE_3_MISLEADING_VALIDATOR]** The Phase 3 MISLEADING = 0 finding is a proxy artefact (§5.1 of scorecard). Build a second-order check: for each failure/crash episode, inspect the paired reasoning chain in `data/reasoning_chains/chains.jsonl` and flag sections the chain explicitly cited before failure. Emit `data/audit/misleading_candidates.json`. Acceptance: ≥ 1 episode annotated; output either confirms MISLEADING ≈ 0 empirically OR raises a concrete suppress candidate for the Policy Review.
 
 ### Deep Audit — Phase 4 Follow-ups (added 2026-04-16 via AUDIT_CAP_OVERRIDE)
 
 _Source: `docs/internal/audits/BRAIN_USEFULNESS_2026-04-16.md` + `docs/internal/audits/decisions/2026-04-16_phase4_brain_usefulness.md`. Phase 4 ruled INSUFFICIENT_DATA × 10 collections on the attribution gate — blocked by two Phase-0 capture gaps (listed below, the P0 item being the most severe). One independent REVISE flagged on routing. `scripts/audit/brain_attribution.py` + `data/audit/brain_attribution.jsonl` + `data/audit/brain_collection_scorecard.json` shipped. All items use `source="audit_phase_4"`._
 
-- [ ] **[AUDIT_PHASE_4_SPAWN_CLAUDE_PROMPT_CAPTURE]** Extend `scripts/agents/spawn_claude.sh` to persist the task prompt text (and any caller-provided context brief) into `prompt.context_brief` on the audit trace. Currently the script captures only `execution.output_tail` + `outcome`, so every non-heartbeat spawn is opaque to brain-attribution analysis. Paired with `[AUDIT_PHASE_4_BRAIN_RETRIEVAL_TRACE_WIRING]` (P0) this closes both capture gaps. Acceptance: new `spawn_claude` traces show non-empty `prompt.context_brief`; `scripts/audit/brain_attribution.py run` counts them as `attributable_traces`.
 - [ ] **[AUDIT_PHASE_4_RE_RUN_AFTER_7D_TRACES]** On or after 2026-04-23, after `[AUDIT_PHASE_4_BRAIN_RETRIEVAL_TRACE_WIRING]` + `[AUDIT_PHASE_4_SPAWN_CLAUDE_PROMPT_CAPTURE]` have landed AND ≥ 7 attributable traces exist, re-run `python3 scripts/audit/brain_attribution.py run --days 30` and promote the per-collection verdicts from INSUFFICIENT_DATA to PASS / REVISE / DEMOTE_CANDIDATE. Record the updated rulings in a §9 addendum on `docs/internal/audits/BRAIN_USEFULNESS_2026-04-16.md`. No demotion action is permitted on a single window — per plan §3.1, DEMOTE requires two consecutive windows agreeing. Acceptance: rescore lands; headline reports `attributable_traces ≥ 7`.
 
 ### Deep Audit — Phase 6 Follow-ups (added 2026-04-16 via AUDIT_CAP_OVERRIDE)
@@ -186,7 +182,6 @@ _All are surface trims or cheap coverage lifts. Bridge wrappers (18) and underly
 - [ ] **[SPINE_ORCH_SCOREBOARD_SURFACE_TRIM]** Drop `scoreboard_record`, `scoreboard_show`, `scoreboard_trend` re-exports from `clarvis/orch/__init__.py`. The `clarvis.orch.scoreboard` submodule stays live (1 importer per Phase 1) — direct importers can still `from clarvis.orch.scoreboard import record, show, trend`. Acceptance: `orch.dead_exports = 0`.
 - [ ] **[SPINE_COMPAT_WIRE_OR_DOCUMENT]** `clarvis/compat/` has zero production callers (only test callers). Decide one of: (a) wire `run_contract_checks()` into `scripts/infra/health_monitor.sh` with a daily metric exported to `monitoring/`, OR (b) mark the module docstring as "test-scaffold for host-portability contracts" and exclude it from future Phase 9 EVS/TCS passes. Acceptance: clear wire-or-document state recorded — no "kept for future" ambiguity.
 - [ ] **[SPINE_HEARTBEAT_UNIT_COVERAGE]** Add unit tests for `clarvis/heartbeat/error_classifier.py` and `clarvis/heartbeat/worker_validation.py` — both near-zero coverage today because existing tests exercise the pipeline as a whole. Acceptance: `heartbeat.coverage_pct ≥ 25` on `scripts/audit/spine_scorecard.py` re-run.
-- [ ] **[SPINE_METRICS_COVERAGE_LIFT]** Add tests for `clarvis/metrics/memory_audit.run_full_audit` and `clarvis/metrics/quality.compute_code_quality_score`. Both are used operationally (cron + project-lane) but uncovered. Acceptance: `metrics.coverage_pct ≥ 25`.
 - [ ] **[SPINE_RUNTIME_INFER_TASK_SOURCE_DECIDE]** `infer_task_source` is re-exported from `clarvis/runtime/__init__.py` but not called anywhere. Decide: wire it into `clarvis/orch/task_selector.py` at the task-source inference point, OR drop from `__init__` (the function in `mode.py` can stay). Acceptance: `runtime.dead_exports = 0`.
 
 ### Deep Audit Follow-ups (from Phase 3 — `docs/internal/audits/PROMPT_ASSEMBLY_SCORECARD_2026-04-16.md`)
@@ -233,7 +228,6 @@ _Source: `source="audit_phase_4"`. P0+P1 items are co-located with their parent 
 - [ ] Reconcile @reboot boot sequence between crontab.reference and systemd.
 - [ ] Clean stale `packages/` test checks from verify_install.sh.
 - [ ] Stub or remove truly missing script references in skill SKILL.md files.
-- [ ] Fix skill SKILL.md path errors.
 - [ ] Fix Sunday cron learning-strategy relative path failure.
 - [ ] Add env template setup guard for placeholder API keys.
 - [ ] Remove stale `plugins.slots.contextEngine = "legacy"` from openclaw.json.

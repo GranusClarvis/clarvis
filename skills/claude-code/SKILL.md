@@ -172,7 +172,7 @@ timeout 600 claude -p "Review brain.py, optimize query performance, improve erro
 ### Run a Python Script That Imports Brain
 ```bash
 cd $CLARVIS_WORKSPACE && \
-timeout 300 claude -p "Run: python3 scripts/clarvis_reflection.py and report the output" \
+timeout 300 claude -p "Run: python3 scripts/cognition/clarvis_reflection.py and report the output" \
   --dangerously-skip-permissions \
   --model claude-opus-4-6
 ```

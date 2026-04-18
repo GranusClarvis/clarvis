@@ -47,24 +47,14 @@ $CLARVIS_WORKSPACE/scripts/agents/spawn_claude.sh "{task}" 1200 --topic=2 --chat
 ### Agent Lifecycle Manager (advanced)
 ```bash
 # Spawn with full lifecycle tracking:
-python3 scripts/agent_lifecycle.py spawn "task" --timeout 1200 --isolated
+python3 scripts/agents/agent_lifecycle.py spawn "task" --timeout 1200 --isolated
 # List / status / kill / restore / merge:
-python3 scripts/agent_lifecycle.py list
-python3 scripts/agent_lifecycle.py status <agent_id>
-python3 scripts/agent_lifecycle.py kill <agent_id>
-python3 scripts/agent_lifecycle.py restore <agent_id>
-python3 scripts/agent_lifecycle.py merge <agent_id>
-python3 scripts/agent_lifecycle.py cleanup
-```
-
-### Auto-Fix PR Review Comments
-```bash
-# Show what would be fixed (dry run):
-python3 scripts/pr_autofix.py <pr_number> --dry-run
-# Fix all actionable review comments:
-python3 scripts/pr_autofix.py <pr_number>
-# Fix in isolation:
-python3 scripts/pr_autofix.py <pr_number> --isolated
+python3 scripts/agents/agent_lifecycle.py list
+python3 scripts/agents/agent_lifecycle.py status <agent_id>
+python3 scripts/agents/agent_lifecycle.py kill <agent_id>
+python3 scripts/agents/agent_lifecycle.py restore <agent_id>
+python3 scripts/agents/agent_lifecycle.py merge <agent_id>
+python3 scripts/agents/agent_lifecycle.py cleanup
 ```
 
 ## Rules
