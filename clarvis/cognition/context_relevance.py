@@ -416,6 +416,7 @@ HARD_SUPPRESS = frozenset({
     "brain_goals",        # mean=0.089
     "metrics",            # mean=0.099
     "synaptic",           # mean=0.112
+    "world_model",        # HELPFUL=5.6%, NOISE=22.2% — suppress until HELPFUL≥20%
 })
 
 

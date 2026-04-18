@@ -476,13 +476,14 @@ class EpisodicMemory:
 
     def encode(self, task_text, section, salience, outcome,
                duration_s=0, error_msg=None, steps_taken=None,
-               failure_type=None):
+               failure_type=None, output_text=None):
         """Encode a new episode from a heartbeat task.
 
         Args:
             failure_type: Optional structured failure category. One of:
                 timeout, memory, planning, system, action, partial-success.
                 Only meaningful when outcome != 'success'.
+            output_text: Raw executor output; used to extract a one-line lesson.
         """
         now = datetime.now(timezone.utc)
 
@@ -509,6 +510,8 @@ class EpisodicMemory:
             if ft is None:
                 ft = "action"
 
+        lesson = self._extract_lesson(output_text, outcome, error_msg) if output_text else None
+
         episode = {
             "id": f"ep_{now.strftime('%Y%m%d_%H%M%S')}",
             "timestamp": now.isoformat(),
@@ -520,6 +523,7 @@ class EpisodicMemory:
             "valence": valence,
             "duration_s": duration_s,
             "error": error_msg[:200] if error_msg else None,
+            "lesson": lesson,
             "steps": steps_taken,
             "access_times": [now.timestamp()],  # ACT-R: track retrievals
             "activation": 1.0  # initial activation
@@ -535,6 +539,55 @@ class EpisodicMemory:
 
         self._post_encode(episode, task_text, valence, ft, error_msg)
         return episode
+
+    @staticmethod
+    def _extract_lesson(output_text, outcome, error_msg=None):
+        """Extract a one-line reusable lesson from executor output.
+
+        Searches for RESULT lines, Files modified lines, or NEXT lines.
+        For failures, extracts the most informative error line.
+        Returns a string ≤120 chars or None if nothing useful found.
+        """
+        import re
+        if not output_text:
+            return None
+        lines = output_text.strip().splitlines()
+        if not lines:
+            return None
+
+        # 1. Look for RESULT: line (standard postflight output format)
+        for line in reversed(lines):
+            stripped = line.strip()
+            if stripped.startswith("RESULT:"):
+                # e.g. "RESULT: success — fixed broken import in preflight"
+                lesson = stripped[7:].strip().lstrip("—- ").strip()
+                if len(lesson) > 10:
+                    return lesson[:120]
+
+        # 2. For success: look for "Files modified:" or summary-like lines
+        if outcome == "success":
+            for line in reversed(lines[-30:]):
+                stripped = line.strip()
+                if stripped.startswith("Files modified:") or stripped.startswith("NEXT:"):
+                    return stripped[:120]
+            # Last non-empty line as fallback if it's informative enough
+            for line in reversed(lines[-10:]):
+                stripped = line.strip()
+                if len(stripped) > 20 and not stripped.startswith(("#", "=", "-", "+")):
+                    # Filter out noise: timestamps, empty markers
+                    if not re.match(r'^[\d\-T:Z.]+$', stripped):
+                        return stripped[:120]
+
+        # 3. For failure: extract root-cause hint from error
+        if outcome != "success" and error_msg:
+            # Already have error_msg, but try to find a more specific line
+            for line in reversed(lines[-20:]):
+                stripped = line.strip()
+                if any(kw in stripped.lower() for kw in
+                       ("error:", "traceback", "failed", "exception", "assert")):
+                    return stripped[:120]
+
+        return None
 
     def _post_encode(self, episode, task_text, valence, ft, error_msg):
         """Auto-tag, store in brain, and create somatic markers for a new episode."""
@@ -552,7 +605,9 @@ class EpisodicMemory:
         summary = f"Episode: {task_text[:100]} -> {episode['outcome']}"
         if ft:
             summary += f" [{ft}]"
-        if error_msg:
+        if episode.get("lesson"):
+            summary += f" — {episode['lesson']}"
+        elif error_msg:
             summary += f" (error: {error_msg[:80]})"
 
         brain.store(summary, collection="clarvis-episodes",

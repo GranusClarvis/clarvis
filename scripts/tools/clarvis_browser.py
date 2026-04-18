@@ -336,12 +336,13 @@ class ClarvisBrowser:
         if self.has_agent_browser:
             loaded = 0
             failed = 0
-            for cookie in cookies:
+
+            async def _inject_one(cookie):
                 name = cookie.get("name", "")
                 value = cookie.get("value", "")
                 domain = cookie.get("domain", "")
                 if not name or not domain:
-                    continue
+                    return True  # skip, count as ok
 
                 args = ["cookies", "set", name, value]
 
@@ -367,11 +368,25 @@ class ClarvisBrowser:
 
                 r = await self._ab.arun(*args, timeout=5)
                 if r.get("success", False) or r.get("error") is None:
-                    loaded += 1
+                    return True
                 else:
-                    failed += 1
                     logger.debug("Cookie %s@%s failed: %s", name, domain,
                                  r.get("error", "unknown"))
+                    return False
+
+            # Inject in parallel batches of 10 to avoid serial 0.15s×N overhead
+            BATCH = 10
+            for i in range(0, len(cookies), BATCH):
+                batch = cookies[i:i + BATCH]
+                results = await asyncio.gather(
+                    *[_inject_one(c) for c in batch],
+                    return_exceptions=True
+                )
+                for ok in results:
+                    if ok is True:
+                        loaded += 1
+                    else:
+                        failed += 1
 
             logger.info("Session loaded: %d/%d cookies injected via agent-browser (%d failed)",
                         loaded, loaded + failed, failed)

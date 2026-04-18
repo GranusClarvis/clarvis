@@ -106,7 +106,7 @@ def _find_best_episode_match(pred_text: str, episodes: list, ep_embeddings: dict
 
     # Phase 1: Word overlap (fast, no embeddings needed)
     for ep in episodes:
-        task = ep.get("task", "")
+        task = ep.get("task") or ""
         ep_words = _word_set(task)
         jacc = _jaccard(pred_words, ep_words)
         if jacc > best_score:
@@ -117,7 +117,7 @@ def _find_best_episode_match(pred_text: str, episodes: list, ep_embeddings: dict
     # Phase 2: Embedding similarity (only if word overlap didn't find strong match)
     if best_score < EMBED_THRESHOLD and pred_embedding is not None:
         for ep in episodes:
-            task = ep.get("task", "")
+            task = ep.get("task") or ""
             ep_emb = ep_embeddings.get(task)
             if ep_emb is None:
                 continue
@@ -188,8 +188,8 @@ def resolve(dry_run: bool = False) -> dict:
 
     # Precompute embeddings
     ef = _get_ef()
-    ep_tasks = list({ep["task"] for ep in episodes})
-    pred_texts = [_desanitize(preds[i]["event"]) for i in unresolved_idx]
+    ep_tasks = list({ep["task"] for ep in episodes if ep.get("task")})
+    pred_texts = [_desanitize(preds[i]["event"]) for i in unresolved_idx if preds[i].get("event")]
     all_texts = ep_tasks + pred_texts
     all_embs = ef(all_texts) if all_texts else []
 
@@ -202,6 +202,9 @@ def resolve(dry_run: bool = False) -> dict:
 
     for j, idx in enumerate(unresolved_idx):
         pred = preds[idx]
+        if not pred.get("event"):
+            skipped += 1
+            continue
         pred_text = _desanitize(pred["event"])
         pred_emb = all_embs[len(ep_tasks) + j] if all_embs else None
 
@@ -250,8 +253,8 @@ def rescue_stale(dry_run: bool = False) -> dict:
 
     # Precompute embeddings
     ef = _get_ef()
-    ep_tasks = list({ep["task"] for ep in episodes})
-    pred_texts = [_desanitize(preds[i]["event"]) for i in stale_idx]
+    ep_tasks = list({ep["task"] for ep in episodes if ep.get("task")})
+    pred_texts = [_desanitize(preds[i]["event"]) for i in stale_idx if preds[i].get("event")]
     all_texts = ep_tasks + pred_texts
     all_embs = ef(all_texts) if all_texts else []
 
@@ -264,6 +267,9 @@ def rescue_stale(dry_run: bool = False) -> dict:
 
     for j, idx in enumerate(stale_idx):
         pred = preds[idx]
+        if not pred.get("event"):
+            kept_stale += 1
+            continue
         pred_text = _desanitize(pred["event"])
         pred_emb = all_embs[len(ep_tasks) + j] if all_embs else None
 

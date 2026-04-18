@@ -234,8 +234,73 @@ PY
                     -d parse_mode="HTML" >/dev/null 2>&1 || true
             fi
         fi
+
+        # Composite Phi below-target alert (target: 0.65)
+        if python3 -c "import sys; sys.exit(0 if float('$PHI_TOTAL') < 0.65 else 1)" 2>/dev/null; then
+            echo "[$DATE] [WARNING] Phi below target 0.65: Phi=$PHI_TOTAL" >> "$LOG_DIR"/alerts.log
+        fi
     fi
     touch "$PHI_SUB_CACHE"
+fi
+
+# === QUEUE.md P0/P1 CAP BREACH CHECK (once per hour, cached) ===
+QUEUE_CAP_CACHE="/tmp/clarvis_queue_cap_cache"
+QUEUE_CAP_STALE=true
+if [ -f "$QUEUE_CAP_CACHE" ]; then
+    QC_AGE=$(( $(date +%s) - $(stat -c%Y "$QUEUE_CAP_CACHE" 2>/dev/null || echo 0) ))
+    [ "$QC_AGE" -lt 3600 ] && QUEUE_CAP_STALE=false
+fi
+if [ "$QUEUE_CAP_STALE" = true ]; then
+    QUEUE_FILE="$CLARVIS_WORKSPACE/memory/evolution/QUEUE.md"
+    if [ -f "$QUEUE_FILE" ]; then
+        QUEUE_CAP_JSON=$(python3 - "$QUEUE_FILE" <<'PYEOF'
+import re, sys, json
+path = sys.argv[1]
+text = open(path, encoding="utf-8").read()
+# Count unchecked items (- [ ]) under P0 and P1 sections
+in_p0 = in_p1 = False
+p0 = p1 = 0
+for line in text.splitlines():
+    if re.match(r"^## P0\b", line):
+        in_p0, in_p1 = True, False
+    elif re.match(r"^## P1\b", line):
+        in_p0, in_p1 = False, True
+    elif re.match(r"^## ", line):
+        in_p0, in_p1 = False, False
+    elif re.match(r"^\s*- \[ \] ", line):
+        if in_p0:
+            p0 += 1
+        elif in_p1:
+            p1 += 1
+print(json.dumps({"p0": p0, "p1": p1}))
+PYEOF
+)
+        P0_COUNT=$(echo "$QUEUE_CAP_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin)['p0'])" 2>/dev/null)
+        P1_COUNT=$(echo "$QUEUE_CAP_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin)['p1'])" 2>/dev/null)
+        P0_COUNT=${P0_COUNT:-0}
+        P1_COUNT=${P1_COUNT:-0}
+        echo "[$DATE] QUEUE caps: P0=$P0_COUNT/10 P1=$P1_COUNT/25" >> "$LOG_DIR"/health.log
+        QUEUE_ALERT=""
+        if [ "$P0_COUNT" -gt 10 ] 2>/dev/null; then
+            QUEUE_ALERT="P0=$P0_COUNT (cap 10)"
+        fi
+        if [ "$P1_COUNT" -gt 25 ] 2>/dev/null; then
+            QUEUE_ALERT="${QUEUE_ALERT:+$QUEUE_ALERT, }P1=$P1_COUNT (cap 25)"
+        fi
+        if [ -n "$QUEUE_ALERT" ]; then
+            echo "[$DATE] [WARNING] QUEUE.md cap breach: $QUEUE_ALERT" >> "$LOG_DIR"/alerts.log
+            TG_TOKEN="${CLARVIS_TG_BOT_TOKEN:-}"
+            TG_CHAT="${CLARVIS_TG_CHAT_ID:-}"
+            if [ -n "$TG_TOKEN" ] && [ -n "$TG_CHAT" ]; then
+                curl -s --max-time 10 \
+                    "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+                    -d chat_id="$TG_CHAT" \
+                    -d text="⚠️ QUEUE cap breach: $QUEUE_ALERT" \
+                    -d parse_mode="HTML" >/dev/null 2>&1 || true
+            fi
+        fi
+    fi
+    touch "$QUEUE_CAP_CACHE"
 fi
 
 # === CONTEXT RELEVANCE TREND ===

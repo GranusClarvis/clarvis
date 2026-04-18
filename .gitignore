@@ -16,6 +16,7 @@
 **/secrets/
 **/.secrets/
 *.token
+data/browser_sessions/
 
 # --- API Keys (catch patterns) ---
 # If any file accidentally contains keys

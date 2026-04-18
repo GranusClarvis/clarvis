@@ -170,6 +170,9 @@ try:
 except Exception:
     wtype = 'general'
 print(f'WORKER_TYPE={shlex.quote(wtype)}')
+# Project-agent routing
+print(f'IS_PROJECT_TASK={shlex.quote(str(d.get(\"is_project_task\", False)).lower())}')
+print(f'PROJECT_AGENT_NAME={shlex.quote(d.get(\"project_agent_name\", \"\"))}')
 # Timings summary
 timings = d.get('timings', {})
 print(f'PF_TOTAL_TIME={shlex.quote(str(timings.get(\"total\", \"?\")))}')
@@ -461,7 +464,48 @@ fi
 # Kill switch — set to false in cron_env.sh to disable OpenRouter routing
 OPENROUTER_ROUTING="${OPENROUTER_ROUTING:-true}"
 
-if [ "$OPENROUTER_ROUTING" = "true" ] && { [ "$ROUTE_EXECUTOR" = "gemini" ] || [ "$ROUTE_EXECUTOR" = "openrouter" ]; }; then
+# === PROJECT-AGENT ROUTING ===
+# When the preflight flags a project-lane task AND a matching project agent exists,
+# route directly to project_agent.py spawn instead of generic Claude Code.
+# This closes the gap where project-lane tasks were selected but never spawned the agent.
+if [ "$IS_PROJECT_TASK" = "true" ] && [ -n "$PROJECT_AGENT_NAME" ]; then
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] PROJECT-AGENT ROUTING: spawning agent '$PROJECT_AGENT_NAME' for project task" >> "$LOGFILE"
+    EXECUTOR_USED="project_agent"
+
+    # Extract a clean task description from the QUEUE task text
+    # Strip markdown formatting: **[TAG]** description → [TAG] description
+    AGENT_TASK=$(echo "$NEXT_TASK" | sed 's/\*\*//g')
+
+    python3 "$SCRIPTS/agents/project_agent.py" spawn "$PROJECT_AGENT_NAME" "$AGENT_TASK" \
+        --timeout "$CLAUDE_TIMEOUT" > "$TASK_OUTPUT_FILE" 2>> "$LOGFILE"
+    TASK_EXIT=$?
+
+    # Inject route_executor into preflight JSON for postflight
+    python3 -c "
+import json, os, tempfile
+with open('$PREFLIGHT_FILE') as f:
+    d = json.load(f)
+d['route_executor'] = 'project_agent'
+d['project_agent_name'] = '$PROJECT_AGENT_NAME'
+fd, tmp = tempfile.mkstemp(suffix='.json', dir=os.path.dirname('$PREFLIGHT_FILE') or '/tmp')
+try:
+    with os.fdopen(fd, 'w') as f:
+        json.dump(d, f)
+    os.rename(tmp, '$PREFLIGHT_FILE')
+except Exception:
+    os.unlink(tmp)
+    raise
+" 2>> "$LOGFILE"
+
+    # Promote results back to Clarvis if spawn succeeded
+    if [ "$TASK_EXIT" -eq 0 ]; then
+        python3 "$SCRIPTS/agents/project_agent.py" promote "$PROJECT_AGENT_NAME" >> "$LOGFILE" 2>&1 || true
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] PROJECT-AGENT: spawn succeeded, results promoted" >> "$LOGFILE"
+    else
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] PROJECT-AGENT: spawn failed (exit=$TASK_EXIT)" >> "$LOGFILE"
+    fi
+
+elif [ "$OPENROUTER_ROUTING" = "true" ] && { [ "$ROUTE_EXECUTOR" = "gemini" ] || [ "$ROUTE_EXECUTOR" = "openrouter" ]; }; then
     # === TRY OPENROUTER CHEAP MODEL FIRST ===
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] ROUTING to OpenRouter (tier=$ROUTE_TIER, score=$ROUTE_SCORE)" >> "$LOGFILE"
     EXECUTOR_USED="openrouter"

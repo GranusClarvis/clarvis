@@ -39,6 +39,15 @@ try:
 except ImportError:
     get_relevant_frameworks = None
 
+try:
+    from clarvis.audit.toggles import is_enabled as _toggle_enabled, is_shadow as _toggle_shadow
+    from clarvis.audit.trace import update_trace as _toggle_update_trace, current_trace_id as _toggle_trace_id
+except ImportError:
+    def _toggle_enabled(name, default=True): return default
+    def _toggle_shadow(name, default=False): return default
+    def _toggle_update_trace(tid, **kw): return False
+    def _toggle_trace_id(): return None
+
 logger = logging.getLogger(__name__)
 
 WORKSPACE = os.environ.get(
@@ -1511,11 +1520,18 @@ def _build_brief_end(current_task, tier, budget, episodic_hints, section_weights
         except Exception:
             logger.debug("Failed to synthesize knowledge", exc_info=True)
 
-    if get_relevant_frameworks and tier != "minimal":
+    if not _toggle_enabled("conceptual_framework_injection"):
+        logger.debug("Conceptual frameworks SKIPPED — toggle disabled")
+    elif get_relevant_frameworks and tier != "minimal":
         try:
             frameworks_text = get_relevant_frameworks(current_task, max_frameworks=3)
             if frameworks_text and frameworks_text.strip():
-                parts.append("CONCEPTUAL FRAMEWORKS:\n" + frameworks_text)
+                if _toggle_shadow("conceptual_framework_injection"):
+                    logger.debug("Conceptual frameworks SHADOW — ran but excluded from prompt")
+                    _toggle_update_trace(_toggle_trace_id(),
+                                         toggles_shadowed=["conceptual_framework_injection"])
+                else:
+                    parts.append("CONCEPTUAL FRAMEWORKS:\n" + frameworks_text)
         except Exception:
             logger.debug("Failed to get conceptual frameworks", exc_info=True)
 

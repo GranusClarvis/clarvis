@@ -60,13 +60,13 @@ TIER_BUDGETS = {
         "reasoning_scaffold": 40,
     },
     "full": {
-        "total": 1000,
-        "decision_context": 230,   # +80 from merged metrics
-        "spotlight": 120,
-        "related_tasks": 100,
+        "total": 1200,
+        "decision_context": 270,   # +40: highest relevance section (0.47)
+        "spotlight": 150,          # +30: gwt_broadcast (0.30) + attention
+        "related_tasks": 120,      # +20: consistently high relevance (0.38)
         "completions": 50,
-        "episodes": 150,           # +30: hierarchical episodes need room
-        "reasoning_scaffold": 60,
+        "episodes": 200,           # +50: highest-impact section (0.39)
+        "reasoning_scaffold": 70,  # +10: mid-tier but load-bearing
     },
 }
 

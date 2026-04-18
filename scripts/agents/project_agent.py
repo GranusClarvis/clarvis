@@ -464,6 +464,32 @@ AGENT_CONFIG_TEMPLATE = {
 }
 
 
+def find_agent_for_lane(lane: str) -> Optional[str]:
+    """Find the project agent name mapped to a given lane (e.g. 'SWO' → 'star-world-order').
+
+    Scans all agent configs for a matching 'lane' field. Returns the agent name or None.
+    """
+    if not lane:
+        return None
+    lane_upper = lane.upper()
+    for root in (AGENTS_ROOT_PRIMARY, AGENTS_ROOT_FALLBACK):
+        if not root.exists():
+            continue
+        for agent_dir in root.iterdir():
+            if not agent_dir.is_dir():
+                continue
+            cfg_path = agent_dir / "configs" / "agent.json"
+            if not cfg_path.exists():
+                continue
+            try:
+                cfg = json.loads(cfg_path.read_text())
+                if cfg.get("lane", "").upper() == lane_upper:
+                    return cfg.get("name", agent_dir.name)
+            except (json.JSONDecodeError, OSError):
+                continue
+    return None
+
+
 def _log(msg: str):
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
     line = f"[{ts}] [project-agent] {msg}"

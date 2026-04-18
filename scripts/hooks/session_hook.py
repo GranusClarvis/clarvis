@@ -16,6 +16,15 @@ from pathlib import Path
 from clarvis.brain import brain
 from clarvis.cognition.attention import attention
 
+try:
+    from clarvis.audit.toggles import is_enabled, is_shadow
+    from clarvis.audit.trace import update_trace, current_trace_id
+except ImportError:
+    def is_enabled(name, default=True): return default
+    def is_shadow(name, default=False): return default
+    def update_trace(tid, **kw): return False
+    def current_trace_id(): return None
+
 DATA_DIR = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))) / "data"
 SESSION_STATE_FILE = DATA_DIR / "session_state.json"
 
@@ -53,18 +62,32 @@ def session_open(session_key=None):
     )
 
     # 5. Theory of Mind: generate proactive suggestions and push to spotlight
-    try:
-        from clarvis._script_loader import load as _load_script
-        _tom_mod = _load_script("theory_of_mind", "cognition")
-        tom = _tom_mod.tom
-        suggestions = tom.generate_suggestions()
-        pushed = tom.push_to_spotlight(suggestions)
-        if suggestions:
-            print(f"  Theory of Mind: {len(suggestions)} suggestions, {pushed} pushed to spotlight")
-            for s in suggestions[:3]:
-                print(f"    [{s['priority']}] {s['suggestion'][:70]}")
-    except Exception as e:
-        print(f"  Theory of Mind: unavailable ({e})")
+    _tom_toggle = "theory_of_mind"
+    if not is_enabled(_tom_toggle):
+        print(f"  Theory of Mind: feature '{_tom_toggle}' disabled — skipping.")
+    else:
+        _tom_shadow = is_shadow(_tom_toggle)
+        if _tom_shadow:
+            print("  Theory of Mind: running in SHADOW mode (suggestions not pushed to spotlight).")
+            update_trace(current_trace_id(), toggles_shadowed=[_tom_toggle])
+        try:
+            from clarvis._script_loader import load as _load_script
+            _tom_mod = _load_script("theory_of_mind", "cognition")
+            tom = _tom_mod.tom
+            suggestions = tom.generate_suggestions()
+            if _tom_shadow:
+                # Shadow: log suggestions but do NOT push to spotlight
+                print(f"  Theory of Mind [SHADOW]: {len(suggestions)} suggestions generated (not pushed)")
+                for s in suggestions[:3]:
+                    print(f"    [SHADOW] [{s['priority']}] {s['suggestion'][:70]}")
+            else:
+                pushed = tom.push_to_spotlight(suggestions)
+                if suggestions:
+                    print(f"  Theory of Mind: {len(suggestions)} suggestions, {pushed} pushed to spotlight")
+                    for s in suggestions[:3]:
+                        print(f"    [{s['priority']}] {s['suggestion'][:70]}")
+        except Exception as e:
+            print(f"  Theory of Mind: unavailable ({e})")
 
     attention._save()
 
@@ -128,16 +151,23 @@ def session_close(session_key=None, messages=None):
         print(f"  Stored: {len(decisions)} decisions, {len(insights)} insights")
 
     # Theory of Mind: record session close event and feed observations
-    try:
-        from theory_of_mind import tom
-        tom.observe("feedback", f"Session closed: {session_key}",
-                    context={"source": "session_close"})
-        if decisions:
-            for d in decisions[:3]:
-                tom.observe("preference", d, context={"source": "session_decision"})
-        print("  Theory of Mind: session close events recorded")
-    except Exception:
-        pass
+    if not is_enabled("theory_of_mind"):
+        pass  # skip entirely when disabled
+    else:
+        try:
+            from theory_of_mind import tom
+            tom.observe("feedback", f"Session closed: {session_key}",
+                        context={"source": "session_close",
+                                 "shadow_mode": is_shadow("theory_of_mind")})
+            if decisions:
+                for d in decisions[:3]:
+                    tom.observe("preference", d,
+                                context={"source": "session_decision",
+                                         "shadow_mode": is_shadow("theory_of_mind")})
+            mode_label = " [SHADOW]" if is_shadow("theory_of_mind") else ""
+            print(f"  Theory of Mind{mode_label}: session close events recorded")
+        except Exception:
+            pass
 
     # Save attention/working memory state for next session
     spotlight_count = len(attention.items)

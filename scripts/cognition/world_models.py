@@ -359,7 +359,7 @@ class TaskEmbedding:
 
     def embed(self, task_text, domain="unknown"):
         """Encode a task description into embedding space."""
-        words = task_text.lower().split()
+        words = (task_text or "").lower().split()
 
         # Strategy inference
         strategy = "unknown"
@@ -399,7 +399,7 @@ class TaskEmbedding:
         word_set = set(words)
         overlaps = []
         for emb, outcome, train_text in self.task_vectors:
-            train_words = set(train_text.lower().split())
+            train_words = set((train_text or "").lower().split())
             if not train_words:
                 continue
             overlap = len(word_set & train_words) / max(1, len(word_set | train_words))

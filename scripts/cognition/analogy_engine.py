@@ -25,6 +25,17 @@ from typing import Any
 
 WORKSPACE = Path(os.environ.get("CLARVIS_WORKSPACE", "/home/agent/.openclaw/workspace"))
 
+try:
+    from clarvis.audit.toggles import is_enabled, is_shadow
+    from clarvis.audit.trace import update_trace, current_trace_id
+except ImportError:
+    def is_enabled(name, default=True): return default
+    def is_shadow(name, default=False): return default
+    def update_trace(tid, **kw): return False
+    def current_trace_id(): return None
+
+_TOGGLE_NAME = "analogy_engine"
+
 
 # ── Data structures ──────────────────────────────────────────────
 
@@ -173,6 +184,15 @@ def find_analogies(
     - For each memory C, find what D should be: T_d = embed(C) + R
     - Find the memory closest to T_d
     """
+    # ── Toggle gate ──
+    if not is_enabled(_TOGGLE_NAME):
+        return []
+    if is_shadow(_TOGGLE_NAME):
+        update_trace(current_trace_id(), toggles_shadowed=[_TOGGLE_NAME])
+        # Shadow: compute analogies for measurement but caller should not use results
+        # in prompt construction. We tag results but still return them so traces can
+        # capture quality metrics.
+
     # Embed source pair
     source_embs = _embed([a_text, b_text])
     emb_a, emb_b = source_embs[0], source_embs[1]

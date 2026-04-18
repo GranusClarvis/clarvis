@@ -42,6 +42,18 @@ try:
 except ImportError:
     episodic = None
 
+try:
+    from clarvis.audit.toggles import is_enabled, is_shadow
+    from clarvis.audit.trace import update_trace, current_trace_id
+except ImportError:
+    def is_enabled(name, default=True): return default
+    def is_shadow(name, default=False): return default
+    def update_trace(tid, **kw): return False
+    def current_trace_id(): return None
+
+_TOGGLE_NAME = "absolute_zero_selfplay"
+_shadow_active = False
+
 # ── Storage ──────────────────────────────────────────────────────────────
 DATA_DIR = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))) / "data/absolute_zero"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -534,11 +546,14 @@ def run_cycle() -> dict:
     if learnability > 0.3:
         insight = _extract_insight(task_type, task, result, learnability)
         if insight:
+            _azr_tags = ["absolute_zero", task_type, "self_improvement"]
+            if _shadow_active:
+                _azr_tags.append("shadow_mode")
             brain.store(
                 f"[AZR-{task_type.upper()}] {insight}",
                 collection="autonomous-learning",
                 importance=min(0.4 + learnability * 0.4, 0.8),
-                tags=["absolute_zero", task_type, "self_improvement"],
+                tags=_azr_tags,
                 source="absolute_zero",
             )
             stats["insights_stored"] += 1
@@ -560,6 +575,21 @@ def run_cycle() -> dict:
 
 def run_n_cycles(n: int = 3) -> dict:
     """Run n AZR cycles, one per task type if possible."""
+    global _shadow_active
+
+    # ── Toggle gate ──
+    if not is_enabled(_TOGGLE_NAME):
+        print(f"[AZR] Feature '{_TOGGLE_NAME}' is disabled — skipping.")
+        return {"skipped": True, "reason": "toggle_disabled",
+                "cycles_run": 0, "avg_learnability": 0, "insights_generated": 0,
+                "insights": [], "results": []}
+
+    _shadow_active = is_shadow(_TOGGLE_NAME)
+    if _shadow_active:
+        print("[AZR] Running in SHADOW mode — insights stored but excluded from prompts/decisions.")
+        update_trace(current_trace_id(),
+                     toggles_shadowed=[_TOGGLE_NAME])
+
     results = []
     for i in range(n):
         result = run_cycle()
@@ -574,7 +604,8 @@ def run_n_cycles(n: int = 3) -> dict:
     )
 
     # If we found high-learnability patterns, inject a task into QUEUE
-    if avg_learnability > 0.5 and insights:
+    # Skip QUEUE injection in shadow mode — shadow runs must not affect decisions.
+    if avg_learnability > 0.5 and insights and not _shadow_active:
         _inject_improvement_task(insights, avg_learnability)
 
     return {

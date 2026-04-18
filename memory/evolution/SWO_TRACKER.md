@@ -24,6 +24,7 @@ Planning docs, queue items, and brand positioning do NOT count as delivery.
 |---|-----|-------|------|
 | 1 | #175 | ci: add test workflow | 2026-03-02 |
 | 2 | #178 | feat: V1 companion dashboard with quick actions | 2026-04-16 |
+| 3 | #182 | fix: replace 14 `any` types with narrow sanctuary row types | 2026-04-17 |
 
 ## Pending PRs
 

@@ -97,8 +97,8 @@ except ImportError:
     enforce_stale_demotions = None
 
 try:
-    from world_models import predict_task_outcome as wm_predict
-except ImportError:
+    wm_predict = _load_script("world_models", "cognition").predict_task_outcome
+except (ImportError, Exception):
     wm_predict = None
 
 try:
@@ -161,6 +161,21 @@ try:
     from directive_engine import DirectiveEngine
 except ImportError:
     DirectiveEngine = None
+
+try:
+    _project_agent = _load_script("project_agent", "agents")
+    find_agent_for_lane = _project_agent.find_agent_for_lane
+except (ImportError, FileNotFoundError, AttributeError):
+    find_agent_for_lane = None
+
+try:
+    from clarvis.audit.toggles import is_enabled as _toggle_enabled, is_shadow as _toggle_shadow
+    from clarvis.audit.trace import update_trace as _toggle_update_trace, current_trace_id as _toggle_trace_id
+except ImportError:
+    def _toggle_enabled(name, default=True): return default
+    def _toggle_shadow(name, default=False): return default
+    def _toggle_update_trace(tid, **kw): return False
+    def _toggle_trace_id(): return None
 
 _import_time = time.monotonic() - start_import
 log = lambda msg: print(f"[{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S')}] PREFLIGHT: {msg}", file=sys.stderr)
@@ -666,6 +681,21 @@ def _preflight_select_task(result, codelet_result, t0):
 
     result["task_section"] = task_section
     result["task_salience"] = round(best_salience, 4)
+
+    # Project-agent routing: flag project-lane tasks for direct agent spawn
+    result["is_project_task"] = False
+    result["project_agent_name"] = ""
+    if _PROJECT_LANE and _is_project_task(next_task):
+        result["is_project_task"] = True
+        if find_agent_for_lane:
+            try:
+                agent_name = find_agent_for_lane(_PROJECT_LANE)
+                if agent_name:
+                    result["project_agent_name"] = agent_name
+                    log(f"Project-agent routing: task maps to agent '{agent_name}' (lane={_PROJECT_LANE})")
+            except Exception as e:
+                log(f"Project-agent lookup failed (non-fatal): {e}")
+
     result["timings"]["task_selection"] = round(time.monotonic() - t2, 3)
     return next_task, task_section, best_salience
 
@@ -968,7 +998,9 @@ def _preflight_episodic(result, next_task, _rt):
     t8 = time.monotonic()
     similar_episodes = ""
     failure_episodes = ""
-    if _rt == "NO_RETRIEVAL":
+    if not _toggle_enabled("episodic_memory_injection"):
+        log("Episodic recall SKIPPED — toggle episodic_memory_injection disabled")
+    elif _rt == "NO_RETRIEVAL":
         log("Episodic recall SKIPPED — retrieval gate: NO_RETRIEVAL")
     elif EpisodicMemory:
         try:
@@ -988,6 +1020,12 @@ def _preflight_episodic(result, next_task, _rt):
                 )[:300]
         except Exception as e:
             log(f"Episodic recall failed: {e}")
+    # Shadow mode: episodic ran but output excluded from prompt
+    if _toggle_shadow("episodic_memory_injection") and (similar_episodes or failure_episodes):
+        log("Episodic memory SHADOW — results recorded to trace but excluded from prompt")
+        _toggle_update_trace(_toggle_trace_id(), toggles_shadowed=["episodic_memory_injection"])
+        similar_episodes = ""
+        failure_episodes = ""
     result["timings"]["episodic"] = round(time.monotonic() - t8, 3)
     return similar_episodes, failure_episodes
 
@@ -1022,7 +1060,9 @@ def _preflight_brain_bridge(result, next_task, _rt, retrieval_tier_info):
     brain_working_memory = ""
     brain_ctx = {}
 
-    if _rt == "NO_RETRIEVAL":
+    if not _toggle_enabled("brain_retrieval"):
+        log("Brain bridge SKIPPED — toggle brain_retrieval disabled")
+    elif _rt == "NO_RETRIEVAL":
         log("Brain bridge SKIPPED — retrieval gate: NO_RETRIEVAL (saving ~7.5s)")
     elif brain_preflight_context:
         try:
@@ -1048,10 +1088,19 @@ def _preflight_brain_bridge(result, next_task, _rt, retrieval_tier_info):
     else:
         knowledge_hints = _brain_legacy_fallback(next_task, _rt)
 
-    result["knowledge_hints"] = knowledge_hints
-    result["brain_goals"] = brain_goals
-    result["brain_context"] = brain_context
-    result["brain_working_memory"] = brain_working_memory
+    # Shadow mode: retrieval ran but output excluded from prompts
+    if _toggle_shadow("brain_retrieval"):
+        log("Brain bridge SHADOW — results recorded to trace but excluded from prompt")
+        _toggle_update_trace(_toggle_trace_id(), toggles_shadowed=["brain_retrieval"])
+        result["knowledge_hints"] = ""
+        result["brain_goals"] = ""
+        result["brain_context"] = ""
+        result["brain_working_memory"] = ""
+    else:
+        result["knowledge_hints"] = knowledge_hints
+        result["brain_goals"] = brain_goals
+        result["brain_context"] = brain_context
+        result["brain_working_memory"] = brain_working_memory
 
     # Extract recalled memory IDs for postflight
     _recalled_ids = []
@@ -1237,8 +1286,12 @@ def _run_synaptic_spread(next_task, introspection_text, recalled_memory_ids=None
 def _build_failure_avoidance(next_task):
     """Build failure avoidance text from somatic markers + episodic causal chains."""
     avoidance_lines = []
+    _somatic_shadowed = False
     try:
-        if SomaticMarkerSystem:
+        if not _toggle_enabled("somatic_markers"):
+            log("Somatic markers SKIPPED — toggle disabled")
+        elif SomaticMarkerSystem:
+            _somatic_shadowed = _toggle_shadow("somatic_markers")
             try:
                 somatic = SomaticMarkerSystem()
                 bias = somatic.get_bias(next_task)
@@ -1247,6 +1300,10 @@ def _build_failure_avoidance(next_task):
                         val = m.get("valence", 0)
                         if val < -0.1:
                             avoidance_lines.append(f"  AVOID [{val:.2f}]: {m.get('stimulus', '')[:60]}")
+                if _somatic_shadowed:
+                    log("Somatic markers SHADOW — ran but excluded from prompt")
+                    _toggle_update_trace(_toggle_trace_id(), toggles_shadowed=["somatic_markers"])
+                    avoidance_lines = [l for l in avoidance_lines if not l.startswith("  AVOID")]
             except Exception:
                 pass
         if EpisodicMemory:
@@ -1404,12 +1461,17 @@ def _preflight_insights_prompt_workspace(context_brief, result, next_task, compr
     result["timings"]["prompt_optimizer"] = round(time.monotonic() - t1055, 3)
 
     t106 = time.monotonic()
-    if cog_workspace:
+    if not _toggle_enabled("cognitive_workspace"):
+        log("Cognitive workspace SKIPPED — toggle disabled")
+    elif cog_workspace:
         try:
             cw_result = cog_workspace.set_task(next_task)
             if cw_result.get("reactivated"):
                 log(f"Cognitive workspace: reactivated {len(cw_result['reactivated'])} dormant items")
                 cog_workspace.sync_from_spotlight()
+            if _toggle_shadow("cognitive_workspace"):
+                log("Cognitive workspace SHADOW — ran but excluded from prompt")
+                _toggle_update_trace(_toggle_trace_id(), toggles_shadowed=["cognitive_workspace"])
         except Exception as e:
             log(f"Cognitive workspace failed: {e}")
     result["timings"]["cognitive_workspace"] = round(time.monotonic() - t106, 3)

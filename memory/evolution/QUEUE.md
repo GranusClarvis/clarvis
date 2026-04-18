@@ -51,9 +51,6 @@ _SWO tasks tracked here. When project lane is active, these get priority. See al
 
 _Recorded under the audit-cap override (§P0 banner). P1 is currently 19/15 in base terms but within the 25-ceiling for audit sources. These are justified Phase 0 follow-ups; closing them is a precondition for a valid Phase 0 PASS ruling and for downstream phases. See `docs/internal/audits/decisions/2026-04-16_phase0_instrumentation.md`._
 
-- [x] **[METACOGNITION_WIRE_VERIFY]** [2026-04-18] Verified: module importable via `from clarvis.cognition.metacognition import ...`, 32/32 tests pass covering all 5 public API functions (check_step_quality, compute_coherence, evaluate_session, brier_score, diagnose_sessions). Real runtime callers: reasoning.py, confidence.py, self_model.py. Also referenced in verify_install.sh, wiki_compile.py, research_novelty.py.
-- [ ] **[AUDIT_PHASE_0_TRACE_RETENTION_SWEEPER]** Add a daily cron (05:05 CET, after `cron_pi_refresh` / before `cron_brain_eval`) that prunes `data/audit/traces/<date>/` directories older than 45 days. Must be idempotent, log to `monitoring/audit_retention.log`, and fail-open (never raise). Acceptance: sweeper runs ≥3 consecutive days without error; no trace older than 45d remains; disk footprint stays bounded.
-- [ ] **[AUDIT_PHASE_0_TOGGLE_CALL_SITES]** Wire `clarvis.audit.toggles.is_enabled` / `is_shadow` at production call sites for the 23 registered features. Each site: if `enabled=False`, skip the feature entirely; if `shadow=True`, run it but exclude its output from prompts/decisions while still recording to trace under `toggles_shadowed`. Acceptance: at least 5 high-leverage sites wired (brain_retrieval, wiki_retrieval, conceptual_framework_injection, somatic_markers, cognitive_workspace); each shows a shadow-mode trace entry during a canary run.
 - [ ] **[AUDIT_PHASE_0_GATE_EVALUATION]** On or after 2026-04-23, run `python3 scripts/audit/trace_exporter.py gate --days 7` and record the verdict in the Phase 0 decision doc. If PASS, mark `[AUDIT_PHASE_0_INSTRUMENTATION]` [x] and unblock Phase 2. If FAIL, diagnose which spawn paths are missing traces (expected offenders: ad-hoc manual spawns, cron jobs that don't route through `spawn_claude.sh`), extend instrumentation, and reschedule the gate.
 
 ### Deep Audit — Phase 2 Follow-ups (added 2026-04-16 via AUDIT_CAP_OVERRIDE)
@@ -126,8 +123,6 @@ _Demoted to P2 to bring P1 within 25-ceiling. All are review/sweep/benchmark tas
 
 - [ ] **[PHASE10_RESTORE_DRILL]** Create `scripts/infra/restore_drill.sh` that restores the latest backup to a temp directory, verifies ClarvisDB can load, runs `brain.health_check()`, and reports pass/fail. Add quarterly cron entry. Acceptance: drill runs once successfully and is scheduled. Source: Phase 10 reliability gap — backups verified but never test-restored. Decision doc: `docs/internal/audits/decisions/2026-04-17_phase10_reliability_security.md`.
 - [ ] **[PHASE10_GATEWAY_SYSTEMD_HARDENING]** Add `PrivateTmp=true`, `NoNewPrivileges=true`, `ProtectHome=read-only`, `ProtectSystem=strict` to `openclaw-gateway.service`. Project agent services already have these. Acceptance: `systemctl --user show openclaw-gateway.service | grep PrivateTmp` returns `yes`. Source: Phase 10 security gap.
-- [x] **[PHASE10_SECRET_SWEEP_CRON]** [2026-04-18] Added to system crontab: Sunday 05:35 CET (after cleanup, before benchmark). Entry: `35 5 * * 0 cd workspace && . cron_env.sh && python3 secret_sweep.py --json >> monitoring/secret_sweep.log`. Verified script runs cleanly.
-- [x] **[PHASE10_BROWSER_SESSIONS_GITIGNORE]** [2026-04-18] Already present in `.gitignore` at line 19 (`data/browser_sessions/`). Also covered by broader `data/` exclusion at line 79. No action needed.
 - [ ] **[PHASE10_LOCK_AUDIT_JOURNAL]** Create centralized lock audit journal: each lock acquisition/release writes a line to `monitoring/lock_audit.log` with timestamp, PID, lock name, action. Enables post-incident investigation. Replicate `lock_helper.sh` pattern to project agents after journal exists. Source: Phase 10 PROMOTE investment case.
 
 ### Deep Audit — Phases 12–15 Anchors (P2, added 2026-04-16 per meta-meta audit)
@@ -140,9 +135,6 @@ _Activate when Sprint 6 artifacts merge. These are placeholder anchors — full 
 
 _Source: `docs/internal/audits/decisions/2026-04-17_phase15_reaudit_protocol.md`. Phase 15 PASS: all 3 gates met. Trial run found 3 stale locks (actionable regression)._
 
-- [ ] **[PHASE15_STALE_LOCK_INVESTIGATION]** Investigate the 3 stale locks (>2h old) found by the Phase 15 trial run on 2026-04-17. Despite lock discipline being PROMOTE-grade (Phase 10), real stale locks exist. Identify which scripts left them, fix the root cause, and verify lock_helper cleanup. Source: Phase 15 trial findings.
-- [ ] **[PHASE15_REAUDIT_CRON_WIRING]** Wire `scripts/audit/reaudit_runner.py weekly` into the Sunday `cron_cleanup.sh` window (05:30). Low-cost (0 LLM, <30s). Enables automated weekly drift detection. Source: Phase 15 Gap 2.
-- [ ] **[PHASE15_REAUDIT_TREND_SUBCOMMAND]** Add `trend` subcommand to `reaudit_runner.py` that compares last N results and detects cross-metric regression patterns. Blocked on ≥3 monthly result files. Source: Phase 15 Gap 3.
 
 ### Phase 14 Follow-ups (P2, added 2026-04-17)
 
@@ -216,7 +208,7 @@ _Source: `source="audit_phase_4"`. P0+P1 items are co-located with their parent 
 ### Phi Monitoring / Validation (demoted to observability metric by Phase 11 synthesis — regression watch only, not a KPI or optimization target; overlaps Phase 9 REVISE ruling on phi_metric)
 
 - [~] **[PHI_EMERGENCY_CROSS_LINK_BLITZ]** Run targeted bulk_cross_link on all 45 collection pairs (Phi target). (2026-04-16: started full-brain bulk_cross_link but process killed at ~5min when cron_autonomous started; +1357 edges committed before kill. Follow-up pair-targeted pass below supplanted the remainder.)
-- [ ] Expand clarvis-goals collection — add 10-15 goal memories referencing infra/identity/learning.
+- [x] Expand clarvis-goals collection — add 10-15 goal memories referencing infra/identity/learning. (2026-04-18: added 13 goals covering infra resilience/security/backup/gateway/cron, identity self-model/coherence/ToM/dual-layer, and learning retention/bridges/research/dreams. Collection: 16→29.)
 - [ ] Tune graph compaction aggressiveness + add Phi-guard (skip if Phi < 0.65).
 - [ ] Add Phi-floor guard to graph_compaction.py before edge pruning.
 - [ ] Audit graph edge-type distribution for integration balance.

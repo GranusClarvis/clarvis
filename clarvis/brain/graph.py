@@ -356,16 +356,25 @@ class GraphMixin:
                     counts[tgt] = counts.get(tgt, 0) + 1
         return counts
 
-    def bulk_cross_link(self, max_distance=1.5, max_links_per_memory=3, verbose=False):
+    def bulk_cross_link(self, max_distance=1.5, max_links_per_memory=3,
+                        verbose=False, timeout_seconds=None):
         """Scan all memories and create cross-collection edges where missing.
 
         Uses synonym-aware matching: when a memory contains domain terms,
         also queries with related synonyms to find bridges that pure embedding
         distance would miss. Under-connected collections get a relaxed distance
         threshold and more links per memory to boost bridge density.
+
+        Args:
+            timeout_seconds: If set, stop scanning after this many seconds and
+                return partial results. Allows the reflection pipeline to
+                proceed even if the full scan can't complete in time.
         """
+        import time as _time
         new_edges = 0
         memories_scanned = 0
+        timed_out = False
+        start_time = _time.monotonic()
 
         existing_pairs = self._existing_edge_pairs("cross_collection")
 
@@ -381,6 +390,13 @@ class GraphMixin:
             col_max_distance = max_distance + 0.3 if is_boosted else max_distance
             col_max_links = max_links_per_memory + 2 if is_boosted else max_links_per_memory
 
+            # Check timeout before starting each collection
+            if timeout_seconds and (_time.monotonic() - start_time) >= timeout_seconds:
+                timed_out = True
+                if verbose:
+                    print(f"  TIMEOUT after {timeout_seconds}s — stopping crosslink early")
+                break
+
             results = col.get()
             ids = results.get("ids", [])
             docs = results.get("documents", [])
@@ -388,6 +404,14 @@ class GraphMixin:
             for idx, (mem_id, doc) in enumerate(zip(ids, docs)):
                 if not doc or len(doc) < 10:
                     continue
+
+                # Check timeout every 10 memories to avoid overshoot
+                if timeout_seconds and memories_scanned % 10 == 0:
+                    if (_time.monotonic() - start_time) >= timeout_seconds:
+                        timed_out = True
+                        if verbose:
+                            print(f"  TIMEOUT after {timeout_seconds}s — stopping crosslink early")
+                        break
 
                 memories_scanned += 1
                 links_added = 0
@@ -445,16 +469,25 @@ class GraphMixin:
                     if links_added >= col_max_links:
                         break
 
+            if timed_out:
+                break
+
             if verbose and ids:
                 boost_tag = " [BOOSTED]" if is_boosted else ""
                 print(f"  Scanned {col_name}: {len(ids)} memories{boost_tag}")
 
-        return {
+        elapsed = _time.monotonic() - start_time
+        result = {
             "new_edges": new_edges,
             "memories_scanned": memories_scanned,
             "total_edges": len(self.graph.get("edges", [])),
             "boosted_collections": [c for c, cnt in col_cross_counts.items() if cnt < boost_threshold],
+            "timed_out": timed_out,
+            "elapsed_seconds": round(elapsed, 1),
         }
+        if verbose and timed_out:
+            print(f"  Partial scan: {memories_scanned} memories in {elapsed:.0f}s (cap={timeout_seconds}s)")
+        return result
 
     def pair_targeted_cross_link(self, pairs, max_distance=2.0,
                                   max_links_per_memory=10, verbose=False):

@@ -40,7 +40,8 @@ def episode_encode(task, task_section, best_salience, task_status, task_duration
             error_msg = output_text[-200:] if task_status != "success" else None
             em.encode(task, task_section, best_salience, task_status,
                       duration_s=task_duration, error_msg=error_msg,
-                      failure_type=error_type)
+                      failure_type=error_type,
+                      output_text=output_text[-2000:] if output_text else None)
             latest_ep = em.episodes[-1] if em.episodes else {}
             causal_n = latest_ep.get("causal_links_created", 0)
             causal_info = f", causal_links={causal_n}" if causal_n else ""

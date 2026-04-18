@@ -14,10 +14,13 @@ Functions are designed for use in heartbeat_preflight.py and heartbeat_postfligh
     - brain_update_context(task, status) -> updates brain's working context
 """
 
+import logging
 import os
 import re
 import time
 from datetime import datetime, timezone
+
+logger = logging.getLogger(__name__)
 
 try:
     # Check for ACT-R activation scoring availability
@@ -44,13 +47,13 @@ def brain_preflight_context(task_text, n_knowledge=5, n_goals=5, graph_expand=Fa
     Args:
         graph_expand: If True, expand recall results with 1-hop graph neighbors.
         collections: Override which collections to query for knowledge recall.
-                     If None, uses default [LEARNINGS, MEMORIES, EPISODES].
+                     If None, uses default [LEARNINGS, MEMORIES, EPISODES, INFRASTRUCTURE].
 
     Returns dict with keys: goals_text, context, knowledge_hints, working_memory
     All values are strings safe for prompt injection.
     """
     from clarvis.brain import get_brain
-    from clarvis.brain.constants import LEARNINGS, CONTEXT, MEMORIES, EPISODES
+    from clarvis.brain.constants import LEARNINGS, CONTEXT, MEMORIES, EPISODES, INFRASTRUCTURE
 
     result = {
         "goals_text": "",
@@ -63,6 +66,7 @@ def brain_preflight_context(task_text, n_knowledge=5, n_goals=5, graph_expand=Fa
     try:
         b = get_brain()
     except Exception:
+        logger.warning("brain_bridge: brain unavailable, returning empty context")
         return result
 
     t0 = time.monotonic()
@@ -79,7 +83,7 @@ def brain_preflight_context(task_text, n_knowledge=5, n_goals=5, graph_expand=Fa
                 lines.append(f"  ({progress}%) {name}")
             result["goals_text"] = "\n".join(lines)
     except Exception:
-        pass
+        logger.warning("brain_bridge: goals retrieval failed", exc_info=True)
     result["brain_timings"]["goals"] = round(time.monotonic() - t0, 3)
 
     # 2. Current context
@@ -88,13 +92,13 @@ def brain_preflight_context(task_text, n_knowledge=5, n_goals=5, graph_expand=Fa
         ctx = b.get_context()
         result["context"] = ctx if ctx != "idle" else ""
     except Exception:
-        pass
+        logger.warning("brain_bridge: context retrieval failed", exc_info=True)
     result["brain_timings"]["context"] = round(time.monotonic() - t1, 3)
 
     # 3. Relevant knowledge (multi-collection: learnings + memories + episodes)
     t2 = time.monotonic()
     try:
-        _recall_collections = collections if collections else [LEARNINGS, MEMORIES, EPISODES]
+        _recall_collections = collections if collections else [LEARNINGS, MEMORIES, EPISODES, INFRASTRUCTURE]
         knowledge = b.recall(
             task_text,
             collections=_recall_collections,
@@ -171,7 +175,7 @@ def brain_preflight_context(task_text, n_knowledge=5, n_goals=5, graph_expand=Fa
                 result["brain_timings"]["actr_mean"] = round(sum(actr_scores) / len(actr_scores), 3)
                 result["brain_timings"]["actr_max"] = round(max(actr_scores), 3)
     except Exception:
-        pass
+        logger.warning("brain_bridge: knowledge retrieval failed", exc_info=True)
     result["brain_timings"]["knowledge"] = round(time.monotonic() - t2, 3)
 
     # 4. Working memory: recent context entries (last 3)
@@ -186,7 +190,7 @@ def brain_preflight_context(task_text, n_knowledge=5, n_goals=5, graph_expand=Fa
                     wm_lines.append(f"  {doc}")
             result["working_memory"] = "\n".join(wm_lines)
     except Exception:
-        pass
+        logger.warning("brain_bridge: working memory retrieval failed", exc_info=True)
     result["brain_timings"]["working_memory"] = round(time.monotonic() - t3, 3)
 
     return result
@@ -255,4 +259,4 @@ def brain_update_context(task_text, status):
         context = f"[{timestamp}] Last task ({status}): {task_text[:120]}"
         b.set_context(context)
     except Exception:
-        pass
+        logger.warning("brain_bridge: context update failed", exc_info=True)

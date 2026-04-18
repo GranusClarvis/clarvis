@@ -33,6 +33,17 @@ from pathlib import Path
 
 from clarvis.brain import brain, AUTONOMOUS_LEARNING
 
+try:
+    from clarvis.audit.toggles import is_enabled, is_shadow
+    from clarvis.audit.trace import update_trace, current_trace_id
+except ImportError:
+    def is_enabled(name, default=True): return default
+    def is_shadow(name, default=False): return default
+    def update_trace(tid, **kw): return False
+    def current_trace_id(): return None
+
+_TOGGLE_NAME = "theory_of_mind"
+
 DATA_DIR = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))) / "data/theory_of_mind"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -910,6 +921,14 @@ if __name__ == "__main__":
         print("  update                    Full model update from all data sources")
         print("  score                     Show model maturity score")
         sys.exit(0)
+
+    # ��─ Toggle gate ──
+    if not is_enabled(_TOGGLE_NAME):
+        print(f"[ToM] Feature '{_TOGGLE_NAME}' is disabled — skipping.")
+        sys.exit(0)
+    if is_shadow(_TOGGLE_NAME):
+        print("[ToM] Running in SHADOW mode — outputs excluded from prompts/decisions.")
+        update_trace(current_trace_id(), toggles_shadowed=[_TOGGLE_NAME])
 
     cmd = sys.argv[1]
 

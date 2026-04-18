@@ -511,7 +511,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Clarvis Visual Dashboard")
     parser.add_argument("--port", type=int, default=18799)
-    parser.add_argument("--host", type=str, default="0.0.0.0")
+    parser.add_argument("--host", type=str, default="127.0.0.1")
     args = parser.parse_args()
 
     print(f"[dashboard] Starting on {args.host}:{args.port}")

@@ -301,14 +301,19 @@ def stale():
 
 
 @app.command()
-def crosslink():
+def crosslink(
+    timeout: int = typer.Option(600, help="Max seconds before stopping (0=unlimited)"),
+):
     """Build cross-collection edges for all memories."""
     b = _get_brain()
-    result = b.bulk_cross_link(verbose=True)
-    print("\nCross-linking complete:")
+    timeout_val = timeout if timeout > 0 else None
+    result = b.bulk_cross_link(verbose=True, timeout_seconds=timeout_val)
+    status = "PARTIAL (timed out)" if result.get("timed_out") else "complete"
+    print(f"\nCross-linking {status}:")
     print(f"  New edges: {result['new_edges']}")
     print(f"  Scanned: {result['memories_scanned']} memories")
     print(f"  Total edges: {result['total_edges']}")
+    print(f"  Elapsed: {result.get('elapsed_seconds', '?')}s")
 
 
 @app.command()

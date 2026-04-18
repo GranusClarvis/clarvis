@@ -33,6 +33,20 @@ from clarvis.brain import brain
 from clarvis.memory.episodic_memory import episodic
 from clarvis.cognition.reasoning_chains import create_chain, add_step, complete_step
 
+try:
+    from clarvis.audit.toggles import is_enabled, is_shadow
+    from clarvis.audit.trace import update_trace, current_trace_id
+except ImportError:
+    def is_enabled(name, default=True): return default
+    def is_shadow(name, default=False): return default
+    def update_trace(tid, **kw): return False
+    def current_trace_id(): return None
+
+_TOGGLE_NAME = "dream_engine_outputs"
+# Set by dream() when running in shadow mode — checked by callers who inject
+# dream outputs into prompts/decisions.
+_shadow_active = False
+
 DREAM_LOG = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))) / "data/dream_log.json"
 DREAM_LOG.parent.mkdir(parents=True, exist_ok=True)
 
@@ -432,6 +446,19 @@ def dream(n_episodes=10):
 
     Returns summary dict.
     """
+    global _shadow_active
+
+    # ── Toggle gate ──
+    if not is_enabled(_TOGGLE_NAME):
+        print(f"[dream] Feature '{_TOGGLE_NAME}' is disabled — skipping.")
+        return {"skipped": True, "reason": "toggle_disabled", "insights_generated": 0}
+
+    _shadow_active = is_shadow(_TOGGLE_NAME)
+    if _shadow_active:
+        print(f"[dream] Running in SHADOW mode — outputs will not affect prompts/decisions.")
+        update_trace(current_trace_id(),
+                     toggles_shadowed=[_TOGGLE_NAME])
+
     print(f"[dream] Starting counterfactual dream cycle ({n_episodes} episodes)...")
 
     # 1. Select episodes
@@ -467,11 +494,14 @@ def dream(n_episodes=10):
         #    from creating duplicate entries.
         dream_text = f"[DREAM INSIGHT] {insight}"
         dream_dedup_id = f"dream_{episode['id']}_{cf['template_id']}"
+        _dream_tags = ["dream", "counterfactual", cf["template_id"], session_id]
+        if _shadow_active:
+            _dream_tags.append("shadow_mode")
         dream_memory_id = brain.store(
             dream_text,
             collection="clarvis-learnings",
             importance=0.5,  # Must be >=0.3 to surface in preflight knowledge recall
-            tags=["dream", "counterfactual", cf["template_id"], session_id],
+            tags=_dream_tags,
             source="dream_engine",
             memory_id=dream_dedup_id,
         )
@@ -503,11 +533,14 @@ def dream(n_episodes=10):
         f"generated from {len(episodes)} episodes. Templates used: "
         f"{', '.join(set(d['template'] for d in session_insights))}."
     )
+    _session_tags = ["dream_session", session_id]
+    if _shadow_active:
+        _session_tags.append("shadow_mode")
     brain.store(
         summary,
         collection="clarvis-learnings",
         importance=0.4,
-        tags=["dream_session", session_id],
+        tags=_session_tags,
         source="dream_engine",
         memory_id=f"dream_session_{session_id}",
     )

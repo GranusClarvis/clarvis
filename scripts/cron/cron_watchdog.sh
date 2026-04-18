@@ -193,6 +193,64 @@ if echo "$QH" | grep -q "^WARN"; then
     ((FAILURES++)) || true
 fi
 
+# --- Stale PR check (weekly — only runs on Sundays) ---
+# Lists open Clarvis-authored PRs older than 14 days with review status.
+DAY_OF_WEEK=$(date +%u)  # 7=Sunday
+if [ "$DAY_OF_WEEK" -eq 7 ]; then
+  STALE_PR_REPORT=""
+  STALE_PR_COUNT=0
+  if command -v gh >/dev/null 2>&1; then
+    # Check PRs across all repos where Clarvis has authored PRs
+    STALE_PR_JQ='.[] | select((now - (.createdAt | fromdateiso8601)) / 86400 > 14) | [.number, ((now - (.createdAt | fromdateiso8601)) / 86400 | floor), .title, (.reviewDecision // "NO_REVIEW")] | @tsv'
+    for repo in "" "InverseAltruism/Star-World-Order"; do
+      repo_flag=""
+      repo_label="clarvis"
+      if [ -n "$repo" ]; then
+        repo_flag="--repo $repo --author GranusClarvis"
+        repo_label="$repo"
+      else
+        repo_flag="--author @me"
+      fi
+      while IFS=$'\t' read -r pr_number pr_age pr_title pr_state; do
+        [ -z "$pr_number" ] && continue
+        STALE_PR_REPORT="${STALE_PR_REPORT}STALE_PR ${repo_label}#${pr_number} — ${pr_age}d old (${pr_state}): ${pr_title}\n"
+        ((STALE_PR_COUNT++)) || true
+      done < <(gh pr list $repo_flag --state open --json number,title,createdAt,reviewDecision \
+        --jq "$STALE_PR_JQ" 2>/dev/null)
+    done
+
+    if [ "$STALE_PR_COUNT" -gt 0 ]; then
+      REPORT="${REPORT}${STALE_PR_REPORT}"
+      if [ "$ALERT_MODE" = true ]; then
+        STALE_PR_MSG="📋 Stale PR Alert — ${STALE_PR_COUNT} open PR(s) older than 14 days:
+
+$(echo -e "$STALE_PR_REPORT")"
+        python3 << PYEOF
+import json, urllib.request, urllib.parse, os
+try:
+    token = os.environ.get("CLARVIS_TG_BOT_TOKEN", "")
+    if not token:
+        with open(os.path.expanduser('~/.openclaw/openclaw.json')) as f:
+            config = json.load(f)
+        token = config['channels']['telegram']['botToken']
+    chat_id = os.environ.get("CLARVIS_TG_CHAT_ID", "")
+    msg = """$STALE_PR_MSG"""
+    data = urllib.parse.urlencode({"chat_id": chat_id, "text": msg})
+    req = urllib.request.Request(f"https://api.telegram.org/bot{token}/sendMessage", data=data.encode())
+    urllib.request.urlopen(req, timeout=10)
+    print("Stale PR alert sent to Telegram")
+except Exception as e:
+    print(f"Stale PR alert send failed: {e}")
+PYEOF
+      fi
+    else
+      REPORT="${REPORT}OK      stale_prs — no open PRs older than 14 days\n"
+    fi
+  else
+    REPORT="${REPORT}SKIP    stale_prs — gh CLI not available\n"
+  fi
+fi
+
 # --- Output report ---
 TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%S)
 echo "[$TIMESTAMP] Watchdog check: $FAILURES failures" >> "$WATCHDOG_LOG"
