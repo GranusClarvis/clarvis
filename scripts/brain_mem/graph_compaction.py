@@ -21,6 +21,8 @@ from datetime import datetime, timezone
 
 from clarvis.brain import get_brain
 
+PHI_FLOOR = 0.65  # Skip destructive pruning when Phi is below this threshold
+
 
 # ====================================================================
 # JSON backend helpers (legacy)
@@ -410,7 +412,7 @@ def _sqlite_nearest_neighbor_edges(store, brain, k=5, sample_per_col=80, dry_run
     return new_edges
 
 
-def run_compaction_sqlite(brain, dry_run=False):
+def run_compaction_sqlite(brain, dry_run=False, skip_pruning=False):
     """Compaction pipeline using SQL operations on the SQLite graph store."""
     t0 = time.time()
     store = brain._sqlite_store
@@ -439,18 +441,26 @@ def run_compaction_sqlite(brain, dry_run=False):
     print(f"Orphan nodes removed: {orphan_nodes}")
 
     # 5. Decay edge weights and prune weak edges
-    decay_types = {"hebbian_association", "cross_collection", "transitive_cross",
-                   "similar_to", "boosted_bridge", "mirror_bridge",
-                   "semantic_bridge", "bridged_similarity"}
-    decay_result = store.decay_edges(
-        half_life_days=30, prune_below=0.02,
-        decay_types=decay_types, dry_run=dry_run,
-    )
-    print(f"Edge decay: {decay_result['decayed']} decayed, {decay_result['pruned']} pruned")
+    if skip_pruning:
+        print(f"Edge decay: SKIPPED (Phi < {PHI_FLOOR})")
+        decay_result = {"decayed": 0, "pruned": 0}
+    else:
+        decay_types = {"hebbian_association", "cross_collection", "transitive_cross",
+                       "similar_to", "boosted_bridge", "mirror_bridge",
+                       "semantic_bridge", "bridged_similarity"}
+        decay_result = store.decay_edges(
+            half_life_days=30, prune_below=0.02,
+            decay_types=decay_types, dry_run=dry_run,
+        )
+        print(f"Edge decay: {decay_result['decayed']} decayed, {decay_result['pruned']} pruned")
 
     # 6. Prune high-degree nodes (cap at 150 edges per node)
-    hd_result = _sqlite_prune_high_degree(store, max_degree=150, dry_run=dry_run)
-    print(f"High-degree pruning: {hd_result['pruned']} edges from {hd_result['nodes_affected']} nodes")
+    if skip_pruning:
+        print(f"High-degree pruning: SKIPPED (Phi < {PHI_FLOOR})")
+        hd_result = {"pruned": 0, "nodes_affected": 0}
+    else:
+        hd_result = _sqlite_prune_high_degree(store, max_degree=150, dry_run=dry_run)
+        print(f"High-degree pruning: {hd_result['pruned']} edges from {hd_result['nodes_affected']} nodes")
 
     # 7. Nearest-neighbor intra-collection edges (boost intra-density)
     nn_edges = _sqlite_nearest_neighbor_edges(store, brain, dry_run=dry_run)
@@ -485,11 +495,12 @@ def run_compaction_sqlite(brain, dry_run=False):
 # JSON backend — compaction via in-memory manipulation (original)
 # ====================================================================
 
-def run_compaction_json(brain, dry_run=False):
+def run_compaction_json(brain, dry_run=False, skip_pruning=False):
     """Full compaction pipeline for JSON backend.
 
     All mutations happen in-memory, then a single atomic write at the end
     bypasses _save_graph()'s read-merge (which would re-add deleted edges).
+    Note: JSON backend has no decay/high-degree pruning, so skip_pruning is accepted but unused.
     """
     t0 = time.time()
     print("Backend: JSON")
@@ -552,16 +563,36 @@ def run_compaction_json(brain, dry_run=False):
     }
 
 
+def _check_phi_guard():
+    """Return (phi_value, should_skip_pruning). Fail-open: never blocks on error."""
+    try:
+        from clarvis.metrics.phi import compute_phi
+        result = compute_phi()
+        phi = result.get("phi", 1.0) if isinstance(result, dict) else 1.0
+        return phi, phi < PHI_FLOOR
+    except Exception as e:
+        print(f"Phi guard: could not compute Phi ({e}), proceeding normally")
+        return None, False
+
+
 def run_compaction(dry_run=False):
     """Dispatch to backend-specific compaction pipeline.
 
     SQLite is the sole runtime backend since 2026-03-29 cutover.
     JSON compaction retained as fallback if SQLite store isn't initialized.
+
+    Phi-guard: when Phi < PHI_FLOOR (0.65), skip destructive edge pruning
+    (decay/prune, high-degree prune) to protect integration score.
     """
+    phi_val, skip_pruning = _check_phi_guard()
+    if phi_val is not None:
+        print(f"Phi guard: Phi={phi_val:.3f}, floor={PHI_FLOOR}, "
+              f"pruning={'SKIPPED' if skip_pruning else 'allowed'}")
+
     brain = get_brain()
     if brain._sqlite_store is not None:
-        return run_compaction_sqlite(brain, dry_run=dry_run)
-    return run_compaction_json(brain, dry_run=dry_run)
+        return run_compaction_sqlite(brain, dry_run=dry_run, skip_pruning=skip_pruning)
+    return run_compaction_json(brain, dry_run=dry_run, skip_pruning=skip_pruning)
 
 
 if __name__ == "__main__":

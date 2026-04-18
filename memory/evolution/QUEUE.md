@@ -56,7 +56,6 @@ _Recorded under the audit-cap override (§P0 banner). P1 is currently 19/15 in b
 
 _Source: `docs/internal/audits/SPINE_MODULE_SCORECARD_2026-04-16.md` + `docs/internal/audits/decisions/2026-04-16_phase2_spine_quality.md`. Phase 2 ruled 1 PASS, 13 REVISE, 0 DEMOTE/ARCHIVE on 14 spine modules — most of the REVISE work is small `__init__.py` surface trims and cheap coverage lifts. Only 1 P1 (the new `clarvis/audit/` module needs tests — substrate is live but untested)._
 
-- [ ] **[SPINE_AUDIT_MODULE_TEST_HARNESS]** Write unit tests for `clarvis/audit/{trace.py,toggles.py}` covering: (1) trace lifecycle — `start_trace` → `update_trace` (deep-merge) → `finalize_trace` → atomic JSON on disk → `load_trace` round-trip; (2) toggle registry — `load_toggles`, `is_enabled`, `is_shadow`, default seeding of 23 features on first load; (3) fail-open behaviour when `data/audit/` is read-only. Acceptance: `clarvis.audit` coverage ≥ 60 %; re-running `scripts/audit/spine_scorecard.py` shows `audit.coverage_pct ≥ 60` and `audit.dead_exports` reduced by exercising `AuditTrace, new_trace_id, load_trace, set_current_trace_id, trace_path_for, load_toggles, is_shadow, DEFAULT_TOGGLES`. Phase 2 companion to Phase 0 (substrate shipped but untested).
 
 ### Deep Audit — Phase 3 Follow-ups (added 2026-04-16 via AUDIT_CAP_OVERRIDE)
 
@@ -187,7 +186,6 @@ _All are surface trims or cheap coverage lifts. Bridge wrappers (18) and underly
 - [ ] **[SPINE_ORCH_SCOREBOARD_SURFACE_TRIM]** Drop `scoreboard_record`, `scoreboard_show`, `scoreboard_trend` re-exports from `clarvis/orch/__init__.py`. The `clarvis.orch.scoreboard` submodule stays live (1 importer per Phase 1) — direct importers can still `from clarvis.orch.scoreboard import record, show, trend`. Acceptance: `orch.dead_exports = 0`.
 - [ ] **[SPINE_COMPAT_WIRE_OR_DOCUMENT]** `clarvis/compat/` has zero production callers (only test callers). Decide one of: (a) wire `run_contract_checks()` into `scripts/infra/health_monitor.sh` with a daily metric exported to `monitoring/`, OR (b) mark the module docstring as "test-scaffold for host-portability contracts" and exclude it from future Phase 9 EVS/TCS passes. Acceptance: clear wire-or-document state recorded — no "kept for future" ambiguity.
 - [ ] **[SPINE_HEARTBEAT_UNIT_COVERAGE]** Add unit tests for `clarvis/heartbeat/error_classifier.py` and `clarvis/heartbeat/worker_validation.py` — both near-zero coverage today because existing tests exercise the pipeline as a whole. Acceptance: `heartbeat.coverage_pct ≥ 25` on `scripts/audit/spine_scorecard.py` re-run.
-- [ ] **[SPINE_LEARNING_COVERAGE_VERIFY]** `clarvis/learning/` reports 0 % coverage despite having a test file. Investigate why existing `tests/test_meta_learning*.py` tests don't touch `MetaLearner`; add a minimal smoke test that instantiates + exercises `.update_policy()`. Acceptance: `learning.coverage_pct > 0` and non-trivial (≥ 20 %).
 - [ ] **[SPINE_METRICS_COVERAGE_LIFT]** Add tests for `clarvis/metrics/memory_audit.run_full_audit` and `clarvis/metrics/quality.compute_code_quality_score`. Both are used operationally (cron + project-lane) but uncovered. Acceptance: `metrics.coverage_pct ≥ 25`.
 - [ ] **[SPINE_RUNTIME_INFER_TASK_SOURCE_DECIDE]** `infer_task_source` is re-exported from `clarvis/runtime/__init__.py` but not called anywhere. Decide: wire it into `clarvis/orch/task_selector.py` at the task-source inference point, OR drop from `__init__` (the function in `mode.py` can stay). Acceptance: `runtime.dead_exports = 0`.
 
@@ -207,8 +205,6 @@ _Source: `source="audit_phase_4"`. P0+P1 items are co-located with their parent 
 ### Phi Monitoring / Validation (demoted to observability metric by Phase 11 synthesis — regression watch only, not a KPI or optimization target; overlaps Phase 9 REVISE ruling on phi_metric)
 
 - [~] **[PHI_EMERGENCY_CROSS_LINK_BLITZ]** Run targeted bulk_cross_link on all 45 collection pairs (Phi target). (2026-04-16: started full-brain bulk_cross_link but process killed at ~5min when cron_autonomous started; +1357 edges committed before kill. Follow-up pair-targeted pass below supplanted the remainder.)
-- [ ] Tune graph compaction aggressiveness + add Phi-guard (skip if Phi < 0.65).
-- [ ] Add Phi-floor guard to graph_compaction.py before edge pruning.
 - [ ] Audit graph edge-type distribution for integration balance.
 - [ ] Diagnose near-zero bridge-type edges and fix bridging pipeline.
 - [ ] Fix bulk_cross_link total_edges returning 0 in SQLite mode.
