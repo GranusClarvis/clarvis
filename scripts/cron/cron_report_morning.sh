@@ -314,6 +314,18 @@ for gl in goal_lines:
     lines.append(gl)
 
 lines.append("")
+
+# Rating prompt for yesterday's unlabeled tasks
+try:
+    sys.path.insert(0, os.path.join(WORKSPACE, "scripts", "tools"))
+    from operator_value_label import get_unlabeled_summary
+    rating_block = get_unlabeled_summary(days=2, max_items=5)
+    if rating_block:
+        lines.append(rating_block)
+        lines.append("")
+except Exception:
+    pass
+
 lines.append("=" * 40)
 lines.append("Ready for the day, sir.")
 
