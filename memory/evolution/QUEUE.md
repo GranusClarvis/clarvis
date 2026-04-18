@@ -81,7 +81,11 @@ _Source: `docs/internal/audits/decisions/2026-04-16_meta_audit_phases_0_4.md`. A
 ---
 
 ## P2 — When Idle
-- [ ] [STALLED] **[AUDIT_PHASE_0_INSTRUMENTATION]** Implement the Phase 0 measurement substrate that blocks every downstream audit phase: (1) per-spawn `audit_trace_id` linking preflight→execution→postflight→outcome, (2) `data/audit/traces/<date>/<id>.json` writer with ≥45d retention, (3) `data/audit/feature_toggles.json` registry supporting `shadow` mode, (4) `scripts/audit/trace_exporter.py` CLI, (5) `scripts/audit/replay.py` for deterministic prompt rebuild. PASS gate: ≥95% of real Claude spawns in a 7-day window have a complete recoverable trace. Canonical plan: `docs/internal/audits/CLARVIS_DEEP_AUDIT_PLAN_2026-04-16.md`. (2026-04-16: substrate shipped — `clarvis/audit/{trace,toggles}.py`, trace_exporter + replay CLIs, spawn_claude + heartbeat wiring, `audit_trace_id` on CostEntry. Awaiting 7-day trace window before PASS ruling. Decision doc: `docs/internal/audits/decisions/2026-04-16_phase0_instrumentation.md`.)
+- [~] [STALLED] **[AUDIT_PHASE_0_INSTRUMENTATION]** Implement the Phase 0 measurement substrate that blocks every downstream audit phase: (1) per-spawn `audit_trace_id` linking preflight→execution→postflight→outcome, (2) `data/audit/traces/<date>/<id>.json` writer with ≥45d retention, (3) `data/audit/feature_toggles.json` registry supporting `shadow` mode, (4) `scripts/audit/trace_exporter.py` CLI, (5) `scripts/audit/replay.py` for deterministic prompt rebuild. PASS gate: ≥95% of real Claude spawns in a 7-day window have a complete recoverable trace. Canonical plan: `docs/internal/audits/CLARVIS_DEEP_AUDIT_PLAN_2026-04-16.md`. (2026-04-16: substrate shipped — `clarvis/audit/{trace,toggles}.py`, trace_exporter + replay CLIs, spawn_claude + heartbeat wiring, `audit_trace_id` on CostEntry. Awaiting 7-day trace window before PASS ruling. Decision doc: `docs/internal/audits/decisions/2026-04-16_phase0_instrumentation.md`.)
+  - [x] [STALLED_1] Analyze: read relevant source files, identify change boundary (added: 2026-04-18, source: auto_split) (done 2026-04-18: change boundary mapped — 3 spine, 3 pipeline, 5 consumer, 1 orch files. Substrate shipped, awaiting 7-day trace window.)
+  - [ ] [STALLED_2] Implement: core logic change in one focused increment (added: 2026-04-18, source: auto_split)
+  - [ ] [STALLED_3] Test: add/update test(s) covering the new behavior (added: 2026-04-18, source: auto_split)
+  - [ ] [STALLED_4] Verify: run existing tests, confirm no regressions (added: 2026-04-18, source: auto_split)
 
 ### Demoted from P1 (2026-04-16, cap triage)
 
@@ -90,14 +94,13 @@ _Demoted to P2 to bring P1 within 25-ceiling. All are review/sweep/benchmark tas
 
 ### Phase 6 Follow-ups (P2, added 2026-04-16)
 
-- [ ] **[PHASE6_OPERATOR_VALUE_LABEL]** Design a mechanism for operator to label task outcomes as "high-value" / "neutral" / "low-value". Could be Telegram reaction on digest, `/rate` command, or QUEUE.md annotation. Without this, task-selector vs operator-value correlation is structurally unmeasurable. Source: Phase 6 Gap 5.
 
 ### Deep Audit — Meta-Audit Follow-ups (P2, added 2026-04-16 via AUDIT_CAP_OVERRIDE)
 
 
 ### Graph Integration (P2, added 2026-04-18)
 
-- [ ] **[PHI_REMAINING_GAP]** Phi is 0.616 vs 0.65 target. Remaining gap is in cross_collection_connectivity (0.501) and episodes intra-density (0.42). Next steps: run full bulk_intra_link for episodes/learnings (needs longer timeout), investigate if cross_collection ratio can be improved by targeted bridging.
+- [~] **[PHI_REMAINING_GAP]** Phi is 0.616 vs 0.65 target. (2026-04-18: +15 intra-edges for goals, +101 cross-edges from bulk_cross_link (goals boosted). Episodes bulk_intra_link times out at 180s — needs cron slot with 600s+ timeout. Cross ratio now 58.5%. Goals was weakest node (499 edges, 1 edge to context). Audit: `data/audit/graph_edge_audit_2026-04-18.json`. Remaining: episodes intra-link needs longer timeout.)
 
 ### Phase 4.5 Follow-ups (P2, added 2026-04-16)
 
@@ -174,7 +177,7 @@ _All are surface trims or cheap coverage lifts. Bridge wrappers (18) and underly
 - [ ] **[SPINE_MEMORY_INIT_TRIM_AND_COVERAGE]** Trim 12 DEAD re-exports from `clarvis/memory/__init__.py` (all are `memory_consolidation` helpers — `learn_from_failures, retire_stale, compose_procedures, merge_clusters, enhanced_decay, enforce_memory_caps, run_consolidation, sleep_consolidate, attention_guided_prune, attention_guided_decay, gwt_broadcast_survivors, salience_report`). Underlying `memory_consolidation.py` stays — callers use direct submodule imports. Add direct unit tests for `procedural_memory.find_procedure` and `procedural_memory.store_procedure` (heavily used in production, currently only exercised indirectly). Acceptance: `memory.coverage_pct ≥ 25` and `memory.dead_exports = 0`.
 - [ ] **[SPINE_ORCH_SCOREBOARD_SURFACE_TRIM]** Drop `scoreboard_record`, `scoreboard_show`, `scoreboard_trend` re-exports from `clarvis/orch/__init__.py`. The `clarvis.orch.scoreboard` submodule stays live (1 importer per Phase 1) — direct importers can still `from clarvis.orch.scoreboard import record, show, trend`. Acceptance: `orch.dead_exports = 0`.
 - [ ] **[SPINE_COMPAT_WIRE_OR_DOCUMENT]** `clarvis/compat/` has zero production callers (only test callers). Decide one of: (a) wire `run_contract_checks()` into `scripts/infra/health_monitor.sh` with a daily metric exported to `monitoring/`, OR (b) mark the module docstring as "test-scaffold for host-portability contracts" and exclude it from future Phase 9 EVS/TCS passes. Acceptance: clear wire-or-document state recorded — no "kept for future" ambiguity.
-- [ ] **[SPINE_HEARTBEAT_UNIT_COVERAGE]** Add unit tests for `clarvis/heartbeat/error_classifier.py` and `clarvis/heartbeat/worker_validation.py` — both near-zero coverage today because existing tests exercise the pipeline as a whole. Acceptance: `heartbeat.coverage_pct ≥ 25` on `scripts/audit/spine_scorecard.py` re-run.
+- [x] **[SPINE_HEARTBEAT_UNIT_COVERAGE]** Add unit tests for `clarvis/heartbeat/error_classifier.py` and `clarvis/heartbeat/worker_validation.py` — both near-zero coverage today because existing tests exercise the pipeline as a whole. Acceptance: `heartbeat.coverage_pct ≥ 25` on `scripts/audit/spine_scorecard.py` re-run. (done 2026-04-18: 109 tests across 2 test files — test_heartbeat_error_classifier.py + test_heartbeat_worker_validation.py, all passing)
 - [ ] **[SPINE_RUNTIME_INFER_TASK_SOURCE_DECIDE]** `infer_task_source` is re-exported from `clarvis/runtime/__init__.py` but not called anywhere. Decide: wire it into `clarvis/orch/task_selector.py` at the task-source inference point, OR drop from `__init__` (the function in `mode.py` can stay). Acceptance: `runtime.dead_exports = 0`.
 
 ### Deep Audit Follow-ups (from Phase 3 — `docs/internal/audits/PROMPT_ASSEMBLY_SCORECARD_2026-04-16.md`)
@@ -193,7 +196,6 @@ _Source: `source="audit_phase_4"`. P0+P1 items are co-located with their parent 
 ### Phi Monitoring / Validation (demoted to observability metric by Phase 11 synthesis — regression watch only, not a KPI or optimization target; overlaps Phase 9 REVISE ruling on phi_metric)
 
 - [~] **[PHI_EMERGENCY_CROSS_LINK_BLITZ]** Run targeted bulk_cross_link on all 45 collection pairs (Phi target). (2026-04-16: started full-brain bulk_cross_link but process killed at ~5min when cron_autonomous started; +1357 edges committed before kill. Follow-up pair-targeted pass below supplanted the remainder.)
-- [ ] Audit graph edge-type distribution for integration balance.
 - [ ] Diagnose near-zero bridge-type edges and fix bridging pipeline.
 - [ ] Fix bulk_cross_link total_edges returning 0 in SQLite mode.
 - [ ] Restore cross-collection bridge capacity in cron_reflection.sh.

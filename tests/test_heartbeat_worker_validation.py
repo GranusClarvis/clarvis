@@ -1,0 +1,353 @@
+"""Unit tests for clarvis.heartbeat.worker_validation.
+
+Covers: classify_worker_type(), validate_worker_output(),
+and the per-type validators (_check_research/implementation/maintenance_output).
+No external I/O — pure logic tests.
+"""
+
+import pytest
+from clarvis.heartbeat.worker_validation import (
+    classify_worker_type,
+    validate_worker_output,
+    _check_research_output,
+    _check_implementation_output,
+    _check_maintenance_output,
+    RESEARCH,
+    IMPLEMENTATION,
+    MAINTENANCE,
+    GENERAL,
+    _get_compiled,
+    _WORKER_PATTERNS,
+)
+
+
+# ---------------------------------------------------------------------------
+# classify_worker_type — tag-based (Signal 1)
+# ---------------------------------------------------------------------------
+
+class TestClassifyWorkerTypeByTag:
+    def test_research_tag(self):
+        assert classify_worker_type("do something", task_tag="RESEARCH 2026-04-02") == RESEARCH
+
+    def test_impl_tag(self):
+        assert classify_worker_type("do something", task_tag="IMPL sprint-7") == IMPLEMENTATION
+
+    def test_maintenance_tag(self):
+        assert classify_worker_type("do something", task_tag="MAINT cleanup") == MAINTENANCE
+
+    def test_tag_case_insensitive(self):
+        assert classify_worker_type("x", task_tag="research") == RESEARCH
+        assert classify_worker_type("x", task_tag="Impl") == IMPLEMENTATION
+        assert classify_worker_type("x", task_tag="maint") == MAINTENANCE
+
+    def test_tag_takes_priority_over_text(self):
+        # Tag says research, text says implement
+        assert classify_worker_type("implement the feature", task_tag="RESEARCH") == RESEARCH
+
+    def test_unrecognized_tag_falls_through(self):
+        # Tag doesn't match any known type — should fall through to text matching
+        result = classify_worker_type("implement the fix", task_tag="BUGFIX")
+        assert result == IMPLEMENTATION  # matched by regex
+
+
+# ---------------------------------------------------------------------------
+# classify_worker_type — prompt_variant (Signal 2)
+# ---------------------------------------------------------------------------
+
+class TestClassifyWorkerTypeByPromptVariant:
+    def test_research_variant(self):
+        assert classify_worker_type("x", prompt_variant_task_type="research") == RESEARCH
+
+    def test_implementation_variant(self):
+        assert classify_worker_type("x", prompt_variant_task_type="implementation") == IMPLEMENTATION
+
+    def test_bugfix_variant(self):
+        assert classify_worker_type("x", prompt_variant_task_type="bugfix") == IMPLEMENTATION
+
+    def test_refactoring_variant(self):
+        assert classify_worker_type("x", prompt_variant_task_type="refactoring") == IMPLEMENTATION
+
+    def test_optimization_variant(self):
+        assert classify_worker_type("x", prompt_variant_task_type="optimization") == IMPLEMENTATION
+
+    def test_tag_overrides_variant(self):
+        assert classify_worker_type("x", task_tag="RESEARCH", prompt_variant_task_type="implementation") == RESEARCH
+
+    def test_unknown_variant_falls_through(self):
+        result = classify_worker_type("cleanup old logs", prompt_variant_task_type="unknown")
+        assert result == MAINTENANCE  # matched by regex
+
+
+# ---------------------------------------------------------------------------
+# classify_worker_type — regex (Signal 3)
+# ---------------------------------------------------------------------------
+
+class TestClassifyWorkerTypeByRegex:
+    def test_research_deep_dive(self):
+        assert classify_worker_type("deep dive into attention mechanisms") == RESEARCH
+
+    def test_research_paper_study(self):
+        assert classify_worker_type("research paper on GWT architecture") == RESEARCH
+
+    def test_research_lit_review(self):
+        assert classify_worker_type("literature review of memory systems") == RESEARCH
+
+    def test_implement_keyword(self):
+        assert classify_worker_type("implement the new cost tracker") == IMPLEMENTATION
+
+    def test_fix_bug(self):
+        assert classify_worker_type("fix bug in heartbeat postflight") == IMPLEMENTATION
+
+    def test_refactor(self):
+        assert classify_worker_type("refactor the brain module") == IMPLEMENTATION
+
+    def test_add_function(self):
+        assert classify_worker_type("add function to parse QUEUE.md") == IMPLEMENTATION
+
+    def test_cleanup(self):
+        assert classify_worker_type("cleanup old log files") == MAINTENANCE
+
+    def test_health_check(self):
+        assert classify_worker_type("health check on brain and cron") == MAINTENANCE
+
+    def test_vacuum(self):
+        assert classify_worker_type("vacuum chromadb collections") == MAINTENANCE
+
+    def test_backup_data(self):
+        # "migration" matches implementation regex before maintenance can match
+        assert classify_worker_type("backup database and verify integrity") == MAINTENANCE
+
+    def test_dead_code_audit(self):
+        assert classify_worker_type("dead code audit and remove unused scripts") == MAINTENANCE
+
+    def test_general_fallback(self):
+        assert classify_worker_type("update the QUEUE.md file") == GENERAL
+
+    def test_empty_text(self):
+        assert classify_worker_type("") == GENERAL
+
+    def test_none_text(self):
+        assert classify_worker_type(None) == GENERAL
+
+
+# ---------------------------------------------------------------------------
+# _get_compiled — pattern compilation
+# ---------------------------------------------------------------------------
+
+class TestGetCompiled:
+    def test_returns_compiled_patterns(self):
+        compiled = _get_compiled()
+        assert RESEARCH in compiled
+        assert IMPLEMENTATION in compiled
+        assert MAINTENANCE in compiled
+
+    def test_pattern_count_matches_source(self):
+        compiled = _get_compiled()
+        for wtype in (RESEARCH, IMPLEMENTATION, MAINTENANCE):
+            assert len(compiled[wtype]) == len(_WORKER_PATTERNS[wtype])
+
+
+# ---------------------------------------------------------------------------
+# _check_research_output
+# ---------------------------------------------------------------------------
+
+class TestCheckResearchOutput:
+    def test_good_research_output(self):
+        output = """## Findings
+Key insight: GWT attention correlates with task success.
+Stored 3 brain memories via remember() with importance=0.8.
+"""
+        passed, reasons, checks = _check_research_output(output)
+        assert passed is True
+        assert checks["has_findings"] is True
+        assert checks["has_brain_storage"] is True
+        assert checks["has_structure"] is True
+
+    def test_research_result_block(self):
+        output = "RESEARCH_RESULT:\n  TOPIC: GWT\n  stored brain memories"
+        passed, reasons, checks = _check_research_output(output)
+        assert passed is True
+        assert checks["has_findings"] is True
+
+    def test_no_output(self):
+        passed, reasons, checks = _check_research_output(None)
+        assert passed is False
+        assert "no output text" in reasons
+
+    def test_empty_output(self):
+        passed, reasons, checks = _check_research_output("")
+        assert passed is False
+
+    def test_unstructured_output(self):
+        output = "I did some research and it was interesting."
+        passed, reasons, checks = _check_research_output(output)
+        assert passed is False
+        assert not checks["has_findings"]
+        assert not checks["has_brain_storage"]
+        assert not checks["has_structure"]
+
+    def test_partial_pass_two_of_three(self):
+        output = "## Summary\nI learned that attention is important.\nstored results"
+        passed, reasons, checks = _check_research_output(output)
+        assert passed is True  # 2 of 3 checks pass
+
+    def test_bullet_list_counts_as_structure(self):
+        output = "- item one\n- item two\nlearned that X"
+        passed, reasons, checks = _check_research_output(output)
+        assert checks["has_structure"] is True
+
+
+# ---------------------------------------------------------------------------
+# _check_implementation_output
+# ---------------------------------------------------------------------------
+
+class TestCheckImplementationOutput:
+    def test_good_implementation_output(self):
+        output = """Edited clarvis/brain/store.py
+def new_function():
+    pass
+pytest tests/ - 5 passed, 0 failed
+"""
+        passed, reasons, checks = _check_implementation_output(output)
+        assert passed is True
+        assert checks["has_file_changes"] is True
+        assert checks["has_tests"] is True
+        assert checks["has_code"] is True
+
+    def test_file_changes_required(self):
+        output = "def foo():\n    pass\npytest passed"
+        passed, reasons, checks = _check_implementation_output(output)
+        assert passed is False
+        assert "no file changes detected" in reasons
+
+    def test_no_output(self):
+        passed, reasons, checks = _check_implementation_output(None)
+        assert passed is False
+        assert "no output text" in reasons
+
+    def test_empty_output(self):
+        passed, reasons, checks = _check_implementation_output("")
+        assert passed is False
+
+    def test_file_changes_only_passes(self):
+        output = "Edited the config file, wrote to /tmp/output.json, modified 3 files"
+        passed, reasons, checks = _check_implementation_output(output)
+        assert passed is True
+        assert checks["has_file_changes"] is True
+
+    def test_write_tool_pattern(self):
+        output = 'Write(file_path="/tmp/test.py")\ncreated new file'
+        passed, reasons, checks = _check_implementation_output(output)
+        assert passed is True
+
+    def test_import_counts_as_code(self):
+        output = "edited file\nimport json\nfrom pathlib import Path"
+        passed, reasons, checks = _check_implementation_output(output)
+        assert checks["has_code"] is True
+
+
+# ---------------------------------------------------------------------------
+# _check_maintenance_output
+# ---------------------------------------------------------------------------
+
+class TestCheckMaintenanceOutput:
+    def test_good_maintenance_output(self):
+        output = "Health check: all systems OK. Cleaned 15 old log files. Disk usage: 42%."
+        passed, reasons, checks = _check_maintenance_output(output)
+        assert passed is True
+        assert checks["has_status"] is True
+        assert checks["has_actions"] is True
+
+    def test_status_only_passes(self):
+        output = "Health check report: all metrics within normal range."
+        passed, reasons, checks = _check_maintenance_output(output)
+        assert passed is True
+        assert checks["has_status"] is True
+
+    def test_actions_only_passes(self):
+        output = "Pruned 200 stale entries. Archived old sessions. Compressed logs."
+        passed, reasons, checks = _check_maintenance_output(output)
+        assert passed is True
+        assert checks["has_actions"] is True
+
+    def test_no_action_needed_passes(self):
+        output = "Everything all healthy, no action needed."
+        passed, reasons, checks = _check_maintenance_output(output)
+        assert passed is True
+
+    def test_no_output(self):
+        passed, reasons, checks = _check_maintenance_output(None)
+        assert passed is False
+
+    def test_empty_output(self):
+        passed, reasons, checks = _check_maintenance_output("")
+        assert passed is False
+
+    def test_unrelated_output(self):
+        output = "The sky is blue and water is wet."
+        passed, reasons, checks = _check_maintenance_output(output)
+        assert passed is False
+
+
+# ---------------------------------------------------------------------------
+# validate_worker_output
+# ---------------------------------------------------------------------------
+
+class TestValidateWorkerOutput:
+    def test_success_research_good_output(self):
+        output = "## Findings\nKey insight found.\nStored in brain via remember()."
+        result = validate_worker_output(RESEARCH, output, "success")
+        assert result["validated"] is True
+        assert result["downgrade"] is False
+        assert result["worker_type"] == RESEARCH
+
+    def test_success_research_bad_output_downgrades(self):
+        output = "I looked at stuff."
+        result = validate_worker_output(RESEARCH, output, "success")
+        assert result["validated"] is False
+        assert result["downgrade"] is True
+
+    def test_failure_status_skips_validation(self):
+        result = validate_worker_output(RESEARCH, "", "failure")
+        assert result["validated"] is True
+        assert result["downgrade"] is False
+
+    def test_timeout_status_skips_validation(self):
+        result = validate_worker_output(IMPLEMENTATION, "", "timeout")
+        assert result["validated"] is True
+        assert result["downgrade"] is False
+
+    def test_general_type_skips_validation(self):
+        result = validate_worker_output(GENERAL, "", "success")
+        assert result["validated"] is True
+        assert result["downgrade"] is False
+
+    def test_success_implementation_no_files_downgrades(self):
+        output = "I thought about the code but didn't change anything."
+        result = validate_worker_output(IMPLEMENTATION, output, "success")
+        assert result["downgrade"] is True
+
+    def test_success_implementation_with_files_passes(self):
+        output = "Edited foo.py, wrote tests. pytest 3 passed."
+        result = validate_worker_output(IMPLEMENTATION, output, "success")
+        assert result["validated"] is True
+        assert result["downgrade"] is False
+
+    def test_success_maintenance_with_status_passes(self):
+        output = "Health check passed. All systems OK."
+        result = validate_worker_output(MAINTENANCE, output, "success")
+        assert result["validated"] is True
+
+    def test_result_has_expected_keys(self):
+        result = validate_worker_output(GENERAL, "x", "success")
+        assert "validated" in result
+        assert "worker_type" in result
+        assert "downgrade" in result
+        assert "reasons" in result
+        assert "checks" in result
+
+    def test_partial_success_is_not_revalidated(self):
+        # partial_success != "success", so validation is skipped
+        result = validate_worker_output(RESEARCH, "", "partial_success")
+        assert result["validated"] is True
+        assert result["downgrade"] is False
