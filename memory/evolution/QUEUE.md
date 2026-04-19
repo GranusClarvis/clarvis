@@ -95,7 +95,7 @@ _Demoted to P2 to bring P1 within 25-ceiling. All are review/sweep/benchmark tas
 
 ### Graph Integration (P2, added 2026-04-18)
 
-- [~] **[PHI_REMAINING_GAP]** Phi is 0.616 vs 0.65 target. (2026-04-18: +15 intra-edges for goals, +101 cross-edges from bulk_cross_link (goals boosted). Episodes bulk_intra_link times out at 180s — needs cron slot with 600s+ timeout. Cross ratio now 58.5%. Goals was weakest node (499 edges, 1 edge to context). Audit: `data/audit/graph_edge_audit_2026-04-18.json`. Remaining: episodes intra-link needs longer timeout.)
+- [~] **[PHI_REMAINING_GAP]** Phi is 0.582 vs 0.65 target (gap=0.068). (2026-04-19: +5,497 edges total — intra-link on 6 collections (+5,243) + cross-link (+254). Intra-density 0.530→0.619 (+0.089). Cross-connectivity diluted to 0.383 by same-collection edge growth. Semantic overlap steady at 0.579. Bottleneck: cross-collection ratio needs ~0.50+ AND semantic overlap needs ~0.65+. These require either longer timeout cross-link passes or hand-authored bridge memories targeting weak pairs. Weakest semantic pairs: goals↔autonomous-learning (0.483), preferences↔autonomous-learning (0.489).)
 
 ### Phase 4.5 Follow-ups (P2, added 2026-04-16)
 
