@@ -125,6 +125,10 @@ def generate_report(preds: list[dict] = None) -> str:
 
     binned = bin_predictions(preds)
     total_n = len(preds)
+
+    if total_n == 0:
+        return "# Calibration Curve Report\nTotal predictions: 0\nNo data to analyse."
+
     ece = compute_ece(binned, total_n)
     mce = compute_mce(binned)
 
