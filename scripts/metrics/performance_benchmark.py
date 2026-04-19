@@ -1215,21 +1215,38 @@ def run_refresh_benchmark():
 
 
 def run_quick_benchmark():
-    """Fast subset: brain speed + stats + PI estimate (~2s)."""
+    """Fast subset: brain speed + stats + PI estimate (~2s).
+
+    Merges fresh quick metrics with cached full metrics from the last
+    full benchmark so that compute_pi() sees all dimensions instead of
+    penalizing missing ones as failures (which caused false PI=0.165 alerts).
+    """
     timestamp = datetime.now(timezone.utc).isoformat()
     t0 = time.monotonic()
 
     speed = benchmark_brain_speed()
     brain_stats = benchmark_brain_stats()
 
-    # Quick PI estimate from available metrics
+    # Load cached full metrics as baseline (avoids missing-metric penalty)
+    cached_metrics = {}
+    try:
+        if os.path.exists(METRICS_FILE):
+            with open(METRICS_FILE) as f:
+                cached = json.load(f)
+            cached_metrics = {k: v for k, v in cached.get("metrics", {}).items()
+                              if isinstance(v, (int, float))}
+    except (json.JSONDecodeError, OSError):
+        pass  # Fall back to quick-only metrics
+
+    # Fresh quick metrics override cached values
     quick_metrics = {
         "brain_query_avg_ms": speed["avg_ms"],
         "brain_query_p95_ms": speed["p95_ms"],
         "graph_density": brain_stats["graph_density"],
         "bloat_score": brain_stats.get("bloat_score", 0.0),
     }
-    pi_data = compute_pi(quick_metrics)
+    merged_metrics = {**cached_metrics, **quick_metrics}
+    pi_data = compute_pi(merged_metrics)
 
     duration = round(time.monotonic() - t0, 2)
 

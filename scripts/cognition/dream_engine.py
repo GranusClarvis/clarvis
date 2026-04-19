@@ -190,10 +190,13 @@ def compute_surprise(episode, all_episodes):
     Returns:
         float: surprise score (0.0 to 1.0, higher = more surprising)
     """
+    if not all_episodes:
+        return 0.0
+
     outcome = episode.get("outcome", "success")
     duration = episode.get("duration_s", 60)
     confidence = episode.get("confidence", 0.5)
-    task = episode.get("task", "")
+    task = episode.get("task") or ""
 
     # Component 1: Outcome surprise — failures are rarer, hence more surprising
     outcome_surprise = 0.7 if outcome != "success" else 0.2
@@ -211,10 +214,11 @@ def compute_surprise(episode, all_episodes):
     # (proxy for NLL: novel content = high "prediction error")
     task_lower = task.lower()
     similarities = []
+    ep_id = episode.get("id")
     for other in all_episodes:
-        if other["id"] == episode["id"]:
+        if other.get("id") == ep_id and ep_id is not None:
             continue
-        other_task = other.get("task", "").lower()
+        other_task = (other.get("task") or "").lower()
         if not other_task:
             continue
         # Jaccard similarity on word sets as fast proxy
@@ -224,7 +228,7 @@ def compute_surprise(episode, all_episodes):
             jaccard = len(words_a & words_b) / max(1, len(words_a | words_b))
             similarities.append(jaccard)
     # Novelty = 1 - max_similarity (most unique episodes are most novel)
-    semantic_novelty = 1.0 - max(similarities[:10]) if similarities else 1.0
+    semantic_novelty = (1.0 - max(similarities[:10])) if similarities else 1.0
 
     # Component 4: Confidence gap — low confidence = high surprise
     confidence_surprise = 1.0 - min(1.0, max(0.0, confidence))

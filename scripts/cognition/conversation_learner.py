@@ -239,7 +239,7 @@ def extract_session_patterns(session_records: list) -> dict:
 
         # Extract tool/system mentions from full output
         tool_names = re.findall(
-            r'\b(brain\.py|attention\.py|working_memory\.py|phi_metric\.py|'
+            r'\b(brain\.py|attention\.py|working_memory\.py|phi\.py|phi_metric\.py|'
             r'procedural_memory\.py|reasoning_chain|knowledge_synthesis|'
             r'self_model\.py|clarvis_confidence|evolution_loop|'
             r'task_selector|cron_\w+\.sh|claude\s+code|chromadb)\b',
@@ -399,7 +399,7 @@ def extract_patterns(transcripts: list) -> dict:
 
         # Count tools/systems mentioned
         tool_names = re.findall(
-            r'\b(brain\.py|attention\.py|working_memory\.py|phi_metric\.py|'
+            r'\b(brain\.py|attention\.py|working_memory\.py|phi\.py|phi_metric\.py|'
             r'procedural_memory\.py|reasoning_chain|knowledge_synthesis|'
             r'self_model\.py|clarvis_confidence|evolution_loop|'
             r'task_selector|cron_\w+\.sh|claude\s+code|chromadb)\b',

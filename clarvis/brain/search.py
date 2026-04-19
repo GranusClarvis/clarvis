@@ -38,6 +38,17 @@ _BRAIN_HOOK_TIMEOUT_S = 0.5   # 500ms for inline recall hooks
 _HEARTBEAT_HOOK_TIMEOUT_S = 10.0  # 10s for heartbeat/observer hooks
 
 
+# Module-level hook timeout counter (consumed by brain.stats() via _drain_hook_timeouts)
+_hook_timeout_count = [0]
+
+
+def _drain_hook_timeouts():
+    """Return and reset the accumulated hook timeout count."""
+    count = _hook_timeout_count[0]
+    _hook_timeout_count[0] = 0
+    return count
+
+
 def _hook_id(fn):
     """Stable identifier for a hook function."""
     return getattr(fn, "__qualname__", None) or id(fn)
@@ -91,6 +102,8 @@ def _run_hook_with_timeout(fn, args, timeout_s):
         except FuturesTimeout:
             _log.warning("Hook %s timed out after %.1fs", _hook_id(fn), timeout_s)
             _record_hook_result(fn, False)
+            # Increment module-level counter; brain instance counter updated by caller
+            _hook_timeout_count[0] += 1
             future.cancel()
             return False
         except Exception as exc:
@@ -441,6 +454,7 @@ class SearchMixin:
                 results = col.query(query_texts=[query], n_results=fetch_n,
                                     where=where_clause)
         except Exception:
+            self._failure_counters["temporal_fallbacks"] += 1
             if query_embedding is not None:
                 results = col.query(query_embeddings=[query_embedding], n_results=fetch_n)
             else:
@@ -502,13 +516,13 @@ class SearchMixin:
                 try:
                     all_results.extend(future.result())
                 except Exception:
-                    pass
+                    self._failure_counters["search_query_failures"] += 1
         else:
             for c in valid_collections:
                 try:
                     all_results.extend(query_fn(c))
                 except Exception:
-                    pass
+                    self._failure_counters["search_query_failures"] += 1
         return all_results
 
     # --- recall helper: chronological fallback ---
@@ -845,11 +859,13 @@ class SearchMixin:
                 final_results = self._cross_collection_expand(
                     query, query_embedding, final_results, collections, n)
             except Exception:
+                self._failure_counters["expansion_failures"] += 1
                 _log.debug("Cross-collection expansion failed", exc_info=True)
         if graph_expand and final_results:
             try:
                 final_results = self._expand_with_graph_neighbors(final_results, n)
             except Exception:
+                self._failure_counters["expansion_failures"] += 1
                 _log.debug("Graph expansion failed", exc_info=True)
 
         # Phase 6b: Re-rank after expansions so new results are properly sorted

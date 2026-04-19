@@ -255,7 +255,7 @@ _SOURCE_BUCKETS = {
     'research': {'research', 'research_discovery'},
     'reflection': {'reflection', 'self_reflection', 'meta_learning',
                    'synthesis', 'self-assessment', 'self_representation',
-                   'phi_metric', 'internal'},
+                   'phi_metric', 'phi', 'internal'},
     'coding': {'conversation', 'code', 'implementation', 'tool_extraction',
                'procedural_memory', 'manual'},
     'system': {'system', 'canonical', 'migration', 'seed',

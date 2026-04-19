@@ -5,7 +5,7 @@ Serves static HTML pages and /api/public/status with live data
 from CLR benchmark, Performance Index, and evolution queue.
 
 Usage:
-    python3 website/server.py [--port 18801] [--host 0.0.0.0]
+    python3 website/server.py [--port 18801] [--host 127.0.0.1]
 """
 
 import argparse

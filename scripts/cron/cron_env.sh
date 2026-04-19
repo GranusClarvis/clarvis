@@ -31,8 +31,6 @@ export PYTHONPATH="$CLARVIS_WORKSPACE/scripts${PYTHONPATH:+:$PYTHONPATH}"
 # Secrets loaded from .env file (not tracked). See .env.example for required vars.
 if [ -f "$CLARVIS_WORKSPACE/.env" ]; then
     set -a; . "$CLARVIS_WORKSPACE/.env"; set +a
-elif [ -f "$CLARVIS_WORKSPACE/.env" ]; then
-    set -a; . "$CLARVIS_WORKSPACE/.env"; set +a
 fi
 export CLARVIS_TG_BOT_TOKEN="${CLARVIS_TG_BOT_TOKEN:-}"
 export CLARVIS_TG_CHAT_ID="${CLARVIS_TG_CHAT_ID:-}"

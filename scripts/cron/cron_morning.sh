@@ -42,10 +42,10 @@ cat "$MORNING_OUTPUT_FILE" >> "$LOGFILE"
 if [ "$CLAUDE_EXIT" -eq 0 ]; then
     # === DIGEST: Write first-person summary for M2.5 agent ===
     # Extract priority lines from Claude output (look for PRIORITY markers or numbered items)
-    PRIORITIES=$(grep -iE '^\s*(PRIORITY|[1-3][\.\)])' "$MORNING_OUTPUT_FILE" 2>/dev/null | head -3 | tr '\n' ' ' | sed 's/[^a-zA-Z0-9 _.,:;=+\-\/()@#%]//g' | head -c 400)
+    PRIORITIES=$(grep -iE '^\s*(PRIORITY|[1-3][\.\)])' "$MORNING_OUTPUT_FILE" 2>/dev/null | head -3 | tr '\n' ' ' | sed 's/[^a-zA-Z0-9 _.,:;=+\-\/()@#%!?\x27\x22\[\]{}|~&<>*^-]//g' | cut -c1-400)
     if [ -z "$PRIORITIES" ]; then
         # Fallback: take last few lines, sanitized
-        PRIORITIES=$(tail -c 300 "$MORNING_OUTPUT_FILE" 2>/dev/null | tr '\n' ' ' | sed 's/[^a-zA-Z0-9 _.,:;=+\-\/()@#%]//g' | head -c 300)
+        PRIORITIES=$(tail -c 300 "$MORNING_OUTPUT_FILE" 2>/dev/null | tr '\n' ' ' | sed 's/[^a-zA-Z0-9 _.,:;=+\-\/()@#%!?\x27\x22\[\]{}|~&<>*^-]//g' | cut -c1-300)
     fi
     python3 "$CLARVIS_WORKSPACE/scripts/tools/digest_writer.py" morning "I reviewed the evolution queue and set today's priorities.
 $PRIORITIES" >> "$LOGFILE" 2>&1 || true

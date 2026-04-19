@@ -146,7 +146,7 @@ BENCHMARK_PAIRS = [
         "expected_substrings": ["phi", "consciousness", "iit", "metric"],
         "expected_collections": [LEARNINGS, MEMORIES],
         "category": "knowledge",
-        "gold_evidence": "Phi metric based on IIT (Integrated Information Theory). Computed via phi_metric.py. Measures information integration across brain collections and graph connectivity. Higher phi = more integrated consciousness proxy.",
+        "gold_evidence": "Phi metric based on IIT (Integrated Information Theory). Computed via clarvis.metrics.phi. Measures information integration across brain collections and graph connectivity. Higher phi = more integrated consciousness proxy.",
     },
     {
         "id": "B13",

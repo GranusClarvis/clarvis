@@ -33,7 +33,8 @@ _Source: `docs/internal/audits/NEURO_FEATURE_DECISIONS_2026-04-17.md`. Phase 9 s
 
 _SWO tasks tracked here. When project lane is active, these get priority. See also: memory/evolution/SWO_TRACKER.md_
 
-- [ ] **[SWO_SECURITY_THREAT_SURFACE_AUDIT]** Run a focused security audit of SWO: wallet auth, holder gating, governance/voting, raffle entry validation, marketplace/listing flows, server trust boundaries, API authorization, client-trust assumptions, contract/version drift, and obvious attack vectors or abuse paths. Output should become concrete reviewable tasks/PRs, not just a vague report.
+- [ ] **[SWO_FIX_RAFFLE_RANDOMNESS]** Raffle winner selection uses predictable `Math.random()`/public block hash. Replace with commit-reveal or combined entropy (block hash + server secret + entry count hash). Remove client-supplied `blockHash` from admin draw endpoint. _(CRIT, from 2026-04-19 audit C-1)_
+- [ ] **[SWO_FIX_SOCIAL_CONNECTIONS_AUTH]** `/api/social-connections` GET leaks Discord/X usernames without auth. Add wallet auth or return only boolean flags for non-owner queries. _(HIGH, from 2026-04-19 audit H-2)_
 
 
 
@@ -110,8 +111,29 @@ _Demoted to P2 to bring P1 within 25-ceiling. All are review/sweep/benchmark tas
 
 ### Phase 10 Follow-ups (P2, added 2026-04-17)
 
-- [x] **[PHASE10_RESTORE_DRILL]** _(done 2026-04-19)_ Created `scripts/infra/restore_drill.sh` — restores latest backup (incremental chain) to temp dir, runs `brain.health_check()`, reports pass/fail. Drill passed: 2692 memories, 10 collections, store/recall OK. Quarterly cron at 03:15 on 1st of Jan/Apr/Jul/Oct.
-- [ ] **[PHASE10_LOCK_AUDIT_JOURNAL]** Create centralized lock audit journal: each lock acquisition/release writes a line to `monitoring/lock_audit.log` with timestamp, PID, lock name, action. Enables post-incident investigation. Replicate `lock_helper.sh` pattern to project agents after journal exists. Source: Phase 10 PROMOTE investment case.
+_Source: `docs/internal/audits/decisions/2026-04-17_phase10_reliability_security.md`. Phase 10 ruled REVISE — restore drill FAIL blocks PASS. Items below were in the decision doc and AUDIT_INDEX but never added to QUEUE.md._
+
+- [ ] **[PHASE10_RESTORE_DRILL]** Create `scripts/infra/restore_drill.sh` that exercises: (1) backup restore from `backup_daily.sh` output, (2) brain health check post-restore, (3) gateway restart. Add quarterly cron entry. The Phase 10 reliability gate scored FAIL on this dimension. Acceptance: script runs successfully against latest backup; restore completes in <5 min. Source: Phase 10 restore gap.
+- [ ] **[PHASE10_GATEWAY_SYSTEMD_HARDENING]** Add `PrivateTmp=yes`, `NoNewPrivileges=yes`, `ProtectHome=read-only`, `ProtectSystem=strict` to `openclaw-gateway.service`. Acceptance: gateway starts cleanly with hardened unit; `systemctl --user status` shows active. Source: Phase 10 hardening R3.
+
+### Phase 5 Follow-ups (P2, added 2026-04-19 — recovered from decision doc)
+
+_Source: `docs/internal/audits/decisions/2026-04-16_phase5_wiki_usefulness.md`. Phase 5 ruled REVISE. These items were mandated in the decision doc but never added to QUEUE.md. The 30-day re-evaluation window from 2026-04-16 is active._
+
+- [ ] **[WIKI_PRODUCT_TO_EXECUTION_BRIDGE]** Wire `wiki_retrieval.py` into preflight context assembly in shadow mode. Required for Phase 5 REVISE path — without it, wiki usefulness cannot be re-evaluated. Acceptance: preflight traces include `wiki_retrieval` field (even if empty in shadow mode). Source: Phase 5 REVISE requirement.
+- [ ] [UNVERIFIED] **[BRAIN_WIKI_CONTEXT_ROUTE_BENCH]** Run a matched-pair benchmark: brain-only vs brain+wiki retrieval on 20 recent tasks. Requires `[WIKI_PRODUCT_TO_EXECUTION_BRIDGE]`. Acceptance: benchmark results in `data/audit/wiki_vs_brain_bench.json`. Source: Phase 5 re-evaluation gate.
+
+### Phase 12 Follow-ups (P2, added 2026-04-19 — recovered from decision doc)
+
+_Source: `docs/internal/audits/DUAL_LAYER_HANDOFF_2026-04-17.md`. Phase 12 ruled REVISE (digest actionability 56.5% vs 60% target). Only 1 of 4 follow-ups was in QUEUE.md._
+
+- [ ] [UNVERIFIED] **[PHASE12_DIGEST_ARCHIVE]** Add daily digest archival (`memory/cron/digest_archive/<date>.md`) before the morning reset clears it. Multi-day pattern analysis is currently impossible because digest content is destroyed daily. Acceptance: 3 consecutive days produce archive files. Source: Phase 12 §archive gap.
+
+### Test Suite Health (P2, added 2026-04-19)
+
+_72/2921 tests failing (2.5% failure rate), 10 collection errors, 1 broken collection file. Test suite health is untracked in the queue despite being a foundational capability metric._
+
+- [ ] **[TEST_SUITE_RED_FIXES]** Fix the 72 failing tests across 8 test files: `test_brain_roundtrip` (2), `test_chaos_recovery` (6), `test_graph_compaction_sqlite` (2), `test_pr_factory` (3), `test_project_agent` (2), `test_assembly_calibration_freeze` (2), `test_bench_memory_consolidation` (3), plus `test_csp_solver` collection error and others. Most appear to be API contract drift (brain `stats()` return shape changed, `_script_loader` import paths). Acceptance: `pytest tests/` passes with 0 failures, 0 errors. Source: test run 2026-04-19.
 
 ### Deep Audit — Phases 12–15 Anchors (P2, added 2026-04-16 per meta-meta audit)
 
@@ -130,7 +152,6 @@ _Source: `docs/internal/audits/COST_VALUE_2026-04-17.md`. Phase 14 ruled REVISE:
 
 - [ ] **[PHASE14_CLAUDE_CLI_TOKEN_CAPTURE]** Modify `scripts/agents/spawn_claude.sh` to parse Claude CLI stdout/stderr for token usage summaries and log them to `data/costs.jsonl` with `estimated: false`. The claude CLI outputs usage data that is currently discarded. This provides ground-truth per-session Anthropic costs. Acceptance: next 3 Claude spawns produce non-estimated cost entries. Source: Phase 14 Gap 1 (R1).
 - [ ] **[PHASE14_OPENROUTER_API_KEY_FIX]** The OpenRouter API key stored in `auth-profiles.json` returns HTTP 401 ("User not found"). Rotate or verify the key so `cost_checkpoint.py` and `budget_alert.py` can function. Requires operator action. Acceptance: `python3 -c "from clarvis.orch.cost_api import fetch_usage; print(fetch_usage())"` returns valid data. Source: Phase 14 Gap 1 (R2).
-- [ ] **[PHASE14_HEARTBEAT_GIT_OUTCOME]** Add git outcome capture to `heartbeat_postflight.py`: after each heartbeat, record `git diff --stat` and `git log --oneline -1` into the heartbeat outcome. Enables cost-per-commit-from-heartbeat tracking. Acceptance: next 5 heartbeat outcomes include `git_diff_stat` and `latest_commit` fields. Source: Phase 14 Gap 2 (R3).
 - [ ] **[PHASE14_RESEARCH_ATTRIBUTION]** Add `research_id` field to research session outputs in `cron_research.sh`. When a research finding appears in a later task's context or decision, log the attribution to `data/audit/research_attribution.jsonl`. Enables research ROI measurement. Acceptance: next 3 research sessions produce entries with research_id; attribution schema defined. Source: Phase 14 Gap 3 (R5).
 - [ ] **[PHASE14_COST_DASHBOARD]** Create unified cost dashboard (`cost_dashboard.py`) that merges Anthropic (from CLI token capture) and OpenRouter (from API) spend into a single view. Blocked by `[PHASE14_CLAUDE_CLI_TOKEN_CAPTURE]` and `[PHASE14_OPENROUTER_API_KEY_FIX]`. Source: Phase 14 Gap 4 (split-brain tracking).
 
@@ -156,13 +177,11 @@ _Source: `docs/internal/audits/decisions/2026-04-16_phase2_5_code_design_review.
 
 - [ ] **[CONTEXT_BRIEF_TELEMETRY]** Add a `BriefResult` dataclass to `clarvis.context.assembly.generate_tiered_brief()` that returns structured telemetry alongside the brief text: `sections_included`, `sections_pruned`, `token_budget_used`, `fallbacks_activated`, `relevance_weights_applied`. Wire into Phase 0 audit traces via `update_trace({"prompt.brief_telemetry": ...})`. This is a Phase 3 dependency — without it, prompt assembly audit operates on indirect evidence only. Acceptance: at least 3 heartbeats produce traces with non-empty `prompt.brief_telemetry`; existing callers that only need the string can use `result.text`.
 - [ ] **[ORCH_STRUCTURED_LOGGING]** Add `import logging` to `clarvis/orch/task_selector.py`, `cost_tracker.py`, and `pr_intake.py`. Log at WARNING when: (a) an optional module import fails in task_selector (currently silently `None`-ified), (b) a malformed cost entry is dropped in `_read_entries()`, (c) an artifact generator is skipped in pr_intake. Acceptance: after one heartbeat cycle with the new logging, `grep WARNING` on the cron output shows at least the expected import-failure messages (somatic_markers etc. if not installed).
-- [ ] **[BRAIN_OBSERVABILITY_COUNTERS]** Add failure counters to `clarvis.brain`: `_dedup_failures`, `_hook_timeouts`, `_temporal_fallbacks` — increment on each silent swallow site in `store.py`, `search.py`, `hooks.py`. Expose via `brain.stats()` so `health_check()` and the audit trace can surface degradation. Acceptance: `brain.stats()` includes `failure_counters` dict with ≥ 3 keys; counters increment on injected test failures.
 
 ### Deep Audit Follow-ups (from Phase 2 — `docs/internal/audits/SPINE_MODULE_SCORECARD_2026-04-16.md`)
 
 _All are surface trims or cheap coverage lifts. Bridge wrappers (18) and underlying submodule files are NOT being touched — only `__init__.py` re-exports. All new items use `source="audit_phase_2"` and benefit from the audit-cap override. Re-run `scripts/audit/spine_scorecard.py` after each PR to verify the `dead_exports` count drops._
 
-- [ ] **[SPINE_BRAIN_INIT_TRIM]** Remove 6 DEAD re-exports from `clarvis/brain/__init__.py`: `LOCAL_GRAPH_SQLITE_FILE`, `StoreMixin`, `propose_and_commit`, `get_pending_proposals`, `reject_proposal`, `temporal_search`. Do NOT delete the underlying files — this is a surface narrowing only. The proposal workflow (`propose_and_commit`/`get_pending_proposals`/`reject_proposal`) is dormant since consolidation refactor; `temporal_search` is superseded by `search(..., since_days=…)`. Acceptance: `python3 -m clarvis brain stats` + `cron_autonomous.sh` dry-run pass; `spine_scorecard.py` shows `brain.dead_exports = 0`.
 - [ ] **[SPINE_CONTEXT_INIT_TRIM_AND_COVERAGE]** Trim 12 DEAD re-exports from `clarvis/context/__init__.py` (`_simple_tiered_brief, prune_stale, snip_middle, graduated_compact, get_optimizer_report, load_section_relevance_weights, build_wire_guidance, get_failure_patterns, get_workspace_context, get_spotlight_items, build_hierarchical_episodes, synthesize_knowledge`). These are already directly importable from `clarvis.context.{compressor,assembly,prompt_optimizer,…}` — the `__init__` level re-exports are redundant. Also add 2-3 unit tests for currently-uncovered branches in `clarvis/context/assembly.py`. Acceptance: `context.coverage_pct ≥ 40` and `context.dead_exports = 0` on re-run.
 - [ ] **[SPINE_MEMORY_INIT_TRIM_AND_COVERAGE]** Trim 12 DEAD re-exports from `clarvis/memory/__init__.py` (all are `memory_consolidation` helpers — `learn_from_failures, retire_stale, compose_procedures, merge_clusters, enhanced_decay, enforce_memory_caps, run_consolidation, sleep_consolidate, attention_guided_prune, attention_guided_decay, gwt_broadcast_survivors, salience_report`). Underlying `memory_consolidation.py` stays — callers use direct submodule imports. Add direct unit tests for `procedural_memory.find_procedure` and `procedural_memory.store_procedure` (heavily used in production, currently only exercised indirectly). Acceptance: `memory.coverage_pct ≥ 25` and `memory.dead_exports = 0`.
 - [ ] **[SPINE_COMPAT_WIRE_OR_DOCUMENT]** `clarvis/compat/` has zero production callers (only test callers). Decide one of: (a) wire `run_contract_checks()` into `scripts/infra/health_monitor.sh` with a daily metric exported to `monitoring/`, OR (b) mark the module docstring as "test-scaffold for host-portability contracts" and exclude it from future Phase 9 EVS/TCS passes. Acceptance: clear wire-or-document state recorded — no "kept for future" ambiguity.
@@ -178,15 +197,12 @@ _Source: `source="audit_phase_3"`. P1 items are co-located in the Phase 3 Follow
 
 _Source: `source="audit_phase_4"`. P0+P1 items are co-located with their parent blocks above; these are the P2 continuation._
 
-- [ ] **[AUDIT_PHASE_4_AB_BRIDGES_HEBBIAN_EPISODES]** Execute matched-pair 14-day A/B windows for three brain features already registered in `clarvis/audit/toggles.py`: `graph_bridges`, `hebbian_boost`, `episodic_memory_injection`. Each feature toggles OFF (or `shadow=true`) for 14 days on a matched task mix, with the corresponding ON window captured before or after. Depends on `[AUDIT_PHASE_4_BRAIN_RETRIEVAL_TRACE_WIRING]` (attribution-gate inputs must be live). Emit three result files under `data/audit/ab_windows/{bridges,hebbian,episodes}_<date>.json` with delta-to-baseline metrics on attribution share, task outcome, and retrieval recall. Subtle-feature guard §3.3 applies (rare-but-critical carve-out) — episode-recall may help only on a narrow task type. Acceptance: all three A/B files present; Phase 9 EVS/TCS scorecard can ingest them.
+- [ ] [UNVERIFIED] **[AUDIT_PHASE_4_AB_BRIDGES_HEBBIAN_EPISODES]** Execute matched-pair 14-day A/B windows for three brain features already registered in `clarvis/audit/toggles.py`: `graph_bridges`, `hebbian_boost`, `episodic_memory_injection`. Each feature toggles OFF (or `shadow=true`) for 14 days on a matched task mix, with the corresponding ON window captured before or after. Depends on `[AUDIT_PHASE_4_BRAIN_RETRIEVAL_TRACE_WIRING]` (attribution-gate inputs must be live). Emit three result files under `data/audit/ab_windows/{bridges,hebbian,episodes}_<date>.json` with delta-to-baseline metrics on attribution share, task outcome, and retrieval recall. Subtle-feature guard §3.3 applies (rare-but-critical carve-out) — episode-recall may help only on a narrow task type. Acceptance: all three A/B files present; Phase 9 EVS/TCS scorecard can ingest them.
 - [ ] **[AUDIT_PHASE_4_BRAIN_EVAL_FRESHNESS]** `data/brain_eval/latest.json` is six weeks stale (last run 2026-03-04) despite `cron_brain_eval.sh` existing and being listed in `CLAUDE.md §Cron Schedule`. Verify the cron is still scheduled, executing, and writing to the expected path. If the cron is broken, fix the schedule or writer. Acceptance: within 26 h of the fix landing, `data/brain_eval/latest.json` has a fresh timestamp; `scripts/audit/brain_attribution.py run` picks up the new `recall_at_k` snapshot automatically.
 
 ### Phi Monitoring / Validation (demoted to observability metric by Phase 11 synthesis — regression watch only, not a KPI or optimization target; overlaps Phase 9 REVISE ruling on phi_metric)
 
 - [~] **[PHI_EMERGENCY_CROSS_LINK_BLITZ]** Run targeted bulk_cross_link on all 45 collection pairs (Phi target). (2026-04-16: started full-brain bulk_cross_link but process killed at ~5min when cron_autonomous started; +1357 edges committed before kill. Follow-up pair-targeted pass below supplanted the remainder.)
-- [x] _(done 2026-04-19)_ Phi weekly regression check: `weekly_regression_check()` in `clarvis/metrics/phi.py`, wired into `cron_clr_benchmark.sh`. Checks all 4 components (including semantic_cross_collection) for >5% weekly drops, fires attention alerts on regression.
-- [ ] Fix phi_metric.py string references across hooks and brain_mem scripts.
-- [ ] Fix dream_engine.py NoneType crash in compute_surprise() — nightly dream cycle dead.
 - [ ] Add test coverage for cognition integration modules.
 
 ### Deep Cognition (pre-audit backlog; overlaps Phase 2/4.5/9 findings)
@@ -201,7 +217,6 @@ _Source: `source="audit_phase_4"`. P0+P1 items are co-located with their parent 
 - [ ] Sync crontab.reference with 3 undocumented live jobs.
 - [ ] Fix openclaw.json Telegram topic system prompts with stale script paths.
 - [ ] Remove placeholder goplaces API key from openclaw.json.
-- [ ] Remove dead duplicate elif block in cron_env.sh.
 - [ ] Reconcile @reboot boot sequence between crontab.reference and systemd.
 - [ ] Clean stale `packages/` test checks from verify_install.sh.
 - [ ] Stub or remove truly missing script references in skill SKILL.md files.
@@ -213,14 +228,12 @@ _Source: `source="audit_phase_4"`. P0+P1 items are co-located with their parent 
 - [ ] Add state-change dedup guard for health_monitor.sh brain-hygiene alerts.
 - [ ] Archive or refresh stale consciousness-research plan.
 - [ ] Migrate 3 scripts off sys.path.insert to clarvis.* spine imports.
-- [ ] Fix broken budget_alert.py path in heartbeat_postflight.py.
 - [ ] Fix cron_orchestrator.sh Stage 4 silent failure.
 - [ ] Fix lite_brain bare-name import breaking orchestrator retrieval score.
 - [ ] Diagnose silent canonical_state_refresh.py cron failure.
 - [ ] Add watchdog coverage for weekly cron jobs.
 - [ ] Diagnose calibration_report.py permanent MISSED cron status.
 - [ ] Revive security_monitor in health_monitor.sh or add dedicated cron.
-- [ ] Fix heartbeat_postflight.py 3 silent bare-import failures.
 - [ ] Add cron_morning.sh stale-queue audit step.
 
 ### Calibration / Brier Score (weakest metric — all-time Brier=0.1148 vs target 0.1, 7-day=0.2400)
@@ -267,7 +280,6 @@ _Source: `source="audit_phase_4"`. P0+P1 items are co-located with their parent 
 ## NEW ITEMS (2026-04-15 evolution scan)
 
 - [ ] **[PHI_INTRA_DENSITY_DECAY_RATE]** Intra-collection density degrades to ~0.38 between weekly Sunday hygiene runs, dragging Phi below 0.65. Add a lightweight daily intra-density boost pass (mid-week, ~04:50 CET after graph compaction) that targets the 3 most starved collections. This directly addresses the weakest metric (Phi=0.636) by closing the repair-vs-decay gap. Non-Python: requires a new cron entry + small bash wrapper.
-- [ ] **[FIX_OPENCLAW_TOPIC_STALE_PATHS]** `openclaw.json` topics 2 and 5 reference pre-reorg script paths (`scripts/cost_tracker.py`, `scripts/brain.py`, `scripts/prompt_builder.py`). Topic 2's stale `prompt_builder.py` path silently breaks ACP context injection for every spawned task. Update all systemPrompt paths to current `scripts/infra/`, `scripts/brain_mem/`, `scripts/tools/` locations.
 
 ### 2026-04-16 evolution scan
 

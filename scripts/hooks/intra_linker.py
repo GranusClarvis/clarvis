@@ -210,7 +210,7 @@ def run_intra_linker(cap_per_collection=DEFAULT_CAP, dry_run=False,
                       f"(density {d_before:.4f} -> {d_after:.4f}, "
                       f"{avail} candidates above threshold)")
 
-    # Compute aggregate intra-density (same formula as phi_metric.py)
+    # Compute aggregate intra-density (same formula as clarvis/metrics/phi.py)
     avg_density = (sum(density_after.values()) / len(density_after)
                    if density_after else 0)
     # Phi normalizes density as min(1.0, raw_density * 5)

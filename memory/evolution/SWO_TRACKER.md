@@ -35,10 +35,29 @@ Planning docs, queue items, and brand positioning do NOT count as delivery.
 | 3 | #180 | fix(adminAuth): persist used nonces in SQLite to prevent replay (P1) | OPEN | 2026-04-16 — closes SWO_ADMIN_NONCE_PERSIST; SQLite-backed nonce table + 8 vitest cases |
 | 4 | #181 | chore(contracts): archive StarForge V1-V4 + Testing_casino, add DEPLOYED.md (P2) | OPEN | 2026-04-16 — closes SWO_CONTRACT_ARCHIVE |
 
+## Security Audit Backlog (from 2026-04-19 audit)
+
+_Full report: `docs/SECURITY_AUDIT_2026-04-19.md` in SWO repo._
+_Items already addressed by open PRs are marked; remaining items need new PRs._
+
+| # | Finding | Sev | Covered By | Status |
+|---|---------|-----|------------|--------|
+| C-1 | Raffle randomness predictable/manipulable | CRIT | — | **OPEN — needs PR** |
+| C-2 | Governance votingPower client-supplied | CRIT | PR #177 | Pending merge |
+| H-1 | Raffle bonuses (discordBonus/engagementBonus) client-supplied | HIGH | PR #179 (commit 952e3fd) | Pending merge |
+| H-2 | Social connections GET leaks user PII without auth | HIGH | — | **OPEN — needs PR** |
+| H-3 | In-memory security state (nonces, seeds, rate limits) | HIGH | PR #180 (admin nonces only) | Partial — seeds+rates still in-memory |
+| H-4 | Cron dev bypass tied to NODE_ENV | HIGH | PR #179 (commit 43ce164) | Pending merge |
+| M-1 | No rate limiting on most API endpoints | MED | — | **OPEN — needs PR** |
+| M-3 | Vote change lacks signature verification | MED | — | **OPEN — needs PR** |
+| M-5 | StarForge game ID predictable | MED | — | **OPEN — needs PR** |
+| L-3 | Hardcoded default admin wallet | LOW | — | **OPEN — needs PR** |
+
 ## Delivered Artifacts (non-PR)
 
 | Date | Commit | Description |
 |------|--------|-------------|
+| 2026-04-19 | docs   | Security audit v2: `docs/SECURITY_AUDIT_2026-04-19.md` (14 findings, 2 CRIT / 4 HIGH / 5 MED / 3 LOW) |
 | 2026-04-16 | audit  | Security threat-surface audit: `memory/audits/swo_security_threat_surface_2026-04-16.md` (16 findings, 6 P0, 5-PR plan) |
 | 2026-04-10 | 378d7a1 | Website redesign — gold palette, Press Start 2P font |
 | 2026-04-05 | a5479fd | SWO ecosystem positioning doc |

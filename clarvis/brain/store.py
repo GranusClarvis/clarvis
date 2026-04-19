@@ -130,6 +130,7 @@ class StoreMixin:
                     )
                     return {"id": mid, "document": doc, "metadata": meta, "distance": dist}
         except Exception:
+            self._failure_counters["dedup_failures"] += 1
             pass  # dedup is best-effort; never block a store
         return None
 
@@ -189,9 +190,10 @@ class StoreMixin:
                             if cross_linked >= 4:
                                 break
                 except Exception:
+                    self._failure_counters["store_link_failures"] += 1
                     continue
         except Exception:
-            pass
+            self._failure_counters["store_link_failures"] += 1
 
     # === BELIEF REVISION ===
 
@@ -949,11 +951,16 @@ class StoreMixin:
             graph_nodes = len(self.graph["nodes"])
             graph_edges = len(self.graph["edges"])
 
+        # Drain hook timeouts from module-level counter into instance counter
+        from .search import _drain_hook_timeouts
+        self._failure_counters["hook_timeouts"] += _drain_hook_timeouts()
+
         stats = {
             "collections": {},
             "total_memories": 0,
             "graph_nodes": graph_nodes,
-            "graph_edges": graph_edges
+            "graph_edges": graph_edges,
+            "failure_counters": dict(self._failure_counters),
         }
 
         for name, col in self.collections.items():

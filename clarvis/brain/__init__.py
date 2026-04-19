@@ -22,19 +22,20 @@ _logger = logging.getLogger("clarvis.brain")
 
 from .constants import (
     DATA_DIR, LOCAL_DATA_DIR, GRAPH_FILE, LOCAL_GRAPH_FILE,
-    GRAPH_SQLITE_FILE, LOCAL_GRAPH_SQLITE_FILE, GRAPH_BACKEND,
+    GRAPH_SQLITE_FILE, GRAPH_BACKEND,
     IDENTITY, PREFERENCES, LEARNINGS, INFRASTRUCTURE, GOALS,
     CONTEXT, MEMORIES, PROCEDURES, AUTONOMOUS_LEARNING, EPISODES,
     ALL_COLLECTIONS, DEFAULT_COLLECTIONS,
     route_query, get_local_embedding_function,
 )
+from .constants import LOCAL_GRAPH_SQLITE_FILE as _LOCAL_GRAPH_SQLITE_FILE
 from .factory import get_chroma_client, get_embedding_function
 from .graph import GraphMixin
 from .search import SearchMixin, contextual_enrich
-from .store import StoreMixin
+from .store import StoreMixin as _StoreMixin
 
 
-class ClarvisBrain(StoreMixin, GraphMixin, SearchMixin):
+class ClarvisBrain(_StoreMixin, GraphMixin, SearchMixin):
     """Unified brain for Clarvis — single source of truth.
 
     Hook registries (dependency inversion):
@@ -50,7 +51,7 @@ class ClarvisBrain(StoreMixin, GraphMixin, SearchMixin):
         if use_local_embeddings:
             self.data_dir = LOCAL_DATA_DIR
             self.graph_file = LOCAL_GRAPH_FILE
-            self.graph_sqlite_file = LOCAL_GRAPH_SQLITE_FILE
+            self.graph_sqlite_file = _LOCAL_GRAPH_SQLITE_FILE
             self.embedding_function = get_embedding_function(use_onnx=True)
         else:
             self.data_dir = DATA_DIR
@@ -81,6 +82,16 @@ class ClarvisBrain(StoreMixin, GraphMixin, SearchMixin):
         # Reconsolidation state
         self._labile_memories = {}
         self._lability_window = 300
+
+        # Failure counters — observable via stats()["failure_counters"]
+        self._failure_counters = {
+            "dedup_failures": 0,         # store.py: dedup check errors
+            "store_link_failures": 0,    # store.py: auto-link / graph errors
+            "temporal_fallbacks": 0,     # search.py: temporal WHERE failed, retried without
+            "search_query_failures": 0,  # search.py: collection query failed entirely
+            "expansion_failures": 0,     # search.py: cross-collection or graph expansion failed
+            "hook_timeouts": 0,          # search.py: hook timed out or circuit-broken
+        }
 
         # Hook registries (dependency inversion — external modules register here)
         self._recall_scorers = []
@@ -634,43 +645,6 @@ def commit(candidate_id):
     }
 
 
-def propose_and_commit(text, importance=0.7, category=None, source="auto",
-                       auto_commit=True):
-    """Convenience: propose + auto-commit if recommended.
-
-    Returns the proposal with commit result if auto-committed.
-    Use this as a drop-in replacement for remember() with pre-storage filtering.
-    """
-    proposal = propose(text, importance=importance, category=category, source=source)
-
-    if auto_commit and proposal["recommendation"] == "commit":
-        result = commit(proposal["candidate_id"])
-        proposal["commit_result"] = result
-    elif auto_commit and proposal["recommendation"] == "review":
-        # For "review" recommendations, still commit but flag it
-        result = commit(proposal["candidate_id"])
-        proposal["commit_result"] = result
-    else:
-        proposal["commit_result"] = None
-
-    return proposal
-
-
-def get_pending_proposals():
-    """List all pending proposals awaiting commit/reject."""
-    now = time.time()
-    return [
-        {**p, "age_s": round(now - p["proposed_at"], 1)}
-        for p in _pending_proposals.values()
-    ]
-
-
-def reject_proposal(candidate_id):
-    """Explicitly reject a pending proposal."""
-    proposal = _pending_proposals.pop(candidate_id, None)
-    if proposal is None:
-        return {"rejected": False, "error": f"No pending proposal with id '{candidate_id}'"}
-    return {"rejected": True, "candidate_id": candidate_id, "text": proposal["text"][:100]}
 
 
 def evolve(old_id, old_collection, new_text, reason="contradiction"):
@@ -707,15 +681,6 @@ def search(query, n=5, min_importance=None, collections=None, since_days=None,
     })
 
     return results
-
-
-def temporal_search(query, n=10, since_days=None):
-    """Search with explicit recency bias — use for 'what happened recently' queries.
-
-    Shorthand for search() with recency_weight=0.8 and temporal-first retrieval.
-    If since_days is None, auto-detects from query (e.g. 'today' → 1 day).
-    """
-    return search(query, n=n, since_days=since_days, recency_weight=0.8)
 
 
 def synthesize(query, n=10, collections=None):

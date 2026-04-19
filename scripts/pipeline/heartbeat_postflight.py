@@ -160,25 +160,28 @@ except ImportError:
     cog_workspace = None
 
 try:
-    from tool_maker import postflight_extract as tool_maker_extract
-except ImportError:
+    tool_maker_extract = _load_script("tool_maker", "tools").postflight_extract
+except (ImportError, Exception):
     tool_maker_extract = None
 
 try:
-    from import_health import build_import_graph, full_report as import_health_report, SCRIPTS_DIR as IH_SCRIPTS_DIR
-except ImportError:
+    _ih = _load_script("import_health", "infra")
+    build_import_graph = _ih.build_import_graph
+    import_health_report = _ih.full_report
+    IH_SCRIPTS_DIR = _ih.SCRIPTS_DIR
+except (ImportError, Exception):
     build_import_graph = None
     import_health_report = None
     IH_SCRIPTS_DIR = None
 
 try:
-    from retrieval_quality import tracker as rq_tracker
-except ImportError:
+    rq_tracker = _load_script("retrieval_quality", "brain_mem").tracker
+except (ImportError, Exception):
     rq_tracker = None
 
 try:
-    from wiki_hooks import postflight_wiki_ingest
-except ImportError:
+    postflight_wiki_ingest = _load_script("wiki_hooks", "wiki").postflight_wiki_ingest
+except (ImportError, Exception):
     postflight_wiki_ingest = None
 
 try:
@@ -457,6 +460,32 @@ def _transcript_log(ctx, _pf_errors):
     return timings
 
 
+def _capture_git_outcome():
+    """Capture git diff --stat and latest commit for cost-per-commit tracking."""
+    import subprocess
+    ws = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
+    result = {"git_diff_stat": None, "latest_commit": None}
+    try:
+        diff = subprocess.run(
+            ["git", "diff", "--stat", "HEAD~1"],
+            capture_output=True, text=True, timeout=10, cwd=ws,
+        )
+        if diff.returncode == 0 and diff.stdout.strip():
+            result["git_diff_stat"] = diff.stdout.strip()
+    except Exception:
+        pass
+    try:
+        log_out = subprocess.run(
+            ["git", "log", "--oneline", "-1"],
+            capture_output=True, text=True, timeout=10, cwd=ws,
+        )
+        if log_out.returncode == 0 and log_out.stdout.strip():
+            result["latest_commit"] = log_out.stdout.strip()
+    except Exception:
+        pass
+    return result
+
+
 def _build_postflight_ctx(exit_code, output_file, preflight_data, task_duration):
     """Build shared context dict for postflight helpers."""
     WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
@@ -490,6 +519,8 @@ def _build_postflight_ctx(exit_code, output_file, preflight_data, task_duration)
             error_evidence = f"instant-fail ({preflight_data.get('crash_duration', '?')}s), original: {error_evidence}"
         log(f"Error taxonomy: {error_type} ({error_evidence})")
 
+    git_outcome = _capture_git_outcome()
+
     return {
         "task": task,
         "task_section": preflight_data.get("task_section", "P1"),
@@ -506,6 +537,8 @@ def _build_postflight_ctx(exit_code, output_file, preflight_data, task_duration)
         "exit_code": exit_code,
         "task_duration": task_duration,
         "preflight_data": preflight_data,
+        "git_diff_stat": git_outcome["git_diff_stat"],
+        "latest_commit": git_outcome["latest_commit"],
         "WORKSPACE": WORKSPACE,
         "QUEUE_FILE": os.path.join(WORKSPACE, "memory/evolution/QUEUE.md"),
         "QUEUE_ARCHIVE": os.path.join(WORKSPACE, "memory/evolution/QUEUE_ARCHIVE.md"),
@@ -1721,7 +1754,8 @@ def _pf_cost_and_budget(ctx, _pf_errors):
     t76 = time.monotonic()
     try:
         import subprocess
-        subprocess.run(["python3", os.path.join(os.path.dirname(__file__), "budget_alert.py")],
+        _ws = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
+        subprocess.run(["python3", os.path.join(_ws, "scripts", "infra", "budget_alert.py")],
                       timeout=15, capture_output=True)
     except Exception as e:
         log(f"Budget alert check failed: {e}")
@@ -2077,6 +2111,8 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
                     "duration_s": task_duration,
                     "exit_code": exit_code,
                     "output_chars": len(ctx.get("output_text") or ""),
+                    "git_diff_stat": ctx.get("git_diff_stat"),
+                    "latest_commit": ctx.get("latest_commit"),
                 },
             )
             finalize_trace(audit_tid, outcome=outcome_status,
@@ -2089,7 +2125,9 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
             "error_type": ctx["error_type"],
             "audit_trace_id": audit_tid,
             "worker_type": ctx.get("worker_type", "general"),
-            "worker_validation": ctx.get("worker_validation", {})}
+            "worker_validation": ctx.get("worker_validation", {}),
+            "git_diff_stat": ctx.get("git_diff_stat"),
+            "latest_commit": ctx.get("latest_commit")}
 
 
 

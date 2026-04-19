@@ -29,12 +29,31 @@
 GLOBAL_LOCK="/tmp/clarvis_claude_global.lock"
 # Maintenance lock path
 MAINTENANCE_LOCK="/tmp/clarvis_maintenance.lock"
+# Lock audit journal
+LOCK_AUDIT_LOG="${CLARVIS_WORKSPACE:-$HOME/.openclaw/workspace}/monitoring/lock_audit.log"
 
 # Internal: list of lock files to clean on EXIT
 _LOCK_HELPER_FILES=()
 
 # Internal: PID of the background timeout watchdog (if any)
 _SCRIPT_TIMEOUT_PID=""
+
+# =============================================================================
+# _audit_lock <lock_name> <action> [detail]
+#
+# Appends a line to the centralized lock audit journal.
+# Format: TIMESTAMP PID LOCK_NAME ACTION [DETAIL]
+# =============================================================================
+_audit_lock() {
+    local lock_name="$1"
+    local action="$2"
+    local detail="${3:-}"
+    local ts
+    ts="$(date -u +%Y-%m-%dT%H:%M:%S)"
+    local line="$ts $$ $lock_name $action"
+    [ -n "$detail" ] && line="$line $detail"
+    echo "$line" >> "$LOCK_AUDIT_LOG" 2>/dev/null || true
+}
 
 _lock_helper_cleanup() {
     # Kill timeout watchdog if running
@@ -43,6 +62,7 @@ _lock_helper_cleanup() {
         wait "$_SCRIPT_TIMEOUT_PID" 2>/dev/null || true
     fi
     for f in "${_LOCK_HELPER_FILES[@]}"; do
+        _audit_lock "$(basename "$f")" "RELEASE"
         rm -f "$f"
     done
 }
@@ -157,20 +177,25 @@ acquire_local_lock() {
                 lock_age=$(( $(date +%s) - $(stat -c %Y "$lockfile" 2>/dev/null || echo 0) ))
                 if [ "$lock_age" -gt "$stale_threshold" ]; then
                     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WARN: Stale lock (age=${lock_age}s, PID $pid) — reclaiming" >> "$logfile"
+                    _audit_lock "$(basename "$lockfile")" "RECLAIM" "stale_age=${lock_age}s prev_pid=$pid"
                 else
                     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] SKIP: Previous run still active (PID $pid, age=${lock_age}s)" >> "$logfile"
+                    _audit_lock "$(basename "$lockfile")" "SKIP" "held_by=$pid age=${lock_age}s"
                     exit 0
                 fi
             else
                 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] SKIP: Previous run still active (PID $pid)" >> "$logfile"
+                _audit_lock "$(basename "$lockfile")" "SKIP" "held_by=$pid"
                 exit 0
             fi
         elif [ -n "$pid" ]; then
             echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WARN: Stale lock (PID $pid dead or recycled) — reclaiming" >> "$logfile"
+            _audit_lock "$(basename "$lockfile")" "RECLAIM" "dead_pid=$pid"
         fi
     fi
     _write_lock "$lockfile"
     _register_lock "$lockfile"
+    _audit_lock "$(basename "$lockfile")" "ACQUIRE"
 }
 
 # =============================================================================
@@ -194,6 +219,7 @@ acquire_global_claude_lock() {
         glock_age=$(( $(date +%s) - $(stat -c %Y "$GLOBAL_LOCK" 2>/dev/null || echo 0) ))
         if [ -n "$gpid" ] && _is_clarvis_process "$gpid" && [ "$glock_age" -le 2400 ]; then
             echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] GLOBAL LOCK: Claude already running (PID $gpid, age=${glock_age}s) — deferring" >> "$logfile"
+            _audit_lock "clarvis_claude_global.lock" "SKIP" "held_by=$gpid age=${glock_age}s"
             if [ "$on_conflict" = "queue" ]; then
                 local scripts_dir
                 scripts_dir="$(dirname "$(readlink -f "${BASH_SOURCE[0]:-$0}")")" 2>/dev/null || scripts_dir="${CLARVIS_WORKSPACE:-$HOME/.openclaw/workspace}/scripts/cron"
@@ -205,12 +231,16 @@ acquire_global_claude_lock() {
             fi
             exit 0
         else
-            [ -n "$gpid" ] && echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] GLOBAL LOCK: Stale (age=${glock_age}s, PID $gpid not clarvis) — reclaiming" >> "$logfile"
+            if [ -n "$gpid" ]; then
+                echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] GLOBAL LOCK: Stale (age=${glock_age}s, PID $gpid not clarvis) — reclaiming" >> "$logfile"
+                _audit_lock "clarvis_claude_global.lock" "RECLAIM" "stale_age=${glock_age}s prev_pid=$gpid"
+            fi
             rm -f "$GLOBAL_LOCK"
         fi
     fi
     _write_lock "$GLOBAL_LOCK"
     _register_lock "$GLOBAL_LOCK"
+    _audit_lock "clarvis_claude_global.lock" "ACQUIRE"
 }
 
 # =============================================================================
@@ -233,12 +263,17 @@ acquire_maintenance_lock() {
         mlock_age=$(( $(date +%s) - $(stat -c %Y "$MAINTENANCE_LOCK" 2>/dev/null || echo 0) ))
         if [ -n "$mpid" ] && _is_clarvis_process "$mpid" && [ "$mlock_age" -le "$stale_threshold" ]; then
             echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] SKIP: Maintenance lock held (PID $mpid, age=${mlock_age}s)" >> "$logfile"
+            _audit_lock "clarvis_maintenance.lock" "SKIP" "held_by=$mpid age=${mlock_age}s"
             exit 0
         else
-            [ -n "$mpid" ] && echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] MAINTENANCE LOCK: Stale (age=${mlock_age}s, PID $mpid not clarvis) — reclaiming" >> "$logfile"
+            if [ -n "$mpid" ]; then
+                echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] MAINTENANCE LOCK: Stale (age=${mlock_age}s, PID $mpid not clarvis) — reclaiming" >> "$logfile"
+                _audit_lock "clarvis_maintenance.lock" "RECLAIM" "stale_age=${mlock_age}s prev_pid=$mpid"
+            fi
             rm -f "$MAINTENANCE_LOCK"
         fi
     fi
     _write_lock "$MAINTENANCE_LOCK"
     _register_lock "$MAINTENANCE_LOCK"
+    _audit_lock "clarvis_maintenance.lock" "ACQUIRE"
 }
