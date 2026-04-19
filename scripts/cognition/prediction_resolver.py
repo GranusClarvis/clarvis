@@ -68,6 +68,8 @@ def _load_episodes():
 
 def _desanitize(event: str) -> str:
     """Convert sanitized event name back to readable text."""
+    if not event:
+        return ""
     return re.sub(r'_+', ' ', event).strip()
 
 
@@ -147,8 +149,8 @@ def scan(use_embeddings: bool = True) -> list:
     pred_embeddings = {}
     if use_embeddings and unresolved:
         ef = _get_ef()
-        ep_tasks = list({ep["task"] for ep in episodes})
-        pred_texts = [_desanitize(p["event"]) for p in unresolved]
+        ep_tasks = list({ep.get("task") or "" for ep in episodes} - {""})
+        pred_texts = [_desanitize(p["event"]) for p in unresolved if p.get("event")]
         all_texts = ep_tasks + pred_texts
         if all_texts:
             all_embs = ef(all_texts)
@@ -188,7 +190,7 @@ def resolve(dry_run: bool = False) -> dict:
 
     # Precompute embeddings
     ef = _get_ef()
-    ep_tasks = list({ep["task"] for ep in episodes if ep.get("task")})
+    ep_tasks = list({ep.get("task") or "" for ep in episodes} - {""})
     pred_texts = [_desanitize(preds[i]["event"]) for i in unresolved_idx if preds[i].get("event")]
     all_texts = ep_tasks + pred_texts
     all_embs = ef(all_texts) if all_texts else []

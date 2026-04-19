@@ -65,6 +65,8 @@
 15 5 * * 0 cd ${OPENCLAW_HOME:-$HOME/.openclaw}/workspace && python3 scripts/brain_mem/brain_hygiene.py run >> memory/cron/brain_hygiene.log 2>&1
 # === Weekly data lifecycle (Sunday 05:20, after brain_hygiene) ===
 20 5 * * 0 cd ${OPENCLAW_HOME:-$HOME/.openclaw}/workspace && python3 scripts/infra/data_lifecycle.py >> memory/cron/data_lifecycle.log 2>&1
+# === Weekly learning strategy analysis (Sunday 05:25, after brain_hygiene, before cleanup) ===
+25 5 * * 0 cd ${OPENCLAW_HOME:-$HOME/.openclaw}/workspace && . scripts/cron/cron_env.sh && python3 scripts/cognition/knowledge_synthesis.py learning-strategy >> memory/cron/learning_strategy.log 2>&1
 # === Weekly cleanup (Sunday 05:30, after maintenance window) ===
 30 5 * * 0 $CLARVIS_WORKSPACE/scripts/cron/cron_cleanup.sh >> $CLARVIS_WORKSPACE/memory/cron/cleanup.log 2>&1
 45 5 * * * $CLARVIS_WORKSPACE/scripts/cron/cron_pi_refresh.sh >> $CLARVIS_WORKSPACE/memory/cron/pi_refresh.log 2>&1

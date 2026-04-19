@@ -37,7 +37,7 @@ def episode_encode(task, task_section, best_salience, task_status, task_duration
     if EpisodicMemory:
         try:
             em = EpisodicMemory()
-            error_msg = output_text[-200:] if task_status != "success" else None
+            error_msg = output_text[-200:] if task_status != "success" and output_text else None
             em.encode(task, task_section, best_salience, task_status,
                       duration_s=task_duration, error_msg=error_msg,
                       failure_type=error_type,

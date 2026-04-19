@@ -11,16 +11,13 @@ Usage:
 """
 
 import json
-import sys
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
-_WS = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(_WS))
-
 from clarvis.brain.graph_store_sqlite import GraphStoreSQLite
 
+_WS = Path(__file__).resolve().parent.parent.parent
 DB_PATH = _WS / "data" / "clarvisdb" / "graph.db"
 
 

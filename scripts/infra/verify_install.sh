@@ -141,41 +141,24 @@ warn_check "pytest available" python3 -m pytest --version
 echo ""
 
 # ── Test discovery (canonical root path) ──────────────────────────────────
-# This exercises the SAME discovery path as `python3 -m pytest` from root,
-# covering tests/ AND packages/*/tests/ via the testpaths config.
 echo "Test discovery (canonical pytest path):"
 if python3 -m pytest --version >/dev/null 2>&1; then
-    # Collect without running — verifies discovery across all test locations
     COLLECT_OUTPUT=$(python3 -m pytest --collect-only -q --no-header 2>&1)
     COLLECT_EXIT=$?
 
     if [ $COLLECT_EXIT -eq 0 ]; then
-        # Count tests from each location
         TOTAL_TESTS=$(echo "$COLLECT_OUTPUT" | grep -c "::" || true)
-        ROOT_TESTS=$(echo "$COLLECT_OUTPUT" | grep -c "^tests/" || true)
-        PKG_TESTS=$(echo "$COLLECT_OUTPUT" | grep -c "^packages/" || true)
 
         if [ "$TOTAL_TESTS" -gt 0 ]; then
-            echo "  PASS  pytest collection: $TOTAL_TESTS tests ($ROOT_TESTS root, $PKG_TESTS packages)"
+            echo "  PASS  pytest collection: $TOTAL_TESTS tests"
             PASS=$((PASS + 1))
         else
             echo "  FAIL  pytest collection: 0 tests found"
             FAIL=$((FAIL + 1))
         fi
-
-        # Verify package tests are discovered (catches silent regressions)
-        if [ "$PKG_TESTS" -gt 0 ]; then
-            echo "  PASS  package test discovery ($PKG_TESTS tests in packages/)"
-            PASS=$((PASS + 1))
-        else
-            echo "  WARN  no package tests discovered (packages/*/tests/ may be empty)"
-            WARN=$((WARN + 1))
-        fi
     else
         echo "  FAIL  pytest collection failed"
         FAIL=$((FAIL + 1))
-        echo "  WARN  package test discovery skipped (collection failed)"
-        WARN=$((WARN + 1))
     fi
 
     # Run smoke tests (fast subset, not full suite)

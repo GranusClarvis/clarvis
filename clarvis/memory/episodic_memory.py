@@ -348,10 +348,12 @@ class EpisodicMemory:
         More robust than raw word overlap for diverse task descriptions
         because it strips brackets, tags, and short words.
         """
+        if not text_a or not text_b:
+            return 0.0
         import re as _re
         def extract(t):
             return set(
-                w.lower() for w in _re.split(r'[\s\-_/.,;:()[\]]+', t)
+                w.lower() for w in _re.split(r'[\s\-_/.,;:()[\]]+', str(t))
                 if len(w) >= min_len and w.isalpha()
             )
         ka, kb = extract(text_a), extract(text_b)
@@ -385,7 +387,7 @@ class EpisodicMemory:
 
             prior_words = set((prior.get("task") or "").lower().split())
             raw_overlap = len(new_words & prior_words) / max(1, len(new_words | prior_words))
-            kw_overlap = self._keyword_overlap(new_episode["task"], prior["task"])
+            kw_overlap = self._keyword_overlap(new_episode.get("task"), prior.get("task"))
             overlap = max(raw_overlap, kw_overlap)
 
             # Strong causal: retry (same section + prior failed + high overlap)

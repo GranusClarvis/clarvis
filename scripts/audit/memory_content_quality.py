@@ -12,16 +12,14 @@ Output:
 import json
 import os
 import random
-import sys
 import time
 from collections import defaultdict
 from pathlib import Path
 
-WORKSPACE = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(WORKSPACE))
-
 from clarvis.brain import brain
 from clarvis.brain.constants import ALL_COLLECTIONS
+
+WORKSPACE = Path(__file__).resolve().parent.parent.parent
 
 DATA_DIR = WORKSPACE / "data" / "audit"
 DATA_DIR.mkdir(parents=True, exist_ok=True)

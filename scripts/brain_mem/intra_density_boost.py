@@ -9,11 +9,7 @@ Usage:
     python3 scripts/brain_mem/intra_density_boost.py [--dry-run] [--threshold 0.6] [--cap 500]
 """
 import argparse
-import sys
 import numpy as np
-
-# -- setup paths --
-sys.path.insert(0, "/home/agent/.openclaw/workspace")
 
 from clarvis.brain import brain
 
