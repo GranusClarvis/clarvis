@@ -480,7 +480,8 @@ class GraphMixin:
         result = {
             "new_edges": new_edges,
             "memories_scanned": memories_scanned,
-            "total_edges": len(self.graph.get("edges", [])),
+            "total_edges": (self._sqlite_store.edge_count() if self._sqlite_store
+                           else len(self.graph.get("edges", []))),
             "boosted_collections": [c for c, cnt in col_cross_counts.items() if cnt < boost_threshold],
             "timed_out": timed_out,
             "elapsed_seconds": round(elapsed, 1),
