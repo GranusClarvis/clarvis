@@ -499,12 +499,16 @@ def trend_analysis():
     }
 
 
+PHI_TARGET = 0.65  # target Phi for healthy integration
+
+
 def act_on_phi(result=None):
     """Close the Phi feedback loop: Phi drives behavior.
 
     - Phi drops >0.05: trigger cross-linking
     - Phi rises >0.05: log positive episode
     - Phi < 0.25: emergency synthesis
+    - Phi < PHI_TARGET (proactive): backfill graph nodes + aggressive cross-link
     """
     if result is None:
         result = compute_phi()
@@ -554,6 +558,41 @@ def act_on_phi(result=None):
             actions.append("triggered emergency bulk_cross_link(max_links_per_memory=8)")
         except Exception as e:
             actions.append(f"emergency cross-link failed: {e}")
+
+    # ── Proactive gap-closing: Phi below target ──────────────────────
+    # Even when Phi is stable (no big delta), if it's below the target
+    # we proactively build integration: backfill orphan graph nodes and
+    # run aggressive cross-linking to close the gap.
+    if current_phi < PHI_TARGET and current_phi >= 0.25:
+        gap = PHI_TARGET - current_phi
+        actions.append(f"phi_gap_close: {current_phi:.3f} < target {PHI_TARGET} (gap={gap:.3f})")
+
+        # 1. Backfill orphan graph nodes (adds nodes for memories without edges)
+        try:
+            brain.backfill_graph_nodes()
+            actions.append("backfilled orphan graph nodes")
+        except Exception as e:
+            actions.append(f"backfill failed: {e}")
+
+        # 2. Aggressive cross-linking proportional to gap size
+        links_per = min(10, max(3, int(gap * 15)))
+        try:
+            brain.bulk_cross_link(max_links_per_memory=links_per, timeout_seconds=120)
+            actions.append(f"proactive bulk_cross_link(max_links_per_memory={links_per})")
+        except Exception as e:
+            actions.append(f"proactive cross-link failed: {e}")
+
+        # 3. Submit attention alert for gap awareness
+        try:
+            from clarvis.cognition.attention import attention
+            attention.submit(
+                f"Phi gap: {current_phi:.3f} vs target {PHI_TARGET} — "
+                f"proactive integration running (gap={gap:.3f})",
+                source="phi_metric", importance=0.7, relevance=0.6, boost=0.2,
+            )
+            actions.append("submitted phi_gap attention alert")
+        except Exception:
+            pass
 
     if not actions:
         actions.append(f"phi_stable: {current_phi:.3f} (delta={delta:.3f}, no action needed)")

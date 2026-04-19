@@ -102,11 +102,10 @@ _Demoted to P2 to bring P1 within 25-ceiling. All are review/sweep/benchmark tas
 
 ### Phase 8 Follow-ups (P2, added 2026-04-16)
 
-- [ ] **[PHASE8_MIRROR_PRESUBMIT_GATE]** Add a pre-submit mirror validation step to `project_agent.py spawn` and the SWO PR workflow. Before opening a PR, run `tsc --noEmit` and `vitest run` against `/opt/star_world_order/PROD` with proposed changes. Cite results in PR body. Acceptance: next SWO PR includes a mirror validation section. Source: Phase 8 Gap 2.
 
 ### Deep Audit — Phase 9 Follow-ups (P2, added 2026-04-17)
 
-- [ ] **[PHASE9_REEVAL_WITH_AB]** After `[PHASE9_AB_TOGGLE_WIRING]` completes and 14-day A/B windows are collected for the 4 SHADOW features, re-run Phase 9 EVS scoring with causal data instead of proxies. Update `data/audit/neuro_feature_scorecard.jsonl` and `NEURO_FEATURE_DECISIONS_2026-04-17.md`. Any SHADOW feature showing positive causal EVS/TCS ≥ 0.2 → upgrade to REVISE. Any showing zero or negative → proceed to DEMOTE (with operator signoff for consciousness-labelled). Source: Phase 9 Proxy Limitation §0.
+- [~] [BLOCKED:2026-05-01] **[PHASE9_REEVAL_WITH_AB]** After `[PHASE9_AB_TOGGLE_WIRING]` completes and 14-day A/B windows are collected for the 4 SHADOW features, re-run Phase 9 EVS scoring with causal data instead of proxies. Update `data/audit/neuro_feature_scorecard.jsonl` and `NEURO_FEATURE_DECISIONS_2026-04-17.md`. Any SHADOW feature showing positive causal EVS/TCS ≥ 0.2 → upgrade to REVISE. Any showing zero or negative → proceed to DEMOTE (with operator signoff for consciousness-labelled). Source: Phase 9 Proxy Limitation §0. (2026-04-19: A/B window opened 2026-04-17, closes 2026-05-01 — only 2/14 days elapsed. No causal data available yet. Re-check on or after 2026-05-01.)
 - [ ] **[PHASE9_CLI_ONLY_SPINE_MODULES]** Score `clarvis/brain/spr.py`, `clarvis/brain/llm_rerank.py`, `clarvis/metrics/clr_reports.py`, `clarvis/metrics/evidence_scoring.py` — CLI-only spine modules with no importing caller. These were deferred from Phase 9 main pass. `spr.py`/`llm_rerank.py` touch retrieval/Phi subcomponents — require operator signoff before SHADOW. Source: `[SPINE_CLI_ONLY_MODULES_PHASE_9_INTAKE]`.
 
 ### Phase 10 Follow-ups (P2, added 2026-04-17)
@@ -185,9 +184,8 @@ _Source: `source="audit_phase_4"`. P0+P1 items are co-located with their parent 
 ### Phi Monitoring / Validation (demoted to observability metric by Phase 11 synthesis — regression watch only, not a KPI or optimization target; overlaps Phase 9 REVISE ruling on phi_metric)
 
 - [~] **[PHI_EMERGENCY_CROSS_LINK_BLITZ]** Run targeted bulk_cross_link on all 45 collection pairs (Phi target). (2026-04-16: started full-brain bulk_cross_link but process killed at ~5min when cron_autonomous started; +1357 edges committed before kill. Follow-up pair-targeted pass below supplanted the remainder.)
-- [ ] Add proactive Phi-gap-closing trigger in act_on_phi.
 - [ ] Add Phi semantic_cross_collection trend monitoring with weekly regression alerts.
-- [ ] Purge synthetic 0%-progress goals polluting clarvis-goals.
+- [x] ~~Purge synthetic 0%-progress goals polluting clarvis-goals.~~ (2026-04-19: Verified — 0 zero-progress goals remain in clarvis-goals collection. Goal hygiene has already cleaned them.)
 - [ ] Fix phi_metric.py string references across hooks and brain_mem scripts.
 - [ ] Fix dream_engine.py NoneType crash in compute_surprise() — nightly dream cycle dead.
 - [ ] Add test coverage for cognition integration modules.

@@ -33,6 +33,9 @@ from project_agent import (
     run_task_loop,
     validate_a2a_result,
     normalize_a2a_result,
+    run_mirror_validation,
+    MIRROR_DIRS,
+    MIRROR_CHECKS,
     _acquire_loop_lock,
     _release_loop_lock,
     _loop_lock_path,
@@ -1437,3 +1440,125 @@ class TestAgentClaudeLock:
     def test_lock_path_format(self):
         path = _agent_claude_lock_path("my-agent")
         assert str(path) == "/tmp/clarvis_agent_my-agent_claude.lock"
+
+
+# ── Mirror Validation Tests ──
+
+class TestMirrorValidation:
+    def test_no_mirror_skips(self):
+        """Agents without a PROD mirror should get a skip result."""
+        result = run_mirror_validation("nonexistent-agent")
+        assert result["passed"] is None
+        assert "skipped" in result["summary"].lower()
+
+    def test_mirror_with_mock_checks(self, tmp_path):
+        """Mirror validation with a temporary mirror dir and mocked subprocess."""
+        mirror_dir = tmp_path / "mirror"
+        mirror_dir.mkdir()
+        # Write a dummy file so the mirror dir exists
+        (mirror_dir / "package.json").write_text("{}")
+
+        agent_ws = tmp_path / "workspace"
+        agent_ws.mkdir()
+        (agent_ws / "src").mkdir()
+        (agent_ws / "src" / "app.ts").write_text("console.log('hello');")
+
+        # Temporarily register this as a mirror
+        original_mirrors = dict(MIRROR_DIRS)
+        original_checks = dict(MIRROR_CHECKS)
+        try:
+            import project_agent as pa
+            pa.MIRROR_DIRS["test-agent"] = mirror_dir
+            pa.MIRROR_CHECKS["test-agent"] = [
+                {"name": "echo test", "cmd": ["echo", "ok"], "timeout": 10},
+            ]
+            result = run_mirror_validation(
+                "test-agent",
+                changed_files=["src/app.ts"],
+                agent_workspace=agent_ws,
+            )
+            assert result["passed"] is True
+            assert len(result["checks"]) == 1
+            assert result["checks"][0]["name"] == "echo test"
+            assert result["checks"][0]["passed"] is True
+            assert "PASS" in result["summary"]
+
+            # Verify file was copied and then restored (shouldn't exist in mirror)
+            assert not (mirror_dir / "src" / "app.ts").exists()
+        finally:
+            pa.MIRROR_DIRS.clear()
+            pa.MIRROR_DIRS.update(original_mirrors)
+            pa.MIRROR_CHECKS.clear()
+            pa.MIRROR_CHECKS.update(original_checks)
+
+    def test_mirror_failing_check(self, tmp_path):
+        """Mirror validation reports failure when a check fails."""
+        mirror_dir = tmp_path / "mirror"
+        mirror_dir.mkdir()
+
+        import project_agent as pa
+        original_mirrors = dict(MIRROR_DIRS)
+        original_checks = dict(MIRROR_CHECKS)
+        try:
+            pa.MIRROR_DIRS["fail-agent"] = mirror_dir
+            pa.MIRROR_CHECKS["fail-agent"] = [
+                {"name": "false cmd", "cmd": ["false"], "timeout": 10},
+            ]
+            result = run_mirror_validation("fail-agent")
+            assert result["passed"] is False
+            assert result["checks"][0]["passed"] is False
+            assert "FAIL" in result["summary"]
+        finally:
+            pa.MIRROR_DIRS.clear()
+            pa.MIRROR_DIRS.update(original_mirrors)
+            pa.MIRROR_CHECKS.clear()
+            pa.MIRROR_CHECKS.update(original_checks)
+
+    def test_mirror_restores_originals(self, tmp_path):
+        """Files in the mirror should be restored after validation."""
+        mirror_dir = tmp_path / "mirror"
+        mirror_dir.mkdir()
+        original_content = b"original content"
+        (mirror_dir / "file.txt").write_bytes(original_content)
+
+        agent_ws = tmp_path / "workspace"
+        agent_ws.mkdir()
+        (agent_ws / "file.txt").write_text("modified content")
+
+        import project_agent as pa
+        original_mirrors = dict(MIRROR_DIRS)
+        original_checks = dict(MIRROR_CHECKS)
+        try:
+            pa.MIRROR_DIRS["restore-agent"] = mirror_dir
+            pa.MIRROR_CHECKS["restore-agent"] = [
+                {"name": "true cmd", "cmd": ["true"], "timeout": 10},
+            ]
+            run_mirror_validation(
+                "restore-agent",
+                changed_files=["file.txt"],
+                agent_workspace=agent_ws,
+            )
+            # Original should be restored
+            assert (mirror_dir / "file.txt").read_bytes() == original_content
+        finally:
+            pa.MIRROR_DIRS.clear()
+            pa.MIRROR_DIRS.update(original_mirrors)
+            pa.MIRROR_CHECKS.clear()
+            pa.MIRROR_CHECKS.update(original_checks)
+
+    def test_spawn_prompt_includes_mirror_section(self, agent_dir):
+        """SWO agents should get mirror validation instructions in prompt."""
+        config = {
+            "name": "star-world-order",
+            "constraints": ["Run tests"],
+            "budget": {"max_timeout": 1800},
+        }
+        import project_agent as pa
+        # Only test if the SWO mirror exists on this machine
+        if pa.MIRROR_DIRS.get("star-world-order", Path("/nonexistent")).exists():
+            prompt = build_spawn_prompt(
+                "star-world-order", "Fix a bug", config, agent_dir
+            )
+            assert "Mirror Validation" in prompt
+            assert "tsc --noEmit" in prompt
+            assert "vitest run" in prompt

@@ -991,6 +991,138 @@ def _write_initial_procedures(name: str):
 
 
 # =========================================================================
+# MIRROR VALIDATION — pre-submit checks against production mirror
+# =========================================================================
+
+# Map agent names to their PROD mirror directories
+MIRROR_DIRS = {
+    "star-world-order": Path("/opt/star_world_order/PROD"),
+}
+
+# Validation commands per project type (run in mirror dir)
+MIRROR_CHECKS = {
+    "star-world-order": [
+        {"name": "tsc --noEmit", "cmd": ["npx", "tsc", "--noEmit"], "timeout": 120},
+        {"name": "vitest run",   "cmd": ["npx", "vitest", "run"],   "timeout": 180},
+    ],
+}
+
+
+def run_mirror_validation(agent_name: str, changed_files: list[str] = None,
+                          agent_workspace: Path = None) -> dict:
+    """Run pre-submit validation against a production mirror.
+
+    Copies changed files from agent workspace into the PROD mirror,
+    runs tsc --noEmit and vitest run, then restores the mirror.
+
+    Returns:
+        {
+            "passed": bool,
+            "checks": [{"name": str, "passed": bool, "output": str, "elapsed": float}],
+            "summary": str,  # markdown-ready for PR body
+        }
+    """
+    mirror_dir = MIRROR_DIRS.get(agent_name)
+    if not mirror_dir or not mirror_dir.exists():
+        return {"passed": None, "checks": [],
+                "summary": f"Mirror validation skipped: no mirror for '{agent_name}'"}
+
+    checks = MIRROR_CHECKS.get(agent_name, [])
+    if not checks:
+        return {"passed": None, "checks": [],
+                "summary": "Mirror validation skipped: no checks configured"}
+
+    # If we have changed files and an agent workspace, copy them into the mirror
+    # and restore originals after validation
+    backup_files = {}
+    copied = []
+    if changed_files and agent_workspace:
+        for rel_path in changed_files:
+            src = agent_workspace / rel_path
+            dst = mirror_dir / rel_path
+            if not src.exists():
+                continue
+            # Backup existing file in mirror (if any)
+            if dst.exists():
+                backup_files[rel_path] = dst.read_bytes()
+            else:
+                backup_files[rel_path] = None  # mark as new (delete on restore)
+            # Copy
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                shutil.copy2(str(src), str(dst))
+                copied.append(rel_path)
+            except OSError as e:
+                _log(f"Mirror copy failed for {rel_path}: {e}")
+
+    results = []
+    all_passed = True
+
+    try:
+        for check in checks:
+            start = time.time()
+            try:
+                proc = subprocess.run(
+                    check["cmd"],
+                    cwd=str(mirror_dir),
+                    capture_output=True,
+                    text=True,
+                    timeout=check.get("timeout", 120),
+                )
+                passed = proc.returncode == 0
+                output = (proc.stdout + proc.stderr)[-2000:]  # cap output
+            except subprocess.TimeoutExpired:
+                passed = False
+                output = f"TIMEOUT after {check.get('timeout', 120)}s"
+            except Exception as e:
+                passed = False
+                output = str(e)
+
+            elapsed = round(time.time() - start, 1)
+            if not passed:
+                all_passed = False
+            results.append({
+                "name": check["name"],
+                "passed": passed,
+                "output": output,
+                "elapsed": elapsed,
+            })
+    finally:
+        # Restore mirror to original state
+        for rel_path, original_bytes in backup_files.items():
+            dst = mirror_dir / rel_path
+            if original_bytes is None:
+                # File was new — remove it
+                try:
+                    dst.unlink(missing_ok=True)
+                except OSError:
+                    pass
+            else:
+                try:
+                    dst.write_bytes(original_bytes)
+                except OSError:
+                    pass
+
+    # Build markdown summary for PR body
+    lines = ["## Mirror Validation (PROD)"]
+    for r in results:
+        icon = "PASS" if r["passed"] else "FAIL"
+        lines.append(f"- **{r['name']}**: {icon} ({r['elapsed']}s)")
+        if not r["passed"]:
+            # Include first 500 chars of error output
+            snippet = r["output"][:500].strip()
+            if snippet:
+                lines.append(f"  ```\n  {snippet}\n  ```")
+    lines.append(f"\nOverall: {'PASS' if all_passed else 'FAIL'}")
+    summary = "\n".join(lines)
+
+    _log(f"Mirror validation for '{agent_name}': {'PASS' if all_passed else 'FAIL'} "
+         f"({len(results)} checks, {len(copied)} files copied)")
+
+    return {"passed": all_passed, "checks": results, "summary": summary}
+
+
+# =========================================================================
 # SPAWN — execute a task in a project agent
 # =========================================================================
 
@@ -1424,6 +1556,31 @@ def build_spawn_prompt(name: str, task: str, config: dict,
     except Exception:
         pass
 
+    # Mirror validation instructions (for agents with PROD mirrors)
+    if name in MIRROR_DIRS and MIRROR_DIRS[name].exists():
+        mirror_dir = MIRROR_DIRS[name]
+        mirror_checks = MIRROR_CHECKS.get(name, [])
+        check_cmds = ", ".join(f"`{c['name']}`" for c in mirror_checks)
+        prompt_parts.extend([
+            "## Pre-Submit Mirror Validation (MANDATORY)",
+            f"Before creating a PR, validate your changes against the PROD mirror at `{mirror_dir}`.",
+            "Steps:",
+            f"1. Copy your changed files into `{mirror_dir}`",
+            f"2. Run: {check_cmds} in `{mirror_dir}`",
+            f"3. Restore any files you copied (do NOT leave changes in the mirror)",
+            "4. Include a '## Mirror Validation (PROD)' section in your PR body with results",
+            "5. If checks fail, fix your code before creating the PR",
+            "",
+            "Example PR body section:",
+            "```",
+            "## Mirror Validation (PROD)",
+            "- **tsc --noEmit**: PASS (12.3s)",
+            "- **vitest run**: PASS (8.1s)",
+            "Overall: PASS",
+            "```",
+            "",
+        ])
+
     if procedures:
         prompt_parts.extend([
             "## Known Procedures",
@@ -1676,6 +1833,25 @@ def cmd_spawn(name: str, task: str, timeout: int = 1200,
         pass  # Phase 3 not installed yet — graceful degradation
     except Exception as e:
         _log(f"PR factory writeback failed (non-fatal): {e}")
+
+    # ── Post-spawn mirror validation ──────────────────────────────────
+    # If this agent has a PROD mirror, run tsc + vitest against it
+    # with the agent's changed files overlaid. Results stored in agent_result.
+    if name in MIRROR_DIRS:
+        try:
+            changed = agent_result.get("files_changed", [])
+            mirror_result = run_mirror_validation(name, changed, workspace)
+            agent_result["mirror_validation"] = mirror_result
+            if mirror_result.get("passed") is False:
+                _log(f"Mirror validation FAILED for task {task_id}")
+            elif mirror_result.get("passed") is True:
+                _log(f"Mirror validation PASSED for task {task_id}")
+        except Exception as e:
+            _log(f"Mirror validation error (non-fatal): {e}")
+            agent_result["mirror_validation"] = {
+                "passed": None, "checks": [],
+                "summary": f"Mirror validation error: {e}",
+            }
 
     # Update config
     config["status"] = "idle"
