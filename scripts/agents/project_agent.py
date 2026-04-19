@@ -1035,6 +1035,7 @@ def run_mirror_validation(agent_name: str, changed_files: list[str] = None,
     # If we have changed files and an agent workspace, copy them into the mirror
     # and restore originals after validation
     backup_files = {}
+    created_dirs = []  # track dirs we created so we can remove them on restore
     copied = []
     if changed_files and agent_workspace:
         for rel_path in changed_files:
@@ -1047,8 +1048,15 @@ def run_mirror_validation(agent_name: str, changed_files: list[str] = None,
                 backup_files[rel_path] = dst.read_bytes()
             else:
                 backup_files[rel_path] = None  # mark as new (delete on restore)
-            # Copy
+            # Track new directories that need to be created
+            new_dirs = []
+            d = dst.parent
+            while d != mirror_dir and not d.exists():
+                new_dirs.append(d)
+                d = d.parent
             dst.parent.mkdir(parents=True, exist_ok=True)
+            created_dirs.extend(reversed(new_dirs))
+            # Copy
             try:
                 shutil.copy2(str(src), str(dst))
                 copied.append(rel_path)
@@ -1102,6 +1110,12 @@ def run_mirror_validation(agent_name: str, changed_files: list[str] = None,
                     dst.write_bytes(original_bytes)
                 except OSError:
                     pass
+        # Remove directories we created (reverse order = deepest first)
+        for d in reversed(created_dirs):
+            try:
+                d.rmdir()  # only removes if empty
+            except OSError:
+                pass
 
     # Build markdown summary for PR body
     lines = ["## Mirror Validation (PROD)"]
@@ -1120,6 +1134,36 @@ def run_mirror_validation(agent_name: str, changed_files: list[str] = None,
          f"({len(results)} checks, {len(copied)} files copied)")
 
     return {"passed": all_passed, "checks": results, "summary": summary}
+
+
+def _close_pr(pr_url: str, repo: str, reason: str) -> bool:
+    """Close a PR that failed mirror validation. Returns True on success."""
+    import re as _re
+    m = _re.search(r'/pull/(\d+)', pr_url)
+    if not m:
+        _log(f"Cannot close PR — could not parse PR number from {pr_url}")
+        return False
+    pr_number = m.group(1)
+    try:
+        comment = (f"Automatically closed: mirror validation FAILED.\n\n{reason}\n\n"
+                   "Fix the issues and re-submit.")
+        subprocess.run(
+            ["gh", "pr", "comment", pr_number, "--repo", repo, "--body", comment],
+            capture_output=True, text=True, timeout=30,
+        )
+        result = subprocess.run(
+            ["gh", "pr", "close", pr_number, "--repo", repo],
+            capture_output=True, text=True, timeout=30,
+        )
+        if result.returncode == 0:
+            _log(f"Closed PR #{pr_number} due to mirror validation failure")
+            return True
+        else:
+            _log(f"Failed to close PR #{pr_number}: {result.stderr}")
+            return False
+    except Exception as e:
+        _log(f"Error closing PR #{pr_number}: {e}")
+        return False
 
 
 # =========================================================================
@@ -1562,14 +1606,17 @@ def build_spawn_prompt(name: str, task: str, config: dict,
         mirror_checks = MIRROR_CHECKS.get(name, [])
         check_cmds = ", ".join(f"`{c['name']}`" for c in mirror_checks)
         prompt_parts.extend([
-            "## Pre-Submit Mirror Validation (MANDATORY)",
-            f"Before creating a PR, validate your changes against the PROD mirror at `{mirror_dir}`.",
+            "## Pre-Submit Mirror Validation (MANDATORY HARD GATE)",
+            f"Before creating a PR, you MUST validate your changes against the PROD mirror at `{mirror_dir}`.",
+            "**If validation fails, DO NOT create the PR. Fix your code first.**",
+            "A post-spawn hard gate will also verify — PRs that fail mirror checks are automatically closed.",
+            "",
             "Steps:",
             f"1. Copy your changed files into `{mirror_dir}`",
             f"2. Run: {check_cmds} in `{mirror_dir}`",
-            f"3. Restore any files you copied (do NOT leave changes in the mirror)",
+            f"3. Restore ALL files AND remove any NEW directories you created (leave mirror byte-identical)",
             "4. Include a '## Mirror Validation (PROD)' section in your PR body with results",
-            "5. If checks fail, fix your code before creating the PR",
+            "5. If checks fail, fix your code and re-validate before creating the PR",
             "",
             "Example PR body section:",
             "```",
@@ -1834,16 +1881,28 @@ def cmd_spawn(name: str, task: str, timeout: int = 1200,
     except Exception as e:
         _log(f"PR factory writeback failed (non-fatal): {e}")
 
-    # ── Post-spawn mirror validation ──────────────────────────────────
+    # ── Post-spawn mirror validation (HARD GATE) ───────────────────────
     # If this agent has a PROD mirror, run tsc + vitest against it
-    # with the agent's changed files overlaid. Results stored in agent_result.
+    # with the agent's changed files overlaid. FAILURE → close PR, mark failed.
     if name in MIRROR_DIRS:
         try:
             changed = agent_result.get("files_changed", [])
             mirror_result = run_mirror_validation(name, changed, workspace)
             agent_result["mirror_validation"] = mirror_result
             if mirror_result.get("passed") is False:
-                _log(f"Mirror validation FAILED for task {task_id}")
+                _log(f"MIRROR HARD GATE: validation FAILED for task {task_id} — blocking PR")
+                pr_url = agent_result.get("pr_url")
+                if pr_url:
+                    import re as _re
+                    repo_url = config.get("repo_url", "")
+                    m = _re.search(r'[:/]([^/]+/[^/.]+?)(?:\.git)?$', repo_url)
+                    gh_repo = m.group(1) if m else ""
+                    if gh_repo:
+                        _close_pr(pr_url, gh_repo, mirror_result.get("summary", "Mirror validation failed"))
+                        agent_result["pr_url"] = None
+                        agent_result["_mirror_closed_pr"] = pr_url
+                agent_result["status"] = "failed"
+                agent_result["error"] = (agent_result.get("error") or "") + " Mirror validation FAILED."
             elif mirror_result.get("passed") is True:
                 _log(f"Mirror validation PASSED for task {task_id}")
         except Exception as e:

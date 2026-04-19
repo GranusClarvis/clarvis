@@ -24,6 +24,7 @@ from project_agent import (
     _parse_agent_output,
     _is_task_failure,
     _build_retry_context,
+    _close_pr,
     cmd_spawn_with_retry,
     cmd_spawn_parallel,
     _poll_ci_checks,
@@ -1562,3 +1563,141 @@ class TestMirrorValidation:
             assert "Mirror Validation" in prompt
             assert "tsc --noEmit" in prompt
             assert "vitest run" in prompt
+
+    def test_mirror_cleans_up_new_directories(self, tmp_path):
+        """New directories created during overlay should be removed on restore."""
+        mirror_dir = tmp_path / "mirror"
+        mirror_dir.mkdir()
+        (mirror_dir / "package.json").write_text("{}")
+
+        agent_ws = tmp_path / "workspace"
+        agent_ws.mkdir()
+        # Create a file in a nested new directory
+        (agent_ws / "src" / "components" / "new").mkdir(parents=True)
+        (agent_ws / "src" / "components" / "new" / "Widget.tsx").write_text("export {}")
+
+        import project_agent as pa
+        original_mirrors = dict(MIRROR_DIRS)
+        original_checks = dict(MIRROR_CHECKS)
+        try:
+            pa.MIRROR_DIRS["dir-cleanup-agent"] = mirror_dir
+            pa.MIRROR_CHECKS["dir-cleanup-agent"] = [
+                {"name": "true", "cmd": ["true"], "timeout": 10},
+            ]
+            run_mirror_validation(
+                "dir-cleanup-agent",
+                changed_files=["src/components/new/Widget.tsx"],
+                agent_workspace=agent_ws,
+            )
+            # New directories should be removed
+            assert not (mirror_dir / "src" / "components" / "new").exists()
+            assert not (mirror_dir / "src" / "components").exists()
+            assert not (mirror_dir / "src").exists()
+        finally:
+            pa.MIRROR_DIRS.clear()
+            pa.MIRROR_DIRS.update(original_mirrors)
+            pa.MIRROR_CHECKS.clear()
+            pa.MIRROR_CHECKS.update(original_checks)
+
+    def test_mirror_preserves_existing_directories(self, tmp_path):
+        """Pre-existing directories should NOT be removed during cleanup."""
+        mirror_dir = tmp_path / "mirror"
+        mirror_dir.mkdir()
+        # Pre-existing directory in mirror
+        (mirror_dir / "src").mkdir()
+        (mirror_dir / "src" / "index.ts").write_text("export {}")
+
+        agent_ws = tmp_path / "workspace"
+        agent_ws.mkdir()
+        (agent_ws / "src" / "utils").mkdir(parents=True)
+        (agent_ws / "src" / "utils" / "helper.ts").write_text("export {}")
+
+        import project_agent as pa
+        original_mirrors = dict(MIRROR_DIRS)
+        original_checks = dict(MIRROR_CHECKS)
+        try:
+            pa.MIRROR_DIRS["preserve-agent"] = mirror_dir
+            pa.MIRROR_CHECKS["preserve-agent"] = [
+                {"name": "true", "cmd": ["true"], "timeout": 10},
+            ]
+            run_mirror_validation(
+                "preserve-agent",
+                changed_files=["src/utils/helper.ts"],
+                agent_workspace=agent_ws,
+            )
+            # New file and its new parent dir should be removed
+            assert not (mirror_dir / "src" / "utils" / "helper.ts").exists()
+            assert not (mirror_dir / "src" / "utils").exists()
+            # Pre-existing directory and file should remain
+            assert (mirror_dir / "src").exists()
+            assert (mirror_dir / "src" / "index.ts").exists()
+        finally:
+            pa.MIRROR_DIRS.clear()
+            pa.MIRROR_DIRS.update(original_mirrors)
+            pa.MIRROR_CHECKS.clear()
+            pa.MIRROR_CHECKS.update(original_checks)
+
+
+class TestClosePr:
+    @patch("project_agent.subprocess.run")
+    def test_close_pr_success(self, mock_run):
+        """Should comment and close the PR."""
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        result = _close_pr("https://github.com/org/repo/pull/42", "org/repo", "Mirror FAIL")
+        assert result is True
+        assert mock_run.call_count == 2  # comment + close
+        # Verify close was called with correct PR number
+        close_call = mock_run.call_args_list[1]
+        assert "42" in close_call[0][0]
+        assert "close" in close_call[0][0]
+
+    @patch("project_agent.subprocess.run")
+    def test_close_pr_failure(self, mock_run):
+        """Should return False when gh pr close fails."""
+        mock_run.side_effect = [
+            MagicMock(returncode=0),  # comment succeeds
+            MagicMock(returncode=1, stderr="not found"),  # close fails
+        ]
+        result = _close_pr("https://github.com/org/repo/pull/99", "org/repo", "Mirror FAIL")
+        assert result is False
+
+    def test_close_pr_bad_url(self):
+        """Should return False for URLs without a PR number."""
+        result = _close_pr("https://github.com/org/repo", "org/repo", "Mirror FAIL")
+        assert result is False
+
+    @patch("project_agent.subprocess.run")
+    def test_close_pr_exception(self, mock_run):
+        """Should handle exceptions gracefully."""
+        mock_run.side_effect = OSError("network error")
+        result = _close_pr("https://github.com/org/repo/pull/1", "org/repo", "fail")
+        assert result is False
+
+
+class TestMirrorHardGatePrompt:
+    def test_prompt_contains_hard_gate_language(self, agent_dir):
+        """Mirror prompt should contain hard gate language."""
+        config = {
+            "name": "test-mirror",
+            "constraints": [],
+            "budget": {"max_timeout": 1800},
+        }
+        import project_agent as pa
+        mirror_dir = agent_dir / "fake_mirror"
+        mirror_dir.mkdir()
+        original_mirrors = dict(MIRROR_DIRS)
+        original_checks = dict(MIRROR_CHECKS)
+        try:
+            pa.MIRROR_DIRS["test-mirror"] = mirror_dir
+            pa.MIRROR_CHECKS["test-mirror"] = [
+                {"name": "test", "cmd": ["true"], "timeout": 10},
+            ]
+            prompt = build_spawn_prompt("test-mirror", "some task", config, agent_dir)
+            assert "HARD GATE" in prompt
+            assert "automatically closed" in prompt
+            assert "byte-identical" in prompt
+        finally:
+            pa.MIRROR_DIRS.clear()
+            pa.MIRROR_DIRS.update(original_mirrors)
+            pa.MIRROR_CHECKS.clear()
+            pa.MIRROR_CHECKS.update(original_checks)
