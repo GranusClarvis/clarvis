@@ -110,7 +110,7 @@ _Demoted to P2 to bring P1 within 25-ceiling. All are review/sweep/benchmark tas
 
 ### Phase 10 Follow-ups (P2, added 2026-04-17)
 
-- [ ] **[PHASE10_RESTORE_DRILL]** Create `scripts/infra/restore_drill.sh` that restores the latest backup to a temp directory, verifies ClarvisDB can load, runs `brain.health_check()`, and reports pass/fail. Add quarterly cron entry. Acceptance: drill runs once successfully and is scheduled. Source: Phase 10 reliability gap — backups verified but never test-restored. Decision doc: `docs/internal/audits/decisions/2026-04-17_phase10_reliability_security.md`.
+- [x] **[PHASE10_RESTORE_DRILL]** _(done 2026-04-19)_ Created `scripts/infra/restore_drill.sh` — restores latest backup (incremental chain) to temp dir, runs `brain.health_check()`, reports pass/fail. Drill passed: 2692 memories, 10 collections, store/recall OK. Quarterly cron at 03:15 on 1st of Jan/Apr/Jul/Oct.
 - [ ] **[PHASE10_LOCK_AUDIT_JOURNAL]** Create centralized lock audit journal: each lock acquisition/release writes a line to `monitoring/lock_audit.log` with timestamp, PID, lock name, action. Enables post-incident investigation. Replicate `lock_helper.sh` pattern to project agents after journal exists. Source: Phase 10 PROMOTE investment case.
 
 ### Deep Audit — Phases 12–15 Anchors (P2, added 2026-04-16 per meta-meta audit)
@@ -184,8 +184,7 @@ _Source: `source="audit_phase_4"`. P0+P1 items are co-located with their parent 
 ### Phi Monitoring / Validation (demoted to observability metric by Phase 11 synthesis — regression watch only, not a KPI or optimization target; overlaps Phase 9 REVISE ruling on phi_metric)
 
 - [~] **[PHI_EMERGENCY_CROSS_LINK_BLITZ]** Run targeted bulk_cross_link on all 45 collection pairs (Phi target). (2026-04-16: started full-brain bulk_cross_link but process killed at ~5min when cron_autonomous started; +1357 edges committed before kill. Follow-up pair-targeted pass below supplanted the remainder.)
-- [ ] Add Phi semantic_cross_collection trend monitoring with weekly regression alerts.
-- [x] ~~Purge synthetic 0%-progress goals polluting clarvis-goals.~~ (2026-04-19: Verified — 0 zero-progress goals remain in clarvis-goals collection. Goal hygiene has already cleaned them.)
+- [x] _(done 2026-04-19)_ Phi weekly regression check: `weekly_regression_check()` in `clarvis/metrics/phi.py`, wired into `cron_clr_benchmark.sh`. Checks all 4 components (including semantic_cross_collection) for >5% weekly drops, fires attention alerts on regression.
 - [ ] Fix phi_metric.py string references across hooks and brain_mem scripts.
 - [ ] Fix dream_engine.py NoneType crash in compute_surprise() — nightly dream cycle dead.
 - [ ] Add test coverage for cognition integration modules.

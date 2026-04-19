@@ -59,8 +59,27 @@ STABILITY_RUNS=$(echo "$STABILITY_OUTPUT" | python3 -c "import sys,json; print(j
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] CLR=$CLR_SCORE value_add=+$VALUE_ADD gate=$GATE stability=$STABILITY_PASS (n=$STABILITY_RUNS)" >> "$LOGFILE"
 
+# Weekly Phi component regression check
+PHI_REGRESSION=$(timeout 30 python3 -c "
+import json
+from clarvis.metrics.phi import weekly_regression_check
+r = weekly_regression_check()
+print(json.dumps(r))
+" 2>/dev/null || echo '{"status":"error"}')
+
+PHI_REG_STATUS=$(echo "$PHI_REGRESSION" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status','?'))" 2>/dev/null || echo "?")
+PHI_REG_DETAIL=""
+if [ "$PHI_REG_STATUS" = "regression" ]; then
+    PHI_REG_DETAIL=$(echo "$PHI_REGRESSION" | python3 -c "import sys,json; print('; '.join(json.load(sys.stdin).get('regressions',[])))" 2>/dev/null || echo "")
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WARNING: Phi regression detected: $PHI_REG_DETAIL" >> "$LOGFILE"
+else
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Phi weekly check: $PHI_REG_STATUS" >> "$LOGFILE"
+fi
+
 # Write summary to digest
-DIGEST_SUMMARY="Weekly CLR benchmark: CLR=$CLR_SCORE (+$VALUE_ADD value-add), gate=$GATE, stability=$STABILITY_PASS ($STABILITY_RUNS runs). $RATING"
+PHI_SUFFIX=""
+[ "$PHI_REG_STATUS" = "regression" ] && PHI_SUFFIX=" ⚠ Phi regression: $PHI_REG_DETAIL"
+DIGEST_SUMMARY="Weekly CLR benchmark: CLR=$CLR_SCORE (+$VALUE_ADD value-add), gate=$GATE, stability=$STABILITY_PASS ($STABILITY_RUNS runs). $RATING$PHI_SUFFIX"
 python3 "$CLARVIS_WORKSPACE/scripts/tools/digest_writer.py" evolution \
     "$DIGEST_SUMMARY" >> "$LOGFILE" 2>&1 || true
 

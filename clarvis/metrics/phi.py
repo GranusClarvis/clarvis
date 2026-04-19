@@ -502,6 +502,87 @@ def trend_analysis():
 PHI_TARGET = 0.65  # target Phi for healthy integration
 
 
+def weekly_regression_check():
+    """Check for weekly regression in Phi components, especially semantic_cross_collection.
+
+    Compares the latest 7 days of measurements against the prior 7 days.
+    Returns a dict with per-component deltas and any regression alerts.
+    Designed to be called from weekly cron (cron_clr_benchmark.sh or performance_benchmark.py).
+    """
+    history = get_history()
+    if len(history) < 4:
+        return {"status": "insufficient_data", "measurements": len(history)}
+
+    from datetime import datetime, timedelta, timezone as tz
+
+    now = datetime.now(tz.utc)
+    week_ago = now - timedelta(days=7)
+    two_weeks_ago = now - timedelta(days=14)
+
+    def _parse_ts(entry):
+        ts = entry.get("timestamp", "")
+        try:
+            return datetime.fromisoformat(ts)
+        except (ValueError, TypeError):
+            return None
+
+    recent = [e for e in history if (t := _parse_ts(e)) and t >= week_ago]
+    prior = [e for e in history if (t := _parse_ts(e)) and two_weeks_ago <= t < week_ago]
+
+    if not recent or not prior:
+        return {"status": "insufficient_data", "recent": len(recent), "prior": len(prior)}
+
+    components = ["intra_collection_density", "cross_collection_connectivity",
+                  "semantic_cross_collection", "collection_reachability"]
+
+    def _avg_component(entries, key):
+        vals = [e.get("components", {}).get(key) for e in entries]
+        vals = [v for v in vals if v is not None]
+        return sum(vals) / len(vals) if vals else None
+
+    deltas = {}
+    regressions = []
+    REGRESSION_THRESHOLD = -0.05  # 5% drop = regression
+
+    for comp in components:
+        avg_recent = _avg_component(recent, comp)
+        avg_prior = _avg_component(prior, comp)
+        if avg_recent is not None and avg_prior is not None:
+            delta = round(avg_recent - avg_prior, 4)
+            deltas[comp] = {"recent": round(avg_recent, 4), "prior": round(avg_prior, 4), "delta": delta}
+            if delta < REGRESSION_THRESHOLD:
+                regressions.append(f"{comp}: {avg_prior:.3f} -> {avg_recent:.3f} (delta={delta:+.3f})")
+
+    # Overall Phi delta
+    phi_recent = sum(e["phi"] for e in recent) / len(recent)
+    phi_prior = sum(e["phi"] for e in prior) / len(prior)
+    phi_delta = round(phi_recent - phi_prior, 4)
+
+    result = {
+        "status": "regression" if regressions else "ok",
+        "phi_recent": round(phi_recent, 4),
+        "phi_prior": round(phi_prior, 4),
+        "phi_delta": phi_delta,
+        "components": deltas,
+        "regressions": regressions,
+        "recent_count": len(recent),
+        "prior_count": len(prior),
+    }
+
+    # Fire attention alert on regression
+    if regressions:
+        try:
+            from clarvis.cognition.attention import attention
+            attention.submit(
+                f"Phi weekly regression: {'; '.join(regressions)}",
+                source="phi_metric", importance=0.85, relevance=0.8, boost=0.3,
+            )
+        except Exception:
+            pass
+
+    return result
+
+
 def act_on_phi(result=None):
     """Close the Phi feedback loop: Phi drives behavior.
 
