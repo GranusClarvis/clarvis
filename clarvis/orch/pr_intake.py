@@ -15,10 +15,13 @@ Usage:
 """
 
 import json
+import logging
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 
 # ── Project Brief ──
@@ -732,6 +735,7 @@ def refresh_artifacts(agent_dir: Path, workspace: Path) -> dict:
             else:
                 report["skipped"].append(name)
         except Exception as e:
+            logger.warning("Artifact generator %s skipped: %s", name, e)
             report["errors"].append(f"{name}: {e}")
 
     return report

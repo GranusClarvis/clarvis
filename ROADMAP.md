@@ -1,7 +1,7 @@
 # ROADMAP.md — Clarvis Evolution Roadmap
 
 _The single source of truth for where Clarvis is going and how to get there._
-_Updated: 2026-04-05_
+_Updated: 2026-04-19_
 
 ---
 
@@ -70,6 +70,13 @@ Clarvis should grow into:
 | **Agent Orchestrator** | 80% | no agent dir |
 | **Performance Index** | 94% | PI=0.9446 |
 | **Public Surface** | 90% | Dockerfile=yes, README=yes |
+
+### Weekly State Note (2026-04-19)
+- Deep audit moved from vague program to evidence-producing workflow: trace retention, trace wiring, toggle wiring, and recovered decision-doc queue items are now in place.
+- Reflection reliability improved via crosslink timeout control and pipeline reorder, but postflight `NoneType` failures still degrade learning quality.
+- SWO delivery stayed productive, especially on auth/security fixes, while PR #177 was revalidated as still needed.
+- Phi remains below target despite graph growth; the bottleneck is now targeted cross-domain bridging, not raw edge count.
+- Test suite health is now explicitly tracked as a standing systems risk.
 
 ---
 

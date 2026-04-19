@@ -20,7 +20,7 @@ Inputs
 2. Retrieval telemetry — ``data/retrieval_quality/events.jsonl`` — used
    as a collection-level usage volume proxy when per-trace attribution
    is unavailable.
-3. Recall@K baseline — ``data/brain_eval/latest.json`` (deterministic
+3. Recall@K baseline — ``data/daily_brain_eval/latest.json`` (deterministic
    golden-QA run) and ``data/retrieval_benchmark/recall_precision_benchmark.json``.
 
 Attribution score (per retrieval block → response)
@@ -70,7 +70,7 @@ WORKSPACE = Path(os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.open
 TRACES_DIR = WORKSPACE / "data" / "audit" / "traces"
 EVENTS_FILE = WORKSPACE / "data" / "retrieval_quality" / "events.jsonl"
 REPORT_FILE = WORKSPACE / "data" / "retrieval_quality" / "report.json"
-BRAIN_EVAL_LATEST = WORKSPACE / "data" / "brain_eval" / "latest.json"
+BRAIN_EVAL_LATEST = WORKSPACE / "data" / "daily_brain_eval" / "latest.json"
 RECALL_PRECISION_FILE = WORKSPACE / "data" / "retrieval_benchmark" / "latest.json"
 EFFECTIVENESS_HISTORY = WORKSPACE / "data" / "brain_effectiveness_history.jsonl"
 
@@ -416,7 +416,7 @@ def _recall_k_snapshot() -> Dict[str, Any]:
     data = _load_json(BRAIN_EVAL_LATEST) or {}
     metrics = data.get("metrics") or {}
     return {
-        "source": "data/brain_eval/latest.json",
+        "source": "data/daily_brain_eval/latest.json",
         "timestamp": data.get("timestamp"),
         "golden_queries": data.get("golden_queries"),
         "p_at_1": metrics.get("p_at_1"),

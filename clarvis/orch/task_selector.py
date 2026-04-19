@@ -11,33 +11,40 @@ Migrated from scripts/task_selector.py (Phase 5 spine refactor).
 """
 
 import json
+import logging
 import os
 import re
 
 from clarvis.cognition.attention import attention, get_codelet_competition
 from clarvis.brain import brain
 
+logger = logging.getLogger(__name__)
+
 try:
     from clarvis._script_loader import load as _load_script
     _retrieval_mod = _load_script("retrieval_experiment", "brain_mem")
     smart_recall = _retrieval_mod.smart_recall
 except Exception:
+    logger.warning("Optional module retrieval_experiment unavailable — smart_recall disabled")
     smart_recall = None
 
 try:
     from clarvis.cognition.somatic_markers import somatic
 except Exception:
+    logger.warning("Optional module somatic_markers unavailable — somatic scoring disabled")
     somatic = None
 
 try:
     from clarvis.cognition.thought_protocol import thought as thought_proto
 except Exception:
+    logger.warning("Optional module thought_protocol unavailable — thought hooks disabled")
     thought_proto = None
 
 try:
     _world_models_mod = _load_script("world_models", "cognition")
     _wm = _world_models_mod.get_world_model()
 except Exception:
+    logger.warning("Optional module world_models unavailable — world model disabled")
     _wm = None
 
 _WS = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
@@ -521,6 +528,7 @@ def score_tasks(tasks, codelet_result=None):
         from clarvis.runtime.mode import get_mode, is_task_allowed_for_mode
         _current_mode = get_mode()
     except ImportError:
+        logger.warning("clarvis.runtime.mode unavailable — mode filtering disabled")
         pass
 
     scored = []

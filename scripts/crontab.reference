@@ -86,3 +86,6 @@
 
 # === Status JSON generation (daily at 05:50, before brain eval) ===
 50 5 * * * . $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh && python3 $CLARVIS_WORKSPACE/scripts/infra/generate_status_json.py >> $CLARVIS_WORKSPACE/memory/cron/status_json.log 2>&1
+
+# === Quarterly restore drill (1st of Jan, Apr, Jul, Oct at 03:00) ===
+0 3 1 1,4,7,10 * . $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh && $CLARVIS_WORKSPACE/scripts/infra/restore_drill.sh >> $CLARVIS_WORKSPACE/monitoring/restore_drill.log 2>&1

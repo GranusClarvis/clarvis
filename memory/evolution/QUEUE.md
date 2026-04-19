@@ -26,6 +26,7 @@ _Source: `docs/internal/audits/NEURO_FEATURE_DECISIONS_2026-04-17.md`. Phase 9 s
 
 ### Bugs
 
+- [ ] **[P0_MIRROR_VALIDATION_HARD_GATE]** `scripts/agents/project_agent.py` added mirror validation, but it currently runs as a non-fatal post-spawn step and may not reliably block bad PR creation or fully restore mirror state (new directories can persist after overlay). Move validation to a true pre-submit hard gate, make failures block PR creation, and restore/delete overlay-created directories cleanly. Acceptance: failing mirror checks prevent PR emission; temp overlay leaves mirror byte-identical after run.
 
 ## P1 — This Week
 
@@ -33,8 +34,6 @@ _Source: `docs/internal/audits/NEURO_FEATURE_DECISIONS_2026-04-17.md`. Phase 9 s
 
 _SWO tasks tracked here. When project lane is active, these get priority. See also: memory/evolution/SWO_TRACKER.md_
 
-- [ ] **[SWO_FIX_RAFFLE_RANDOMNESS]** Raffle winner selection uses predictable `Math.random()`/public block hash. Replace with commit-reveal or combined entropy (block hash + server secret + entry count hash). Remove client-supplied `blockHash` from admin draw endpoint. _(CRIT, from 2026-04-19 audit C-1)_
-- [ ] **[SWO_FIX_SOCIAL_CONNECTIONS_AUTH]** `/api/social-connections` GET leaks Discord/X usernames without auth. Add wallet auth or return only boolean flags for non-owner queries. _(HIGH, from 2026-04-19 audit H-2)_
 
 
 
@@ -113,8 +112,6 @@ _Demoted to P2 to bring P1 within 25-ceiling. All are review/sweep/benchmark tas
 
 _Source: `docs/internal/audits/decisions/2026-04-17_phase10_reliability_security.md`. Phase 10 ruled REVISE — restore drill FAIL blocks PASS. Items below were in the decision doc and AUDIT_INDEX but never added to QUEUE.md._
 
-- [ ] **[PHASE10_RESTORE_DRILL]** Create `scripts/infra/restore_drill.sh` that exercises: (1) backup restore from `backup_daily.sh` output, (2) brain health check post-restore, (3) gateway restart. Add quarterly cron entry. The Phase 10 reliability gate scored FAIL on this dimension. Acceptance: script runs successfully against latest backup; restore completes in <5 min. Source: Phase 10 restore gap.
-- [ ] **[PHASE10_GATEWAY_SYSTEMD_HARDENING]** Add `PrivateTmp=yes`, `NoNewPrivileges=yes`, `ProtectHome=read-only`, `ProtectSystem=strict` to `openclaw-gateway.service`. Acceptance: gateway starts cleanly with hardened unit; `systemctl --user status` shows active. Source: Phase 10 hardening R3.
 
 ### Phase 5 Follow-ups (P2, added 2026-04-19 — recovered from decision doc)
 
@@ -127,11 +124,14 @@ _Source: `docs/internal/audits/decisions/2026-04-16_phase5_wiki_usefulness.md`. 
 
 _Source: `docs/internal/audits/DUAL_LAYER_HANDOFF_2026-04-17.md`. Phase 12 ruled REVISE (digest actionability 56.5% vs 60% target). Only 1 of 4 follow-ups was in QUEUE.md._
 
-- [ ] [UNVERIFIED] **[PHASE12_DIGEST_ARCHIVE]** Add daily digest archival (`memory/cron/digest_archive/<date>.md`) before the morning reset clears it. Multi-day pattern analysis is currently impossible because digest content is destroyed daily. Acceptance: 3 consecutive days produce archive files. Source: Phase 12 §archive gap.
 
 ### Test Suite Health (P2, added 2026-04-19)
 
 _72/2921 tests failing (2.5% failure rate), 10 collection errors, 1 broken collection file. Test suite health is untracked in the queue despite being a foundational capability metric._
+
+- [ ] **[POSTFLIGHT_NONE_GUARD_FIXES]** Fix the recurring postflight hook `NoneType` crashes (`periodic_synthesis`, episodic encoding, prediction-resolve / validator edge cases). Acceptance: 3 consecutive autonomous runs complete with no `expected string or bytes-like object, got 'NoneType'` errors in postflight logs.
+- [ ] **[BRAIN_MEMORY_DROP_AUDIT]** Investigate the sharp reported brain memory-count drop across 2026-04-16 → 2026-04-19 (≈2933 → 2296). Determine whether this is healthy consolidation, stats drift, or accidental data loss. Acceptance: write findings to `memory/evolution/` with a verdict and any required fix.
+- [ ] **[PHASE8_MIRROR_PRESUBMIT_GATE_TIMEOUT_FORENSICS]** Analyze why `PHASE8_MIRROR_PRESUBMIT_GATE` timed out at 1800s on 2026-04-19. Capture which step consumed the budget, decide whether to split the task, reduce scope, or add intermediate instrumentation. Acceptance: a concrete retry plan is added to the queue or the implementation is resumed in smaller slices.
 
 - [ ] **[TEST_SUITE_RED_FIXES]** Fix the 72 failing tests across 8 test files: `test_brain_roundtrip` (2), `test_chaos_recovery` (6), `test_graph_compaction_sqlite` (2), `test_pr_factory` (3), `test_project_agent` (2), `test_assembly_calibration_freeze` (2), `test_bench_memory_consolidation` (3), plus `test_csp_solver` collection error and others. Most appear to be API contract drift (brain `stats()` return shape changed, `_script_loader` import paths). Acceptance: `pytest tests/` passes with 0 failures, 0 errors. Source: test run 2026-04-19.
 
@@ -176,7 +176,6 @@ _Source: `docs/internal/audits/DUAL_LAYER_HANDOFF_2026-04-17.md`. Phase 12 found
 _Source: `docs/internal/audits/decisions/2026-04-16_phase2_5_code_design_review.md`. Phase 2.5 reviewed 3 spine modules (brain, orch, context) for design quality. All 3 ruled REVISE. Top finding: no prompt-generation telemetry in `clarvis.context`. All items use `source="audit_phase_2_5"`._
 
 - [ ] **[CONTEXT_BRIEF_TELEMETRY]** Add a `BriefResult` dataclass to `clarvis.context.assembly.generate_tiered_brief()` that returns structured telemetry alongside the brief text: `sections_included`, `sections_pruned`, `token_budget_used`, `fallbacks_activated`, `relevance_weights_applied`. Wire into Phase 0 audit traces via `update_trace({"prompt.brief_telemetry": ...})`. This is a Phase 3 dependency — without it, prompt assembly audit operates on indirect evidence only. Acceptance: at least 3 heartbeats produce traces with non-empty `prompt.brief_telemetry`; existing callers that only need the string can use `result.text`.
-- [ ] **[ORCH_STRUCTURED_LOGGING]** Add `import logging` to `clarvis/orch/task_selector.py`, `cost_tracker.py`, and `pr_intake.py`. Log at WARNING when: (a) an optional module import fails in task_selector (currently silently `None`-ified), (b) a malformed cost entry is dropped in `_read_entries()`, (c) an artifact generator is skipped in pr_intake. Acceptance: after one heartbeat cycle with the new logging, `grep WARNING` on the cron output shows at least the expected import-failure messages (somatic_markers etc. if not installed).
 
 ### Deep Audit Follow-ups (from Phase 2 — `docs/internal/audits/SPINE_MODULE_SCORECARD_2026-04-16.md`)
 
@@ -185,7 +184,6 @@ _All are surface trims or cheap coverage lifts. Bridge wrappers (18) and underly
 - [ ] **[SPINE_CONTEXT_INIT_TRIM_AND_COVERAGE]** Trim 12 DEAD re-exports from `clarvis/context/__init__.py` (`_simple_tiered_brief, prune_stale, snip_middle, graduated_compact, get_optimizer_report, load_section_relevance_weights, build_wire_guidance, get_failure_patterns, get_workspace_context, get_spotlight_items, build_hierarchical_episodes, synthesize_knowledge`). These are already directly importable from `clarvis.context.{compressor,assembly,prompt_optimizer,…}` — the `__init__` level re-exports are redundant. Also add 2-3 unit tests for currently-uncovered branches in `clarvis/context/assembly.py`. Acceptance: `context.coverage_pct ≥ 40` and `context.dead_exports = 0` on re-run.
 - [ ] **[SPINE_MEMORY_INIT_TRIM_AND_COVERAGE]** Trim 12 DEAD re-exports from `clarvis/memory/__init__.py` (all are `memory_consolidation` helpers — `learn_from_failures, retire_stale, compose_procedures, merge_clusters, enhanced_decay, enforce_memory_caps, run_consolidation, sleep_consolidate, attention_guided_prune, attention_guided_decay, gwt_broadcast_survivors, salience_report`). Underlying `memory_consolidation.py` stays — callers use direct submodule imports. Add direct unit tests for `procedural_memory.find_procedure` and `procedural_memory.store_procedure` (heavily used in production, currently only exercised indirectly). Acceptance: `memory.coverage_pct ≥ 25` and `memory.dead_exports = 0`.
 - [ ] **[SPINE_COMPAT_WIRE_OR_DOCUMENT]** `clarvis/compat/` has zero production callers (only test callers). Decide one of: (a) wire `run_contract_checks()` into `scripts/infra/health_monitor.sh` with a daily metric exported to `monitoring/`, OR (b) mark the module docstring as "test-scaffold for host-portability contracts" and exclude it from future Phase 9 EVS/TCS passes. Acceptance: clear wire-or-document state recorded — no "kept for future" ambiguity.
-- [ ] **[SPINE_RUNTIME_INFER_TASK_SOURCE_DECIDE]** `infer_task_source` is re-exported from `clarvis/runtime/__init__.py` but not called anywhere. Decide: wire it into `clarvis/orch/task_selector.py` at the task-source inference point, OR drop from `__init__` (the function in `mode.py` can stay). Acceptance: `runtime.dead_exports = 0`.
 
 ### Deep Audit Follow-ups (from Phase 3 — `docs/internal/audits/PROMPT_ASSEMBLY_SCORECARD_2026-04-16.md`)
 
@@ -198,7 +196,6 @@ _Source: `source="audit_phase_3"`. P1 items are co-located in the Phase 3 Follow
 _Source: `source="audit_phase_4"`. P0+P1 items are co-located with their parent blocks above; these are the P2 continuation._
 
 - [ ] [UNVERIFIED] **[AUDIT_PHASE_4_AB_BRIDGES_HEBBIAN_EPISODES]** Execute matched-pair 14-day A/B windows for three brain features already registered in `clarvis/audit/toggles.py`: `graph_bridges`, `hebbian_boost`, `episodic_memory_injection`. Each feature toggles OFF (or `shadow=true`) for 14 days on a matched task mix, with the corresponding ON window captured before or after. Depends on `[AUDIT_PHASE_4_BRAIN_RETRIEVAL_TRACE_WIRING]` (attribution-gate inputs must be live). Emit three result files under `data/audit/ab_windows/{bridges,hebbian,episodes}_<date>.json` with delta-to-baseline metrics on attribution share, task outcome, and retrieval recall. Subtle-feature guard §3.3 applies (rare-but-critical carve-out) — episode-recall may help only on a narrow task type. Acceptance: all three A/B files present; Phase 9 EVS/TCS scorecard can ingest them.
-- [ ] **[AUDIT_PHASE_4_BRAIN_EVAL_FRESHNESS]** `data/brain_eval/latest.json` is six weeks stale (last run 2026-03-04) despite `cron_brain_eval.sh` existing and being listed in `CLAUDE.md §Cron Schedule`. Verify the cron is still scheduled, executing, and writing to the expected path. If the cron is broken, fix the schedule or writer. Acceptance: within 26 h of the fix landing, `data/brain_eval/latest.json` has a fresh timestamp; `scripts/audit/brain_attribution.py run` picks up the new `recall_at_k` snapshot automatically.
 
 ### Phi Monitoring / Validation (demoted to observability metric by Phase 11 synthesis — regression watch only, not a KPI or optimization target; overlaps Phase 9 REVISE ruling on phi_metric)
 
@@ -216,13 +213,11 @@ _Source: `source="audit_phase_4"`. P0+P1 items are co-located with their parent 
 
 - [ ] Sync crontab.reference with 3 undocumented live jobs.
 - [ ] Fix openclaw.json Telegram topic system prompts with stale script paths.
-- [ ] Remove placeholder goplaces API key from openclaw.json.
 - [ ] Reconcile @reboot boot sequence between crontab.reference and systemd.
 - [ ] Clean stale `packages/` test checks from verify_install.sh.
 - [ ] Stub or remove truly missing script references in skill SKILL.md files.
 - [ ] Fix Sunday cron learning-strategy relative path failure.
 - [ ] Add env template setup guard for placeholder API keys.
-- [ ] Remove stale `plugins.slots.contextEngine = "legacy"` from openclaw.json.
 - [ ] Add 3 unbounded monitoring logs to cleanup_policy.py rotation table.
 - [ ] Remove orphaned monitoring/cron_errors_daily.md or wire regeneration.
 - [ ] Add state-change dedup guard for health_monitor.sh brain-hygiene alerts.
@@ -284,7 +279,6 @@ _Source: `source="audit_phase_4"`. P0+P1 items are co-located with their parent 
 ### 2026-04-16 evolution scan
 
 - [ ] **[PHI_PAIR_BRIDGE_PRIORITIZATION]** Identify the 5 collection pairs with BOTH lowest semantic similarity AND lowest edge count, then queue targeted bridge memories that cite concepts from both sides. Current bulk_cross_link treats all pairs equally; starved pairs (e.g. `clarvis-identity` ↔ `autonomous-learning`) need hand-authored bridges, not random sampling. Directly targets Phi=0.619 (weakest metric).
-- [ ] **[TEST_PHI_METRIC_REGRESSION_HARNESS]** Add `tests/test_phi_metric.py` that snapshots current phi subcomponent scores (intra_density, cross_connectivity, semantic_cross_collection, reachability) and fails if any regress >5%. Dual-purpose: bootstraps test capability (currently 0.00) AND guards the weakest metric against silent regressions introduced by graph compaction or hygiene passes.
 - [ ] **[CRON_LANE_CONSOLIDATION_AUDIT]** _(non-Python — audit + docs)_ Audit all 47 cron entries in `crontab.reference`, classify each into a lane (brain/cognitive/maintenance/project/reporting), and produce `docs/CRON_LANES.md` mapping. Currently there's no single source of truth for "which cron touches Phi" vs "which cron rotates logs" — this blocks targeted Phi-recovery interventions and makes merge-freeze reasoning hard. Deliverable: docs + a linting comment block in crontab.reference.
 
 ---

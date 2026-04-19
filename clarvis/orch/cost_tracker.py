@@ -15,11 +15,14 @@ Provides:
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional, Tuple
+
+logger = logging.getLogger(__name__)
 
 # === PRICING TABLE ===
 # Prices in USD per 1M tokens (input/output)
@@ -239,7 +242,8 @@ class CostTracker:
                         if ts < since:
                             continue
                     entries.append(entry)
-                except (json.JSONDecodeError, TypeError, KeyError):
+                except (json.JSONDecodeError, TypeError, KeyError) as exc:
+                    logger.warning("Dropping malformed cost entry: %s", exc)
                     continue
         return entries
 
