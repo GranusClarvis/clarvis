@@ -58,12 +58,12 @@ Clarvis should grow into:
 | **Reflection** | 94% | reflection log fresh (0d old) |
 | **Confidence Gating** | 95% | 50/50 recent predictions resolved |
 | **Attention & Working Memory** | 94% | prompt_context=0.84 |
-| **Reasoning Chains** | 100% | 346 chain files |
+| **Reasoning Chains** | 100% | 347 chain files |
 | **Knowledge Synthesis** | 100% | 60 concepts, 50 cross-domain, 828 edges |
 | **Procedural Memory** | 92% | 162 procedures |
 | **Context Quality** | 90% | prompt_context=0.84, efficiency=0.99 |
 | **Monitoring** | 95% | health log fresh (0h old) |
-| **Episodic Memory** | 96% | 457 episodes |
+| **Episodic Memory** | 96% | 458 episodes |
 | **Self-Surgery** | 92% | spine module healthy |
 | **Cognitive Workspace** | 88% | 0 items across buffers |
 | **ACT-R Activation** | 88% | stable |

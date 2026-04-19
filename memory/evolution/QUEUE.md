@@ -76,7 +76,6 @@ _Source: `docs/internal/audits/decisions/2026-04-16_phase6_execution_routing_que
 
 _Source: `docs/internal/audits/decisions/2026-04-16_meta_audit_phases_0_4.md`. A sharpness-check on Phases 0–4 found the program well-executed but framed too narrowly toward removal. Corrections: add code-review axis to Phase 2, wire operator-in-the-loop EVS signal, content-quality spot check for Phase 4. Plan §0 principle 7 + PROMOTE gate already landed in the plan doc. All items use `source="audit_meta"`._
 
-- [x] **[AUDIT_OPERATOR_FEEDBACK_LOOP]** Wire the operator-in-the-loop signal that plan §EVS weights at 0.10 but has no data source. (Done 2026-04-19: `scripts/tools/operator_feedback.py` created, wired into both cron reports, cross-ref verified, addendum added to meta audit doc. 7-day canary begins.)
 
 ---
 
@@ -215,7 +214,6 @@ _Source: `source="audit_phase_4"`. P0+P1 items are co-located with their parent 
 - [ ] Add 3 unbounded monitoring logs to cleanup_policy.py rotation table.
 - [ ] Remove orphaned monitoring/cron_errors_daily.md or wire regeneration.
 - [ ] Add state-change dedup guard for health_monitor.sh brain-hygiene alerts.
-- [x] Purge ghost .pyc files for migrated scripts. (Done 2026-04-19: 34 ghost .pyc files removed across 8 __pycache__ dirs.)
 - [ ] Archive or refresh stale consciousness-research plan.
 - [ ] Migrate 3 scripts off sys.path.insert to clarvis.* spine imports.
 - [ ] Fix broken budget_alert.py path in heartbeat_postflight.py.
