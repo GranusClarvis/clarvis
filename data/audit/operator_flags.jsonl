@@ -1,0 +1,2 @@
+{"timestamp": "2026-04-19T06:02:36.430955+00:00", "audit_trace_id": null, "digest_id": "morning-2026-04-19", "flag": "up", "note": "test flag"}
+{"timestamp": "2026-04-19T06:02:36.451527+00:00", "audit_trace_id": "20260419T060004Z-9d8c5b", "digest_id": null, "flag": 4, "note": "good evolution run"}

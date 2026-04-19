@@ -272,6 +272,19 @@ try:
 except Exception:
     pass
 
+# Operator feedback prompt (EVS 0.10 signal — audit_meta)
+try:
+    sys.path.insert(0, os.path.join(WORKSPACE, "scripts", "tools"))
+    from operator_feedback import get_feedback_prompt, get_recent_trace_ids
+    digest_id = f"evening-{today_str}"
+    trace_ids = get_recent_trace_ids(days=1, max_items=3)
+    feedback_block = get_feedback_prompt(digest_id, trace_ids)
+    if feedback_block:
+        lines.append(feedback_block)
+        lines.append("")
+except Exception:
+    pass
+
 lines.append("=" * 40)
 lines.append("Good night, sir.")
 

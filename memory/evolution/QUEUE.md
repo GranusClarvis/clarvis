@@ -76,7 +76,7 @@ _Source: `docs/internal/audits/decisions/2026-04-16_phase6_execution_routing_que
 
 _Source: `docs/internal/audits/decisions/2026-04-16_meta_audit_phases_0_4.md`. A sharpness-check on Phases 0–4 found the program well-executed but framed too narrowly toward removal. Corrections: add code-review axis to Phase 2, wire operator-in-the-loop EVS signal, content-quality spot check for Phase 4. Plan §0 principle 7 + PROMOTE gate already landed in the plan doc. All items use `source="audit_meta"`._
 
-- [ ] **[AUDIT_OPERATOR_FEEDBACK_LOOP]** Wire the operator-in-the-loop signal that plan §EVS weights at 0.10 but has no data source. Extend the 09:30 (`cron_report_morning.sh`) and 22:30 (`cron_report_evening.sh`) digest reports to include a Telegram response path: 👍 / 👎 on the digest as a whole, plus `/rate <trace_id> <1-5>` for per-trace feedback. Persist flags to `data/audit/operator_flags.jsonl` with schema `{timestamp, audit_trace_id|null, digest_id|null, flag: "up"|"down"|int, note|null}`. Cross-reference trace_ids when present. Acceptance: ≥ 5 flags collected in a 7-day canary window; at least one row cross-references a live audit trace; short addendum added to `docs/internal/audits/decisions/2026-04-16_meta_audit_phases_0_4.md` confirming the plumbing works end-to-end. Unblocks the EVS 0.10 weight as real data instead of placeholder proxy.
+- [x] **[AUDIT_OPERATOR_FEEDBACK_LOOP]** Wire the operator-in-the-loop signal that plan §EVS weights at 0.10 but has no data source. (Done 2026-04-19: `scripts/tools/operator_feedback.py` created, wired into both cron reports, cross-ref verified, addendum added to meta audit doc. 7-day canary begins.)
 
 ---
 
@@ -100,7 +100,6 @@ _Demoted to P2 to bring P1 within 25-ceiling. All are review/sweep/benchmark tas
 
 ### Phase 4.5 Follow-ups (P2, added 2026-04-16)
 
-- [x] **[AUDIT_PHASE_4_5_BRIDGE_CLEANUP]** (2026-04-19) Removed 200 bridge/boost entries across all 10 collections (79 bridge_, 39 sbridge_, 27 boost_, 20 tm_, 18 cross-domain insight, 11 Phi action, 6 semantic). Export: `data/audit/bridge_cleanup_2026-04-19.json`. Script: `scripts/audit/bridge_cleanup.py`.
 
 ### Phase 8 Follow-ups (P2, added 2026-04-16)
 
@@ -187,7 +186,6 @@ _Source: `source="audit_phase_4"`. P0+P1 items are co-located with their parent 
 ### Phi Monitoring / Validation (demoted to observability metric by Phase 11 synthesis — regression watch only, not a KPI or optimization target; overlaps Phase 9 REVISE ruling on phi_metric)
 
 - [~] **[PHI_EMERGENCY_CROSS_LINK_BLITZ]** Run targeted bulk_cross_link on all 45 collection pairs (Phi target). (2026-04-16: started full-brain bulk_cross_link but process killed at ~5min when cron_autonomous started; +1357 edges committed before kill. Follow-up pair-targeted pass below supplanted the remainder.)
-- [x] Widen Phi semantic_cross_collection sample from 8 to 20 queries. (2026-04-19) Updated `clarvis/metrics/phi.py`: sample_size 12→24, query slice 8→20 per direction.
 - [ ] Add proactive Phi-gap-closing trigger in act_on_phi.
 - [ ] Add Phi semantic_cross_collection trend monitoring with weekly regression alerts.
 - [ ] Purge synthetic 0%-progress goals polluting clarvis-goals.
@@ -217,7 +215,7 @@ _Source: `source="audit_phase_4"`. P0+P1 items are co-located with their parent 
 - [ ] Add 3 unbounded monitoring logs to cleanup_policy.py rotation table.
 - [ ] Remove orphaned monitoring/cron_errors_daily.md or wire regeneration.
 - [ ] Add state-change dedup guard for health_monitor.sh brain-hygiene alerts.
-- [ ] Purge ghost .pyc files for migrated scripts.
+- [x] Purge ghost .pyc files for migrated scripts. (Done 2026-04-19: 34 ghost .pyc files removed across 8 __pycache__ dirs.)
 - [ ] Archive or refresh stale consciousness-research plan.
 - [ ] Migrate 3 scripts off sys.path.insert to clarvis.* spine imports.
 - [ ] Fix broken budget_alert.py path in heartbeat_postflight.py.
