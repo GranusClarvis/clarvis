@@ -205,8 +205,9 @@ def semantic_cross_collection(brain):
     Fetches pre-stored embeddings from ChromaDB and computes cosine similarity
     directly with numpy — no ONNX inference needed.
 
-    Stratified sample (up to 12 docs) from each collection, bidirectional
-    best-match cosine similarity. Score = average across all collection pairs.
+    Stratified sample (up to 24 docs) from each collection, bidirectional
+    best-match cosine similarity (20 queries per direction).
+    Score = average across all collection pairs.
 
     Uses dot product as cosine similarity (MiniLM embeddings are L2-normalized).
     """
@@ -224,7 +225,7 @@ def semantic_cross_collection(brain):
                 continue
             all_arr = np.array(all_embs, dtype=np.float32)
             col_all_embs[col_name] = all_arr
-            sample_size = min(12, len(all_embs))
+            sample_size = min(24, len(all_embs))
             if sample_size >= len(all_embs):
                 col_query_embs[col_name] = all_arr
             else:
@@ -247,19 +248,19 @@ def semantic_cross_collection(brain):
             if q1 is None or q2 is None or all1 is None or all2 is None:
                 continue
 
-            # Use up to 8 stratified query samples per direction
+            # Use up to 20 stratified query samples per direction
             # Dot product = cosine similarity for L2-normalized embeddings
             # Search against ALL embeddings in target collection
-            e1 = q1[:8]   # query samples from c1
-            e2 = q2[:8]   # query samples from c2
+            e1 = q1[:20]   # query samples from c1
+            e2 = q2[:20]   # query samples from c2
 
             # c1 queries -> best match in full c2
-            cos_sim_1to2 = e1 @ all2.T              # [8, N2]
-            best_sim_c1_to_c2 = cos_sim_1to2.max(axis=1)  # [8]
+            cos_sim_1to2 = e1 @ all2.T              # [<=20, N2]
+            best_sim_c1_to_c2 = cos_sim_1to2.max(axis=1)  # [<=20]
 
             # c2 queries -> best match in full c1
-            cos_sim_2to1 = e2 @ all1.T              # [8, N1]
-            best_sim_c2_to_c1 = cos_sim_2to1.max(axis=1)  # [8]
+            cos_sim_2to1 = e2 @ all1.T              # [<=20, N1]
+            best_sim_c2_to_c1 = cos_sim_2to1.max(axis=1)  # [<=20]
 
             all_sims = np.concatenate([best_sim_c1_to_c2, best_sim_c2_to_c1])
             all_sims = np.maximum(0.0, all_sims)    # floor at 0

@@ -100,7 +100,7 @@ _Demoted to P2 to bring P1 within 25-ceiling. All are review/sweep/benchmark tas
 
 ### Phase 4.5 Follow-ups (P2, added 2026-04-16)
 
-- [ ] **[AUDIT_PHASE_4_5_BRIDGE_CLEANUP]** Remove or relocate `sbridge_*` / `BRIDGE [...]` entries from primary collections (identity, infrastructure, memories). These are graph relationship metadata stored as standalone memories, polluting retrieval. ~9 found in sample; likely more in full population. Provenance: Phase 4.5 taxonomy finding D1.
+- [x] **[AUDIT_PHASE_4_5_BRIDGE_CLEANUP]** (2026-04-19) Removed 200 bridge/boost entries across all 10 collections (79 bridge_, 39 sbridge_, 27 boost_, 20 tm_, 18 cross-domain insight, 11 Phi action, 6 semantic). Export: `data/audit/bridge_cleanup_2026-04-19.json`. Script: `scripts/audit/bridge_cleanup.py`.
 
 ### Phase 8 Follow-ups (P2, added 2026-04-16)
 
@@ -187,7 +187,7 @@ _Source: `source="audit_phase_4"`. P0+P1 items are co-located with their parent 
 ### Phi Monitoring / Validation (demoted to observability metric by Phase 11 synthesis — regression watch only, not a KPI or optimization target; overlaps Phase 9 REVISE ruling on phi_metric)
 
 - [~] **[PHI_EMERGENCY_CROSS_LINK_BLITZ]** Run targeted bulk_cross_link on all 45 collection pairs (Phi target). (2026-04-16: started full-brain bulk_cross_link but process killed at ~5min when cron_autonomous started; +1357 edges committed before kill. Follow-up pair-targeted pass below supplanted the remainder.)
-- [ ] Widen Phi semantic_cross_collection sample from 8 to 20 queries.
+- [x] Widen Phi semantic_cross_collection sample from 8 to 20 queries. (2026-04-19) Updated `clarvis/metrics/phi.py`: sample_size 12→24, query slice 8→20 per direction.
 - [ ] Add proactive Phi-gap-closing trigger in act_on_phi.
 - [ ] Add Phi semantic_cross_collection trend monitoring with weekly regression alerts.
 - [ ] Purge synthetic 0%-progress goals polluting clarvis-goals.
