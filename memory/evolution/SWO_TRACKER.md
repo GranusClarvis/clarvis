@@ -31,6 +31,7 @@ Planning docs, queue items, and brand positioning do NOT count as delivery.
 | 7 | #186 | feat: sanctuary journal system | 2026-04-20 |
 | 8 | #187 | feat: open Sanctuary to all Skrumpey holders | 2026-04-20 |
 | 9 | #188 | feat: sanctuary V1.5 — companion chat, trait evolution, seasonal quests | 2026-04-20 |
+| 10 | #189 | feat: sanctuary style doctrine + sprite/animation infrastructure | 2026-04-20 |
 
 ## Pending PRs
 
