@@ -25,7 +25,8 @@ _Source: `docs/internal/audits/NEURO_FEATURE_DECISIONS_2026-04-17.md`. Phase 9 s
 
 
 ### Bugs
-
+- [ ] **[AUDIT_TRACE_ATTRIBUTION_DAY_ROLLOVER]** Fix `scripts/pipeline/heartbeat_postflight.py` brain-attribution trace lookup to resolve the trace path from trace metadata or trace id storage rather than `datetime.now(timezone.utc)`. Current logic can miss same-trace attribution when postflight runs across a UTC date boundary, silently dropping audit rows. Add a regression test that simulates pre-midnight trace creation and post-midnight postflight attribution.
+- [ ] **[STANDALONE_TRACE_FAILURE_FINALIZATION]** Harden standalone audit tracing in `scripts/cognition/{absolute_zero,dream_engine,theory_of_mind}.py` so traces finalize with `outcome="error"` on exceptions and still record duration. Current happy-path finalization only marks `success`/`skipped`, leaving failed standalone runs with incomplete audit evidence. Add one shared helper or `try/finally` pattern plus tests.
 
 ## P1 — This Week
 
@@ -203,9 +204,9 @@ _Source: `source="audit_phase_4"`. P0+P1 items are co-located with their parent 
 #### Retention / Identity
 
 #### V1.5 / Deeper Layer
-- [ ] **[SANCTUARY_COMPANION_CHAT_V1]** V1.5 personalized chat with active Skrumpey.
-- [ ] **[SANCTUARY_TRAIT_EVOLUTION]** Derive visible companion traits from behavior patterns.
-- [ ] **[SANCTUARY_SEASONAL_QUESTS_V1]** First seasonal quest/event layer.
+- [x] **[SANCTUARY_COMPANION_CHAT_V1]** V1.5 personalized chat with active Skrumpey. (2026-04-20, branch feat/sanctuary-v1.5-chat-traits-quests)
+- [x] **[SANCTUARY_TRAIT_EVOLUTION]** Derive visible companion traits from behavior patterns. (2026-04-20, branch feat/sanctuary-v1.5-chat-traits-quests)
+- [x] **[SANCTUARY_SEASONAL_QUESTS_V1]** First seasonal quest/event layer. (2026-04-20, branch feat/sanctuary-v1.5-chat-traits-quests)
 - [ ] **[SANCTUARY_STAR_CURRENCY_DECISION]** STAR on Monad recommendation.
 
 
