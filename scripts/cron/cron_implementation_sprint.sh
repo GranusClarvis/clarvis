@@ -141,6 +141,19 @@ INSTRUCTIONS:
 - If the task is too large, do the most impactful part and note what remains.
 - When done, output a summary listing what you did, comma-separated.
 STATIC_FOOTER
+    # Detect project-lane tasks and inject PR delivery requirement
+    if echo "$IMPL_TASK" | grep -qiE '\[PROJECT:[A-Z]|\(SWO\)|\[SWO\]'; then
+        cat <<'PROJECT_DELIVERY_BLOCK'
+
+## PROJECT DELIVERY REQUIREMENT (MANDATORY)
+This is a PROJECT-LANE task. It MUST be delivered as a mergeable GitHub PR to count as complete.
+- Push your branch to the remote repository (git push)
+- Create a PR via `gh pr create` with a clear title and description
+- Include the PR URL in your output (e.g. https://github.com/owner/repo/pull/N)
+- If you cannot create a PR (blocker, auth issue, etc.), report partial and explain why
+- DO NOT mark the task [x] in QUEUE.md unless you have created and linked a PR
+PROJECT_DELIVERY_BLOCK
+    fi
 } > "$PROMPT_FILE"
 
 run_claude_monitored 1500 "$TASK_OUTPUT_FILE" "$PROMPT_FILE" "$LOGFILE"

@@ -53,6 +53,11 @@ build/
 *.o
 *.pyc
 __pycache__/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage/
+htmlcov/
 *.egg-info/
 *.egg
 

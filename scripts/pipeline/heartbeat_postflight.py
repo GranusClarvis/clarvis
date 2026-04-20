@@ -273,6 +273,9 @@ from clarvis.heartbeat.episode_encoder import episode_encode as _episode_encode_
 # Worker-type classification and output validation
 from clarvis.heartbeat.worker_validation import classify_worker_type, validate_worker_output
 
+# Project-task delivery validation (PR requirement for SWO/project-lane tasks)
+from clarvis.heartbeat.delivery_validator import validate_project_delivery
+
 # Brain storage — canonical implementation in clarvis.heartbeat.brain_store
 from clarvis.heartbeat.brain_store import (
     brain_store as _brain_store_canonical,
@@ -1836,28 +1839,33 @@ def _pf_queue_update(ctx, _pf_errors):
 
     if queue_engine and task_tag:
         try:
+            # Use effective status (may be downgraded by delivery validation)
+            effective_status = task_status
             if run_id:
                 queue_engine.end_run(
                     run_id=run_id,
-                    outcome=task_status,
+                    outcome=effective_status,
                     exit_code=exit_code,
                     error=ctx.get("error_evidence", ""),
                     duration_s=ctx.get("task_duration"),
                 )
-                log(f"Queue engine: ended run {run_id} ({task_status})")
+                log(f"Queue engine: ended run {run_id} ({effective_status})")
             else:
-                # No run_id from preflight — just update sidecar state directly
-                if task_status == "success":
+                if effective_status == "success":
                     queue_engine.mark_succeeded(task_tag, datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
                 else:
-                    queue_engine.mark_failed(task_tag, ctx.get("error_evidence", task_status))
-                log(f"Queue engine: marked [{task_tag}] {task_status} (no run_id)")
+                    queue_engine.mark_failed(task_tag, ctx.get("error_evidence", effective_status))
+                log(f"Queue engine: marked [{task_tag}] {effective_status} (no run_id)")
         except Exception as e:
             log(f"Queue engine update failed (non-fatal): {e}")
 
     # --- Legacy path: queue_writer marks [x] in QUEUE.md ---
+    # Project tasks without PR delivery stay unchecked (partial_success / no_pr_delivery)
+    dv = ctx.get("delivery_validation", {})
+    block_completion = dv.get("downgrade") and dv.get("downgrade_reason") == "no_pr_delivery"
+
     try:
-        if exit_code == 0:
+        if exit_code == 0 and not block_completion:
             timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
             task_for_marking = task
             if task_tag:
@@ -1869,6 +1877,10 @@ def _pf_queue_update(ctx, _pf_errors):
                 log(f"Task already in QUEUE_ARCHIVE.md: {task[:60]}")
             else:
                 log(f"Task not found in QUEUE.md for completion: {task[:60]}...")
+        elif block_completion:
+            log(f"BLOCKED queue completion: project task without PR delivery "
+                f"(evidence={dv.get('evidence', {}).get('evidence_level', 'none')}). "
+                f"Task remains unchecked in QUEUE.md.")
         elif exit_code == 124:
             _handle_timeout_retry(task, ctx["RETRY_FILE"], ctx["QUEUE_FILE"], ctx["QUEUE_ARCHIVE"])
     except Exception as e:
@@ -2023,6 +2035,30 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
         ctx["worker_validation"] = {"validated": True, "downgrade": False}
         _pf_errors.append("worker_validation")
     timings["worker_validation"] = round(time.monotonic() - t_wv, 3)
+
+    # §0.6: Project delivery validation (PR requirement for SWO/project-lane tasks)
+    t_dv = time.monotonic()
+    try:
+        dv_result = validate_project_delivery(
+            task_text=ctx["task"],
+            output_text=ctx["output_text"],
+            task_status=ctx["task_status"],
+            task_tag=preflight_data.get("task_tag", "") if isinstance(preflight_data, dict) else "",
+        )
+        ctx["delivery_validation"] = dv_result
+        if dv_result["downgrade"]:
+            ctx["task_status"] = "partial_success"
+            ctx["error_type"] = ctx.get("error_type") or "no_pr_delivery"
+            log(f"Delivery validation DOWNGRADE: project task → partial_success "
+                f"(reason: {', '.join(dv_result['reasons'])})")
+        elif dv_result["is_project"]:
+            log(f"Delivery validation PASS: project task, "
+                f"evidence={dv_result['evidence'].get('evidence_level', 'n/a')}")
+    except Exception as e:
+        log(f"Delivery validation failed (non-fatal): {e}")
+        ctx["delivery_validation"] = {"validated": True, "downgrade": False, "is_project": False}
+        _pf_errors.append("delivery_validation")
+    timings["delivery_validation"] = round(time.monotonic() - t_dv, 3)
 
     # §1-2.7: Confidence, reasoning chain, failure lessons, brain bridge
     timings.update(_confidence_record(ctx["task_event"], exit_code, ctx["task"], preflight_data, _pf_errors))

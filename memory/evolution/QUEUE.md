@@ -204,9 +204,6 @@ _Source: `source="audit_phase_4"`. P0+P1 items are co-located with their parent 
 #### Retention / Identity
 
 #### V1.5 / Deeper Layer
-- [x] **[SANCTUARY_COMPANION_CHAT_V1]** V1.5 personalized chat with active Skrumpey. (2026-04-20, branch feat/sanctuary-v1.5-chat-traits-quests)
-- [x] **[SANCTUARY_TRAIT_EVOLUTION]** Derive visible companion traits from behavior patterns. (2026-04-20, branch feat/sanctuary-v1.5-chat-traits-quests)
-- [x] **[SANCTUARY_SEASONAL_QUESTS_V1]** First seasonal quest/event layer. (2026-04-20, branch feat/sanctuary-v1.5-chat-traits-quests)
 - [ ] **[SANCTUARY_STAR_CURRENCY_DECISION]** STAR on Monad recommendation.
 
 

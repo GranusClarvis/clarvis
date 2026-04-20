@@ -386,6 +386,20 @@ Rules:
 - After each task, update QUEUE.md (mark [x]) before moving to the next.
 OUTPUT FORMAT (mandatory): Start with "RESULT: success|partial|fail — <what changed>". Then list each task with status. End with "NEXT: <suggested follow-up or none>".
 STATIC_BLOCK
+        # Inject project delivery guardrail for project-lane tasks
+        if [ "$IS_PROJECT_TASK" = "true" ]; then
+            cat <<'PROJECT_DELIVERY_BLOCK'
+
+## PROJECT DELIVERY REQUIREMENT (MANDATORY)
+This is a PROJECT-LANE task. It MUST be delivered as a mergeable GitHub PR to count as complete.
+- Push your branch to the remote repository (git push)
+- Create a PR via `gh pr create` with a clear title and description
+- Include the PR URL in your output (e.g. https://github.com/owner/repo/pull/N)
+- If you cannot create a PR (blocker, auth issue, etc.), report RESULT: partial and explain why
+- DO NOT mark the task [x] in QUEUE.md unless you have created and linked a PR
+- A task without a PR URL in the output will be automatically downgraded to partial_success
+PROJECT_DELIVERY_BLOCK
+        fi
     } > "$_prompt_file"
 
     # Validate prompt is non-empty before invoking Claude
