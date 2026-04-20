@@ -36,7 +36,7 @@ from clarvis.cognition.reasoning_chains import create_chain, add_step, complete_
 try:
     from clarvis.audit.toggles import is_enabled, is_shadow, toggle_snapshot
     from clarvis.audit.trace import (
-        update_trace, current_trace_id, start_trace, finalize_trace,
+        update_trace, current_trace_id, standalone_trace,
     )
 except ImportError:
     def is_enabled(name, default=True): return default
@@ -44,8 +44,13 @@ except ImportError:
     def toggle_snapshot(): return {}
     def update_trace(tid, **kw): return False
     def current_trace_id(): return None
-    def start_trace(**kw): return None
-    def finalize_trace(tid, outcome, **kw): return False
+    from contextlib import contextmanager as _cm
+    @_cm
+    def standalone_trace(**kw):
+        class _H:
+            tid = None; finalized = False
+            def finalize(self, *a, **k): pass
+        yield _H()
 
 _TOGGLE_NAME = "dream_engine_outputs"
 # Set by dream() when running in shadow mode — checked by callers who inject
@@ -736,6 +741,12 @@ def list_insights(n=10):
     return insights
 
 
+from contextlib import contextmanager as _contextmanager
+
+@_contextmanager
+def _nullctx():
+    yield None
+
 # CLI
 if __name__ == "__main__":
     if len(sys.argv) < 2:
@@ -750,56 +761,46 @@ if __name__ == "__main__":
 
     cmd = sys.argv[1]
 
-    # Start a standalone audit trace for shadow-mode A/B data collection
-    _standalone_tid = None
-    if cmd in ("dream", "rethink", "sleep") and not current_trace_id():
-        _standalone_tid = start_trace(
-            source="standalone_cron",
-            task={"name": f"dream_engine.{cmd}", "toggle": _TOGGLE_NAME},
-            cron_origin="dream_engine.py",
-            feature_toggles=toggle_snapshot(),
-        )
+    _trace_kw = dict(
+        source="standalone_cron",
+        task={"name": f"dream_engine.{cmd}", "toggle": _TOGGLE_NAME},
+        cron_origin="dream_engine.py",
+        feature_toggles=toggle_snapshot(),
+    ) if cmd in ("dream", "rethink", "sleep") else {}
 
-    _t0 = datetime.now(timezone.utc)
+    with standalone_trace(**_trace_kw) if _trace_kw else _nullctx():
+        if cmd == "dream":
+            n = int(sys.argv[2]) if len(sys.argv) > 2 else 10
+            result = dream(n)
+            print(f"\n{json.dumps(result, indent=2)}")
 
-    if cmd == "dream":
-        n = int(sys.argv[2]) if len(sys.argv) > 2 else 10
-        result = dream(n)
-        print(f"\n{json.dumps(result, indent=2)}")
+        elif cmd == "rethink":
+            n = int(sys.argv[2]) if len(sys.argv) > 2 else 20
+            result = rethink_memory(n)
+            print(f"\n{json.dumps(result, indent=2)}")
 
-    elif cmd == "rethink":
-        n = int(sys.argv[2]) if len(sys.argv) > 2 else 20
-        result = rethink_memory(n)
-        print(f"\n{json.dumps(result, indent=2)}")
+        elif cmd == "sleep":
+            n = int(sys.argv[2]) if len(sys.argv) > 2 else 10
+            print("=== SLEEP CYCLE: Phase 1 — Counterfactual Dreaming ===")
+            dream_result = dream(n)
+            print("\n=== SLEEP CYCLE: Phase 2 — Rethink Memory ===")
+            rethink_result = rethink_memory(n * 2)
+            print("\n=== SLEEP CYCLE COMPLETE ===")
+            print(f"  Dreams: {dream_result.get('insights_generated', 0)} insights")
+            print(f"  Rethink: {rethink_result.get('learnings', 0)} learned patterns")
 
-    elif cmd == "sleep":
-        # Full sleep cycle: counterfactual dreaming + rethink memory
-        n = int(sys.argv[2]) if len(sys.argv) > 2 else 10
-        print("=== SLEEP CYCLE: Phase 1 — Counterfactual Dreaming ===")
-        dream_result = dream(n)
-        print("\n=== SLEEP CYCLE: Phase 2 — Rethink Memory ===")
-        rethink_result = rethink_memory(n * 2)
-        print("\n=== SLEEP CYCLE COMPLETE ===")
-        print(f"  Dreams: {dream_result.get('insights_generated', 0)} insights")
-        print(f"  Rethink: {rethink_result.get('learnings', 0)} learned patterns")
+        elif cmd == "stats":
+            stats = get_stats()
+            print(json.dumps(stats, indent=2))
 
-    elif cmd == "stats":
-        stats = get_stats()
-        print(json.dumps(stats, indent=2))
+        elif cmd == "insights":
+            insights = list_insights()
+            if not insights:
+                print("No dream insights found yet.")
+            else:
+                for ins in insights:
+                    print(f"  [{ins['created']}] (imp={ins['importance']:.2f}) {ins['text']}")
 
-    elif cmd == "insights":
-        insights = list_insights()
-        if not insights:
-            print("No dream insights found yet.")
         else:
-            for ins in insights:
-                print(f"  [{ins['created']}] (imp={ins['importance']:.2f}) {ins['text']}")
-
-    else:
-        print(f"Unknown command: {cmd}")
-        sys.exit(1)
-
-    # Finalize standalone trace
-    if _standalone_tid:
-        _dur = (datetime.now(timezone.utc) - _t0).total_seconds()
-        finalize_trace(_standalone_tid, outcome="success", duration_s=_dur)
+            print(f"Unknown command: {cmd}")
+            sys.exit(1)

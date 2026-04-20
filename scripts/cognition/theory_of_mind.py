@@ -36,7 +36,7 @@ from clarvis.brain import brain, AUTONOMOUS_LEARNING
 try:
     from clarvis.audit.toggles import is_enabled, is_shadow, toggle_snapshot
     from clarvis.audit.trace import (
-        update_trace, current_trace_id, start_trace, finalize_trace,
+        update_trace, current_trace_id, standalone_trace,
     )
 except ImportError:
     def is_enabled(name, default=True): return default
@@ -44,8 +44,13 @@ except ImportError:
     def toggle_snapshot(): return {}
     def update_trace(tid, **kw): return False
     def current_trace_id(): return None
-    def start_trace(**kw): return None
-    def finalize_trace(tid, outcome, **kw): return False
+    from contextlib import contextmanager as _cm
+    @_cm
+    def standalone_trace(**kw):
+        class _H:
+            tid = None; finalized = False
+            def finalize(self, *a, **k): pass
+        yield _H()
 
 _TOGGLE_NAME = "theory_of_mind"
 
@@ -909,6 +914,11 @@ class _LazyToM:
 
 tom = _LazyToM()
 
+from contextlib import contextmanager as _contextmanager
+
+@_contextmanager
+def _nullctx():
+    yield None
 
 # ==================================================================
 # CLI
@@ -927,87 +937,76 @@ if __name__ == "__main__":
         print("  score                     Show model maturity score")
         sys.exit(0)
 
-    # ��─ Toggle gate ──
     cmd = sys.argv[1]
 
-    # Start a standalone audit trace for shadow-mode A/B data collection
-    _standalone_tid = None
-    if cmd in ("update", "predict", "suggest", "observe") and not current_trace_id():
-        _standalone_tid = start_trace(
-            source="standalone_cron",
-            task={"name": f"theory_of_mind.{cmd}", "toggle": _TOGGLE_NAME},
-            cron_origin="theory_of_mind.py",
-            feature_toggles=toggle_snapshot(),
-        )
+    _trace_kw = dict(
+        source="standalone_cron",
+        task={"name": f"theory_of_mind.{cmd}", "toggle": _TOGGLE_NAME},
+        cron_origin="theory_of_mind.py",
+        feature_toggles=toggle_snapshot(),
+    ) if cmd in ("update", "predict", "suggest", "observe") else {}
 
-    _t0 = datetime.now(timezone.utc)
+    with standalone_trace(**_trace_kw) if _trace_kw else _nullctx() as _handle:
+        # Toggle gate
+        if not is_enabled(_TOGGLE_NAME):
+            print(f"[ToM] Feature '{_TOGGLE_NAME}' is disabled — skipping.")
+            if _handle:
+                _handle.finalize("skipped")
+            sys.exit(0)
+        if is_shadow(_TOGGLE_NAME):
+            print("[ToM] Running in SHADOW mode — outputs excluded from prompts/decisions.")
+            update_trace(current_trace_id(), toggles_shadowed=[_TOGGLE_NAME])
 
-    # Toggle gate
-    if not is_enabled(_TOGGLE_NAME):
-        print(f"[ToM] Feature '{_TOGGLE_NAME}' is disabled — skipping.")
-        if _standalone_tid:
-            finalize_trace(_standalone_tid, outcome="skipped",
-                           duration_s=(datetime.now(timezone.utc) - _t0).total_seconds())
-        sys.exit(0)
-    if is_shadow(_TOGGLE_NAME):
-        print("[ToM] Running in SHADOW mode — outputs excluded from prompts/decisions.")
-        update_trace(current_trace_id(), toggles_shadowed=[_TOGGLE_NAME])
+        if cmd == "observe":
+            if len(sys.argv) < 4:
+                print("Usage: observe <event_type> <content>")
+                sys.exit(1)
+            event_type = sys.argv[2]
+            content = " ".join(sys.argv[3:])
+            event = tom.observe(event_type, content)
+            print(f"Observed: {event['type']} -> {event['content'][:80]}")
 
-    if cmd == "observe":
-        if len(sys.argv) < 4:
-            print("Usage: observe <event_type> <content>")
+        elif cmd == "predict":
+            predictions = tom.predict_intent()
+            if not predictions:
+                print("No predictions (insufficient data).")
+            else:
+                print(f"Intent Predictions ({len(predictions)}):")
+                for p in predictions:
+                    print(f"  [{p['confidence']:.0%}] {p['intent'][:70]}")
+                    print(f"       {p['reasoning'][:70]}")
+
+        elif cmd == "suggest":
+            suggestions = tom.generate_suggestions()
+            if not suggestions:
+                print("No suggestions available.")
+            else:
+                print(f"Proactive Suggestions ({len(suggestions)}):")
+                for s in suggestions:
+                    icon = {"high": "!!!", "medium": " ! ", "low": "   "}.get(s["priority"], "   ")
+                    print(f"  [{icon}] {s['suggestion'][:70]}")
+                    print(f"       context: {s['context'][:60]}")
+
+        elif cmd == "profile":
+            tom.show_profile()
+
+        elif cmd == "update":
+            print("Running full theory of mind update...")
+            stats = tom.full_update()
+            print("\n--- Update Complete ---")
+            print(f"  Events mined: {stats['events_mined']}")
+            print(f"  Preferences updated: {stats['preferences_updated']}")
+            print(f"  Request patterns: {stats['patterns_found']}")
+            print(f"  Total observations: {stats['total_observations']}")
+            print(f"  Preference topics: {stats['preference_topics']}")
+            print(f"  Temporal hours tracked: {stats['temporal_hours_tracked']}")
+
+        elif cmd == "score":
+            score, evidence = tom.get_model_score()
+            print(f"Theory of Mind Model Score: {score:.2f}")
+            for e in evidence:
+                print(f"  - {e}")
+
+        else:
+            print(f"Unknown command: {cmd}")
             sys.exit(1)
-        event_type = sys.argv[2]
-        content = " ".join(sys.argv[3:])
-        event = tom.observe(event_type, content)
-        print(f"Observed: {event['type']} -> {event['content'][:80]}")
-
-    elif cmd == "predict":
-        predictions = tom.predict_intent()
-        if not predictions:
-            print("No predictions (insufficient data).")
-        else:
-            print(f"Intent Predictions ({len(predictions)}):")
-            for p in predictions:
-                print(f"  [{p['confidence']:.0%}] {p['intent'][:70]}")
-                print(f"       {p['reasoning'][:70]}")
-
-    elif cmd == "suggest":
-        suggestions = tom.generate_suggestions()
-        if not suggestions:
-            print("No suggestions available.")
-        else:
-            print(f"Proactive Suggestions ({len(suggestions)}):")
-            for s in suggestions:
-                icon = {"high": "!!!", "medium": " ! ", "low": "   "}.get(s["priority"], "   ")
-                print(f"  [{icon}] {s['suggestion'][:70]}")
-                print(f"       context: {s['context'][:60]}")
-
-    elif cmd == "profile":
-        tom.show_profile()
-
-    elif cmd == "update":
-        print("Running full theory of mind update...")
-        stats = tom.full_update()
-        print("\n--- Update Complete ---")
-        print(f"  Events mined: {stats['events_mined']}")
-        print(f"  Preferences updated: {stats['preferences_updated']}")
-        print(f"  Request patterns: {stats['patterns_found']}")
-        print(f"  Total observations: {stats['total_observations']}")
-        print(f"  Preference topics: {stats['preference_topics']}")
-        print(f"  Temporal hours tracked: {stats['temporal_hours_tracked']}")
-
-    elif cmd == "score":
-        score, evidence = tom.get_model_score()
-        print(f"Theory of Mind Model Score: {score:.2f}")
-        for e in evidence:
-            print(f"  - {e}")
-
-    else:
-        print(f"Unknown command: {cmd}")
-        sys.exit(1)
-
-    # Finalize standalone trace
-    if _standalone_tid:
-        _dur = (datetime.now(timezone.utc) - _t0).total_seconds()
-        finalize_trace(_standalone_tid, outcome="success", duration_s=_dur)

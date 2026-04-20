@@ -45,7 +45,7 @@ except ImportError:
 try:
     from clarvis.audit.toggles import is_enabled, is_shadow, toggle_snapshot
     from clarvis.audit.trace import (
-        update_trace, current_trace_id, start_trace, finalize_trace,
+        update_trace, current_trace_id, standalone_trace,
     )
 except ImportError:
     def is_enabled(name, default=True): return default
@@ -53,8 +53,13 @@ except ImportError:
     def toggle_snapshot(): return {}
     def update_trace(tid, **kw): return False
     def current_trace_id(): return None
-    def start_trace(**kw): return None
-    def finalize_trace(tid, outcome, **kw): return False
+    from contextlib import contextmanager as _cm
+    @_cm
+    def standalone_trace(**kw):
+        class _H:
+            tid = None; finalized = False
+            def finalize(self, *a, **k): pass
+        yield _H()
 
 _TOGGLE_NAME = "absolute_zero_selfplay"
 _shadow_active = False
@@ -1006,6 +1011,12 @@ def print_insights():
         print(f"  Error loading insights: {e}")
 
 
+from contextlib import contextmanager as _contextmanager
+
+@_contextmanager
+def _nullctx():
+    yield None
+
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Usage: absolute_zero.py <run|stats|buffer|insights> [n_cycles]")
@@ -1018,50 +1029,41 @@ if __name__ == "__main__":
 
     cmd = sys.argv[1]
 
-    # Start a standalone audit trace for shadow-mode A/B data collection
-    _standalone_tid = None
-    if cmd == "run" and not current_trace_id():
-        _standalone_tid = start_trace(
-            source="standalone_cron",
-            task={"name": "absolute_zero.run", "toggle": _TOGGLE_NAME},
-            cron_origin="absolute_zero.py",
-            feature_toggles=toggle_snapshot(),
-        )
+    _trace_kw = dict(
+        source="standalone_cron",
+        task={"name": f"absolute_zero.{cmd}", "toggle": _TOGGLE_NAME},
+        cron_origin="absolute_zero.py",
+        feature_toggles=toggle_snapshot(),
+    ) if cmd == "run" else {}
 
-    _t0 = datetime.now(timezone.utc)
+    with standalone_trace(**_trace_kw) if _trace_kw else _nullctx():
+        if cmd == "run":
+            n = int(sys.argv[2]) if len(sys.argv) > 2 else 3
+            print(f"[AZR] Running {n} Absolute Zero Reasoner cycle(s)...")
+            result = run_n_cycles(n)
+            print("\n[AZR] Complete:")
+            print(f"  Cycles: {result['cycles_run']}")
+            print(f"  Avg learnability: {result['avg_learnability']:.3f}")
+            print(f"  Insights: {result['insights_generated']}")
+            for ins in (result.get("insights") or []):
+                if ins:
+                    print(f"    → {ins[:100]}")
+            for r in result.get("results", []):
+                if "error" not in r:
+                    print(f"  [{r['type']}] L={r['learnability']:.2f} "
+                          f"score={r['solve_score']:.2f} "
+                          f"{'✓' if r['correct'] else '✗'}")
+            print(json.dumps(result, indent=2, default=str))
 
-    if cmd == "run":
-        n = int(sys.argv[2]) if len(sys.argv) > 2 else 3
-        print(f"[AZR] Running {n} Absolute Zero Reasoner cycle(s)...")
-        result = run_n_cycles(n)
-        print("\n[AZR] Complete:")
-        print(f"  Cycles: {result['cycles_run']}")
-        print(f"  Avg learnability: {result['avg_learnability']:.3f}")
-        print(f"  Insights: {result['insights_generated']}")
-        for ins in (result.get("insights") or []):
-            if ins:
-                print(f"    → {ins[:100]}")
-        for r in result.get("results", []):
-            if "error" not in r:
-                print(f"  [{r['type']}] L={r['learnability']:.2f} "
-                      f"score={r['solve_score']:.2f} "
-                      f"{'✓' if r['correct'] else '✗'}")
-        print(json.dumps(result, indent=2, default=str))
+        elif cmd == "stats":
+            print_stats()
 
-    elif cmd == "stats":
-        print_stats()
+        elif cmd == "buffer":
+            print_buffer()
 
-    elif cmd == "buffer":
-        print_buffer()
+        elif cmd == "insights":
+            print_insights()
 
-    elif cmd == "insights":
-        print_insights()
-
-    else:
-        print(f"Unknown command: {cmd}")
-        sys.exit(1)
-
-    # Finalize standalone trace
-    if _standalone_tid:
-        _dur = (datetime.now(timezone.utc) - _t0).total_seconds()
-        finalize_trace(_standalone_tid, outcome="success", duration_s=_dur)
+        else:
+            print(f"Unknown command: {cmd}")
+            sys.exit(1)

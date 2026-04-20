@@ -18,6 +18,7 @@ import json
 import os
 import secrets
 import threading
+from contextlib import contextmanager
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -222,3 +223,59 @@ def finalize_trace(
     if extra:
         sections.update(extra)
     return update_trace(trace_id, **sections)
+
+
+class TraceHandle:
+    """Mutable handle yielded by ``standalone_trace`` context manager."""
+
+    __slots__ = ("tid", "finalized")
+
+    def __init__(self, tid: Optional[str]):
+        self.tid = tid
+        self.finalized = False
+
+    def finalize(self, outcome: str, **kw: Any) -> bool:
+        if self.tid and not self.finalized:
+            self.finalized = True
+            return finalize_trace(self.tid, outcome=outcome, **kw)
+        return False
+
+
+@contextmanager
+def standalone_trace(
+    source: str,
+    task: Optional[Dict[str, Any]] = None,
+    cron_origin: str = "",
+    feature_toggles: Optional[Dict[str, Any]] = None,
+):
+    """Context manager for standalone audit traces with error-safe finalization.
+
+    Yields a ``TraceHandle``.  On normal exit finalizes with ``outcome="success"``.
+    On exception finalizes with ``outcome="error"``.  Duration is always recorded.
+    Call ``handle.finalize("skipped", ...)`` inside the block for early termination
+    — the finally clause will not re-finalize.
+    """
+    tid: Optional[str] = None
+    if not current_trace_id():
+        tid = start_trace(
+            source=source,
+            task=task or {},
+            cron_origin=cron_origin,
+            feature_toggles=feature_toggles or {},
+        )
+    handle = TraceHandle(tid)
+    t0 = datetime.now(timezone.utc)
+    outcome = "success"
+    try:
+        yield handle
+    except SystemExit as exc:
+        if exc.code and exc.code != 0:
+            outcome = "error"
+        raise
+    except Exception:
+        outcome = "error"
+        raise
+    finally:
+        dur = (datetime.now(timezone.utc) - t0).total_seconds()
+        if not handle.finalized:
+            handle.finalize(outcome, duration_s=dur)

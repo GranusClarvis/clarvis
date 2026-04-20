@@ -25,14 +25,47 @@ _Source: `docs/internal/audits/NEURO_FEATURE_DECISIONS_2026-04-17.md`. Phase 9 s
 
 
 ### Bugs
-- [x] **[AUDIT_TRACE_ATTRIBUTION_DAY_ROLLOVER]** _(2026-04-20)_ Fixed: replaced manual `datetime.now(UTC)` path construction with `trace_path_for(audit_tid)` which extracts date from trace id. Added 3-test regression suite `tests/test_trace_day_rollover.py`.
-- [ ] **[STANDALONE_TRACE_FAILURE_FINALIZATION]** Harden standalone audit tracing in `scripts/cognition/{absolute_zero,dream_engine,theory_of_mind}.py` so traces finalize with `outcome="error"` on exceptions and still record duration. Current happy-path finalization only marks `success`/`skipped`, leaving failed standalone runs with incomplete audit evidence. Add one shared helper or `try/finally` pattern plus tests.
 
 ## P1 — This Week
+
+### Claude Design & Routines Integration (cross-project, added 2026-04-20)
+
+_Source: `docs/CLAUDE_DESIGN_ROUTINES_STRATEGY.md`. Cross-project operating model for Claude Design + Claude Code Routines._
+
+- [ ] **[ROUTINE_SWO_PR_REVIEW]** Set up a Claude Code Routine (GitHub webhook trigger: `pull_request.opened`, `pull_request.ready_for_review`) on the SWO repo for automated first-pass PR review. Prompt should check: security patterns (wallet auth, no Math.random in randomness, no `any` types), test coverage, CLAUDE.md compliance. Deliverable: working Routine on claude.ai/code/routines with correct webhook wiring. (PROJECT:SWO)
+- [ ] **[ROUTINE_SWO_POST_MERGE]** Set up a Claude Code Routine (GitHub webhook trigger: `pull_request.closed` + `merged=true`) on the SWO repo for post-merge build/test verification. Prompt: clone, `npm install`, `npm run build`, `npm test`, report failures as GitHub issue. Deliverable: working Routine. (PROJECT:SWO)
+- [ ] **[ROUTINE_CLARVIS_SPINE_TEST]** Set up a Claude Code Routine (GitHub webhook trigger: PR touching `clarvis/` directory) on the Clarvis repo for automated spine test gate. Prompt: run `python3 -m pytest tests/` and post results as PR comment. Deliverable: working Routine.
+- [ ] **[ROUTINES_MANIFEST_SPEC]** Define the `.clarvis/routines.yaml` manifest format for per-project Routine declarations. Write spec doc and create example manifests for SWO and Clarvis repos. Deliverable: `docs/ROUTINES_MANIFEST.md` + example YAML files.
 
 ### Star Sanctuary — Foundation PRs (PROJECT:SWO)
 
 _SWO tasks tracked here. When project lane is active, these get priority. See also: memory/evolution/SWO_TRACKER.md_
+_Deep Sanctuary Review completed 2026-04-20 (DEV @ `3e8f802`). Build ✓, 128/128 tests ✓. V1.0+V1.5 features complete in code. See assessment below._
+
+#### Visual Polish & Animation (highest-value UX improvements)
+
+- [ ] **[SWO_SANCTUARY_COMPANION_SPRITE]** Replace the emoji-only companion display (currently just mood emoji in 64×64 box) with actual pixel-art Skrumpey sprites per constellation. Need 10 constellation sprites (aether, spectra, solveil, nebulu, chroma, rose, monflare, auracore, parallel, prime) + mood variants. **Asset workflow: Retro Diffusion (pixel-art generation) for companion sprites, NOT Claude Design.** Deliverable: `public/sanctuary/companions/` sprite sheet or PNGs + rendering in CompanionPanel. (PROJECT:SWO)
+- [ ] **[SWO_SANCTUARY_MAP_VISUAL]** The world map is functional (positioned icons on dark bg with grid lines) but looks bare — no terrain, no atmosphere. Design a pixel-art sanctuary world map background (720×405 or 16:9 aspect) with themed zones matching the 8 locations. **Asset workflow: Retro Diffusion for the map background tileset/illustration. Claude Design for layout/composition direction.** Deliverable: `public/sanctuary/map_bg.png` + CSS integration. (PROJECT:SWO)
+- [ ] **[SWO_SANCTUARY_ANIMATIONS]** Add micro-animations to key interactions: (1) bond/XP bar fill with glow pulse on gain, (2) companion mood transition (smooth emoji crossfade or sprite animation), (3) activity completion celebration (particle burst or glow), (4) quest complete reward fanfare, (5) chat message typing indicator with pixel-art dots. Current state: only `animate-pulse` on timer complete. Deliverable: CSS keyframes + component integration. (PROJECT:SWO)
+- [ ] **[SWO_SANCTUARY_EMPTY_STATES]** Improve empty/zero states: (1) no-companion-selected needs visual flair (pixel art Skrumpey silhouette + CTA), (2) empty journal shows bare text "No entries yet", (3) quests panel shows "Loading quests..." as permanent state when API returns empty, (4) traits panel empty state is functional but uninspiring. Add pixel-art illustrations or animated placeholders. **Asset workflow: Claude Design for layout mockups, Retro Diffusion for pixel art empty-state illustrations.** (PROJECT:SWO)
+- [ ] **[SWO_SANCTUARY_SOUND_DESIGN]** Add optional ambient sound layer: (1) location-specific ambient (hot springs bubbling, library pages), (2) interaction feedback sounds (feed crunch, pet purr, talk chime), (3) quest complete jingle, (4) chat message sent/received pings. Muted by default, toggle in UI. Deliverable: `public/sanctuary/sfx/` + AudioContext integration. (PROJECT:SWO)
+
+#### Functional Gaps & Improvements
+
+- [ ] **[SWO_SANCTUARY_CHAT_LLM]** Upgrade companion chat from template-based responses to LLM-backed (per ADR-002). Use OpenRouter → Gemini Flash for personality-aware responses. Rate limit: 15/day. Inject: companion personality, bond level, recent journal context. Estimated cost: $0.05/day at 100 users. Currently the 10 constellation templates produce repetitive responses. (PROJECT:SWO)
+- [ ] **[SWO_SANCTUARY_COMPANION_SELECT_UI]** No companion selection UI exists — if a user has multiple Skrumpeys, there's no way to switch in the frontend. The API supports `select` and `switch` but the UI only shows the active companion. Add a companion picker/gallery in the Sanctuary header. (PROJECT:SWO)
+- [ ] **[SWO_SANCTUARY_ACTIVITY_FEEDBACK]** When sending companion to activity, there's no confirmation or preview of duration/rewards. Add: (1) duration preview per location before sending, (2) expected rewards tooltip, (3) activity-in-progress visual on the map (companion icon at location), (4) push notification or visual cue when activity completes. (PROJECT:SWO)
+- [ ] **[SWO_SANCTUARY_RESPONSIVE]** Test and fix mobile responsiveness. The 2-column grid (`md:grid-cols-2`) collapses on mobile but: (1) world map 16:9 aspect may be too small on phones, (2) 6-7px text sizes are unreadable on mobile, (3) interaction buttons may be too small for touch targets (40px minimum recommended), (4) chat input/send layout needs mobile treatment. (PROJECT:SWO)
+
+#### Testing & Quality
+
+- [ ] **[SWO_SANCTUARY_E2E_TESTS]** Add end-to-end test coverage for the full Sanctuary flow: (1) wallet connect → companion select → interact → journal appears, (2) send to activity → wait → complete → rewards, (3) chat send/receive, (4) quest progress → claim reward, (5) trait unlock, (6) public map view without wallet. Current tests only cover DB-layer unit scenarios. Use Playwright or Vitest browser mode. (PROJECT:SWO)
+- [ ] **[SWO_SANCTUARY_API_VALIDATION]** Harden API input validation: several routes accept `address` and `token_id` from query params without format validation (e.g., address could be non-hex, token_id could be negative). Add Zod schemas or manual validation at route boundaries. (PROJECT:SWO)
+
+#### Future Phases (P2 candidates, from milestones)
+
+- [ ] **[SWO_SANCTUARY_COSMETICS_SHOP]** Implement P3.1+P3.2 from milestones: cosmetic items schema + STAR shop UI. The `equipped_cosmetics` column exists but is never written. Seed 15-25 items across 5 categories. This is the primary STAR token sink. (PROJECT:SWO)
+- [ ] **[SWO_SANCTUARY_EXPEDITIONS]** Implement expedition system (tables exist, routes are stubs). Multi-step adventures with narrative choices per P4.3 milestone. Currently all expedition functions throw "not implemented". (PROJECT:SWO)
 
 
 
@@ -85,6 +118,14 @@ _Source: `docs/internal/audits/decisions/2026-04-16_meta_audit_phases_0_4.md`. A
 
 ## P2 — When Idle
 - [~] [STALLED] **[AUDIT_PHASE_0_INSTRUMENTATION]** Implement the Phase 0 measurement substrate that blocks every downstream audit phase: (1) per-spawn `audit_trace_id` linking preflight→execution→postflight→outcome, (2) `data/audit/traces/<date>/<id>.json` writer with ≥45d retention, (3) `data/audit/feature_toggles.json` registry supporting `shadow` mode, (4) `scripts/audit/trace_exporter.py` CLI, (5) `scripts/audit/replay.py` for deterministic prompt rebuild. PASS gate: ≥95% of real Claude spawns in a 7-day window have a complete recoverable trace. Canonical plan: `docs/internal/audits/CLARVIS_DEEP_AUDIT_PLAN_2026-04-16.md`. (2026-04-16: substrate shipped — `clarvis/audit/{trace,toggles}.py`, trace_exporter + replay CLIs, spawn_claude + heartbeat wiring, `audit_trace_id` on CostEntry. Awaiting 7-day trace window before PASS ruling. Decision doc: `docs/internal/audits/decisions/2026-04-16_phase0_instrumentation.md`.) (2026-04-20 corrected assessment: 106 traces across 5 days (Apr 16–20). By source: heartbeat 43/43 complete (100%), spawn_claude 59/61 have outcome (96.7% — 2 missing outcome.status), 2 test traces excluded. Combined: 102/104 non-test = 98.1% completeness, above 95% gate. 7-day window not yet met — 5/7 days elapsed, eval on or after 2026-04-23.)
+
+### Claude Design & Routines — Medium-term (P2, added 2026-04-20)
+
+_Source: `docs/CLAUDE_DESIGN_ROUTINES_STRATEGY.md` §6 Phase 2-3._
+
+- [ ] **[ROUTINE_SWO_DOCS_DRIFT]** Set up weekly scheduled Routine for SWO: compare API route handlers with `docs/API.md` and `docs/DEPLOYED.md`, flag stale references, open PR if drift found.
+- [ ] **[ROUTINE_QUEUE_HYGIENE]** Set up weekly scheduled Routine for Clarvis repo: scan QUEUE.md for cap violations, stale items (>14 days no progress), missing source references. Post report to Telegram.
+- [ ] **[ROUTINE_MANAGER_SCRIPT]** Build `scripts/infra/routine_manager.py` that reads `.clarvis/routines.yaml` from a project repo and provisions/updates Routines via the Anthropic API (`POST /v1/claude_code/routines/{id}/fire`). CLI: `routine_manager.py provision|list|fire|status`.
 
 ### Demoted from P1 (2026-04-16, cap triage)
 
@@ -227,7 +268,6 @@ _Source: `source="audit_phase_4"`. P0+P1 items are co-located with their parent 
 - [ ] **[SEMANTIC_OVERLAP_BOOST]** Phi's weakest sub-component is `semantic_cross_collection`=0.579 (others ≥0.63). Identify the 5 lowest-similarity collection pairs (goals↔autonomous-learning=0.492, procedures↔autonomous-learning=0.488) and add 10–15 bridging memories that create genuine semantic connections between those domains. Verify Phi semantic component rises ≥0.60 without degrading other components.
 - [ ] **[CRON_STALE_WORKTREE_CLEANUP]** 10+ stale worktrees exist under `.claude/worktrees/` from prior agent runs, each containing full repo copies. Add a weekly cron entry (Sun 05:25, between existing hygiene jobs) that runs `git worktree prune` and removes any `.claude/worktrees/` dirs older than 7 days. Non-Python task (bash cron script).
 - [ ] **[AUTONOMOUS_EXECUTION_CAPABILITY_LIFT]** `autonomous_execution` is the weakest capability at 0.64. Audit the last 20 autonomous cron episodes for failure patterns (timeout, lock contention, wrong-model spawn). Implement the top fix (likely: reduce lock wait time or add per-job timeout tuning). Acceptance: capability score ≥0.70 on next weekly benchmark.
-- [x] **[COST_API_KEY_RESTORE]** _(2026-04-20)_ Fixed: `cost_tracker.py telegram` now falls back to local cost estimates when API key is expired/invalid. Returns valid data without crashing. Key itself still needs rotation by operator.
 
 ---
 

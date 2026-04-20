@@ -35,6 +35,7 @@ def _register_subcommands():
     from clarvis.cli_maintenance import app as maintenance_app
     from clarvis.cli_metrics import app as metrics_app
     from clarvis.cli_welcome import app as welcome_app
+    from clarvis.cli_design import app as design_app
     from clarvis.cli_wiki import app as wiki_app
 
     app.add_typer(brain_app, name="brain", help="ClarvisDB brain operations.")
@@ -44,6 +45,7 @@ def _register_subcommands():
     app.add_typer(cost_app, name="cost", help="Cost tracking and budget monitoring.")
     app.add_typer(cron_app, name="cron", help="Cron job inspection and execution.")
     app.add_typer(demo_app, name="demo", help="Self-contained demo (no data needed).")
+    app.add_typer(design_app, name="design", help="Claude Design bridge: packs, decisions, ingestion.")
     app.add_typer(doctor_app, name="doctor", help="Post-install health verification.")
     app.add_typer(local_app, name="local", help="Zero-API-key local model quickstart.")
     app.add_typer(heartbeat_app, name="heartbeat", help="Heartbeat pipeline.")
