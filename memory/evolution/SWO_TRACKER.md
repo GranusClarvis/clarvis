@@ -25,6 +25,12 @@ Planning docs, queue items, and brand positioning do NOT count as delivery.
 | 1 | #175 | ci: add test workflow | 2026-03-02 |
 | 2 | #178 | feat: V1 companion dashboard with quick actions | 2026-04-16 |
 | 3 | #182 | fix: replace 14 `any` types with narrow sanctuary row types | 2026-04-17 |
+| 4 | #183 | feat: sanctuary interactables V1 + enhanced world map | 2026-04-18 |
+| 5 | #184 | fix: social connections auth | 2026-04-18 |
+| 6 | #185 | feat: sanctuary interactables V1 + enhanced world map | 2026-04-19 |
+| 7 | #186 | feat: sanctuary journal system | 2026-04-20 |
+| 8 | #187 | feat: open Sanctuary to all Skrumpey holders | 2026-04-20 |
+| 9 | #188 | feat: sanctuary V1.5 — companion chat, trait evolution, seasonal quests | 2026-04-20 |
 
 ## Pending PRs
 
