@@ -2120,6 +2120,28 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
         except Exception as e:
             log(f"audit trace finalize failed (non-fatal): {e}")
 
+        # Incremental brain attribution: score this trace and append to JSONL.
+        try:
+            _ba = _load_script("brain_attribution", "audit")
+            attribute_trace, ATTRIB_JSONL = _ba.attribute_trace, _ba.ATTRIB_JSONL
+            trace_path = os.path.join(
+                os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")),
+                "data", "audit", "traces",
+                datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+                f"{audit_tid}.json",
+            )
+            if os.path.isfile(trace_path):
+                with open(trace_path, encoding="utf-8") as _tf:
+                    trace_data = json.load(_tf)
+                row = attribute_trace(trace_data)
+                os.makedirs(str(ATTRIB_JSONL.parent), exist_ok=True)
+                with open(str(ATTRIB_JSONL), "a", encoding="utf-8") as _af:
+                    _af.write(json.dumps(row) + "\n")
+                log(f"brain attribution appended: blocks={row.get('block_count', 0)} "
+                    f"structured={row.get('has_structured_retrievals', False)}")
+        except Exception as e:
+            log(f"brain attribution append failed (non-fatal): {e}")
+
     return {"status": "ok", "task_status": ctx["task_status"], "timings": timings,
             "completeness": round(completeness, 4), "errors": _pf_errors,
             "error_type": ctx["error_type"],

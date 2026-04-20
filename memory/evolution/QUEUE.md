@@ -42,6 +42,13 @@ _SWO tasks tracked here. When project lane is active, these get priority. See al
 ### Phase 8 Follow-ups (P1, added 2026-04-16)
 
 
+### Deep Audit — Verification Program (added 2026-04-20)
+
+_3-phase verification pass over the completed 16-phase deep audit + 100+ queue items. Confirms work quality, identifies regressions, flags fragile areas. Each phase covers ~6 audit areas. Source: operator-requested audit-of-the-audit._
+
+- [ ] **[VERIFY_P2_SHADOW_DATA_GAP]** Phase 2 verification follow-up: 3 of 4 SHADOW neuro features (dream_engine_outputs, absolute_zero_selfplay, theory_of_mind) produce 0 A/B traces because they run outside assembly.py. Either (a) add shadow-mode trace emission to their standalone cron/hook entry points, or (b) define an alternative A/B measurement that doesn't require assembly.py toggle traces (e.g., episode outcome comparison with/without feature). Must resolve before the 2026-05-01 A/B window closes. Source: VERIFY_PHASE_2_COGNITION check (e).
+- [ ] **[VERIFY_PHASE_3_EXECUTION]** Verification Phase 3: Execution, Economics & Governance (covers audit Phases 6, 7, 8, 12, 13, 14). Confirm: (a) Phase 6 queue execution — verify project-lane slot share improved from 12.5% baseline (check reaudit weekly output); (b) Phase 7 heartbeat — compare clean re-audit (Phase 16) rulings against live heartbeat outcomes for the past 7 days, confirm no regression in 90.3% success rate; (c) Phase 8 project delivery — verify PR merge rate ≥1/week (was 0.14/week at audit time); (d) Phase 12 digest — measure current digest actionability vs 56.5% baseline; (e) Phase 13 proposal quality — check sidecar outcome-capture progress (was 0/434 with status metadata); (f) Phase 14 cost tracking — verify `cost_tracker.py telegram` returns real data and cost_checkpoint HTTP 401 is fixed or documented as known-limitation. Acceptance: 6-area scorecard with PASS/DRIFT/REGRESSION for each; overall PASS requires ≤1 REGRESSION.
+
 ### Clarvis Maintenance — Keep Alive
 
 
@@ -78,7 +85,7 @@ _Source: `docs/internal/audits/decisions/2026-04-16_meta_audit_phases_0_4.md`. A
 ---
 
 ## P2 — When Idle
-- [~] [STALLED] **[AUDIT_PHASE_0_INSTRUMENTATION]** Implement the Phase 0 measurement substrate that blocks every downstream audit phase: (1) per-spawn `audit_trace_id` linking preflight→execution→postflight→outcome, (2) `data/audit/traces/<date>/<id>.json` writer with ≥45d retention, (3) `data/audit/feature_toggles.json` registry supporting `shadow` mode, (4) `scripts/audit/trace_exporter.py` CLI, (5) `scripts/audit/replay.py` for deterministic prompt rebuild. PASS gate: ≥95% of real Claude spawns in a 7-day window have a complete recoverable trace. Canonical plan: `docs/internal/audits/CLARVIS_DEEP_AUDIT_PLAN_2026-04-16.md`. (2026-04-16: substrate shipped — `clarvis/audit/{trace,toggles}.py`, trace_exporter + replay CLIs, spawn_claude + heartbeat wiring, `audit_trace_id` on CostEntry. Awaiting 7-day trace window before PASS ruling. Decision doc: `docs/internal/audits/decisions/2026-04-16_phase0_instrumentation.md`.) (2026-04-20 assessment: 102 traces across 5 days, 99/102 complete (97.1% — above 95% PASS threshold). 3 traces missing outcome.status. 7-day window not yet met — 4/7 days elapsed, eval on or after 2026-04-23.)
+- [~] [STALLED] **[AUDIT_PHASE_0_INSTRUMENTATION]** Implement the Phase 0 measurement substrate that blocks every downstream audit phase: (1) per-spawn `audit_trace_id` linking preflight→execution→postflight→outcome, (2) `data/audit/traces/<date>/<id>.json` writer with ≥45d retention, (3) `data/audit/feature_toggles.json` registry supporting `shadow` mode, (4) `scripts/audit/trace_exporter.py` CLI, (5) `scripts/audit/replay.py` for deterministic prompt rebuild. PASS gate: ≥95% of real Claude spawns in a 7-day window have a complete recoverable trace. Canonical plan: `docs/internal/audits/CLARVIS_DEEP_AUDIT_PLAN_2026-04-16.md`. (2026-04-16: substrate shipped — `clarvis/audit/{trace,toggles}.py`, trace_exporter + replay CLIs, spawn_claude + heartbeat wiring, `audit_trace_id` on CostEntry. Awaiting 7-day trace window before PASS ruling. Decision doc: `docs/internal/audits/decisions/2026-04-16_phase0_instrumentation.md`.) (2026-04-20 corrected assessment: 106 traces across 5 days (Apr 16–20). By source: heartbeat 43/43 complete (100%), spawn_claude 59/61 have outcome (96.7% — 2 missing outcome.status), 2 test traces excluded. Combined: 102/104 non-test = 98.1% completeness, above 95% gate. 7-day window not yet met — 5/7 days elapsed, eval on or after 2026-04-23.)
 
 ### Demoted from P1 (2026-04-16, cap triage)
 
@@ -93,7 +100,6 @@ _Demoted to P2 to bring P1 within 25-ceiling. All are review/sweep/benchmark tas
 
 ### Graph Integration (P2, added 2026-04-18)
 
-- [x] **[PHI_REMAINING_GAP]** Phi is 0.582 vs 0.65 target (gap=0.068). (2026-04-20: TARGET REACHED. Phi 0.5845→0.6510 (+0.0665) via 3 rounds of pair_targeted_cross_link on 15 weakest pairs (+19,140 semantic_bridge edges total) + 7 hand-authored bridge memories + decompose_phi() bug fix (ChromaDB batched retrieval). Components: intra=0.6452, cross=0.6337 (was 0.5301), semantic=0.5782, reachability=1.0.)
 
 ### Phase 4.5 Follow-ups (P2, added 2026-04-16)
 
@@ -145,7 +151,7 @@ _Source: `docs/internal/audits/COST_VALUE_2026-04-17.md`. Phase 14 ruled REVISE:
 
 _Source: `docs/internal/audits/PROPOSAL_QUALITY_2026-04-17.md`. Phase 13 ruled REVISE: proposal quality analytically strong but tracking broken (sidecar 0/394 useful), hallucination rate at boundary (10%), self-work bias structural._
 
-- [~] [BLOCKED:PHASE6_SIDECAR_SOURCE_PROPAGATION] **[PHASE13_RESCORE_AFTER_SIDECAR]** After `[PHASE6_SIDECAR_SOURCE_PROPAGATION]` lands and 14 days of sidecar data accumulates, re-run Phase 13 survival and outcome measurements with real data instead of proxies. Update `data/audit/proposal_quality.jsonl` and scorecard. Acceptance: re-scored gates use sidecar data, not proxy estimates. Source: Phase 13 proxy limitation. (2026-04-20: blocked — sidecar has 394 entries but 0/394 carry usable source/status/outcome metadata. Phase 6 propagation must land first.)
+- [~] [BLOCKED:SIDECAR_OUTCOME_CAPTURE] **[PHASE13_RESCORE_AFTER_SIDECAR]** After sidecar carries outcome-quality metadata and 14 days of data accumulates, re-run Phase 13 survival and outcome measurements with real data instead of proxies. Update `data/audit/proposal_quality.jsonl` and scorecard. Acceptance: re-scored gates use sidecar data, not proxy estimates. Source: Phase 13 proxy limitation. (2026-04-20 corrected: Phase 6 source propagation landed 2026-04-18 — 106/434 sidecar entries now have `source`. However, 0/434 have `status` or `outcome` quality metadata. The sidecar tracks operational state (`state: succeeded/failed`) but not outcome quality (PR merged, value delivered). Real blocker: outcome-quality capture must be wired into sidecar before rescore is possible.)
 
 ### Phase 12 Follow-ups (P2, added 2026-04-17)
 
@@ -177,7 +183,6 @@ _Source: `source="audit_phase_4"`. P0+P1 items are co-located with their parent 
 
 ### Phi Monitoring / Validation (demoted to observability metric by Phase 11 synthesis — regression watch only, not a KPI or optimization target; overlaps Phase 9 REVISE ruling on phi_metric)
 
-- [x] **[PHI_EMERGENCY_CROSS_LINK_BLITZ]** Run targeted bulk_cross_link on all 45 collection pairs (Phi target). (2026-04-16: started full-brain bulk_cross_link but process killed at ~5min when cron_autonomous started; +1357 edges committed before kill. Follow-up pair-targeted pass below supplanted the remainder.) (2026-04-20: Superseded by PHI_PAIR_BRIDGE_PRIORITIZATION which targeted the 10 weakest pairs specifically — +15,952 edges. Cross-connectivity 0.5301→0.6198. Marking complete.)
 
 ### Deep Cognition (pre-audit backlog; overlaps Phase 2/4.5/9 findings)
 
@@ -185,10 +190,10 @@ _Source: `source="audit_phase_4"`. P0+P1 items are co-located with their parent 
 ### Cron / Non-Python Maintenance (pre-audit backlog; several overlap Phase 1 wiring inventory + Phase 10 reliability findings)
 
 
-### Calibration / Brier Score (weakest metric — all-time Brier=0.1148 vs target 0.1, 7-day=0.2400)
+### Calibration / Brier Score (RECOVERED — all-time Brier=0.094, 7-day=0.085 as of 2026-04-20; target 0.1 PASS)
 
 
-### CLR Autonomy Dimension (critically low: 0.025)
+### CLR Autonomy Dimension (recovered from 0.025 → 0.603 as of 2026-04-20; remaining drag: daily cost > $10 ceiling)
 
 ### Claude Spawn Observability (pre-audit backlog; related to Phase 0 instrumentation + Phase 10 reliability)
 
@@ -198,8 +203,6 @@ _Source: `source="audit_phase_4"`. P0+P1 items are co-located with their parent 
 #### First Playable Layer
 
 #### Retention / Identity
-- [ ] **[SANCTUARY_EXPEDITIONS_V1]** Short/medium activities returning journal events, resources, cosmetics.
-- [ ] **[SANCTUARY_PUBLIC_ACTIVITY_FEED]** Social feed layer.
 - [ ] **[SANCTUARY_JOURNAL_SYSTEM]** Persistent companion journal/history.
 - [ ] **[SANCTUARY_BALANCE_PASS_1]** Progression/reward cadence tuning.
 
@@ -210,13 +213,12 @@ _Source: `source="audit_phase_4"`. P0+P1 items are co-located with their parent 
 - [ ] **[SANCTUARY_SEASONAL_QUESTS_V1]** First seasonal quest/event layer.
 - [ ] **[SANCTUARY_STAR_CURRENCY_DECISION]** STAR on Monad recommendation.
 
-- [ ] **[AUDIT_PHASE_16_REAUDIT_PHASE_7]** Re-audit tainted Phase 7 at the end of the deep audit program. Treat the earlier run as low-trust due to prompt contamination / merged-ask framing mistakes. Re-run it with strict prompt hygiene and use the clean rerun as the canonical evidence for synthesis.
 
 ### Adaptive RAG Pipeline
 
 ### Episode Success Rate Recovery & Benchmark Accuracy (2026-04-09 evolution)
 
-### Task Quality Score (currently 0.35, target 0.70)
+### Task Quality Score (RECOVERED — 0.83 as of 2026-04-20, target 0.70 PASS)
 
 ---
 
@@ -225,7 +227,6 @@ _Source: `source="audit_phase_4"`. P0+P1 items are co-located with their parent 
 
 ### 2026-04-16 evolution scan
 
-- [x] **[PHI_PAIR_BRIDGE_PRIORITIZATION]** Identify the 5 collection pairs with BOTH lowest semantic similarity AND lowest edge count, then queue targeted bridge memories that cite concepts from both sides. Current bulk_cross_link treats all pairs equally; starved pairs (e.g. `clarvis-identity` ↔ `autonomous-learning`) need hand-authored bridges, not random sampling. Directly targets Phi=0.619 (weakest metric). (2026-04-20: DONE — identified top 10 weakest pairs by combined weakness score (low semantic + few edges). Ran `pair_targeted_cross_link` on all 10 pairs: +15,952 semantic_bridge edges. Created 7 hand-authored bridge memories targeting goals↔preferences/identity/infrastructure/procedures/memories integration. Phi: 0.5845→0.6058 (+0.0213), cross-connectivity: 0.5301→0.6198 (+0.0897). Remaining gap to 0.65 target: 0.044.)
 
 ---
 
@@ -233,7 +234,6 @@ _Source: `source="audit_phase_4"`. P0+P1 items are co-located with their parent 
 
 ### External Challenges
 
-- [ ] [EXTERNAL_CHALLENGE:reasoning-depth-04] Build a causal inference engine for episode outcome analysis — Given episode data (task, actions, outcome), build a lightweight causal model: which actions most influence success/failure? Use counterfactual analysis (if action X hadn't happened, would outcome cha
 
 ---
 

@@ -496,7 +496,7 @@ class StructuralCausalModel:
     def _episode_to_observation(self, episode: dict,
                                 prior_episode: dict = None) -> dict:
         """Convert an episode to an SCM observation dict."""
-        task = episode.get("task", "")
+        task = episode.get("task") or ""
         task_words = task.lower().split()
 
         # Infer strategy from task text
