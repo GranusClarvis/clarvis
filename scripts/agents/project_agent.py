@@ -1805,8 +1805,11 @@ def cmd_spawn(name: str, task: str, timeout: int = 1200,
     # Build shell command that reads prompt from file (avoids ARG_MAX)
     cmd = build_spawn_command(prompt_file, timeout)
 
-    # Spawn Claude Code
-    env = os.environ.copy()
+    # Spawn Claude Code — scrub Clarvis secrets from subprocess environment
+    _SECRET_ENV_PREFIXES = ("CLARVIS_TG", "CLARVIS_AUDIT", "OPENROUTER_API",
+                            "TELEGRAM_BOT", "TELEGRAM_TOKEN")
+    env = {k: v for k, v in os.environ.items()
+           if not any(k.startswith(p) for p in _SECRET_ENV_PREFIXES)}
     env.pop("CLAUDECODE", None)
     env.pop("CLAUDE_CODE_ENTRYPOINT", None)
 

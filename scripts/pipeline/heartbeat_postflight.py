@@ -2160,12 +2160,8 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
         try:
             _ba = _load_script("brain_attribution", "audit")
             attribute_trace, ATTRIB_JSONL = _ba.attribute_trace, _ba.ATTRIB_JSONL
-            trace_path = os.path.join(
-                os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace")),
-                "data", "audit", "traces",
-                datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-                f"{audit_tid}.json",
-            )
+            from clarvis.audit import trace_path_for
+            trace_path = str(trace_path_for(audit_tid))
             if os.path.isfile(trace_path):
                 with open(trace_path, encoding="utf-8") as _tf:
                     trace_data = json.load(_tf)

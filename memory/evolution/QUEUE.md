@@ -25,7 +25,7 @@ _Source: `docs/internal/audits/NEURO_FEATURE_DECISIONS_2026-04-17.md`. Phase 9 s
 
 
 ### Bugs
-- [ ] **[AUDIT_TRACE_ATTRIBUTION_DAY_ROLLOVER]** Fix `scripts/pipeline/heartbeat_postflight.py` brain-attribution trace lookup to resolve the trace path from trace metadata or trace id storage rather than `datetime.now(timezone.utc)`. Current logic can miss same-trace attribution when postflight runs across a UTC date boundary, silently dropping audit rows. Add a regression test that simulates pre-midnight trace creation and post-midnight postflight attribution.
+- [x] **[AUDIT_TRACE_ATTRIBUTION_DAY_ROLLOVER]** _(2026-04-20)_ Fixed: replaced manual `datetime.now(UTC)` path construction with `trace_path_for(audit_tid)` which extracts date from trace id. Added 3-test regression suite `tests/test_trace_day_rollover.py`.
 - [ ] **[STANDALONE_TRACE_FAILURE_FINALIZATION]** Harden standalone audit tracing in `scripts/cognition/{absolute_zero,dream_engine,theory_of_mind}.py` so traces finalize with `outcome="error"` on exceptions and still record duration. Current happy-path finalization only marks `success`/`skipped`, leaving failed standalone runs with incomplete audit evidence. Add one shared helper or `try/finally` pattern plus tests.
 
 ## P1 — This Week
@@ -227,7 +227,7 @@ _Source: `source="audit_phase_4"`. P0+P1 items are co-located with their parent 
 - [ ] **[SEMANTIC_OVERLAP_BOOST]** Phi's weakest sub-component is `semantic_cross_collection`=0.579 (others ≥0.63). Identify the 5 lowest-similarity collection pairs (goals↔autonomous-learning=0.492, procedures↔autonomous-learning=0.488) and add 10–15 bridging memories that create genuine semantic connections between those domains. Verify Phi semantic component rises ≥0.60 without degrading other components.
 - [ ] **[CRON_STALE_WORKTREE_CLEANUP]** 10+ stale worktrees exist under `.claude/worktrees/` from prior agent runs, each containing full repo copies. Add a weekly cron entry (Sun 05:25, between existing hygiene jobs) that runs `git worktree prune` and removes any `.claude/worktrees/` dirs older than 7 days. Non-Python task (bash cron script).
 - [ ] **[AUTONOMOUS_EXECUTION_CAPABILITY_LIFT]** `autonomous_execution` is the weakest capability at 0.64. Audit the last 20 autonomous cron episodes for failure patterns (timeout, lock contention, wrong-model spawn). Implement the top fix (likely: reduce lock wait time or add per-job timeout tuning). Acceptance: capability score ≥0.70 on next weekly benchmark.
-- [ ] **[COST_API_KEY_RESTORE]** VERIFY_PHASE_3 flagged REGRESSION: OpenRouter API key expired, `cost_tracker.py` returns HTTP 401. Restore cost visibility by either rotating the API key or switching to local-only cost estimation from sidecar data. Acceptance: `cost_tracker.py telegram` returns valid data without 401.
+- [x] **[COST_API_KEY_RESTORE]** _(2026-04-20)_ Fixed: `cost_tracker.py telegram` now falls back to local cost estimates when API key is expired/invalid. Returns valid data without crashing. Key itself still needs rotation by operator.
 
 ---
 

@@ -287,12 +287,26 @@ cleanup() {
 }
 trap cleanup EXIT
 unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT 2>/dev/null || true
+# Save secrets for post-run Telegram delivery, then scrub before Claude spawn
+_SAVED_TG_TOKEN="\${CLARVIS_TG_BOT_TOKEN:-}"
+_SAVED_TG_CHAT="\${CLARVIS_TG_CHAT_ID:-}"
+_SAVED_TG_GROUP="\${CLARVIS_TG_GROUP_ID:-}"
+_SAVED_OR_KEY="\${OPENROUTER_API_KEY:-}"
+unset CLARVIS_TG_BOT_TOKEN CLARVIS_TG_CHAT_ID CLARVIS_TG_GROUP_ID 2>/dev/null || true
+unset CLARVIS_TG_REPORTS_TOPIC CLARVIS_AUDIT_TRACE_ID 2>/dev/null || true
+unset OPENROUTER_API_KEY 2>/dev/null || true
 RESULT=0
 START_EPOCH=\$(date +%s)
 run_claude_monitored "$TIMEOUT" "$OUTPUT_FILE" "$PROMPT_FILE" "$CLARVIS_WORKSPACE/memory/cron/spawn_claude.log" || RESULT=\$MONITORED_EXIT
 END_EPOCH=\$(date +%s)
 DURATION=\$(( END_EPOCH - START_EPOCH ))
 rm -f "$PROMPT_FILE"
+# Restore secrets now that Claude has exited (needed for audit + TG delivery below)
+export CLARVIS_TG_BOT_TOKEN="\$_SAVED_TG_TOKEN"
+export CLARVIS_TG_CHAT_ID="\$_SAVED_TG_CHAT"
+export CLARVIS_TG_GROUP_ID="\$_SAVED_TG_GROUP"
+export OPENROUTER_API_KEY="\$_SAVED_OR_KEY"
+export CLARVIS_AUDIT_TRACE_ID="${CLARVIS_AUDIT_TRACE_ID:-}"
 LOGFILE="$CLARVIS_WORKSPACE/memory/cron/spawn_claude.log"
 if [ \$RESULT -eq 124 ]; then
   echo "[spawn_claude] TIMEOUT after ${TIMEOUT}s" >> "$OUTPUT_FILE"

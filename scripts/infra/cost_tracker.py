@@ -163,30 +163,47 @@ def main():
 
     elif cmd == "telegram":
         # Formatted output for Telegram /costs command
+        # Try OpenRouter API first, fall back to local-only if key is expired/invalid
         from clarvis.orch.cost_api import fetch_usage
-        usage = fetch_usage()
-        rollup = tracker.rollup("day")
+        usage = None
+        api_error = None
+        try:
+            usage = fetch_usage()
+        except Exception as e:
+            api_error = str(e)
+
+        rollup_day = tracker.rollup("day")
+        rollup_week = tracker.rollup("week")
+        rollup_month = tracker.rollup("month")
 
         lines = []
-        lines.append("OpenRouter Usage")
-        lines.append(f"Today: ${usage['daily']:.2f} | Week: ${usage['weekly']:.2f} | Month: ${usage['monthly']:.2f}")
-        if usage["limit"] is not None and usage["remaining"] is not None:
-            pct_left = usage["remaining"] / usage["limit"] * 100 if usage["limit"] > 0 else 0
-            lines.append(f"Remaining: ${usage['remaining']:.2f} / ${usage['limit']:.0f} ({pct_left:.0f}%)")
+        if usage:
+            lines.append("OpenRouter Usage")
+            lines.append(f"Today: ${usage['daily']:.2f} | Week: ${usage['weekly']:.2f} | Month: ${usage['monthly']:.2f}")
+            if usage["limit"] is not None and usage["remaining"] is not None:
+                pct_left = usage["remaining"] / usage["limit"] * 100 if usage["limit"] > 0 else 0
+                lines.append(f"Remaining: ${usage['remaining']:.2f} / ${usage['limit']:.0f} ({pct_left:.0f}%)")
+        else:
+            lines.append("Cost Report (local estimates — API key expired)")
+            lines.append(f"Today: ${rollup_day['total_cost']:.2f} | Week: ${rollup_week['total_cost']:.2f} | Month: ${rollup_month['total_cost']:.2f}")
 
-        if rollup["by_model"]:
+        if rollup_day["by_model"]:
             lines.append("")
             lines.append("Model Breakdown (today):")
-            for m, d in sorted(rollup["by_model"].items(), key=lambda x: -x[1]["cost"]):
+            for m, d in sorted(rollup_day["by_model"].items(), key=lambda x: -x[1]["cost"]):
                 name = m.split("/")[-1] if "/" in m else m
                 lines.append(f"  {name}: ${d['cost']:.4f} ({d['count']} calls)")
 
-        if usage.get("remaining") is not None and usage["remaining"] < 20:
+        if usage and usage.get("remaining") is not None and usage["remaining"] < 20:
             lines.append("")
             if usage["remaining"] < 10:
                 lines.append("CRITICAL: Less than $10 remaining!")
             else:
                 lines.append("WARNING: Less than $20 remaining")
+
+        if api_error:
+            lines.append("")
+            lines.append(f"API: {api_error[:80]}")
 
         print("\n".join(lines))
 
