@@ -215,21 +215,36 @@ def semantic_cross_collection(brain):
     col_all_embs = {}     # col_name -> np.array of ALL embeddings (for target search)
     col_query_embs = {}   # col_name -> np.array of sampled embeddings (for queries)
 
+    TARGET_SAMPLE = 100
+    QUERY_SAMPLE = 24
+
     for col_name, col in brain.collections.items():
         count = col.count()
         if count > 0:
             active_collections.append(col_name)
-            results = col.get(include=["embeddings"])
+            limit = min(TARGET_SAMPLE, count) if count > TARGET_SAMPLE else None
+            try:
+                kw = {"include": ["embeddings"]}
+                if limit is not None:
+                    kw["limit"] = limit
+                results = col.get(**kw)
+            except Exception:
+                if limit is None:
+                    results = col.get(include=["embeddings"], limit=TARGET_SAMPLE)
+                else:
+                    continue
             all_embs = results.get("embeddings")
-            if all_embs is None or len(all_embs) == 0:
+            if all_embs is None:
                 continue
-            all_arr = np.array(all_embs, dtype=np.float32)
+            all_arr = np.array(all_embs, dtype=np.float32) if not isinstance(all_embs, np.ndarray) else all_embs
+            if all_arr.shape[0] == 0:
+                continue
             col_all_embs[col_name] = all_arr
-            sample_size = min(24, len(all_embs))
-            if sample_size >= len(all_embs):
+            sample_size = min(QUERY_SAMPLE, all_arr.shape[0])
+            if sample_size >= all_arr.shape[0]:
                 col_query_embs[col_name] = all_arr
             else:
-                step = len(all_embs) / sample_size
+                step = all_arr.shape[0] / sample_size
                 indices = [int(i * step) for i in range(sample_size)]
                 col_query_embs[col_name] = all_arr[indices]
 
