@@ -22,10 +22,15 @@ _cached_key: Optional[str] = None
 
 
 def get_api_key() -> str:
-    """Read OpenRouter API key from OpenClaw auth-profiles.json. Caches after first read."""
+    """Read OpenRouter API key. Checks OPENROUTER_API_KEY env var first, then auth-profiles.json."""
     global _cached_key
     if _cached_key:
         return _cached_key
+
+    env_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
+    if env_key and not env_key.startswith("sk-or-v1-your-key"):
+        _cached_key = env_key
+        return env_key
 
     if not os.path.exists(AUTH_FILE):
         raise FileNotFoundError(f"Auth file not found: {AUTH_FILE}")
@@ -35,10 +40,27 @@ def get_api_key() -> str:
 
     key = auth.get("profiles", {}).get("openrouter:default", {}).get("key")
     if not key:
-        raise ValueError("No OpenRouter API key found in auth-profiles.json")
+        raise ValueError("No OpenRouter API key found in auth-profiles.json or OPENROUTER_API_KEY env var")
 
     _cached_key = key
     return key
+
+
+def clear_key_cache():
+    """Clear cached API key so next call re-reads from env/file."""
+    global _cached_key
+    _cached_key = None
+
+
+def validate_key() -> Dict:
+    """Test the API key. Returns {"valid": bool, "error": str|None, "source": str}."""
+    clear_key_cache()
+    source = "env" if os.environ.get("OPENROUTER_API_KEY", "").strip() else "auth-profiles.json"
+    try:
+        usage = fetch_usage()
+        return {"valid": True, "error": None, "source": source, "usage": usage}
+    except Exception as e:
+        return {"valid": False, "error": str(e), "source": source}
 
 
 def _api_get(endpoint: str, timeout: int = 10) -> Dict:

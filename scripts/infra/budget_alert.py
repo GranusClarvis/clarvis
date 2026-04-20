@@ -92,7 +92,7 @@ def send_telegram(bot_token: str, chat_id: str, message: str, topic_id: str = ""
         "text": message,
         "parse_mode": "HTML",
     }
-    if topic_id and topic_id != "1":
+    if topic_id and topic_id != "1" and topic_id.isdigit():
         payload["message_thread_id"] = int(topic_id)
     data = json.dumps(payload).encode()
 
@@ -117,7 +117,11 @@ def check_and_alert(test_mode=False) -> dict:
     """
     config = load_config()
     state = load_state()
-    usage = fetch_usage()
+    try:
+        usage = fetch_usage()
+    except Exception as e:
+        print(f"[budget_alert] API error (non-fatal): {e}", file=sys.stderr)
+        return {"alerts_sent": 0, "usage": {}, "triggered": [], "error": str(e)}
 
     now = time.time()
     cooldown_s = config.get("cooldown_hours", 6) * 3600
@@ -185,7 +189,12 @@ def main():
     if "--test" in sys.argv:
         print("Sending test alert...")
         config = load_config()
-        usage = fetch_usage()
+        try:
+            usage = fetch_usage()
+        except Exception as e:
+            print(f"Cannot fetch usage: {e}", file=sys.stderr)
+            print("Set OPENROUTER_API_KEY env var or update auth-profiles.json")
+            sys.exit(1)
         msg = "<b>[TEST] Budget Alert System Working</b>\n\n"
         msg += f"Today: ${usage['daily']:.2f}\n"
         msg += f"Week: ${usage['weekly']:.2f}\n"
@@ -203,7 +212,12 @@ def main():
         return
 
     if "--status" in sys.argv:
-        usage = fetch_usage()
+        try:
+            usage = fetch_usage()
+        except Exception as e:
+            print(f"=== Budget Status ===\nAPI Error: {e}")
+            print("Set OPENROUTER_API_KEY env var or update auth-profiles.json")
+            sys.exit(1)
         config = load_config()
         state = load_state()
         print("=== Budget Status ===")

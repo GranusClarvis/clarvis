@@ -356,9 +356,7 @@ def _build_strategy_paragraph(days, total, bucket_stats):
 
 def _compute_bucket_stats(recent):
     """Classify recent memories into source buckets and compute per-bucket stats."""
-    from collections import defaultdict as _defaultdict
-
-    buckets = _defaultdict(lambda: {'count': 0, 'quality_scores': [], 'collections': set()})
+    buckets = defaultdict(lambda: {'count': 0, 'quality_scores': [], 'collections': set()})
     for mem in recent:
         meta = mem.get('metadata', {})
         bucket = _classify_source(meta)
