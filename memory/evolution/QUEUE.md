@@ -141,13 +141,12 @@ _Source: `docs/internal/audits/decisions/2026-04-17_phase15_reaudit_protocol.md`
 
 _Source: `docs/internal/audits/COST_VALUE_2026-04-17.md`. Phase 14 ruled REVISE: cost tracking structurally broken, system-adjusted cost/PR fails gate, but trend improving and cost-reduction targets identified._
 
-- [ ] **[PHASE14_OPENROUTER_API_KEY_FIX]** The OpenRouter API key stored in `auth-profiles.json` returns HTTP 401 ("User not found"). Rotate or verify the key so `cost_checkpoint.py` and `budget_alert.py` can function. Requires operator action. Acceptance: `python3 -c "from clarvis.orch.cost_api import fetch_usage; print(fetch_usage())"` returns valid data. Source: Phase 14 Gap 1 (R2).
 
 ### Phase 13 Follow-ups (P2, added 2026-04-17)
 
 _Source: `docs/internal/audits/PROPOSAL_QUALITY_2026-04-17.md`. Phase 13 ruled REVISE: proposal quality analytically strong but tracking broken (sidecar 0/394 useful), hallucination rate at boundary (10%), self-work bias structural._
 
-- [ ] **[PHASE13_RESCORE_AFTER_SIDECAR]** After `[PHASE6_SIDECAR_SOURCE_PROPAGATION]` lands and 14 days of sidecar data accumulates, re-run Phase 13 survival and outcome measurements with real data instead of proxies. Update `data/audit/proposal_quality.jsonl` and scorecard. Acceptance: re-scored gates use sidecar data, not proxy estimates. Source: Phase 13 proxy limitation.
+- [~] [BLOCKED:PHASE6_SIDECAR_SOURCE_PROPAGATION] **[PHASE13_RESCORE_AFTER_SIDECAR]** After `[PHASE6_SIDECAR_SOURCE_PROPAGATION]` lands and 14 days of sidecar data accumulates, re-run Phase 13 survival and outcome measurements with real data instead of proxies. Update `data/audit/proposal_quality.jsonl` and scorecard. Acceptance: re-scored gates use sidecar data, not proxy estimates. Source: Phase 13 proxy limitation. (2026-04-20: blocked — sidecar has 394 entries but 0/394 carry usable source/status/outcome metadata. Phase 6 propagation must land first.)
 
 ### Phase 12 Follow-ups (P2, added 2026-04-17)
 
@@ -184,8 +183,6 @@ _Source: `source="audit_phase_4"`. P0+P1 items are co-located with their parent 
 
 ### Deep Cognition (pre-audit backlog; overlaps Phase 2/4.5/9 findings)
 
-- [ ] Autonomous code review of own scripts (Phase 3.3).
-- [ ] Refactor knowledge_synthesis.py learning_strategy_analysis() to stay under 100-line limit.
 
 ### Cron / Non-Python Maintenance (pre-audit backlog; several overlap Phase 1 wiring inventory + Phase 10 reliability findings)
 
@@ -201,8 +198,8 @@ _Source: `source="audit_phase_4"`. P0+P1 items are co-located with their parent 
 ### Star Sanctuary — Later Phases (PROJECT:SWO)
 
 #### First Playable Layer
-- [ ] **[SANCTUARY_INTERACTABLES_V1]** Add first charming owner actions (feed, pet, talk, send-to-activity).
-- [ ] **[SANCTUARY_WORLD_MAP_V1]** Create public/shared sanctuary map with locations.
+- [x] **[SANCTUARY_INTERACTABLES_V1]** Add first charming owner actions (feed, pet, talk, send-to-activity). (2026-04-20: implemented send-to-activity with location picker, timer-based activities, bond rewards on completion. Feed/pet/talk already existed. Branch: `feat/sanctuary-interactables-worldmap` on SWO repo.)
+- [x] **[SANCTUARY_WORLD_MAP_V1]** Create public/shared sanctuary map with locations. (2026-04-20: enhanced world map with location icons, companion counts at locations, hover detail cards, level-lock indicators, grid background. Map API now returns companions at locations. Branch: `feat/sanctuary-interactables-worldmap` on SWO repo.)
 - [ ] **[SANCTUARY_PROGRESS_BRIDGE]** Bridge SWO participation into Sanctuary progression.
 
 #### Retention / Identity
