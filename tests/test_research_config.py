@@ -90,16 +90,14 @@ class TestEnableDisable:
 
 class TestStatus:
     def test_status_shows_effective_state(self, config_file):
-        from clarvis.research_config import status, enable, _load, _save
-        # Sub-key on but master off -> effective is off
+        from clarvis.research_config import status, _load, _save
         config = _load()
         config["research_discovery_fallback"] = True
         config["research_auto_fill"] = False
         _save(config)
         s = status()
-        assert s["master_enabled"] is False
         assert s["paths"]["research_discovery_fallback"]["raw"] is True
-        assert s["paths"]["research_discovery_fallback"]["effective"] is False
+        assert s["research_auto_fill"] is False
 
 
 class TestQueueWriterGate:

@@ -11,9 +11,26 @@ import sys
 import tempfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
-import _paths  # noqa: F401,E402
+try:
+    import _paths  # noqa: F401,E402
+except ImportError:
+    pass
+
+import importlib.util
 
 import pytest
+
+_pb_path = os.path.join(os.path.dirname(__file__), "..", "scripts", "metrics", "performance_benchmark.py")
+
+def _load_pb():
+    """Load performance_benchmark by file path to avoid namespace package issues."""
+    if "scripts.metrics.performance_benchmark" in sys.modules:
+        return sys.modules["scripts.metrics.performance_benchmark"]
+    spec = importlib.util.spec_from_file_location("scripts.metrics.performance_benchmark", _pb_path)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["scripts.metrics.performance_benchmark"] = mod
+    spec.loader.exec_module(mod)
+    return mod
 
 
 @pytest.fixture
@@ -22,7 +39,7 @@ def metrics_dir(tmp_path, monkeypatch):
     metrics_file = str(tmp_path / "performance_metrics.json")
     alerts_file = str(tmp_path / "performance_alerts.jsonl")
     history_file = str(tmp_path / "performance_history.jsonl")
-    import scripts.metrics.performance_benchmark as pb
+    pb = _load_pb()
     monkeypatch.setattr(pb, "METRICS_FILE", metrics_file)
     monkeypatch.setattr(pb, "ALERTS_FILE", alerts_file)
     monkeypatch.setattr(pb, "HISTORY_FILE", history_file)
@@ -44,7 +61,7 @@ def _write_prev_metrics(metrics_file, metrics):
 
 def test_guard_blocks_catastrophic_drop(metrics_dir, monkeypatch):
     """Core metric dropping from 0.94 to 0.0 should be blocked."""
-    import scripts.metrics.performance_benchmark as pb
+    pb = _load_pb()
 
     _, metrics_file, alerts_file = metrics_dir
     prev = {
@@ -92,7 +109,7 @@ def test_guard_blocks_catastrophic_drop(metrics_dir, monkeypatch):
 
 def test_guard_allows_normal_fluctuation(metrics_dir, monkeypatch):
     """Small drops (< 50%) should NOT be blocked."""
-    import scripts.metrics.performance_benchmark as pb
+    pb = _load_pb()
 
     _, metrics_file, alerts_file = metrics_dir
     prev = {
@@ -128,7 +145,7 @@ def test_guard_allows_normal_fluctuation(metrics_dir, monkeypatch):
 
 def test_guard_skips_low_prev_values(metrics_dir, monkeypatch):
     """If previous value was already very low (< 0.1), guard should not trigger."""
-    import scripts.metrics.performance_benchmark as pb
+    pb = _load_pb()
 
     _, metrics_file, _ = metrics_dir
     prev = {

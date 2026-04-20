@@ -18,9 +18,14 @@ def digest_env(tmp_path, monkeypatch):
 
     monkeypatch.setenv("CLARVIS_WORKSPACE", str(workspace))
 
-    # Reload module with new env
-    import importlib
-    import scripts.tools.digest_writer as dw
+    # Load module by file path (no __init__.py in scripts/)
+    import importlib.util
+    _spec = importlib.util.spec_from_file_location(
+        "digest_writer",
+        os.path.join(os.path.dirname(__file__), "..", "scripts", "tools", "digest_writer.py"),
+    )
+    dw = importlib.util.module_from_spec(_spec)
+    _spec.loader.exec_module(dw)
     dw.WORKSPACE = str(workspace)
     dw.DIGEST_FILE = os.path.join(str(workspace), "memory", "cron", "digest.md")
     dw.DIGEST_STATE = os.path.join(str(workspace), "data", "digest_state.json")
@@ -128,7 +133,7 @@ def test_reset_triggers_archive(digest_env):
     from unittest.mock import patch
     from datetime import datetime, timezone
     fake_now = datetime(2026, 4, 18, 8, 0, 0, tzinfo=timezone.utc)
-    with patch("scripts.tools.digest_writer.datetime") as mock_dt:
+    with patch.object(dw, "datetime") as mock_dt:
         mock_dt.now.return_value = fake_now
         mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
         state = dw._reset_if_new_day(state)

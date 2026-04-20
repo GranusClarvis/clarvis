@@ -103,7 +103,8 @@ def _score_isolation(name: str) -> tuple[float, dict]:
 
     # Try to count agent memories
     try:
-        from lite_brain import LiteBrain
+        from clarvis._script_loader import load as _load_script
+        LiteBrain = _load_script("lite_brain", "brain_mem").LiteBrain
         lb = LiteBrain(str(agent_brain))
         details["agent_memories"] = lb.stats().get("total_memories", 0)
     except Exception:

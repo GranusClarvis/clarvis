@@ -39,13 +39,17 @@ from research_novelty import (
 def tmp_registry(tmp_path):
     """Create a TopicRegistry backed by a temp file with sample topics."""
     reg_path = str(tmp_path / "registry.json")
+    from datetime import datetime, timedelta, timezone
+    now = datetime.now(timezone.utc)
+    recent = (now - timedelta(days=4)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    old = (now - timedelta(days=20)).strftime("%Y-%m-%dT%H:%M:%SZ")
     registry_data = {
         "iit 4.0": {
             "canonical_name": "iit 4.0",
             "aliases": ["iit llm representations", "integrated information theory"],
             "source_files": ["2026-03-09-iit-4.0.md"],
             "first_seen": "2026-03-09T10:00:00Z",
-            "last_researched": "2026-04-01T10:00:00Z",  # 4 days ago
+            "last_researched": recent,  # 4 days ago
             "research_count": 2,
             "memory_count": 5,
             "last_novelty": "",
@@ -55,7 +59,7 @@ def tmp_registry(tmp_path):
             "aliases": ["arag hierarchical retrieval", "retrieval optimization"],
             "source_files": ["retrieval-optimization.md"],
             "first_seen": "2026-03-10T10:00:00Z",
-            "last_researched": "2026-04-01T10:00:00Z",
+            "last_researched": recent,
             "research_count": 3,
             "memory_count": 12,
             "last_novelty": "",
@@ -65,7 +69,7 @@ def tmp_registry(tmp_path):
             "aliases": ["free energy world models"],
             "source_files": ["world-models.md"],
             "first_seen": "2026-03-08T10:00:00Z",
-            "last_researched": "2026-03-01T10:00:00Z",  # >14 days ago (old)
+            "last_researched": old,  # >14 days ago (old)
             "research_count": 3,
             "memory_count": 18,
             "last_novelty": "",
@@ -75,7 +79,7 @@ def tmp_registry(tmp_path):
             "aliases": ["global workspace theory implementation"],
             "source_files": ["consciousness-arch.md"],
             "first_seen": "2026-03-15T10:00:00Z",
-            "last_researched": "2026-04-02T10:00:00Z",
+            "last_researched": recent,
             "research_count": 1,
             "memory_count": 1,  # shallow
             "last_novelty": "",
@@ -378,6 +382,10 @@ class TestClassifyResultMetadata:
 @pytest.fixture
 def matrix_registry(tmp_path):
     """Registry with diverse topics for test matrix coverage."""
+    from datetime import datetime, timedelta, timezone
+    now = datetime.now(timezone.utc)
+    recent = (now - timedelta(days=3)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    stale = (now - timedelta(days=20)).strftime("%Y-%m-%dT%H:%M:%SZ")
     reg_path = str(tmp_path / "matrix_registry.json")
     data = {
         "phi-computation": {
@@ -388,7 +396,7 @@ def matrix_registry(tmp_path):
             "aliases": ["scalable phi approximations", "phi metric for llms"],
             "source_files": ["phi-computation.md", "phi-approximations.md"],
             "first_seen": "2026-03-01T10:00:00Z",
-            "last_researched": "2026-04-03T10:00:00Z",
+            "last_researched": recent,
             "research_count": 3,
             "memory_count": 15,
             "last_novelty": "",
@@ -401,7 +409,7 @@ def matrix_registry(tmp_path):
             "aliases": ["late chunking for rag"],
             "source_files": ["rag-chunking.md"],
             "first_seen": "2026-03-15T10:00:00Z",
-            "last_researched": "2026-04-05T10:00:00Z",
+            "last_researched": recent,
             "research_count": 1,
             "memory_count": 2,  # shallow
             "last_novelty": "",
@@ -414,7 +422,7 @@ def matrix_registry(tmp_path):
             "aliases": [],
             "source_files": ["mem0-architecture.md"],
             "first_seen": "2026-02-20T10:00:00Z",
-            "last_researched": "2026-03-10T10:00:00Z",  # stale (>14d)
+            "last_researched": stale,  # stale (>14d)
             "research_count": 2,
             "memory_count": 8,
             "last_novelty": "",
@@ -427,7 +435,7 @@ def matrix_registry(tmp_path):
             "aliases": ["reflexion agent self-improvement"],
             "source_files": ["reflexion.md"],
             "first_seen": "2026-03-05T10:00:00Z",
-            "last_researched": "2026-04-01T10:00:00Z",
+            "last_researched": recent,
             "research_count": 2,
             "memory_count": 6,
             "last_novelty": "",

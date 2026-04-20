@@ -83,6 +83,7 @@ check_job "llm_context_review" "$LOG_DIR/llm_context_review.log" 26 # daily at 0
 check_job "status_json"     "$LOG_DIR/status_json.log"      26   # daily at 05:50
 check_job "relevance_refresh" "$LOG_DIR/relevance_refresh.log" 26 # daily at 02:40
 check_job "calibration_report" "$LOG_DIR/calibration_report.log" 170 # Sun 06:45
+check_job "canonical_state_refresh" "$LOG_DIR/canonical_state_refresh.log" 170 # Sun 05:00
 # Weekly jobs
 check_job "cleanup"         "$LOG_DIR/cleanup.log"          170  # Sun 05:30
 check_job "absolute_zero"   "$LOG_DIR/absolute_zero.log"    170  # Sun 03:00
@@ -94,6 +95,9 @@ check_job "pi_benchmark"    "$LOG_DIR/pi_benchmark.log"     170  # Sun 06:00
 # Monthly jobs
 check_job "monthly_reflection" "$LOG_DIR/monthly_reflection.log" 750  # 1st 03:30
 check_job "brief_benchmark" "$LOG_DIR/brief_benchmark.log"  750  # 1st 03:45
+check_job "reaudit_monthly" "$LOG_DIR/reaudit_monthly.log"  750  # 1st 03:50
+# Quarterly jobs
+check_job "reaudit_quarterly" "$LOG_DIR/reaudit_quarterly.log" 2200  # 1st Jan/Apr/Jul/Oct
 
 # --- Digest freshness check ---
 # CLR autonomy score tanks when digest.md goes stale (>6h without update).
@@ -319,8 +323,11 @@ if [ "$FAILURES" -gt 0 ]; then
   recheck_job "$LOG_DIR/data_lifecycle.log" 170
   recheck_job "$LOG_DIR/pi_benchmark.log" 170
   recheck_job "$LOG_DIR/calibration_report.log" 170
+  recheck_job "$LOG_DIR/canonical_state_refresh.log" 170
   recheck_job "$LOG_DIR/monthly_reflection.log" 750
   recheck_job "$LOG_DIR/brief_benchmark.log" 750
+  recheck_job "$LOG_DIR/reaudit_monthly.log" 750
+  recheck_job "$LOG_DIR/reaudit_quarterly.log" 2200
 
   RECOVERED=$(( FAILURES - STILL_FAILING ))
   echo "------------------------------"

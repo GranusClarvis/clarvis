@@ -247,7 +247,9 @@ fi
 RUN_ID=$(date -u +%Y-%m-%d-%H%M%S)
 RUN_DIR="memory/research/runs/$RUN_ID"
 mkdir -p "$RUN_DIR"
-echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Run dir: $RUN_DIR (novelty=$NOVELTY_TIER)" >> "$LOGFILE"
+# Generate stable research_id for attribution tracking (Phase 14)
+RESEARCH_ID="research-${RUN_ID}-$(python3 -c 'import uuid; print(uuid.uuid4().hex[:8])')"
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Run dir: $RUN_DIR (novelty=$NOVELTY_TIER) research_id=$RESEARCH_ID" >> "$LOGFILE"
 
 # Pre-compute weakest metric for prompt injection
 WEAKEST_METRIC=$(get_weakest_metric)
@@ -271,6 +273,7 @@ fi
 # Structured output format shared by both prompt types
 STRUCTURED_OUTPUT_FMT="OUTPUT FORMAT (mandatory — must appear at end of your response):
 RESEARCH_RESULT:
+  RESEARCH_ID: $RESEARCH_ID
   TOPIC: <topic name>
   DECISION: APPLY|ARCHIVE|DISCARD
   FINDINGS: <1-3 sentence summary of what was learned>
@@ -504,6 +507,30 @@ store = ResearchLessonStore()
 lesson = store.record(topic=topic, decision=decision, findings=findings, queue_items=queue_items)
 print(f'Lesson recorded: [{lesson.decision}] {lesson.topic[:60]}')
 " >> "$LOGFILE" 2>&1
+
+# === RESEARCH ATTRIBUTION LOG (Phase 14) ===
+python3 -c "
+import json, os
+from datetime import datetime, timezone
+
+attribution = {
+    'research_id': '$RESEARCH_ID',
+    'run_id': '$RUN_ID',
+    'v2_run_id': '$V2_RUN_ID' or None,
+    'timestamp': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
+    'task': '''${RESEARCH_TASK:0:200}''',
+    'novelty_tier': '$NOVELTY_TIER',
+    'exit_code': $TASK_EXIT,
+    'duration_s': $TASK_DURATION,
+    'ingested_count': ${INGESTED_COUNT:-0},
+    'run_dir': '$RUN_DIR',
+}
+attr_file = 'data/audit/research_attribution.jsonl'
+os.makedirs(os.path.dirname(attr_file), exist_ok=True)
+with open(attr_file, 'a') as f:
+    f.write(json.dumps(attribution, default=str) + '\n')
+print(f'Attribution logged: {attribution[\"research_id\"]}')
+" >> "$LOGFILE" 2>&1 || true
 
 # Cost logging removed — postflight already logs cost for the spawned Claude session.
 # Duplicate logging here caused double-counting. (Fixed 2026-04-09, ref: SECOND_PASS_VALIDATION F4.6.2)

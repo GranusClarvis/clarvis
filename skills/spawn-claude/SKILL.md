@@ -60,7 +60,7 @@ python3 scripts/agents/agent_lifecycle.py cleanup
 ## Rules
 
 - **From /spawn command:** Use `spawn_claude.sh` — it handles env setup, brain context injection, output capture, logging, and TG delivery
-- **From conversation (no /spawn):** Use ACP — first `exec prompt_builder.py build --task "..." --tier standard`, then `sessions_spawn({runtime: "acp", agentId: "claude", task: "<enriched>", thread: true})`
+- **From conversation (no /spawn):** Use ACP — first `exec python3 $CLARVIS_WORKSPACE/scripts/tools/prompt_builder.py build --task "..." --tier standard`, then `sessions_spawn({runtime: "acp", agentId: "claude", task: "<enriched>", thread: true})`
 - **NEVER use `sessions_spawn` WITHOUT `runtime: "acp"`** — that spawns M2.5, not Claude Code
 - **NEVER use `--output-format json`** — wraps output in JSON, makes it unreadable
 - **Minimum timeout: 600s** — default 1200s, use 1800s for large tasks

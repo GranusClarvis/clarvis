@@ -23,12 +23,17 @@ python3 "$CLARVIS_WORKSPACE/scripts/hooks/session_hook.py" open >> "$LOGFILE" 2>
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Bootstrapping daily memory file..." >> "$LOGFILE"
 python3 "$CLARVIS_WORKSPACE/scripts/tools/daily_memory_log.py" >> "$LOGFILE" 2>&1 || true
 
+# Step 1: Queue staleness audit (informational, non-blocking)
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running queue staleness audit..." >> "$LOGFILE"
+STALE_REPORT=$(python3 "$CLARVIS_WORKSPACE/scripts/tools/queue_audit.py" 2>&1) || true
+echo "$STALE_REPORT" >> "$LOGFILE"
+
 # === MORNING PLANNING (with context from prompt_builder) ===
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Running morning planning..." >> "$LOGFILE"
 SCRIPTS="$CLARVIS_WORKSPACE/scripts"
 WEAKEST_METRIC=$(get_weakest_metric)
 MORNING_PROMPT=$(python3 "$SCRIPTS/tools/prompt_builder.py" build \
-    --task "Morning planning. Read memory/evolution/QUEUE.md. Pick top 3 priorities for today from pending tasks. WEAKEST METRIC: $WEAKEST_METRIC — one priority MUST target this. Update brain.set_context() with today's focus. OUTPUT FORMAT (mandatory): PRIORITY 1: <task> | PRIORITY 2: <task> | PRIORITY 3: <task> — one line each with brief reasoning." \
+    --task "Morning planning. Read memory/evolution/QUEUE.md. Pick top 3 priorities for today from pending tasks. WEAKEST METRIC: $WEAKEST_METRIC — one priority MUST target this. QUEUE STALENESS: $STALE_REPORT — consider stale items for prioritization. Update brain.set_context() with today's focus. OUTPUT FORMAT (mandatory): PRIORITY 1: <task> | PRIORITY 2: <task> | PRIORITY 3: <task> — one line each with brief reasoning." \
     --role "morning planner" --tier standard 2>> "$LOGFILE")
 MORNING_PROMPT_FILE=$(mktemp)
 echo "$MORNING_PROMPT" > "$MORNING_PROMPT_FILE"

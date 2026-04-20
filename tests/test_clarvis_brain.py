@@ -134,6 +134,16 @@ def brain_instance(tmp_path):
     b._labile_memories = {}
     b._lability_window = 300
 
+    # Failure counters
+    b._failure_counters = {
+        "dedup_failures": 0,
+        "store_link_failures": 0,
+        "temporal_fallbacks": 0,
+        "search_query_failures": 0,
+        "expansion_failures": 0,
+        "hook_timeouts": 0,
+    }
+
     # Hook registries
     b._recall_scorers = []
     b._recall_boosters = []

@@ -144,11 +144,18 @@ class TestBuildSpawnPrompt:
         assert "Context from Clarvis" in prompt
         assert "merge conflicts" in prompt
 
-    def test_context_excluded_when_empty(self, agent_config, agent_dir):
+    def test_context_auto_enriched_when_empty(self, agent_config, agent_dir):
         prompt = build_spawn_prompt(
             "test-project", "some task", agent_config, agent_dir, context=""
         )
-        assert "Context from Clarvis" not in prompt
+        assert "Context from Clarvis" in prompt
+
+    def test_explicit_context_preserved(self, agent_config, agent_dir):
+        prompt = build_spawn_prompt(
+            "test-project", "some task", agent_config, agent_dir,
+            context="Custom context here"
+        )
+        assert "Custom context here" in prompt
 
     def test_agent_name_in_prompt(self, agent_config, agent_dir):
         prompt = build_spawn_prompt(
@@ -648,11 +655,12 @@ class TestRunTaskLoop:
         result = run_task_loop("nonexistent", "do thing")
         assert "error" in result
 
+    @patch("project_agent.time.sleep")
     @patch("project_agent.cmd_spawn_with_retry")
     @patch("project_agent._load_config")
     @patch("project_agent._agent_dir")
     @patch("project_agent._snapshot_cost")
-    def test_session_limit_enforced(self, mock_cost, mock_dir, mock_config, mock_spawn, tmp_path):
+    def test_session_limit_enforced(self, mock_cost, mock_dir, mock_config, mock_spawn, mock_sleep, tmp_path):
         """Loop stops when max sessions reached."""
         mock_config.return_value = {
             "name": "test", "repo_url": "https://github.com/o/r.git",
@@ -1415,21 +1423,23 @@ class TestAgentClaudeLock:
         self.setup_method()
 
     def test_acquire_and_release(self):
-        err = _acquire_agent_claude_lock("test-lock-claude")
-        assert err is None
-        lock = _agent_claude_lock_path("test-lock-claude")
-        assert lock.exists()
-        _release_agent_claude_lock("test-lock-claude")
-        assert not lock.exists()
+        with patch("project_agent._is_pid_clarvis", return_value=True):
+            err = _acquire_agent_claude_lock("test-lock-claude")
+            assert err is None
+            lock = _agent_claude_lock_path("test-lock-claude")
+            assert lock.exists()
+            _release_agent_claude_lock("test-lock-claude")
+            assert not lock.exists()
 
     def test_double_acquire_blocked(self):
-        err1 = _acquire_agent_claude_lock("test-lock-claude")
-        assert err1 is None
-        # Second acquire should fail (same PID holds it)
-        err2 = _acquire_agent_claude_lock("test-lock-claude")
-        assert err2 is not None
-        assert "lock held" in err2
-        _release_agent_claude_lock("test-lock-claude")
+        with patch("project_agent._is_pid_clarvis", return_value=True):
+            err1 = _acquire_agent_claude_lock("test-lock-claude")
+            assert err1 is None
+            # Second acquire should fail (same PID holds it)
+            err2 = _acquire_agent_claude_lock("test-lock-claude")
+            assert err2 is not None
+            assert "lock held" in err2
+            _release_agent_claude_lock("test-lock-claude")
 
     def test_stale_lock_reclaimed(self):
         lock = _agent_claude_lock_path("test-lock-claude")

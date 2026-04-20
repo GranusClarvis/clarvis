@@ -281,6 +281,7 @@ class TestWikiRetrievalIntegration:
 
 
 @pytest.mark.slow
+@pytest.mark.timeout(300)
 @requires_brain
 class TestEvalSuiteAggregates:
     """Run the full eval suite and check aggregate quality."""

@@ -77,9 +77,9 @@ def test_adapter_factory_returns_openclaw():
 
 
 def test_adapter_factory_rejects_nonexistent_hosts():
-    """No dead hosts registered — hermes/nanoclaw should raise ValueError."""
+    """Unknown hosts raise ValueError; registered adapters (openclaw, hermes) do not."""
     from clarvis.adapters import get_adapter
-    for ghost_host in ("hermes", "nanoclaw", "ollama", ""):
+    for ghost_host in ("nanoclaw", "ollama", ""):
         with pytest.raises(ValueError, match="Unknown host adapter"):
             get_adapter(ghost_host)
 
@@ -269,13 +269,12 @@ def test_no_clarvis_p_bridge_package_exists():
 
 
 def test_no_dead_adapter_files():
-    """hermes.py and nanoclaw.py should not exist as production adapter files."""
+    """nanoclaw.py should not exist as a production adapter file (hermes is a registered adapter)."""
     import clarvis.adapters as adapters_pkg
     adapter_dir = inspect.getfile(adapters_pkg)
     from pathlib import Path
     adapter_path = Path(adapter_dir).parent
     dead_files = [
-        adapter_path / "hermes.py",
         adapter_path / "nanoclaw.py",
     ]
     for f in dead_files:

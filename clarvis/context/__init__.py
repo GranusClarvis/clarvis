@@ -18,7 +18,7 @@ from .dycp import (  # noqa: F401
     dycp_prune_brief, should_suppress_section, rerank_knowledge_hints,
 )
 from .assembly import (  # noqa: F401
-    generate_tiered_brief,
+    generate_tiered_brief, BriefResult, BriefTelemetry,
     build_decision_context, build_reasoning_scaffold,
     find_related_tasks, get_recent_completions, get_recommended_procedures,
 )

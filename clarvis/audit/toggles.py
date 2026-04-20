@@ -39,9 +39,9 @@ DEFAULT_TOGGLES: Dict[str, Dict[str, Any]] = {
         "notes": "Vector recall from 10 collections. Core to prompt assembly.",
     },
     "wiki_retrieval": {
-        "enabled": True, "shadow": False,
+        "enabled": True, "shadow": True,
         "owner": "clarvis.wiki",
-        "notes": "Canonical-wiki retrieval path. Phase 5 will re-rule.",
+        "notes": "Wired into assembly.py in shadow mode (2026-04-19). Phase 5 REVISE requires shadow data before re-ruling.",
     },
     "conceptual_framework_injection": {
         "enabled": True, "shadow": False,

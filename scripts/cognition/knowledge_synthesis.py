@@ -306,22 +306,91 @@ def _quality_score(metadata: dict) -> float:
     return 0.4 * importance + 0.35 * access_score + 0.25 * recall_score
 
 
-def learning_strategy_analysis(days: int = 7) -> dict:
-    """Analyze learning effectiveness over the past N days.
+def _build_strategy_paragraph(days, total, bucket_stats):
+    """Build strategy recommendation paragraph from bucket statistics."""
+    ranked = sorted(bucket_stats.items(), key=lambda x: -x[1]['avg_quality'])
+    best_name, best_data = ranked[0] if ranked else ('none', {'avg_quality': 0, 'count': 0})
+    worst_name, worst_data = ranked[-1] if len(ranked) > 1 else ('none', {'avg_quality': 0, 'count': 0})
 
-    Reviews memories created in the window, categorizes by source,
-    scores quality, and produces a strategy adjustment paragraph.
+    parts = [f"Weekly learning review ({days}d window, {total} new memories)."]
 
-    Returns dict with analysis results and the strategy paragraph.
-    """
-    import time
-    import json as _json
+    if best_data['avg_quality'] > 0:
+        parts.append(
+            f"Highest-quality source: {best_name} "
+            f"(avg={best_data['avg_quality']:.3f}, {best_data['count']} memories, "
+            f"{best_data['share_pct']}% of total)."
+        )
+
+    if worst_name != best_name and worst_data['count'] > 0:
+        parts.append(
+            f"Lowest-quality source: {worst_name} "
+            f"(avg={worst_data['avg_quality']:.3f}, {worst_data['count']} memories)."
+        )
+
+    _STRATEGY_ADVICE = {
+        'episodes': "Strategy: episodes are the strongest learning channel — "
+                    "continue prioritizing task execution with clear success/failure encoding.",
+        'research': "Strategy: research sessions produce high-quality memories — "
+                    "consider increasing research frequency or depth.",
+        'reflection': "Strategy: reflection is the top learning source — "
+                      "the synthesis pipeline is working well. Maintain current reflection depth.",
+        'coding': "Strategy: coding/conversation sessions produce the best memories — "
+                  "continue hands-on implementation focus.",
+    }
+    if best_name == 'episodes' and best_data['avg_quality'] <= 0.3:
+        parts.append(f"Strategy: {best_name} leads quality. Investigate why other channels lag.")
+    else:
+        parts.append(_STRATEGY_ADVICE.get(
+            best_name,
+            f"Strategy: {best_name} leads quality. Investigate why other channels lag."
+        ))
+
+    if len(ranked) >= 2 and ranked[0][1]['share_pct'] > 70:
+        parts.append(
+            f"Warning: {ranked[0][0]} dominates at {ranked[0][1]['share_pct']}% — "
+            "diversify learning sources for more robust knowledge."
+        )
+
+    return " ".join(parts), best_name, worst_name
+
+
+def _compute_bucket_stats(recent):
+    """Classify recent memories into source buckets and compute per-bucket stats."""
     from collections import defaultdict as _defaultdict
+
+    buckets = _defaultdict(lambda: {'count': 0, 'quality_scores': [], 'collections': set()})
+    for mem in recent:
+        meta = mem.get('metadata', {})
+        bucket = _classify_source(meta)
+        quality = _quality_score(meta)
+        buckets[bucket]['count'] += 1
+        buckets[bucket]['quality_scores'].append(quality)
+        buckets[bucket]['collections'].add(mem.get('collection', 'unknown'))
+
+    stats = {}
+    for bucket, data in sorted(buckets.items(), key=lambda x: -x[1]['count']):
+        scores = data['quality_scores']
+        avg_quality = sum(scores) / len(scores) if scores else 0
+        stats[bucket] = {
+            'count': data['count'],
+            'avg_quality': round(avg_quality, 3),
+            'max_quality': round(max(scores), 3) if scores else 0,
+            'collections': sorted(data['collections']),
+            'share_pct': round(100 * data['count'] / len(recent), 1),
+        }
+        print(f"  {bucket:12s}: {data['count']:3d} memories, "
+              f"avg_quality={avg_quality:.3f}, "
+              f"share={stats[bucket]['share_pct']}%")
+    return stats
+
+
+def learning_strategy_analysis(days: int = 7) -> dict:
+    """Analyze learning effectiveness over the past N days."""
+    import time
 
     cutoff_epoch = time.time() - (days * 86400)
     print(f"=== Learning Strategy Analysis (past {days} days) ===\n")
 
-    # Collect recent memories from all collections
     all_memories = load_all_memories()
     recent = []
     for mem in all_memories:
@@ -338,105 +407,18 @@ def learning_strategy_analysis(days: int = 7) -> dict:
     print(f"Total memories: {len(all_memories)}, recent ({days}d): {len(recent)}\n")
 
     if not recent:
-        paragraph = (
-            f"No new memories created in the past {days} days. "
-            "Learning pipeline may be stalled — check cron execution and brain.store() calls."
-        )
-        return {'recent_count': 0, 'buckets': {}, 'strategy': paragraph}
-
-    # Bucket analysis
-    buckets = _defaultdict(lambda: {'count': 0, 'quality_scores': [], 'collections': set()})
-    for mem in recent:
-        meta = mem.get('metadata', {})
-        bucket = _classify_source(meta)
-        quality = _quality_score(meta)
-        buckets[bucket]['count'] += 1
-        buckets[bucket]['quality_scores'].append(quality)
-        buckets[bucket]['collections'].add(mem.get('collection', 'unknown'))
-
-    # Compute per-bucket stats
-    bucket_stats = {}
-    for bucket, data in sorted(buckets.items(), key=lambda x: -x[1]['count']):
-        scores = data['quality_scores']
-        avg_quality = sum(scores) / len(scores) if scores else 0
-        bucket_stats[bucket] = {
-            'count': data['count'],
-            'avg_quality': round(avg_quality, 3),
-            'max_quality': round(max(scores), 3) if scores else 0,
-            'collections': sorted(data['collections']),
-            'share_pct': round(100 * data['count'] / len(recent), 1),
+        return {
+            'recent_count': 0, 'buckets': {},
+            'strategy': f"No new memories created in the past {days} days. "
+                        "Learning pipeline may be stalled — check cron execution and brain.store() calls.",
         }
-        print(f"  {bucket:12s}: {data['count']:3d} memories, "
-              f"avg_quality={avg_quality:.3f}, "
-              f"share={bucket_stats[bucket]['share_pct']}%")
 
-    # Identify best and worst sources
-    ranked = sorted(bucket_stats.items(), key=lambda x: -x[1]['avg_quality'])
-    best_source = ranked[0] if ranked else ('none', {'avg_quality': 0, 'count': 0})
-    worst_source = ranked[-1] if len(ranked) > 1 else ('none', {'avg_quality': 0, 'count': 0})
-
-    # Generate strategy paragraph
-    total = len(recent)
-    best_name, best_data = best_source
-    worst_name, worst_data = worst_source
-
-    paragraph_parts = [
-        f"Weekly learning review ({days}d window, {total} new memories)."
-    ]
-
-    if best_data['avg_quality'] > 0:
-        paragraph_parts.append(
-            f"Highest-quality source: {best_name} "
-            f"(avg={best_data['avg_quality']:.3f}, {best_data['count']} memories, "
-            f"{best_data['share_pct']}% of total)."
-        )
-
-    if worst_name != best_name and worst_data['count'] > 0:
-        paragraph_parts.append(
-            f"Lowest-quality source: {worst_name} "
-            f"(avg={worst_data['avg_quality']:.3f}, {worst_data['count']} memories)."
-        )
-
-    # Strategy adjustment recommendation
-    if best_name == 'episodes' and best_data['avg_quality'] > 0.3:
-        paragraph_parts.append(
-            "Strategy: episodes are the strongest learning channel — "
-            "continue prioritizing task execution with clear success/failure encoding."
-        )
-    elif best_name == 'research':
-        paragraph_parts.append(
-            "Strategy: research sessions produce high-quality memories — "
-            "consider increasing research frequency or depth."
-        )
-    elif best_name == 'reflection':
-        paragraph_parts.append(
-            "Strategy: reflection is the top learning source — "
-            "the synthesis pipeline is working well. Maintain current reflection depth."
-        )
-    elif best_name == 'coding':
-        paragraph_parts.append(
-            "Strategy: coding/conversation sessions produce the best memories — "
-            "continue hands-on implementation focus."
-        )
-    else:
-        paragraph_parts.append(
-            f"Strategy: {best_name} leads quality. Investigate why other channels lag."
-        )
-
-    # Check for imbalance
-    if len(ranked) >= 2:
-        top_share = ranked[0][1]['share_pct']
-        if top_share > 70:
-            paragraph_parts.append(
-                f"Warning: {ranked[0][0]} dominates at {top_share}% — "
-                "diversify learning sources for more robust knowledge."
-            )
-
-    paragraph = " ".join(paragraph_parts)
+    bucket_stats = _compute_bucket_stats(recent)
+    paragraph, best_name, worst_name = _build_strategy_paragraph(days, len(recent), bucket_stats)
     print(f"\n--- Strategy ---\n{paragraph}\n")
 
     return {
-        'recent_count': total,
+        'recent_count': len(recent),
         'buckets': dict(bucket_stats),
         'best_source': best_name,
         'worst_source': worst_name,

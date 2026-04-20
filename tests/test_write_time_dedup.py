@@ -7,6 +7,7 @@ Covers:
   4. Research queue fingerprint-based leak prevention
 """
 
+import importlib.util
 import json
 import os
 import sys
@@ -15,6 +16,13 @@ import tempfile
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+_rtq_spec = importlib.util.spec_from_file_location(
+    "research_to_queue",
+    os.path.join(os.path.dirname(__file__), "..", "scripts", "evolution", "research_to_queue.py"),
+)
+_rtq_mod = importlib.util.module_from_spec(_rtq_spec)
+_rtq_spec.loader.exec_module(_rtq_mod)
 
 
 # ---------------------------------------------------------------------------
@@ -251,31 +259,29 @@ class TestResearchFingerprint:
     """Verify that previously-processed proposals don't leak back into queue."""
 
     def test_proposal_fingerprint_deterministic(self):
-        from scripts.evolution.research_to_queue import _proposal_fingerprint
+        _proposal_fingerprint = _rtq_mod._proposal_fingerprint
         fp1 = _proposal_fingerprint("paper_a.md", "Implement brain search recall")
         fp2 = _proposal_fingerprint("paper_a.md", "Implement brain search recall")
         assert fp1 == fp2
 
     def test_proposal_fingerprint_normalized(self):
-        from scripts.evolution.research_to_queue import _proposal_fingerprint
+        _proposal_fingerprint = _rtq_mod._proposal_fingerprint
         fp1 = _proposal_fingerprint("paper_a.md", "Implement  brain   search")
         fp2 = _proposal_fingerprint("paper_a.md", "implement brain search")
         assert fp1 == fp2
 
     def test_proposal_fingerprint_differs_by_paper(self):
-        from scripts.evolution.research_to_queue import _proposal_fingerprint
+        _proposal_fingerprint = _rtq_mod._proposal_fingerprint
         fp1 = _proposal_fingerprint("paper_a.md", "Implement X")
         fp2 = _proposal_fingerprint("paper_b.md", "Implement X")
         assert fp1 != fp2
 
     def test_processed_proposals_skipped_on_rescan(self, tmp_path, monkeypatch):
         """Proposals in the disposition log should not reappear in scan results."""
-        from scripts.evolution.research_to_queue import (
-            _proposal_fingerprint,
-            _load_processed_fingerprints,
-            _log_dispositions,
-            scan_papers,
-        )
+        _proposal_fingerprint = _rtq_mod._proposal_fingerprint
+        _load_processed_fingerprints = _rtq_mod._load_processed_fingerprints
+        _log_dispositions = _rtq_mod._log_dispositions
+        scan_papers = _rtq_mod.scan_papers
 
         # Create a minimal ingested paper
         ingested = tmp_path / "ingested"
@@ -294,10 +300,10 @@ class TestResearchFingerprint:
         archive.write_text("")
         disposition_log = str(tmp_path / "dispositions.jsonl")
 
-        monkeypatch.setattr("scripts.evolution.research_to_queue.INGESTED_DIR", str(ingested))
-        monkeypatch.setattr("scripts.evolution.research_to_queue.QUEUE_FILE", str(queue))
-        monkeypatch.setattr("scripts.evolution.research_to_queue.ARCHIVE_FILE", str(archive))
-        monkeypatch.setattr("scripts.evolution.research_to_queue.DISPOSITION_LOG", disposition_log)
+        monkeypatch.setattr(_rtq_mod, "INGESTED_DIR", str(ingested))
+        monkeypatch.setattr(_rtq_mod, "QUEUE_FILE", str(queue))
+        monkeypatch.setattr(_rtq_mod, "ARCHIVE_FILE", str(archive))
+        monkeypatch.setattr(_rtq_mod, "DISPOSITION_LOG", disposition_log)
 
         # First scan should find proposals
         results1 = scan_papers()

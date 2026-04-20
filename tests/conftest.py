@@ -68,6 +68,14 @@ def tmp_brain():
         brain._recall_cache_ttl = 30
         brain._labile_memories = {}
         brain._lability_window = 300
+        brain._failure_counters = {
+            "dedup_failures": 0,
+            "store_link_failures": 0,
+            "temporal_fallbacks": 0,
+            "search_query_failures": 0,
+            "expansion_failures": 0,
+            "hook_timeouts": 0,
+        }
         brain._recall_scorers = []
         brain._recall_boosters = []
         brain._recall_observers = []

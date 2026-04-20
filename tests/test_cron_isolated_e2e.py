@@ -419,7 +419,10 @@ class TestCronScheduleIntegrity:
 
     def test_autonomous_entries_exist(self):
         """Crontab has multiple cron_autonomous.sh entries."""
-        rc = _bash("crontab -l 2>/dev/null | grep -c 'cron_autonomous.sh' || echo '0'")
+        check = _bash("crontab -l 2>/dev/null || echo 'NO_CRONTAB'")
+        if "NO_CRONTAB" in check.stdout:
+            pytest.skip("No crontab installed")
+        rc = _bash("crontab -l 2>/dev/null | grep -c 'cron_autonomous.sh'; true")
         count = int(rc.stdout.strip())
         assert count >= 8, f"Expected >=8 autonomous entries, got {count}"
 

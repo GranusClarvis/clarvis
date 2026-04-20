@@ -1635,6 +1635,14 @@ def build_spawn_prompt(name: str, task: str, config: dict,
             "",
         ])
 
+    if not context:
+        try:
+            from clarvis.context.assembly import generate_tiered_brief
+            brief = generate_tiered_brief(task, tier="standard")
+            context = str(brief)[:2000]
+        except Exception:
+            pass
+
     if context:
         prompt_parts.extend([
             "## Context from Clarvis",

@@ -78,18 +78,54 @@ if [ "${SUSPICIOUS:-0}" -gt 0 ]; then
     echo "[$DATE] [WARNING] Suspicious processes detected" >> "$LOG_DIR"/alerts.log
 fi
 
+# === SECRET SWEEP (once per hour, cached) ===
+SWEEP_CACHE="/tmp/clarvis_secret_sweep_cache"
+SWEEP_STALE=true
+if [ -f "$SWEEP_CACHE" ]; then
+    SWEEP_AGE=$(( $(date +%s) - $(stat -c%Y "$SWEEP_CACHE" 2>/dev/null || echo 0) ))
+    [ "$SWEEP_AGE" -lt 3600 ] && SWEEP_STALE=false
+fi
+if [ "$SWEEP_STALE" = true ]; then
+    SWEEP_JSON=$(python3 "$CLARVIS_WORKSPACE/scripts/audit/secret_sweep.py" --json 2>/dev/null || echo '{}')
+    SWEEP_SECRETS=$(echo "$SWEEP_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d.get('secrets_in_tracked_files',[])))" 2>/dev/null || echo 0)
+    SWEEP_PERMS=$(echo "$SWEEP_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d.get('permission_issues',[])))" 2>/dev/null || echo 0)
+    SWEEP_EXPOSED=$(echo "$SWEEP_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d.get('network_exposure',[])))" 2>/dev/null || echo 0)
+    echo "[$DATE] SECURITY: secrets=$SWEEP_SECRETS perms=$SWEEP_PERMS exposed=$SWEEP_EXPOSED" >> "$LOG_DIR"/security.log
+    if [ "${SWEEP_SECRETS:-0}" -gt 0 ]; then
+        echo "[$DATE] [CRITICAL] Secret sweep found $SWEEP_SECRETS potential secrets in tracked files!" >> "$LOG_DIR"/alerts.log
+    fi
+    if [ "${SWEEP_PERMS:-0}" -gt 0 ]; then
+        echo "[$DATE] [WARNING] Secret sweep found $SWEEP_PERMS file permission issues" >> "$LOG_DIR"/alerts.log
+    fi
+    touch "$SWEEP_CACHE"
+fi
+
 # === BRAIN HYGIENE CHECK (once per hour, not every 15min) ===
 BRAIN_CACHE="/tmp/clarvis_brain_check_cache"
+BRAIN_ALERT_STATE="/tmp/clarvis_brain_alert_state"
 BRAIN_STALE=true
 if [ -f "$BRAIN_CACHE" ]; then
     BRAIN_AGE=$(( $(date +%s) - $(stat -c%Y "$BRAIN_CACHE" 2>/dev/null || echo 0) ))
     [ "$BRAIN_AGE" -lt 3600 ] && BRAIN_STALE=false
 fi
 if [ "$BRAIN_STALE" = true ]; then
-    python3 "$CLARVIS_WORKSPACE/scripts/brain_mem/brain_hygiene.py" check >> "$LOG_DIR"/health.log 2>&1 || {
-        echo "[$DATE] [WARNING] Brain hygiene check failed or detected regression" >> "$LOG_DIR"/alerts.log
-    
-    }
+    BRAIN_OUTPUT=$(python3 "$CLARVIS_WORKSPACE/scripts/brain_mem/brain_hygiene.py" check 2>&1)
+    BRAIN_RC=$?
+    echo "$BRAIN_OUTPUT" >> "$LOG_DIR"/health.log
+    if [ $BRAIN_RC -ne 0 ]; then
+        BRAIN_SIG=$(echo "$BRAIN_OUTPUT" | grep -Eio '(regression|drop|failed|error|collapse)[^.]*' | sort -u | head -3 | tr '\n' '|')
+        PREV_SIG=""
+        [ -f "$BRAIN_ALERT_STATE" ] && PREV_SIG=$(cat "$BRAIN_ALERT_STATE")
+        if [ "$BRAIN_SIG" != "$PREV_SIG" ]; then
+            echo "[$DATE] [WARNING] Brain hygiene check failed or detected regression" >> "$LOG_DIR"/alerts.log
+            echo "$BRAIN_SIG" > "$BRAIN_ALERT_STATE"
+        fi
+    else
+        if [ -f "$BRAIN_ALERT_STATE" ]; then
+            echo "[$DATE] [INFO] Brain hygiene check recovered" >> "$LOG_DIR"/alerts.log
+            rm -f "$BRAIN_ALERT_STATE"
+        fi
+    fi
     touch "$BRAIN_CACHE"
 fi
 

@@ -1,5 +1,9 @@
 """Host compatibility contracts for ClarvisDB extraction readiness.
 
+Test-scaffold for host-portability contracts. No production callers —
+used only by test_host_compat_contracts, test_fork_merge_smoke, and
+test_open_source_smoke. Excluded from Phase 9 EVS/TCS passes.
+
 Currently scoped to OpenClaw only.  Add Hermes/NanoClaw contracts when
 real host consumers exist (see docs/FORK_INTEGRATION_PLAN §2.2).
 """

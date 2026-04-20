@@ -1,9 +1,11 @@
 """Tests for CSP solver with AC-3 + backtracking."""
 import pytest
 import sys
-sys.path.insert(0, "/home/agent/.openclaw/workspace")
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"))
+import _paths  # noqa: F401,E402
 
-from scripts.reasoning.csp_solver import (
+from csp_solver import (
     CSP, BinaryConstraint, SolverStats,
     ac3, solve, verify_solution,
     puzzle_easy, puzzle_medium, puzzle_hard,

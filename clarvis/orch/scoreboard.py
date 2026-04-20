@@ -158,3 +158,15 @@ def trend(n: int = 10):
             print(f"  {date}  {row['agent']:20s}  composite={cs_str}  tasks={row.get('total_tasks', 0)}")
         except json.JSONDecodeError:
             continue
+
+
+if __name__ == "__main__":
+    import sys
+    cmd = sys.argv[1] if len(sys.argv) > 1 else "show"
+    if cmd == "record":
+        record()
+    elif cmd == "trend":
+        n = int(sys.argv[2]) if len(sys.argv) > 2 else 10
+        trend(n)
+    else:
+        show()

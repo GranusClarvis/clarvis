@@ -167,6 +167,7 @@ class TestComputePI:
             "bloat_score": 0.40,
             "brief_compression": 0.55,
             "load_degradation_pct": 15.0,
+            "confidence_brier": 0.10,
         }
         metrics.update(metric_overrides)
         return compute_pi(metrics)
@@ -218,6 +219,7 @@ class TestComputePI:
             bloat_score=0.70,
             brief_compression=0.20,
             load_degradation_pct=60.0,
+            confidence_brier=0.50,
         )
         assert result["pi"] == 0.0
         assert "Critical" in result["interpretation"]

@@ -61,14 +61,14 @@ class TestComputeCodeQualityScore:
 
     def test_score_in_range(self):
         """Test that score is between 0 and 1."""
-        result = compute_code_quality_score(days=7)
+        result = compute_code_quality_score(days=1)
         score = result.get('quality_score', result.get('score', None))
         if score is not None:
             assert 0 <= score <= 1, f"Score {score} out of range"
 
     def test_components_tracked(self):
         """Test that components are tracked in result."""
-        result = compute_code_quality_score(days=7)
+        result = compute_code_quality_score(days=1)
         components = result.get('components', {})
         assert isinstance(components, dict)
 
@@ -103,23 +103,47 @@ class TestComputeEfficiencyScore:
         assert 'efficiency_score' in result or 'score' in result
 
 
+_FAKE_CODE_QUALITY = {
+    "quality_score": 0.80,
+    "components": {"lint": 1.0, "imports": 0.9, "secrets": 1.0, "structural": 0.8},
+    "files_checked": 5,
+}
+
+
 @pytest.mark.slow
 class TestGetAllQualityMetrics:
-    """Tests for get_all_quality_metrics function."""
+    """Tests for get_all_quality_metrics function.
 
-    def test_returns_comprehensive_dict(self):
+    compute_code_quality_score(days=7) walks the entire workspace and can exceed
+    the 15s per-test timeout. Patch it with a stable fake so these tests only
+    verify the return *shape* of get_all_quality_metrics(), not the I/O pipeline.
+    """
+
+    def test_returns_comprehensive_dict(self, monkeypatch):
         """Test that function returns all quality metrics."""
+        monkeypatch.setattr(
+            "clarvis.metrics.quality.compute_code_quality_score",
+            lambda *a, **kw: _FAKE_CODE_QUALITY,
+        )
         result = get_all_quality_metrics()
         assert isinstance(result, dict)
 
-    def test_contains_task_and_code_metrics(self):
+    def test_contains_task_and_code_metrics(self, monkeypatch):
         """Test that both task and code quality are included."""
+        monkeypatch.setattr(
+            "clarvis.metrics.quality.compute_code_quality_score",
+            lambda *a, **kw: _FAKE_CODE_QUALITY,
+        )
         result = get_all_quality_metrics()
         assert 'task_quality' in result or 'task' in result
         assert 'code_quality' in result or 'code' in result
 
-    def test_all_scores_in_range(self):
+    def test_all_scores_in_range(self, monkeypatch):
         """Test that all scores are between 0 and 1."""
+        monkeypatch.setattr(
+            "clarvis.metrics.quality.compute_code_quality_score",
+            lambda *a, **kw: _FAKE_CODE_QUALITY,
+        )
         result = get_all_quality_metrics()
         for key, value in result.items():
             if isinstance(value, dict):

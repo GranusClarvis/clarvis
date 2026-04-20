@@ -48,7 +48,7 @@ def agent_dir(tmp_path):
 
 @pytest.fixture
 def mock_litebrain():
-    """Inject a mock lite_brain module into sys.modules."""
+    """Patch pr_factory._lite_brain_mod so LiteBrain() returns our mock."""
     mock_lb_instance = MagicMock()
     mock_lb_instance.recall.return_value = []
     mock_lb_instance.store.return_value = "lb-abc123"
@@ -58,13 +58,11 @@ def mock_litebrain():
     fake_module = types.ModuleType("lite_brain")
     fake_module.LiteBrain = mock_lb_class
 
-    old = sys.modules.get("lite_brain")
-    sys.modules["lite_brain"] = fake_module
+    import pr_factory as _pf
+    old_mod = _pf._lite_brain_mod
+    _pf._lite_brain_mod = fake_module
     yield mock_lb_instance, mock_lb_class
-    if old is not None:
-        sys.modules["lite_brain"] = old
-    else:
-        sys.modules.pop("lite_brain", None)
+    _pf._lite_brain_mod = old_mod
 
 
 @pytest.fixture

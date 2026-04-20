@@ -35,6 +35,14 @@ LOG_ROTATION = {
     "monitoring/watchdog.log": 500_000,
     "monitoring/alerts.log": 200_000,
     "monitoring/security.log": 200_000,
+    "monitoring/audit_retention.log": 200_000,
+    "monitoring/brain_hygiene_alerts.log": 200_000,
+    "monitoring/context_relevance_trend.log": 200_000,
+    "monitoring/evolution_hallucinations.log": 200_000,
+    "monitoring/lock_audit.log": 200_000,
+    "monitoring/restore_drill.log": 200_000,
+    "monitoring/secret_sweep.log": 200_000,
+    "monitoring/wiki_hooks.log": 200_000,
 }
 
 CRON_LOG_ROTATION = {
@@ -87,6 +95,12 @@ CRON_LOG_ROTATION = {
     "memory/cron/densify.log": 100_000,
     "memory/cron/agent_lifecycle.log": 100_000,
     "memory/cron/graph_migrate.log": 100_000,
+    "memory/cron/calibration_report.log": 100_000,
+    "memory/cron/canonical_state_refresh.log": 100_000,
+    "memory/cron/learning_strategy.log": 100_000,
+    "memory/cron/refresh_priorities.log": 100_000,
+    "memory/cron/reaudit_monthly.log": 100_000,
+    "memory/cron/reaudit_quarterly.log": 100_000,
 }
 
 MAX_ROTATED_COPIES = 2

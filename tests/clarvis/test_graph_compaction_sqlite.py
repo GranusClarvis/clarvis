@@ -15,9 +15,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-# Add scripts dir to path
 SCRIPTS_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "scripts")
 sys.path.insert(0, SCRIPTS_DIR)
+import _paths  # noqa: F401,E402
 
 from clarvis.brain.graph_store_sqlite import GraphStoreSQLite
 
@@ -179,7 +179,8 @@ class TestCompactionDispatch:
         """Verify run_compaction dispatches to SQLite path when _sqlite_store set."""
         from graph_compaction import run_compaction
 
-        with patch("graph_compaction.get_brain") as mock_get_brain:
+        with patch("graph_compaction.get_brain") as mock_get_brain, \
+             patch("graph_compaction._check_phi_guard", return_value=(0.70, False)):
             brain = MagicMock()
             brain._sqlite_store = MagicMock()  # non-None -> SQLite path
             mock_get_brain.return_value = brain
@@ -187,13 +188,14 @@ class TestCompactionDispatch:
             with patch("graph_compaction.run_compaction_sqlite") as mock_sqlite:
                 mock_sqlite.return_value = {"test": True}
                 result = run_compaction(dry_run=True)
-                mock_sqlite.assert_called_once_with(brain, dry_run=True)
+                mock_sqlite.assert_called_once_with(brain, dry_run=True, skip_pruning=False)
 
     def test_dispatches_to_json(self):
         """Verify run_compaction dispatches to JSON path when _sqlite_store is None."""
         from graph_compaction import run_compaction
 
-        with patch("graph_compaction.get_brain") as mock_get_brain:
+        with patch("graph_compaction.get_brain") as mock_get_brain, \
+             patch("graph_compaction._check_phi_guard", return_value=(0.70, False)):
             brain = MagicMock()
             brain._sqlite_store = None
             mock_get_brain.return_value = brain
@@ -201,4 +203,4 @@ class TestCompactionDispatch:
             with patch("graph_compaction.run_compaction_json") as mock_json:
                 mock_json.return_value = {"test": True}
                 result = run_compaction(dry_run=True)
-                mock_json.assert_called_once_with(brain, dry_run=True)
+                mock_json.assert_called_once_with(brain, dry_run=True, skip_pruning=False)

@@ -20,6 +20,17 @@ from pathlib import Path
 import pytest
 import uvicorn
 
+try:
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as p:
+        _browser = p.chromium.launch(headless=True)
+        _browser.close()
+    _PW_OK = True
+except Exception:
+    _PW_OK = False
+
+pytestmark = pytest.mark.skipif(not _PW_OK, reason="Playwright browser unavailable")
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 # Detect system Chromium (snap or apt) — Playwright's bundled Chromium

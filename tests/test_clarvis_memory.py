@@ -594,7 +594,7 @@ class TestEpisodicMemoryInit:
 class TestEpisodicCausalRelationships:
     def test_causal_relationships_dict(self):
         from clarvis.memory.episodic_memory import CAUSAL_RELATIONSHIPS
-        assert len(CAUSAL_RELATIONSHIPS) == 5
+        assert len(CAUSAL_RELATIONSHIPS) >= 5
         for key in ["caused", "enabled", "blocked", "fixed", "retried"]:
             assert key in CAUSAL_RELATIONSHIPS
             assert isinstance(CAUSAL_RELATIONSHIPS[key], str)

@@ -16,9 +16,9 @@ Unified memory system for Clarvis. This IS my brain — powered by ClarvisDB wit
 ## Architecture
 
 ### Three Layers
-1. **brain.py** — Core memory (store, recall, graph, goals, context)
-2. **brain_bridge.py** — Connects brain to subconscious (heartbeat preflight/postflight)
-3. **brain_introspect.py** — Self-awareness layer (domain detection, goal alignment, knowledge mapping)
+1. **clarvis.brain** — Core memory spine module (store, recall, graph, goals, context). CLI: `python3 -m clarvis brain`
+2. **clarvis.heartbeat.brain_bridge** — Connects brain to subconscious (heartbeat preflight/postflight)
+3. **scripts/brain_mem/brain_introspect.py** — Self-awareness layer (domain detection, goal alignment, knowledge mapping)
 
 ### 10 Collections (2584+ memories)
 | Collection | Count | Purpose | Query When |
@@ -43,7 +43,7 @@ Unified memory system for Clarvis. This IS my brain — powered by ClarvisDB wit
 
 ### Core Operations
 ```python
-from brain import brain, search, remember, capture
+from clarvis.brain import brain, search, remember, capture
 
 # Semantic search
 results = search("what do I know about X")
@@ -79,6 +79,8 @@ python3 -m clarvis brain optimize-full  # decay + prune + dedup + noise clean (C
 
 ### Introspection (Self-Awareness)
 ```python
+from clarvis._script_loader import load as _load_script
+brain_introspect = _load_script("brain_introspect", "brain_mem")
 from brain_introspect import introspect_for_task, format_manifest_for_prompt, build_knowledge_map
 
 # Full task introspection — what do I know? what aligns with my goals?

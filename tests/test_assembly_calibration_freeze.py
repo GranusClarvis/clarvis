@@ -49,6 +49,7 @@ EXPECTED_HARD_SUPPRESS = frozenset({
     "brain_goals",
     "metrics",
     "synaptic",
+    "world_model",
 })
 
 EXPECTED_DEFAULT_SUPPRESS = frozenset({
@@ -128,7 +129,7 @@ def test_standard_tier_total_frozen():
 
 def test_full_tier_total_frozen():
     from clarvis.context.assembly import TIER_BUDGETS
-    assert TIER_BUDGETS["full"]["total"] == 1000
+    assert TIER_BUDGETS["full"]["total"] == 1200
 
 
 def test_budget_section_keys_stable():

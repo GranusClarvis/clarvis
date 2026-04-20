@@ -13,6 +13,7 @@ Usage:
 import logging
 import os
 import re
+from dataclasses import dataclass, field
 from .compressor import compress_text, get_latest_scores
 from .budgets import (  # noqa: F401 — re-exported for backward compat
     BUDGET_TO_SECTIONS as _BUDGET_TO_SECTIONS,
@@ -40,6 +41,15 @@ except ImportError:
     get_relevant_frameworks = None
 
 try:
+    from clarvis._script_loader import load as _load_script
+    _wiki_mod = _load_script("wiki_retrieval", "wiki")
+    wiki_retrieve = _wiki_mod.wiki_retrieve
+    wiki_format_context = _wiki_mod.format_context
+except Exception:
+    wiki_retrieve = None
+    wiki_format_context = None
+
+try:
     from clarvis.audit.toggles import is_enabled as _toggle_enabled, is_shadow as _toggle_shadow
     from clarvis.audit.trace import update_trace as _toggle_update_trace, current_trace_id as _toggle_trace_id
 except ImportError:
@@ -55,6 +65,42 @@ WORKSPACE = os.environ.get(
 )
 SCRIPTS = os.path.join(WORKSPACE, "scripts")
 QUEUE_FILE = os.path.join(WORKSPACE, "memory/evolution/QUEUE.md")
+
+
+@dataclass
+class BriefTelemetry:
+    """Structured telemetry from a generate_tiered_brief() call."""
+    sections_included: list = field(default_factory=list)
+    sections_pruned: list = field(default_factory=list)
+    token_budget_used: int = 0
+    fallbacks_activated: list = field(default_factory=list)
+    relevance_weights_applied: dict = field(default_factory=dict)
+    tier: str = "standard"
+    task_complexity: str = "medium"
+
+    def to_dict(self):
+        return {
+            "sections_included": self.sections_included,
+            "sections_pruned": self.sections_pruned,
+            "token_budget_used": self.token_budget_used,
+            "fallbacks_activated": self.fallbacks_activated,
+            "relevance_weights_applied": self.relevance_weights_applied,
+            "tier": self.tier,
+            "task_complexity": self.task_complexity,
+        }
+
+
+class BriefResult(str):
+    """String subclass carrying telemetry — all str callers work unchanged."""
+
+    def __new__(cls, text, telemetry=None):
+        instance = super().__new__(cls, text)
+        instance.telemetry = telemetry or BriefTelemetry()
+        return instance
+
+    @property
+    def text(self):
+        return str(self)
 
 
 # Known integration targets for wire-task guidance
@@ -1520,6 +1566,23 @@ def _build_brief_end(current_task, tier, budget, episodic_hints, section_weights
         except Exception:
             logger.debug("Failed to synthesize knowledge", exc_info=True)
 
+    if not _toggle_enabled("wiki_retrieval"):
+        logger.debug("Wiki retrieval SKIPPED — toggle disabled")
+    elif wiki_retrieve and tier != "minimal":
+        try:
+            wiki_result = wiki_retrieve(current_task, max_pages=3, expand_graph=True)
+            if wiki_result.get("wiki_hits"):
+                wiki_text = wiki_format_context(wiki_result, max_tokens=500)
+                if wiki_text and wiki_text.strip():
+                    if _toggle_shadow("wiki_retrieval"):
+                        logger.debug("Wiki retrieval SHADOW — ran but excluded from prompt")
+                        _toggle_update_trace(_toggle_trace_id(),
+                                             toggles_shadowed=["wiki_retrieval"])
+                    else:
+                        parts.append("WIKI KNOWLEDGE:\n" + wiki_text)
+        except Exception:
+            logger.debug("Failed wiki retrieval", exc_info=True)
+
     if not _toggle_enabled("conceptual_framework_injection"):
         logger.debug("Conceptual frameworks SKIPPED — toggle disabled")
     elif get_relevant_frameworks and tier != "minimal":
@@ -1551,37 +1614,55 @@ def generate_tiered_brief(
 ):
     """Generate a quality-optimized context brief using primacy/recency positioning.
 
+    Returns a BriefResult (str subclass) — use as a string, or access .telemetry
+    for structured metadata (sections_included, sections_pruned, etc.).
+
     Ordering follows LLM attention research (Liu et al. "Lost in the Middle"):
       BEGINNING (highest attention): Decision context, knowledge, working memory.
       MIDDLE (lower attention): Related tasks, completions.
       END (high attention): Episodic lessons, knowledge synthesis, reasoning scaffold.
-
-    Per-section relevance weights scale individual char budgets within each zone,
-    so high-value sections (episodes, reasoning, knowledge) expand while low-value
-    sections (metrics, completions) compress.  This improves brief compression
-    ratio by allocating tokens where they contribute most to task success.
     """
     queue_file = queue_file or QUEUE_FILE
     budget = get_adjusted_budgets(tier)
     empirical_weights = load_section_relevance_weights()
     policy_weights = _get_policy_section_weights(current_task)
-    # Merge: policy weights are priors, empirical data adjusts.
-    # If both exist for a section, geometric mean preserves both signals.
     section_weights = {}
     all_sections = set(list(empirical_weights.keys()) + list(policy_weights.keys()))
     for sec in all_sections:
         emp = empirical_weights.get(sec)
         pol = policy_weights.get(sec)
         if emp is not None and pol is not None:
-            section_weights[sec] = round((emp * pol) ** 0.5, 3)  # geometric mean
+            section_weights[sec] = round((emp * pol) ** 0.5, 3)
         elif pol is not None:
             section_weights[sec] = round(pol, 3)
         elif emp is not None:
             section_weights[sec] = round(emp, 3)
 
+    telemetry = BriefTelemetry(
+        tier=tier,
+        task_complexity=_estimate_task_complexity(current_task),
+        relevance_weights_applied=dict(section_weights),
+    )
+    fallbacks = []
+
     beginning = _build_brief_beginning(current_task, tier, budget, knowledge_hints, section_weights)
     middle = _build_brief_middle(current_task, tier, budget, queue_file, section_weights)
     end = _build_brief_end(current_task, tier, budget, episodic_hints, section_weights)
+
+    _SECTION_MARKERS = {
+        "CURRENT TASK:": "decision_context", "RELEVANT KNOWLEDGE:": "knowledge",
+        "WORKING MEMORY:": "working_memory", "METRICS:": "metrics",
+        "RELATED TASKS:": "related_tasks", "RECENT:": "completions",
+        "EPISODIC LESSONS:": "episodes", "KNOWLEDGE SYNTHESIS:": "knowledge_synthesis",
+        "WIKI KNOWLEDGE:": "wiki_knowledge",
+        "CONCEPTUAL FRAMEWORKS:": "conceptual_frameworks",
+        "CODE GENERATION TEMPLATES": "procedures", "APPROACH:": "reasoning_scaffold",
+    }
+
+    all_parts_text = "\n".join(beginning + middle + end)
+    for marker, name in _SECTION_MARKERS.items():
+        if marker in all_parts_text:
+            telemetry.sections_included.append(name)
 
     parts = beginning
     if middle:
@@ -1594,6 +1675,21 @@ def generate_tiered_brief(
     assembled = "\n".join(parts)
 
     if tier != "minimal":
+        pre_prune_len = len(assembled)
         assembled = dycp_prune_brief(assembled, current_task)
+        if len(assembled) < pre_prune_len:
+            for marker, name in _SECTION_MARKERS.items():
+                if name in telemetry.sections_included and marker not in assembled:
+                    telemetry.sections_pruned.append(name)
+                    telemetry.sections_included.remove(name)
 
-    return assembled
+    telemetry.token_budget_used = len(assembled)
+
+    tid = _toggle_trace_id()
+    if tid:
+        try:
+            _toggle_update_trace(tid, **{"prompt.brief_telemetry": telemetry.to_dict()})
+        except Exception:
+            logger.debug("Failed to write brief telemetry to audit trace", exc_info=True)
+
+    return BriefResult(assembled, telemetry=telemetry)

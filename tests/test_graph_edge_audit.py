@@ -1,9 +1,18 @@
 """Tests for graph edge audit and bulk_intra_link boosting."""
 
+import importlib.util
 import sqlite3
 import tempfile
 import os
 import pytest
+
+_AUDIT_SPEC = importlib.util.spec_from_file_location(
+    "graph_edge_audit",
+    os.path.join(os.path.dirname(__file__), "..", "scripts", "audit", "graph_edge_audit.py"),
+)
+_audit_mod = importlib.util.module_from_spec(_AUDIT_SPEC)
+_AUDIT_SPEC.loader.exec_module(_audit_mod)
+audit = _audit_mod.audit
 
 
 def _make_test_db(path):
@@ -41,7 +50,6 @@ class TestGraphEdgeAudit:
         db_path = str(tmp_path / "test_graph.db")
         _make_test_db(db_path)
 
-        from scripts.audit.graph_edge_audit import audit
         report = audit(db_path)
 
         assert report["total_edges"] == 12
@@ -59,7 +67,6 @@ class TestGraphEdgeAudit:
             store.add_edge(f"pad_a{i}", f"pad_b{i}", "intra_similar",
                            source_collection="col-a", target_collection="col-a")
 
-        from scripts.audit.graph_edge_audit import audit
         report = audit(db_path)
 
         assert "supports" in report["near_zero_types"]
@@ -68,7 +75,6 @@ class TestGraphEdgeAudit:
         db_path = str(tmp_path / "test_graph.db")
         _make_test_db(db_path)
 
-        from scripts.audit.graph_edge_audit import audit
         report = audit(db_path)
 
         # a->b and a->c are connected, b->c is not
@@ -80,7 +86,6 @@ class TestGraphEdgeAudit:
         db_path = str(tmp_path / "test_graph.db")
         _make_test_db(db_path)
 
-        from scripts.audit.graph_edge_audit import audit
         report = audit(db_path)
 
         assert 0.0 <= report["gini_coefficient"] <= 1.0

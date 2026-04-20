@@ -11,13 +11,13 @@ def test_adapter_factory_openclaw():
 
 def test_adapter_factory_unknown_raises():
     with pytest.raises(ValueError, match="Unknown host adapter"):
-        get_adapter("hermes")
+        get_adapter("nosuchhost_zzz")
 
 
 def test_openclaw_adapter_delegates(monkeypatch):
-    monkeypatch.setattr(openclaw_mod, "remember", lambda text, importance=0.8, category="clarvis-memories": "mid-1")
-    monkeypatch.setattr(openclaw_mod, "search", lambda query, n=5, collections=None: [{"document": "ok"}])
-    monkeypatch.setattr(openclaw_mod, "generate_tiered_brief", lambda current_task, tier="standard": "brief")
+    monkeypatch.setattr("clarvis.brain.remember", lambda text, importance=0.8, category="clarvis-memories": "mid-1")
+    monkeypatch.setattr("clarvis.brain.search", lambda query, n=5, collections=None: [{"document": "ok"}])
+    monkeypatch.setattr("clarvis.context.assembly.generate_tiered_brief", lambda current_task, tier="standard": "brief")
 
     adapter = openclaw_mod.OpenClawAdapter()
     assert adapter.store_memory("hello").data["memory_id"] == "mid-1"

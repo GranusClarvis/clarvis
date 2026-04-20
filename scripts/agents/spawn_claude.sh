@@ -30,6 +30,7 @@ ISOLATED="false"
 TG_TOPIC=""
 TG_CHAT_ID="${CLARVIS_TG_CHAT_ID:-}"
 CATEGORY=""
+RETRY_MAX=0
 # Parse optional flags from args 3+
 for arg in "${@:3}"; do
     case "$arg" in
@@ -38,6 +39,7 @@ for arg in "${@:3}"; do
         --topic=*)    TG_TOPIC="${arg#--topic=}" ;;
         --chat=*)     TG_CHAT_ID="${arg#--chat=}" ;;
         --category=*) CATEGORY="${arg#--category=}" ;;
+        --retry=*)    RETRY_MAX="${arg#--retry=}" ;;
     esac
 done
 
@@ -53,12 +55,13 @@ if [ -n "$CATEGORY" ] && [ "$TIMEOUT" = "1200" ]; then
 fi
 
 if [ -z "$TASK" ]; then
-    echo "Usage: ./spawn_claude.sh 'task description' [timeout] [--no-tg] [--isolated] [--category=CAT] [--topic=N] [--chat=ID]"
+    echo "Usage: ./spawn_claude.sh 'task description' [timeout] [--no-tg] [--isolated] [--category=CAT] [--topic=N] [--chat=ID] [--retry=N]"
     echo "Default timeout: 1200s (20 min). Use --no-tg to skip Telegram delivery."
     echo "Use --isolated to run in git worktree isolation."
     echo "Use --category=CAT to set timeout by task type: quick=600s, standard=1200s, research=1800s, build=1800s."
     echo "Use --topic=N to deliver output to a specific Telegram topic thread."
     echo "Use --chat=ID to deliver to a specific chat (default: \$CLARVIS_TG_CHAT_ID)."
+    echo "Use --retry=N to retry N times with backoff if global lock is held (default: 0, reject immediately)."
     exit 1
 fi
 
@@ -210,16 +213,38 @@ finalize_trace('$CLARVIS_AUDIT_TRACE_ID', outcome='deferred', exit_code=$EX_DEFE
     rm -f "$PROMPT_FILE" "$TASK_FILE" 2>/dev/null || true
 }
 
-if [ -f "$GLOBAL_LOCK" ]; then
+# --- Deferred Retry Policy ---
+# --retry=0 (default): reject loudly, queue P0, exit 75
+# --retry=N: wait 30s×attempt (30, 60, 90...) then re-check lock, up to N times
+# Total wait budget: N*(N+1)/2 * 30s (e.g. --retry=2 → 90s, --retry=3 → 180s)
+_RETRY_ATTEMPT=0
+_lock_is_held() {
+    [ -f "$GLOBAL_LOCK" ] || return 1
     GPID=$(_read_lock_pid "$GLOBAL_LOCK")
     GAGE=$(( $(date +%s) - $(stat -c %Y "$GLOBAL_LOCK" 2>/dev/null || echo 0) ))
     if [ -n "$GPID" ] && _is_clarvis_process "$GPID" && [ "$GAGE" -le 2400 ]; then
-        _spawn_report_deferred "global Claude lock held" "$GPID" "$GAGE"
-        exit $EX_DEFERRED
+        return 0
     else
-        # Orphaned (dead PID, non-clarvis, or aged past 2400s) — safe to reclaim.
         echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] Reclaiming stale global lock (PID=${GPID:-?}, age=${GAGE}s)" >> "$LOGFILE"
         rm -f "$GLOBAL_LOCK"
+        return 1
+    fi
+}
+
+if _lock_is_held; then
+    while [ "$_RETRY_ATTEMPT" -lt "$RETRY_MAX" ]; do
+        _RETRY_ATTEMPT=$(( _RETRY_ATTEMPT + 1 ))
+        _RETRY_WAIT=$(( _RETRY_ATTEMPT * 30 ))
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] Lock held (PID ${GPID}, age=${GAGE}s) — retry ${_RETRY_ATTEMPT}/${RETRY_MAX} in ${_RETRY_WAIT}s" >> "$LOGFILE"
+        sleep "$_RETRY_WAIT"
+        if ! _lock_is_held; then
+            echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] Lock released after retry ${_RETRY_ATTEMPT} — proceeding" >> "$LOGFILE"
+            break
+        fi
+    done
+    if _lock_is_held; then
+        _spawn_report_deferred "global Claude lock held (after ${_RETRY_ATTEMPT} retries)" "$GPID" "$GAGE"
+        exit $EX_DEFERRED
     fi
 fi
 

@@ -103,6 +103,7 @@ class TestWorktreeLifecycle:
 
 
 @pytest.mark.slow
+@pytest.mark.timeout(300)
 class TestRunTestsMainWorkspace:
     """Run tests against the main workspace (read-only, no worktree) — runs nested test suite."""
 
@@ -121,6 +122,7 @@ class TestRunTestsMainWorkspace:
 
 
 @pytest.mark.slow
+@pytest.mark.timeout(300)
 class TestVerify:
     """Test the full verify flow — runs nested test suite."""
 

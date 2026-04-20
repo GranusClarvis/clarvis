@@ -36,6 +36,28 @@ export CLARVIS_TG_BOT_TOKEN="${CLARVIS_TG_BOT_TOKEN:-}"
 export CLARVIS_TG_CHAT_ID="${CLARVIS_TG_CHAT_ID:-}"
 export CLARVIS_TG_GROUP_ID="${CLARVIS_TG_GROUP_ID:-}"
 export CLARVIS_TG_REPORTS_TOPIC="${CLARVIS_TG_REPORTS_TOPIC:-5}"
+
+# Guard: reject placeholder API keys copied from .env.example
+_is_placeholder() {
+    case "$1" in
+        *your-key-here*|*your-*-here*|*your-personal-*|*your-group-*|\
+        *example*|*placeholder*|*CHANGE_ME*|*TODO*|"") return 0 ;;
+        *) return 1 ;;
+    esac
+}
+if _is_placeholder "${OPENROUTER_API_KEY:-}"; then
+    export OPENROUTER_API_KEY=""
+fi
+if _is_placeholder "${CLARVIS_TG_BOT_TOKEN:-}"; then
+    export CLARVIS_TG_BOT_TOKEN=""
+fi
+if _is_placeholder "${CLARVIS_TG_CHAT_ID:-}"; then
+    export CLARVIS_TG_CHAT_ID=""
+fi
+if _is_placeholder "${CLARVIS_TG_GROUP_ID:-}"; then
+    export CLARVIS_TG_GROUP_ID=""
+fi
+
 cd "$CLARVIS_WORKSPACE" || exit 1
 
 # Graph storage backend: SQLite (cutover finalized 2026-03-29).
@@ -118,11 +140,14 @@ run_claude_monitored() {
         return 1
     fi
 
-    # Launch Claude Code in background, feeding prompt via stdin (not argv)
+    # Launch Claude Code in background with JSON output for token capture.
+    # stderr → output_file (monitor watches this); stdout (JSON) → .json sidecar.
+    local _json_file="${_output_file}.json"
     timeout "$_timeout" env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \
         ${CLAUDE_BIN:-$(command -v claude || echo "$HOME/.local/bin/claude")} -p \
         --dangerously-skip-permissions --model claude-opus-4-6 \
-        < "$_prompt_file" > "$_output_file" 2>&1 &
+        --output-format json \
+        < "$_prompt_file" > "$_json_file" 2>"$_output_file" &
     local _claude_pid=$!
 
     # Launch execution monitor in background
@@ -136,6 +161,66 @@ run_claude_monitored() {
     # Clean up monitor
     kill "$_monitor_pid" 2>/dev/null
     wait "$_monitor_pid" 2>/dev/null
+
+    # Extract text result from JSON output and capture token usage.
+    # On parse failure (timeout, crash), fall back to raw stderr output.
+    local _source
+    _source="${CRON_SOURCE:-$(basename "${BASH_SOURCE[1]:-$0}" .sh 2>/dev/null || echo unknown)}"
+    python3 - "$_json_file" "$_output_file" "$_source" <<'EXTRACT_PY' >> "$_logfile" 2>&1 || true
+import json, sys, os
+json_file, output_file, source = sys.argv[1], sys.argv[2], sys.argv[3]
+try:
+    with open(json_file) as f:
+        data = json.load(f)
+except Exception:
+    sys.exit(0)
+
+result_text = data.get("result", "")
+if result_text:
+    stderr_content = ""
+    try:
+        with open(output_file) as f:
+            stderr_content = f.read()
+    except Exception:
+        pass
+    with open(output_file, "w") as f:
+        f.write(result_text)
+        if stderr_content.strip():
+            f.write("\n\n--- stderr ---\n" + stderr_content)
+
+usage = data.get("usage", {})
+total_cost = data.get("total_cost_usd")
+input_tokens = usage.get("input_tokens", 0)
+cache_create = usage.get("cache_creation_input_tokens", 0)
+cache_read = usage.get("cache_read_input_tokens", 0)
+output_tokens = usage.get("output_tokens", 0)
+total_input = input_tokens + cache_create + cache_read
+
+if total_cost is not None and total_input > 0:
+    try:
+        ws = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
+        from clarvis.orch.cost_tracker import CostTracker
+        tracker = CostTracker(os.path.join(ws, "data", "costs.jsonl"))
+        duration_ms = data.get("duration_ms", 0)
+        audit_trace_id = os.environ.get("CLARVIS_AUDIT_TRACE_ID", "")
+        tracker.log_real(
+            model="claude-code",
+            input_tokens=total_input,
+            output_tokens=output_tokens,
+            cost_usd=total_cost,
+            source=source,
+            task="",
+            duration_s=duration_ms / 1000.0,
+            generation_id=data.get("session_id", ""),
+            audit_trace_id=audit_trace_id,
+        )
+        from datetime import datetime, timezone
+        ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+        print(f"[{ts}] TOKEN_CAPTURE: in={total_input} out={output_tokens} cost=${total_cost:.4f} (cache_create={cache_create} cache_read={cache_read})")
+    except Exception as e:
+        print(f"TOKEN_CAPTURE: cost logging failed: {e}")
+EXTRACT_PY
+    rm -f "$_json_file"
 
     # Check reconsider file
     local _reconsider_file="${_output_file}.reconsider.json"
@@ -159,8 +244,6 @@ print(f\"reason={d.get('reason','?')} aborted={d.get('aborted',False)}\")
     [ "$_owns_prompt_file" -eq 1 ] && rm -f "$_prompt_file"
 
     # Log real cost checkpoint from OpenRouter API (non-blocking, best-effort)
-    local _source
-    _source="${CRON_SOURCE:-$(basename "${BASH_SOURCE[1]:-$0}" .sh 2>/dev/null || echo unknown)}"
     python3 "$CLARVIS_WORKSPACE/scripts/infra/cost_checkpoint.py" \
         "$_source" "$_task_head" "$_timeout" >> "$_logfile" 2>&1 || true
 

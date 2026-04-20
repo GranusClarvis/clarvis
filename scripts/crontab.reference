@@ -1,4 +1,6 @@
 # Clarvis Cron Schedule — Rebalanced 2026-03-03, reorganized 2026-04-04
+# Lane classification: docs/CRON_LANES.md (52 entries across 8 lanes)
+# Lanes: cognitive | brain | maintenance | monitoring | benchmark | reporting | project | audit
 # Global Claude lock (/tmp/clarvis_claude_global.lock) prevents any two
 # Claude Code spawners from running simultaneously.
 # Maintenance lock (/tmp/clarvis_maintenance.lock) prevents graph/vacuum overlap.
@@ -6,8 +8,15 @@
 # Scripts reorganized into subdirectories: cron/, pipeline/, brain_mem/, cognition/,
 # metrics/, evolution/, agents/, infra/, tools/, hooks/
 
-@reboot $HOME/.npm-global/bin/pm2 resurrect
-@reboot sleep 10 && ${OPENCLAW_HOME:-$HOME/.openclaw}/browser/start-chromium.sh start >> /tmp/openclaw-browser-boot.log 2>&1
+# === Boot sequence ===
+# systemd user services (auto-start via loginctl linger):
+#   openclaw-gateway.service  — OpenClaw gateway (port 18789)  [enabled]
+#   clarvis-website.service   — Public website (port 18801)    [enabled]
+#   clarvis-dashboard.service — Visual dashboard (port 18799)  [disabled]
+#   ollama.service            — Local LLM (Qwen3-VL)           [disabled]
+# Chromium for browser automation started on-demand, not at boot.
+# Legacy @reboot entries (pm2 resurrect, start-chromium.sh) removed —
+# gateway managed by systemd since 2026-03; chromium started on-demand.
 
 # === Nightly (02:00-02:45) ===
 0 2 * * * $CLARVIS_WORKSPACE/scripts/infra/backup_daily.sh >> $CLARVIS_WORKSPACE/memory/cron/backup.log 2>&1
@@ -79,10 +88,14 @@
 # === Monthly structural reflection (1st of month) ===
 30 3 1 * * $CLARVIS_WORKSPACE/scripts/cron/cron_monthly_reflection.sh >> $CLARVIS_WORKSPACE/memory/cron/monthly_reflection.log 2>&1
 45 3 1 * * . $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh && python3 $CLARVIS_WORKSPACE/scripts/metrics/brief_benchmark.py >> $CLARVIS_WORKSPACE/memory/cron/brief_benchmark.log 2>&1
+# === Monthly re-audit (1st of month, after brief_benchmark) ===
+50 3 1 * * . $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh && python3 $CLARVIS_WORKSPACE/scripts/audit/reaudit_runner.py monthly >> $CLARVIS_WORKSPACE/memory/cron/reaudit_monthly.log 2>&1
 
 # === Weekly PI benchmark (Sunday 06:00, after maintenance) ===
 0 6 * * 0 . $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh && python3 $CLARVIS_WORKSPACE/scripts/metrics/performance_benchmark.py record >> $CLARVIS_WORKSPACE/memory/cron/pi_benchmark.log 2>&1
 40 2 * * * . $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh && python3 -m clarvis cognition context-relevance refresh >> $CLARVIS_WORKSPACE/memory/cron/relevance_refresh.log 2>&1
+# === Weekly calibration report (Sunday 06:45, after CLR benchmark) ===
+45 6 * * 0 $CLARVIS_WORKSPACE/scripts/cron/cron_calibration_report.sh >> $CLARVIS_WORKSPACE/memory/cron/calibration_report.log 2>&1
 # === Weekly CLR benchmark (Sunday 06:30, after PI benchmark) ===
 30 6 * * 0 $CLARVIS_WORKSPACE/scripts/cron/cron_clr_benchmark.sh >> $CLARVIS_WORKSPACE/memory/cron/clr_benchmark.log 2>&1
 
@@ -91,3 +104,5 @@
 
 # === Quarterly restore drill (1st of Jan, Apr, Jul, Oct at 03:00) ===
 0 3 1 1,4,7,10 * . $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh && $CLARVIS_WORKSPACE/scripts/infra/restore_drill.sh >> $CLARVIS_WORKSPACE/monitoring/restore_drill.log 2>&1
+# === Quarterly re-audit (1st of Jan, Apr, Jul, Oct at 03:15) ===
+15 3 1 1,4,7,10 * . $CLARVIS_WORKSPACE/scripts/cron/cron_env.sh && python3 $CLARVIS_WORKSPACE/scripts/audit/reaudit_runner.py quarterly >> $CLARVIS_WORKSPACE/memory/cron/reaudit_quarterly.log 2>&1
