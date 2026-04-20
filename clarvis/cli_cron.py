@@ -66,6 +66,7 @@ _KNOWN_JOBS = [
     "graph_checkpoint",
     "graph_compaction",
     "graph_verify",
+    "intra_density_boost",
     "chromadb_vacuum",
     "monthly_reflection",
     "orchestrator",
@@ -117,6 +118,7 @@ _JOBS = {
     "graph_checkpoint": "0 4 * * * __WORKSPACE__/scripts/cron/cron_graph_checkpoint.sh >> __WORKSPACE__/memory/cron/graph_checkpoint.log 2>&1",
     "graph_compaction": "30 4 * * * __WORKSPACE__/scripts/cron/cron_graph_compaction.sh >> __WORKSPACE__/memory/cron/graph_compaction.log 2>&1",
     "graph_verify": "45 4 * * * __WORKSPACE__/scripts/cron/cron_graph_verify.sh >> __WORKSPACE__/memory/cron/graph_verify.log 2>&1",
+    "intra_density_boost": "50 4 * * * __WORKSPACE__/scripts/cron/cron_intra_density_boost.sh >> __WORKSPACE__/memory/cron/intra_density_boost.log 2>&1",
     "chromadb_vacuum": "0 5 * * * __WORKSPACE__/scripts/cron/cron_chromadb_vacuum.sh >> __WORKSPACE__/memory/cron/chromadb_vacuum.log 2>&1",
     # Core cycle
     "morning": "0 8 * * * __WORKSPACE__/scripts/cron/cron_morning.sh >> __WORKSPACE__/memory/cron/morning.log 2>&1",
@@ -175,7 +177,7 @@ _PRESETS: dict[str, dict] = {
         "jobs": [
             "health_monitor", "watchdog",
             "backup", "backup_verify",
-            "graph_checkpoint", "graph_compaction", "graph_verify", "chromadb_vacuum",
+            "graph_checkpoint", "graph_compaction", "graph_verify", "intra_density_boost", "chromadb_vacuum",
             "cleanup", "data_lifecycle",
             "pi_refresh", "status_json",
         ],
@@ -188,7 +190,7 @@ _PRESETS: dict[str, dict] = {
             # Backup
             "backup", "backup_verify",
             # Maintenance
-            "graph_checkpoint", "graph_compaction", "graph_verify", "chromadb_vacuum",
+            "graph_checkpoint", "graph_compaction", "graph_verify", "intra_density_boost", "chromadb_vacuum",
             # Core daily cycle
             "morning", "evening", "reflection", "evolution",
             # Moderate autonomous (4x/day)
@@ -217,7 +219,7 @@ _PRESETS: dict[str, dict] = {
             # Backup
             "backup", "backup_verify",
             # Maintenance
-            "graph_checkpoint", "graph_compaction", "graph_verify", "chromadb_vacuum",
+            "graph_checkpoint", "graph_compaction", "graph_verify", "intra_density_boost", "chromadb_vacuum",
             # Core daily cycle
             "morning", "evening", "reflection", "evolution",
             # Moderate autonomous (6x/day)

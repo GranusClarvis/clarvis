@@ -133,6 +133,7 @@ def test_guard_allows_normal_fluctuation(metrics_dir, monkeypatch):
     monkeypatch.setattr(pb, "benchmark_brain_stats", lambda: {"graph_density": 30, "total_memories": 2955, "bloat_score": 0.0})
     monkeypatch.setattr(pb, "benchmark_episodes", lambda: {"success_rate": 0.90, "action_accuracy": 0.93})
     monkeypatch.setattr(pb, "benchmark_quality", lambda: {"task_quality_score": 0.80, "code_quality_score": 0.75})
+    monkeypatch.setattr(pb, "benchmark_phi", lambda: {"phi": 0.72, "interpretation": "moderate"})
     monkeypatch.setattr(pb, "_safe_bench", lambda fn, name: fn())
 
     report = pb.run_refresh_benchmark()

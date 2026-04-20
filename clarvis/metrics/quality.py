@@ -112,40 +112,33 @@ def _ast_structural_checks(tree, content):
     """
     import ast
 
-    results = {}
-
-    # Check 1: No bare except clauses (anti-pattern that hides bugs)
     bare_excepts = 0
+    long_funcs = 0
+    star_imports = 0
+    has_try = False
+
     for node in ast.walk(tree):
         if isinstance(node, ast.ExceptHandler) and node.type is None:
             bare_excepts += 1
-    results["no_bare_except"] = bare_excepts == 0
-
-    # Check 2: Reasonable function length (<200 lines)
-    long_funcs = 0
-    for node in ast.walk(tree):
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             if hasattr(node, 'end_lineno') and node.end_lineno:
-                length = node.end_lineno - node.lineno
-                if length > 200:
+                if node.end_lineno - node.lineno > 200:
                     long_funcs += 1
-    results["reasonable_function_length"] = long_funcs == 0
+        elif isinstance(node, ast.ImportFrom) and node.names:
+            if any(alias.name == '*' for alias in node.names):
+                star_imports += 1
+        elif isinstance(node, ast.Try):
+            has_try = True
 
-    # Check 3: No star imports (namespace pollution)
-    star_imports = sum(
-        1 for node in ast.walk(tree)
-        if isinstance(node, ast.ImportFrom) and node.names
-        and any(alias.name == '*' for alias in node.names)
-    )
-    results["no_star_imports"] = star_imports == 0
-
-    # Check 4: Error handling present if file does I/O
     io_patterns = re.compile(r'open\(|subprocess\.|requests\.|urlopen|socket\.')
     has_io = bool(io_patterns.search(content))
-    has_try = any(isinstance(n, ast.Try) for n in ast.walk(tree))
-    results["has_error_handling"] = (not has_io) or has_try
 
-    return results
+    return {
+        "no_bare_except": bare_excepts == 0,
+        "reasonable_function_length": long_funcs == 0,
+        "no_star_imports": star_imports == 0,
+        "has_error_handling": (not has_io) or has_try,
+    }
 
 
 def _test_pass_rate():
@@ -258,8 +251,8 @@ def compute_code_quality_score(days=7):
         if not recent_files:
             return {"quality_score": 0.7, "reason": "no_recent_code"}
 
-        # Filter to Python files (only type we actually check)
-        py_files = [f for f in recent_files if f.endswith(".py")]
+        # Filter to Python files (only type we actually check), cap to avoid timeout
+        py_files = [f for f in recent_files if f.endswith(".py")][:200]
 
         results = {
             "lint_passed": 0,
