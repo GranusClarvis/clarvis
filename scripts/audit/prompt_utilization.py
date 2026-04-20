@@ -51,11 +51,48 @@ RELEVANCE_FILE = WORKSPACE / "data" / "retrieval_quality" / "context_relevance.j
 TRACES_DIR = WORKSPACE / "data" / "audit" / "traces"
 HISTORY_FILE = WORKSPACE / "data" / "audit" / "prompt_utilization_history.jsonl"
 SUMMARY_FILE = WORKSPACE / "data" / "audit" / "prompt_utilization_summary.json"
+HANDLABEL_FILE = WORKSPACE / "data" / "audit" / "prompt_utilization_handlabel_template.json"
+HANDLABEL_PROVENANCE = WORKSPACE / "data" / "audit" / "prompt_utilization_handlabel_provenance.json"
 
 # Phase-3 canonical task types (plan §Phase 3).
 TASK_TYPES = ["swo_feature", "bug_fix", "research_distillation", "maintenance", "self_reflection"]
 
-_SWO_RX = re.compile(r"\bSWO[_\- ]|star[_\- ]?world[_\- ]?order", re.I)
+# --- Tag-based classifier (Phase 3 upgrade) ---
+# Structured prefix→type mapping extracted from QUEUE.md task naming conventions.
+# Evaluated first; falls through to keyword regex only when no tag matches.
+_TAG_RX = re.compile(r"^\*{0,2}\[([A-Z][A-Z0-9_:]+?)(?:\]|\s)")
+
+_TAG_PREFIX_MAP: dict[str, str] = {
+    "SWO": "swo_feature",
+    "SANCTUARY": "swo_feature",
+    "STAR": "swo_feature",
+
+    "RESEARCH": "research_distillation",
+    "WIKI": "research_distillation",
+    "WIKI_QUERY_RETURN_SIGNATURE_FIX": "bug_fix",
+    "WIKI_METADATA_SCHEMA_ALIGNMENT": "bug_fix",
+    "LLM_BRAIN_REVIEW": "research_distillation",
+    "BRIEF": "research_distillation",
+    "LEARNING_STRATEGY": "research_distillation",
+
+    "FIX": "bug_fix",
+    "P0": "bug_fix",
+    "CALIBRATION": "bug_fix",
+    "HEARTBEAT_TASK_AWARE": "bug_fix",
+    "BENCH_CLR_AB": "bug_fix",
+
+    "PHI": "self_reflection",
+    "GRAPH_CONSOLIDATION": "self_reflection",
+    "DEAD_SCRIPT": "self_reflection",
+    "DEAD_CODE": "self_reflection",
+    "REASONING_CHAIN_QUALITY": "self_reflection",
+    "CRON_TIMEOUT_AUDIT": "self_reflection",
+    "OSS_HARDCODED": "self_reflection",
+    "PHI_REACHABILITY": "self_reflection",
+    "PHI_EMERGENCY": "self_reflection",
+}
+
+_SWO_RX = re.compile(r"\bSWO[_\- ]|star[_\- ]?world[_\- ]?order|\bsanctuary\b", re.I)
 _BUG_RX = re.compile(r"\b(?:fix|bug|race|regression|crash|broken|P0|leak|lock|retry|error[_\s]+classif)\b", re.I)
 _RESEARCH_RX = re.compile(r"\b(?:research|paper|arxiv|survey|distill|brief\b.*(?:survey|paper)|literature|study)\b", re.I)
 _REFLECTION_RX = re.compile(r"\b(?:phi|consciousness|self[_\- ]?model|reflection|dream|meta[_\- ]?cog|evolution\b|audit\b)\b", re.I)
@@ -81,8 +118,23 @@ GOOD_OUTCOMES = {"success", "partial_success"}
 
 
 def _classify_task_type(task: str, mmr_category: str = "") -> str:
-    """Heuristic mapping to one of the five Phase-3 canonical task types."""
+    """Classify task into one of five canonical Phase-3 types.
+
+    Priority: (1) structured tag-prefix lookup, (2) keyword regex, (3) mmr_category, (4) default.
+    """
     t = task or ""
+    # --- Stage 1: tag-prefix lookup (most reliable) ---
+    tag_m = _TAG_RX.match(t)
+    if tag_m:
+        tag = tag_m.group(1)
+        # Try full tag first, then progressively shorter prefixes
+        for candidate in [tag, *[tag.rsplit("_", i)[0] for i in range(1, tag.count("_") + 1)]]:
+            if candidate in _TAG_PREFIX_MAP:
+                return _TAG_PREFIX_MAP[candidate]
+        # No prefix match — check if tag itself signals a bug fix
+        if "FIX" in tag.split("_") or tag.endswith("_FIX"):
+            return "bug_fix"
+    # --- Stage 2: keyword regex fallback (original heuristic, same priority order) ---
     if _SWO_RX.search(t):
         return "swo_feature"
     if _REFLECTION_RX.search(t):
@@ -91,6 +143,7 @@ def _classify_task_type(task: str, mmr_category: str = "") -> str:
         return "bug_fix"
     if _RESEARCH_RX.search(t):
         return "research_distillation"
+    # --- Stage 3: mmr_category signal ---
     if (mmr_category or "").lower() == "research":
         return "research_distillation"
     return "maintenance"
@@ -148,8 +201,26 @@ def _load_traces_by_task() -> dict[str, str]:
     return mapping
 
 
-def _bucketize(rows: list[dict]) -> list[dict]:
+def _load_hand_labels() -> dict[str, dict[str, str]]:
+    """Load hand-labels keyed by task prefix (first 200 chars)."""
+    if not HANDLABEL_FILE.exists():
+        return {}
+    try:
+        rows = json.loads(HANDLABEL_FILE.read_text())
+    except (json.JSONDecodeError, OSError):
+        return {}
+    mapping: dict[str, dict[str, str]] = {}
+    for row in rows:
+        task = (row.get("task") or "")[:200]
+        labels = row.get("hand_labels") or {}
+        if task and any(v not in ("TBD", "", None) for v in labels.values()):
+            mapping[task] = {k: v for k, v in labels.items() if v not in ("TBD", "", None)}
+    return mapping
+
+
+def _bucketize(rows: list[dict], use_hand_labels: bool = False) -> list[dict]:
     traces = _load_traces_by_task()
+    hand_labels = _load_hand_labels() if use_hand_labels else {}
     history: list[dict] = []
     for r in rows:
         task = r.get("task") or ""
@@ -160,6 +231,11 @@ def _bucketize(rows: list[dict]) -> list[dict]:
             name: _label_section(float(score), outcome)
             for name, score in per_section.items()
         }
+        hl = hand_labels.get(task[:200], {})
+        if hl:
+            for name in section_labels:
+                if name in hl and hl[name] in SECTION_LABELS:
+                    section_labels[name] = hl[name]
         label_counts = Counter(section_labels.values())
         misleading_share = (
             label_counts.get("MISLEADING", 0) / len(section_labels)
@@ -322,7 +398,10 @@ def cmd_run(args: argparse.Namespace) -> int:
     if not rows:
         print(f"No corpus at {RELEVANCE_FILE}")
         return 1
-    history = _bucketize(rows)
+    use_hl = getattr(args, "hand_labels", False)
+    history = _bucketize(rows, use_hand_labels=use_hl)
+    if use_hl:
+        print("Hand-label override: ON")
     HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
     with HISTORY_FILE.open("w") as fh:
         for h in history:
@@ -388,16 +467,105 @@ def cmd_sample(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_handlabel(args: argparse.Namespace) -> int:
+    """Report on hand-label status and compare proxy vs hand labels."""
+    if not HANDLABEL_FILE.exists():
+        print(f"No hand-label file at {HANDLABEL_FILE}")
+        return 1
+    rows = json.loads(HANDLABEL_FILE.read_text())
+    labeled = [r for r in rows if any(
+        v not in ("TBD", "", None) for v in (r.get("hand_labels") or {}).values()
+    )]
+    total_sections = sum(len(r.get("hand_labels", {})) for r in rows)
+    labeled_sections = sum(
+        sum(1 for v in (r.get("hand_labels", {}).values()) if v not in ("TBD", "", None))
+        for r in rows
+    )
+    print(f"Rows: {len(rows)} total, {len(labeled)} with labels")
+    print(f"Sections: {labeled_sections}/{total_sections} labeled")
+
+    if not labeled:
+        print("No labels yet.")
+        return 0
+
+    proxy_agree = 0
+    proxy_disagree = 0
+    misleading_count = 0
+    label_dist: Counter = Counter()
+    for r in labeled:
+        proxy = r.get("section_labels_proxy", {})
+        hand = r.get("hand_labels", {})
+        for sec, hl in hand.items():
+            if hl in ("TBD", "", None):
+                continue
+            label_dist[hl] += 1
+            if hl == "MISLEADING":
+                misleading_count += 1
+            pl = proxy.get(sec, "")
+            if pl == hl:
+                proxy_agree += 1
+            else:
+                proxy_disagree += 1
+
+    total_compared = proxy_agree + proxy_disagree
+    print(f"\nLabel distribution: {dict(label_dist)}")
+    print(f"Proxy agreement: {proxy_agree}/{total_compared} ({proxy_agree/total_compared*100:.1f}%)" if total_compared else "")
+    print(f"Proxy disagreement: {proxy_disagree}/{total_compared} ({proxy_disagree/total_compared*100:.1f}%)" if total_compared else "")
+    print(f"MISLEADING count: {misleading_count}")
+    if misleading_count >= 5:
+        print("ALERT: >= 5 MISLEADING — scorecard re-ruling required")
+    else:
+        print(f"OK: {misleading_count} MISLEADING (< 5 threshold)")
+
+    if HANDLABEL_PROVENANCE.exists():
+        prov = json.loads(HANDLABEL_PROVENANCE.read_text())
+        print(f"\nProvenance: {prov.get('method')} / {prov.get('model')} @ {prov.get('timestamp', '')[:19]}")
+    return 0
+
+
+def cmd_validate(args: argparse.Namespace) -> int:
+    """Validate classifier accuracy against hand-label template task types."""
+    if not HANDLABEL_FILE.exists():
+        print(f"No hand-label file at {HANDLABEL_FILE}")
+        return 1
+    rows = json.loads(HANDLABEL_FILE.read_text())
+    correct = 0
+    wrong: list[tuple[str, str, str]] = []
+    for r in rows:
+        task = r.get("task", "")
+        expected = r.get("task_type", "")
+        predicted = _classify_task_type(task, r.get("mmr_category", ""))
+        if predicted == expected:
+            correct += 1
+        else:
+            wrong.append((task[:80], expected, predicted))
+    total = len(rows)
+    accuracy = correct / total if total else 0.0
+    print(f"Classifier accuracy: {correct}/{total} ({accuracy:.1%})")
+    print(f"Target: ≥ 85.0%  —  {'PASS' if accuracy >= 0.85 else 'FAIL'}")
+    if wrong:
+        print(f"\nDisagreements ({len(wrong)}):")
+        for task_snip, expected, predicted in wrong:
+            print(f"  expected={expected:25s}  predicted={predicted:25s}  task={task_snip}")
+    return 0 if accuracy >= 0.85 else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Phase-3 prompt utilization auditor")
     sub = parser.add_subparsers(dest="cmd", required=True)
     p_run = sub.add_parser("run", help="Score corpus + write history + summary")
+    p_run.add_argument("--hand-labels", action="store_true",
+                        help="Override proxy labels with hand-labels where available")
     p_run.set_defaults(func=cmd_run)
     p_sum = sub.add_parser("summary", help="Print latest summary JSON")
     p_sum.set_defaults(func=cmd_summary)
     p_sample = sub.add_parser("sample", help="Emit N-row hand-label template")
     p_sample.add_argument("--n", type=int, default=40)
     p_sample.set_defaults(func=cmd_sample)
+    p_hl = sub.add_parser("handlabel", help="Report hand-label status + proxy comparison")
+    p_hl.set_defaults(func=cmd_handlabel)
+    p_val = sub.add_parser("validate", help="Validate classifier vs hand-label template")
+    p_val.set_defaults(func=cmd_validate)
     args = parser.parse_args(argv)
     return args.func(args)
 
