@@ -34,13 +34,18 @@ from clarvis.memory.episodic_memory import episodic
 from clarvis.cognition.reasoning_chains import create_chain, add_step, complete_step
 
 try:
-    from clarvis.audit.toggles import is_enabled, is_shadow
-    from clarvis.audit.trace import update_trace, current_trace_id
+    from clarvis.audit.toggles import is_enabled, is_shadow, toggle_snapshot
+    from clarvis.audit.trace import (
+        update_trace, current_trace_id, start_trace, finalize_trace,
+    )
 except ImportError:
     def is_enabled(name, default=True): return default
     def is_shadow(name, default=False): return default
+    def toggle_snapshot(): return {}
     def update_trace(tid, **kw): return False
     def current_trace_id(): return None
+    def start_trace(**kw): return None
+    def finalize_trace(tid, outcome, **kw): return False
 
 _TOGGLE_NAME = "dream_engine_outputs"
 # Set by dream() when running in shadow mode — checked by callers who inject
@@ -745,6 +750,18 @@ if __name__ == "__main__":
 
     cmd = sys.argv[1]
 
+    # Start a standalone audit trace for shadow-mode A/B data collection
+    _standalone_tid = None
+    if cmd in ("dream", "rethink", "sleep") and not current_trace_id():
+        _standalone_tid = start_trace(
+            source="standalone_cron",
+            task={"name": f"dream_engine.{cmd}", "toggle": _TOGGLE_NAME},
+            cron_origin="dream_engine.py",
+            feature_toggles=toggle_snapshot(),
+        )
+
+    _t0 = datetime.now(timezone.utc)
+
     if cmd == "dream":
         n = int(sys.argv[2]) if len(sys.argv) > 2 else 10
         result = dream(n)
@@ -781,3 +798,8 @@ if __name__ == "__main__":
     else:
         print(f"Unknown command: {cmd}")
         sys.exit(1)
+
+    # Finalize standalone trace
+    if _standalone_tid:
+        _dur = (datetime.now(timezone.utc) - _t0).total_seconds()
+        finalize_trace(_standalone_tid, outcome="success", duration_s=_dur)

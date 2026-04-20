@@ -201,11 +201,8 @@ _Source: `source="audit_phase_4"`. P0+P1 items are co-located with their parent 
 #### First Playable Layer
 
 #### Retention / Identity
-- [x] **[SANCTUARY_JOURNAL_SYSTEM]** Persistent companion journal/history. (2026-04-20: paginated API + type filters + stats + enhanced UI with full history view)
-- [x] **[SANCTUARY_BALANCE_PASS_1]** Progression/reward cadence tuning. (2026-04-20: daily interaction cap 15/day, XP for interactions+activities, bond/min rebalance favoring longer activities)
 
 #### V1.5 / Deeper Layer
-- [x] **[SANCTUARY_CHAT_ARCH_V1]** Lightweight companion-chat architecture design. (2026-04-20: ADR-002 shipped — trait personality, session chat, 15msg/day cap, ~$1.50/mo)
 - [ ] **[SANCTUARY_COMPANION_CHAT_V1]** V1.5 personalized chat with active Skrumpey.
 - [ ] **[SANCTUARY_TRAIT_EVOLUTION]** Derive visible companion traits from behavior patterns.
 - [ ] **[SANCTUARY_SEASONAL_QUESTS_V1]** First seasonal quest/event layer.

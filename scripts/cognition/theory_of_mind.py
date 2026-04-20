@@ -34,13 +34,18 @@ from pathlib import Path
 from clarvis.brain import brain, AUTONOMOUS_LEARNING
 
 try:
-    from clarvis.audit.toggles import is_enabled, is_shadow
-    from clarvis.audit.trace import update_trace, current_trace_id
+    from clarvis.audit.toggles import is_enabled, is_shadow, toggle_snapshot
+    from clarvis.audit.trace import (
+        update_trace, current_trace_id, start_trace, finalize_trace,
+    )
 except ImportError:
     def is_enabled(name, default=True): return default
     def is_shadow(name, default=False): return default
+    def toggle_snapshot(): return {}
     def update_trace(tid, **kw): return False
     def current_trace_id(): return None
+    def start_trace(**kw): return None
+    def finalize_trace(tid, outcome, **kw): return False
 
 _TOGGLE_NAME = "theory_of_mind"
 
@@ -923,14 +928,30 @@ if __name__ == "__main__":
         sys.exit(0)
 
     # ��─ Toggle gate ──
+    cmd = sys.argv[1]
+
+    # Start a standalone audit trace for shadow-mode A/B data collection
+    _standalone_tid = None
+    if cmd in ("update", "predict", "suggest", "observe") and not current_trace_id():
+        _standalone_tid = start_trace(
+            source="standalone_cron",
+            task={"name": f"theory_of_mind.{cmd}", "toggle": _TOGGLE_NAME},
+            cron_origin="theory_of_mind.py",
+            feature_toggles=toggle_snapshot(),
+        )
+
+    _t0 = datetime.now(timezone.utc)
+
+    # Toggle gate
     if not is_enabled(_TOGGLE_NAME):
         print(f"[ToM] Feature '{_TOGGLE_NAME}' is disabled — skipping.")
+        if _standalone_tid:
+            finalize_trace(_standalone_tid, outcome="skipped",
+                           duration_s=(datetime.now(timezone.utc) - _t0).total_seconds())
         sys.exit(0)
     if is_shadow(_TOGGLE_NAME):
         print("[ToM] Running in SHADOW mode — outputs excluded from prompts/decisions.")
         update_trace(current_trace_id(), toggles_shadowed=[_TOGGLE_NAME])
-
-    cmd = sys.argv[1]
 
     if cmd == "observe":
         if len(sys.argv) < 4:
@@ -985,3 +1006,8 @@ if __name__ == "__main__":
     else:
         print(f"Unknown command: {cmd}")
         sys.exit(1)
+
+    # Finalize standalone trace
+    if _standalone_tid:
+        _dur = (datetime.now(timezone.utc) - _t0).total_seconds()
+        finalize_trace(_standalone_tid, outcome="success", duration_s=_dur)
