@@ -46,8 +46,6 @@ _SWO tasks tracked here. When project lane is active, these get priority. See al
 
 _3-phase verification pass over the completed 16-phase deep audit + 100+ queue items. Confirms work quality, identifies regressions, flags fragile areas. Each phase covers ~6 audit areas. Source: operator-requested audit-of-the-audit._
 
-- [ ] **[VERIFY_P2_SHADOW_DATA_GAP]** Phase 2 verification follow-up: 3 of 4 SHADOW neuro features (dream_engine_outputs, absolute_zero_selfplay, theory_of_mind) produce 0 A/B traces because they run outside assembly.py. Either (a) add shadow-mode trace emission to their standalone cron/hook entry points, or (b) define an alternative A/B measurement that doesn't require assembly.py toggle traces (e.g., episode outcome comparison with/without feature). Must resolve before the 2026-05-01 A/B window closes. Source: VERIFY_PHASE_2_COGNITION check (e).
-- [x] **[VERIFY_PHASE_3_EXECUTION]** Verification Phase 3: Execution, Economics & Governance (covers audit Phases 6, 7, 8, 12, 13, 14). (2026-04-20 completed. Scorecard: 4 PASS, 1 DRIFT, 1 REGRESSION. Overall: PASS — 1 REGRESSION ≤ 1 threshold met. Details: (a) Phase 6 queue slot share: DRIFT — improved 12.5%→~17% but 50% PROJECT_LANES target not met, crowded by audit phases; (b) Phase 7 heartbeat: PASS — 97.2% success (70/72 episodes, Apr 13–20), +6.9pp above 90.3% baseline; (c) Phase 8 PR delivery: PASS — 3.5/week (7 merged PRs in 2 weeks), 25× the 0.14/week baseline; (d) Phase 12 digest: PASS — 100% actionability (9/9 items), +43.5pp above 56.5% baseline; (e) Phase 13 sidecar: PASS — 439/439 entries have state metadata (100%), up from 0/394 baseline; note: outcome-quality metadata still missing, tracked by PHASE13_RESCORE_AFTER_SIDECAR; (f) Phase 14 cost tracking: REGRESSION — OpenRouter API key expired, `cost_tracker.py` returns HTTP 401, no real cost visibility; `cost_checkpoint.py` degrades gracefully but issue is chronic since early April. Note: `data/audit/heartbeat_outcomes.jsonl` stopped writing after Apr 4 — stale but non-blocking.)
 
 ### Clarvis Maintenance — Keep Alive
 
@@ -203,11 +201,11 @@ _Source: `source="audit_phase_4"`. P0+P1 items are co-located with their parent 
 #### First Playable Layer
 
 #### Retention / Identity
-- [ ] **[SANCTUARY_JOURNAL_SYSTEM]** Persistent companion journal/history.
-- [ ] **[SANCTUARY_BALANCE_PASS_1]** Progression/reward cadence tuning.
+- [x] **[SANCTUARY_JOURNAL_SYSTEM]** Persistent companion journal/history. (2026-04-20: paginated API + type filters + stats + enhanced UI with full history view)
+- [x] **[SANCTUARY_BALANCE_PASS_1]** Progression/reward cadence tuning. (2026-04-20: daily interaction cap 15/day, XP for interactions+activities, bond/min rebalance favoring longer activities)
 
 #### V1.5 / Deeper Layer
-- [ ] **[SANCTUARY_CHAT_ARCH_V1]** Lightweight companion-chat architecture design.
+- [x] **[SANCTUARY_CHAT_ARCH_V1]** Lightweight companion-chat architecture design. (2026-04-20: ADR-002 shipped — trait personality, session chat, 15msg/day cap, ~$1.50/mo)
 - [ ] **[SANCTUARY_COMPANION_CHAT_V1]** V1.5 personalized chat with active Skrumpey.
 - [ ] **[SANCTUARY_TRAIT_EVOLUTION]** Derive visible companion traits from behavior patterns.
 - [ ] **[SANCTUARY_SEASONAL_QUESTS_V1]** First seasonal quest/event layer.
@@ -227,6 +225,14 @@ _Source: `source="audit_phase_4"`. P0+P1 items are co-located with their parent 
 
 ### 2026-04-16 evolution scan
 
+
+### 2026-04-20 evolution scan
+
+- [ ] [UNVERIFIED] **[FIX_PHI_HEALTH_REPORTING]** The health pipeline reports Phi=0.000 because `phi_metric.py` was never committed to `scripts/metrics/` on main — it only exists in stale worktrees. Either (a) add a `scripts/metrics/phi_metric.py` wrapper that calls `clarvis.metrics.phi.compute_phi()`, or (b) fix the health data collector (`cron_pi_refresh.sh` / `daily_brain_eval.py`) to import from `clarvis.metrics.phi` directly. Acceptance: `health_monitor.sh` and evolution context report Phi≥0.60 instead of 0.000.
+- [ ] **[SEMANTIC_OVERLAP_BOOST]** Phi's weakest sub-component is `semantic_cross_collection`=0.579 (others ≥0.63). Identify the 5 lowest-similarity collection pairs (goals↔autonomous-learning=0.492, procedures↔autonomous-learning=0.488) and add 10–15 bridging memories that create genuine semantic connections between those domains. Verify Phi semantic component rises ≥0.60 without degrading other components.
+- [ ] **[CRON_STALE_WORKTREE_CLEANUP]** 10+ stale worktrees exist under `.claude/worktrees/` from prior agent runs, each containing full repo copies. Add a weekly cron entry (Sun 05:25, between existing hygiene jobs) that runs `git worktree prune` and removes any `.claude/worktrees/` dirs older than 7 days. Non-Python task (bash cron script).
+- [ ] **[AUTONOMOUS_EXECUTION_CAPABILITY_LIFT]** `autonomous_execution` is the weakest capability at 0.64. Audit the last 20 autonomous cron episodes for failure patterns (timeout, lock contention, wrong-model spawn). Implement the top fix (likely: reduce lock wait time or add per-job timeout tuning). Acceptance: capability score ≥0.70 on next weekly benchmark.
+- [ ] **[COST_API_KEY_RESTORE]** VERIFY_PHASE_3 flagged REGRESSION: OpenRouter API key expired, `cost_tracker.py` returns HTTP 401. Restore cost visibility by either rotating the API key or switching to local-only cost estimation from sidecar data. Acceptance: `cost_tracker.py telegram` returns valid data without 401.
 
 ---
 
