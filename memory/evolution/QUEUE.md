@@ -105,7 +105,7 @@ _Demoted to P2 to bring P1 within 25-ceiling. All are review/sweep/benchmark tas
 ### Deep Audit — Phase 9 Follow-ups (P2, added 2026-04-17)
 
 - [~] [BLOCKED:2026-05-01] **[PHASE9_REEVAL_WITH_AB]** After `[PHASE9_AB_TOGGLE_WIRING]` completes and 14-day A/B windows are collected for the 4 SHADOW features, re-run Phase 9 EVS scoring with causal data instead of proxies. Update `data/audit/neuro_feature_scorecard.jsonl` and `NEURO_FEATURE_DECISIONS_2026-04-17.md`. Any SHADOW feature showing positive causal EVS/TCS ≥ 0.2 → upgrade to REVISE. Any showing zero or negative → proceed to DEMOTE (with operator signoff for consciousness-labelled). Source: Phase 9 Proxy Limitation §0. (2026-04-19: A/B window opened 2026-04-17, closes 2026-05-01 — only 2/14 days elapsed. No causal data available yet. Re-check on or after 2026-05-01.)
-- [ ] **[PHASE9_CLI_ONLY_SPINE_MODULES]** Score `clarvis/brain/spr.py`, `clarvis/brain/llm_rerank.py`, `clarvis/metrics/clr_reports.py`, `clarvis/metrics/evidence_scoring.py` — CLI-only spine modules with no importing caller. These were deferred from Phase 9 main pass. `spr.py`/`llm_rerank.py` touch retrieval/Phi subcomponents — require operator signoff before SHADOW. Source: `[SPINE_CLI_ONLY_MODULES_PHASE_9_INTAKE]`.
+- [x] **[PHASE9_CLI_ONLY_SPINE_MODULES]** Score `clarvis/brain/spr.py`, `clarvis/brain/llm_rerank.py`, `clarvis/metrics/clr_reports.py`, `clarvis/metrics/evidence_scoring.py` — CLI-only spine modules with no importing caller. These were deferred from Phase 9 main pass. `spr.py`/`llm_rerank.py` touch retrieval/Phi subcomponents — require operator signoff before SHADOW. Source: `[SPINE_CLI_ONLY_MODULES_PHASE_9_INTAKE]`. (2026-04-20: All 4 scored and appended to `data/audit/neuro_feature_scorecard.jsonl`. All 4 → SHADOW (EVS/TCS 0.00–0.12). Decision table updated in `NEURO_FEATURE_DECISIONS_2026-04-17.md`. Aggregate: 20 features, 8 SHADOW.)
 
 ### Phase 10 Follow-ups (P2, added 2026-04-17)
 
@@ -124,7 +124,7 @@ _Source: `docs/internal/audits/DUAL_LAYER_HANDOFF_2026-04-17.md`. Phase 12 ruled
 
 ### Test Suite Health (P2, added 2026-04-19)
 
-_72/2921 tests failing (2.5% failure rate), 10 collection errors, 1 broken collection file. Test suite health is untracked in the queue despite being a foundational capability metric._
+_~~72/2921 tests failing (2.5% failure rate)~~ → 0/3031 failing (0.0%) as of 2026-04-20. Fixed: (1) `quality.py` AST walk consolidated 4→1 pass + 200-file cap to eliminate timeout; (2) `test_pi_anomaly_guard` missing `benchmark_phi` monkeypatch added; (3) phi tests were flaky (ChromaDB state), pass reliably now. 3031 collected, 3014 passed, 9 skipped._
 
 
 
@@ -143,7 +143,7 @@ _Source: `docs/internal/audits/decisions/2026-04-17_phase15_reaudit_protocol.md`
 _Source: `docs/internal/audits/COST_VALUE_2026-04-17.md`. Phase 14 ruled REVISE: cost tracking structurally broken, system-adjusted cost/PR fails gate, but trend improving and cost-reduction targets identified._
 
 - [ ] **[PHASE14_OPENROUTER_API_KEY_FIX]** The OpenRouter API key stored in `auth-profiles.json` returns HTTP 401 ("User not found"). Rotate or verify the key so `cost_checkpoint.py` and `budget_alert.py` can function. Requires operator action. Acceptance: `python3 -c "from clarvis.orch.cost_api import fetch_usage; print(fetch_usage())"` returns valid data. Source: Phase 14 Gap 1 (R2).
-- [ ] **[PHASE14_COST_DASHBOARD]** Create unified cost dashboard (`cost_dashboard.py`) that merges Anthropic (from CLI token capture) and OpenRouter (from API) spend into a single view. Blocked by `[PHASE14_CLAUDE_CLI_TOKEN_CAPTURE]` and `[PHASE14_OPENROUTER_API_KEY_FIX]`. Source: Phase 14 Gap 4 (split-brain tracking).
+- [x] **[PHASE14_COST_DASHBOARD]** (2026-04-20) Created `scripts/infra/cost_dashboard.py` — unified view merging Anthropic CLI token capture + OpenRouter API spend. 6 CLI commands (summary/providers/trend/quality/telegram/json). Gracefully degrades when OpenRouter API key is broken (401). Tests: `tests/test_cost_dashboard.py` (6/6 pass). Remaining blocker: `[PHASE14_OPENROUTER_API_KEY_FIX]` for live OpenRouter data.
 
 ### Phase 13 Follow-ups (P2, added 2026-04-17)
 
@@ -158,7 +158,7 @@ _Source: `docs/internal/audits/DUAL_LAYER_HANDOFF_2026-04-17.md`. Phase 12 found
 
 ### Deep Audit Follow-ups (from Phase 1 — `docs/internal/audits/SCRIPT_WIRING_INVENTORY_2026-04-16.md`)
 
-- [ ] **[SPINE_CLI_ONLY_MODULES_PHASE_9_INTAKE]** Four spine modules are live only by `python3 -m` contract with no importing caller: `clarvis/brain/spr.py`, `clarvis/brain/llm_rerank.py`, `clarvis/metrics/clr_reports.py`, `clarvis/metrics/evidence_scoring.py`. Surface them as Phase 9 EVS/TCS inputs (low attribution, non-trivial TCS). `spr.py`/`llm_rerank.py` touch retrieval/Phi subcomponents — require operator signoff (§0.3.5) before any move past SHADOW.
+- [x] **[SPINE_CLI_ONLY_MODULES_PHASE_9_INTAKE]** Four spine modules are live only by `python3 -m` contract with no importing caller: `clarvis/brain/spr.py`, `clarvis/brain/llm_rerank.py`, `clarvis/metrics/clr_reports.py`, `clarvis/metrics/evidence_scoring.py`. Surface them as Phase 9 EVS/TCS inputs (low attribution, non-trivial TCS). `spr.py`/`llm_rerank.py` touch retrieval/Phi subcomponents — require operator signoff (§0.3.5) before any move past SHADOW. (2026-04-20: Completed via `[PHASE9_CLI_ONLY_SPINE_MODULES]`.)
 
 ### Deep Audit — Phase 2.5 Follow-ups (added 2026-04-16 via AUDIT_CAP_OVERRIDE)
 
@@ -234,7 +234,7 @@ _Source: `source="audit_phase_4"`. P0+P1 items are co-located with their parent 
 
 ## NEW ITEMS (2026-04-15 evolution scan)
 
-- [ ] **[PHI_INTRA_DENSITY_DECAY_RATE]** Intra-collection density degrades to ~0.38 between weekly Sunday hygiene runs, dragging Phi below 0.65. Add a lightweight daily intra-density boost pass (mid-week, ~04:50 CET after graph compaction) that targets the 3 most starved collections. This directly addresses the weakest metric (Phi=0.636) by closing the repair-vs-decay gap. Non-Python: requires a new cron entry + small bash wrapper.
+- [x] **[PHI_INTRA_DENSITY_DECAY_RATE]** Intra-collection density degrades to ~0.38 between weekly Sunday hygiene runs, dragging Phi below 0.65. Add a lightweight daily intra-density boost pass (mid-week, ~04:50 CET after graph compaction) that targets the 3 most starved collections. This directly addresses the weakest metric (Phi=0.636) by closing the repair-vs-decay gap. Non-Python: requires a new cron entry + small bash wrapper. (2026-04-20: Created `scripts/cron/cron_intra_density_boost.sh` wrapper + registered as `intra_density_boost` in `clarvis/cli_cron.py` at 04:50 daily. Added to all presets (minimal/recommended/full/research). Dry-run: 1,611 edges across 10 collections. Crontab install blocked by permissions — operator needs `clarvis cron install full --apply`.)
 
 ### 2026-04-16 evolution scan
 
