@@ -1,0 +1,912 @@
+{
+  "timestamp": "2026-04-20T01:03:48.227310+00:00",
+  "task_count": 20,
+  "summary": {
+    "wiki_value_rate": 1.0,
+    "wiki_value_count": 20,
+    "avg_term_delta": -1080.0,
+    "avg_latency_delta_ms": 7.2,
+    "coverage_distribution": {
+      "wiki+graph": 20
+    }
+  },
+  "by_domain": {
+    "analysis": {
+      "count": 6,
+      "wiki_value_rate": 1.0,
+      "avg_term_delta": -942.7,
+      "avg_latency_delta_ms": -55.1
+    },
+    "general": {
+      "count": 4,
+      "wiki_value_rate": 1.0,
+      "avg_term_delta": -1417.8,
+      "avg_latency_delta_ms": 92.4
+    },
+    "optimization": {
+      "count": 1,
+      "wiki_value_rate": 1.0,
+      "avg_term_delta": -1379.0,
+      "avg_latency_delta_ms": -12.1
+    },
+    "integration": {
+      "count": 1,
+      "wiki_value_rate": 1.0,
+      "avg_term_delta": -1627.0,
+      "avg_latency_delta_ms": 11.9
+    },
+    "new_capability": {
+      "count": 4,
+      "wiki_value_rate": 1.0,
+      "avg_term_delta": -606.5,
+      "avg_latency_delta_ms": 20.6
+    },
+    "research": {
+      "count": 1,
+      "wiki_value_rate": 1.0,
+      "avg_term_delta": -620.0,
+      "avg_latency_delta_ms": 6.3
+    },
+    "bug_fix": {
+      "count": 3,
+      "wiki_value_rate": 1.0,
+      "avg_term_delta": -1406.7,
+      "avg_latency_delta_ms": 5.5
+    }
+  },
+  "recommendation": "MARGINAL: Minimal wiki value with acceptable latency cost. Keep shadow mode.",
+  "pairs": [
+    {
+      "task": "CRON LANE CONSOLIDATION AUDIT",
+      "domain": "analysis",
+      "source": "queue",
+      "brain_only": {
+        "route": "brain_only",
+        "latency_ms": 728.9,
+        "result_count": 29,
+        "avg_distance": 1.1733,
+        "min_distance": 0.9088,
+        "max_distance": 1.4531,
+        "unique_terms": 818,
+        "collections_hit": [
+          "clarvis-learnings",
+          "clarvis-infrastructure",
+          "clarvis-memories"
+        ]
+      },
+      "brain_plus_wiki": {
+        "route": "brain_plus_wiki",
+        "latency_ms": 254.6,
+        "coverage": "wiki+graph",
+        "wiki_hit_count": 5,
+        "graph_neighbor_count": 4,
+        "broad_fallback_count": 0,
+        "result_count": 5,
+        "wiki_avg_distance": 1.6137,
+        "wiki_min_distance": 1.5831,
+        "broad_avg_distance": null,
+        "unique_terms": 336
+      },
+      "delta": {
+        "unique_terms": -482,
+        "latency_ms": -474.3,
+        "wiki_added_value": true,
+        "coverage": "wiki+graph"
+      }
+    },
+    {
+      "task": "CLAUDE SPAWN DEFERRED RETRY POLICY Define behavior for lock-held spawns: reject loudly, queue explic",
+      "domain": "general",
+      "source": "queue",
+      "brain_only": {
+        "route": "brain_only",
+        "latency_ms": 317.0,
+        "result_count": 98,
+        "avg_distance": 1.341,
+        "min_distance": 0.7678,
+        "max_distance": 1.7323,
+        "unique_terms": 1789,
+        "collections_hit": [
+          "clarvis-context",
+          "clarvis-identity",
+          "clarvis-memories",
+          "clarvis-preferences",
+          "autonomous-learning",
+          "clarvis-goals",
+          "clarvis-learnings",
+          "clarvis-episodes",
+          "clarvis-infrastructure",
+          "clarvis-procedures"
+        ]
+      },
+      "brain_plus_wiki": {
+        "route": "brain_plus_wiki",
+        "latency_ms": 537.1,
+        "coverage": "wiki+graph",
+        "wiki_hit_count": 5,
+        "graph_neighbor_count": 4,
+        "broad_fallback_count": 0,
+        "result_count": 5,
+        "wiki_avg_distance": 1.7054,
+        "wiki_min_distance": 1.6766,
+        "broad_avg_distance": null,
+        "unique_terms": 393
+      },
+      "delta": {
+        "unique_terms": -1396,
+        "latency_ms": 220.1,
+        "wiki_added_value": true,
+        "coverage": "wiki+graph"
+      }
+    },
+    {
+      "task": "CLAUDE SPAWN STATUS OBSERVABILITY Add clean status surface for Claude spawns: per-task state trackin",
+      "domain": "optimization",
+      "source": "queue",
+      "brain_only": {
+        "route": "brain_only",
+        "latency_ms": 230.1,
+        "result_count": 98,
+        "avg_distance": 1.2888,
+        "min_distance": 0.8112,
+        "max_distance": 1.6146,
+        "unique_terms": 1764,
+        "collections_hit": [
+          "clarvis-context",
+          "clarvis-identity",
+          "clarvis-memories",
+          "clarvis-preferences",
+          "autonomous-learning",
+          "clarvis-goals",
+          "clarvis-learnings",
+          "clarvis-episodes",
+          "clarvis-infrastructure",
+          "clarvis-procedures"
+        ]
+      },
+      "brain_plus_wiki": {
+        "route": "brain_plus_wiki",
+        "latency_ms": 218.0,
+        "coverage": "wiki+graph",
+        "wiki_hit_count": 5,
+        "graph_neighbor_count": 7,
+        "broad_fallback_count": 0,
+        "result_count": 5,
+        "wiki_avg_distance": 1.4791,
+        "wiki_min_distance": 1.3618,
+        "broad_avg_distance": null,
+        "unique_terms": 385
+      },
+      "delta": {
+        "unique_terms": -1379,
+        "latency_ms": -12.1,
+        "wiki_added_value": true,
+        "coverage": "wiki+graph"
+      }
+    },
+    {
+      "task": "TEST CAPABILITY BOOTSTRAP Add spine module tests to lift test capability from 0.00.",
+      "domain": "analysis",
+      "source": "queue",
+      "brain_only": {
+        "route": "brain_only",
+        "latency_ms": 145.3,
+        "result_count": 30,
+        "avg_distance": 1.2822,
+        "min_distance": 0.988,
+        "max_distance": 1.5194,
+        "unique_terms": 532,
+        "collections_hit": [
+          "clarvis-learnings",
+          "clarvis-identity",
+          "clarvis-memories"
+        ]
+      },
+      "brain_plus_wiki": {
+        "route": "brain_plus_wiki",
+        "latency_ms": 189.4,
+        "coverage": "wiki+graph",
+        "wiki_hit_count": 5,
+        "graph_neighbor_count": 8,
+        "broad_fallback_count": 0,
+        "result_count": 5,
+        "wiki_avg_distance": 1.6456,
+        "wiki_min_distance": 1.5837,
+        "broad_avg_distance": null,
+        "unique_terms": 278
+      },
+      "delta": {
+        "unique_terms": -254,
+        "latency_ms": 44.1,
+        "wiki_added_value": true,
+        "coverage": "wiki+graph"
+      }
+    },
+    {
+      "task": "SPINE COMPAT WIRE OR DOCUMENT `clarvis/compat/` has zero production callers",
+      "domain": "integration",
+      "source": "queue",
+      "brain_only": {
+        "route": "brain_only",
+        "latency_ms": 140.2,
+        "result_count": 97,
+        "avg_distance": 1.3222,
+        "min_distance": 0.8534,
+        "max_distance": 1.8681,
+        "unique_terms": 1926,
+        "collections_hit": [
+          "clarvis-context",
+          "clarvis-identity",
+          "clarvis-memories",
+          "clarvis-preferences",
+          "autonomous-learning",
+          "clarvis-goals",
+          "clarvis-learnings",
+          "clarvis-episodes",
+          "clarvis-infrastructure",
+          "clarvis-procedures"
+        ]
+      },
+      "brain_plus_wiki": {
+        "route": "brain_plus_wiki",
+        "latency_ms": 152.1,
+        "coverage": "wiki+graph",
+        "wiki_hit_count": 5,
+        "graph_neighbor_count": 6,
+        "broad_fallback_count": 0,
+        "result_count": 5,
+        "wiki_avg_distance": 1.3617,
+        "wiki_min_distance": 1.2955,
+        "broad_avg_distance": null,
+        "unique_terms": 299
+      },
+      "delta": {
+        "unique_terms": -1627,
+        "latency_ms": 11.9,
+        "wiki_added_value": true,
+        "coverage": "wiki+graph"
+      }
+    },
+    {
+      "task": "CONTEXT BRIEF TELEMETRY Add a `BriefResult` dataclass to `clarvis.context.assembly.generate tiered b",
+      "domain": "new_capability",
+      "source": "queue",
+      "brain_only": {
+        "route": "brain_only",
+        "latency_ms": 132.9,
+        "result_count": 30,
+        "avg_distance": 1.1369,
+        "min_distance": 0.8138,
+        "max_distance": 1.4184,
+        "unique_terms": 756,
+        "collections_hit": [
+          "clarvis-learnings",
+          "clarvis-context",
+          "clarvis-memories"
+        ]
+      },
+      "brain_plus_wiki": {
+        "route": "brain_plus_wiki",
+        "latency_ms": 140.6,
+        "coverage": "wiki+graph",
+        "wiki_hit_count": 5,
+        "graph_neighbor_count": 7,
+        "broad_fallback_count": 0,
+        "result_count": 5,
+        "wiki_avg_distance": 1.2737,
+        "wiki_min_distance": 1.1913,
+        "broad_avg_distance": null,
+        "unique_terms": 299
+      },
+      "delta": {
+        "unique_terms": -457,
+        "latency_ms": 7.7,
+        "wiki_added_value": true,
+        "coverage": "wiki+graph"
+      }
+    },
+    {
+      "task": "PHASE12 SPAWN ENRICHMENT TO PROJECT AGENTS Replicate `prompt builder.py context-brief` enrichment to",
+      "domain": "new_capability",
+      "source": "queue",
+      "brain_only": {
+        "route": "brain_only",
+        "latency_ms": 132.6,
+        "result_count": 30,
+        "avg_distance": 1.1131,
+        "min_distance": 0.7605,
+        "max_distance": 1.3823,
+        "unique_terms": 654,
+        "collections_hit": [
+          "clarvis-learnings",
+          "clarvis-context",
+          "clarvis-memories"
+        ]
+      },
+      "brain_plus_wiki": {
+        "route": "brain_plus_wiki",
+        "latency_ms": 138.8,
+        "coverage": "wiki+graph",
+        "wiki_hit_count": 5,
+        "graph_neighbor_count": 7,
+        "broad_fallback_count": 0,
+        "result_count": 5,
+        "wiki_avg_distance": 1.3461,
+        "wiki_min_distance": 1.2856,
+        "broad_avg_distance": null,
+        "unique_terms": 324
+      },
+      "delta": {
+        "unique_terms": -330,
+        "latency_ms": 6.2,
+        "wiki_added_value": true,
+        "coverage": "wiki+graph"
+      }
+    },
+    {
+      "task": "PHASE14 RESEARCH ATTRIBUTION Add `research id` field to research session outputs in `cron research.s",
+      "domain": "research",
+      "source": "queue",
+      "brain_only": {
+        "route": "brain_only",
+        "latency_ms": 133.6,
+        "result_count": 40,
+        "avg_distance": 1.204,
+        "min_distance": 0.9074,
+        "max_distance": 1.4471,
+        "unique_terms": 819,
+        "collections_hit": [
+          "clarvis-learnings",
+          "clarvis-infrastructure",
+          "clarvis-memories",
+          "clarvis-episodes"
+        ]
+      },
+      "brain_plus_wiki": {
+        "route": "brain_plus_wiki",
+        "latency_ms": 139.9,
+        "coverage": "wiki+graph",
+        "wiki_hit_count": 5,
+        "graph_neighbor_count": 6,
+        "broad_fallback_count": 0,
+        "result_count": 5,
+        "wiki_avg_distance": 1.3964,
+        "wiki_min_distance": 1.3066,
+        "broad_avg_distance": null,
+        "unique_terms": 199
+      },
+      "delta": {
+        "unique_terms": -620,
+        "latency_ms": 6.3,
+        "wiki_added_value": true,
+        "coverage": "wiki+graph"
+      }
+    },
+    {
+      "task": "PHASE14 CLAUDE CLI TOKEN CAPTURE Modify `scripts/agents/spawn claude.sh` to parse Claude CLI stdout/",
+      "domain": "general",
+      "source": "queue",
+      "brain_only": {
+        "route": "brain_only",
+        "latency_ms": 142.2,
+        "result_count": 98,
+        "avg_distance": 1.3025,
+        "min_distance": 0.716,
+        "max_distance": 1.7492,
+        "unique_terms": 1812,
+        "collections_hit": [
+          "clarvis-context",
+          "clarvis-identity",
+          "clarvis-memories",
+          "clarvis-preferences",
+          "autonomous-learning",
+          "clarvis-goals",
+          "clarvis-learnings",
+          "clarvis-episodes",
+          "clarvis-infrastructure",
+          "clarvis-procedures"
+        ]
+      },
+      "brain_plus_wiki": {
+        "route": "brain_plus_wiki",
+        "latency_ms": 160.2,
+        "coverage": "wiki+graph",
+        "wiki_hit_count": 5,
+        "graph_neighbor_count": 7,
+        "broad_fallback_count": 0,
+        "result_count": 5,
+        "wiki_avg_distance": 1.3399,
+        "wiki_min_distance": 1.2192,
+        "broad_avg_distance": null,
+        "unique_terms": 329
+      },
+      "delta": {
+        "unique_terms": -1483,
+        "latency_ms": 18.0,
+        "wiki_added_value": true,
+        "coverage": "wiki+graph"
+      }
+    },
+    {
+      "task": "AUDIT PHASE 15 REAUDIT PROTOCOL ~~Define longitudinal re-audit cadence.~~ Protocol, schedule, runner",
+      "domain": "analysis",
+      "source": "queue",
+      "brain_only": {
+        "route": "brain_only",
+        "latency_ms": 145.4,
+        "result_count": 98,
+        "avg_distance": 1.2459,
+        "min_distance": 0.8319,
+        "max_distance": 1.7131,
+        "unique_terms": 1802,
+        "collections_hit": [
+          "clarvis-context",
+          "clarvis-identity",
+          "clarvis-memories",
+          "clarvis-preferences",
+          "autonomous-learning",
+          "clarvis-goals",
+          "clarvis-learnings",
+          "clarvis-episodes",
+          "clarvis-infrastructure",
+          "clarvis-procedures"
+        ]
+      },
+      "brain_plus_wiki": {
+        "route": "brain_plus_wiki",
+        "latency_ms": 187.6,
+        "coverage": "wiki+graph",
+        "wiki_hit_count": 5,
+        "graph_neighbor_count": 4,
+        "broad_fallback_count": 0,
+        "result_count": 5,
+        "wiki_avg_distance": 1.4412,
+        "wiki_min_distance": 1.3957,
+        "broad_avg_distance": null,
+        "unique_terms": 269
+      },
+      "delta": {
+        "unique_terms": -1533,
+        "latency_ms": 42.2,
+        "wiki_added_value": true,
+        "coverage": "wiki+graph"
+      }
+    },
+    {
+      "task": "TEST SUITE RED FIXES Fix the 72 failing tests across 8 test files: `test brain roundtrip`",
+      "domain": "bug_fix",
+      "source": "queue",
+      "brain_only": {
+        "route": "brain_only",
+        "latency_ms": 138.8,
+        "result_count": 99,
+        "avg_distance": 1.3577,
+        "min_distance": 0.7066,
+        "max_distance": 1.7775,
+        "unique_terms": 1547,
+        "collections_hit": [
+          "clarvis-context",
+          "clarvis-identity",
+          "clarvis-memories",
+          "clarvis-preferences",
+          "autonomous-learning",
+          "clarvis-goals",
+          "clarvis-learnings",
+          "clarvis-episodes",
+          "clarvis-infrastructure",
+          "clarvis-procedures"
+        ]
+      },
+      "brain_plus_wiki": {
+        "route": "brain_plus_wiki",
+        "latency_ms": 173.6,
+        "coverage": "wiki+graph",
+        "wiki_hit_count": 5,
+        "graph_neighbor_count": 5,
+        "broad_fallback_count": 0,
+        "result_count": 5,
+        "wiki_avg_distance": 1.7295,
+        "wiki_min_distance": 1.6778,
+        "broad_avg_distance": null,
+        "unique_terms": 206
+      },
+      "delta": {
+        "unique_terms": -1341,
+        "latency_ms": 34.8,
+        "wiki_added_value": true,
+        "coverage": "wiki+graph"
+      }
+    },
+    {
+      "task": "WIKI PRODUCT TO EXECUTION BRIDGE Wire `wiki retrieval.py` into preflight context assembly in shadow ",
+      "domain": "analysis",
+      "source": "queue",
+      "brain_only": {
+        "route": "brain_only",
+        "latency_ms": 138.1,
+        "result_count": 30,
+        "avg_distance": 1.1065,
+        "min_distance": 0.7787,
+        "max_distance": 1.4427,
+        "unique_terms": 651,
+        "collections_hit": [
+          "clarvis-learnings",
+          "clarvis-context",
+          "clarvis-memories"
+        ]
+      },
+      "brain_plus_wiki": {
+        "route": "brain_plus_wiki",
+        "latency_ms": 140.6,
+        "coverage": "wiki+graph",
+        "wiki_hit_count": 5,
+        "graph_neighbor_count": 6,
+        "broad_fallback_count": 0,
+        "result_count": 5,
+        "wiki_avg_distance": 1.214,
+        "wiki_min_distance": 1.0653,
+        "broad_avg_distance": null,
+        "unique_terms": 282
+      },
+      "delta": {
+        "unique_terms": -369,
+        "latency_ms": 2.5,
+        "wiki_added_value": true,
+        "coverage": "wiki+graph"
+      }
+    },
+    {
+      "task": "P0 MIRROR VALIDATION HARD GATE scripts agents project",
+      "domain": "general",
+      "source": "prediction",
+      "brain_only": {
+        "route": "brain_only",
+        "latency_ms": 139.3,
+        "result_count": 98,
+        "avg_distance": 1.3284,
+        "min_distance": 0.6151,
+        "max_distance": 1.6598,
+        "unique_terms": 1567,
+        "collections_hit": [
+          "clarvis-context",
+          "clarvis-identity",
+          "clarvis-memories",
+          "clarvis-preferences",
+          "autonomous-learning",
+          "clarvis-goals",
+          "clarvis-learnings",
+          "clarvis-episodes",
+          "clarvis-infrastructure",
+          "clarvis-procedures"
+        ]
+      },
+      "brain_plus_wiki": {
+        "route": "brain_plus_wiki",
+        "latency_ms": 148.1,
+        "coverage": "wiki+graph",
+        "wiki_hit_count": 5,
+        "graph_neighbor_count": 5,
+        "broad_fallback_count": 0,
+        "result_count": 5,
+        "wiki_avg_distance": 1.5532,
+        "wiki_min_distance": 1.4889,
+        "broad_avg_distance": null,
+        "unique_terms": 293
+      },
+      "delta": {
+        "unique_terms": -1274,
+        "latency_ms": 8.8,
+        "wiki_added_value": true,
+        "coverage": "wiki+graph"
+      }
+    },
+    {
+      "task": "SWO FIX SOCIAL CONNECTIONS AUTH api social connectio",
+      "domain": "bug_fix",
+      "source": "prediction",
+      "brain_only": {
+        "route": "brain_only",
+        "latency_ms": 137.4,
+        "result_count": 97,
+        "avg_distance": 1.4993,
+        "min_distance": 0.5132,
+        "max_distance": 1.8716,
+        "unique_terms": 1757,
+        "collections_hit": [
+          "clarvis-context",
+          "clarvis-identity",
+          "clarvis-memories",
+          "clarvis-preferences",
+          "autonomous-learning",
+          "clarvis-goals",
+          "clarvis-learnings",
+          "clarvis-episodes",
+          "clarvis-infrastructure",
+          "clarvis-procedures"
+        ]
+      },
+      "brain_plus_wiki": {
+        "route": "brain_plus_wiki",
+        "latency_ms": 149.1,
+        "coverage": "wiki+graph",
+        "wiki_hit_count": 5,
+        "graph_neighbor_count": 9,
+        "broad_fallback_count": 0,
+        "result_count": 5,
+        "wiki_avg_distance": 1.8368,
+        "wiki_min_distance": 1.7194,
+        "broad_avg_distance": null,
+        "unique_terms": 325
+      },
+      "delta": {
+        "unique_terms": -1432,
+        "latency_ms": 11.7,
+        "wiki_added_value": true,
+        "coverage": "wiki+graph"
+      }
+    },
+    {
+      "task": "SWO FIX RAFFLE RANDOMNESS Raffle winner selection uses",
+      "domain": "bug_fix",
+      "source": "prediction",
+      "brain_only": {
+        "route": "brain_only",
+        "latency_ms": 176.1,
+        "result_count": 100,
+        "avg_distance": 1.4816,
+        "min_distance": 0.6354,
+        "max_distance": 1.8397,
+        "unique_terms": 1687,
+        "collections_hit": [
+          "clarvis-context",
+          "clarvis-identity",
+          "clarvis-memories",
+          "clarvis-preferences",
+          "autonomous-learning",
+          "clarvis-goals",
+          "clarvis-learnings",
+          "clarvis-episodes",
+          "clarvis-infrastructure",
+          "clarvis-procedures"
+        ]
+      },
+      "brain_plus_wiki": {
+        "route": "brain_plus_wiki",
+        "latency_ms": 146.2,
+        "coverage": "wiki+graph",
+        "wiki_hit_count": 5,
+        "graph_neighbor_count": 5,
+        "broad_fallback_count": 0,
+        "result_count": 5,
+        "wiki_avg_distance": 1.6932,
+        "wiki_min_distance": 1.6455,
+        "broad_avg_distance": null,
+        "unique_terms": 240
+      },
+      "delta": {
+        "unique_terms": -1447,
+        "latency_ms": -29.9,
+        "wiki_added_value": true,
+        "coverage": "wiki+graph"
+      }
+    },
+    {
+      "task": "PHASE10 LOCK HELPER REPLICATE Replicate lock helper s",
+      "domain": "general",
+      "source": "prediction",
+      "brain_only": {
+        "route": "brain_only",
+        "latency_ms": 139.1,
+        "result_count": 99,
+        "avg_distance": 1.4379,
+        "min_distance": 0.5767,
+        "max_distance": 1.7353,
+        "unique_terms": 1773,
+        "collections_hit": [
+          "clarvis-context",
+          "clarvis-identity",
+          "clarvis-memories",
+          "clarvis-preferences",
+          "autonomous-learning",
+          "clarvis-goals",
+          "clarvis-learnings",
+          "clarvis-episodes",
+          "clarvis-infrastructure",
+          "clarvis-procedures"
+        ]
+      },
+      "brain_plus_wiki": {
+        "route": "brain_plus_wiki",
+        "latency_ms": 261.8,
+        "coverage": "wiki+graph",
+        "wiki_hit_count": 5,
+        "graph_neighbor_count": 5,
+        "broad_fallback_count": 0,
+        "result_count": 5,
+        "wiki_avg_distance": 1.6618,
+        "wiki_min_distance": 1.5808,
+        "broad_avg_distance": null,
+        "unique_terms": 255
+      },
+      "delta": {
+        "unique_terms": -1518,
+        "latency_ms": 122.7,
+        "wiki_added_value": true,
+        "coverage": "wiki+graph"
+      }
+    },
+    {
+      "task": "PHASE10 LOCK AUDIT JOURNAL Create centralized lock aud",
+      "domain": "analysis",
+      "source": "prediction",
+      "brain_only": {
+        "route": "brain_only",
+        "latency_ms": 398.8,
+        "result_count": 99,
+        "avg_distance": 1.3917,
+        "min_distance": 0.5592,
+        "max_distance": 1.721,
+        "unique_terms": 1926,
+        "collections_hit": [
+          "clarvis-context",
+          "clarvis-identity",
+          "clarvis-memories",
+          "clarvis-preferences",
+          "autonomous-learning",
+          "clarvis-goals",
+          "clarvis-learnings",
+          "clarvis-episodes",
+          "clarvis-infrastructure",
+          "clarvis-procedures"
+        ]
+      },
+      "brain_plus_wiki": {
+        "route": "brain_plus_wiki",
+        "latency_ms": 397.4,
+        "coverage": "wiki+graph",
+        "wiki_hit_count": 5,
+        "graph_neighbor_count": 4,
+        "broad_fallback_count": 0,
+        "result_count": 5,
+        "wiki_avg_distance": 1.551,
+        "wiki_min_distance": 1.4947,
+        "broad_avg_distance": null,
+        "unique_terms": 199
+      },
+      "delta": {
+        "unique_terms": -1727,
+        "latency_ms": -1.4,
+        "wiki_added_value": true,
+        "coverage": "wiki+graph"
+      }
+    },
+    {
+      "task": "PHASE10 RESTORE DRILL Create scripts infra restore dr",
+      "domain": "new_capability",
+      "source": "prediction",
+      "brain_only": {
+        "route": "brain_only",
+        "latency_ms": 236.1,
+        "result_count": 30,
+        "avg_distance": 1.2778,
+        "min_distance": 0.5161,
+        "max_distance": 1.5717,
+        "unique_terms": 779,
+        "collections_hit": [
+          "clarvis-learnings",
+          "clarvis-infrastructure",
+          "clarvis-memories"
+        ]
+      },
+      "brain_plus_wiki": {
+        "route": "brain_plus_wiki",
+        "latency_ms": 303.3,
+        "coverage": "wiki+graph",
+        "wiki_hit_count": 5,
+        "graph_neighbor_count": 7,
+        "broad_fallback_count": 0,
+        "result_count": 5,
+        "wiki_avg_distance": 1.6729,
+        "wiki_min_distance": 1.6051,
+        "broad_avg_distance": null,
+        "unique_terms": 367
+      },
+      "delta": {
+        "unique_terms": -412,
+        "latency_ms": 67.2,
+        "wiki_added_value": true,
+        "coverage": "wiki+graph"
+      }
+    },
+    {
+      "task": "PHASE9 REEVAL WITH AB After PHASE9 AB TOGGLE WIRING",
+      "domain": "analysis",
+      "source": "prediction",
+      "brain_only": {
+        "route": "brain_only",
+        "latency_ms": 239.3,
+        "result_count": 98,
+        "avg_distance": 1.5399,
+        "min_distance": 0.5907,
+        "max_distance": 1.981,
+        "unique_terms": 1550,
+        "collections_hit": [
+          "clarvis-context",
+          "clarvis-identity",
+          "clarvis-memories",
+          "clarvis-preferences",
+          "autonomous-learning",
+          "clarvis-goals",
+          "clarvis-learnings",
+          "clarvis-episodes",
+          "clarvis-infrastructure",
+          "clarvis-procedures"
+        ]
+      },
+      "brain_plus_wiki": {
+        "route": "brain_plus_wiki",
+        "latency_ms": 295.7,
+        "coverage": "wiki+graph",
+        "wiki_hit_count": 5,
+        "graph_neighbor_count": 7,
+        "broad_fallback_count": 0,
+        "result_count": 5,
+        "wiki_avg_distance": 1.8767,
+        "wiki_min_distance": 1.8089,
+        "broad_avg_distance": null,
+        "unique_terms": 259
+      },
+      "delta": {
+        "unique_terms": -1291,
+        "latency_ms": 56.4,
+        "wiki_added_value": true,
+        "coverage": "wiki+graph"
+      }
+    },
+    {
+      "task": "PHASE8 MIRROR PRESUBMIT GATE Add a pre submit mirror v",
+      "domain": "new_capability",
+      "source": "prediction",
+      "brain_only": {
+        "route": "brain_only",
+        "latency_ms": 269.7,
+        "result_count": 98,
+        "avg_distance": 1.5126,
+        "min_distance": 0.6545,
+        "max_distance": 1.8133,
+        "unique_terms": 1546,
+        "collections_hit": [
+          "clarvis-context",
+          "clarvis-identity",
+          "clarvis-memories",
+          "clarvis-preferences",
+          "autonomous-learning",
+          "clarvis-goals",
+          "clarvis-learnings",
+          "clarvis-episodes",
+          "clarvis-infrastructure",
+          "clarvis-procedures"
+        ]
+      },
+      "brain_plus_wiki": {
+        "route": "brain_plus_wiki",
+        "latency_ms": 270.9,
+        "coverage": "wiki+graph",
+        "wiki_hit_count": 5,
+        "graph_neighbor_count": 5,
+        "broad_fallback_count": 0,
+        "result_count": 5,
+        "wiki_avg_distance": 1.8475,
+        "wiki_min_distance": 1.8162,
+        "broad_avg_distance": null,
+        "unique_terms": 319
+      },
+      "delta": {
+        "unique_terms": -1227,
+        "latency_ms": 1.2,
+        "wiki_added_value": true,
+        "coverage": "wiki+graph"
+      }
+    }
+  ]
+}

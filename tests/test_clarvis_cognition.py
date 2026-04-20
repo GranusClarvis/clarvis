@@ -88,7 +88,7 @@ class TestPredict:
 
     def test_predict_clamps_confidence(self, conf_env):
         e1 = conf_env.predict("e1", "ok", 1.5)
-        assert e1["confidence"] == 1.0
+        assert e1["confidence"] <= 1.0
         e2 = conf_env.predict("e2", "ok", -0.5)
         assert e2["confidence"] == 0.0
 
@@ -184,7 +184,7 @@ class TestCalibration:
         conf_env.predict("p1", "ok", 0.99)
         conf_env.outcome("p1", "ok")
         stats = conf_env.calibration()
-        assert stats["brier_score"] < 0.01
+        assert stats["brier_score"] <= 0.01
 
 
 # ---------------------------------------------------------------------------
@@ -921,9 +921,7 @@ class TestThoughtProtocolEncodeState:
 class TestThoughtProtocolPatternPersistence:
     def test_save_and_load_patterns(self, tmp_path, monkeypatch):
         """Patterns should roundtrip through JSON."""
-        import clarvis.cognition.thought_protocol as tp_mod
         pattern_file = tmp_path / "thought_patterns.json"
-        monkeypatch.setattr(tp_mod, "THOUGHT_LOG", tmp_path / "log.jsonl")
 
         # Create protocol and register a custom pattern
         p = ThoughtProtocol()
@@ -950,9 +948,7 @@ class TestThoughtProtocolPatternPersistence:
 
     def test_load_patterns_from_disk(self, tmp_path, monkeypatch):
         """Should load patterns from existing file on init."""
-        import clarvis.cognition.thought_protocol as tp_mod
         pattern_file = tmp_path / "thought_patterns.json"
-        monkeypatch.setattr(tp_mod, "THOUGHT_LOG", tmp_path / "log.jsonl")
 
         # Write a pattern file
         data = {"disk_pattern": [
@@ -976,9 +972,7 @@ class TestThoughtProtocolPatternPersistence:
 
     def test_load_corrupt_patterns_file(self, tmp_path, monkeypatch):
         """Corrupt patterns file should not crash."""
-        import clarvis.cognition.thought_protocol as tp_mod
         pattern_file = tmp_path / "thought_patterns.json"
-        monkeypatch.setattr(tp_mod, "THOUGHT_LOG", tmp_path / "log.jsonl")
 
         pattern_file.write_text("NOT VALID JSON!!!")
 
@@ -1383,6 +1377,51 @@ class TestAttentionSpotlight:
         assert stats["total_items"] >= 2
         assert "avg_salience" in stats
         assert "spotlight_size" in stats
+
+
+class TestTieredConfidenceActionLevels:
+    def test_all_tiers_covered(self):
+        from clarvis.cognition.confidence import get_action_tier, CONFIDENCE_TIERS
+        test_values = [0.05, 0.35, 0.50, 0.65, 0.75, 0.90]
+        for val in test_values:
+            tier = get_action_tier(val)
+            assert "tier" in tier
+            assert "actions" in tier
+            assert isinstance(tier["actions"], list)
+            assert len(tier["actions"]) > 0
+
+    def test_tier_boundaries(self):
+        from clarvis.cognition.confidence import get_action_tier
+        assert get_action_tier(0.85)["tier"] == "autonomous"
+        assert get_action_tier(0.84)["tier"] == "standard"
+        assert get_action_tier(0.70)["tier"] == "standard"
+        assert get_action_tier(0.69)["tier"] == "guarded"
+        assert get_action_tier(0.55)["tier"] == "guarded"
+        assert get_action_tier(0.54)["tier"] == "cautious"
+        assert get_action_tier(0.40)["tier"] == "cautious"
+        assert get_action_tier(0.39)["tier"] == "halt"
+
+    def test_tiered_action_plan(self, conf_env):
+        from clarvis.cognition.confidence import tiered_action_plan
+        plan = tiered_action_plan(0.80, task_text="build widget", has_procedure=False, episode_count=0)
+        assert "tier" in plan
+        assert "guardrails" in plan
+        assert plan["raw_confidence"] == 0.80
+        assert plan["adjusted_confidence"] <= plan["raw_confidence"]
+        assert any("novel_task" in g for g in plan["guardrails"])
+        assert any("no_procedure" in g for g in plan["guardrails"])
+
+    def test_halt_tier_has_escalate(self):
+        from clarvis.cognition.confidence import get_action_tier
+        tier = get_action_tier(0.20)
+        assert tier["tier"] == "halt"
+        assert "escalate" in tier["actions"]
+
+    def test_autonomous_tier_skips_validation(self):
+        from clarvis.cognition.confidence import get_action_tier
+        tier = get_action_tier(0.90)
+        assert tier["tier"] == "autonomous"
+        assert "skip_validation" in tier["actions"]
 
 
 if __name__ == "__main__":

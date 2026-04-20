@@ -477,6 +477,106 @@ def task_aware_confidence(
     return round(conf, 3)
 
 
+# ============================================================
+# Tiered confidence action levels (Phase 3.1)
+# ============================================================
+
+CONFIDENCE_TIERS = {
+    "autonomous": {
+        "range": (0.85, 1.01),
+        "label": "AUTONOMOUS",
+        "actions": ["proceed", "skip_validation"],
+        "description": "High confidence — proceed without extra checks.",
+    },
+    "standard": {
+        "range": (0.70, 0.85),
+        "label": "STANDARD",
+        "actions": ["proceed", "log_outcome"],
+        "description": "Normal confidence — proceed with outcome logging.",
+    },
+    "guarded": {
+        "range": (0.55, 0.70),
+        "label": "GUARDED",
+        "actions": ["proceed", "add_checkpoints", "reduce_scope", "log_outcome"],
+        "description": "Below-average confidence — add validation checkpoints, consider reducing scope.",
+    },
+    "cautious": {
+        "range": (0.40, 0.55),
+        "label": "CAUTIOUS",
+        "actions": ["seek_guidance", "reduce_scope", "add_checkpoints", "log_outcome"],
+        "description": "Low confidence — reduce scope, seek clarification before proceeding.",
+    },
+    "halt": {
+        "range": (0.0, 0.40),
+        "label": "HALT",
+        "actions": ["escalate", "defer", "log_outcome"],
+        "description": "Very low confidence — escalate to operator or defer the task.",
+    },
+}
+
+
+def get_action_tier(confidence: float) -> dict:
+    """Map a confidence value to its action tier.
+
+    Returns a dict with: tier (name), label, actions (list), description, confidence.
+    """
+    for tier_name, tier in CONFIDENCE_TIERS.items():
+        lo, hi = tier["range"]
+        if lo <= confidence < hi:
+            return {
+                "tier": tier_name,
+                "label": tier["label"],
+                "actions": list(tier["actions"]),
+                "description": tier["description"],
+                "confidence": confidence,
+            }
+    return {
+        "tier": "halt",
+        "label": "HALT",
+        "actions": ["escalate", "defer", "log_outcome"],
+        "description": "Confidence out of expected range.",
+        "confidence": confidence,
+    }
+
+
+def tiered_action_plan(
+    confidence: float,
+    task_text: str = "",
+    has_procedure: bool = True,
+    episode_count: int | None = None,
+) -> dict:
+    """Generate a full action plan based on confidence tier.
+
+    Combines get_action_tier() with task-specific context to produce
+    actionable guidance for the heartbeat pipeline.
+
+    Returns: {tier, label, actions, guardrails, confidence, adjusted_confidence}
+    """
+    adjusted = task_aware_confidence(
+        confidence,
+        has_procedure=has_procedure,
+        episode_count=episode_count,
+        task_text=task_text,
+    )
+    tier_info = get_action_tier(adjusted)
+
+    guardrails = []
+    if tier_info["tier"] in ("guarded", "cautious", "halt"):
+        if episode_count is not None and episode_count == 0:
+            guardrails.append("novel_task: log detailed reasoning for future reference")
+        if not has_procedure:
+            guardrails.append("no_procedure: document steps taken for procedure creation")
+    if tier_info["tier"] == "cautious":
+        guardrails.append("reduce_scope: attempt smallest viable increment only")
+    if tier_info["tier"] == "halt":
+        guardrails.append("operator_review: submit plan for review before executing")
+
+    tier_info["guardrails"] = guardrails
+    tier_info["adjusted_confidence"] = adjusted
+    tier_info["raw_confidence"] = confidence
+    return tier_info
+
+
 def predict_specific(domain: str) -> dict | None:
     """Generate a domain-specific prediction with real uncertainty.
 
@@ -1150,9 +1250,28 @@ def main():
             for band, data in result['band_adjustments'].items():
                 print(f"  {band}: acc={data['accuracy']:.0%} vs pred={data['predicted_avg']:.0%} (gap={data['gap']:+.0%}, n={data['n']})")
 
+    elif cmd == "tier":
+        conf = float(sys.argv[2]) if len(sys.argv) > 2 else dynamic_confidence()
+        task = " ".join(sys.argv[3:]) if len(sys.argv) > 3 else ""
+        plan = tiered_action_plan(conf, task_text=task)
+        print(f"Confidence: {plan['raw_confidence']:.0%} → adjusted: {plan['adjusted_confidence']:.0%}")
+        print(f"Tier: {plan['label']}")
+        print(f"Actions: {', '.join(plan['actions'])}")
+        if plan.get('guardrails'):
+            print(f"Guardrails:")
+            for g in plan['guardrails']:
+                print(f"  - {g}")
+        print(f"Description: {plan['description']}")
+
+    elif cmd == "tiers":
+        print("=== Confidence Action Tiers ===")
+        for name, tier in CONFIDENCE_TIERS.items():
+            lo, hi = tier["range"]
+            print(f"  {tier['label']:12s} [{lo:.2f}-{hi:.2f}): {', '.join(tier['actions'])}")
+
     else:
         print(f"Unknown command: {cmd}")
-        print("Try: predict, outcome, calibration, list, review, dynamic, apply, threshold, predict-specific, auto-resolve, sweep, recalibrate")
+        print("Try: predict, outcome, calibration, list, review, dynamic, apply, threshold, predict-specific, auto-resolve, sweep, recalibrate, tier, tiers")
 
 
 if __name__ == "__main__":
