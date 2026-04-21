@@ -32,38 +32,51 @@ _Source: `docs/internal/audits/NEURO_FEATURE_DECISIONS_2026-04-17.md`. Phase 9 s
 
 _Source: `docs/CLAUDE_DESIGN_ROUTINES_STRATEGY.md`. Cross-project operating model for Claude Design + Claude Code Routines._
 
-- [x] **[ROUTINES_MANIFEST_SPEC]** Define the `.clarvis/routines.yaml` manifest format for per-project Routine declarations. Write spec doc and create example manifests for SWO and Clarvis repos. Deliverable: `docs/ROUTINES_MANIFEST.md` + example YAML files. (2026-04-21: spec + 2 example manifests shipped)
 
-### Star Sanctuary — Foundation PRs (PROJECT:SWO)
+### Star Sanctuary — Validated Roadmap (PROJECT:SWO, revalidated 2026-04-21)
 
-_SWO tasks tracked here. When project lane is active, these get priority. See also: memory/evolution/SWO_TRACKER.md_
-_Deep Sanctuary Review completed 2026-04-20 (DEV @ `3e8f802`). Build ✓, 128/128 tests ✓. V1.0+V1.5 features complete in code._
-_Style doctrine: `docs/SANCTUARY_STYLE_DOCTRINE.md` — binding on all visual work. Core rule: luminous cosmic pixel-art compatible with existing Skrumpey sprite language. NOT grimdark, NOT generic dark fantasy._
-_Asset prep completed 2026-04-20: `CompanionSprite` + `LocationIcon` components with sprite→emoji fallback, `public/sanctuary/` directory structure, Sanctuary CSS keyframes (idle-bob, happy-bounce, sleepy-sway, sparkle, twinkle, glow-pulse). Ready for asset drop-in._
+_SWO tasks tracked here. See also: memory/evolution/SWO_TRACKER.md_
+_Status as of 2026-04-21: dev branch (upstream 5ed3557) is canonical baseline. 17 PRs merged (128/128 tests ✓, tsc clean). Self-hosted corpus DONE (3,333 NFT images). Security PRs #177/#180/#181/#183/#184 merged. PR #179 CLOSED (wallet auth on POST routes still needed). Ownership verification: single path (balanceOf + multicall Star check via 6-endpoint RPC client)._
+_Style doctrine: `docs/SANCTUARY_STYLE_DOCTRINE.md` — binding on all visual work._
+_Asset state: NFT art self-hosted ✓, companion sprites NOT YET CREATED (falls back to NFT art), location vignettes NOT YET CREATED (falls back to emoji), empty-state illustrations NOT YET CREATED._
 
-#### Visual Polish & Animation (highest-value UX improvements)
+#### 0. Security (BLOCKING — do first)
 
-- [ ] **[SWO_SANCTUARY_MAP_VISUAL]** **ASSET-ONLY — CSS class `.sanctuary-map-bg` ready.** Need 720×405 pixel-art star-map with 8 luminous location zones at positions matching DB `position_x/y`. **Style: dark cosmic base (#0a0a1a) with warm glowing terrain zones — think constellation map with cozy islands, NOT detailed Zelda overworld. Each zone uses its doctrine accent color (amber for Hot Springs, teal for Star Garden, etc).** Scattered 1-2px star dots. `LocationIcon` component ready for 64×64 location vignettes (optional). Asset workflow: Retro Diffusion / Aseprite. (PROJECT:SWO)
-- [ ] **[SWO_SANCTUARY_ANIMATIONS]** **PARTIALLY DONE — CSS keyframes added (sanctuaryIdleBob, sanctuaryHappyBounce, sanctuarySleepySway, sanctuarySparkle, sanctuaryGlowPulse, sanctuaryBarFill).** Remaining: (1) wire `sanctuaryBarFill` to StatBar on bond/XP gain, (2) add sparkle burst on activity completion (replace plain ✅), (3) add typing indicator dots for chat, (4) add `sanctuaryStarTwinkle` to map background stars. (PROJECT:SWO)
-- [ ] **[SWO_SANCTUARY_EMPTY_STATES]** **PARTIALLY DONE — (1) no-companion now shows `CompanionPicker` with real NFT image grid + selection flow.** Remaining: (2) empty journal: pixel-art open book illustration, (3) quests empty: fix "Loading quests..." permanent state when API returns empty array, (4) traits empty: encouraging progress message. (PROJECT:SWO)
-- [ ] **[SWO_SANCTUARY_SOUND_DESIGN]** Add optional ambient sound layer. `public/sanctuary/sfx/` directory ready. Muted by default, toggle in UI. Lower priority — visual assets first. (PROJECT:SWO)
 
-#### Functional Gaps & Improvements
+#### 1. Error Handling & Reliability (highest user-facing impact)
 
-- [ ] **[SWO_SANCTUARY_CHAT_LLM]** Upgrade companion chat from template-based responses to LLM-backed (per ADR-002). Use OpenRouter → Gemini Flash for personality-aware responses. Rate limit: 15/day. Inject: companion personality, bond level, recent journal context. Estimated cost: $0.05/day at 100 users. Currently the 10 constellation templates produce repetitive responses. (PROJECT:SWO)
-- [ ] **[SWO_SANCTUARY_COMPANION_SELECT_UI]** No companion selection UI exists — if a user has multiple Skrumpeys, there's no way to switch in the frontend. The API supports `select` and `switch` but the UI only shows the active companion. Add a companion picker/gallery in the Sanctuary header. (PROJECT:SWO)
-- [ ] **[SWO_SANCTUARY_ACTIVITY_FEEDBACK]** When sending companion to activity, there's no confirmation or preview of duration/rewards. Add: (1) duration preview per location before sending, (2) expected rewards tooltip, (3) activity-in-progress visual on the map (companion icon at location), (4) push notification or visual cue when activity completes. (PROJECT:SWO)
-- [ ] **[SWO_SANCTUARY_RESPONSIVE]** Test and fix mobile responsiveness. The 2-column grid (`md:grid-cols-2`) collapses on mobile but: (1) world map 16:9 aspect may be too small on phones, (2) 6-7px text sizes are unreadable on mobile, (3) interaction buttons may be too small for touch targets (40px minimum recommended), (4) chat input/send layout needs mobile treatment. (PROJECT:SWO)
+- [ ] **[SWO_SANCTUARY_ERROR_STATES]** Replace all silent `.catch(() => {})` in SanctuaryContent.tsx with proper error states. 6 fetch calls currently swallow errors silently (journal line 561, chat line 675, traits line 780, quests line 854, map line 1162, interact line 1014). Add: (1) error state variables per panel, (2) "Failed to load — Retry" UI with retry button, (3) distinguish network errors from empty data. Also fix quests "Loading quests..." permanent state when API returns empty array — should show "No quests available" instead. (PROJECT:SWO)
+- [ ] **[SWO_SANCTUARY_JSON_SAFETY]** Wrap all `JSON.parse(attributes_json)` calls in try-catch in: `list-owned/route.ts` (line 37, 49), `select/route.ts` (line 42), `switch/route.ts` (line 42), `nft-traits/route.ts` (line 44). Malformed metadata in DB currently crashes these routes. (PROJECT:SWO)
 
-#### Testing & Quality
+#### 2. Functional Gaps (code-only, high value)
 
-- [ ] **[SWO_SANCTUARY_E2E_TESTS]** Add end-to-end test coverage for the full Sanctuary flow: (1) wallet connect → companion select → interact → journal appears, (2) send to activity → wait → complete → rewards, (3) chat send/receive, (4) quest progress → claim reward, (5) trait unlock, (6) public map view without wallet. Current tests only cover DB-layer unit scenarios. Use Playwright or Vitest browser mode. (PROJECT:SWO)
-- [ ] **[SWO_SANCTUARY_API_VALIDATION]** Harden API input validation: several routes accept `address` and `token_id` from query params without format validation (e.g., address could be non-hex, token_id could be negative). Add Zod schemas or manual validation at route boundaries. (PROJECT:SWO)
+- [ ] **[SWO_SANCTUARY_COMPANION_SELECT_UI]** Build React companion picker component in Sanctuary header. API endpoint `list-owned` already complete with trait filtering + multicall ownership (#192). Frontend component missing — users with multiple Skrumpeys can't switch. Call `/api/sanctuary/companion/list-owned`, render grid of owned NFTs with constellation/star badge, wire to `/api/sanctuary/companion/switch`. (PROJECT:SWO)
+- [ ] **[SWO_SANCTUARY_EMPTY_STATES]** Fix 4 empty states: (1) empty journal — show placeholder message instead of "No entries yet." (line 628), (2) quests — show "No quests available" when array empty (line 883 currently shows "Loading quests..." forever), (3) traits — more prominent encouraging message (line 793), (4) no-companion state says "Select a Skrumpey" but has no selector — wire to companion picker once built. (PROJECT:SWO)
+- [ ] **[SWO_SANCTUARY_ACTIVITY_FEEDBACK]** Add: (1) duration preview per location before sending, (2) expected rewards tooltip, (3) activity-in-progress icon on map location, (4) visual cue on activity completion (replace plain text "⏳ WELCOME BACK" with animated completion state). Also fix ActivityTimer memory leak — interval keeps running after completion (line 333). (PROJECT:SWO)
 
-#### Future Phases (P2 candidates, from milestones)
+#### 3. Animation & Polish Wiring (keyframes exist, just need connection)
 
-- [ ] **[SWO_SANCTUARY_COSMETICS_SHOP]** Implement P3.1+P3.2 from milestones: cosmetic items schema + STAR shop UI. The `equipped_cosmetics` column exists but is never written. Seed 15-25 items across 5 categories. This is the primary STAR token sink. (PROJECT:SWO)
-- [ ] **[SWO_SANCTUARY_EXPEDITIONS]** Implement expedition system (tables exist, routes are stubs). Multi-step adventures with narrative choices per P4.3 milestone. Currently all expedition functions throw "not implemented". (PROJECT:SWO)
+- [ ] **[SWO_SANCTUARY_ANIMATIONS]** Wire 6 remaining connections: (1) `sanctuaryBarFill` to StatBar on bond/XP gain, (2) sparkle burst on activity completion (replace plain ✅), (3) typing indicator dots for chat, (4) `sanctuaryStarTwinkle` to map background stars, (5) wire `.sanctuary-sparkle` class to interaction feedback, (6) wire `.sanctuary-glow` + `.sanctuary-twinkle` to companion panel ambient effects. All CSS keyframes exist in globals.css (lines 473-516) but are dead code. (PROJECT:SWO)
+- [ ] **[SWO_SANCTUARY_PIXELATED_CLASS]** Add `image-rendering-pixelated` utility to tailwind.config.ts — referenced in CompanionSprite (SanctuaryContent.tsx line 281) but never defined. NFT fallback images may render blurry without it. Quick fix. (PROJECT:SWO)
+- [ ] **[SWO_SANCTUARY_MAP_ART_ASSET]** Replace the current procedural/CSS-only sanctuary map background with the intended 720×405 pixel-art star-map asset from the style doctrine. Keep DB-aligned location coordinates and current CSS fallback, but add the real production map PNG/WebP plus placement verification so zones, icons, and stars do not overlap awkwardly. Must pass Skrumpey-compatibility checks from `docs/SANCTUARY_STYLE_DOCTRINE.md`. (PROJECT:SWO)
+- [ ] **[SWO_SANCTUARY_COMPANION_ART_PACK]** Create and integrate the first bespoke Sanctuary companion asset pack described by the art plan: 60 PNGs (10 constellations × 6 moods) or a narrower but complete production-safe v1 set if 60 is too large. Assets must be visually compatible with Skrumpeys, drop into `public/sanctuary/companions/`, and render through the existing CompanionSprite fallback chain without layout breakage. (PROJECT:SWO)
+- [ ] **[SWO_SANCTUARY_LOCATION_VIGNETTES]** Create and wire the optional-but-high-value location vignette/icon set (8 × 64×64) for Sanctuary locations so the world feels deliberate rather than emoji-backed. Use the house style doctrine, preserve readability on dark backgrounds, and fall back gracefully if any location asset is missing. (PROJECT:SWO)
+
+#### 4. Quality & Hardening
+
+- [ ] **[SWO_SANCTUARY_API_VALIDATION]** Add Zod schemas at API route boundaries: (1) address format validation (0x + 40 hex), (2) token_id range (1-3333), (3) action enum for interact, (4) integer validation on pagination params. Currently no routes validate input format — only presence checks. (PROJECT:SWO)
+- [ ] **[SWO_SANCTUARY_RESPONSIVE]** Test and fix mobile: (1) world map aspect on phones, (2) text size readability (text-[7px] to text-[10px] may be unreadable), (3) touch target sizing (40px min), (4) chat input mobile layout. (PROJECT:SWO)
+- [ ] **[SWO_SANCTUARY_E2E_TESTS]** E2E test coverage for all 15 API routes at HTTP layer. Current 128 tests are DB-layer only. Add: wallet connect → interact → journal, activity flow, chat, quest claim, public map view. Also add tests for error paths and rate-limit responses. (PROJECT:SWO)
+
+#### 5. Enhancement (lower priority)
+
+- [ ] **[SWO_SANCTUARY_CHAT_LLM]** Upgrade chat from templates to LLM (per ADR-002). OpenRouter → Gemini Flash, 15/day rate limit, personality + bond + journal context injection. ~$0.05/day at 100 users. (PROJECT:SWO)
+- [ ] **[SWO_SANCTUARY_SOUND_DESIGN]** Optional ambient sound layer. Muted by default. Lower priority — visual assets first. (PROJECT:SWO)
+
+#### 6. Future Phases (P2, from milestones)
+
+- [ ] **[SWO_SANCTUARY_COSMETICS_SHOP]** Cosmetic items schema + STAR shop UI. `equipped_cosmetics` column exists but unused. Primary STAR token sink. (PROJECT:SWO)
+- [ ] **[SWO_SANCTUARY_EXPEDITIONS]** Expedition system (tables exist, routes stub). Multi-step adventures with narrative choices. (PROJECT:SWO)
 
 
 
@@ -235,11 +248,7 @@ _Source: `source="audit_phase_4"`. P0+P1 items are co-located with their parent 
 
 ### Star Sanctuary — Later Phases (PROJECT:SWO)
 
-#### First Playable Layer
-
-#### Retention / Identity
-
-#### V1.5 / Deeper Layer
+_V1.0+V1.5 shipped. First Playable Layer and Retention/Identity phases consolidated into P1 §5 above. Remaining P2:_
 - [ ] **[SANCTUARY_STAR_CURRENCY_DECISION]** STAR on Monad recommendation.
 
 

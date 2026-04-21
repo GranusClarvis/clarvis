@@ -32,33 +32,46 @@ Planning docs, queue items, and brand positioning do NOT count as delivery.
 | 8 | #187 | feat: open Sanctuary to all Skrumpey holders | 2026-04-20 |
 | 9 | #188 | feat: sanctuary V1.5 — companion chat, trait evolution, seasonal quests | 2026-04-20 |
 | 10 | #189 | feat: sanctuary style doctrine + sprite/animation infrastructure | 2026-04-20 |
+| 11 | #192 | feat: self-hosted Skrumpey corpus + Sanctuary integration | 2026-04-21 |
+| 12 | #177 | fix: verify governance voting power server-side | 2026-04-21 |
+| 13 | #180 | fix(adminAuth): persist used nonces in SQLite to prevent replay | 2026-04-21 |
+| 14 | #181 | chore(contracts): archive StarForge V1-V4 + Testing_casino | 2026-04-21 |
+| 15 | #183 | fix: harden raffle randomness — CSPRNG + combined entropy | 2026-04-18 |
+| 16 | #184 | fix: social connections auth | 2026-04-18 |
+| 17 | #191 | feat: sanctuary-map-bg CSS class with procedural star map | 2026-04-21 |
 
-## Pending PRs
+## Pending PRs — MERGE PRIORITY ORDER
 
-| # | PR | Title | State | Last Checked |
-|---|-----|-------|-------|--------------|
-| 1 | #177 | fix: verify governance voting power server-side | OPEN, MERGEABLE, CLEAN (no reviews) | 2026-04-18 — revalidated against e22cd21, vuln persists, 0 conflicts, verdict REVIVE |
-| 2 | #179 | fix(api): verify wallet signature on chat/messages/presence writes (P0) | OPEN | 2026-04-16 — closes SWO_FIX_CHAT_AUTH/DM/PRESENCE; follow-up commits 037066c/952e3fd/43ce164 also close SWO_FIX_VOICE_AUTH, SWO_FIX_RAFFLE_BONUSES, SWO_HARDEN_CRON_AUTH |
-| 3 | #180 | fix(adminAuth): persist used nonces in SQLite to prevent replay (P1) | OPEN | 2026-04-16 — closes SWO_ADMIN_NONCE_PERSIST; SQLite-backed nonce table + 8 vitest cases |
-| 4 | #181 | chore(contracts): archive StarForge V1-V4 + Testing_casino, add DEPLOYED.md (P2) | OPEN | 2026-04-16 — closes SWO_CONTRACT_ARCHIVE |
+_Revalidated 2026-04-21 against upstream/dev HEAD (5ed3557). PRs #177, #180, #181 confirmed merged._
 
-## Security Audit Backlog (from 2026-04-19 audit)
+| # | PR | Title | Sev | State | Last Checked |
+|---|-----|-------|-----|-------|--------------|
+| — | — | All pending PRs merged or closed | — | — | 2026-04-21 |
+
+**Resolved:**
+- ~~#177~~ — MERGED on dev (governance votingPower server-side verification)
+- ~~#180~~ — MERGED on dev (admin nonce persistence in SQLite)
+- ~~#181~~ — MERGED on dev (contract archive housekeeping)
+- ~~#179~~ — CLOSED (not merged). Wallet signature on chat/messages/presence. Findings H-1/H-4 remain unaddressed and need a new PR.
+
+## Security Audit Backlog (from 2026-04-19 audit, revalidated 2026-04-21)
 
 _Full report: `docs/SECURITY_AUDIT_2026-04-19.md` in SWO repo._
-_Items already addressed by open PRs are marked; remaining items need new PRs._
+_Revalidated against dev HEAD 5ed3557. Updated status reflects actual merge state._
 
 | # | Finding | Sev | Covered By | Status |
 |---|---------|-----|------------|--------|
-| C-1 | Raffle randomness predictable/manipulable | CRIT | — | **OPEN — needs PR** |
-| C-2 | Governance votingPower client-supplied | CRIT | PR #177 | Pending merge |
-| H-1 | Raffle bonuses (discordBonus/engagementBonus) client-supplied | HIGH | PR #179 (commit 952e3fd) | Pending merge |
-| H-2 | Social connections GET leaks user PII without auth | HIGH | — | **OPEN — needs PR** |
-| H-3 | In-memory security state (nonces, seeds, rate limits) | HIGH | PR #180 (admin nonces only) | Partial — seeds+rates still in-memory |
-| H-4 | Cron dev bypass tied to NODE_ENV | HIGH | PR #179 (commit 43ce164) | Pending merge |
+| C-1 | Raffle randomness predictable/manipulable | CRIT | #183 merged | **FIXED** — CSPRNG + combined entropy |
+| C-2 | Governance votingPower client-supplied | CRIT | #177 merged | **FIXED** |
+| H-1 | Raffle bonuses (discordBonus/engagementBonus) client-supplied | HIGH | #179 CLOSED | **OPEN — needs new PR** |
+| H-2 | Social connections GET leaks user PII without auth | HIGH | #184 merged | **FIXED** — wallet auth required |
+| H-3 | In-memory security state (nonces, seeds, rate limits) | HIGH | #180 merged (nonces) | **Partial** — seeds+rates still in-memory |
+| H-4 | Cron dev bypass tied to NODE_ENV | HIGH | #179 CLOSED | **OPEN — needs new PR** |
 | M-1 | No rate limiting on most API endpoints | MED | — | **OPEN — needs PR** |
 | M-3 | Vote change lacks signature verification | MED | — | **OPEN — needs PR** |
 | M-5 | StarForge game ID predictable | MED | — | **OPEN — needs PR** |
 | L-3 | Hardcoded default admin wallet | LOW | — | **OPEN — needs PR** |
+| NEW | Sanctuary POST routes (interact/activity/claim) accept wallet without auth | HIGH | — | **OPEN — needs PR** |
 
 ## Delivered Artifacts (non-PR)
 
