@@ -683,25 +683,38 @@ def safe_stage_files(workspace: Path) -> tuple[list[str], list[str]]:
 
 
 def _sync_and_checkout_work_branch(workspace: Path, base_branch: str, agent: str, task_id: str) -> str:
-    """Hard-sync to origin/<base_branch> and checkout a fresh work branch.
+    """Hard-sync to upstream (or origin) base branch and checkout a fresh work branch.
+
+    For fork-based workflows (upstream remote exists), syncs origin/<base>
+    to upstream/<base> so new branches always start from the latest upstream.
 
     Returns the created branch name.
     """
     branch = f"clarvis/{agent}/{task_id}"
 
-    # Fetch latest refs
-    _run_git(workspace, ["fetch", "--prune"])  # best-effort
+    # Fetch all remotes (upstream + origin) so we have latest refs
+    _run_git(workspace, ["fetch", "--all", "--prune"], timeout=120)
 
-    # Ensure base branch matches origin
+    # Determine the true base ref: prefer upstream if it exists (fork workflow)
+    r_upstream = _run_git(workspace, ["rev-parse", "--verify", f"upstream/{base_branch}"])
+    has_upstream = r_upstream.returncode == 0
+
+    if has_upstream:
+        base_ref = f"upstream/{base_branch}"
+        # Fast-forward origin/<base> to match upstream/<base> so the fork stays current
+        _run_git(workspace, ["push", "origin", f"upstream/{base_branch}:{base_branch}"], timeout=120)
+    else:
+        base_ref = f"origin/{base_branch}"
+
+    # Ensure local base branch matches the chosen ref
     r = _run_git(workspace, ["checkout", base_branch])
     if r.returncode != 0:
-        # If base branch doesn't exist locally, create it from origin
-        _run_git(workspace, ["checkout", "-B", base_branch, f"origin/{base_branch}"])
+        _run_git(workspace, ["checkout", "-B", base_branch, base_ref])
 
-    _run_git(workspace, ["reset", "--hard", f"origin/{base_branch}"])
-    _run_git(workspace, ["clean", "-fd"])  # remove untracked files from prior runs
+    _run_git(workspace, ["reset", "--hard", base_ref])
+    _run_git(workspace, ["clean", "-fd"])
 
-    # Fresh work branch
+    # Fresh work branch from the true upstream head
     _run_git(workspace, ["checkout", "-B", branch])
     return branch
 
@@ -719,6 +732,78 @@ def _sync_and_checkout_work_branch(workspace: Path, base_branch: str, agent: str
 #   /opt/clarvis-agents/<name>/
 #     workspace/          — main clone (bare or full, used for fetch/push)
 #     worktrees/<task_id>/ — per-task worktree (created, used, cleaned up)
+
+
+def cleanup_stale_branches(workspace: Path, keep_branch: str = "",
+                           base_branch: str = "dev", dry_run: bool = False) -> dict:
+    """Delete local branches that are merged into base or are stale task branches.
+
+    Targets:
+      - clarvis/*/t* branches (auto-created per spawn, safe to remove when merged)
+      - feat/*, feature/*, fix/*, chore/* branches merged into base_branch
+    Preserves:
+      - The current branch and keep_branch
+      - base_branch itself
+      - Any branch with an open PR (checked via local ref only — no API call)
+      - Not-merged feat/feature/fix/chore branches (may have open PRs)
+
+    Returns dict with deleted, skipped, errors lists.
+    """
+    result = {"deleted": [], "skipped": [], "errors": []}
+
+    r = _run_git(workspace, ["fetch", "--all", "--prune"], timeout=120)
+
+    current = _run_git(workspace, ["rev-parse", "--abbrev-ref", "HEAD"])
+    current_branch = current.stdout.strip() if current.returncode == 0 else ""
+
+    protected = {base_branch, current_branch}
+    if keep_branch:
+        protected.add(keep_branch)
+
+    r = _run_git(workspace, ["branch", "--format=%(refname:short)"])
+    if r.returncode != 0:
+        result["errors"].append(f"git branch list failed: {r.stderr.strip()}")
+        return result
+
+    all_branches = [b.strip() for b in r.stdout.strip().split("\n") if b.strip()]
+
+    for branch in all_branches:
+        if branch in protected:
+            continue
+
+        is_task_branch = branch.startswith("clarvis/") and "/t" in branch
+
+        is_merged = _run_git(workspace, ["merge-base", "--is-ancestor", branch, base_branch])
+        merged = is_merged.returncode == 0
+
+        if is_task_branch and merged:
+            if dry_run:
+                result["deleted"].append(f"{branch} (merged, dry-run)")
+            else:
+                r = _run_git(workspace, ["branch", "-d", branch])
+                if r.returncode == 0:
+                    result["deleted"].append(branch)
+                else:
+                    result["errors"].append(f"{branch}: {r.stderr.strip()}")
+        elif merged and any(branch.startswith(p) for p in ("feat/", "feature/", "fix/", "chore/")):
+            if dry_run:
+                result["deleted"].append(f"{branch} (merged, dry-run)")
+            else:
+                r = _run_git(workspace, ["branch", "-d", branch])
+                if r.returncode == 0:
+                    result["deleted"].append(branch)
+                else:
+                    result["errors"].append(f"{branch}: {r.stderr.strip()}")
+        elif is_task_branch and not merged:
+            result["skipped"].append(f"{branch} (not merged)")
+        else:
+            result["skipped"].append(f"{branch} (not merged or not a cleanup target)")
+
+    stale_remotes = _run_git(workspace, ["remote", "prune", "origin"])
+    if stale_remotes.stdout.strip():
+        result["_pruned_remotes"] = stale_remotes.stdout.strip()
+
+    return result
 
 
 def worktree_create(workspace: Path, agent: str, task_id: str,
@@ -740,13 +825,17 @@ def worktree_create(workspace: Path, agent: str, task_id: str,
         if wt_path.exists():
             shutil.rmtree(wt_path, ignore_errors=True)
 
-    # Fetch latest refs
-    _run_git(workspace, ["fetch", "--prune"], timeout=120)
+    # Fetch all remotes (upstream + origin) for fork workflows
+    _run_git(workspace, ["fetch", "--all", "--prune"], timeout=120)
 
-    # Create worktree on a new branch from origin/<base>
+    # Prefer upstream/<base> if available (fork workflow)
+    r_upstream = _run_git(workspace, ["rev-parse", "--verify", f"upstream/{base_branch}"])
+    base_ref = f"upstream/{base_branch}" if r_upstream.returncode == 0 else f"origin/{base_branch}"
+
+    # Create worktree on a new branch from the true upstream head
     r = _run_git(workspace, [
         "worktree", "add", "-B", branch,
-        str(wt_path), f"origin/{base_branch}"
+        str(wt_path), base_ref
     ])
     if r.returncode != 0:
         raise RuntimeError(f"worktree add failed: {r.stderr.strip()}")
@@ -973,10 +1062,10 @@ def _write_initial_procedures(name: str):
     proc_file.write_text(f"""# Procedures — {name}
 
 ## Git Workflow
-1. Always create a feature branch: `git checkout -b feature/<description>`
-2. Make changes and commit with clear messages
-3. Push branch: `git push origin feature/<description>`
-4. Create PR: `gh pr create --title "..." --body "..."`
+1. You are already on a fresh work branch — do NOT create or switch to another branch
+2. Make changes and commit on the CURRENT branch
+3. Push: `git push origin HEAD`
+4. Create PR (the orchestrator provides exact gh pr create flags in the prompt)
 5. Report PR URL in output
 
 ## Testing
@@ -1500,40 +1589,465 @@ def build_ci_context(name: str) -> dict:
     return ci
 
 
+def _gather_episodic_context(agent_dir: Path, task: str, max_episodes: int = 5) -> str:
+    """Gather episodic hints from prior runs — successes and failures.
+
+    Reads summaries/*.json, filters for relevance, and formats as prompt context.
+    Prioritizes: (1) failures on same/similar task tags, (2) recent successes.
+    """
+    summaries_dir = agent_dir / "memory" / "summaries"
+    if not summaries_dir.exists():
+        return ""
+
+    episodes = []
+    for sf in sorted(summaries_dir.glob("*.json"), reverse=True):
+        try:
+            data = json.loads(sf.read_text())
+            result = data.get("result", {})
+            status = result.get("status", "unknown")
+            if status == "unknown":
+                continue
+            episodes.append({
+                "task_id": data.get("task_id", ""),
+                "task": data.get("task", "")[:120],
+                "status": status,
+                "error": result.get("error", ""),
+                "summary": result.get("summary", "")[:150],
+                "pr_url": result.get("pr_url"),
+                "elapsed": data.get("elapsed", 0),
+                "mirror": result.get("mirror_validation", {}),
+            })
+        except (json.JSONDecodeError, OSError):
+            continue
+        if len(episodes) >= 20:
+            break
+
+    if not episodes:
+        return ""
+
+    # Separate failures and successes
+    failures = [e for e in episodes if e["status"] in ("failed", "partial")]
+    successes = [e for e in episodes if e["status"] == "success"]
+
+    lines = []
+
+    if failures:
+        lines.append("RECENT FAILURES (avoid repeating these):")
+        for f in failures[:3]:
+            mirror_note = ""
+            if f.get("mirror", {}).get("passed") is False:
+                mirror_note = " [MIRROR VALIDATION FAILED]"
+            error_note = f" — {f['error'][:80]}" if f.get("error") else ""
+            lines.append(f"  [{f['status'].upper()}] {f['task'][:100]}{error_note}{mirror_note}")
+
+    if successes:
+        lines.append("RECENT SUCCESSES (proven patterns):")
+        for s in successes[:3]:
+            pr_note = f" PR:{s['pr_url'].split('/')[-1]}" if s.get("pr_url") else ""
+            lines.append(f"  [OK] {s['task'][:100]} ({s['elapsed']:.0f}s){pr_note}")
+
+    return "\n".join(lines)
+
+
+def _gather_failure_avoidance(agent_dir: Path, task: str) -> str:
+    """Build failure avoidance hints from recent failures — specific causal analysis."""
+    summaries_dir = agent_dir / "memory" / "summaries"
+    if not summaries_dir.exists():
+        return ""
+
+    avoidance = []
+    for sf in sorted(summaries_dir.glob("*.json"), reverse=True)[:15]:
+        try:
+            data = json.loads(sf.read_text())
+            result = data.get("result", {})
+            if result.get("status") not in ("failed",):
+                continue
+            mirror = result.get("mirror_validation", {})
+            if mirror.get("passed") is False:
+                for check in mirror.get("checks", []):
+                    if not check.get("passed", True):
+                        output_snippet = check.get("output", "")[:200]
+                        avoidance.append(
+                            f"AVOID: {check['name']} failed on task '{data.get('task', '')[:60]}' — "
+                            f"{output_snippet}"
+                        )
+            elif result.get("error"):
+                avoidance.append(f"AVOID: {result['error'][:120]}")
+        except (json.JSONDecodeError, OSError):
+            continue
+
+    if not avoidance:
+        return ""
+    return "FAILURE AVOIDANCE (learn from past mistakes):\n" + "\n".join(f"  {a}" for a in avoidance[:5])
+
+
+# ── Failure Pattern Auto-Learning ────────────────────────────────────────
+# Classifies mirror/spawn failures into reusable pattern classes, persists
+# them in a per-agent registry, and promotes high-frequency patterns into
+# procedures.md + lite brain so future spawns avoid repeating mistakes.
+
+FAILURE_CLASSIFIERS = [
+    # (pattern_name, regex_on_error_output, constraint_template)
+    ("missing_type_export", r"TS2305.*exported member|TS2724.*not exported|has no exported member",
+     "Ensure all new types/interfaces are explicitly exported from their module's index.ts"),
+    ("type_mismatch", r"TS2345|TS2322|TS2339|Type .* is not assignable",
+     "Verify argument types match function signatures; check union types and optional fields"),
+    ("missing_import", r"TS2307.*Cannot find module|Cannot find module",
+     "Verify import paths exist and spelling matches filesystem case-sensitively"),
+    ("unused_variable", r"TS6133.*declared but|is declared but its value is never read",
+     "Remove or use all declared variables; prefix intentionally unused params with _"),
+    ("test_assertion", r"AssertionError|expect\(.*\)\.(toBe|toEqual|toMatch)|FAIL.*test",
+     "Run tests locally before committing; check that mocked data matches current schema"),
+    ("test_import", r"vitest.*Cannot find|SyntaxError.*import|ERR_MODULE_NOT_FOUND",
+     "Ensure test files import from correct paths; check that vitest config resolves aliases"),
+    ("build_error", r"tsc.*error TS|Build failed|Compilation failed",
+     "Run tsc --noEmit before creating PR; fix all type errors, not just the ones in changed files"),
+    ("mirror_restore", r"mirror.*not restored|byte-identical|mirror cleanup",
+     "After mirror validation, restore ALL files including new directories created during copy"),
+    ("wrong_target_repo", r"targets? wrong repo|misrouted.*pr|fork.*upstream",
+     "PRs must target the upstream repo, not the fork; use --repo flag with gh pr create"),
+    ("stale_baseline", r"merge conflict|CONFLICT|diverged|out of date|needs rebase",
+     "Pull latest from target branch before starting work; rebase if branch has diverged"),
+    ("missing_dependency", r"npm ERR!|Module not found|No matching version|peer dep",
+     "Check package.json for required dependencies before importing new packages"),
+    ("runtime_error", r"ReferenceError|TypeError.*undefined|Cannot read propert",
+     "Add null checks for optional chain access; verify API response shapes match types"),
+    ("timeout", r"timed? ?out|SIGTERM|killed|deadline exceeded",
+     "Break large tasks into smaller increments; avoid unbounded loops or network calls in tests"),
+]
+
+FAILURE_REGISTRY_FILE = "failure_patterns.json"
+PROMOTION_THRESHOLD = 2  # occurrences before pattern gets promoted to procedures
+
+
+def _classify_failure(error_output: str, mirror_checks: list = None) -> list[dict]:
+    """Classify error output into known failure pattern classes.
+
+    Returns list of {class, constraint, snippet} dicts for each matched pattern.
+    """
+    if not error_output and not mirror_checks:
+        return []
+
+    matches = []
+    for class_name, regex, constraint in FAILURE_CLASSIFIERS:
+        if not error_output:
+            break
+        m = _re_mod.search(regex, error_output, _re_mod.IGNORECASE)
+        if m:
+            start = max(0, m.start() - 40)
+            end = min(len(error_output), m.end() + 80)
+            snippet = error_output[start:end].strip()
+            matches.append({
+                "class": class_name,
+                "constraint": constraint,
+                "snippet": snippet[:150],
+            })
+
+    if mirror_checks:
+        for check in mirror_checks:
+            if not check.get("passed", True):
+                check_output = check.get("output", "")
+                sub_matches = _classify_failure(check_output)
+                if sub_matches:
+                    matches.extend(sub_matches)
+                elif check_output:
+                    matches.append({
+                        "class": f"mirror_{check.get('name', 'unknown').replace(' ', '_')}",
+                        "constraint": f"Fix {check.get('name', 'check')} errors before creating PR",
+                        "snippet": check_output[:150],
+                    })
+
+    seen = set()
+    deduped = []
+    for m in matches:
+        if m["class"] not in seen:
+            seen.add(m["class"])
+            deduped.append(m)
+    return deduped
+
+
+def _load_failure_registry(agent_dir: Path) -> dict:
+    """Load the persistent failure pattern registry for an agent."""
+    reg_file = agent_dir / "data" / FAILURE_REGISTRY_FILE
+    if reg_file.exists():
+        try:
+            return json.loads(reg_file.read_text())
+        except (json.JSONDecodeError, OSError):
+            pass
+    return {"patterns": {}, "version": 1}
+
+
+def _save_failure_registry(agent_dir: Path, registry: dict):
+    """Save the failure pattern registry."""
+    reg_file = agent_dir / "data" / FAILURE_REGISTRY_FILE
+    reg_file.parent.mkdir(parents=True, exist_ok=True)
+    reg_file.write_text(json.dumps(registry, indent=2, default=str))
+
+
+def _update_failure_registry(agent_dir: Path, classified: list[dict],
+                             task: str, task_id: str) -> list[dict]:
+    """Update persistent failure registry with newly classified patterns.
+
+    Returns list of patterns that crossed the promotion threshold this time.
+    """
+    if not classified:
+        return []
+
+    registry = _load_failure_registry(agent_dir)
+    patterns = registry.setdefault("patterns", {})
+    now = datetime.now(timezone.utc).isoformat()
+    newly_promoted = []
+
+    for item in classified:
+        cls = item["class"]
+        if cls in patterns:
+            prev_count = patterns[cls]["count"]
+            patterns[cls]["count"] += 1
+            patterns[cls]["last_seen"] = now
+            patterns[cls]["last_task_id"] = task_id
+            patterns[cls]["last_snippet"] = item["snippet"]
+            if prev_count < PROMOTION_THRESHOLD <= patterns[cls]["count"]:
+                newly_promoted.append(patterns[cls])
+        else:
+            patterns[cls] = {
+                "class": cls,
+                "constraint": item["constraint"],
+                "count": 1,
+                "first_seen": now,
+                "last_seen": now,
+                "first_task": task[:120],
+                "last_task_id": task_id,
+                "last_snippet": item["snippet"],
+                "promoted": False,
+            }
+
+    registry["last_updated"] = now
+    _save_failure_registry(agent_dir, registry)
+    return newly_promoted
+
+
+def _promote_failure_patterns(agent_dir: Path, patterns_to_promote: list[dict]):
+    """Promote high-frequency failure patterns to procedures.md and lite brain."""
+    if not patterns_to_promote:
+        return
+
+    # 1. Append to procedures.md
+    proc_file = agent_dir / "memory" / "procedures.md"
+    proc_file.parent.mkdir(parents=True, exist_ok=True)
+    existing = proc_file.read_text() if proc_file.exists() else ""
+
+    new_lines = []
+    for p in patterns_to_promote:
+        constraint_line = f"- **[auto-learned]** {p['constraint']} (failed {p['count']}x, class: {p['class']})"
+        if constraint_line not in existing and p["constraint"] not in existing:
+            new_lines.append(constraint_line)
+            p["promoted"] = True
+
+    if new_lines:
+        with open(proc_file, "a") as f:
+            f.write(f"\n## Failure Constraints (auto-learned {datetime.now(timezone.utc).strftime('%Y-%m-%d')})\n")
+            for line in new_lines:
+                f.write(f"{line}\n")
+        _log(f"Promoted {len(new_lines)} failure patterns to procedures.md")
+
+    # 2. Store in lite brain as project-learnings
+    try:
+        sys.path.insert(0, str(CLARVIS_WORKSPACE / "scripts" / "brain_mem"))
+        from lite_brain import LiteBrain
+        lb = LiteBrain(str(agent_dir / "data" / "brain"))
+        for p in patterns_to_promote:
+            learning = (
+                f"FAILURE PATTERN [{p['class']}]: {p['constraint']} "
+                f"(observed {p['count']}x, last: {p.get('last_snippet', '')[:80]})"
+            )
+            lb.store(
+                learning,
+                collection="project-learnings",
+                importance=0.9,
+                tags=["failure-pattern", f"class:{p['class']}", "auto-learned"],
+                source="failure_registry",
+            )
+        _log(f"Stored {len(patterns_to_promote)} failure patterns in lite brain")
+    except Exception as e:
+        _log(f"Lite brain failure pattern store failed (non-fatal): {e}")
+
+    # 3. Mark promoted in registry
+    registry = _load_failure_registry(agent_dir)
+    for p in patterns_to_promote:
+        if p["class"] in registry.get("patterns", {}):
+            registry["patterns"][p["class"]]["promoted"] = True
+    _save_failure_registry(agent_dir, registry)
+
+
+def _gather_failure_constraints(agent_dir: Path) -> str:
+    """Build structured failure constraints from the persistent registry.
+
+    Unlike _gather_failure_avoidance (raw snippets), this returns classified,
+    deduplicated, actionable constraints ranked by frequency.
+    """
+    registry = _load_failure_registry(agent_dir)
+    patterns = registry.get("patterns", {})
+    if not patterns:
+        return ""
+
+    sorted_patterns = sorted(patterns.values(), key=lambda p: p["count"], reverse=True)
+    lines = ["## Learned Failure Constraints (auto-learned from past failures)",
+             "These constraints are derived from repeated failures. Follow them strictly."]
+    for p in sorted_patterns[:8]:
+        freq = f"({p['count']}x)" if p["count"] > 1 else "(1x)"
+        lines.append(f"- **{p['class']}** {freq}: {p['constraint']}")
+
+    return "\n".join(lines)
+
+
+def _query_lite_brain(agent_dir: Path, task: str, *,
+                      skip_procedures: bool = False,
+                      skip_failure_patterns: bool = False) -> str:
+    """Query the project's lite brain for relevant learnings and procedures.
+
+    Args:
+        skip_procedures: True when procedures.md is already in the prompt.
+        skip_failure_patterns: True when failure_constraints section is present.
+    """
+    brain_dir = agent_dir / "data" / "brain"
+    if not brain_dir.exists():
+        return ""
+
+    try:
+        sys.path.insert(0, str(CLARVIS_WORKSPACE / "scripts" / "brain_mem"))
+        from lite_brain import LiteBrain
+        brain = LiteBrain(str(brain_dir))
+
+        learnings = brain.recall(task, n_results=5, collection="project-learnings")
+
+        lines = []
+        if learnings:
+            relevant = [l for l in learnings if l.get("relevance", 0) > 0.3]
+            if skip_failure_patterns:
+                relevant = [l for l in relevant
+                            if "FAILURE PATTERN" not in l.get("document", "")]
+            if relevant:
+                lines.append("PROJECT KNOWLEDGE (from prior runs):")
+                for l in relevant[:4]:
+                    lines.append(f"  [learn] {l['document'][:120]}")
+
+        if not skip_procedures:
+            procedures = brain.recall(task, n_results=3, collection="project-procedures")
+            if procedures:
+                relevant_procs = [p for p in procedures if p.get("relevance", 0) > 0.3]
+                if relevant_procs:
+                    lines.append("PROJECT PROCEDURES (proven):")
+                    for p in relevant_procs[:3]:
+                        lines.append(f"  [proc] {p['document'][:120]}")
+
+        return "\n".join(lines) if lines else ""
+    except Exception:
+        return ""
+
+
+def _get_worker_template_for_task(task: str) -> str:
+    """Select and return the appropriate worker template for the task type."""
+    template_dir = CLARVIS_WORKSPACE / "scripts" / "worker_templates"
+    if not template_dir.exists():
+        return ""
+
+    task_lower = task.lower()
+    if any(kw in task_lower for kw in ["implement", "add", "fix", "build", "create", "replace", "wrap", "refactor"]):
+        template_name = "implementation.txt"
+    elif any(kw in task_lower for kw in ["research", "investigate", "analyze", "review"]):
+        template_name = "research.txt"
+    elif any(kw in task_lower for kw in ["maintain", "cleanup", "migrate", "update", "upgrade"]):
+        template_name = "maintenance.txt"
+    else:
+        template_name = "general.txt"
+
+    template_file = template_dir / template_name
+    if template_file.exists():
+        try:
+            return template_file.read_text()[:1500]
+        except OSError:
+            pass
+    return ""
+
+
+# Sections in procedures.md that duplicate hardcoded prompt sections
+_PROC_ALWAYS_REDUNDANT = {
+    "git workflow", "git workflow (critical", "communication", "notes", "note",
+}
+_PROC_REDUNDANT_IF_CI = {
+    "build & test", "build", "testing",
+}
+
+
+def _dedup_procedures(raw: str, has_ci_context: bool = False) -> str:
+    """Strip sections from procedures.md that duplicate other prompt sections.
+
+    Always removed: Git Workflow, Communication, Notes (hardcoded in prompt).
+    Removed when CI context present: Build & Test, Testing (in CI Commands).
+    """
+    redundant = _PROC_ALWAYS_REDUNDANT | (_PROC_REDUNDANT_IF_CI if has_ci_context else set())
+    lines = raw.split("\n")
+    result = []
+    skip = False
+    for line in lines:
+        stripped = line.strip().lower()
+        if stripped.startswith("## "):
+            heading = stripped[3:].strip().rstrip(")")
+            skip = any(heading.startswith(r) for r in redundant)
+        if not skip:
+            result.append(line)
+    return "\n".join(result).strip()
+
+
 def build_spawn_prompt(name: str, task: str, config: dict,
-                       agent_dir: Path, context: str = "") -> str:
+                       agent_dir: Path, context: str = "",
+                       timeout: int = 1200) -> str:
     """Build the full prompt string for a project agent spawn.
 
     Extracted for testability. Returns the prompt text.
+    Enriched with episodic context, failure avoidance, brain knowledge,
+    worker template, and time budget — matching Clarvis self-work quality.
     """
     workspace = agent_dir / "workspace"
 
-    procedures = ""
+    raw_procedures = ""
     proc_file = agent_dir / "memory" / "procedures.md"
     if proc_file.exists():
         try:
-            procedures = proc_file.read_text()[:2000]
+            raw_procedures = proc_file.read_text()[:2000]
         except OSError:
             pass
 
     constraints = "\n".join(f"- {c}" for c in config.get("constraints", []))
 
-    prompt_parts = [
+    # Select worker template based on task type
+    worker_template = _get_worker_template_for_task(task)
+
+    prompt_parts = []
+
+    if worker_template:
+        prompt_parts.append(worker_template)
+        prompt_parts.append("")
+
+    prompt_parts.extend([
         f"You are a project agent for '{name}'.",
         f"Working directory: {workspace}",
+        f"TIME BUDGET: You have ~{timeout // 60} minutes. Prioritize completing something concrete over perfection.",
         "",
         "## Constraints",
         constraints,
         "",
-    ]
+    ])
 
     # Load CI context if available
+    has_ci_context = False
     ci_file = agent_dir / "data" / "ci_context.json"
     if ci_file.exists():
         try:
             ci = json.loads(ci_file.read_text())
             cmds = ci.get("commands", {})
             if cmds:
+                has_ci_context = True
                 ci_lines = ["## CI Commands (auto-detected)"]
                 for category, cmd_list in cmds.items():
                     ci_lines.append(f"- **{category}**: {' ; '.join(cmd_list)}")
@@ -1628,6 +2142,7 @@ def build_spawn_prompt(name: str, task: str, config: dict,
             "",
         ])
 
+    procedures = _dedup_procedures(raw_procedures, has_ci_context=has_ci_context) if raw_procedures else ""
     if procedures:
         prompt_parts.extend([
             "## Known Procedures",
@@ -1635,18 +2150,47 @@ def build_spawn_prompt(name: str, task: str, config: dict,
             "",
         ])
 
-    if not context:
-        try:
-            from clarvis.context.assembly import generate_tiered_brief
-            brief = generate_tiered_brief(task, tier="standard")
-            context = str(brief)[:2000]
-        except Exception:
-            pass
-
+    # Only include explicit caller-provided context. The Clarvis tiered
+    # brief (generate_tiered_brief) was previously used as a fallback here,
+    # but it injects Clarvis-internal failure patterns, episodic memory, and
+    # queue tasks that are irrelevant noise for project agents. Project-specific
+    # context is assembled below via episodic/failure/brain sections.
     if context:
         prompt_parts.extend([
             "## Context from Clarvis",
             context[:2000],
+            "",
+        ])
+
+    # ── Unified Prior Knowledge (deduped) ─────────────────────────────
+    # Merge episodic history + failure constraints + brain knowledge into
+    # a single section, avoiding the triple-inclusion of failure info that
+    # occurred when each source was appended independently.
+
+    # 1. Episodic context (successes + failures from summaries)
+    episodic_ctx = _gather_episodic_context(agent_dir, task)
+
+    # 2. Classified failure constraints (persistent registry — superset of
+    #    raw failure_avoidance, so we skip _gather_failure_avoidance entirely)
+    failure_constraints = _gather_failure_constraints(agent_dir)
+
+    # 3. Lite brain learnings (exclude procedures — already in § Known Procedures)
+    brain_knowledge = _query_lite_brain(agent_dir, task,
+                                         skip_procedures=bool(procedures),
+                                         skip_failure_patterns=bool(failure_constraints))
+
+    # Combine into one section to avoid prompt sprawl
+    prior_parts = []
+    if episodic_ctx:
+        prior_parts.append(episodic_ctx)
+    if failure_constraints:
+        prior_parts.append(failure_constraints)
+    if brain_knowledge:
+        prior_parts.append(brain_knowledge)
+    if prior_parts:
+        prompt_parts.extend([
+            "## Prior Knowledge & Run History",
+            "\n\n".join(prior_parts),
             "",
         ])
 
@@ -1656,6 +2200,14 @@ def build_spawn_prompt(name: str, task: str, config: dict,
         prompt_parts.extend(build_pr_rules_section())
     except ImportError:
         pass
+
+    # Derive fork workflow details for PR instructions
+    _repo_url = config.get("repo_url", "")
+    import re as _re_prompt
+    _m = _re_prompt.search(r'[:/]([^/]+/[^/.]+?)(?:\.git)?$', _repo_url)
+    _upstream_repo = _m.group(1) if _m else ""
+    _fork_owner = "GranusClarvis"
+    _base_branch = config.get("branch", "main")
 
     prompt_parts.extend([
         "## Task",
@@ -1667,11 +2219,22 @@ def build_spawn_prompt(name: str, task: str, config: dict,
         f"from lite_brain import LiteBrain; b=LiteBrain('{agent_dir}/data/brain'); "
         "b.store('what you learned', 'project-procedures')\"",
         "",
-        "## Git Workflow for PRs",
-        "1. git checkout -b feature/<desc>",
-        "2. Make changes, commit (see Commit Safety below)",
-        "3. git push origin feature/<desc>",
-        "4. gh pr create --title '...' --body '...'",
+        "## Git Workflow for PRs (CRITICAL — follow exactly)",
+        "You are already on a fresh work branch. Do NOT create or switch to another branch.",
+        "1. Make changes and commit on the CURRENT branch (see Commit Safety below)",
+        "2. Push: `git push origin HEAD`",
+    ])
+    if _upstream_repo:
+        _current_branch_var = "$(git rev-parse --abbrev-ref HEAD)"
+        prompt_parts.extend([
+            f"3. Create PR targeting UPSTREAM: `gh pr create --repo {_upstream_repo} "
+            f"--head {_fork_owner}:{_current_branch_var} --base {_base_branch} "
+            f"--title '...' --body '...'`",
+            f"IMPORTANT: The PR MUST target the upstream repo ({_upstream_repo}), NOT the fork.",
+        ])
+    else:
+        prompt_parts.append("3. Create PR: `gh pr create --title '...' --body '...'`")
+    prompt_parts.extend([
         "",
         "## Commit Safety (MANDATORY)",
         "NEVER commit secrets, credentials, or binary artifacts.",
@@ -1688,7 +2251,7 @@ def build_spawn_prompt(name: str, task: str, config: dict,
         '  "status": "success|partial|failed|blocked",  // REQUIRED',
         '  "summary": "2-3 sentences of what you did",  // REQUIRED',
         '  "pr_url": "https://github.com/..." or null,',
-        '  "branch": "feature/...",',
+        '  "branch": "current branch name",',
         '  "files_changed": ["path/to/file1", "path/to/file2"],',
         '  "procedures": ["Build: npm run build", "Test: npm run test"],',
         '  "follow_ups": ["TODO: ...", "NEEDS: ..."],',
@@ -1794,7 +2357,7 @@ def cmd_spawn(name: str, task: str, timeout: int = 1200,
     _save_config(name, config)
 
     # Build prompt and write to file
-    prompt = build_spawn_prompt(name, task, config, agent_dir, context)
+    prompt = build_spawn_prompt(name, task, config, agent_dir, context, timeout=timeout)
     prompt_file = f"/tmp/project_agent_{name}_{task_id}.txt"
     with open(prompt_file, "w") as f:
         f.write(prompt)
@@ -1872,7 +2435,20 @@ def cmd_spawn(name: str, task: str, timeout: int = 1200,
     # Parse agent output for structured result
     agent_result = _parse_agent_output(output)
 
-    # ── Post-spawn commit safety audit ────────────────────────────────
+    # ── Post-spawn PR URL validation ───────────────────────────────��──
+    # Reject PRs targeting the fork instead of upstream
+    _pr_url = agent_result.get("pr_url")
+    if _pr_url and isinstance(_pr_url, str):
+        import re as _re_pr
+        _repo_url_cfg = config.get("repo_url", "")
+        _m_up = _re_pr.search(r'[:/]([^/]+/[^/.]+?)(?:\.git)?$', _repo_url_cfg)
+        _upstream_slug = _m_up.group(1).lower() if _m_up else ""
+        if _upstream_slug and _upstream_slug not in _pr_url.lower():
+            _log(f"PR URL targets wrong repo (expected {_upstream_slug}): {_pr_url}")
+            agent_result["_misrouted_pr"] = _pr_url
+            agent_result["pr_url"] = None
+
+    # ── Post-spawn commit safety audit ───────────────��────────────────
     # Re-stage any remaining dirty files through the safety filter.
     # This catches cases where the agent used `git add .` or staged secrets.
     try:
@@ -1957,7 +2533,75 @@ def cmd_spawn(name: str, task: str, timeout: int = 1200,
         summary_data["actual_cost_usd"] = actual_cost_usd
     summary_file.write_text(json.dumps(summary_data, indent=2))
 
+    # Episode writeback to lite brain — store real task outcomes for future retrieval
+    try:
+        sys.path.insert(0, str(CLARVIS_WORKSPACE / "scripts" / "brain_mem"))
+        from lite_brain import LiteBrain
+        lb = LiteBrain(str(agent_dir / "data" / "brain"))
+        status = agent_result.get("status", "unknown")
+        summary_text = agent_result.get("summary", "")[:200]
+        pr_note = f" PR:{agent_result['pr_url']}" if agent_result.get("pr_url") else ""
+        episode_text = (
+            f"[{status.upper()}] {task[:120]} — "
+            f"{summary_text}{pr_note}"
+        )
+        lb.store(
+            episode_text,
+            collection="project-episodes",
+            importance=0.8 if status == "success" else 0.9,
+            tags=[f"status:{status}", f"task_id:{task_id}"],
+            source="spawn-writeback",
+        )
+        # Store learned procedures from successful runs
+        if status == "success" and agent_result.get("procedures"):
+            for proc in agent_result["procedures"][:5]:
+                if proc and len(proc) > 10:
+                    lb.store(proc, collection="project-procedures",
+                             importance=0.7, tags=["auto-learned"],
+                             source="spawn-writeback")
+        _log(f"Episode writeback: stored to lite brain (status={status})")
+    except Exception as e:
+        _log(f"Episode writeback to lite brain failed (non-fatal): {e}")
+
+    # Auto-refresh procedures.md from successful run procedures
+    if agent_result.get("status") == "success" and agent_result.get("procedures"):
+        try:
+            proc_file = agent_dir / "memory" / "procedures.md"
+            existing = proc_file.read_text() if proc_file.exists() else ""
+            new_procs = [p for p in agent_result["procedures"]
+                         if p and len(p) > 10 and p not in existing]
+            if new_procs:
+                with open(proc_file, "a") as f:
+                    f.write(f"\n## Learned {datetime.now(timezone.utc).strftime('%Y-%m-%d')}\n")
+                    for p in new_procs[:5]:
+                        f.write(f"- {p}\n")
+                _log(f"Procedures.md updated: +{len(new_procs)} new procedures")
+        except Exception as e:
+            _log(f"Procedures.md update failed (non-fatal): {e}")
+
+    # ── Postflight parity: mirror key Clarvis heartbeat postflight steps ──
+    _run_clarvis_postflight(
+        name=name,
+        task_id=task_id,
+        task=task,
+        agent_result=agent_result,
+        exit_code=exit_code,
+        elapsed=elapsed,
+        output=output,
+    )
+
     _log(f"Task {task_id} completed: exit={exit_code} elapsed={elapsed:.0f}s status={agent_result.get('status', 'unknown')}")
+
+    # ── Post-task branch cleanup (best-effort, non-blocking) ──────────
+    try:
+        cleanup = cleanup_stale_branches(
+            workspace, keep_branch=work_branch, base_branch=base_branch)
+        if cleanup["deleted"]:
+            _log(f"Branch cleanup: deleted {len(cleanup['deleted'])} stale branches")
+        if cleanup["errors"]:
+            _log(f"Branch cleanup errors: {cleanup['errors'][:3]}")
+    except Exception as e:
+        _log(f"Branch cleanup failed (non-fatal): {e}")
 
     _emit("task_completed", agent=name, task_id=task_id,
           status=agent_result.get("status", "unknown"),
@@ -1978,6 +2622,133 @@ def cmd_spawn(name: str, task: str, timeout: int = 1200,
         "output_tail": output[-1500:] if output else "",
         "log": str(log_file),
     }
+
+
+def _run_clarvis_postflight(*, name, task_id, task, agent_result, exit_code, elapsed, output):
+    """Lightweight postflight mirroring key heartbeat_postflight steps for parity.
+
+    Runs six steps:
+    1. Clarvis-side episodic encoding (not just lite brain)
+    2. Brain outcome recording (store to clarvis-learnings)
+    3. Failure lesson extraction (learn from errors)
+    3.5. Failure pattern classification → registry → promotion (auto-learning)
+    4. Digest writing (surface to conscious layer)
+    5. Routing log entry (track project-agent decisions)
+    """
+    status = agent_result.get("status", "unknown")
+    summary_text = agent_result.get("summary", "")[:200]
+    pr_url = agent_result.get("pr_url")
+    t0 = time.time()
+
+    # 1. Clarvis-side episodic encoding
+    try:
+        from clarvis.memory.episodic_memory import EpisodicMemory
+        em = EpisodicMemory()
+        error_msg = agent_result.get("error", "")[:200] if status != "success" else None
+        failure_type = None
+        if status == "timeout":
+            failure_type = "timeout"
+        elif status == "failed" or status == "failure":
+            failure_type = "action"
+        em.encode(
+            task_text=f"[agent:{name}] {task[:200]}",
+            section="project-agent",
+            salience=0.7 if status == "success" else 0.85,
+            outcome="success" if status == "success" else ("timeout" if status == "timeout" else "failure"),
+            duration_s=int(elapsed),
+            error_msg=error_msg,
+            failure_type=failure_type,
+            output_text=output[-500:] if output else None,
+        )
+        _log(f"Postflight: Clarvis episodic encode done (agent={name})")
+    except Exception as e:
+        _log(f"Postflight: episodic encode failed (non-fatal): {e}")
+
+    # 2. Brain outcome recording
+    try:
+        from clarvis.heartbeat.brain_bridge import brain_record_outcome
+        brain_record_outcome(
+            task_text=f"[agent:{name}] {task[:150]}",
+            status="success" if status == "success" else ("timeout" if status == "timeout" else "failure"),
+            output_text=output[-500:] if output else "",
+            duration_s=int(elapsed),
+        )
+        _log(f"Postflight: brain outcome recorded")
+    except Exception as e:
+        _log(f"Postflight: brain outcome failed (non-fatal): {e}")
+
+    # 3. Failure lesson extraction
+    if status not in ("success",) and output:
+        try:
+            from clarvis.brain import get_brain
+            from clarvis.brain.constants import LEARNINGS
+            b = get_brain()
+            error_tail = output[-300:]
+            import re as _re_fl
+            error_tail = _re_fl.sub(r'[^a-zA-Z0-9 _.,:;=+\-/()@#%\n]', '', error_tail)[:250]
+            lesson = f"AGENT-FAILURE [{name}] {task[:100]} — {error_tail}"
+            b.store(
+                lesson,
+                collection=LEARNINGS,
+                importance=0.85,
+                tags=["agent-failure", f"agent:{name}", f"task_id:{task_id}"],
+                source="project_agent_postflight",
+            )
+            _log(f"Postflight: failure lesson stored")
+        except Exception as e:
+            _log(f"Postflight: failure lesson failed (non-fatal): {e}")
+
+    # 3.5. Failure pattern classification + registry + promotion
+    if status not in ("success",):
+        try:
+            agent_dir = _agent_dir(name)
+            error_text = (output or "")[-600:] + " " + (agent_result.get("error") or "")
+            mirror_checks = agent_result.get("mirror_validation", {}).get("checks", [])
+            classified = _classify_failure(error_text, mirror_checks if mirror_checks else None)
+            if classified:
+                newly_promoted = _update_failure_registry(
+                    agent_dir, classified, task, task_id
+                )
+                classes = [c["class"] for c in classified]
+                _log(f"Postflight: classified failure patterns: {classes}")
+                if newly_promoted:
+                    _promote_failure_patterns(agent_dir, newly_promoted)
+                    _log(f"Postflight: promoted {len(newly_promoted)} patterns to procedures + lite brain")
+            else:
+                _log(f"Postflight: no known failure pattern matched — raw lesson stored in step 3")
+        except Exception as e:
+            _log(f"Postflight: failure pattern classification failed (non-fatal): {e}")
+
+    # 4. Digest writing
+    try:
+        from clarvis._script_loader import load as _load_script
+        _dw = _load_script("digest_writer", "tools")
+        pr_note = f" PR: {pr_url}" if pr_url else ""
+        _dw.write_digest(
+            "autonomous",
+            f'Project agent [{name}] completed task: "{task[:100]}". '
+            f'Result: {status} ({elapsed:.0f}s).{pr_note} '
+            f'{summary_text[:150]}'
+        )
+        _log(f"Postflight: digest written")
+    except Exception as e:
+        _log(f"Postflight: digest write failed (non-fatal): {e}")
+
+    # 5. Routing log entry
+    try:
+        from clarvis.orch.router import log_decision
+        log_decision(
+            task_text=f"[agent:{name}] {task[:150]}",
+            classification={"tier": "COMPLEX", "score": 1.0, "reason": "project-agent"},
+            executor_used=f"project-agent:{name}",
+            outcome=status,
+        )
+        _log(f"Postflight: routing decision logged")
+    except Exception as e:
+        _log(f"Postflight: routing log failed (non-fatal): {e}")
+
+    pf_elapsed = time.time() - t0
+    _log(f"Postflight parity: completed in {pf_elapsed:.2f}s (5 steps)")
 
 
 def _parse_agent_output(output: str) -> dict:

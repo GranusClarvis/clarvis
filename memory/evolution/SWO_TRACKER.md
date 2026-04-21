@@ -39,14 +39,24 @@ Planning docs, queue items, and brand positioning do NOT count as delivery.
 | 15 | #183 | fix: harden raffle randomness — CSPRNG + combined entropy | 2026-04-18 |
 | 16 | #184 | fix: social connections auth | 2026-04-18 |
 | 17 | #191 | feat: sanctuary-map-bg CSS class with procedural star map | 2026-04-21 |
+| 18 | #194 | fix: replace silent .catch with error states in SanctuaryContent | 2026-04-21 |
+| 19 | #195 | fix: wrap all JSON.parse(attributes_json) calls in try-catch | 2026-04-21 |
+
+## Branch Cleanup Log
+
+| Date | Action | Count |
+|------|--------|-------|
+| 2026-04-21 | Deleted merged local branches | 30 |
+| 2026-04-21 | Force-deleted stale not-merged local branches | 8 |
+| 2026-04-21 | Deleted merged remote branches (fork) | 16 |
+| 2026-04-21 | Deleted stale remote branches (fork + copilot) | 10 |
+| 2026-04-21 | Auto-cleanup wired into project_agent.py cmd_spawn | — |
 
 ## Pending PRs — MERGE PRIORITY ORDER
 
-_Revalidated 2026-04-21 against upstream/dev HEAD (5ed3557). PRs #177, #180, #181 confirmed merged._
+_Revalidated 2026-04-21 against upstream/dev HEAD (36d0e20). Fork dev synced. All branches cleaned._
 
-| # | PR | Title | Sev | State | Last Checked |
-|---|-----|-------|-----|-------|--------------|
-| — | — | All pending PRs merged or closed | — | — | 2026-04-21 |
+_(No pending PRs)_
 
 **Resolved:**
 - ~~#177~~ — MERGED on dev (governance votingPower server-side verification)

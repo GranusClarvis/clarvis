@@ -36,17 +36,16 @@ _Source: `docs/CLAUDE_DESIGN_ROUTINES_STRATEGY.md`. Cross-project operating mode
 ### Star Sanctuary — Validated Roadmap (PROJECT:SWO, revalidated 2026-04-21)
 
 _SWO tasks tracked here. See also: memory/evolution/SWO_TRACKER.md_
-_Status as of 2026-04-21: dev branch (upstream 5ed3557) is canonical baseline. 17 PRs merged (128/128 tests ✓, tsc clean). Self-hosted corpus DONE (3,333 NFT images). Security PRs #177/#180/#181/#183/#184 merged. PR #179 CLOSED (wallet auth on POST routes still needed). Ownership verification: single path (balanceOf + multicall Star check via 6-endpoint RPC client)._
+_Status as of 2026-04-21: dev branch (upstream 36d0e20) synced. All 19 PRs merged (through #195). All branches cleaned (38→2). Self-hosted corpus DONE (3,333 NFT images). Security PRs #177/#180/#181/#183/#184 merged. PR #179 CLOSED (wallet auth on POST routes still needed — SWO_SANCTUARY_POST_AUTH). Fork sync + branch discipline + PR targeting + auto-cleanup fixed in project_agent.py._
 _Style doctrine: `docs/SANCTUARY_STYLE_DOCTRINE.md` — binding on all visual work._
 _Asset state: NFT art self-hosted ✓, companion sprites NOT YET CREATED (falls back to NFT art), location vignettes NOT YET CREATED (falls back to emoji), empty-state illustrations NOT YET CREATED._
 
 #### 0. Security (BLOCKING — do first)
 
+- [ ] **[SWO_SANCTUARY_POST_AUTH]** Add wallet signature verification to all state-modifying Sanctuary POST routes: `/companion/interact`, `/companion/send-to-activity`, `/companion/complete-activity`, `/quests/claim`. Use the existing `verifyWalletAccess()` path from `lib/walletAuth.ts`; do not create a second ownership/auth route. Goal: clean production-safe fix against current dev baseline with passing validation. (PROJECT:SWO)
 
 #### 1. Error Handling & Reliability (highest user-facing impact)
 
-- [ ] **[SWO_SANCTUARY_ERROR_STATES]** Replace all silent `.catch(() => {})` in SanctuaryContent.tsx with proper error states. 6 fetch calls currently swallow errors silently (journal line 561, chat line 675, traits line 780, quests line 854, map line 1162, interact line 1014). Add: (1) error state variables per panel, (2) "Failed to load — Retry" UI with retry button, (3) distinguish network errors from empty data. Also fix quests "Loading quests..." permanent state when API returns empty array — should show "No quests available" instead. (PROJECT:SWO)
-- [ ] **[SWO_SANCTUARY_JSON_SAFETY]** Wrap all `JSON.parse(attributes_json)` calls in try-catch in: `list-owned/route.ts` (line 37, 49), `select/route.ts` (line 42), `switch/route.ts` (line 42), `nft-traits/route.ts` (line 44). Malformed metadata in DB currently crashes these routes. (PROJECT:SWO)
 
 #### 2. Functional Gaps (code-only, high value)
 
@@ -70,16 +69,23 @@ _Asset state: NFT art self-hosted ✓, companion sprites NOT YET CREATED (falls 
 
 #### 5. Enhancement (lower priority)
 
-- [ ] **[SWO_SANCTUARY_CHAT_LLM]** Upgrade chat from templates to LLM (per ADR-002). OpenRouter → Gemini Flash, 15/day rate limit, personality + bond + journal context injection. ~$0.05/day at 100 users. (PROJECT:SWO)
+- [ ] **[SWO_SANCTUARY_CHAT_LLM]** Upgrade chat from templates to LLM (per ADR-002). OpenRouter → Gemini Flash, 15/day rate limit, personality + bond + journal context injection. Create `lib/sanctuary/chatPersonality.ts` (trait→prompt builder), `app/api/sanctuary/companion/chat/route.ts`, `sanctuary_chat_usage` table. Add `SANCTUARY_CHAT_DRY_RUN` env flag for cost-safe testing. ~$0.05/day at 100 users. Design ref: `docs/KINKLY_REFERENCE_ANALYSIS.md` §Phase 1. (PROJECT:SWO)
+- [ ] **[SWO_SANCTUARY_BOND_STAGES]** Map existing `bond_score` 0-100 to 4 behavioral stages (Shy/Friendly/Bonded/Devoted) that change companion chat personality. Create `lib/sanctuary/bondStages.ts` with stage thresholds + prompt context generator. Inject stage-appropriate tone guidance into chat system prompt. No schema changes — derives from existing `bond_score` column. Depends on `[SWO_SANCTUARY_CHAT_LLM]`. Design ref: `docs/KINKLY_REFERENCE_ANALYSIS.md` §Phase 2. (PROJECT:SWO)
+- [ ] **[SWO_SANCTUARY_CHAT_MEMORY]** Lightweight persistent memory so companions remember owner facts across sessions. Create `sanctuary_chat_memories` table (5 categories: owner_identity, preferences, shared_experiences, companion_feelings, recurring_topics). Extract facts by piggybacking on the chat LLM call (no separate classifier — zero extra cost). Inject top 5 memories by importance+recency into system prompt (150 token budget, 3-turn frequency cap). Depends on `[SWO_SANCTUARY_CHAT_LLM]`. Design ref: `docs/KINKLY_REFERENCE_ANALYSIS.md` §Phase 3. (PROJECT:SWO)
+- [ ] **[SWO_SANCTUARY_CHAT_HISTORY]** Persist chat messages server-side so conversations survive tab close. Create `sanctuary_chat_history` table (wallet, token_id, role, content, created_at). Load last 20 on reconnect, send last 10 to LLM for context. Add GET endpoint for paginated history. Depends on `[SWO_SANCTUARY_CHAT_LLM]`. Design ref: `docs/KINKLY_REFERENCE_ANALYSIS.md` §Phase 4. (PROJECT:SWO)
+- [ ] **[SWO_SANCTUARY_TYPING_SIM]** Add typing simulation to companion chat for immersion. Calculate delay from response word count (~45 WPM, 800ms-4000ms range). Show typing indicator dots (CSS keyframes already exist in globals.css). Frontend delays rendering assistant message by calculated ms. Depends on `[SWO_SANCTUARY_CHAT_LLM]`. Design ref: `docs/KINKLY_REFERENCE_ANALYSIS.md` §Phase 5. (PROJECT:SWO)
 - [ ] **[SWO_SANCTUARY_SOUND_DESIGN]** Optional ambient sound layer. Muted by default. Lower priority — visual assets first. (PROJECT:SWO)
 
 #### 6. Future Phases (P2, from milestones)
 
 - [ ] **[SWO_SANCTUARY_COSMETICS_SHOP]** Cosmetic items schema + STAR shop UI. `equipped_cosmetics` column exists but unused. Primary STAR token sink. (PROJECT:SWO)
 - [ ] **[SWO_SANCTUARY_EXPEDITIONS]** Expedition system (tables exist, routes stub). Multi-step adventures with narrative choices. (PROJECT:SWO)
+- [ ] **[SWO_SANCTUARY_MEMORY_CONSOLIDATION]** Weekly batch job to consolidate chat memories: merge duplicates, decay old emotions (staleness penalty on volatile categories), summarize recurring topics. Similar to Kinkly's contradiction detection but batch-processed. Depends on `[SWO_SANCTUARY_CHAT_MEMORY]`. (PROJECT:SWO)
 
 
 
+
+- [ ] **[PHI_DEEMPHASIS_AUDIT]** Audit and reduce Clarvis-wide overfocus on Phi. Goal: Phi should remain only a lightweight regression/health signal, not a recurring optimization target, routing bias, prompt contaminant, or context-budget parasite. Find where Phi/Integration language, tasks, alerts, queue injection, prompt sections, and autonomous logic still over-prioritize it; downgrade/remove those pathways where low-value; preserve only minimal monitoring for genuine regressions. Deliver: clear map of where Phi is still plaguing the system, code/config/doc changes to de-emphasize it, and updated rules so future work is judged more by operator value, task outcomes, retrieval quality, reliability, and shipped results than by Phi movement. (PROJECT:CLARVIS)
 
 ### Deep Audit — Phase 9 Follow-ups (P1, added 2026-04-17)
 
@@ -92,8 +98,17 @@ _Asset state: NFT art self-hosted ✓, companion sprites NOT YET CREATED (falls 
 _3-phase verification pass over the completed 16-phase deep audit + 100+ queue items. Confirms work quality, identifies regressions, flags fragile areas. Each phase covers ~6 audit areas. Source: operator-requested audit-of-the-audit._
 
 
+### Project-Agent Orchestration Quality (added 2026-04-21)
+
+_Source: deep analysis of why Clarvis self-work > project-agent work. Core issue: project-agent prompts lacked 8+ context layers that self-work enjoys. FIXED in this session: worker template, time budget, episodic recall, failure avoidance, lite brain query, episode writeback, procedures.md auto-refresh. Follow-up items below._
+
+- [x] **[PROJECT_AGENT_POSTFLIGHT_PARITY]** ✅ Done 2026-04-21. Added `_run_clarvis_postflight()` to project_agent.py with 5 steps: (1) Clarvis-side episodic encoding via EpisodicMemory.encode(), (2) brain outcome recording via brain_bridge.brain_record_outcome(), (3) failure lesson extraction to clarvis-learnings, (4) digest writing via digest_writer, (5) routing log entry via router.log_decision(). All steps fire correctly on both success and failure paths. Episodes tagged `[agent:<name>]` for attribution.
+- [x] **[PROJECT_AGENT_MIRROR_FAILURE_LEARNING]** ✅ Done 2026-04-21. Implemented full failure pattern auto-learning loop in project_agent.py: (1) 13-class regex classifier (`_classify_failure()`) covering tsc type errors, missing exports, test failures, mirror restore, wrong target repo, stale baseline, etc. (2) Persistent per-agent failure registry (`failure_patterns.json`) with dedup, occurrence tracking, first/last seen. (3) Postflight step 3.5 auto-classifies every failure and updates registry. (4) Patterns crossing 2x threshold auto-promote to `procedures.md` + lite brain `project-learnings`. (5) New `_gather_failure_constraints()` injects classified, ranked constraints into spawn prompts alongside raw failure avoidance. Full loop: fail → classify → register → promote → inject into next spawn.
+- [x] **[PROJECT_AGENT_CONTEXT_DEDUP]** ✅ Done 2026-04-21. Deduped spawn prompt: 15k→11.5k chars (23% reduction, 21→15 sections). Eliminated: procedures.md ↔ brain procedures overlap, triple failure-info inclusion, Clarvis-internal context noise, git workflow duplication.
+
 ### Clarvis Maintenance — Keep Alive
 
+- [x] **[PROJECT_AGENT_BRANCH_CLEANUP]** ✅ Done 2026-04-21. Added `cleanup_stale_branches(workspace, keep_branch, base_branch, dry_run)` to project_agent.py. Wired into cmd_spawn() as post-task best-effort step. Targets merged `clarvis/*/t*` + `feat/feature/fix/chore/*` branches. Initial SWO run: deleted 30 merged + 8 stale local, 26 stale remote branches. Fork clean: dev + main only.
 
 ### Deep Audit — Phase 0 Follow-ups (added 2026-04-16 via AUDIT_CAP_OVERRIDE)
 
