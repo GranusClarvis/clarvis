@@ -6,6 +6,7 @@ from clarvis.heartbeat.delivery_validator import (
     extract_pr_urls,
     has_pr_evidence,
     validate_project_delivery,
+    classify_delivery_type,
 )
 
 
@@ -200,3 +201,130 @@ class TestValidateProjectDelivery:
         assert result["is_project"]
         assert result["validated"]
         assert not result["downgrade"]
+
+    def test_setup_routine_task_exempt_from_pr(self):
+        result = validate_project_delivery(
+            "Set up a Claude Code Routine (GitHub webhook trigger: pull_request.closed) (PROJECT:SWO)",
+            "Routine already exists. Verified webhook configuration.",
+            "success",
+        )
+        assert result["is_project"]
+        assert result["validated"]
+        assert not result["downgrade"]
+        assert result["delivery_type"] == "operational"
+        assert "operational task" in result["reasons"][0]
+
+    def test_configure_webhook_exempt_from_pr(self):
+        result = validate_project_delivery(
+            "[PROJECT:SWO] Configure webhook for CI notifications",
+            "Webhook configured successfully.",
+            "success",
+        )
+        assert result["is_project"]
+        assert result["validated"]
+        assert not result["downgrade"]
+        assert result["delivery_type"] == "operational"
+
+    def test_deliverable_working_routine_exempt(self):
+        result = validate_project_delivery(
+            "(PROJECT:SWO) Build verification pipeline. Deliverable: working Routine.",
+            "Routine verified and active.",
+            "success",
+        )
+        assert result["is_project"]
+        assert not result["downgrade"]
+        assert result["delivery_type"] == "operational"
+
+    def test_delivery_type_in_result(self):
+        result = validate_project_delivery(
+            "[PROJECT:SWO] Fix login page",
+            "Fixed. https://github.com/org/repo/pull/42",
+            "success",
+        )
+        assert result["delivery_type"] == "code_delivery"
+
+    def test_non_project_has_empty_delivery_type(self):
+        result = validate_project_delivery(
+            "[IMPL] Fix brain dedup", "done", "success",
+        )
+        assert result["delivery_type"] == ""
+
+
+class TestClassifyDeliveryType:
+    def test_setup_routine_is_operational(self):
+        assert classify_delivery_type(
+            "Set up a Claude Code Routine (webhook trigger)"
+        ) == "operational"
+
+    def test_configure_ci_is_operational(self):
+        assert classify_delivery_type(
+            "Configure CI for deployment pipeline"
+        ) == "operational"
+
+    def test_verify_integration_is_operational(self):
+        assert classify_delivery_type(
+            "Verify routine webhook integration works"
+        ) == "operational"
+
+    def test_define_manifest_spec_is_operational(self):
+        assert classify_delivery_type(
+            "Define the `.clarvis/routines.yaml` manifest format"
+        ) == "operational"
+
+    def test_deliverable_spec_is_operational(self):
+        assert classify_delivery_type(
+            "Build docs framework. Deliverable: spec document."
+        ) == "operational"
+
+    def test_write_spec_is_operational(self):
+        assert classify_delivery_type(
+            "Write spec for the API schema"
+        ) == "operational"
+
+    def test_no_pr_tag_is_operational(self):
+        assert classify_delivery_type(
+            "Fix login page {no-pr}"
+        ) == "operational"
+
+    def test_no_pr_tag_case_insensitive(self):
+        assert classify_delivery_type(
+            "Update docs {NO-PR}"
+        ) == "operational"
+
+    def test_regular_code_task_is_code_delivery(self):
+        assert classify_delivery_type(
+            "Fix the login page CSS"
+        ) == "code_delivery"
+
+    def test_implement_feature_is_code_delivery(self):
+        assert classify_delivery_type(
+            "Implement dark mode toggle"
+        ) == "code_delivery"
+
+    def test_add_tests_is_code_delivery(self):
+        assert classify_delivery_type(
+            "Add unit tests for auth module"
+        ) == "code_delivery"
+
+
+class TestNoPrAnnotation:
+    def test_no_pr_annotation_bypasses_pr_check(self):
+        result = validate_project_delivery(
+            "[PROJECT:SWO] Update deployment docs {no-pr}",
+            "Updated the docs. No code changes.",
+            "success",
+        )
+        assert result["is_project"]
+        assert result["validated"]
+        assert not result["downgrade"]
+        assert result["delivery_type"] == "operational"
+        assert "{no-pr}" in result["reasons"][0]
+
+    def test_no_pr_on_code_task_still_exempts(self):
+        result = validate_project_delivery(
+            "[PROJECT:SWO] Fix login page {no-pr}",
+            "Investigated and found no fix needed.",
+            "success",
+        )
+        assert not result["downgrade"]
+        assert result["delivery_type"] == "operational"

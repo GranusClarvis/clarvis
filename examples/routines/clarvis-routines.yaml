@@ -1,0 +1,65 @@
+version: "1"
+
+project: clarvis
+repo: GranusClarvis/clarvis
+budget:
+  max_daily_runs: 3
+
+routines:
+  spine-test-gate:
+    description: Run pytest on PRs touching the clarvis/ spine
+    trigger: github_webhook
+    events:
+      - pull_request.opened
+      - pull_request.synchronize
+    filter:
+      paths:
+        - "clarvis/**"
+        - "tests/**"
+    prompt: |
+      PR #{{pr.number}} modifies spine modules or tests.
+      1. Install: pip install -e . (if setup exists) or ensure clarvis/ is importable
+      2. Run: python3 -m pytest tests/ -x --tb=short
+      3. If any test fails, post a comment with the failure output
+      4. If all pass, post a success comment with test count
+
+      Do NOT modify code — this is a read-only gate.
+    connectors: [github]
+    timeout: 300
+
+  self-pr-review:
+    description: Independent review of self-generated PRs
+    trigger: github_webhook
+    events:
+      - pull_request.opened
+    filter:
+      base_branch: [main]
+    prompt: |
+      Review PR #{{pr.number}} ("{{pr.title}}") opened against main.
+      Focus on:
+      1. Import convention compliance (clarvis.* spine imports, no sys.path hacks)
+      2. No dead code, unused imports, or speculative abstractions
+      3. Test coverage for new logic
+      4. No secrets or credential paths in diff
+      5. QUEUE.md updated if task is completed
+
+      Post a summary comment. Flag blocking issues as request-changes.
+    connectors: [github]
+    timeout: 300
+
+  queue-hygiene:
+    description: Weekly check for QUEUE.md health and cap compliance
+    trigger: schedule
+    cron: "0 10 * * 5"
+    prompt: |
+      Audit memory/evolution/QUEUE.md for hygiene ({{run.date}}):
+      1. Cap check: P0 <= 10, P1 <= 15 (25 with audit override)
+      2. Stale items: any unchecked task older than 14 days without progress
+      3. Missing sources: items without _Source:_ annotation
+      4. Duplicate detection: tasks with overlapping descriptions
+      5. Blocked items: check if blockers have been resolved
+
+      Post findings as a GitHub issue titled "QUEUE Hygiene — {{run.date}}".
+      If caps are violated, list specific items to triage.
+    connectors: [github]
+    timeout: 300

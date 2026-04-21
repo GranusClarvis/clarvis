@@ -4,6 +4,11 @@ SWO/project tasks must produce a mergeable GitHub PR to count as "success".
 Without a PR URL in the output, the task is downgraded to partial_success
 (status: "partial_delivery") so it re-enters the queue for completion.
 
+Two narrow exemptions preserve the gate while avoiding infinite-retry loops:
+  1. Operational tasks (auto-detected by verb patterns) — setup, configure, verify,
+     define spec, write doc — inherently don't produce PRs.
+  2. Explicit {no-pr} annotation in the task text — operator override.
+
 Wired into heartbeat_postflight after worker_validation (§0.6).
 """
 
@@ -17,6 +22,21 @@ _PROJECT_TAG_RE = re.compile(
     r"|\[PROJECT\b",
     re.IGNORECASE,
 )
+
+# Operational project tasks that inherently don't produce PRs.
+# These verbs describe setup/config/verification/spec work, not code delivery.
+_OPERATIONAL_TASK_RE = re.compile(
+    r"Set up a.*(?:Routine|workflow|pipeline|hook)"
+    r"|Configure.*(?:webhook|trigger|cron|routine|CI|deployment)"
+    r"|Verify\b.*(?:routine|webhook|pipeline|deployment|integration)"
+    r"|Deliverable:\s*(?:working Routine|spec|manifest|doc)"
+    r"|Define the\b.*(?:manifest|spec|format|schema)\b"
+    r"|Write spec\b|Write doc\b",
+    re.IGNORECASE,
+)
+
+# Explicit operator override: {no-pr} anywhere in task text
+_NO_PR_TAG_RE = re.compile(r"\{no-pr\}", re.IGNORECASE)
 
 # Also match if CLARVIS_PROJECT_LANE is set and the task contains the lane name
 _PROJECT_LANE = os.environ.get("CLARVIS_PROJECT_LANE", "").strip().upper()
@@ -102,16 +122,31 @@ def has_pr_evidence(output_text: str) -> dict:
     }
 
 
+def classify_delivery_type(task_text: str) -> str:
+    """Classify a project task as 'code_delivery' or 'operational'.
+
+    operational = setup, config, verification, spec — inherently no PR.
+    code_delivery = default — requires PR evidence.
+    """
+    if _NO_PR_TAG_RE.search(task_text):
+        return "operational"
+    if _OPERATIONAL_TASK_RE.search(task_text):
+        return "operational"
+    return "code_delivery"
+
+
 def validate_project_delivery(task_text: str, output_text: str, task_status: str,
                                task_tag: str = "") -> dict:
     """Validate that a project task produced PR delivery evidence.
 
     Only runs for project-lane tasks with task_status == "success".
     Non-project tasks or non-success statuses pass through unchanged.
+    Operational tasks (auto-detected or {no-pr} annotated) are exempt.
 
     Returns:
         dict with:
             is_project: bool
+            delivery_type: str — "code_delivery" or "operational" (or "" for non-project)
             validated: bool — True if delivery evidence is sufficient
             downgrade: bool — True if status should become partial_success
             downgrade_reason: str — "no_pr_delivery" or ""
@@ -120,6 +155,7 @@ def validate_project_delivery(task_text: str, output_text: str, task_status: str
     """
     result = {
         "is_project": False,
+        "delivery_type": "",
         "validated": True,
         "downgrade": False,
         "downgrade_reason": "",
@@ -131,6 +167,14 @@ def validate_project_delivery(task_text: str, output_text: str, task_status: str
         return result
 
     result["is_project"] = True
+    result["delivery_type"] = classify_delivery_type(task_text)
+
+    if result["delivery_type"] == "operational":
+        if _NO_PR_TAG_RE.search(task_text):
+            result["reasons"].append("explicit {no-pr} — PR evidence not required")
+        else:
+            result["reasons"].append("operational task — PR evidence not required")
+        return result
 
     if task_status != "success":
         return result

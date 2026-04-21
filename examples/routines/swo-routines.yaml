@@ -1,0 +1,81 @@
+version: "1"
+
+project: star-world-order
+repo: InverseAltruism/Star-World-Order
+budget:
+  max_daily_runs: 5
+
+routines:
+  pr-review:
+    description: Automated first-pass code review on new PRs
+    trigger: github_webhook
+    events:
+      - pull_request.opened
+      - pull_request.ready_for_review
+    filter:
+      base_branch: [dev, main]
+    prompt: |
+      Review PR #{{pr.number}} ("{{pr.title}}") for:
+      1. Security: no wallet auth bypasses (audit finding H-4), no predictable randomness (Math.random for raffle/loot)
+      2. Type safety: no `any` types, Zod validation on API route inputs
+      3. Test coverage: new routes/components should have tests
+      4. Style: follows CLAUDE.md and Sanctuary style doctrine
+      5. Supabase: migrations are idempotent, no destructive ALTER without backup
+
+      Post inline comments on specific issues. End with a summary comment
+      rating the PR: approve, request-changes, or comment-only.
+    connectors: [github]
+    timeout: 300
+
+  post-merge-verify:
+    description: Build and test verification after merge to dev/main
+    trigger: github_webhook
+    events:
+      - pull_request.closed
+    filter:
+      merged: true
+      base_branch: [dev, main]
+    prompt: |
+      PR #{{pr.number}} was merged to {{pr.base_branch}}.
+      1. Install dependencies: npm ci
+      2. Build: npm run build
+      3. Run tests: npm test
+      4. Check Supabase migration consistency: ensure no orphaned or conflicting migrations
+
+      If anything fails, open an issue titled "Post-merge failure: {{pr.title}}"
+      with the error output. If all pass, post a checkmark comment on the PR.
+    connectors: [github]
+    timeout: 600
+
+  security-scan:
+    description: Weekly scan for known vulnerability patterns from audit
+    trigger: schedule
+    cron: "0 8 * * 1"
+    prompt: |
+      Run a security-focused review of the codebase ({{run.date}}).
+      Check for the specific patterns flagged in the 2026-04-19 security audit:
+      - C-1: Admin endpoints without role verification
+      - H-2: SQL injection via raw string interpolation in Supabase queries
+      - M-1: Missing rate limiting on auth-sensitive routes
+      - M-3: Secrets in client-accessible code or .env committed
+      - M-5: CORS misconfiguration allowing wildcard origins
+      - L-3: Verbose error messages leaking stack traces
+
+      Report findings as a GitHub issue titled "Weekly Security Scan — {{run.date}}"
+      with severity labels. If no new findings, skip issue creation.
+    connectors: [github]
+    timeout: 600
+
+  docs-drift:
+    description: Weekly check for API docs vs actual routes
+    trigger: schedule
+    cron: "0 9 * * 3"
+    prompt: |
+      Compare the API route handlers in src/app/api/ with documentation.
+      Also check docs/DEPLOYED.md against actual contract addresses
+      referenced in the codebase.
+
+      Flag: endpoints missing from docs, docs referencing removed endpoints,
+      stale contract addresses. Open a PR with fixes if drift is found.
+    connectors: [github]
+    timeout: 300

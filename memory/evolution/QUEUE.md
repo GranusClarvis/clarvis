@@ -32,9 +32,7 @@ _Source: `docs/internal/audits/NEURO_FEATURE_DECISIONS_2026-04-17.md`. Phase 9 s
 
 _Source: `docs/CLAUDE_DESIGN_ROUTINES_STRATEGY.md`. Cross-project operating model for Claude Design + Claude Code Routines._
 
-- [ ] **[ROUTINE_SWO_POST_MERGE]** Set up a Claude Code Routine (GitHub webhook trigger: `pull_request.closed` + `merged=true`) on the SWO repo for post-merge build/test verification. Prompt: clone, `npm install`, `npm run build`, `npm test`, report failures as GitHub issue. Deliverable: working Routine. (PROJECT:SWO)
-- [ ] **[ROUTINE_CLARVIS_SPINE_TEST]** Set up a Claude Code Routine (GitHub webhook trigger: PR touching `clarvis/` directory) on the Clarvis repo for automated spine test gate. Prompt: run `python3 -m pytest tests/` and post results as PR comment. Deliverable: working Routine.
-- [ ] **[ROUTINES_MANIFEST_SPEC]** Define the `.clarvis/routines.yaml` manifest format for per-project Routine declarations. Write spec doc and create example manifests for SWO and Clarvis repos. Deliverable: `docs/ROUTINES_MANIFEST.md` + example YAML files.
+- [x] **[ROUTINES_MANIFEST_SPEC]** Define the `.clarvis/routines.yaml` manifest format for per-project Routine declarations. Write spec doc and create example manifests for SWO and Clarvis repos. Deliverable: `docs/ROUTINES_MANIFEST.md` + example YAML files. (2026-04-21: spec + 2 example manifests shipped)
 
 ### Star Sanctuary — Foundation PRs (PROJECT:SWO)
 
@@ -45,7 +43,6 @@ _Asset prep completed 2026-04-20: `CompanionSprite` + `LocationIcon` components 
 
 #### Visual Polish & Animation (highest-value UX improvements)
 
-- [ ] **[SWO_SANCTUARY_LAYERED_ART_STRATEGY]** **OPTIONAL ENHANCEMENT.** Canonical art already renders well. If desired: (1) extract transparent/no-background variants for overlay use, (2) composite mood-effect overlays on top of NFT art, (3) investigate IPFS metadata `attributes` for layer-specific rendering. Low priority since full NFT art already shows correctly. (PROJECT:SWO)
 - [ ] **[SWO_SANCTUARY_MAP_VISUAL]** **ASSET-ONLY — CSS class `.sanctuary-map-bg` ready.** Need 720×405 pixel-art star-map with 8 luminous location zones at positions matching DB `position_x/y`. **Style: dark cosmic base (#0a0a1a) with warm glowing terrain zones — think constellation map with cozy islands, NOT detailed Zelda overworld. Each zone uses its doctrine accent color (amber for Hot Springs, teal for Star Garden, etc).** Scattered 1-2px star dots. `LocationIcon` component ready for 64×64 location vignettes (optional). Asset workflow: Retro Diffusion / Aseprite. (PROJECT:SWO)
 - [ ] **[SWO_SANCTUARY_ANIMATIONS]** **PARTIALLY DONE — CSS keyframes added (sanctuaryIdleBob, sanctuaryHappyBounce, sanctuarySleepySway, sanctuarySparkle, sanctuaryGlowPulse, sanctuaryBarFill).** Remaining: (1) wire `sanctuaryBarFill` to StatBar on bond/XP gain, (2) add sparkle burst on activity completion (replace plain ✅), (3) add typing indicator dots for chat, (4) add `sanctuaryStarTwinkle` to map background stars. (PROJECT:SWO)
 - [ ] **[SWO_SANCTUARY_EMPTY_STATES]** **PARTIALLY DONE — (1) no-companion now shows `CompanionPicker` with real NFT image grid + selection flow.** Remaining: (2) empty journal: pixel-art open book illustration, (3) quests empty: fix "Loading quests..." permanent state when API returns empty array, (4) traits empty: encouraging progress message. (PROJECT:SWO)
@@ -124,9 +121,6 @@ _Source: `docs/internal/audits/decisions/2026-04-16_meta_audit_phases_0_4.md`. A
 
 _Source: `docs/CLAUDE_DESIGN_ROUTINES_STRATEGY.md` §6 Phase 2-3._
 
-- [ ] **[ROUTINE_SWO_DOCS_DRIFT]** Set up weekly scheduled Routine for SWO: compare API route handlers with `docs/API.md` and `docs/DEPLOYED.md`, flag stale references, open PR if drift found.
-- [ ] **[ROUTINE_QUEUE_HYGIENE]** Set up weekly scheduled Routine for Clarvis repo: scan QUEUE.md for cap violations, stale items (>14 days no progress), missing source references. Post report to Telegram.
-- [ ] **[ROUTINE_MANAGER_SCRIPT]** Build `scripts/infra/routine_manager.py` that reads `.clarvis/routines.yaml` from a project repo and provisions/updates Routines via the Anthropic API (`POST /v1/claude_code/routines/{id}/fire`). CLI: `routine_manager.py provision|list|fire|status`.
 
 ### Demoted from P1 (2026-04-16, cap triage)
 

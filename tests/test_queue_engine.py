@@ -603,5 +603,58 @@ class TestExternalRun:
         assert runs[0]["source"] == "cron_research"
 
 
+class TestNoPrDeliveryLoop:
+    """Test that repeated no_pr_delivery partial_success auto-defers instead of looping."""
+
+    def test_first_no_pr_delivery_marks_failed(self, engine):
+        engine.reconcile()
+        run_id = engine.start_run("ENGINE_V2")
+        engine.end_run(run_id, "partial_success", error="no_pr_delivery")
+
+        state = engine.get_task_state("ENGINE_V2")
+        assert state["state"] == "failed"
+        assert "no_pr_delivery" in state["failure_reason"]
+
+    def test_second_no_pr_delivery_auto_defers(self, engine):
+        engine.reconcile()
+
+        # First attempt: no_pr_delivery → failed
+        run_id1 = engine.start_run("ENGINE_V2")
+        engine.end_run(run_id1, "partial_success", error="no_pr_delivery")
+        state1 = engine.get_task_state("ENGINE_V2")
+        assert state1["state"] == "failed"
+
+        # Second attempt: no_pr_delivery again → auto-deferred
+        run_id2 = engine.start_run("ENGINE_V2")
+        engine.end_run(run_id2, "partial_success", error="no_pr_delivery")
+        state2 = engine.get_task_state("ENGINE_V2")
+        assert state2["state"] == "deferred"
+        assert "repeated no_pr_delivery" in (state2.get("failure_reason") or "")
+
+    def test_different_error_after_no_pr_does_not_defer(self, engine):
+        """Use P0 task (3 retries) to isolate no_pr logic from max-retry auto-defer."""
+        engine.reconcile()
+
+        # First: no_pr_delivery
+        run_id1 = engine.start_run("URGENT_FIX")
+        engine.end_run(run_id1, "partial_success", error="no_pr_delivery")
+
+        # Second: different error — should NOT trigger no_pr loop detection
+        run_id2 = engine.start_run("URGENT_FIX")
+        engine.end_run(run_id2, "partial_success", error="output_validation: missing tests")
+        state = engine.get_task_state("URGENT_FIX")
+        assert state["state"] == "failed"
+        assert "output_validation" in state["failure_reason"]
+
+    def test_no_pr_loop_does_not_affect_regular_failures(self, engine):
+        engine.reconcile()
+
+        run_id = engine.start_run("ENGINE_V2")
+        engine.end_run(run_id, "failure", error="import error")
+        state = engine.get_task_state("ENGINE_V2")
+        assert state["state"] == "failed"
+        assert "import error" in state["failure_reason"]
+
+
 # Need these imports for the recovery tests
 from datetime import datetime, timezone

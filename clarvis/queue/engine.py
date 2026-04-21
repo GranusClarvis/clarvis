@@ -474,6 +474,28 @@ class QueueEngine:
         finally:
             self._release_lock(fd)
 
+    # -- no-PR-delivery loop detection --
+
+    def _handle_no_pr_loop(self, tag: str, reason: str) -> None:
+        """Handle repeated no_pr_delivery failures by auto-deferring on second occurrence.
+
+        If the task already failed once with no_pr_delivery, retrying won't produce
+        a PR — the task is likely operational, not code-delivery. Auto-defer with a
+        diagnostic message so the operator can either add {no-pr} or reclassify.
+        """
+        sidecar = self._load()
+        entry = sidecar.get(tag, {})
+        prev_reason = entry.get("failure_reason", "") or ""
+
+        if "no_pr_delivery" in prev_reason:
+            self.defer(
+                tag,
+                "auto-deferred: repeated no_pr_delivery — task may be operational "
+                "(add {no-pr} to exempt, or ensure it produces a PR)",
+            )
+        else:
+            self.mark_failed(tag, reason)
+
     # -- stuck-run recovery --
 
     def recover_stuck(self, threshold_hours: float = STUCK_RUNNING_HOURS) -> list[str]:
@@ -898,6 +920,12 @@ class QueueEngine:
         # Update sidecar state
         if outcome == "success":
             self.mark_succeeded(tag, now)
+        elif outcome == "partial_success":
+            reason = error or "partial_success: incomplete delivery"
+            if "no_pr_delivery" in reason:
+                self._handle_no_pr_loop(tag, reason)
+            else:
+                self.mark_failed(tag, reason)
         elif outcome in ("failure", "timeout", "crash"):
             self.mark_failed(tag, error or outcome)
 
