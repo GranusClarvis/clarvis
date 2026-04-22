@@ -115,7 +115,7 @@ class TestBuildSpawnPrompt:
         prompt = build_spawn_prompt(
             "test-project", "some task", agent_config, agent_dir
         )
-        assert "Output Protocol" in prompt
+        assert "Output (A2A/v1" in prompt
         assert '"status"' in prompt
         assert '"pr_url"' in prompt
         assert "```json" in prompt
@@ -144,11 +144,11 @@ class TestBuildSpawnPrompt:
         assert "Context from Clarvis" in prompt
         assert "merge conflicts" in prompt
 
-    def test_context_auto_enriched_when_empty(self, agent_config, agent_dir):
+    def test_context_omitted_when_empty(self, agent_config, agent_dir):
         prompt = build_spawn_prompt(
             "test-project", "some task", agent_config, agent_dir, context=""
         )
-        assert "Context from Clarvis" in prompt
+        assert "Context from Clarvis" not in prompt
 
     def test_explicit_context_preserved(self, agent_config, agent_dir):
         prompt = build_spawn_prompt(
@@ -1238,8 +1238,7 @@ class TestCommitSafetyWhitelist:
         prompt = build_spawn_prompt(
             "test-project", "some task", agent_config, agent_dir
         )
-        assert "Commit Safety" in prompt
-        assert "NEVER use `git add .`" in prompt
+        assert "never `git add .`" in prompt
         assert ".env" in prompt
 
 

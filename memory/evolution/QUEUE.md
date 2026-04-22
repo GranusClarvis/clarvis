@@ -49,7 +49,6 @@ _Asset state: NFT art self-hosted ✓, companion sprites NOT YET CREATED (falls 
 
 #### 2. Functional Gaps (code-only, high value)
 
-- [ ] **[SWO_SANCTUARY_COMPANION_SELECT_UI]** Build React companion picker component in Sanctuary header. API endpoint `list-owned` already complete with trait filtering + multicall ownership (#192). Frontend component missing — users with multiple Skrumpeys can't switch. Call `/api/sanctuary/companion/list-owned`, render grid of owned NFTs with constellation/star badge, wire to `/api/sanctuary/companion/switch`. (PROJECT:SWO)
 - [ ] **[SWO_SANCTUARY_EMPTY_STATES]** Fix 4 empty states: (1) empty journal — show placeholder message instead of "No entries yet." (line 628), (2) quests — show "No quests available" when array empty (line 883 currently shows "Loading quests..." forever), (3) traits — more prominent encouraging message (line 793), (4) no-companion state says "Select a Skrumpey" but has no selector — wire to companion picker once built. (PROJECT:SWO)
 - [ ] **[SWO_SANCTUARY_ACTIVITY_FEEDBACK]** Add: (1) duration preview per location before sending, (2) expected rewards tooltip, (3) activity-in-progress icon on map location, (4) visual cue on activity completion (replace plain text "⏳ WELCOME BACK" with animated completion state). Also fix ActivityTimer memory leak — interval keeps running after completion (line 333). (PROJECT:SWO)
 
@@ -102,13 +101,9 @@ _3-phase verification pass over the completed 16-phase deep audit + 100+ queue i
 
 _Source: deep analysis of why Clarvis self-work > project-agent work. Core issue: project-agent prompts lacked 8+ context layers that self-work enjoys. FIXED in this session: worker template, time budget, episodic recall, failure avoidance, lite brain query, episode writeback, procedures.md auto-refresh. Follow-up items below._
 
-- [x] **[PROJECT_AGENT_POSTFLIGHT_PARITY]** ✅ Done 2026-04-21. Added `_run_clarvis_postflight()` to project_agent.py with 5 steps: (1) Clarvis-side episodic encoding via EpisodicMemory.encode(), (2) brain outcome recording via brain_bridge.brain_record_outcome(), (3) failure lesson extraction to clarvis-learnings, (4) digest writing via digest_writer, (5) routing log entry via router.log_decision(). All steps fire correctly on both success and failure paths. Episodes tagged `[agent:<name>]` for attribution.
-- [x] **[PROJECT_AGENT_MIRROR_FAILURE_LEARNING]** ✅ Done 2026-04-21. Implemented full failure pattern auto-learning loop in project_agent.py: (1) 13-class regex classifier (`_classify_failure()`) covering tsc type errors, missing exports, test failures, mirror restore, wrong target repo, stale baseline, etc. (2) Persistent per-agent failure registry (`failure_patterns.json`) with dedup, occurrence tracking, first/last seen. (3) Postflight step 3.5 auto-classifies every failure and updates registry. (4) Patterns crossing 2x threshold auto-promote to `procedures.md` + lite brain `project-learnings`. (5) New `_gather_failure_constraints()` injects classified, ranked constraints into spawn prompts alongside raw failure avoidance. Full loop: fail → classify → register → promote → inject into next spawn.
-- [x] **[PROJECT_AGENT_CONTEXT_DEDUP]** ✅ Done 2026-04-21. Deduped spawn prompt: 15k→11.5k chars (23% reduction, 21→15 sections). Eliminated: procedures.md ↔ brain procedures overlap, triple failure-info inclusion, Clarvis-internal context noise, git workflow duplication.
 
 ### Clarvis Maintenance — Keep Alive
 
-- [x] **[PROJECT_AGENT_BRANCH_CLEANUP]** ✅ Done 2026-04-21. Added `cleanup_stale_branches(workspace, keep_branch, base_branch, dry_run)` to project_agent.py. Wired into cmd_spawn() as post-task best-effort step. Targets merged `clarvis/*/t*` + `feat/feature/fix/chore/*` branches. Initial SWO run: deleted 30 merged + 8 stale local, 26 stale remote branches. Fork clean: dev + main only.
 
 ### Deep Audit — Phase 0 Follow-ups (added 2026-04-16 via AUDIT_CAP_OVERRIDE)
 

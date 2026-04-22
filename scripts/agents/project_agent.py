@@ -1590,10 +1590,11 @@ def build_ci_context(name: str) -> dict:
 
 
 def _gather_episodic_context(agent_dir: Path, task: str, max_episodes: int = 5) -> str:
-    """Gather episodic hints from prior runs — successes and failures.
+    """Gather episodic context from prior runs — success-first framing.
 
-    Reads summaries/*.json, filters for relevance, and formats as prompt context.
-    Prioritizes: (1) failures on same/similar task tags, (2) recent successes.
+    Reads summaries/*.json.  Surfaces what worked (proven patterns, timing,
+    approach) prominently, with a brief note on recent failures only when they
+    carry actionable signal not already in the failure-constraints section.
     """
     summaries_dir = agent_dir / "memory" / "summaries"
     if not summaries_dir.exists():
@@ -1615,7 +1616,9 @@ def _gather_episodic_context(agent_dir: Path, task: str, max_episodes: int = 5) 
                 "summary": result.get("summary", "")[:150],
                 "pr_url": result.get("pr_url"),
                 "elapsed": data.get("elapsed", 0),
-                "mirror": result.get("mirror_validation", {}),
+                "files_changed": result.get("files_changed", []),
+                "procedures": result.get("procedures", []),
+                "confidence": result.get("confidence"),
             })
         except (json.JSONDecodeError, OSError):
             continue
@@ -1625,26 +1628,26 @@ def _gather_episodic_context(agent_dir: Path, task: str, max_episodes: int = 5) 
     if not episodes:
         return ""
 
-    # Separate failures and successes
-    failures = [e for e in episodes if e["status"] in ("failed", "partial")]
     successes = [e for e in episodes if e["status"] == "success"]
+    failures = [e for e in episodes if e["status"] in ("failed", "partial")]
 
     lines = []
 
-    if failures:
-        lines.append("RECENT FAILURES (avoid repeating these):")
-        for f in failures[:3]:
-            mirror_note = ""
-            if f.get("mirror", {}).get("passed") is False:
-                mirror_note = " [MIRROR VALIDATION FAILED]"
-            error_note = f" — {f['error'][:80]}" if f.get("error") else ""
-            lines.append(f"  [{f['status'].upper()}] {f['task'][:100]}{error_note}{mirror_note}")
-
+    # Success exemplars first — what works in this repo
     if successes:
-        lines.append("RECENT SUCCESSES (proven patterns):")
+        lines.append("PROVEN PATTERNS (from successful runs):")
         for s in successes[:3]:
             pr_note = f" PR:{s['pr_url'].split('/')[-1]}" if s.get("pr_url") else ""
             lines.append(f"  [OK] {s['task'][:100]} ({s['elapsed']:.0f}s){pr_note}")
+            if s.get("procedures"):
+                lines.append(f"       Steps used: {'; '.join(s['procedures'][:3])}")
+
+    # Recent failures — brief, only for situational awareness (details in constraints)
+    if failures:
+        lines.append("RECENT ISSUES (details in constraints if recurring):")
+        for f in failures[:2]:
+            error_brief = f" — {f['error'][:60]}" if f.get("error") else ""
+            lines.append(f"  [{f['status'].upper()}] {f['task'][:80]}{error_brief}")
 
     return "\n".join(lines)
 
@@ -1880,23 +1883,77 @@ def _promote_failure_patterns(agent_dir: Path, patterns_to_promote: list[dict]):
 
 
 def _gather_failure_constraints(agent_dir: Path) -> str:
-    """Build structured failure constraints from the persistent registry.
+    """Build concise failure constraints from the persistent registry.
 
-    Unlike _gather_failure_avoidance (raw snippets), this returns classified,
-    deduplicated, actionable constraints ranked by frequency.
+    Returns at most 3 high-frequency, actionable constraints.  Keeps each
+    entry to one line so the prompt leaves room for reasoning.
     """
     registry = _load_failure_registry(agent_dir)
     patterns = registry.get("patterns", {})
     if not patterns:
         return ""
 
-    sorted_patterns = sorted(patterns.values(), key=lambda p: p["count"], reverse=True)
-    lines = ["## Learned Failure Constraints (auto-learned from past failures)",
-             "These constraints are derived from repeated failures. Follow them strictly."]
-    for p in sorted_patterns[:8]:
-        freq = f"({p['count']}x)" if p["count"] > 1 else "(1x)"
-        lines.append(f"- **{p['class']}** {freq}: {p['constraint']}")
+    # Only include patterns that have occurred more than once
+    recurring = [p for p in patterns.values() if p.get("count", 0) >= 2]
+    if not recurring:
+        return ""
 
+    sorted_patterns = sorted(recurring, key=lambda p: p["count"], reverse=True)
+    lines = ["Known pitfalls in this repo:"]
+    for p in sorted_patterns[:3]:
+        lines.append(f"- {p['constraint']} ({p['count']}x)")
+
+    return "\n".join(lines)
+
+
+def _gather_success_exemplar(agent_dir: Path, task: str) -> str:
+    """Find the best success exemplar for a similar task type.
+
+    Returns a compact description of how a similar past task succeeded,
+    including the approach, files touched, and timing.  This gives the
+    agent a concrete model to follow rather than just avoidance rules.
+    """
+    summaries_dir = agent_dir / "memory" / "summaries"
+    if not summaries_dir.exists():
+        return ""
+
+    task_lower = task.lower()
+    task_words = set(task_lower.split())
+
+    best = None
+    best_overlap = 0
+    for sf in sorted(summaries_dir.glob("*.json"), reverse=True)[:30]:
+        try:
+            data = json.loads(sf.read_text())
+            result = data.get("result", {})
+            if result.get("status") != "success" or not result.get("pr_url"):
+                continue
+            past_words = set(data.get("task", "").lower().split())
+            overlap = len(task_words & past_words)
+            if overlap > best_overlap:
+                best_overlap = overlap
+                best = {
+                    "task": data.get("task", "")[:80],
+                    "summary": result.get("summary", "")[:120],
+                    "files": result.get("files_changed", [])[:5],
+                    "elapsed": data.get("elapsed", 0),
+                    "pr_url": result.get("pr_url", ""),
+                    "procedures": result.get("procedures", [])[:3],
+                }
+        except (json.JSONDecodeError, OSError):
+            continue
+
+    if not best or best_overlap < 2:
+        return ""
+
+    lines = [f"SUCCESS EXEMPLAR (similar past task):"]
+    lines.append(f"  Task: {best['task']}")
+    lines.append(f"  Result: {best['summary']}")
+    if best["procedures"]:
+        lines.append(f"  Steps: {'; '.join(best['procedures'])}")
+    if best["files"]:
+        lines.append(f"  Files: {', '.join(best['files'][:4])}")
+    lines.append(f"  Time: {best['elapsed']:.0f}s | PR: {best['pr_url'].split('/')[-1]}")
     return "\n".join(lines)
 
 
@@ -2162,35 +2219,44 @@ def build_spawn_prompt(name: str, task: str, config: dict,
             "",
         ])
 
-    # ── Unified Prior Knowledge (deduped) ─────────────────────────────
-    # Merge episodic history + failure constraints + brain knowledge into
-    # a single section, avoiding the triple-inclusion of failure info that
-    # occurred when each source was appended independently.
+    # ── Task (placed early so the agent knows what context to weight) ──
+    prompt_parts.extend([
+        "## Task",
+        task,
+        "",
+    ])
 
-    # 1. Episodic context (successes + failures from summaries)
-    episodic_ctx = _gather_episodic_context(agent_dir, task)
+    # ── Project Intelligence (success-first, concise) ────────────────
+    # Order: success exemplar → brain knowledge → episodic context →
+    # failure constraints (max 3).  The goal is to give the agent a
+    # positive model to follow, relevant repo knowledge, then brief
+    # situational awareness of past issues — not a wall of avoidance.
 
-    # 2. Classified failure constraints (persistent registry — superset of
-    #    raw failure_avoidance, so we skip _gather_failure_avoidance entirely)
+    # 1. Success exemplar — what a good run looked like for a similar task
+    success_exemplar = _gather_success_exemplar(agent_dir, task)
+
+    # 2. Lite brain learnings (skip procedures if already in prompt)
     failure_constraints = _gather_failure_constraints(agent_dir)
-
-    # 3. Lite brain learnings (exclude procedures — already in § Known Procedures)
     brain_knowledge = _query_lite_brain(agent_dir, task,
                                          skip_procedures=bool(procedures),
                                          skip_failure_patterns=bool(failure_constraints))
 
-    # Combine into one section to avoid prompt sprawl
-    prior_parts = []
-    if episodic_ctx:
-        prior_parts.append(episodic_ctx)
-    if failure_constraints:
-        prior_parts.append(failure_constraints)
+    # 3. Episodic context (successes + brief failure notes)
+    episodic_ctx = _gather_episodic_context(agent_dir, task)
+
+    intel_parts = []
+    if success_exemplar:
+        intel_parts.append(success_exemplar)
     if brain_knowledge:
-        prior_parts.append(brain_knowledge)
-    if prior_parts:
+        intel_parts.append(brain_knowledge)
+    if episodic_ctx:
+        intel_parts.append(episodic_ctx)
+    if failure_constraints:
+        intel_parts.append(failure_constraints)
+    if intel_parts:
         prompt_parts.extend([
-            "## Prior Knowledge & Run History",
-            "\n\n".join(prior_parts),
+            "## Project Intelligence",
+            "\n\n".join(intel_parts),
             "",
         ])
 
@@ -2201,7 +2267,7 @@ def build_spawn_prompt(name: str, task: str, config: dict,
     except ImportError:
         pass
 
-    # Derive fork workflow details for PR instructions
+    # ── Delivery Protocol (Git + Safety + Output) ────────────────────
     _repo_url = config.get("repo_url", "")
     import re as _re_prompt
     _m = _re_prompt.search(r'[:/]([^/]+/[^/.]+?)(?:\.git)?$', _repo_url)
@@ -2209,61 +2275,52 @@ def build_spawn_prompt(name: str, task: str, config: dict,
     _fork_owner = "GranusClarvis"
     _base_branch = config.get("branch", "main")
 
+    prompt_parts.append("## Delivery")
+    prompt_parts.append("You are on a fresh work branch. Commit → push → PR. Do NOT switch branches.")
+    if _upstream_repo:
+        _current_branch_var = "$(git rev-parse --abbrev-ref HEAD)"
+        prompt_parts.append(
+            f"PR command: `gh pr create --repo {_upstream_repo} "
+            f"--head {_fork_owner}:{_current_branch_var} --base {_base_branch} "
+            f"--title '...' --body '...'`"
+        )
+        prompt_parts.append(f"Target the upstream repo ({_upstream_repo}), not the fork.")
+    else:
+        prompt_parts.append("PR command: `gh pr create --title '...' --body '...'`")
     prompt_parts.extend([
-        "## Task",
-        task,
+        "Use `git add <specific-files>` — never `git add .`.",
+        f"Allowed file extensions: {', '.join(sorted(COMMIT_EXT_WHITELIST))}",
+        "Never commit: .env, keys, *.pem, *.sqlite, *.db, *.log, node_modules/.",
         "",
-        "## Brain (optional — store useful learnings)",
-        f"export AGENT_BRAIN_DIR={agent_dir}/data/brain",
-        f"python3 -c \"import sys; sys.path.insert(0, '{CLARVIS_WORKSPACE}/scripts/brain_mem'); "
+    ])
+
+    # Brain storage hint (optional, one line)
+    prompt_parts.extend([
+        "## Brain (optional)",
+        f"Store learnings: `python3 -c \"import sys; sys.path.insert(0, '{CLARVIS_WORKSPACE}/scripts/brain_mem'); "
         f"from lite_brain import LiteBrain; b=LiteBrain('{agent_dir}/data/brain'); "
         "b.store('what you learned', 'project-procedures')\"",
         "",
-        "## Git Workflow for PRs (CRITICAL — follow exactly)",
-        "You are already on a fresh work branch. Do NOT create or switch to another branch.",
-        "1. Make changes and commit on the CURRENT branch (see Commit Safety below)",
-        "2. Push: `git push origin HEAD`",
     ])
-    if _upstream_repo:
-        _current_branch_var = "$(git rev-parse --abbrev-ref HEAD)"
-        prompt_parts.extend([
-            f"3. Create PR targeting UPSTREAM: `gh pr create --repo {_upstream_repo} "
-            f"--head {_fork_owner}:{_current_branch_var} --base {_base_branch} "
-            f"--title '...' --body '...'`",
-            f"IMPORTANT: The PR MUST target the upstream repo ({_upstream_repo}), NOT the fork.",
-        ])
-    else:
-        prompt_parts.append("3. Create PR: `gh pr create --title '...' --body '...'`")
+
     prompt_parts.extend([
-        "",
-        "## Commit Safety (MANDATORY)",
-        "NEVER commit secrets, credentials, or binary artifacts.",
-        f"Allowed extensions for new files: {', '.join(sorted(COMMIT_EXT_WHITELIST))}",
-        "Blocked patterns: .env, id_rsa, id_ed25519, *.pem, *.key, *.p12, *.pfx,",
-        "  *.sqlite, *.db, *.log, *.zip, *.tar, *.gz, node_modules/, __pycache__/.",
-        "Use `git add <specific-files>` — NEVER use `git add .` or `git add -A`.",
-        "",
-        "## Output Protocol (A2A/v1 — MANDATORY)",
-        "At the END of your work, output EXACTLY ONE JSON block (```json ... ```) with this structure.",
-        "All fields marked REQUIRED must be present. Clarvis validates this automatically.",
+        "## Output (A2A/v1 — MANDATORY)",
+        "End with EXACTLY ONE ```json block:",
         "```json",
         "{",
-        '  "status": "success|partial|failed|blocked",  // REQUIRED',
-        '  "summary": "2-3 sentences of what you did",  // REQUIRED',
+        '  "status": "success|partial|failed|blocked",',
+        '  "summary": "2-3 sentences of what you did",',
         '  "pr_url": "https://github.com/..." or null,',
         '  "branch": "current branch name",',
-        '  "files_changed": ["path/to/file1", "path/to/file2"],',
-        '  "procedures": ["Build: npm run build", "Test: npm run test"],',
-        '  "follow_ups": ["TODO: ...", "NEEDS: ..."],',
+        '  "files_changed": ["path/to/file1"],',
+        '  "procedures": ["Build: npm run build"],',
+        '  "follow_ups": ["TODO: ..."],',
         '  "tests_passed": true or false,',
-        '  "error": "error description if failed/blocked" or null,',
-        '  "confidence": 0.0 to 1.0,  // your confidence in the result',
-        '  "pr_class": "A|B|C"  // REQUIRED when pr_url is set (see PR Factory Rules)',
+        '  "error": "description if failed" or null,',
+        '  "confidence": 0.0 to 1.0,',
+        '  "pr_class": "A|B|C"',
         "}",
         "```",
-        "Status meanings: success=task fully done, partial=some work done but incomplete,",
-        "failed=could not complete, blocked=external dependency prevents completion.",
-        "pr_class: A=full completion, B=best safe progress, C=task-unblocking.",
     ])
 
     return "\n".join(prompt_parts)
