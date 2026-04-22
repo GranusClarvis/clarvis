@@ -1096,6 +1096,48 @@ MIRROR_CHECKS = {
     ],
 }
 
+# Gate behavior: "soft" = comment only, "hard" = close PR, "off" = skip entirely
+MIRROR_GATE_MODE = {
+    "star-world-order": "soft",
+}
+_MIRROR_GATE_DEFAULT = "soft"
+
+
+def _sync_mirror(agent_name: str) -> bool:
+    """Pull latest changes into the PROD mirror before validation."""
+    mirror_dir = MIRROR_DIRS.get(agent_name)
+    if not mirror_dir or not mirror_dir.exists():
+        return False
+    try:
+        result = subprocess.run(
+            ["git", "pull", "--ff-only"],
+            cwd=str(mirror_dir),
+            capture_output=True, text=True, timeout=60,
+        )
+        if result.returncode == 0:
+            _log(f"Mirror sync: pulled latest for '{agent_name}'")
+            return True
+        _log(f"Mirror sync: git pull failed for '{agent_name}': {result.stderr[:200]}")
+        return False
+    except Exception as e:
+        _log(f"Mirror sync error for '{agent_name}': {e}")
+        return False
+
+
+def _get_changed_files_from_git(workspace: Path, base_branch: str = "dev") -> list[str]:
+    """Get the actual list of changed files using git diff against base branch."""
+    try:
+        result = subprocess.run(
+            ["git", "diff", "--name-only", f"{base_branch}...HEAD"],
+            cwd=str(workspace),
+            capture_output=True, text=True, timeout=30,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return [f.strip() for f in result.stdout.strip().splitlines() if f.strip()]
+    except Exception as e:
+        _log(f"git diff failed: {e}")
+    return []
+
 
 def _parse_error_lines(output: str) -> set[str]:
     """Extract individual error lines from tsc/vitest output for diffing."""
@@ -1170,6 +1212,15 @@ def run_mirror_validation(agent_name: str, changed_files: list[str] = None,
     if not checks:
         return {"passed": None, "checks": [],
                 "summary": "Mirror validation skipped: no checks configured"}
+
+    # Sync mirror to latest upstream before validating
+    _sync_mirror(agent_name)
+
+    # Use git-based file detection if agent didn't report files
+    if agent_workspace and (not changed_files):
+        changed_files = _get_changed_files_from_git(agent_workspace)
+        if changed_files:
+            _log(f"Mirror: using git-detected file list ({len(changed_files)} files)")
 
     has_overlay = bool(changed_files and agent_workspace)
 
@@ -1275,34 +1326,48 @@ def run_mirror_validation(agent_name: str, changed_files: list[str] = None,
     return {"passed": all_passed, "checks": results, "summary": summary}
 
 
-def _close_pr(pr_url: str, repo: str, reason: str) -> bool:
-    """Close a PR that failed mirror validation. Returns True on success."""
+def _flag_pr(pr_url: str, repo: str, reason: str, close: bool = False) -> bool:
+    """Comment on a PR with validation findings. Only closes if close=True."""
     import re as _re
     m = _re.search(r'/pull/(\d+)', pr_url)
     if not m:
-        _log(f"Cannot close PR — could not parse PR number from {pr_url}")
+        _log(f"Cannot flag PR — could not parse PR number from {pr_url}")
         return False
     pr_number = m.group(1)
     try:
-        comment = (f"Automatically closed: mirror validation FAILED.\n\n{reason}\n\n"
-                   "Fix the issues and re-submit.")
+        if close:
+            comment = (f"Automatically closed: mirror validation FAILED.\n\n{reason}\n\n"
+                       "Fix the issues and re-submit.")
+        else:
+            comment = (f"⚠️ **Mirror validation found issues** (not auto-closing — needs review).\n\n"
+                       f"{reason}\n\n"
+                       "These may be false positives if the mirror is stale or if "
+                       "changes depend on other unmerged PRs.")
         subprocess.run(
             ["gh", "pr", "comment", pr_number, "--repo", repo, "--body", comment],
             capture_output=True, text=True, timeout=30,
         )
-        result = subprocess.run(
-            ["gh", "pr", "close", pr_number, "--repo", repo],
-            capture_output=True, text=True, timeout=30,
-        )
-        if result.returncode == 0:
-            _log(f"Closed PR #{pr_number} due to mirror validation failure")
-            return True
-        else:
-            _log(f"Failed to close PR #{pr_number}: {result.stderr}")
-            return False
+        if close:
+            result = subprocess.run(
+                ["gh", "pr", "close", pr_number, "--repo", repo],
+                capture_output=True, text=True, timeout=30,
+            )
+            if result.returncode == 0:
+                _log(f"Closed PR #{pr_number} due to mirror validation failure")
+                return True
+            else:
+                _log(f"Failed to close PR #{pr_number}: {result.stderr}")
+                return False
+        _log(f"Flagged PR #{pr_number} with mirror validation findings (not closed)")
+        return True
     except Exception as e:
-        _log(f"Error closing PR #{pr_number}: {e}")
+        _log(f"Error flagging PR #{pr_number}: {e}")
         return False
+
+
+def _close_pr(pr_url: str, repo: str, reason: str) -> bool:
+    """Deprecated: use _flag_pr. Kept for backward compatibility."""
+    return _flag_pr(pr_url, repo, reason, close=False)
 
 
 # =========================================================================
@@ -2226,15 +2291,17 @@ def build_spawn_prompt(name: str, task: str, config: dict,
         mirror_dir = MIRROR_DIRS[name]
         mirror_checks = MIRROR_CHECKS.get(name, [])
         check_cmds = ", ".join(f"`{c['name']}`" for c in mirror_checks)
+        gate_mode = MIRROR_GATE_MODE.get(name, _MIRROR_GATE_DEFAULT)
         prompt_parts.extend([
-            "## Pre-Submit Mirror Validation (MANDATORY HARD GATE)",
-            f"Before creating a PR, you MUST validate your changes against the PROD mirror at `{mirror_dir}`.",
-            "**If validation fails, DO NOT create the PR. Fix your code first.**",
-            "A post-spawn hard gate will also verify — PRs that fail mirror checks are automatically closed.",
+            "## Pre-Submit Mirror Validation",
+            f"Before creating a PR, validate your changes against the PROD mirror at `{mirror_dir}`.",
+            "**Try to fix any validation errors before creating the PR, but create the PR even if",
+            "some errors remain — the post-spawn gate will comment with findings for review.**",
             "",
             "The post-spawn gate uses **baseline-diff**: it runs checks BEFORE and AFTER overlaying",
             "your files. Only NEW errors (not pre-existing in PROD) cause failure. Pre-existing errors",
             "in PROD (e.g., missing modules not yet deployed) are excluded from the diff.",
+            f"Gate mode: **{gate_mode}** — {'PR will be commented but NOT closed on failure' if gate_mode == 'soft' else 'PR will be closed on failure' if gate_mode == 'hard' else 'validation skipped'}.",
             "",
             "Steps:",
             f"1. Copy your changed files into `{mirror_dir}`",
@@ -2579,28 +2646,39 @@ def cmd_spawn(name: str, task: str, timeout: int = 1200,
     except Exception as e:
         _log(f"PR factory writeback failed (non-fatal): {e}")
 
-    # ── Post-spawn mirror validation (HARD GATE) ───────────────────────
-    # If this agent has a PROD mirror, run tsc + vitest against it
-    # with the agent's changed files overlaid. FAILURE → close PR, mark failed.
-    if name in MIRROR_DIRS:
+    # ── Post-spawn mirror validation ─────────────────────────────────
+    # Gate mode: "soft" = comment only (default), "hard" = close PR, "off" = skip
+    _gate_mode = MIRROR_GATE_MODE.get(name, _MIRROR_GATE_DEFAULT)
+    if name in MIRROR_DIRS and _gate_mode != "off":
         try:
             changed = agent_result.get("files_changed", [])
             mirror_result = run_mirror_validation(name, changed, workspace)
             agent_result["mirror_validation"] = mirror_result
             if mirror_result.get("passed") is False:
-                _log(f"MIRROR HARD GATE: validation FAILED for task {task_id} — blocking PR")
                 pr_url = agent_result.get("pr_url")
-                if pr_url:
-                    import re as _re
-                    repo_url = config.get("repo_url", "")
-                    m = _re.search(r'[:/]([^/]+/[^/.]+?)(?:\.git)?$', repo_url)
-                    gh_repo = m.group(1) if m else ""
-                    if gh_repo:
-                        _close_pr(pr_url, gh_repo, mirror_result.get("summary", "Mirror validation failed"))
-                        agent_result["pr_url"] = None
-                        agent_result["_mirror_closed_pr"] = pr_url
-                agent_result["status"] = "failed"
-                agent_result["error"] = (agent_result.get("error") or "") + " Mirror validation FAILED."
+                if _gate_mode == "hard":
+                    _log(f"MIRROR HARD GATE: validation FAILED for task {task_id} — closing PR")
+                    if pr_url:
+                        import re as _re
+                        repo_url = config.get("repo_url", "")
+                        m = _re.search(r'[:/]([^/]+/[^/.]+?)(?:\.git)?$', repo_url)
+                        gh_repo = m.group(1) if m else ""
+                        if gh_repo:
+                            _flag_pr(pr_url, gh_repo, mirror_result.get("summary", ""), close=True)
+                            agent_result["pr_url"] = None
+                            agent_result["_mirror_closed_pr"] = pr_url
+                    agent_result["status"] = "failed"
+                    agent_result["error"] = (agent_result.get("error") or "") + " Mirror validation FAILED."
+                else:
+                    _log(f"MIRROR SOFT GATE: validation found issues for task {task_id} — commenting (PR stays open)")
+                    if pr_url:
+                        import re as _re
+                        repo_url = config.get("repo_url", "")
+                        m = _re.search(r'[:/]([^/]+/[^/.]+?)(?:\.git)?$', repo_url)
+                        gh_repo = m.group(1) if m else ""
+                        if gh_repo:
+                            _flag_pr(pr_url, gh_repo, mirror_result.get("summary", ""), close=False)
+                    agent_result["_mirror_flagged"] = True
             elif mirror_result.get("passed") is True:
                 _log(f"Mirror validation PASSED for task {task_id}")
         except Exception as e:

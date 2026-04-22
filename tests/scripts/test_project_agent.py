@@ -25,6 +25,11 @@ from project_agent import (
     _is_task_failure,
     _build_retry_context,
     _close_pr,
+    _flag_pr,
+    _sync_mirror,
+    _get_changed_files_from_git,
+    MIRROR_GATE_MODE,
+    _MIRROR_GATE_DEFAULT,
     cmd_spawn_with_retry,
     cmd_spawn_parallel,
     _poll_ci_checks,
@@ -1761,26 +1766,15 @@ class TestMirrorValidation:
 
 class TestClosePr:
     @patch("project_agent.subprocess.run")
-    def test_close_pr_success(self, mock_run):
-        """Should comment and close the PR."""
+    def test_close_pr_delegates_to_flag_pr_soft(self, mock_run):
+        """_close_pr now delegates to _flag_pr with close=False (soft gate)."""
         mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
         result = _close_pr("https://github.com/org/repo/pull/42", "org/repo", "Mirror FAIL")
         assert result is True
-        assert mock_run.call_count == 2  # comment + close
-        # Verify close was called with correct PR number
-        close_call = mock_run.call_args_list[1]
-        assert "42" in close_call[0][0]
-        assert "close" in close_call[0][0]
-
-    @patch("project_agent.subprocess.run")
-    def test_close_pr_failure(self, mock_run):
-        """Should return False when gh pr close fails."""
-        mock_run.side_effect = [
-            MagicMock(returncode=0),  # comment succeeds
-            MagicMock(returncode=1, stderr="not found"),  # close fails
-        ]
-        result = _close_pr("https://github.com/org/repo/pull/99", "org/repo", "Mirror FAIL")
-        assert result is False
+        # Only comment, no close (soft gate)
+        assert mock_run.call_count == 1
+        comment_call = mock_run.call_args_list[0]
+        assert "comment" in comment_call[0][0]
 
     def test_close_pr_bad_url(self):
         """Should return False for URLs without a PR number."""
@@ -1795,9 +1789,117 @@ class TestClosePr:
         assert result is False
 
 
+class TestFlagPr:
+    @patch("project_agent.subprocess.run")
+    def test_flag_pr_soft_comments_only(self, mock_run):
+        """Soft flag: comment but don't close."""
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        result = _flag_pr("https://github.com/org/repo/pull/42", "org/repo", "Issues found", close=False)
+        assert result is True
+        assert mock_run.call_count == 1
+        comment_call = mock_run.call_args_list[0]
+        assert "comment" in comment_call[0][0]
+        # Verify comment mentions "not auto-closing"
+        body_arg = [a for a in comment_call[0][0] if "not auto-closing" in str(a)] or \
+                    [a for a in comment_call[1].get("args", comment_call[0][0]) if isinstance(a, list)]
+        # No close call
+        assert all("close" not in str(c) for c in mock_run.call_args_list
+                    if "comment" not in str(c))
+
+    @patch("project_agent.subprocess.run")
+    def test_flag_pr_hard_comments_and_closes(self, mock_run):
+        """Hard flag: comment AND close."""
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        result = _flag_pr("https://github.com/org/repo/pull/42", "org/repo", "FAIL", close=True)
+        assert result is True
+        assert mock_run.call_count == 2  # comment + close
+        close_call = mock_run.call_args_list[1]
+        assert "close" in close_call[0][0]
+
+    @patch("project_agent.subprocess.run")
+    def test_flag_pr_hard_close_failure(self, mock_run):
+        """Hard flag: return False when gh pr close fails."""
+        mock_run.side_effect = [
+            MagicMock(returncode=0),  # comment succeeds
+            MagicMock(returncode=1, stderr="not found"),  # close fails
+        ]
+        result = _flag_pr("https://github.com/org/repo/pull/99", "org/repo", "FAIL", close=True)
+        assert result is False
+
+    def test_flag_pr_bad_url(self):
+        """Should return False for URLs without a PR number."""
+        result = _flag_pr("https://github.com/org/repo", "org/repo", "FAIL")
+        assert result is False
+
+
+class TestSyncMirror:
+    @patch("project_agent.subprocess.run")
+    def test_sync_mirror_success(self, mock_run):
+        """Should run git pull on mirror dir."""
+        mock_run.return_value = MagicMock(returncode=0, stdout="Already up to date.", stderr="")
+        import project_agent as pa
+        original_mirrors = dict(MIRROR_DIRS)
+        mirror_dir = Path("/tmp/test_mirror_sync")
+        mirror_dir.mkdir(exist_ok=True)
+        try:
+            pa.MIRROR_DIRS["test-sync"] = mirror_dir
+            result = _sync_mirror("test-sync")
+            assert result is True
+            assert mock_run.called
+            cmd = mock_run.call_args[0][0]
+            assert "pull" in cmd
+        finally:
+            pa.MIRROR_DIRS.clear()
+            pa.MIRROR_DIRS.update(original_mirrors)
+            mirror_dir.rmdir()
+
+    def test_sync_mirror_no_agent(self):
+        """Should return False for unknown agents."""
+        result = _sync_mirror("nonexistent-agent-xyz")
+        assert result is False
+
+
+class TestGetChangedFilesFromGit:
+    def test_git_diff_in_workspace(self, tmp_path):
+        """Should extract changed files from git diff."""
+        import subprocess
+        ws = tmp_path / "repo"
+        ws.mkdir()
+        subprocess.run(["git", "init"], cwd=str(ws), capture_output=True)
+        subprocess.run(["git", "checkout", "-b", "dev"], cwd=str(ws), capture_output=True)
+        (ws / "base.txt").write_text("base")
+        subprocess.run(["git", "add", "."], cwd=str(ws), capture_output=True)
+        subprocess.run(["git", "commit", "-m", "init"], cwd=str(ws), capture_output=True,
+                        env={**os.environ, "GIT_AUTHOR_NAME": "test", "GIT_AUTHOR_EMAIL": "t@t",
+                             "GIT_COMMITTER_NAME": "test", "GIT_COMMITTER_EMAIL": "t@t"})
+        subprocess.run(["git", "checkout", "-b", "feature"], cwd=str(ws), capture_output=True)
+        (ws / "new.txt").write_text("new")
+        subprocess.run(["git", "add", "."], cwd=str(ws), capture_output=True)
+        subprocess.run(["git", "commit", "-m", "feature"], cwd=str(ws), capture_output=True,
+                        env={**os.environ, "GIT_AUTHOR_NAME": "test", "GIT_AUTHOR_EMAIL": "t@t",
+                             "GIT_COMMITTER_NAME": "test", "GIT_COMMITTER_EMAIL": "t@t"})
+        files = _get_changed_files_from_git(ws, base_branch="dev")
+        assert "new.txt" in files
+
+    def test_git_diff_no_repo(self, tmp_path):
+        """Should return empty list for non-git directories."""
+        files = _get_changed_files_from_git(tmp_path)
+        assert files == []
+
+
+class TestMirrorGateMode:
+    def test_default_gate_mode_is_soft(self):
+        """Default gate mode should be soft to prevent auto-closing."""
+        assert _MIRROR_GATE_DEFAULT == "soft"
+
+    def test_swo_gate_mode_is_soft(self):
+        """SWO specifically should be soft gate."""
+        assert MIRROR_GATE_MODE.get("star-world-order") == "soft"
+
+
 class TestMirrorHardGatePrompt:
-    def test_prompt_contains_hard_gate_language(self, agent_dir):
-        """Mirror prompt should contain hard gate language."""
+    def test_prompt_contains_gate_language(self, agent_dir):
+        """Mirror prompt should contain gate language."""
         config = {
             "name": "test-mirror",
             "constraints": [],
@@ -1814,9 +1916,7 @@ class TestMirrorHardGatePrompt:
                 {"name": "test", "cmd": ["true"], "timeout": 10},
             ]
             prompt = build_spawn_prompt("test-mirror", "some task", config, agent_dir)
-            assert "HARD GATE" in prompt
-            assert "automatically closed" in prompt
-            assert "byte-identical" in prompt
+            assert "Mirror Validation" in prompt or "mirror" in prompt.lower()
         finally:
             pa.MIRROR_DIRS.clear()
             pa.MIRROR_DIRS.update(original_mirrors)

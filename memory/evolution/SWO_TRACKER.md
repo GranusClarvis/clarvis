@@ -96,6 +96,56 @@ _Revalidated against dev HEAD 5ed3557. Updated status reflects actual merge stat
 | 2026-04-05 | a5479fd | SWO ecosystem positioning doc |
 | 2026-04-03 | 09b0598 | SWO brand integration doc + LLM prompt evaluator |
 
+## Sanctuary V2 — World-First Rebuild (reorganized 2026-04-22)
+
+_Full plan: `docs/SANCTUARY_V2_PLAN.md`. Queue tasks: `memory/evolution/QUEUE.md` §Star Sanctuary V2._
+_Direction: lobby-first, social, game-like. Tamagotchi + Club Penguin + Habbo vibes. Operator feedback: V1 too dashboard-like, needs game feel._
+
+**Core change:** Replace React panel-based dashboard with Phaser 3 game canvas world. Players walk a pixel-art map with their animated Skrumpey companion, see other players, chat with bubbles, discover quests via NPCs, shop at The Bazaar. Backend/API layer unchanged — V2 is a frontend revolution.
+
+**Stack:** Phaser 3 (`phaserjs/template-nextjs`) + Tiled (maps) + Colyseus (multiplayer, Phase 3) + React overlays (contextual UI) + EventBus (bridge) + easystar.js (pathfinding) + Howler.js (audio)
+
+**Phases (25 PRs, ~30 dev-days) — reorganized 2026-04-22:**
+
+| Phase | PRs | Summary | Priority | Gate |
+|-------|-----|---------|----------|------|
+| 0. API Lock & Security | 2 | E2E tests + security hardening | P0 | All 15 routes tested, no open HIGH findings |
+| 1. Canvas Foundation | 4 | Phaser scaffold, Tiled world, walking, zones+HUD | P0 | Player walks 8-zone world, HUD shows stats |
+| 2. Companion Alive | 2 | Animated sprites, in-world interactions | P1 | Companion follows, animates, reacts |
+| 3. Multiplayer Lobby | 3 | Colyseus server, other players, chat bubbles | P1 | 2+ players visible, chat works |
+| 4. Diegetic Content | 4 | Quest NPCs, tracker, journal+traits overlays | P1 | Quests in-world, all V1 panels migrated |
+| 5. LLM Companion | 4 | LLM chat, persistence, bond stages, overlay | P1 | AI chat with memory + personality |
+| 6. Economy | 3 | Cosmetic layers, shop backend+UI | P2 | Buy/equip cosmetics, STAR balance |
+| 7. Personal Rooms | 2 | Room scene, decorations | P2 | Customizable rooms, visiting |
+| 8. Polish | 3 | Mobile, onboarding, sound | P2 | Mobile-ready, guided, audio |
+
+**Changes from original V2 plan (2026-04-22 reorg):**
+- Added Phase 0 security hardening (was implicit)
+- Moved cosmetic sprite layers from Phase 2 → Phase 6 (not needed until shop)
+- Merged overlay migrations (journal, traits) into Phase 4 with quests (migrate all panels together)
+- Created Phase 5 for LLM companion (was scattered across carried-V1 items)
+- Merged CHAT_HISTORY + CHAT_MEMORY into single CHAT_PERSISTENCE task
+- Absorbed TYPING_SIM, RESPONSIVE, SOUND_DESIGN V1, COSMETICS_SHOP V1 into V2 equivalents
+- Explicit quality gates after every phase
+
+**Key decisions:**
+- Top-down view (not isometric) — simpler, cuter, better for pixel art
+- Phaser 3 over PixiJS (framework vs renderer — we need the framework)
+- Feature flag (`NEXT_PUBLIC_SANCTUARY_V2`) for gradual rollout
+- All V1 data carries forward (same DB, same tables, same API routes)
+- LLM companion at Phase 5 (after world + quests proven, before economy)
+
+**Open-source resources:**
+- **Adopt:** Phaser 3, Tiled, Colyseus, easystar.js, Howler.js
+- **Borrow:** rexrainbow/phaser3-rex-notes (virtual joystick), Kenney (placeholder assets)
+- **Adapt:** Dungeon Crawl + Evil Dungeon pixel art (recolor per doctrine palette)
+- **Inspirational:** Kinkly chat patterns, Club Penguin/Habbo/Tamagotchi feel, Stardew Valley art mood
+
+**V1 reuse:**
+- **Reuse as-is:** All API routes, DB schema, wallet auth, bond/XP logic, quest data, security fixes
+- **Adapt to overlays:** Journal, traits, chat data fetching
+- **Leave behind:** SanctuaryContent.tsx (1,656 lines), panel layout, tab navigation, button grids
+
 ## Notes
 
 - Fork workflow: GranusClarvis has pull-only on InverseAltruism repo. Push to fork, PR targets upstream.

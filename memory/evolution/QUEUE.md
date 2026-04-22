@@ -33,44 +33,103 @@ _Source: `docs/internal/audits/NEURO_FEATURE_DECISIONS_2026-04-17.md`. Phase 9 s
 _Source: `docs/CLAUDE_DESIGN_ROUTINES_STRATEGY.md`. Cross-project operating model for Claude Design + Claude Code Routines._
 
 
-### Star Sanctuary — Validated Roadmap (PROJECT:SWO, revalidated 2026-04-21)
+### Star Sanctuary V2 — World-First Rebuild (PROJECT:SWO, reorganized 2026-04-22)
 
-_SWO tasks tracked here. See also: memory/evolution/SWO_TRACKER.md_
-_Status as of 2026-04-21: dev branch (upstream 36d0e20) synced. All 19 PRs merged (through #195). All branches cleaned (38→2). Self-hosted corpus DONE (3,333 NFT images). Security PRs #177/#180/#181/#183/#184 merged. PR #179 CLOSED (wallet auth on POST routes still needed — SWO_SANCTUARY_POST_AUTH). Fork sync + branch discipline + PR targeting + auto-cleanup fixed in project_agent.py._
-_Style doctrine: `docs/SANCTUARY_STYLE_DOCTRINE.md` — binding on all visual work._
-_Asset state: NFT art self-hosted ✓, companion sprites NOT YET CREATED (falls back to NFT art), location vignettes NOT YET CREATED (falls back to emoji), empty-state illustrations NOT YET CREATED._
+_Sanctuary V2 replaces V1 React panel layout with a Phaser 3 game world. Direction: lobby-first, social, game-like (Tamagotchi + Club Penguin + Habbo). Backend/API layer unchanged — V2 is a frontend revolution._
+_V2 Plan: `docs/SANCTUARY_V2_PLAN.md` | Style: `docs/SANCTUARY_STYLE_DOCTRINE.md` | ADR: `docs/SANCTUARY_ADR.md`_
+_Status: V1.5 shipped (20 PRs merged through #204). PR #204 open (wallet auth for companion interact). Security audit: 7 findings open (see SWO_TRACKER.md)._
+_Asset state: NFT art self-hosted (333 tokens) ✓ | Companion sprites: NOT YET (falls back to NFT art) | Tileset: NOT YET (placeholder OK for Phase 1)_
+_Tech stack: Phaser 3 (`phaserjs/template-nextjs`) + Tiled + Colyseus (Phase 3+) + React overlays + EventBus bridge_
+_What carries forward: all DB schema, all API routes, wallet auth, bond/XP logic, quest data model, security fixes_
+_What's left behind: panel layout, tab navigation, CompanionPanel button grid, monolithic SanctuaryContent.tsx_
 
-#### 0. Security (BLOCKING — do first)
+#### Phase 0: API Contract Lock & Security (P0 — do before any canvas work)
 
+- **GATE:** All 15 API routes have HTTP-layer tests. All Sanctuary POST routes require wallet auth. Rate limiting on write endpoints. No CRIT/HIGH Sanctuary security findings open.
 
-#### 1. Error Handling & Reliability (highest user-facing impact)
+#### Phase 1: Canvas Foundation (P0 — single-player walking world, 4 PRs)
 
+- [ ] **[SWO_V2_PHASER_SCAFFOLD]** Install Phaser 3 and create the V2 entry point. Add `phaser` dependency. Create `components/sanctuary/PhaserGame.tsx` (dynamic import, ssr:false), `components/sanctuary/EventBus.ts` (React↔Phaser bridge), `game/scenes/BootScene.ts` (asset loader), `game/scenes/WorldScene.ts` (main scene with solid-color background placeholder), `game/config/GameConfig.ts`. Add `SanctuaryV2.tsx` with Phaser canvas + wallet auth bar. Feature flag `NEXT_PUBLIC_SANCTUARY_V2` toggles V1 vs V2. Scaffold from `phaserjs/template-nextjs`. PR renders an empty Phaser canvas at `/sanctuary?v=2`. (PROJECT:SWO)
+- [ ] **[SWO_V2_TILED_WORLD_MAP]** Create the world tilemap. Design 8-zone map in Tiled (Town Square center hub, paths to all locations, collision layer, spawn at Town Square). Export as JSON + tileset PNG. Use Kenney free tiles for initial tileset — replaced with doctrine art later. Load in `WorldScene.ts` via `this.load.tilemapTiledJSON()`. Camera follows player. Map ~40×30 tiles at 16px. Depends on `[SWO_V2_PHASER_SCAFFOLD]`. (PROJECT:SWO)
+- [ ] **[SWO_V2_PLAYER_COMPANION_MOVEMENT]** Player and companion walking. Create `game/sprites/PlayerSprite.ts` (placeholder 16×16 sprite, 4-direction walk, arrow/WASD input). Create `game/sprites/CompanionSprite.ts` (follows player with lerp 0.15, uses NFT art as static fallback). Click-to-move via `easystar.js`. Camera follows player. Depends on `[SWO_V2_TILED_WORLD_MAP]`. (PROJECT:SWO)
+- [ ] **[SWO_V2_LOCATION_ZONES_HUD]** Zone detection and minimal HUD. Create `game/systems/ZoneSystem.ts` — rectangular zones per location, `location-entered`/`location-exited` events via EventBus. Create `components/sanctuary/overlays/CompanionHUD.tsx` — compact status bar (name, mood emoji, bond bar, XP bar from existing API). Location name indicator on zone entry. Depends on `[SWO_V2_PLAYER_COMPANION_MOVEMENT]`. (PROJECT:SWO)
+- **GATE:** Player walks around 8-zone world. Zones trigger events. HUD shows companion stats from API. Feature flag toggles V1↔V2. Click-to-move works.
 
-#### 2. Functional Gaps (code-only, high value)
+#### Phase 2: Companion Alive (P1 — animated sprites, in-world interactions, 2 PRs)
 
+- [ ] **[SWO_V2_COMPANION_SPRITE_SYSTEM]** Animated companion sprites. Create `game/systems/AnimationSystem.ts` — sprite sheet loader, animation state machine (idle-bob, walk 4-dir, mood variants). Start with 1-2 constellation sheets (32×32px per style doctrine). Idle bob: 2-frame ±1px at 2s. Walk: 4-frame cycle. Mood from API (happy/calm/sleepy/excited/curious). Fallback to static NFT art for constellations without sheets. Depends on `[SWO_V2_LOCATION_ZONES_HUD]`. Needs at least 1 sprite sheet from `[SWO_V2_COMPANION_SPRITE_ART]`. (PROJECT:SWO)
+- [ ] **[SWO_V2_IN_WORLD_INTERACTIONS]** Replace button panels with in-world interactions. Create `components/sanctuary/overlays/CompanionMenu.tsx` — radial menu on companion click/tap with Pet/Feed/Talk. On action: call existing `/api/sanctuary/companion/interact`, trigger reaction animation (sparkle on pet, bounce on feed, bubble on talk), floating "+2 Bond"/"+5 XP" text. Remove old CompanionPanel button grid from V2. Depends on `[SWO_V2_COMPANION_SPRITE_SYSTEM]`. (PROJECT:SWO)
+- **GATE:** Companion follows player with animation. Mood-driven idle states. Interactions trigger visual reactions + API calls. Bond/XP increments visible.
 
-#### 3. Animation & Polish Wiring (keyframes exist, just need connection)
+#### Phase 3: Multiplayer Lobby (P1 — lobby-first social layer, 3 PRs)
 
+- [ ] **[SWO_V2_COLYSEUS_SERVER]** Colyseus multiplayer server. `server/colyseus/` with room-per-location architecture. `PlayerState` schema (wallet, displayName, position, facing, isMoving, companionTokenId, constellation, mood, equippedCosmetics, currentLocation). `LocationRoom.ts` — one room type per location. Player joins on zone enter, leaves on zone exit. Add `colyseus` + `@colyseus/schema` + `colyseus.js` client. Standalone Node.js process (Railway/Fly.io). Depends on `[SWO_V2_LOCATION_ZONES_HUD]`. (PROJECT:SWO)
+- [ ] **[SWO_V2_OTHER_PLAYERS_RENDER]** Render other players. Create `game/sprites/OtherPlayerSprite.ts` — spawned on `state.players.onAdd`, destroyed on `onRemove`. Position interpolated from Colyseus state. Name tag above sprite. Companion rendered alongside. Sprite pool for off-camera players. Depends on `[SWO_V2_COLYSEUS_SERVER]`. (PROJECT:SWO)
+- [ ] **[SWO_V2_CHAT_BUBBLES]** In-world chat bubbles. Create `components/sanctuary/overlays/ChatInput.tsx` — input bar at bottom. Message → Colyseus room broadcast. `ChatBubble.tsx` — HTML div positioned via `Camera.worldToScreen()`, doctrine-styled (rounded, #0a0a1a bg, Press Start 2P, max 100 chars), fades after 8s. Depends on `[SWO_V2_COLYSEUS_SERVER]`. (PROJECT:SWO)
+- **GATE:** 2+ players visible in same zone. Chat messages as bubbles above players. Join/leave works. Smooth interpolation.
 
-#### 4. Quality & Hardening
+#### Phase 4: Diegetic Content & Overlay Migrations (P1 — quests in-world, panels→overlays, 4 PRs)
 
-- [ ] **[SWO_SANCTUARY_RESPONSIVE]** Test and fix mobile: (1) world map aspect on phones, (2) text size readability (text-[7px] to text-[10px] may be unreadable), (3) touch target sizing (40px min), (4) chat input mobile layout. (PROJECT:SWO)
-- [ ] **[SWO_SANCTUARY_E2E_TESTS]** E2E test coverage for all 15 API routes at HTTP layer. Current 128 tests are DB-layer only. Add: wallet connect → interact → journal, activity flow, chat, quest claim, public map view. Also add tests for error paths and rate-limit responses. (PROJECT:SWO)
+- [ ] **[SWO_V2_QUEST_NPCS]** Quest givers as NPC sprites. Create `game/sprites/NPCSprite.ts` — static/2-frame idle at map locations. "!" indicator for available quests. Click NPC → `npc-clicked` via EventBus → `QuestDialog.tsx` overlay (description, requirements, rewards, accept/decline). Quest Board at Town Square aggregates all quests. Uses existing `/api/sanctuary/quests`. Remove old QuestsPanel. Depends on `[SWO_V2_LOCATION_ZONES_HUD]`. Needs NPC content from `[SWO_V2_NPC_QUEST_CONTENT]`. (PROJECT:SWO)
+- [ ] **[SWO_V2_QUEST_TRACKER_HUD]** Active quest tracker overlay (top-right). 1-3 quests with progress bars. Click to expand. Uses existing quest API. Auto-updates on interaction events. Depends on `[SWO_V2_QUEST_NPCS]`. (PROJECT:SWO)
+- [ ] **[SWO_V2_JOURNAL_OVERLAY]** Journal as overlay. Hotkey (J) or HUD icon. Same data from existing `/api/sanctuary/companion/journal`. Scrollable, type filters, pagination. Pixel-art "book" styling per doctrine. Remove old JournalPanel. (PROJECT:SWO)
+- [ ] **[SWO_V2_TRAITS_LIBRARY]** Traits at Cosmic Library zone. Auto-opens on zone entry + hotkey (T). Personality traits, progress bars, constellation info. Uses existing `/api/sanctuary/traits`. Remove old TraitsPanel. (PROJECT:SWO)
+- **GATE:** Quests discovered in-world via NPCs. All V1 panels (journal, traits, quests) migrated to contextual overlays. No panel layout remnants in V2.
 
-#### 5. Enhancement (lower priority)
+#### Phase 5: LLM Companion (P1 — AI chat, emotional bond, 4 PRs)
 
-- [ ] [UNVERIFIED] **[SWO_SANCTUARY_CHAT_LLM]** Upgrade chat from templates to LLM (per ADR-002). OpenRouter → Gemini Flash, 15/day rate limit, personality + bond + journal context injection. Create `lib/sanctuary/chatPersonality.ts` (trait→prompt builder), `app/api/sanctuary/companion/chat/route.ts`, `sanctuary_chat_usage` table. Add `SANCTUARY_CHAT_DRY_RUN` env flag for cost-safe testing. ~$0.05/day at 100 users. Design ref: `docs/KINKLY_REFERENCE_ANALYSIS.md` §Phase 1. (PROJECT:SWO)
-- [ ] [UNVERIFIED] **[SWO_SANCTUARY_BOND_STAGES]** Map existing `bond_score` 0-100 to 4 behavioral stages (Shy/Friendly/Bonded/Devoted) that change companion chat personality. Create `lib/sanctuary/bondStages.ts` with stage thresholds + prompt context generator. Inject stage-appropriate tone guidance into chat system prompt. No schema changes — derives from existing `bond_score` column. Depends on `[SWO_SANCTUARY_CHAT_LLM]`. Design ref: `docs/KINKLY_REFERENCE_ANALYSIS.md` §Phase 2. (PROJECT:SWO)
-- [ ] [UNVERIFIED] **[SWO_SANCTUARY_CHAT_MEMORY]** Lightweight persistent memory so companions remember owner facts across sessions. Create `sanctuary_chat_memories` table (5 categories: owner_identity, preferences, shared_experiences, companion_feelings, recurring_topics). Extract facts by piggybacking on the chat LLM call (no separate classifier — zero extra cost). Inject top 5 memories by importance+recency into system prompt (150 token budget, 3-turn frequency cap). Depends on `[SWO_SANCTUARY_CHAT_LLM]`. Design ref: `docs/KINKLY_REFERENCE_ANALYSIS.md` §Phase 3. (PROJECT:SWO)
-- [ ] [UNVERIFIED] **[SWO_SANCTUARY_CHAT_HISTORY]** Persist chat messages server-side so conversations survive tab close. Create `sanctuary_chat_history` table (wallet, token_id, role, content, created_at). Load last 20 on reconnect, send last 10 to LLM for context. Add GET endpoint for paginated history. Depends on `[SWO_SANCTUARY_CHAT_LLM]`. Design ref: `docs/KINKLY_REFERENCE_ANALYSIS.md` §Phase 4. (PROJECT:SWO)
-- [ ] [UNVERIFIED] **[SWO_SANCTUARY_TYPING_SIM]** Add typing simulation to companion chat for immersion. Calculate delay from response word count (~45 WPM, 800ms-4000ms range). Show typing indicator dots (CSS keyframes already exist in globals.css). Frontend delays rendering assistant message by calculated ms. Depends on `[SWO_SANCTUARY_CHAT_LLM]`. Design ref: `docs/KINKLY_REFERENCE_ANALYSIS.md` §Phase 5. (PROJECT:SWO)
-- [ ] **[SWO_SANCTUARY_SOUND_DESIGN]** Optional ambient sound layer. Muted by default. Lower priority — visual assets first. (PROJECT:SWO)
+_Companion chat confirmed valid for V2. Positioned after world + quests are working. Design ref: `docs/KINKLY_REFERENCE_ANALYSIS.md`._
 
-#### 6. Future Phases (P2, from milestones)
+- [ ] **[SWO_SANCTUARY_CHAT_LLM]** Upgrade chat from templates to LLM (per ADR-002). OpenRouter → Gemini Flash, 15/day rate limit, personality + bond + journal context injection. Create `lib/sanctuary/chatPersonality.ts` (trait→prompt builder), `app/api/sanctuary/companion/chat/route.ts`, `sanctuary_chat_usage` table. `SANCTUARY_CHAT_DRY_RUN` env flag for cost-safe testing. ~$0.05/day at 100 users. (PROJECT:SWO)
+- [ ] **[SWO_SANCTUARY_CHAT_PERSISTENCE]** Server-side chat history + companion memory in one PR. (a) `sanctuary_chat_history` table — persist messages, load last 20 on reconnect, send last 10 to LLM. GET endpoint for paginated history. (b) `sanctuary_chat_memories` table (5 categories: owner_identity, preferences, shared_experiences, companion_feelings, recurring_topics). Extract facts via piggyback on chat LLM call (zero extra cost). Inject top 5 memories into system prompt (150 token budget). Depends on `[SWO_SANCTUARY_CHAT_LLM]`. (PROJECT:SWO)
+- [ ] **[SWO_SANCTUARY_BOND_STAGES]** Map `bond_score` 0-100 to 4 behavioral stages (Shy/Friendly/Bonded/Devoted). Create `lib/sanctuary/bondStages.ts` with thresholds + prompt context. Inject stage tone guidance into chat system prompt. No schema changes. Depends on `[SWO_SANCTUARY_CHAT_LLM]`. (PROJECT:SWO)
+- [ ] **[SWO_V2_COMPANION_CHAT_OVERLAY]** Chat as in-world conversation. "Talk" from radial menu or hotkey (C) opens compact chat near companion. LLM responses as speech bubble above companion + in overlay. Rate limit display (X/15 remaining). Typing simulation (delay by word count, ~45 WPM, 800ms-4000ms, CSS indicator dots). Depends on `[SWO_SANCTUARY_CHAT_LLM]` + `[SWO_V2_IN_WORLD_INTERACTIONS]`. (PROJECT:SWO)
+- **GATE:** Companion talks via LLM with personality. Remembers facts across sessions. Bond stages change tone. Chat overlay works in-world with typing simulation.
 
-- [ ] **[SWO_SANCTUARY_COSMETICS_SHOP]** Cosmetic items schema + STAR shop UI. `equipped_cosmetics` column exists but unused. Primary STAR token sink. (PROJECT:SWO)
-- [ ] **[SWO_SANCTUARY_EXPEDITIONS]** Expedition system (tables exist, routes stub). Multi-step adventures with narrative choices. (PROJECT:SWO)
-- [ ] **[SWO_SANCTUARY_MEMORY_CONSOLIDATION]** Weekly batch job to consolidate chat memories: merge duplicates, decay old emotions (staleness penalty on volatile categories), summarize recurring topics. Similar to Kinkly's contradiction detection but batch-processed. Depends on `[SWO_SANCTUARY_CHAT_MEMORY]`. (PROJECT:SWO)
+#### Phase 6: Economy (P2 — cosmetics, shop, layered sprites, 3 PRs)
+
+- [ ] **[SWO_V2_COSMETIC_SPRITE_LAYERS]** Layered cosmetic rendering. Extend `CompanionSprite.ts` with Phaser Container (base + hat + accessory layers, same animation frame). Load cosmetic sheets separately. Read `equipped_cosmetics` from API. `game/systems/CosmeticSystem.ts` for layer composition. Equip/unequip via EventBus. Depends on `[SWO_V2_COMPANION_SPRITE_SYSTEM]`. (PROJECT:SWO)
+- [ ] **[SWO_V2_SHOP_BACKEND]** Shop API. Seed `sanctuary_cosmetic_items` with 20-30 items (hats, accessories, backgrounds, animations; 10-50 STAR per STAR_SANCTUARY_PLAN.md). `POST /api/sanctuary/shop/buy` (validate STAR, deduct, add to inventory). `POST /api/sanctuary/inventory/equip`. `GET /api/sanctuary/shop/items` (filterable). Tests for purchase, insufficient balance, double-equip, level gating. Needs content from `[SWO_V2_COSMETIC_ITEM_DESIGN]`. (PROJECT:SWO)
+- [ ] **[SWO_V2_SHOP_UI]** Shop overlay at The Bazaar zone. Grid with category tabs. Preview on companion (EventBus preview event). Buy button, STAR balance, "Owned" badge. `InventoryOverlay.tsx` via hotkey (I). Depends on `[SWO_V2_SHOP_BACKEND]` + `[SWO_V2_COSMETIC_SPRITE_LAYERS]`. (PROJECT:SWO)
+- **GATE:** Players browse, buy, equip cosmetics. Companions render with equipped items. STAR balance updates correctly.
+
+#### Phase 7: Personal Rooms (P2 — customizable spaces, 2 PRs)
+
+- [ ] **[SWO_V2_ROOM_SCENE]** Room as separate Phaser scene. `game/scenes/RoomScene.ts` — 3×3 grid room (expandable with level). Background/floor from equipped cosmetics. Companion idles in room. Enter via portal in Town Square or profile click. "Return to world" exit. Room data in `equipped_cosmetics` JSON (add room_bg, room_floor). (PROJECT:SWO)
+- [ ] **[SWO_V2_ROOM_CUSTOMIZATION]** Decoration placement. Drag-and-place from inventory on 3×3 grid. Layout saved to `sanctuary_companions.room_layout` (new JSON column). Visit other players' rooms (click avatar → "Visit Room"). Visitors see but can't modify. Depends on `[SWO_V2_ROOM_SCENE]`. (PROJECT:SWO)
+- **GATE:** Players have personal rooms. Decorations persist. Can visit others' rooms.
+
+#### Phase 8: Polish (P2 — mobile, onboarding, sound, 3 PRs)
+
+- [ ] **[SWO_V2_MOBILE_CONTROLS]** Mobile touch support. Virtual joystick (`rexrainbow/phaser3-rex-notes` plugin or custom). Tap-to-move. Responsive canvas sizing. Touch-friendly overlays (min 44px targets). Test iOS Safari + Android Chrome. Depends on Phases 1-6 stable. (PROJECT:SWO)
+- [ ] **[SWO_V2_ONBOARDING]** First-visit tutorial. Detect new player (no companion). Guided: select companion → walk to location → interact → open quest board. Tooltip-style, skip button. State in localStorage. (PROJECT:SWO)
+- [ ] **[SWO_V2_SOUND_DESIGN]** Ambient + SFX. Per-location ambient loops (crossfade on zone transition). Interaction SFX (pet sparkle, feed munch, level-up chime). Muted by default, volume slider. Howler.js or Phaser built-in. Need ~8 ambient loops + ~10 SFX. (PROJECT:SWO)
+- **GATE:** Mobile-ready with touch controls. New players guided. Audio layer functional (muted by default).
+
+#### Art & Content Track (parallel — start during Phases 1-3)
+
+_These produce assets consumed by code phases. Can be done by humans, AI tools (Aseprite/PixelLab), or commissioned. Style doctrine is binding._
+
+- [ ] **[SWO_V2_WORLD_TILESET_ART]** Doctrine-compliant tileset for world map. Dark cosmic base (#0a0a1a → #1a1a2e), luminous zones, scattered stars, 16×16px tiles. Replace Kenney placeholders from Phase 1. Deliver tileset PNG + updated Tiled map. Sources: Dungeon Crawl + Evil Dungeon (recolor per doctrine palette). (PROJECT:SWO, ART)
+- [ ] **[SWO_V2_COMPANION_SPRITE_ART]** Sprite sheets for all 10 constellations. 32×32px: walk (4 dir × 4 frames), idle bob (2 frames), 5 moods (happy/excited/calm/sleepy/curious, 2-3 frames each), interaction reactions (pet/feed/play, 4 frames each). ~50 frames per constellation, 500 total. PNG sheets + JSON atlas. Per-constellation accent colors from style doctrine. (PROJECT:SWO, ART)
+- [ ] **[SWO_V2_NPC_QUEST_CONTENT]** Design 3-5 NPCs (names, locations, personality, sprite spec). Write quest dialog for 5 daily errands + 3 weekly adventures. Map to `sanctuary_quests` table format. JSON seed file + NPC placement for Tiled map. (PROJECT:SWO, CONTENT)
+- [ ] **[SWO_V2_COSMETIC_ITEM_DESIGN]** 20-30 items: 8 hats, 6 accessories, 5 backgrounds, 5 floors, 4 animations, 2 seasonal. Each: name, category, rarity (common/uncommon/rare/epic), STAR price (10-50), level req (0-15), pixel art spec. Seed JSON for `sanctuary_cosmetic_items`. (PROJECT:SWO, CONTENT)
+
+#### Post-V2 (P2 — after V2 stable)
+
+- [ ] **[SWO_SANCTUARY_EXPEDITIONS]** Multi-step expedition adventures with narrative choices. Needs V2 Phase 4 quest system as foundation. (PROJECT:SWO)
+- [ ] **[SWO_SANCTUARY_MEMORY_CONSOLIDATION]** Weekly batch: merge duplicate memories, decay old emotions, summarize recurring topics. Depends on `[SWO_SANCTUARY_CHAT_PERSISTENCE]` shipping and accumulating data. (PROJECT:SWO)
+- [ ] **[SANCTUARY_STAR_CURRENCY_DECISION]** STAR on Monad (soulbound vs transferable vs hybrid). Blocks on-chain cosmetic minting. Not needed for V2 MVP — all V2 economy is off-chain. See STAR_SANCTUARY_PLAN.md §3.3. (PROJECT:SWO)
+
+#### Retired Items (absorbed or replaced by V2 tasks)
+
+_These V1 items are no longer standalone tasks. Their scope is covered by V2 items above._
+
+- ~~[SWO_SANCTUARY_RESPONSIVE]~~ → absorbed by `[SWO_V2_MOBILE_CONTROLS]` (V1 panel layout gone; mobile = Phaser canvas now)
+- ~~[SWO_SANCTUARY_CHAT_HISTORY]~~ → merged into `[SWO_SANCTUARY_CHAT_PERSISTENCE]` (single PR for history + memory)
+- ~~[SWO_SANCTUARY_TYPING_SIM]~~ → absorbed by `[SWO_V2_COMPANION_CHAT_OVERLAY]` (typing sim is 15 lines, not a separate PR)
+- ~~[SWO_SANCTUARY_SOUND_DESIGN]~~ → absorbed by `[SWO_V2_SOUND_DESIGN]` (same scope, V2 framing)
+- ~~[SWO_SANCTUARY_COSMETICS_SHOP]~~ → replaced by `[SWO_V2_SHOP_BACKEND]` + `[SWO_V2_SHOP_UI]` (V2 split into backend + zone-based UI)
 
 
 
@@ -249,8 +308,7 @@ _Source: `source="audit_phase_4"`. P0+P1 items are co-located with their parent 
 
 ### Star Sanctuary — Later Phases (PROJECT:SWO)
 
-_V1.0+V1.5 shipped. First Playable Layer and Retention/Identity phases consolidated into P1 §5 above. Remaining P2:_
-- [ ] **[SANCTUARY_STAR_CURRENCY_DECISION]** STAR on Monad recommendation.
+_Consolidated into P1 §Star Sanctuary V2 queue (reorganized 2026-04-22). All remaining items now in V2 phased plan above. SANCTUARY_STAR_CURRENCY_DECISION moved to Post-V2 section._
 
 
 ### Adaptive RAG Pipeline
