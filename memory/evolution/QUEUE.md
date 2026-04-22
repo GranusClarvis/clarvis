@@ -52,8 +52,6 @@ _Asset state: NFT art self-hosted ✓, companion sprites NOT YET CREATED (falls 
 
 #### 3. Animation & Polish Wiring (keyframes exist, just need connection)
 
-- [ ] **[SWO_SANCTUARY_PIXELATED_CLASS]** Add `image-rendering-pixelated` utility to tailwind.config.ts — referenced in CompanionSprite (SanctuaryContent.tsx line 281) but never defined. NFT fallback images may render blurry without it. Quick fix. (PROJECT:SWO)
-- [ ] **[SWO_SANCTUARY_MAP_ART_ASSET]** Replace the current procedural/CSS-only sanctuary map background with the intended 720×405 pixel-art star-map asset from the style doctrine. Keep DB-aligned location coordinates and current CSS fallback, but add the real production map PNG/WebP plus placement verification so zones, icons, and stars do not overlap awkwardly. Must pass Skrumpey-compatibility checks from `docs/SANCTUARY_STYLE_DOCTRINE.md`. (PROJECT:SWO)
 - [ ] **[SWO_SANCTUARY_COMPANION_ART_PACK]** Create and integrate the first bespoke Sanctuary companion asset pack described by the art plan: 60 PNGs (10 constellations × 6 moods) or a narrower but complete production-safe v1 set if 60 is too large. Assets must be visually compatible with Skrumpeys, drop into `public/sanctuary/companions/`, and render through the existing CompanionSprite fallback chain without layout breakage. (PROJECT:SWO)
 - [ ] **[SWO_SANCTUARY_LOCATION_VIGNETTES]** Create and wire the optional-but-high-value location vignette/icon set (8 × 64×64) for Sanctuary locations so the world feels deliberate rather than emoji-backed. Use the house style doctrine, preserve readability on dark backgrounds, and fall back gracefully if any location asset is missing. (PROJECT:SWO)
 

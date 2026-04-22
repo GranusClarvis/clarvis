@@ -1646,6 +1646,118 @@ class TestMirrorValidation:
             pa.MIRROR_CHECKS.clear()
             pa.MIRROR_CHECKS.update(original_checks)
 
+    def test_baseline_diff_ignores_preexisting_errors(self, tmp_path):
+        """Pre-existing errors in PROD mirror should not cause failure."""
+        mirror_dir = tmp_path / "mirror"
+        mirror_dir.mkdir()
+        # A file with a "tsc error" that exists BEFORE overlay
+        (mirror_dir / "broken.ts").write_text("let x: string = 123;")
+
+        agent_ws = tmp_path / "workspace"
+        agent_ws.mkdir()
+        (agent_ws / "good.ts").write_text("let y: number = 1;")
+
+        import project_agent as pa
+        original_mirrors = dict(MIRROR_DIRS)
+        original_checks = dict(MIRROR_CHECKS)
+        try:
+            # Use a script that outputs a "pre-existing" error line both times
+            check_script = tmp_path / "check.sh"
+            check_script.write_text(
+                "#!/bin/bash\n"
+                "echo 'broken.ts(1,5): error TS2322: Type number is not assignable' >&2\n"
+                "exit 1\n"
+            )
+            check_script.chmod(0o755)
+
+            pa.MIRROR_DIRS["baseline-agent"] = mirror_dir
+            pa.MIRROR_CHECKS["baseline-agent"] = [
+                {"name": "tsc --noEmit", "cmd": [str(check_script)], "timeout": 10},
+            ]
+            result = run_mirror_validation(
+                "baseline-agent",
+                changed_files=["good.ts"],
+                agent_workspace=agent_ws,
+            )
+            # Should PASS because the error exists in both baseline and overlay
+            assert result["passed"] is True
+            assert result["checks"][0]["passed"] is True
+            assert result["checks"][0]["new_errors"] == []
+            assert result["checks"][0]["baseline_errors"] == 1
+        finally:
+            pa.MIRROR_DIRS.clear()
+            pa.MIRROR_DIRS.update(original_mirrors)
+            pa.MIRROR_CHECKS.clear()
+            pa.MIRROR_CHECKS.update(original_checks)
+
+    def test_baseline_diff_catches_new_errors(self, tmp_path):
+        """Genuinely new errors introduced by the overlay should fail."""
+        mirror_dir = tmp_path / "mirror"
+        mirror_dir.mkdir()
+
+        agent_ws = tmp_path / "workspace"
+        agent_ws.mkdir()
+        (agent_ws / "bad.ts").write_text("broken code")
+
+        import project_agent as pa
+        original_mirrors = dict(MIRROR_DIRS)
+        original_checks = dict(MIRROR_CHECKS)
+
+        # Track whether overlay file exists to produce different output
+        check_script = tmp_path / "check.sh"
+        check_script.write_text(
+            "#!/bin/bash\n"
+            f"if [ -f '{mirror_dir}/bad.ts' ]; then\n"
+            "  echo 'bad.ts(1,1): error TS1005: new error from overlay' >&2\n"
+            "  exit 1\n"
+            "fi\n"
+            "exit 0\n"
+        )
+        check_script.chmod(0o755)
+
+        try:
+            pa.MIRROR_DIRS["newbug-agent"] = mirror_dir
+            pa.MIRROR_CHECKS["newbug-agent"] = [
+                {"name": "tsc --noEmit", "cmd": [str(check_script)], "timeout": 10},
+            ]
+            result = run_mirror_validation(
+                "newbug-agent",
+                changed_files=["bad.ts"],
+                agent_workspace=agent_ws,
+            )
+            # Should FAIL because the error is NEW (not in baseline)
+            assert result["passed"] is False
+            assert result["checks"][0]["passed"] is False
+            assert len(result["checks"][0]["new_errors"]) == 1
+            assert "new error from overlay" in result["checks"][0]["new_errors"][0]
+        finally:
+            pa.MIRROR_DIRS.clear()
+            pa.MIRROR_DIRS.update(original_mirrors)
+            pa.MIRROR_CHECKS.clear()
+            pa.MIRROR_CHECKS.update(original_checks)
+
+    def test_no_overlay_skips_baseline(self, tmp_path):
+        """Without changed_files, should run checks directly (no baseline)."""
+        mirror_dir = tmp_path / "mirror"
+        mirror_dir.mkdir()
+
+        import project_agent as pa
+        original_mirrors = dict(MIRROR_DIRS)
+        original_checks = dict(MIRROR_CHECKS)
+        try:
+            pa.MIRROR_DIRS["nooverlay-agent"] = mirror_dir
+            pa.MIRROR_CHECKS["nooverlay-agent"] = [
+                {"name": "echo test", "cmd": ["echo", "ok"], "timeout": 10},
+            ]
+            result = run_mirror_validation("nooverlay-agent")
+            assert result["passed"] is True
+            assert result["checks"][0]["baseline_errors"] == 0
+        finally:
+            pa.MIRROR_DIRS.clear()
+            pa.MIRROR_DIRS.update(original_mirrors)
+            pa.MIRROR_CHECKS.clear()
+            pa.MIRROR_CHECKS.update(original_checks)
+
 
 class TestClosePr:
     @patch("project_agent.subprocess.run")

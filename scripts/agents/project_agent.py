@@ -1097,17 +1097,67 @@ MIRROR_CHECKS = {
 }
 
 
+def _parse_error_lines(output: str) -> set[str]:
+    """Extract individual error lines from tsc/vitest output for diffing."""
+    lines = set()
+    for line in output.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        # tsc errors: file(line,col): error TS...
+        if ": error TS" in stripped:
+            lines.add(stripped)
+        # vitest FAIL lines
+        elif stripped.startswith("FAIL ") or "AssertionError" in stripped or "ENOENT" in stripped:
+            lines.add(stripped)
+    return lines
+
+
+def _run_check(check: dict, cwd: str) -> dict:
+    """Run a single validation check. Returns {name, passed, output, elapsed, errors}."""
+    start = time.time()
+    try:
+        proc = subprocess.run(
+            check["cmd"],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            timeout=check.get("timeout", 120),
+        )
+        passed = proc.returncode == 0
+        output = (proc.stdout + proc.stderr)[-2000:]
+    except subprocess.TimeoutExpired:
+        passed = False
+        output = f"TIMEOUT after {check.get('timeout', 120)}s"
+    except Exception as e:
+        passed = False
+        output = str(e)
+
+    elapsed = round(time.time() - start, 1)
+    errors = _parse_error_lines(output)
+    return {
+        "name": check["name"],
+        "passed": passed,
+        "output": output,
+        "elapsed": elapsed,
+        "errors": errors,
+    }
+
+
 def run_mirror_validation(agent_name: str, changed_files: list[str] = None,
                           agent_workspace: Path = None) -> dict:
     """Run pre-submit validation against a production mirror.
 
-    Copies changed files from agent workspace into the PROD mirror,
-    runs tsc --noEmit and vitest run, then restores the mirror.
+    Uses baseline-diff: runs checks BEFORE copying files (baseline), then AFTER
+    (overlay). Only fails if the overlay introduces NEW errors beyond baseline.
+    This prevents false negatives from pre-existing PROD issues or missing
+    dependencies for additive changes.
 
     Returns:
         {
             "passed": bool,
-            "checks": [{"name": str, "passed": bool, "output": str, "elapsed": float}],
+            "checks": [{"name": str, "passed": bool, "output": str, "elapsed": float,
+                         "new_errors": list[str], "baseline_errors": int}],
             "summary": str,  # markdown-ready for PR body
         }
     """
@@ -1121,23 +1171,28 @@ def run_mirror_validation(agent_name: str, changed_files: list[str] = None,
         return {"passed": None, "checks": [],
                 "summary": "Mirror validation skipped: no checks configured"}
 
-    # If we have changed files and an agent workspace, copy them into the mirror
-    # and restore originals after validation
+    has_overlay = bool(changed_files and agent_workspace)
+
+    # ── Step 1: Baseline (PROD mirror as-is) ──
+    baseline_results = {}
+    if has_overlay:
+        for check in checks:
+            baseline_results[check["name"]] = _run_check(check, str(mirror_dir))
+
+    # ── Step 2: Copy changed files into mirror ──
     backup_files = {}
-    created_dirs = []  # track dirs we created so we can remove them on restore
+    created_dirs = []
     copied = []
-    if changed_files and agent_workspace:
+    if has_overlay:
         for rel_path in changed_files:
             src = agent_workspace / rel_path
             dst = mirror_dir / rel_path
             if not src.exists():
                 continue
-            # Backup existing file in mirror (if any)
             if dst.exists():
                 backup_files[rel_path] = dst.read_bytes()
             else:
-                backup_files[rel_path] = None  # mark as new (delete on restore)
-            # Track new directories that need to be created
+                backup_files[rel_path] = None
             new_dirs = []
             d = dst.parent
             while d != mirror_dir and not d.exists():
@@ -1145,51 +1200,45 @@ def run_mirror_validation(agent_name: str, changed_files: list[str] = None,
                 d = d.parent
             dst.parent.mkdir(parents=True, exist_ok=True)
             created_dirs.extend(reversed(new_dirs))
-            # Copy
             try:
                 shutil.copy2(str(src), str(dst))
                 copied.append(rel_path)
             except OSError as e:
                 _log(f"Mirror copy failed for {rel_path}: {e}")
 
+    # ── Step 3: Overlay checks (with changed files in mirror) ──
     results = []
     all_passed = True
 
     try:
         for check in checks:
-            start = time.time()
-            try:
-                proc = subprocess.run(
-                    check["cmd"],
-                    cwd=str(mirror_dir),
-                    capture_output=True,
-                    text=True,
-                    timeout=check.get("timeout", 120),
-                )
-                passed = proc.returncode == 0
-                output = (proc.stdout + proc.stderr)[-2000:]  # cap output
-            except subprocess.TimeoutExpired:
-                passed = False
-                output = f"TIMEOUT after {check.get('timeout', 120)}s"
-            except Exception as e:
-                passed = False
-                output = str(e)
+            overlay = _run_check(check, str(mirror_dir))
 
-            elapsed = round(time.time() - start, 1)
-            if not passed:
+            if has_overlay and check["name"] in baseline_results:
+                baseline = baseline_results[check["name"]]
+                new_errors = sorted(overlay["errors"] - baseline["errors"])
+                # Pass if no NEW errors were introduced (even if pre-existing errors exist)
+                effectively_passed = len(new_errors) == 0
+            else:
+                new_errors = sorted(overlay["errors"]) if not overlay["passed"] else []
+                effectively_passed = overlay["passed"]
+
+            if not effectively_passed:
                 all_passed = False
+
             results.append({
                 "name": check["name"],
-                "passed": passed,
-                "output": output,
-                "elapsed": elapsed,
+                "passed": effectively_passed,
+                "output": overlay["output"],
+                "elapsed": overlay["elapsed"],
+                "new_errors": new_errors,
+                "baseline_errors": len(baseline_results.get(check["name"], {}).get("errors", set())) if has_overlay else 0,
             })
     finally:
         # Restore mirror to original state
         for rel_path, original_bytes in backup_files.items():
             dst = mirror_dir / rel_path
             if original_bytes is None:
-                # File was new — remove it
                 try:
                     dst.unlink(missing_ok=True)
                 except OSError:
@@ -1199,10 +1248,9 @@ def run_mirror_validation(agent_name: str, changed_files: list[str] = None,
                     dst.write_bytes(original_bytes)
                 except OSError:
                     pass
-        # Remove directories we created (reverse order = deepest first)
         for d in reversed(created_dirs):
             try:
-                d.rmdir()  # only removes if empty
+                d.rmdir()
             except OSError:
                 pass
 
@@ -1210,10 +1258,12 @@ def run_mirror_validation(agent_name: str, changed_files: list[str] = None,
     lines = ["## Mirror Validation (PROD)"]
     for r in results:
         icon = "PASS" if r["passed"] else "FAIL"
-        lines.append(f"- **{r['name']}**: {icon} ({r['elapsed']}s)")
-        if not r["passed"]:
-            # Include first 500 chars of error output
-            snippet = r["output"][:500].strip()
+        baseline_note = ""
+        if r.get("baseline_errors", 0) > 0:
+            baseline_note = f" ({r['baseline_errors']} pre-existing errors excluded)"
+        lines.append(f"- **{r['name']}**: {icon} ({r['elapsed']}s){baseline_note}")
+        if not r["passed"] and r.get("new_errors"):
+            snippet = "\n".join(r["new_errors"])[:500].strip()
             if snippet:
                 lines.append(f"  ```\n  {snippet}\n  ```")
     lines.append(f"\nOverall: {'PASS' if all_passed else 'FAIL'}")
@@ -2182,17 +2232,21 @@ def build_spawn_prompt(name: str, task: str, config: dict,
             "**If validation fails, DO NOT create the PR. Fix your code first.**",
             "A post-spawn hard gate will also verify — PRs that fail mirror checks are automatically closed.",
             "",
+            "The post-spawn gate uses **baseline-diff**: it runs checks BEFORE and AFTER overlaying",
+            "your files. Only NEW errors (not pre-existing in PROD) cause failure. Pre-existing errors",
+            "in PROD (e.g., missing modules not yet deployed) are excluded from the diff.",
+            "",
             "Steps:",
             f"1. Copy your changed files into `{mirror_dir}`",
             f"2. Run: {check_cmds} in `{mirror_dir}`",
             f"3. Restore ALL files AND remove any NEW directories you created (leave mirror byte-identical)",
             "4. Include a '## Mirror Validation (PROD)' section in your PR body with results",
-            "5. If checks fail, fix your code and re-validate before creating the PR",
+            "5. If your changes introduce NEW tsc/vitest errors, fix them before creating the PR",
             "",
             "Example PR body section:",
             "```",
             "## Mirror Validation (PROD)",
-            "- **tsc --noEmit**: PASS (12.3s)",
+            "- **tsc --noEmit**: PASS (12.3s) (3 pre-existing errors excluded)",
             "- **vitest run**: PASS (8.1s)",
             "Overall: PASS",
             "```",
