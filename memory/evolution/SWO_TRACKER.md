@@ -41,6 +41,7 @@ Planning docs, queue items, and brand positioning do NOT count as delivery.
 | 17 | #191 | feat: sanctuary-map-bg CSS class with procedural star map | 2026-04-21 |
 | 18 | #194 | fix: replace silent .catch with error states in SanctuaryContent | 2026-04-21 |
 | 19 | #195 | fix: wrap all JSON.parse(attributes_json) calls in try-catch | 2026-04-21 |
+| 20 | #204 | feat: wallet auth for sanctuary companion interact | 2026-04-22 |
 
 ## Branch Cleanup Log
 
@@ -56,7 +57,9 @@ Planning docs, queue items, and brand positioning do NOT count as delivery.
 
 _Revalidated 2026-04-21 against upstream/dev HEAD (36d0e20). Fork dev synced. All branches cleaned._
 
-_(No pending PRs)_
+| # | PR | Title | Status |
+|---|-----|-------|--------|
+| 1 | #204 | feat: wallet auth for sanctuary companion interact | Open — awaiting review |
 
 **Resolved:**
 - ~~#177~~ — MERGED on dev (governance votingPower server-side verification)
