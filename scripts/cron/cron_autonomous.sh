@@ -23,6 +23,8 @@ unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT 2>/dev/null || true
 acquire_local_lock "/tmp/clarvis_autonomous.lock" "$LOGFILE" 2400
 acquire_global_claude_lock "$LOGFILE" "queue"
 
+sync_workspace 2>> "$LOGFILE"
+
 # ============================================================================
 # PHASE 0: HEARTBEAT GATE — Zero-LLM pre-check (skip if nothing changed)
 # Saves cost by deferring when digest/queue/memory haven't changed since last run.

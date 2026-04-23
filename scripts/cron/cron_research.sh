@@ -25,6 +25,8 @@ set_script_timeout 2700 "$LOGFILE"
 acquire_local_lock "/tmp/clarvis_research.lock" "$LOGFILE" 2400
 acquire_global_claude_lock "$LOGFILE"
 
+sync_workspace 2>> "$LOGFILE"
+
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Research session starting ===" >> "$LOGFILE"
 emit_dashboard_event task_started --task-name "Research session" --section cron_research --executor claude-opus
 

@@ -25,6 +25,8 @@ set_script_timeout 2400 "$LOGFILE"
 acquire_local_lock "/tmp/clarvis_implementation_sprint.lock" "$LOGFILE" 2400
 acquire_global_claude_lock "$LOGFILE" "queue"
 
+sync_workspace 2>> "$LOGFILE"
+
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Implementation Sprint starting ===" >> "$LOGFILE"
 emit_dashboard_event task_started --task-name "Implementation Sprint" --section cron_implementation --executor claude-opus
 

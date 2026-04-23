@@ -250,6 +250,45 @@ print(f\"reason={d.get('reason','?')} aborted={d.get('aborted',False)}\")
     return $MONITORED_EXIT
 }
 
+# Sync main workspace with origin before doing work.
+# Fast-forwards local main to origin/main. Handles dirty working tree via stash.
+# Call this from cron orchestrators that spawn Claude Code or modify tracked files.
+# Skips if: not on main, not a git repo, no network, or non-ff divergence.
+sync_workspace() {
+    [ -d "$CLARVIS_WORKSPACE/.git" ] || return 0
+
+    local _branch
+    _branch=$(git -C "$CLARVIS_WORKSPACE" symbolic-ref --short HEAD 2>/dev/null) || return 0
+    [ "$_branch" = "main" ] || return 0
+
+    git -C "$CLARVIS_WORKSPACE" fetch origin main --quiet 2>/dev/null || return 0
+
+    local _local _remote
+    _local=$(git -C "$CLARVIS_WORKSPACE" rev-parse HEAD 2>/dev/null)
+    _remote=$(git -C "$CLARVIS_WORKSPACE" rev-parse origin/main 2>/dev/null)
+    [ "$_local" = "$_remote" ] && return 0
+
+    if ! git -C "$CLARVIS_WORKSPACE" merge-base --is-ancestor "$_local" "$_remote" 2>/dev/null; then
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] SYNC: local main diverged from origin — skipping auto-sync" >&2
+        return 0
+    fi
+
+    local _stashed=0
+    if ! git -C "$CLARVIS_WORKSPACE" diff --quiet 2>/dev/null || \
+       ! git -C "$CLARVIS_WORKSPACE" diff --cached --quiet 2>/dev/null; then
+        git -C "$CLARVIS_WORKSPACE" stash push -q -m "cron-sync-$(date +%s)" 2>/dev/null || return 0
+        _stashed=1
+    fi
+
+    git -C "$CLARVIS_WORKSPACE" merge --ff-only origin/main --quiet 2>/dev/null || {
+        [ "$_stashed" -eq 1 ] && git -C "$CLARVIS_WORKSPACE" stash pop -q 2>/dev/null
+        return 0
+    }
+
+    [ "$_stashed" -eq 1 ] && git -C "$CLARVIS_WORKSPACE" stash pop -q 2>/dev/null
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] SYNC: workspace fast-forwarded to origin/main ($(git -C "$CLARVIS_WORKSPACE" rev-parse --short HEAD))" >&2
+}
+
 # Dashboard event publisher (no-op if script missing; never blocks caller)
 emit_dashboard_event() {
     python3 "$CLARVIS_WORKSPACE/scripts/metrics/dashboard_events.py" emit "$@" >/dev/null 2>&1 || true

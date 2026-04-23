@@ -13,6 +13,8 @@ LOGFILE="memory/cron/strategic_audit.log"
 acquire_local_lock "/tmp/clarvis_strategic_audit.lock" "$LOGFILE" 3600
 acquire_global_claude_lock "$LOGFILE"
 
+sync_workspace 2>> "$LOGFILE"
+
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === STRATEGIC AUDIT START ===" >> "$LOGFILE"
 
 # === STEP 0: AST SURGERY — auto-fix dead imports before audit ===

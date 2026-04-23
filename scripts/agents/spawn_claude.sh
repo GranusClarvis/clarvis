@@ -73,6 +73,8 @@ WORK_DIR="$CLARVIS_WORKSPACE"
 WORKTREE_PATH=""
 WORKTREE_BRANCH=""
 
+sync_workspace 2>> "$LOGFILE"
+
 # === Worktree Isolation ===
 if [ "$ISOLATED" = "true" ]; then
     AGENT_ID="spawn-$(date +%m%d%H%M)-$$"

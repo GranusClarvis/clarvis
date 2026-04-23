@@ -12,6 +12,8 @@ set_script_timeout 1800 "$LOGFILE"
 acquire_local_lock "/tmp/clarvis_morning.lock" "$LOGFILE" 3600
 acquire_global_claude_lock "$LOGFILE"
 
+sync_workspace 2>> "$LOGFILE"
+
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Morning routine started ===" >> "$LOGFILE"
 emit_dashboard_event task_started --task-name "Morning planning" --section cron_morning --executor claude-opus
 
