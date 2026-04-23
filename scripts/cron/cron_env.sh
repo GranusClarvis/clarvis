@@ -292,17 +292,19 @@ sync_workspace() {
         return 0
     fi
 
-    local _stashed=0
+    local _stashed=0 _stash_ref=""
     if ! git -C "$CLARVIS_WORKSPACE" diff --quiet 2>/dev/null || \
        ! git -C "$CLARVIS_WORKSPACE" diff --cached --quiet 2>/dev/null; then
         git -C "$CLARVIS_WORKSPACE" stash push -q -m "cron-sync-$(date +%s)" 2>/dev/null || return 0
+        _stash_ref=$(git -C "$CLARVIS_WORKSPACE" stash list -1 --format="%H" 2>/dev/null)
         _stashed=1
     fi
 
     git -C "$CLARVIS_WORKSPACE" merge --ff-only origin/main --quiet 2>/dev/null || {
         if [ "$_stashed" -eq 1 ]; then
             if ! git -C "$CLARVIS_WORKSPACE" stash pop -q 2>/dev/null; then
-                echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] SYNC: WARNING — stash pop failed after aborted ff-merge. Stashed changes preserved in 'git stash list'. Resolve manually." >&2
+                echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] SYNC: CRITICAL — stash pop failed after aborted ff-merge. Stash ref: ${_stash_ref:-unknown}. Run 'git -C $CLARVIS_WORKSPACE stash list' and 'git -C $CLARVIS_WORKSPACE stash pop' to recover." >&2
+                emit_dashboard_event error --section sync_workspace --meta "stash_pop_failed_after_merge_abort stash_ref=${_stash_ref:-unknown}"
                 return 1
             fi
         fi
@@ -311,7 +313,8 @@ sync_workspace() {
 
     if [ "$_stashed" -eq 1 ]; then
         if ! git -C "$CLARVIS_WORKSPACE" stash pop -q 2>/dev/null; then
-            echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] SYNC: WARNING — stash pop failed after ff-merge. Stashed changes preserved in 'git stash list'. Resolve manually." >&2
+            echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] SYNC: CRITICAL — stash pop failed after successful ff-merge. Stash ref: ${_stash_ref:-unknown}. Workspace is updated but local changes are stranded. Run 'git -C $CLARVIS_WORKSPACE stash show' and 'git -C $CLARVIS_WORKSPACE stash pop' to recover." >&2
+            emit_dashboard_event error --section sync_workspace --meta "stash_pop_failed_after_ff_merge stash_ref=${_stash_ref:-unknown}"
             return 1
         fi
     fi
