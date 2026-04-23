@@ -77,6 +77,17 @@ export CLARVIS_GRAPH_DUAL_WRITE="0"
 # Examples: "SWO", "SANCTUARY", ""
 export CLARVIS_PROJECT_LANE="${CLARVIS_PROJECT_LANE:-SWO}"
 
+# Self-repo sync policy. Controls whether sync_workspace() pulls origin/main
+# into Clarvis's own workspace before cron/spawn work.
+#   "skip"  — (default) do NOT auto-sync; Clarvis commits/pushes directly
+#             to main, so pulling could conflict with in-flight work.
+#   "auto"  — ff-only pull from origin/main (old behavior). Safe when
+#             Clarvis is only consuming, not authoring, commits on main.
+# Project-agent workspaces use their own aggressive sync
+# (_sync_and_checkout_work_branch / worktree_create) and are NOT affected
+# by this variable.
+export CLARVIS_SELF_SYNC="${CLARVIS_SELF_SYNC:-skip}"
+
 # Shared helper: get current weakest performance metric (fast, reads cached file)
 get_weakest_metric() {
     python3 "$CLARVIS_WORKSPACE/scripts/metrics/performance_benchmark.py" weakest 2>/dev/null || echo "unknown"
@@ -250,11 +261,19 @@ print(f\"reason={d.get('reason','?')} aborted={d.get('aborted',False)}\")
     return $MONITORED_EXIT
 }
 
-# Sync main workspace with origin before doing work.
-# Fast-forwards local main to origin/main. Handles dirty working tree via stash.
-# Call this from cron orchestrators that spawn Claude Code or modify tracked files.
-# Skips if: not on main, not a git repo, no network, or non-ff divergence.
+# Sync Clarvis's own workspace (main branch) with origin before doing work.
+# Controlled by CLARVIS_SELF_SYNC env var:
+#   "skip" (default) — no-op; Clarvis commits directly to main.
+#   "auto"           — ff-only pull from origin/main with stash safety.
+# Project-agent workspaces have their own sync in project_agent.py and
+# are NOT affected by this function.
+#
+# Also skips if: not on main, not a git repo, no network, or non-ff divergence.
 sync_workspace() {
+    if [ "${CLARVIS_SELF_SYNC:-skip}" = "skip" ]; then
+        return 0
+    fi
+
     [ -d "$CLARVIS_WORKSPACE/.git" ] || return 0
 
     local _branch
@@ -281,11 +300,21 @@ sync_workspace() {
     fi
 
     git -C "$CLARVIS_WORKSPACE" merge --ff-only origin/main --quiet 2>/dev/null || {
-        [ "$_stashed" -eq 1 ] && git -C "$CLARVIS_WORKSPACE" stash pop -q 2>/dev/null
+        if [ "$_stashed" -eq 1 ]; then
+            if ! git -C "$CLARVIS_WORKSPACE" stash pop -q 2>/dev/null; then
+                echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] SYNC: WARNING — stash pop failed after aborted ff-merge. Stashed changes preserved in 'git stash list'. Resolve manually." >&2
+                return 1
+            fi
+        fi
         return 0
     }
 
-    [ "$_stashed" -eq 1 ] && git -C "$CLARVIS_WORKSPACE" stash pop -q 2>/dev/null
+    if [ "$_stashed" -eq 1 ]; then
+        if ! git -C "$CLARVIS_WORKSPACE" stash pop -q 2>/dev/null; then
+            echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] SYNC: WARNING — stash pop failed after ff-merge. Stashed changes preserved in 'git stash list'. Resolve manually." >&2
+            return 1
+        fi
+    fi
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] SYNC: workspace fast-forwarded to origin/main ($(git -C "$CLARVIS_WORKSPACE" rev-parse --short HEAD))" >&2
 }
 

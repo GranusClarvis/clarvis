@@ -26,6 +26,8 @@ _Source: `docs/internal/audits/NEURO_FEATURE_DECISIONS_2026-04-17.md`. Phase 9 s
 
 ### Bugs
 
+- [ ] **[SYNC_WORKSPACE_STASH_SAFETY]** `scripts/cron/cron_env.sh:sync_workspace()` can `stash push` before a fast-forward, then silently fail on `stash pop` (conflicts/non-zero exit ignored). This risks leaving hidden stashed work or an incompletely restored workspace for later cron runs. Fix by handling `stash pop` failure explicitly: log loudly, preserve stash ref, emit dashboard event, and avoid reporting sync success when restoration failed. Add tests or a reproducible harness for dirty-tree + conflicting upstream change cases. (P0 added 2026-04-23 from evening code review)
+
 ## P1 — This Week
 
 ### Claude Design & Routines Integration (cross-project, added 2026-04-20)
@@ -57,13 +59,10 @@ _What's left behind: panel layout, tab navigation, CompanionPanel button grid, m
 
 #### Phase 3: Multiplayer Lobby (P1 — lobby-first social layer, 3 PRs)
 
-- [ ] **[SWO_V2_OTHER_PLAYERS_RENDER]** Render other players. Create `game/sprites/OtherPlayerSprite.ts` — spawned on `state.players.onAdd`, destroyed on `onRemove`. Position interpolated from Colyseus state. Name tag above sprite. Companion rendered alongside. Sprite pool for off-camera players. Depends on `[SWO_V2_COLYSEUS_SERVER]`. (PROJECT:SWO)
-- [ ] **[SWO_V2_CHAT_BUBBLES]** In-world chat bubbles. Create `components/sanctuary/overlays/ChatInput.tsx` — input bar at bottom. Message → Colyseus room broadcast. `ChatBubble.tsx` — HTML div positioned via `Camera.worldToScreen()`, doctrine-styled (rounded, #0a0a1a bg, Press Start 2P, max 100 chars), fades after 8s. Depends on `[SWO_V2_COLYSEUS_SERVER]`. (PROJECT:SWO)
 - **GATE:** 2+ players visible in same zone. Chat messages as bubbles above players. Join/leave works. Smooth interpolation.
 
 #### Phase 4: Diegetic Content & Overlay Migrations (P1 — quests in-world, panels→overlays, 4 PRs)
 
-- [ ] **[SWO_V2_QUEST_NPCS]** Quest givers as NPC sprites. Create `game/sprites/NPCSprite.ts` — static/2-frame idle at map locations. "!" indicator for available quests. Click NPC → `npc-clicked` via EventBus → `QuestDialog.tsx` overlay (description, requirements, rewards, accept/decline). Quest Board at Town Square aggregates all quests. Uses existing `/api/sanctuary/quests`. Remove old QuestsPanel. Depends on `[SWO_V2_LOCATION_ZONES_HUD]`. Needs NPC content from `[SWO_V2_NPC_QUEST_CONTENT]`. (PROJECT:SWO)
 - [ ] **[SWO_V2_QUEST_TRACKER_HUD]** Active quest tracker overlay (top-right). 1-3 quests with progress bars. Click to expand. Uses existing quest API. Auto-updates on interaction events. Depends on `[SWO_V2_QUEST_NPCS]`. (PROJECT:SWO)
 - [ ] **[SWO_V2_JOURNAL_OVERLAY]** Journal as overlay. Hotkey (J) or HUD icon. Same data from existing `/api/sanctuary/companion/journal`. Scrollable, type filters, pagination. Pixel-art "book" styling per doctrine. Remove old JournalPanel. (PROJECT:SWO)
 - [ ] **[SWO_V2_TRAITS_LIBRARY]** Traits at Cosmic Library zone. Auto-opens on zone entry + hotkey (T). Personality traits, progress bars, constellation info. Uses existing `/api/sanctuary/traits`. Remove old TraitsPanel. (PROJECT:SWO)
