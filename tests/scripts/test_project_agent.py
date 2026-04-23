@@ -24,10 +24,15 @@ from project_agent import (
     _parse_agent_output,
     _is_task_failure,
     _build_retry_context,
-    _close_pr,
+    _comment_pr,
     _flag_pr,
+    _extract_gh_repo,
+    apply_mirror_gate,
     _sync_mirror,
     _get_changed_files_from_git,
+    _fetch_and_resolve_base,
+    _sync_and_checkout_work_branch,
+    worktree_create,
     MIRROR_GATE_MODE,
     _MIRROR_GATE_DEFAULT,
     cmd_spawn_with_retry,
@@ -1764,29 +1769,37 @@ class TestMirrorValidation:
             pa.MIRROR_CHECKS.update(original_checks)
 
 
-class TestClosePr:
+class TestCommentPr:
+    """Tests for _comment_pr (the correctly-named soft-gate function)."""
+
     @patch("project_agent.subprocess.run")
-    def test_close_pr_delegates_to_flag_pr_soft(self, mock_run):
-        """_close_pr now delegates to _flag_pr with close=False (soft gate)."""
+    def test_comment_pr_posts_comment_only(self, mock_run):
+        """_comment_pr comments but never closes."""
         mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
-        result = _close_pr("https://github.com/org/repo/pull/42", "org/repo", "Mirror FAIL")
+        result = _comment_pr("https://github.com/org/repo/pull/42", "org/repo", "Issues found")
         assert result is True
-        # Only comment, no close (soft gate)
         assert mock_run.call_count == 1
         comment_call = mock_run.call_args_list[0]
         assert "comment" in comment_call[0][0]
 
-    def test_close_pr_bad_url(self):
-        """Should return False for URLs without a PR number."""
-        result = _close_pr("https://github.com/org/repo", "org/repo", "Mirror FAIL")
+    def test_comment_pr_bad_url(self):
+        result = _comment_pr("https://github.com/org/repo", "org/repo", "FAIL")
         assert result is False
 
     @patch("project_agent.subprocess.run")
-    def test_close_pr_exception(self, mock_run):
-        """Should handle exceptions gracefully."""
+    def test_comment_pr_exception(self, mock_run):
         mock_run.side_effect = OSError("network error")
-        result = _close_pr("https://github.com/org/repo/pull/1", "org/repo", "fail")
+        result = _comment_pr("https://github.com/org/repo/pull/1", "org/repo", "fail")
         assert result is False
+
+
+class TestClosePrRemoved:
+    """Verify that the misleading _close_pr() alias has been removed."""
+
+    def test_close_pr_no_longer_exported(self):
+        import project_agent as pa
+        assert not hasattr(pa, "_close_pr"), \
+            "_close_pr was removed — use _comment_pr() or _flag_pr(..., close=True)"
 
 
 class TestFlagPr:
@@ -1917,6 +1930,464 @@ class TestMirrorHardGatePrompt:
             ]
             prompt = build_spawn_prompt("test-mirror", "some task", config, agent_dir)
             assert "Mirror Validation" in prompt or "mirror" in prompt.lower()
+        finally:
+            pa.MIRROR_DIRS.clear()
+            pa.MIRROR_DIRS.update(original_mirrors)
+            pa.MIRROR_CHECKS.clear()
+            pa.MIRROR_CHECKS.update(original_checks)
+
+
+# ── _extract_gh_repo tests ──
+
+class TestExtractGhRepo:
+    def test_https_url(self):
+        assert _extract_gh_repo("https://github.com/org/repo.git") == "org/repo"
+
+    def test_https_url_no_git(self):
+        assert _extract_gh_repo("https://github.com/org/repo") == "org/repo"
+
+    def test_ssh_url(self):
+        assert _extract_gh_repo("git@github.com:org/repo.git") == "org/repo"
+
+    def test_empty_url(self):
+        assert _extract_gh_repo("") == ""
+
+    def test_malformed_url(self):
+        assert _extract_gh_repo("not-a-url") == ""
+
+
+# ── apply_mirror_gate tests ──
+
+class TestApplyMirrorGate:
+    """Tests for the extracted mirror gate logic — soft vs hard vs off."""
+
+    def test_off_gate_skips_entirely(self, tmp_path):
+        """Gate mode 'off' should skip validation and return result unchanged."""
+        import project_agent as pa
+        original_modes = dict(pa.MIRROR_GATE_MODE)
+        original_mirrors = dict(MIRROR_DIRS)
+        original_checks = dict(MIRROR_CHECKS)
+        mirror_dir = tmp_path / "mirror"
+        mirror_dir.mkdir()
+        try:
+            pa.MIRROR_DIRS["off-agent"] = mirror_dir
+            pa.MIRROR_CHECKS["off-agent"] = [
+                {"name": "echo ok", "cmd": ["echo", "ok"], "timeout": 10},
+            ]
+            pa.MIRROR_GATE_MODE["off-agent"] = "off"
+            result = {"status": "success", "pr_url": "https://github.com/o/r/pull/1"}
+            out = apply_mirror_gate("off-agent", result, {"repo_url": ""}, tmp_path)
+            assert "mirror_validation" not in out
+            assert out["status"] == "success"
+        finally:
+            pa.MIRROR_GATE_MODE.clear()
+            pa.MIRROR_GATE_MODE.update(original_modes)
+            pa.MIRROR_DIRS.clear()
+            pa.MIRROR_DIRS.update(original_mirrors)
+            pa.MIRROR_CHECKS.clear()
+            pa.MIRROR_CHECKS.update(original_checks)
+
+    def test_no_mirror_skips(self):
+        """Agent with no mirror configured should skip."""
+        result = {"status": "success"}
+        out = apply_mirror_gate("no-such-agent", result, {}, Path("/tmp"))
+        assert "mirror_validation" not in out
+
+    def test_soft_gate_flags_but_keeps_pr_open(self, tmp_path):
+        """Soft gate: validation failure leaves PR open, adds flag."""
+        import project_agent as pa
+        original_modes = dict(pa.MIRROR_GATE_MODE)
+        original_mirrors = dict(MIRROR_DIRS)
+        original_checks = dict(MIRROR_CHECKS)
+        mirror_dir = tmp_path / "mirror"
+        mirror_dir.mkdir()
+        try:
+            pa.MIRROR_DIRS["soft-agent"] = mirror_dir
+            pa.MIRROR_CHECKS["soft-agent"] = [
+                {"name": "false", "cmd": ["false"], "timeout": 10},
+            ]
+            pa.MIRROR_GATE_MODE["soft-agent"] = "soft"
+
+            result = {
+                "status": "success",
+                "pr_url": "https://github.com/o/r/pull/1",
+                "files_changed": [],
+            }
+            config = {"repo_url": "https://github.com/o/r.git"}
+
+            with patch("project_agent._flag_pr") as mock_flag:
+                mock_flag.return_value = True
+                out = apply_mirror_gate("soft-agent", result, config,
+                                        tmp_path, "t001")
+
+            assert out["_mirror_flagged"] is True
+            assert out["pr_url"] == "https://github.com/o/r/pull/1"
+            assert out["status"] == "success"
+            mock_flag.assert_called_once_with(
+                "https://github.com/o/r/pull/1", "o/r",
+                out["mirror_validation"]["summary"], close=False,
+            )
+        finally:
+            pa.MIRROR_GATE_MODE.clear()
+            pa.MIRROR_GATE_MODE.update(original_modes)
+            pa.MIRROR_DIRS.clear()
+            pa.MIRROR_DIRS.update(original_mirrors)
+            pa.MIRROR_CHECKS.clear()
+            pa.MIRROR_CHECKS.update(original_checks)
+
+    def test_hard_gate_closes_pr_and_fails(self, tmp_path):
+        """Hard gate: validation failure closes PR and marks result failed."""
+        import project_agent as pa
+        original_modes = dict(pa.MIRROR_GATE_MODE)
+        original_mirrors = dict(MIRROR_DIRS)
+        original_checks = dict(MIRROR_CHECKS)
+        mirror_dir = tmp_path / "mirror"
+        mirror_dir.mkdir()
+        try:
+            pa.MIRROR_DIRS["hard-agent"] = mirror_dir
+            pa.MIRROR_CHECKS["hard-agent"] = [
+                {"name": "false", "cmd": ["false"], "timeout": 10},
+            ]
+            pa.MIRROR_GATE_MODE["hard-agent"] = "hard"
+
+            result = {
+                "status": "success",
+                "pr_url": "https://github.com/o/r/pull/5",
+                "files_changed": [],
+            }
+            config = {"repo_url": "https://github.com/o/r.git"}
+
+            with patch("project_agent._flag_pr") as mock_flag:
+                mock_flag.return_value = True
+                out = apply_mirror_gate("hard-agent", result, config,
+                                        tmp_path, "t002")
+
+            assert out["status"] == "failed"
+            assert out["pr_url"] is None
+            assert out["_mirror_closed_pr"] == "https://github.com/o/r/pull/5"
+            assert "Mirror validation FAILED" in out["error"]
+            mock_flag.assert_called_once_with(
+                "https://github.com/o/r/pull/5", "o/r",
+                out["mirror_validation"]["summary"], close=True,
+            )
+        finally:
+            pa.MIRROR_GATE_MODE.clear()
+            pa.MIRROR_GATE_MODE.update(original_modes)
+            pa.MIRROR_DIRS.clear()
+            pa.MIRROR_DIRS.update(original_mirrors)
+            pa.MIRROR_CHECKS.clear()
+            pa.MIRROR_CHECKS.update(original_checks)
+
+    def test_passing_validation_no_flag(self, tmp_path):
+        """Passing validation should not flag or close anything."""
+        import project_agent as pa
+        original_mirrors = dict(MIRROR_DIRS)
+        original_checks = dict(MIRROR_CHECKS)
+        mirror_dir = tmp_path / "mirror"
+        mirror_dir.mkdir()
+        try:
+            pa.MIRROR_DIRS["pass-agent"] = mirror_dir
+            pa.MIRROR_CHECKS["pass-agent"] = [
+                {"name": "true", "cmd": ["true"], "timeout": 10},
+            ]
+            result = {
+                "status": "success",
+                "pr_url": "https://github.com/o/r/pull/3",
+                "files_changed": [],
+            }
+            out = apply_mirror_gate("pass-agent", result,
+                                    {"repo_url": "https://github.com/o/r.git"},
+                                    tmp_path)
+            assert out["mirror_validation"]["passed"] is True
+            assert "_mirror_flagged" not in out
+            assert "_mirror_closed_pr" not in out
+            assert out["status"] == "success"
+        finally:
+            pa.MIRROR_DIRS.clear()
+            pa.MIRROR_DIRS.update(original_mirrors)
+            pa.MIRROR_CHECKS.clear()
+            pa.MIRROR_CHECKS.update(original_checks)
+
+    def test_no_pr_url_soft_gate_no_crash(self, tmp_path):
+        """Soft gate with no PR URL should flag result but not crash."""
+        import project_agent as pa
+        original_mirrors = dict(MIRROR_DIRS)
+        original_checks = dict(MIRROR_CHECKS)
+        mirror_dir = tmp_path / "mirror"
+        mirror_dir.mkdir()
+        try:
+            pa.MIRROR_DIRS["nopr-agent"] = mirror_dir
+            pa.MIRROR_CHECKS["nopr-agent"] = [
+                {"name": "false", "cmd": ["false"], "timeout": 10},
+            ]
+            result = {"status": "success", "files_changed": []}
+            with patch("project_agent._flag_pr") as mock_flag:
+                out = apply_mirror_gate("nopr-agent", result,
+                                        {"repo_url": "https://github.com/o/r.git"},
+                                        tmp_path)
+            assert out["_mirror_flagged"] is True
+            mock_flag.assert_not_called()
+        finally:
+            pa.MIRROR_DIRS.clear()
+            pa.MIRROR_DIRS.update(original_mirrors)
+            pa.MIRROR_CHECKS.clear()
+            pa.MIRROR_CHECKS.update(original_checks)
+
+
+# ── Repo-Sync Semantics Tests ──
+
+class TestFetchAndResolveBase:
+    """Tests for the shared _fetch_and_resolve_base helper."""
+
+    def _init_repo(self, tmp_path, branch="main"):
+        """Create a git repo with an origin remote."""
+        import subprocess
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        bare = tmp_path / "bare.git"
+        subprocess.run(["git", "init", "--bare", str(bare)], capture_output=True, check=True)
+        subprocess.run(["git", "clone", str(bare), str(repo)], capture_output=True, check=True)
+        subprocess.run(["git", "config", "user.email", "t@t"], cwd=str(repo), capture_output=True)
+        subprocess.run(["git", "config", "user.name", "T"], cwd=str(repo), capture_output=True)
+        (repo / "init.txt").write_text("init")
+        subprocess.run(["git", "add", "."], cwd=str(repo), capture_output=True)
+        subprocess.run(["git", "commit", "-m", "init"], cwd=str(repo), capture_output=True)
+        if branch != "main":
+            subprocess.run(["git", "checkout", "-b", branch], cwd=str(repo), capture_output=True)
+        subprocess.run(["git", "push", "-u", "origin", branch], cwd=str(repo), capture_output=True)
+        return repo, bare
+
+    def test_resolves_origin_when_no_upstream(self, tmp_path):
+        """Without upstream remote, resolves to origin/<branch>."""
+        repo, _ = self._init_repo(tmp_path)
+        base_ref = _fetch_and_resolve_base(repo, "main")
+        assert base_ref == "origin/main"
+
+    def test_resolves_upstream_when_present(self, tmp_path):
+        """With upstream remote, resolves to upstream/<branch>."""
+        import subprocess
+        repo, bare = self._init_repo(tmp_path, branch="dev")
+        upstream_bare = tmp_path / "upstream.git"
+        subprocess.run(["git", "init", "--bare", str(upstream_bare)], capture_output=True, check=True)
+        subprocess.run(["git", "push", str(upstream_bare), "dev"], cwd=str(repo), capture_output=True, check=True)
+        subprocess.run(["git", "remote", "add", "upstream", str(upstream_bare)], cwd=str(repo), capture_output=True)
+        subprocess.run(["git", "fetch", "upstream"], cwd=str(repo), capture_output=True)
+        base_ref = _fetch_and_resolve_base(repo, "dev")
+        assert base_ref == "upstream/dev"
+
+
+class TestSyncAndCheckoutWorkBranch:
+    """Tests for _sync_and_checkout_work_branch."""
+
+    def _init_repo(self, tmp_path):
+        import subprocess
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        bare = tmp_path / "bare.git"
+        subprocess.run(["git", "init", "--bare", str(bare)], capture_output=True, check=True)
+        subprocess.run(["git", "clone", str(bare), str(repo)], capture_output=True, check=True)
+        subprocess.run(["git", "config", "user.email", "t@t"], cwd=str(repo), capture_output=True)
+        subprocess.run(["git", "config", "user.name", "T"], cwd=str(repo), capture_output=True)
+        (repo / "init.txt").write_text("init")
+        subprocess.run(["git", "add", "."], cwd=str(repo), capture_output=True)
+        subprocess.run(["git", "commit", "-m", "init"], cwd=str(repo), capture_output=True)
+        subprocess.run(["git", "push", "-u", "origin", "main"], cwd=str(repo), capture_output=True)
+        return repo, bare
+
+    def test_creates_correct_branch_name(self, tmp_path):
+        repo, _ = self._init_repo(tmp_path)
+        branch = _sync_and_checkout_work_branch(repo, "main", "test-agent", "t001")
+        assert branch == "clarvis/test-agent/t001"
+
+    def test_ends_on_work_branch(self, tmp_path):
+        import subprocess
+        repo, _ = self._init_repo(tmp_path)
+        _sync_and_checkout_work_branch(repo, "main", "test-agent", "t002")
+        result = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                                cwd=str(repo), capture_output=True, text=True)
+        assert result.stdout.strip() == "clarvis/test-agent/t002"
+
+    def test_clean_working_tree_after_sync(self, tmp_path):
+        import subprocess
+        repo, _ = self._init_repo(tmp_path)
+        (repo / "dirty.txt").write_text("should be cleaned")
+        _sync_and_checkout_work_branch(repo, "main", "test-agent", "t003")
+        result = subprocess.run(["git", "status", "--porcelain"],
+                                cwd=str(repo), capture_output=True, text=True)
+        assert result.stdout.strip() == ""
+
+    def test_starts_from_latest_origin(self, tmp_path):
+        """Work branch should be based on the latest origin/main, not stale local."""
+        import subprocess
+        repo, bare = self._init_repo(tmp_path)
+        clone2 = tmp_path / "clone2"
+        subprocess.run(["git", "clone", str(bare), str(clone2)], capture_output=True, check=True)
+        subprocess.run(["git", "config", "user.email", "t@t"], cwd=str(clone2), capture_output=True)
+        subprocess.run(["git", "config", "user.name", "T"], cwd=str(clone2), capture_output=True)
+        (clone2 / "new.txt").write_text("upstream change")
+        subprocess.run(["git", "add", "."], cwd=str(clone2), capture_output=True)
+        subprocess.run(["git", "commit", "-m", "upstream change"], cwd=str(clone2), capture_output=True)
+        subprocess.run(["git", "push"], cwd=str(clone2), capture_output=True)
+        _sync_and_checkout_work_branch(repo, "main", "test-agent", "t004")
+        assert (repo / "new.txt").exists(), "Should have upstream changes after sync"
+
+
+class TestWorktreeCreateSync:
+    """Verify worktree_create also syncs to latest before creating."""
+
+    def _init_repo(self, tmp_path):
+        import subprocess
+        agent_dir = tmp_path / "agent"
+        agent_dir.mkdir()
+        repo = agent_dir / "workspace"
+        bare = tmp_path / "bare.git"
+        subprocess.run(["git", "init", "--bare", str(bare)], capture_output=True, check=True)
+        subprocess.run(["git", "clone", str(bare), str(repo)], capture_output=True, check=True)
+        subprocess.run(["git", "config", "user.email", "t@t"], cwd=str(repo), capture_output=True)
+        subprocess.run(["git", "config", "user.name", "T"], cwd=str(repo), capture_output=True)
+        (repo / "init.txt").write_text("init")
+        subprocess.run(["git", "add", "."], cwd=str(repo), capture_output=True)
+        subprocess.run(["git", "commit", "-m", "init"], cwd=str(repo), capture_output=True)
+        subprocess.run(["git", "push", "-u", "origin", "main"], cwd=str(repo), capture_output=True)
+        return repo, bare
+
+    def test_worktree_based_on_latest(self, tmp_path):
+        """Worktree should contain latest upstream content."""
+        import subprocess
+        repo, bare = self._init_repo(tmp_path)
+        clone2 = tmp_path / "pusher"
+        subprocess.run(["git", "clone", str(bare), str(clone2)], capture_output=True, check=True)
+        subprocess.run(["git", "config", "user.email", "t@t"], cwd=str(clone2), capture_output=True)
+        subprocess.run(["git", "config", "user.name", "T"], cwd=str(clone2), capture_output=True)
+        (clone2 / "upstream.txt").write_text("from upstream")
+        subprocess.run(["git", "add", "."], cwd=str(clone2), capture_output=True)
+        subprocess.run(["git", "commit", "-m", "add upstream"], cwd=str(clone2), capture_output=True)
+        subprocess.run(["git", "push"], cwd=str(clone2), capture_output=True)
+        wt_path, branch = worktree_create(repo, "test-agent", "wt001", "main")
+        assert (wt_path / "upstream.txt").exists(), "Worktree should have latest upstream content"
+        assert branch == "clarvis/test-agent/wt001"
+
+
+class TestSpawnCallsSync:
+    """Verify cmd_spawn always calls _sync_and_checkout_work_branch."""
+
+    @patch("project_agent.subprocess.run")
+    @patch("project_agent._snapshot_cost")
+    @patch("project_agent._sync_and_checkout_work_branch")
+    @patch("project_agent._acquire_claude_slot", return_value=(Path("/tmp/test_slot"), None))
+    @patch("project_agent._release_claude_slot")
+    @patch("project_agent._acquire_agent_claude_lock", return_value=None)
+    @patch("project_agent._release_agent_claude_lock")
+    @patch("project_agent._load_config")
+    @patch("project_agent._save_config")
+    @patch("project_agent._agent_dir")
+    @patch("project_agent._emit")
+    @patch("project_agent.build_ci_context")
+    def test_sync_called_before_spawn(self, mock_ci, mock_emit, mock_dir,
+                                       mock_save, mock_load, mock_release_claude,
+                                       mock_acquire_claude, mock_release_slot,
+                                       mock_acquire_slot, mock_sync, mock_cost,
+                                       mock_subproc, tmp_path):
+        """cmd_spawn must call _sync_and_checkout_work_branch before Claude."""
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        (tmp_path / "data" / "brain").mkdir(parents=True)
+        (tmp_path / "logs").mkdir()
+        (tmp_path / "memory" / "summaries").mkdir(parents=True)
+        mock_dir.return_value = tmp_path
+        mock_load.return_value = {
+            "name": "test", "repo_url": "https://github.com/o/r.git",
+            "branch": "dev", "trust_score": 0.5,
+            "budget": {"max_timeout": 1200},
+        }
+        mock_sync.return_value = "clarvis/test/t001"
+        mock_cost.return_value = None
+        mock_subproc.return_value = MagicMock(
+            returncode=0,
+            stdout='```json\n{"status": "success", "summary": "done"}\n```',
+            stderr="",
+        )
+
+        from project_agent import cmd_spawn
+        cmd_spawn("test", "do something", timeout=600)
+
+        mock_sync.assert_called_once()
+        args = mock_sync.call_args[0]
+        assert args[0] == workspace
+        assert args[1] == "dev"
+        assert args[2] == "test"
+
+
+# ── Hard-Gate Edge Cases ──
+
+class TestHardGateEdgeCases:
+    """Additional edge-case tests for hard vs soft mirror gate."""
+
+    def test_hard_gate_no_pr_url_still_fails_status(self, tmp_path):
+        """Hard gate with no PR URL: should still mark status=failed."""
+        import project_agent as pa
+        original_modes = dict(pa.MIRROR_GATE_MODE)
+        original_mirrors = dict(MIRROR_DIRS)
+        original_checks = dict(MIRROR_CHECKS)
+        mirror_dir = tmp_path / "mirror"
+        mirror_dir.mkdir()
+        try:
+            pa.MIRROR_DIRS["hardnopr-agent"] = mirror_dir
+            pa.MIRROR_CHECKS["hardnopr-agent"] = [
+                {"name": "false", "cmd": ["false"], "timeout": 10},
+            ]
+            pa.MIRROR_GATE_MODE["hardnopr-agent"] = "hard"
+
+            result = {"status": "success", "files_changed": []}
+            config = {"repo_url": "https://github.com/o/r.git"}
+
+            out = apply_mirror_gate("hardnopr-agent", result, config,
+                                    tmp_path, "t_edge")
+
+            assert out["status"] == "failed"
+            assert "Mirror validation FAILED" in out["error"]
+            assert out.get("pr_url") is None
+            assert "_mirror_closed_pr" not in out
+        finally:
+            pa.MIRROR_GATE_MODE.clear()
+            pa.MIRROR_GATE_MODE.update(original_modes)
+            pa.MIRROR_DIRS.clear()
+            pa.MIRROR_DIRS.update(original_mirrors)
+            pa.MIRROR_CHECKS.clear()
+            pa.MIRROR_CHECKS.update(original_checks)
+
+    def test_soft_gate_unconfigured_agent_defaults_soft(self, tmp_path):
+        """Agent without explicit gate mode should default to 'soft'."""
+        import project_agent as pa
+        original_mirrors = dict(MIRROR_DIRS)
+        original_checks = dict(MIRROR_CHECKS)
+        mirror_dir = tmp_path / "mirror"
+        mirror_dir.mkdir()
+        try:
+            pa.MIRROR_DIRS["default-gate-agent"] = mirror_dir
+            pa.MIRROR_CHECKS["default-gate-agent"] = [
+                {"name": "false", "cmd": ["false"], "timeout": 10},
+            ]
+
+            result = {
+                "status": "success",
+                "pr_url": "https://github.com/o/r/pull/99",
+                "files_changed": [],
+            }
+            config = {"repo_url": "https://github.com/o/r.git"}
+
+            with patch("project_agent._flag_pr") as mock_flag:
+                mock_flag.return_value = True
+                out = apply_mirror_gate("default-gate-agent", result, config,
+                                        tmp_path, "t_default")
+
+            assert out["_mirror_flagged"] is True
+            assert out["status"] == "success"
+            assert out["pr_url"] == "https://github.com/o/r/pull/99"
+            mock_flag.assert_called_once_with(
+                "https://github.com/o/r/pull/99", "o/r",
+                out["mirror_validation"]["summary"], close=False,
+            )
         finally:
             pa.MIRROR_DIRS.clear()
             pa.MIRROR_DIRS.update(original_mirrors)

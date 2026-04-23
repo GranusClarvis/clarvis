@@ -682,6 +682,32 @@ def safe_stage_files(workspace: Path) -> tuple[list[str], list[str]]:
     return staged, blocked
 
 
+def _fetch_and_resolve_base(workspace: Path, base_branch: str) -> str:
+    """Fetch all remotes and resolve the true base ref for a project workspace.
+
+    Project-agent workspaces ALWAYS sync aggressively before work.  This is the
+    opposite of Clarvis's own repo policy (CLARVIS_SELF_SYNC=skip) because
+    project agents open PRs against upstream, not commit directly to main.
+
+    For fork-based workflows (upstream remote exists), also fast-forwards
+    origin/<base> to upstream/<base> so the fork stays current.
+
+    Returns the resolved base ref (e.g. "upstream/dev" or "origin/main").
+    """
+    _run_git(workspace, ["fetch", "--all", "--prune"], timeout=120)
+
+    r_upstream = _run_git(workspace, ["rev-parse", "--verify", f"upstream/{base_branch}"])
+    has_upstream = r_upstream.returncode == 0
+
+    if has_upstream:
+        base_ref = f"upstream/{base_branch}"
+        _run_git(workspace, ["push", "origin", f"upstream/{base_branch}:{base_branch}"], timeout=120)
+    else:
+        base_ref = f"origin/{base_branch}"
+
+    return base_ref
+
+
 def _sync_and_checkout_work_branch(workspace: Path, base_branch: str, agent: str, task_id: str) -> str:
     """Hard-sync to upstream (or origin) base branch and checkout a fresh work branch.
 
@@ -692,19 +718,7 @@ def _sync_and_checkout_work_branch(workspace: Path, base_branch: str, agent: str
     """
     branch = f"clarvis/{agent}/{task_id}"
 
-    # Fetch all remotes (upstream + origin) so we have latest refs
-    _run_git(workspace, ["fetch", "--all", "--prune"], timeout=120)
-
-    # Determine the true base ref: prefer upstream if it exists (fork workflow)
-    r_upstream = _run_git(workspace, ["rev-parse", "--verify", f"upstream/{base_branch}"])
-    has_upstream = r_upstream.returncode == 0
-
-    if has_upstream:
-        base_ref = f"upstream/{base_branch}"
-        # Fast-forward origin/<base> to match upstream/<base> so the fork stays current
-        _run_git(workspace, ["push", "origin", f"upstream/{base_branch}:{base_branch}"], timeout=120)
-    else:
-        base_ref = f"origin/{base_branch}"
+    base_ref = _fetch_and_resolve_base(workspace, base_branch)
 
     # Ensure local base branch matches the chosen ref
     r = _run_git(workspace, ["checkout", base_branch])
@@ -819,18 +833,12 @@ def worktree_create(workspace: Path, agent: str, task_id: str,
     wt_path = worktrees_dir / task_id
 
     if wt_path.exists():
-        # Stale worktree from a crashed run — remove it
         _log(f"Removing stale worktree at {wt_path}")
         _run_git(workspace, ["worktree", "remove", "--force", str(wt_path)])
         if wt_path.exists():
             shutil.rmtree(wt_path, ignore_errors=True)
 
-    # Fetch all remotes (upstream + origin) for fork workflows
-    _run_git(workspace, ["fetch", "--all", "--prune"], timeout=120)
-
-    # Prefer upstream/<base> if available (fork workflow)
-    r_upstream = _run_git(workspace, ["rev-parse", "--verify", f"upstream/{base_branch}"])
-    base_ref = f"upstream/{base_branch}" if r_upstream.returncode == 0 else f"origin/{base_branch}"
+    base_ref = _fetch_and_resolve_base(workspace, base_branch)
 
     # Create worktree on a new branch from the true upstream head
     r = _run_git(workspace, [
@@ -1365,9 +1373,69 @@ def _flag_pr(pr_url: str, repo: str, reason: str, close: bool = False) -> bool:
         return False
 
 
-def _close_pr(pr_url: str, repo: str, reason: str) -> bool:
-    """Deprecated: use _flag_pr. Kept for backward compatibility."""
+def _comment_pr(pr_url: str, repo: str, reason: str) -> bool:
+    """Comment on a PR with validation findings without closing it (soft gate).
+
+    Equivalent to ``_flag_pr(pr_url, repo, reason, close=False)``.
+    """
     return _flag_pr(pr_url, repo, reason, close=False)
+
+
+def _extract_gh_repo(repo_url: str) -> str:
+    """Extract 'owner/repo' slug from a git remote URL."""
+    import re as _re
+    m = _re.search(r'[:/]([^/]+/[^/.]+?)(?:\.git)?$', repo_url)
+    return m.group(1) if m else ""
+
+
+def apply_mirror_gate(name: str, agent_result: dict, config: dict,
+                      workspace: Path, task_id: str = "") -> dict:
+    """Apply mirror validation gate to an agent result.
+
+    Runs mirror validation and, based on gate mode, either:
+      - "off": skips entirely
+      - "soft" (default): comments on PR if validation fails
+      - "hard": closes PR and marks result as failed
+
+    Returns the (possibly mutated) agent_result dict.
+    """
+    gate_mode = MIRROR_GATE_MODE.get(name, _MIRROR_GATE_DEFAULT)
+    if name not in MIRROR_DIRS or gate_mode == "off":
+        return agent_result
+
+    try:
+        changed = agent_result.get("files_changed", [])
+        mirror_result = run_mirror_validation(name, changed, workspace)
+        agent_result["mirror_validation"] = mirror_result
+
+        if mirror_result.get("passed") is False:
+            pr_url = agent_result.get("pr_url")
+            gh_repo = _extract_gh_repo(config.get("repo_url", ""))
+            summary = mirror_result.get("summary", "")
+
+            if gate_mode == "hard":
+                _log(f"MIRROR HARD GATE: validation FAILED for task {task_id} — closing PR")
+                if pr_url and gh_repo:
+                    _flag_pr(pr_url, gh_repo, summary, close=True)
+                    agent_result["pr_url"] = None
+                    agent_result["_mirror_closed_pr"] = pr_url
+                agent_result["status"] = "failed"
+                agent_result["error"] = (agent_result.get("error") or "") + " Mirror validation FAILED."
+            else:
+                _log(f"MIRROR SOFT GATE: validation found issues for task {task_id} — commenting (PR stays open)")
+                if pr_url and gh_repo:
+                    _flag_pr(pr_url, gh_repo, summary, close=False)
+                agent_result["_mirror_flagged"] = True
+        elif mirror_result.get("passed") is True:
+            _log(f"Mirror validation PASSED for task {task_id}")
+    except Exception as e:
+        _log(f"Mirror validation error (non-fatal): {e}")
+        agent_result["mirror_validation"] = {
+            "passed": None, "checks": [],
+            "summary": f"Mirror validation error: {e}",
+        }
+
+    return agent_result
 
 
 # =========================================================================
@@ -2647,46 +2715,7 @@ def cmd_spawn(name: str, task: str, timeout: int = 1200,
         _log(f"PR factory writeback failed (non-fatal): {e}")
 
     # ── Post-spawn mirror validation ─────────────────────────────────
-    # Gate mode: "soft" = comment only (default), "hard" = close PR, "off" = skip
-    _gate_mode = MIRROR_GATE_MODE.get(name, _MIRROR_GATE_DEFAULT)
-    if name in MIRROR_DIRS and _gate_mode != "off":
-        try:
-            changed = agent_result.get("files_changed", [])
-            mirror_result = run_mirror_validation(name, changed, workspace)
-            agent_result["mirror_validation"] = mirror_result
-            if mirror_result.get("passed") is False:
-                pr_url = agent_result.get("pr_url")
-                if _gate_mode == "hard":
-                    _log(f"MIRROR HARD GATE: validation FAILED for task {task_id} — closing PR")
-                    if pr_url:
-                        import re as _re
-                        repo_url = config.get("repo_url", "")
-                        m = _re.search(r'[:/]([^/]+/[^/.]+?)(?:\.git)?$', repo_url)
-                        gh_repo = m.group(1) if m else ""
-                        if gh_repo:
-                            _flag_pr(pr_url, gh_repo, mirror_result.get("summary", ""), close=True)
-                            agent_result["pr_url"] = None
-                            agent_result["_mirror_closed_pr"] = pr_url
-                    agent_result["status"] = "failed"
-                    agent_result["error"] = (agent_result.get("error") or "") + " Mirror validation FAILED."
-                else:
-                    _log(f"MIRROR SOFT GATE: validation found issues for task {task_id} — commenting (PR stays open)")
-                    if pr_url:
-                        import re as _re
-                        repo_url = config.get("repo_url", "")
-                        m = _re.search(r'[:/]([^/]+/[^/.]+?)(?:\.git)?$', repo_url)
-                        gh_repo = m.group(1) if m else ""
-                        if gh_repo:
-                            _flag_pr(pr_url, gh_repo, mirror_result.get("summary", ""), close=False)
-                    agent_result["_mirror_flagged"] = True
-            elif mirror_result.get("passed") is True:
-                _log(f"Mirror validation PASSED for task {task_id}")
-        except Exception as e:
-            _log(f"Mirror validation error (non-fatal): {e}")
-            agent_result["mirror_validation"] = {
-                "passed": None, "checks": [],
-                "summary": f"Mirror validation error: {e}",
-            }
+    apply_mirror_gate(name, agent_result, config, workspace, task_id)
 
     # Update config
     config["status"] = "idle"
