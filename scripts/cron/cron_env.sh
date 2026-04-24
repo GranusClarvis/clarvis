@@ -156,7 +156,7 @@ run_claude_monitored() {
     local _json_file="${_output_file}.json"
     timeout "$_timeout" env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \
         ${CLAUDE_BIN:-$(command -v claude || echo "$HOME/.local/bin/claude")} -p \
-        --dangerously-skip-permissions --model claude-opus-4-6 \
+        --dangerously-skip-permissions --model claude-opus-4-7 \
         --output-format json \
         < "$_prompt_file" > "$_json_file" 2>"$_output_file" &
     local _claude_pid=$!

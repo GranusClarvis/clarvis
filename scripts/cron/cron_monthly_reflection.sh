@@ -78,7 +78,7 @@ echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Spawning Claude Code for monthly reflectio
 TASK_OUTPUT=$(mktemp)
 timeout 1800 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \
     ${CLAUDE_BIN:-$(command -v claude || echo "$HOME/.local/bin/claude")} -p "$(cat "$PROMPT_FILE")" \
-    --dangerously-skip-permissions --model claude-opus-4-6 \
+    --dangerously-skip-permissions --model claude-opus-4-7 \
     > "$TASK_OUTPUT" 2>&1
 TASK_EXIT=$?
 rm -f "$PROMPT_FILE"

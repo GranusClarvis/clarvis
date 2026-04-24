@@ -22,7 +22,7 @@ cat /tmp/heartbeat_context.txt  # review the prompt
 source scripts/cron_env.sh
 timeout 1200 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \
   claude -p "$(cat /tmp/heartbeat_context.txt)" \
-  --dangerously-skip-permissions --model claude-opus-4-6 > /tmp/claude_output.txt 2>&1
+  --dangerously-skip-permissions --model claude-opus-4-7 > /tmp/claude_output.txt 2>&1
 
 # 4. Postflight (episode encoding, metrics)
 python3 scripts/pipeline/heartbeat_postflight.py
@@ -293,7 +293,7 @@ Task description here.
 ENDPROMPT
 timeout 1200 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \
   claude -p "$(cat /tmp/claude_task.txt)" \
-  --dangerously-skip-permissions --model claude-opus-4-6 > /tmp/claude_output.txt 2>&1
+  --dangerously-skip-permissions --model claude-opus-4-7 > /tmp/claude_output.txt 2>&1
 cat /tmp/claude_output.txt
 ```
 

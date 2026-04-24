@@ -26,8 +26,8 @@ WORKSPACE = os.environ.get(
 COST_LOG = os.path.join(WORKSPACE, "data", "costs.jsonl")
 
 ANTHROPIC_MODELS = {
-    "claude-code", "claude-opus-4-6", "claude-sonnet-4-6", "claude-haiku-4-5",
-    "anthropic/claude-opus-4-6", "anthropic/claude-sonnet-4-6",
+    "claude-code", "claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5",
+    "anthropic/claude-opus-4-7", "anthropic/claude-sonnet-4-6",
     "anthropic/claude-haiku-4-5",
 }
 

@@ -25,7 +25,7 @@ Analyze each task and route to the appropriate model.
 |-----------|-------|------|
 | Coding | `minimax-m2.5` | Default |
 | Reasoning | `glm-5` | Keywords: think, plan, analyze, decide |
-| Difficult | `claude-opus-4-6` | Keywords: complex, AGI, consciousness, novel |
+| Difficult | `claude-opus-4-7` | Keywords: complex, AGI, consciousness, novel |
 
 ## Usage
 

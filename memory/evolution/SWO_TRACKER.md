@@ -118,34 +118,39 @@ _Direction: lobby-first, social, game-like. Tamagotchi + Club Penguin + Habbo vi
 
 **Stack:** Phaser 3 + Colyseus (multiplayer) + React overlays (contextual UI) + EventBus (bridge) + easystar.js (pathfinding) + Howler.js (audio)
 
-**Phase Status (reviewed 2026-04-23):**
+**Phase Status (reviewed 2026-04-23, updated with operator split brief):**
 
 | Phase | PRs | Status | Gate |
 |-------|-----|--------|------|
 | 0. API Lock & Security | #205-#207 | ✅ DONE | All routes tested, wallet auth, rate limiting |
-| P0 Blockers (NEW) | — | **6 tasks** | Collision, doors, NPC art, chat echo, companion BG, room gameplay |
+| P0 Blockers | f17f38e (collision) | **1/6 done** | Collision ✅, 5 remain: door, NPC art, chat echo, companion BG, room gameplay |
 | 1. Canvas Foundation | #208-#210, #213 | ✅ DONE | Player walks 8-zone world, real map art, click-to-move |
 | 2. Companion Alive | #214-#215 | ✅ DONE | Companion follows, mood anims, radial menu |
 | 3. Multiplayer Lobby | #216-#218 | ✅ DONE | Colyseus rooms, other players, chat bubbles |
-| 4. Diegetic Content | #219 (partial) | **30%** | Quest NPCs done, 3 overlays remain |
+| 4. Diegetic Content | #219 (partial) | **25%** | Quest NPCs done; 3 overlays + Spawn Fox intro + room NPCs + quest hub remain |
+| 4B. Room Activities & Minigames | — | Not started | Timed quests, Training Grounds XP, minigame plumbing, 8 room minigames |
 | 5. LLM Companion | — | Not started | — |
-| 6. Economy | — | Not started | — |
+| 6. Economy | — | Not started | STAR currency + shop + cosmetics (4 PRs) |
 | 7. Personal Rooms | — | Not started | — |
-| 8. Polish | — | Not started | — |
+| 8. Polish | — | Not started | Mobile, onboarding (Spawn Fox guided), sound |
 
 **Operator manual work (2026-04-23):** Uploaded 4 player sprites, 8 room backgrounds, 8 NPC sprites, overworld map, marked collision map. Authored `extract_sanctuary_layout.mjs`, `analyze_sprite.mjs`, wired real collision data (685 rects), clean character sprite pipeline (`PlayerSprite::registerFrames`), room background loading in BootScene/RoomScene.
 
 **P0 Playability Blockers (discovered 2026-04-23):**
-1. `[SWO_P0_COLLISION_FIX]` — WASD walks through walls (no `physics.add.collider`)
+1. ~~`[SWO_P0_COLLISION_FIX]`~~ — ✅ FIXED (commit f17f38e: `physics.add.collider` wired)
 2. `[SWO_P0_STAR_GARDEN_DOOR]` — Star Garden has no door (7/8 doors defined)
 3. `[SWO_P0_NPC_REAL_SPRITES]` — NPCs use placeholder circles despite real art existing
 4. `[SWO_P0_CHAT_LOCAL_ECHO]` — Chat requires Colyseus roundtrip, no local echo
 5. `[SWO_P0_COMPANION_BG_MATTE]` — Companion mood PNGs have non-transparent backgrounds
 6. `[SWO_P0_ROOM_GAMEPLAY]` — Rooms are static image viewers (no player/movement/collision)
 
-**Recommended execution order:** P0 blockers (1→2→3→4→5→6) → Phase 4 overlays → Phase 5 LLM
+**Recommended execution order:** P0 blockers (2→3→4→5→6) → Phase 4 content → Phase 4B activities/minigames → Phase 5 LLM → Phase 6 economy
 
 **Art track retired items (2026-04-23):** WORLD_TILESET_ART (operator painted map), COMPANION_SPRITE_ART (mood PNGs exist), NPC_QUEST_CONTENT (NPCs defined, only dialog content remains)
+
+**Testing convention:** Primary dev/test loop is local (`npm run dev` + `npm run colyseus:dev`, verify at localhost:3000/sanctuary). test.starworldorder.com is secondary deployment verification only.
+
+**NPC↔Sprite mapping (from operator sprite sheets):** Spawn Fox → Spawn_Fox_Sprite.png (Town Square intro), Springs Duck → Hot Springs, Observatory Owl → Observatory, Training Wolf → Training Grounds, Kitchen Bunny → Nebula Kitchen, Garden Ent → Star Garden, Hollow Moth → Cosmic Library, Dream Sheep → Dream Hollow, Aura Golem → Aura Forge.
 
 ## Notes
 

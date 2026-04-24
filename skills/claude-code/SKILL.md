@@ -83,7 +83,7 @@ cd /path/to/project && timeout 600 claude -p "complex task" \
 
 ```bash
 # Default: Opus 4.6 — best reasoning, most capable
-cd /path && claude -p "..." --model claude-opus-4-6 --dangerously-skip-permissions
+cd /path && claude -p "..." --model claude-opus-4-7 --dangerously-skip-permissions
 
 # Sonnet: for simple/routine tasks where speed matters more than depth
 cd /path && claude -p "..." --model claude-sonnet-4-6 --dangerously-skip-permissions
@@ -128,7 +128,7 @@ cd /path && claude -p "refactor this module" \
 ```bash
 cd $CLARVIS_WORKSPACE && timeout 600 claude -p \
   "The test test_brain_roundtrip.py::test_search_returns_results is failing. Investigate, fix, and verify." \
-  --dangerously-skip-permissions --model claude-opus-4-6 --output-format json
+  --dangerously-skip-permissions --model claude-opus-4-7 --output-format json
 ```
 Expected JSON output:
 ```json
@@ -141,7 +141,7 @@ mkdir -p ~/projects/new-project && \
 cd ~/projects/new-project && \
 timeout 600 claude -p "Initialize a Python project with pyproject.toml, src layout, pytest, and a basic CLI" \
   --dangerously-skip-permissions \
-  --model claude-opus-4-6
+  --model claude-opus-4-7
 ```
 
 ### Get a Second Opinion on Architecture
@@ -150,7 +150,7 @@ cd ~/projects/myproject && \
 timeout 600 claude -p "Review the architecture of this project. Identify design flaws, suggest improvements, and flag any scalability concerns. Write your analysis to REVIEW.md." \
   --dangerously-skip-permissions \
   --allowedTools "Read,Write,Edit,Grep,Glob" \
-  --model claude-opus-4-6
+  --model claude-opus-4-7
 ```
 
 ### Debug a Hard Problem
@@ -158,7 +158,7 @@ timeout 600 claude -p "Review the architecture of this project. Identify design 
 cd ~/projects/myproject && \
 timeout 600 claude -p "The test test_auth_flow is failing with 'token expired'. Investigate root cause across all relevant files, fix it, and verify the fix passes." \
   --dangerously-skip-permissions \
-  --model claude-opus-4-6
+  --model claude-opus-4-7
 ```
 
 ### Self-Evolution — Brain Maintenance
@@ -166,7 +166,7 @@ timeout 600 claude -p "The test test_auth_flow is failing with 'token expired'. 
 cd $CLARVIS_WORKSPACE/scripts && \
 timeout 600 claude -p "Review brain.py, optimize query performance, improve error handling, and run benchmarks before/after" \
   --dangerously-skip-permissions \
-  --model claude-opus-4-6
+  --model claude-opus-4-7
 ```
 
 ### Run a Python Script That Imports Brain
@@ -174,6 +174,6 @@ timeout 600 claude -p "Review brain.py, optimize query performance, improve erro
 cd $CLARVIS_WORKSPACE && \
 timeout 300 claude -p "Run: python3 scripts/cognition/clarvis_reflection.py and report the output" \
   --dangerously-skip-permissions \
-  --model claude-opus-4-6
+  --model claude-opus-4-7
 ```
 Note: Scripts that import chromadb/brain.py take 1-2 seconds to initialize. This is normal.

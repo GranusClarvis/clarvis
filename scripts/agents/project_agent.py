@@ -2525,7 +2525,7 @@ def build_spawn_command(prompt_file: str, timeout: int) -> str:
         f"timeout {timeout} env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT "
         f"{shlex.quote(CLAUDE_BIN)} "
         f"-p \"$(cat {shlex.quote(prompt_file)})\" "
-        f"--dangerously-skip-permissions --model claude-opus-4-6"
+        f"--dangerously-skip-permissions --model claude-opus-4-7"
     )
 
 

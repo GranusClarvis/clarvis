@@ -151,7 +151,7 @@ def cmd_spawn(task: str, timeout: int = 1200, isolated: bool = False) -> dict:
         CLAUDE_BIN,
         "-p", prompt,
         "--dangerously-skip-permissions",
-        "--model", "claude-opus-4-6"
+        "--model", "claude-opus-4-7"
     ]
 
     with open(output_file, "w") as out_f:

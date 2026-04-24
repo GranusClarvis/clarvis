@@ -142,7 +142,7 @@ except Exception as e:
 [ -n "$V2_RUN_ID" ] && echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] V2 run started: $V2_RUN_ID" >> "$LOGFILE"
 
 AUDIT_OUTPUT=$(timeout 1200 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \
-  ${CLAUDE_BIN:-$(command -v claude || echo "$HOME/.local/bin/claude")} --model claude-opus-4-6 -p \
+  ${CLAUDE_BIN:-$(command -v claude || echo "$HOME/.local/bin/claude")} --model claude-opus-4-7 -p \
 "You are Clarvis's strategic auditor — a meta-evaluation layer that prevents metric gaming,
 integration overload, and wasted evolution cycles. Be brutally honest.
 
