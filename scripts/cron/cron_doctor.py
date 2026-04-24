@@ -651,6 +651,12 @@ def check_chromadb_health(dry_run: bool = False) -> dict:
         else:
             result["issues"] = hc.get("issues", [])
             _log(f"ChromaDB health check issues: {hc.get('issues', [])}")
+            # Soft-unhealthy (orphan edges, transient errors) — brain initialized fine.
+            # Do NOT run destructive .recover for these; return and let targeted jobs
+            # (graph backfill, hygiene) handle them. Only true init failure warrants recovery.
+            result["success"] = False
+            result["detail"] = "ChromaDB reports soft issues; skipping .recover (brain initialized)"
+            return result
     except Exception as e:
         result["init_error"] = str(e)[:200]
         _log(f"ChromaDB init failed: {e}")
