@@ -179,8 +179,7 @@ def _structural_health(context):
         "healthy": report["healthy"],
     }
 
-    # Append to performance_history.jsonl
-    hist_file = os.path.join(_SCRIPTS_DIR, "..", "data", "performance_history.jsonl")
+    hist_file = os.path.join(_SCRIPTS_DIR, "..", "data", "structural_health_history.jsonl")
     entry = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "type": "structural_health",

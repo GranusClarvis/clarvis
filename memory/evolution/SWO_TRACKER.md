@@ -133,6 +133,7 @@ _Direction: lobby-first, social, game-like. Tamagotchi + Club Penguin + Habbo vi
 | 6. Economy | — | Not started | STAR currency + shop + cosmetics (4 PRs) |
 | 7. Personal Rooms | — | Not started | — |
 | 8. Polish | — | Not started | Mobile, onboarding (Spawn Fox guided), sound |
+| RD Asset Pipeline | — | Planned (action plan 2026-04-25) | scripts/rd/ + manifest+dedup → 5 batches → ~41 assets unblock HUD/Shop/VFX/cosmetics/empty states |
 
 **Operator manual work (2026-04-23):** Uploaded 4 player sprites, 8 room backgrounds, 8 NPC sprites, overworld map, marked collision map. Authored `extract_sanctuary_layout.mjs`, `analyze_sprite.mjs`, wired real collision data (685 rects), clean character sprite pipeline (`PlayerSprite::registerFrames`), room background loading in BootScene/RoomScene.
 

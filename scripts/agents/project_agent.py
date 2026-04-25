@@ -1112,11 +1112,34 @@ _MIRROR_GATE_DEFAULT = "soft"
 
 
 def _sync_mirror(agent_name: str) -> bool:
-    """Pull latest changes into the PROD mirror before validation."""
+    """Pull latest changes into the PROD mirror before validation.
+
+    The mirror is treated as ephemeral: validation copies overlay files in and
+    restores them after. If a prior run crashed mid-flight, leftover local
+    changes will block `git pull --ff-only` indefinitely. Detect dirty state
+    and hard-reset before pulling so sync is self-healing.
+    """
     mirror_dir = MIRROR_DIRS.get(agent_name)
     if not mirror_dir or not mirror_dir.exists():
         return False
     try:
+        dirty = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=str(mirror_dir),
+            capture_output=True, text=True, timeout=30,
+        )
+        if dirty.returncode == 0 and dirty.stdout.strip():
+            _log(f"Mirror sync: clearing dirty state for '{agent_name}' before pull")
+            subprocess.run(
+                ["git", "reset", "--hard", "HEAD"],
+                cwd=str(mirror_dir),
+                capture_output=True, text=True, timeout=30,
+            )
+            subprocess.run(
+                ["git", "clean", "-fd"],
+                cwd=str(mirror_dir),
+                capture_output=True, text=True, timeout=30,
+            )
         result = subprocess.run(
             ["git", "pull", "--ff-only"],
             cwd=str(mirror_dir),
