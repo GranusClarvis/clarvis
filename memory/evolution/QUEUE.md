@@ -8,7 +8,6 @@ _Deep audit tracker: `docs/internal/audits/CLARVIS_DEEP_AUDIT_PLAN_2026-04-16.md
 
 ## P0 — Current Sprint (2026-04-15)
 
-- [x] [STRATEGIC_AUDIT] **[PI_HISTORY_WRITER_REPAIR]** Fixed 2026-04-25. Root cause: `clarvis/heartbeat/adapters.py:_structural_health` was appending `structural_health` entries to `performance_history.jsonl` instead of the dedicated `data/structural_health_history.jsonl` (which `heartbeat_postflight.py` already used correctly). Audit's "last full PI 2026-04-02" claim was misleading — full PI records existed daily; the structural_health entries at the file's tail masked them. Fix: redirected adapters writer, migrated 7 misplaced entries (backup at `performance_history.jsonl.bak_pi_repair`). Acceptance verified: 7 consecutive days (04-19→04-25) all have full PI records. 137 tests pass.
 _Audit-phase override: while executing the deep Clarvis audit plan, do not suppress or skip justified follow-up queue items merely because P1 is over cap. Audit-derived findings may add P1/P2 tasks when they are necessary to preserve audit continuity and evidence integrity. Triage still applies, but cap pressure must not block recording valid findings._
 
 ### Critical Pipeline Fixes
@@ -27,7 +26,6 @@ _Source: `docs/internal/audits/NEURO_FEATURE_DECISIONS_2026-04-17.md`. Phase 9 s
 
 ### Bugs
 
-- [ ] **[CRON_DOCTOR_SOFT_HEALTH_SEMANTICS]** `scripts/cron/cron_doctor.py::check_chromadb_health()` now skips destructive recovery when the brain initializes but health_check reports soft issues, but still returns `success=False`. Audit all callers/reporting paths and split `healthy` vs `recoverable_soft_issue` so cron doctor doesn't page/escalate like a hard failure while still surfacing issues for graph hygiene/backfill jobs.
 - [ ] **[CRON_SYNC_STASH_RECOVERY_REF]** `scripts/cron/cron_env.sh::sync_workspace()` captures `_stash_ref` via `git stash list -1 --format="%H"`, which yields an opaque commit hash, while the recovery instructions reference stash workflows. Store/log a usable stash selector (`stash@{n}`) or both selector+hash so operators can recover stranded work without guesswork.
 
 ## P1 — This Week
@@ -37,114 +35,87 @@ _Source: `docs/internal/audits/NEURO_FEATURE_DECISIONS_2026-04-17.md`. Phase 9 s
 _Source: `docs/CLAUDE_DESIGN_ROUTINES_STRATEGY.md`. Cross-project operating model for Claude Design + Claude Code Routines._
 
 
-### Star Sanctuary V2 — World-First Rebuild (PROJECT:SWO, reviewed 2026-04-23)
+### Star Sanctuary — V2/V3 Operating Model (PROJECT:SWO, reconciled 2026-04-25)
 
-_Sanctuary V2 replaces V1 React panel layout with a Phaser 3 game world. Direction: lobby-first, social, game-like (Tamagotchi + Club Penguin + Habbo). Backend/API layer unchanged — V2 is a frontend revolution._
-_V2 Plan: `docs/SANCTUARY_V2_PLAN.md` | Style: `docs/SANCTUARY_STYLE_DOCTRINE.md` | ADR: `docs/SANCTUARY_ADR.md`_
-_Status: Phases 0-3 COMPLETE (PRs #205-#219 merged). Phase 4 in progress (quest NPCs done, overlays remain). Operator hand-crafted all map/sprite/room art 2026-04-23._
-_Asset state: Overworld map ✓ (Sanctuary_map.png) | 4 player sprites ✓ | 8 room backgrounds ✓ | 8 NPC sprites ✓ | 10×6 companion mood PNGs ✓ (need BG cleanup) | Collision data ✓ (685 rects from marked map)_
-_Tech stack: Phaser 3 + easystar.js (pathfinding) + Colyseus (multiplayer) + React overlays + EventBus bridge_
-_What carries forward: all DB schema, all API routes, wallet auth, bond/XP logic, quest data model, security fixes_
-_What's left behind: panel layout, tab navigation, CompanionPanel button grid, monolithic SanctuaryContent.tsx_
-_**Testing convention:** Primary dev/test loop is local: `npm run dev` + `npm run colyseus:dev` in SWO workspace, verify at `localhost:3000/sanctuary`. Run `npm run type-check && npm run lint && npm run build` before PR. test.starworldorder.com is **secondary deployment verification only** — requires separate pull/rebuild on server, not the default test path._
+_Source: `memory/evolution/swo_sanctuary_v2_v3_replan_2026-04-25.md` + execution `memory/evolution/swo_sanctuary_v3_alignment_execution_2026-04-25.md`. Sanctuary now runs as two parallel tracks sharing all game logic. V2 = gameplay testbed (`?v=2`). V3 = production tile-based pixel-art rebuild (`?v=3`)._
 
-#### Phase 0: API Contract Lock & Security — ✅ DONE (PRs #205-#207)
+_**Canonical V3 doc:** `docs/SANCTUARY_V3.md` (in SWO repo). Locked palette: `public/sanctuary-v3/palettes/forgotten-memories.png`. Pipeline: `scripts/v3/{generate,normalize,rd-client}.mjs`._
 
-- **GATE MET:** All 16 API routes have HTTP-layer tests. Zod validation. SQLite rate limiting + wallet auth on all Sanctuary POST routes.
+_**Shipped V3 reality (commits `7149ed2 → c2efa0c` on dev):** canonical plan + locked FM palette + custom RD style → 11 NPC walking sheets → 15 themed props → 8 building exteriors → tilemap-driven `overworld.json` with animated water → door transitions + procedural room interiors → walkable test scene at `?v=3`._
 
-#### Phase 1: Canvas Foundation — ✅ DONE (PRs #208-#210, #213 + operator commits)
+_**Local testing (verified 2026-04-25):** `npm run dev` (Next.js) + `npm run colyseus:dev` in SWO workspace; visit `localhost:3000/sanctuary?v=3` for V3 (or `?v=2` for V2). Pre-PR: `npm run type-check && npm run lint && npm run build` (all green at branch `clarvis/star-world-order/t0425200011-0a6c`). RD pipeline gate: `RD_API_KEY=... node scripts/v3/generate.mjs --check-cost`._
 
-- **GATE MET:** Player walks 8-zone world with hand-painted map background (Sanctuary_map.png). Click-to-move pathfinding via easystar.js. Zones trigger events. HUD shows companion stats. Door system with [E] interaction. Collision data from marked map (685 rects). Clean character sprite via PlayerSprite::registerFrames.
+_**Lane discipline:** default new feature work to SHARED. Only fork into V2 or V3 when the work touches Phaser scenes or assets specifically. Naming: `[SWO_SHARED_*]` / `[SWO_V2_*]` / `[SWO_V3_*]`._
 
-#### Phase 2: Companion Alive — ✅ DONE (PRs #214-#215)
+#### SHARED — both V2 + V3 benefit (default lane)
 
-- **GATE MET:** Companion follows player with animation. 10 constellation × 6 mood sprite system. Radial menu with pet/feed/play reactions + API calls. Bond/XP increments visible.
+- [ ] **[SWO_SHARED_SHOP_DIALOG]** ShopDialog React overlay (`components/sanctuary/overlays/ShopDialog.tsx`). Backend shipped (`5aa2965` cosmetic shop + inventory + equip API). Triggered by NPC interaction (Shop Keeper or Quest Board area) + hotkey (B). Grid layout with category tabs (Hats / Accessories / Backgrounds / Animations). Live companion preview via EventBus. Buy button with STAR price/balance/owned/level-req. Inventory tab (hotkey I) with equip/unequip. Mounts in BOTH SanctuaryV2.tsx and SanctuaryV3.tsx. (PROJECT:SWO, P1)
+- [ ] **[SWO_SHARED_QUEST_DIALOG_CONTENT]** Write quest dialog JSON for 5 daily errands + 3 weekly adventures. Map to `sanctuary_quests` table format. JSON seed file. NPC names/zones/locations defined in both `npcDefinitions.ts` (V2) and `game/v3/config/npcDefinitionsV3.ts` (V3). Same dialog data drives both renderers via QuestDialog overlay. (PROJECT:SWO, CONTENT, P1)
+- [ ] **[SWO_SHARED_COSMETIC_ITEM_DESIGN]** 20-30 cosmetic items: 8 hats, 6 accessories, 5 backgrounds, 5 floors, 4 animations, 2 seasonal. Each: name, category, rarity (common/uncommon/rare/epic), STAR price (10-50), level req (0-15), pixel-art spec. Seed JSON for `sanctuary_cosmetic_items`. **Sprite generation forks: V2 cosmic palette under `public/sanctuary/cosmetics/`; V3 FM palette under `public/sanctuary-v3/cosmetics/`. This item owns the shared data spec only.** (PROJECT:SWO, CONTENT, P2)
+- [ ] **[SWO_SHARED_ONBOARDING]** Full guided tutorial extending Spawn Fox intro. Detect new player. Fox walks player through: select companion → walk to first room → interact with NPC → open quest board → try first minigame. Tooltip arrows + highlight zones. Skip button. State in `sanctuary_player_state`. Engine-agnostic (overlays + EventBus events); mounts on V2 and V3. (PROJECT:SWO, P2)
+- [ ] **[SWO_SHARED_SOUND_DESIGN]** Howler.js-based ambient + SFX service (`lib/sanctuary/audio.ts` + EventBus listener). Per-zone ambient loops (crossfade on zone-change event), interaction SFX (pet sparkle, feed munch, level-up chime). Muted by default, volume slider in WelcomeDialog/settings overlay. Both Phaser scenes emit `zone:enter` / `zone:leave` / `companion:react` events; service consumes them. ~8 ambient loops + ~10 SFX. Audio asset folder shared at `public/audio/sanctuary/`. (PROJECT:SWO, P2)
+- [ ] **[SWO_SHARED_VFX_TRIGGER_API]** Shared EventBus contract for companion reactions: `companion:vfx:sparkle`, `companion:vfx:heart`, etc. V2 RadialMenu + V3 RadialMenu both publish these events. Sprite sheets differ per track — V2 stays on emoji/cosmic palette; V3 uses FM palette via `[SWO_V3_VFX_SPRITES]`. This task is the trigger contract only. (PROJECT:SWO, P2)
+- [ ] **[SWO_SHARED_MOBILE_OVERLAYS]** Responsive React overlay sweep: min 44 px hit targets, fluid layout under 768 px, touch-friendly chat input + radial menu. Excludes Phaser canvas joystick (handled per-track in `[SWO_V3_MOBILE_CANVAS]`). (PROJECT:SWO, P2)
+- [ ] **[SWO_SHARED_EXPEDITIONS]** Multi-step expedition adventures with narrative choices. Quest data model extension; UI is overlay-only. Benefits both V2 and V3 automatically. (PROJECT:SWO, P2)
+- [ ] **[SWO_SHARED_CHAT_MEMORY_CONSOLIDATION]** Weekly batch: merge duplicate companion memories, decay old emotions, summarize recurring topics. Backend job; depends on chat persistence shipped in `1d44697`. (PROJECT:SWO, P2)
 
-#### Phase 3: Multiplayer Lobby — ✅ DONE (PRs #216-#218)
+#### V3 — Production Rebuild (`?v=3`, FM palette, locked)
 
-- **GATE MET:** Colyseus multiplayer with room-per-location architecture. Other players visible. Chat bubbles above players. Join/leave on zone transition.
+_**Phase status (per `docs/SANCTUARY_V3.md` §14, commits `7149ed2 → c2efa0c`):** 0 plan ✅ | 1 FM tileset ✅ | 2 RD pipeline ✅ | 3 first-NPC sign-off ✅ | 4 bulk NPC+prop ✅ | 5 buildings + walkable test scene ✅ | 6 tilemap+water ✅ | 7 door transitions + procedural rooms ✅ | 8 polish (HUD/UI/font/particles) ⏳ | 9 hand-authored room interiors + parity audit ⏳._
 
-#### P0 Playability Blockers (fix before continuing Phase 4)
+- [ ] **[SWO_V3_PIPELINE_HARDENING]** Harden `scripts/v3/` against credit waste before next batch. Add: (a) `scripts/v3/asset-manifest-status.json`-style record with prompt_hash dedup before any RD call (refuse if `status=approved` & hash matches); (b) per-batch + per-day cost ceilings via env (`RD_BATCH_CAP_USD=0.50`, `RD_DAILY_CAP_USD=5.00`), abort with override flag; (c) `flock /tmp/rd_v3_generate.lock` around all writes; (d) append-only `scripts/v3/requested.jsonl` log of every POST (success + error); (e) reconciliation script `scripts/v3/rd-reconcile.mjs` that sums jsonl vs `GET /credits`. Acceptance: `RD_DRY_RUN=1 node scripts/v3/generate.mjs --only spawn-fox` produces stub PNG; second run with same hash refuses. (PROJECT:SWO, P1)
+- [ ] **[SWO_V3_HUD_ICONS]** Generate 12 × 16×16 HUD icons (pet/feed/talk/send/sleep + bond/xp/energy/hunger/level + quest/journal) via the V3 pipeline + custom RD style (`scripts/v3/style-id.txt = user__swo_forgotten_sanctuary_0dbd7f09`), `bypass_prompt_expansion: true`, `remove_bg: true`. Use FM palette (no neon `#ffd700` — antique gold `#d4a445` per V3 §4.2). Replace emoji in `CompanionHUD.tsx` and `QuestBoard.tsx` (shared overlays — both V2 and V3 benefit). Cost cap $0.50. Single PR. Depends on `[SWO_V3_PIPELINE_HARDENING]`. (PROJECT:SWO, P1)
+- [ ] **[SWO_V3_FONT_SWAP]** Replace `Press Start 2P` globally with a SNES-mood bitmap font that matches the FM palette mood (V3 doc §14 phase 1, currently used for nameTags + HUD in `WorldSceneV3` / `RoomSceneV3` / `NPCSpriteV3`). Affects both V2 and V3 chrome — choice is driven by V3 doctrine. ~1h. (PROJECT:SWO, P1)
+- [ ] **[SWO_V3_OVERWORLD_MAP_DETAIL]** Currently `public/sanctuary-v3/maps/overworld.json` is 60×40 tiles with **only 4 unique tile gids** (gid=2 grass fills 79% of the map; gid=3 ≈10%; gid=66/67 trace). The walkable test scene reads as a flat green carpet around 8 building anchors with one water rectangle. Author a richer ground composition: stone/dirt path threading buildings, grass tufts/decoration variation, fence segments, terrain transitions, layered tree clusters, additional water bodies. Use existing FM tileset (2048×2048, 4096 tiles available). Tools: Tiled or Sprite Fusion. Out of scope: new RD generation. Acceptance: ground+ground_decoration layers use ≥30 unique tile gids; visual diff at `?v=3` shows readable RPG-route composition not tactical-map flatness. (PROJECT:SWO, P1)
+- [ ] **[SWO_V3_ROOM_INTERIOR_MAPS]** Hand-author Tiled JSON maps for the 8 room interiors (Hot Springs, Observatory, Training Grounds, Star Garden, Cosmic Library, Nebula Kitchen, Dream Hollow, Aura Forge) replacing the procedural floor/wall renderer in `RoomSceneV3.renderInterior()`. Layers per V3 §12: `ground` → `ground_decoration` → `objects` → `collision` → `npcs` → `doors`. 30×20 tiles each. Use FM tileset + already-generated themed props. NPC placement matches `npcDefinitionsV3.ts`. Wire `RoomSceneV3` to `load.tilemapTiledJSON` per door target. Operator-authored or Sprite Fusion procedural-then-refine. (PROJECT:SWO, P1)
+- [ ] **[SWO_V3_SHOP_CHROME]** Generate 4 shop-chrome assets in FM palette via `scripts/v3/`: STAR coin icon (16×16 + 32×32), Shop Keeper NPC walking sheet (48×48 4-direction `rd_animation__four_angle_walking`), Shop panel 9-slice (256×192). Promote to `public/sanctuary-v3/{npcs,props,ui}/`. Cost cap $0.50. Pairs with `[SWO_SHARED_SHOP_DIALOG]`. Depends on `[SWO_V3_PIPELINE_HARDENING]`. (PROJECT:SWO, P1)
+- [ ] **[SWO_V3_VFX_SPRITES]** Generate 6 VFX spritesheets in FM palette via `rd_animation__vfx`: sparkle 32×32×4f, heart 32×32×4f, food crumb 32×32×3f, level-up 64×64×6f, glow ring 32×32×4f, dust trail 16×16×3f. Frame counts in {3,4,6,8,10,12,16}. Promote to `public/sanctuary-v3/vfx/`. Wire to `[SWO_SHARED_VFX_TRIGGER_API]` events. Cost cap $0.50. (PROJECT:SWO, P2)
+- [ ] **[SWO_V3_COSMETIC_HATS_V1]** Generate 8 × 32×32 cosmetic hats in FM palette (wizard, crown, halo, party, beanie, top, bow, antlers). Img2img on the V3 `player-wanderer.png` sprite (NOT V2's `purple_skrumpey.png`). `strength: 0.55`, `remove_bg: true`. Promote to `public/sanctuary-v3/cosmetics/hats/`. Add 8 rows to `sanctuary_cosmetic_items` seed JSON. Cost cap $0.50. Pairs with `[SWO_SHARED_COSMETIC_ITEM_DESIGN]`. (PROJECT:SWO, P2)
+- [ ] **[SWO_V3_UI_RESTYLE]** Restyle V3 UI chrome to FM tones (V3 §14 phase 8). Buttons, panels, dialog frames use FM stone/wood/parchment colors. 9-slice frames cropped from FM tileset where possible; minimal RD only for hero panels. V2 keeps cosmic chrome to remain the "obvious testbed" visually. (PROJECT:SWO, P2)
+- [ ] **[SWO_V3_PARTICLES_AMBIENT]** Add ambient particle system within accent budget (≤2% pixels): firefly drift in Star Garden, steam in Hot Springs, rune sparkle in Aura Forge. Reuses `[SWO_SHARED_VFX_TRIGGER_API]` style. (PROJECT:SWO, P2)
+- [ ] **[SWO_V3_MOBILE_CANVAS]** V3 Phaser touch joystick (rex-rainbow plugin or custom). Tap-to-move on tilemap. Responsive zoom (1× / 2× selection by viewport). Pairs with `[SWO_SHARED_MOBILE_OVERLAYS]`. (PROJECT:SWO, P2)
+- [ ] **[SWO_V3_FEATURE_PARITY_AUDIT]** Walk every V2 feature (minigames, quest board, companion chat, shop, multiplayer, journal, traits) and verify it works at `?v=3`. Gap list → individual follow-up tasks. Operator decides whether to drop V2 entirely after this audit. (PROJECT:SWO, P2)
 
-_Discovered 2026-04-23 during codebase review. Collision fix shipped same day (operator commit f17f38e). 5 items remain._
+#### V2 — Testbed (`?v=2`, gameplay-feature host, visuals are placeholder by design)
 
-- **GATE:** Overworld collision works ✅. All 8 rooms enterable via doors (including Star Garden). NPCs show real sprite art. Chat works offline (local echo). Companion sprites render without background artifacts. Rooms are playable spaces with movement and collision.
+_All Phase 0–6 backbone shipped (PRs #205–#219, #232–#240, plus `5aa2965`/`fd9924c`/`72d6202`). V2 stays as iteration host for game logic. Visual fixes only matter where they unblock testing._
 
-#### Phase 4: Diegetic Content & Overlay Migrations (P1 — partially done)
+- [ ] **[SWO_V2_COMPANION_BG_MATTE]** Run shipped `0f80a91 matte_companion_sprites.mjs` against the 60 mood PNGs in `public/sanctuary/companions/` and commit the cleaned outputs. Visual QA at `localhost:3000/sanctuary?v=2`. ~30 min, 1 PR. V3 unaffected (V3 keeps existing constellation PNGs per `docs/SANCTUARY_V3.md` §13). (PROJECT:SWO, P2)
+- [ ] **[SWO_V2_STATUS_VERIFY]** Verify status of `[SWO_V2_STAR_GARDEN_DOOR]` and `[SWO_V2_NPC_REAL_SPRITES]` against dev HEAD. If still broken, scope a single fix PR; otherwise close them in SWO_TRACKER.md. Operator direction is "keep V2 as testbed for game logic" — door + NPC fixes only matter if operator still iterates on V2 worldmap. (PROJECT:SWO, P2)
+- [ ] **[SWO_V2_DEPRECATION_GATE]** Define the explicit gate at which V2 stops getting visual fixes. V3 doc §0 says "V2 stays until V3 reaches feature parity." Add an operational checklist (which V2-only assets are no longer maintained) so we don't burn cycles on V2 polish that V3 will replace. (PROJECT:SWO, P2)
 
-_Quest NPCs with click-to-dialog and quest board shipped (PR #219). Remaining: 3 overlay migrations + 3 new content tasks from operator brief._
+#### Sanctuary — Post-V3 / strategic
 
-**Overlay migrations (carry-forward):**
+- [ ] **[SANCTUARY_STAR_CURRENCY_DECISION]** STAR on Monad (soulbound vs transferable vs hybrid). Blocks on-chain cosmetic minting. Off-chain backend already shipped (`fd9924c`). Not needed for V2/V3 MVPs. See STAR_SANCTUARY_PLAN.md §3.3. (PROJECT:SWO, P2)
 
-**New diegetic content (from operator split brief 2026-04-23):**
-- **GATE:** Quests discovered in-world via NPCs. All V1 panels (journal, traits, quests) migrated to contextual overlays. No panel layout remnants in V2. Spawn Fox greets first-time visitors. Each room has its themed NPC. Quest Board aggregates all quests.
+#### Retired Items (superseded by V2/V3 split or shipped)
 
-#### Phase 4B: Room Activities & Minigames (P1 — from operator split brief, 4-5 PRs)
-
-_Operator requirement: rooms must have gameplay, not just scenery. Training Grounds for leveling, timed quests with away-state, shared minigame plumbing, 8 room-specific minigames. All depend on `[SWO_P0_ROOM_GAMEPLAY]` + `[SWO_V2_ROOM_NPCS]`._
-
-- **GATE:** Every room has interactive gameplay beyond scenery. Timed quests show away-state in HUD with countdown. Training Grounds grant XP that persists and levels up companions. At least 4/8 minigames playable with score tracking. Leaderboards display.
-
-#### Phase 5: LLM Companion (P1 — AI chat, emotional bond, 4 PRs)
-
-_Companion chat confirmed valid for V2. Positioned after world + quests are working. Design ref: `docs/KINKLY_REFERENCE_ANALYSIS.md`._
-
-- **GATE:** Companion talks via LLM with personality. Remembers facts across sessions. Bond stages change tone. Chat overlay works in-world with typing simulation.
-
-#### Phase 6: Economy (P2 — STAR currency, shop, cosmetics, 4 PRs)
-
-_Operator requirement: STAR currency storage + ShopDialog/API. All economy is off-chain for V2 (on-chain decision deferred per `SANCTUARY_STAR_CURRENCY_DECISION` in Post-V2)._
-
-- [ ] **[SWO_V2_SHOP_BACKEND]** Shop API + ShopDialog backend. Seed `sanctuary_cosmetic_items` table with 20-30 items (hats, accessories, backgrounds, animations; 10-50 STAR per STAR_SANCTUARY_PLAN.md). `POST /api/sanctuary/shop/buy` (validate STAR balance via `sanctuary_star_balance`, deduct, add to `sanctuary_companion_inventory`). `POST /api/sanctuary/inventory/equip`. `GET /api/sanctuary/shop/items` (filterable by category, sorted by price). Tests for purchase, insufficient balance, double-equip, level gating. Depends on `[SWO_V2_STAR_CURRENCY]`. Needs content from `[SWO_V2_COSMETIC_ITEM_DESIGN]`. (PROJECT:SWO)
-- [ ] **[SWO_V2_SHOP_UI]** ShopDialog overlay component (`components/sanctuary/overlays/ShopDialog.tsx`). Triggered by NPC interaction in Town Square (add Shop Keeper NPC or use existing Quest Board area) + hotkey (B). Grid layout with category tabs (Hats / Accessories / Backgrounds / Animations). Live companion preview (EventBus preview event). Buy button with STAR price, balance display, "Owned" badge, level requirement. Inventory tab via hotkey (I) showing owned items with equip/unequip. Depends on `[SWO_V2_SHOP_BACKEND]` + `[SWO_V2_COSMETIC_SPRITE_LAYERS]`. (PROJECT:SWO)
-- **GATE:** STAR balance persists per wallet and updates on earn/spend. Players browse shop, buy, equip cosmetics. Companions render with equipped items. ShopDialog opens from NPC or hotkey.
-
-#### Phase 7: Personal Rooms (P2 — customizable spaces, 2 PRs)
-
-_Note: basic RoomScene shell exists (bg image + exit). `[SWO_P0_ROOM_GAMEPLAY]` makes rooms playable first. This phase adds personalization._
-
-- [ ] **[SWO_V2_ROOM_CUSTOMIZATION]** Room personalization. Background/floor from equipped cosmetics. Drag-and-place decorations from inventory on 3×3 grid. Layout saved to `sanctuary_companions.room_layout` (new JSON column). Visit other players' rooms (click avatar → "Visit Room"). Visitors see but can't modify. (PROJECT:SWO)
-- **GATE:** Players have personal rooms. Decorations persist. Can visit others' rooms.
-
-#### Phase 8: Polish (P2 — mobile, onboarding, sound, 3 PRs)
-
-- [ ] **[SWO_V2_MOBILE_CONTROLS]** Mobile touch support. Virtual joystick (`rexrainbow/phaser3-rex-notes` plugin or custom). Tap-to-move. Responsive canvas sizing. Touch-friendly overlays (min 44px targets). Test iOS Safari + Android Chrome. Depends on Phases 1-6 stable. (PROJECT:SWO)
-- [ ] **[SWO_V2_ONBOARDING]** Full guided tutorial extending Spawn Fox intro (`[SWO_V2_SPAWN_FOX_INTRO]`). Detect new player (no companion). Spawn Fox walks player through: select companion → walk to first room → interact with NPC → open quest board → try first minigame. Tooltip arrows + highlight zones. Skip button. State in `sanctuary_player_state`. Depends on `[SWO_V2_SPAWN_FOX_INTRO]` (basic intro) + Phase 4B (minigames exist). (PROJECT:SWO)
-- [ ] **[SWO_V2_SOUND_DESIGN]** Ambient + SFX. Per-location ambient loops (crossfade on zone transition). Interaction SFX (pet sparkle, feed munch, level-up chime). Muted by default, volume slider. Howler.js or Phaser built-in. Need ~8 ambient loops + ~10 SFX. (PROJECT:SWO)
-- **GATE:** Mobile-ready with touch controls. New players guided. Audio layer functional (muted by default).
-
-#### Art & Content Track (updated 2026-04-23 — most art now delivered by operator)
-
-_Operator hand-crafted most assets 2026-04-23. Remaining work is cleanup/content, not creation._
-
-- [ ] **[SWO_V2_QUEST_DIALOG_CONTENT]** Write quest dialog for 5 daily errands + 3 weekly adventures. Map to `sanctuary_quests` table format. JSON seed file. NPC names/zones/locations already defined in `npcDefinitions.ts`. (PROJECT:SWO, CONTENT)
-- [ ] **[SWO_V2_COSMETIC_ITEM_DESIGN]** 20-30 items: 8 hats, 6 accessories, 5 backgrounds, 5 floors, 4 animations, 2 seasonal. Each: name, category, rarity (common/uncommon/rare/epic), STAR price (10-50), level req (0-15), pixel art spec. Seed JSON for `sanctuary_cosmetic_items`. **Sprite generation handled by `[SWO_RD_BATCH_4_HATS]` and follow-up RD batches; this item only owns the data spec.** (PROJECT:SWO, CONTENT)
-
-#### Sanctuary Asset Pipeline — Retro Diffusion (added 2026-04-25)
-
-_Source: `memory/evolution/swo_sanctuary_retrodiffusion_action_plan_2026-04-25.md`. Plan: `memory/evolution/swo_sanctuary_retrodiffusion_plan_2026-04-25.md`. Stand up dedup-protected RD pipeline in SWO repo, then drip-ship 5 asset batches (~41 assets, ~$2.50–$5.00 budgeted to $10). All assets gated by `check_cost: true` preflight, manifest hash dedup, staging-first promotion. `RD_API_KEY` env-only — never commit / log / echo._
-
-- [ ] **[SWO_RD_PIPELINE_INFRA]** Build the Retro Diffusion asset pipeline in the SWO repo. Create `scripts/rd/{rd_client,rd_plan,rd_generate,rd_review,rd_promote,rd_dedup}.py` (env-only `RD_API_KEY`, refuses to start if unset; always sends `check_cost: true` first; per-batch cost cap default $0.50, daily $5.00; flock `/tmp/rd_generate.lock`). Folders: `assets/specs/` (committed YAML), `assets/manifest.json` (committed), `assets/requested.jsonl` (committed), `assets/staging/` + `assets/rejected/` (gitignored). One-time `assets/palette/sanctuary_palette.png` from doctrine §2 swatches. Add `RD_API_KEY=` placeholder to `.env.example`. Operator runbook at `docs/ASSET_PIPELINE.md`. PR includes `--dry-run` smoke test (no real API call) covering: spec parse, hash compute, dedup refusal on existing slug, manifest read/write. Acceptance: `python3 scripts/rd/rd_client.py credits` returns balance when `RD_API_KEY` set; `rd_plan.py --slug <fake>` errors cleanly when missing. Blocks: all batches below. (PROJECT:SWO, P1)
-- [ ] **[SWO_RD_BATCH_1_HUD]** Generate 12 × 16×16 HUD icons (pet/feed/talk/send/sleep + bond/xp/energy/hunger/level + quest/journal) using `rd_fast__mc_item` style with `bypass_prompt_expansion: true`, `remove_bg: true`, sanctuary palette PNG anchored. Standard negative prompt. Specs in `assets/specs/hud_*.yaml`. Generate `num_images: 4` per slug, pick winner, save seed. Promote to `public/sanctuary/hud/`. Wire icons into `CompanionHUD.tsx` (stat row) + `QuestBoard.tsx` (quest list) + radial menu (action buttons), replacing emoji per Style Doctrine §6 ("When sprites arrive, replace emoji with 16×16 pixel icons"). Test at 1× and 2× display. Single PR. Cost cap $0.50. Depends on `[SWO_RD_PIPELINE_INFRA]`. (PROJECT:SWO, P1)
-
-#### Post-V2 (P2 — after V2 stable)
-
-- [ ] **[SWO_SANCTUARY_EXPEDITIONS]** Multi-step expedition adventures with narrative choices. Needs V2 Phase 4 quest system as foundation. (PROJECT:SWO)
-- [ ] **[SWO_SANCTUARY_MEMORY_CONSOLIDATION]** Weekly batch: merge duplicate memories, decay old emotions, summarize recurring topics. Depends on `[SWO_SANCTUARY_CHAT_PERSISTENCE]` shipping and accumulating data. (PROJECT:SWO)
-- [ ] **[SANCTUARY_STAR_CURRENCY_DECISION]** STAR on Monad (soulbound vs transferable vs hybrid). Blocks on-chain cosmetic minting. Not needed for V2 MVP — all V2 economy is off-chain. See STAR_SANCTUARY_PLAN.md §3.3. (PROJECT:SWO)
-
-#### Retired Items (absorbed or replaced by V2 tasks)
-
-_These V1 items are no longer standalone tasks. Their scope is covered by V2 items above._
-
-- ~~[SWO_SANCTUARY_RESPONSIVE]~~ → absorbed by `[SWO_V2_MOBILE_CONTROLS]` (V1 panel layout gone; mobile = Phaser canvas now)
-- ~~[SWO_SANCTUARY_CHAT_HISTORY]~~ → merged into `[SWO_SANCTUARY_CHAT_PERSISTENCE]` (single PR for history + memory)
-- ~~[SWO_SANCTUARY_TYPING_SIM]~~ → absorbed by `[SWO_V2_COMPANION_CHAT_OVERLAY]` (typing sim is 15 lines, not a separate PR)
-- ~~[SWO_SANCTUARY_SOUND_DESIGN]~~ → absorbed by `[SWO_V2_SOUND_DESIGN]` (same scope, V2 framing)
-- ~~[SWO_SANCTUARY_COSMETICS_SHOP]~~ → replaced by `[SWO_V2_SHOP_BACKEND]` + `[SWO_V2_SHOP_UI]` (V2 split into backend + zone-based UI)
-- ~~[SWO_V2_WORLD_TILESET_ART]~~ → RETIRED 2026-04-23. Operator painted full map PNG.
-- ~~[SWO_V2_COMPANION_SPRITE_ART]~~ → RETIRED 2026-04-23. Mood PNGs exist; replaced by `[SWO_P0_COMPANION_BG_MATTE]`.
-- ~~[SWO_V2_NPC_QUEST_CONTENT]~~ → RETIRED 2026-04-23. NPCs defined in `npcDefinitions.ts` + sprite art exists. Remaining dialog content moved to `[SWO_V2_QUEST_DIALOG_CONTENT]`.
+- ~~[SWO_P0_CHAT_LOCAL_ECHO]~~ → DONE (commit `7a5c40e fix: show local chat echo immediately and dedup server roundtrip`)
+- ~~[SWO_P0_ROOM_GAMEPLAY]~~ → DONE for V2 (commit `55f7cea`); V3 has its own `RoomSceneV3` (commit `c2efa0c`)
+- ~~[SWO_V2_SHOP_BACKEND]~~ → DONE (commit `5aa2965 cosmetic shop backend + inventory + equip API`)
+- ~~[SWO_V2_SHOP_UI]~~ → REPLACED by `[SWO_SHARED_SHOP_DIALOG]` (overlay is shared between V2 and V3)
+- ~~[SWO_V2_ROOM_CUSTOMIZATION]~~ → deferred to post-V3-Phase-8 SHARED equivalent
+- ~~[SWO_V2_MOBILE_CONTROLS]~~ → split into `[SWO_SHARED_MOBILE_OVERLAYS]` + `[SWO_V3_MOBILE_CANVAS]`
+- ~~[SWO_V2_ONBOARDING]~~ → REPLACED by `[SWO_SHARED_ONBOARDING]`
+- ~~[SWO_V2_SOUND_DESIGN]~~ → REPLACED by `[SWO_SHARED_SOUND_DESIGN]`
+- ~~[SWO_V2_QUEST_DIALOG_CONTENT]~~ → REPLACED by `[SWO_SHARED_QUEST_DIALOG_CONTENT]`
+- ~~[SWO_V2_COSMETIC_ITEM_DESIGN]~~ → REPLACED by `[SWO_SHARED_COSMETIC_ITEM_DESIGN]`
+- ~~[SWO_RD_PIPELINE_INFRA]~~ → SUPERSEDED. V3 ships its own pipeline at `scripts/v3/` (FM palette anchor, custom user style ID); a parallel V2 cosmic-palette pipeline is no longer needed. Hardening tracked at `[SWO_V3_PIPELINE_HARDENING]`.
+- ~~[SWO_RD_BATCH_1_HUD]~~ → REPLACED by `[SWO_V3_HUD_ICONS]` (FM palette, V3 pipeline)
+- ~~[SWO_RD_BATCH_2_CURRENCY]~~ → REPLACED by `[SWO_V3_SHOP_CHROME]`
+- ~~[SWO_RD_BATCH_3_VFX]~~ → REPLACED by `[SWO_SHARED_VFX_TRIGGER_API]` + `[SWO_V3_VFX_SPRITES]`
+- ~~[SWO_RD_BATCH_4_HATS]~~ → REPLACED by `[SWO_V3_COSMETIC_HATS_V1]`
+- ~~[SWO_RD_BATCH_5_VIGNETTES]~~ → DROPPED (V2 polish item; V3 empty states tracked separately if operator wants them)
+- ~~[SWO_SANCTUARY_EXPEDITIONS]~~ → RENAMED `[SWO_SHARED_EXPEDITIONS]`
+- ~~[SWO_SANCTUARY_MEMORY_CONSOLIDATION]~~ → RENAMED `[SWO_SHARED_CHAT_MEMORY_CONSOLIDATION]`
+- ~~[SWO_SANCTUARY_RESPONSIVE]~~ → absorbed by `[SWO_SHARED_MOBILE_OVERLAYS]`
+- ~~[SWO_SANCTUARY_CHAT_HISTORY]~~ → DONE (commit `1d44697 server-side chat history pagination + companion memory`)
+- ~~[SWO_SANCTUARY_TYPING_SIM]~~ → absorbed by `[SWO_V2_COMPANION_CHAT_OVERLAY]`
+- ~~[SWO_SANCTUARY_SOUND_DESIGN]~~ → absorbed by `[SWO_SHARED_SOUND_DESIGN]`
+- ~~[SWO_SANCTUARY_COSMETICS_SHOP]~~ → backend DONE (`5aa2965`); UI is `[SWO_SHARED_SHOP_DIALOG]`
+- ~~[SWO_V2_WORLD_TILESET_ART]~~ → V2 RETIRED 2026-04-23 (operator painted PNG); V3 uses Forgotten Memories tileset
+- ~~[SWO_V2_COMPANION_SPRITE_ART]~~ → V2 mood PNGs exist; replaced by `[SWO_V2_COMPANION_BG_MATTE]`
+- ~~[SWO_V2_NPC_QUEST_CONTENT]~~ → NPCs defined in `npcDefinitions.ts`; dialog content moved to `[SWO_SHARED_QUEST_DIALOG_CONTENT]`
 - ~~[SWO_V2_ROOM_SCENE]~~ → RETIRED 2026-04-23. Split: basic room gameplay is now `[SWO_P0_ROOM_GAMEPLAY]` (P0 blocker); personalization is `[SWO_V2_ROOM_CUSTOMIZATION]` (Phase 7).
 
 
@@ -327,14 +298,14 @@ _Source: `source="audit_phase_4"`. P0+P1 items are co-located with their parent 
 _Consolidated into P1 §Star Sanctuary V2 queue (reorganized 2026-04-22). All remaining items now in V2 phased plan above. SANCTUARY_STAR_CURRENCY_DECISION moved to Post-V2 section._
 
 
-### Sanctuary Asset Batches (P2 — gated by Batch 1 success, added 2026-04-25)
+### Sanctuary Asset Batches — RETIRED 2026-04-25
 
-_Source: `memory/evolution/swo_sanctuary_retrodiffusion_action_plan_2026-04-25.md` §B.3. Each batch promotes to P1 once its predecessor merges. All use the `scripts/rd/` pipeline shipped by `[SWO_RD_PIPELINE_INFRA]`. Per-batch cost cap $0.50 except Batch 5 (RD_PRO empty states — $2.00 cap). Standard negative prompt and palette anchor on every call._
+_Source: `memory/evolution/swo_sanctuary_v2_v3_replan_2026-04-25.md` §B.2. The cosmic-palette V2 RD pipeline never shipped; V3 has its own working pipeline at `scripts/v3/{generate,normalize,rd-client}.mjs` with the FM palette anchor and the custom RD style ID `user__swo_forgotten_sanctuary_0dbd7f09`. The V2 batches are RETIRED and their scope mapped to V3-lane equivalents:_
 
-- [ ] **[SWO_RD_BATCH_2_CURRENCY]** Generate 4 shop-chrome assets: STAR coin icon (16×16 + 32×32, `rd_fast__mc_item` / `rd_fast__game_asset`), Shop Keeper NPC turnaround (~32×48 strip, `rd_fast__character_turnaround`), Shop panel frame (256×192, `rd_pro__ui_panel`). Promote to `public/sanctuary/currency/` + `public/sanctuary/hud/`. Cost cap $0.50. Unblocks `[SWO_V2_SHOP_UI]`. Depends on `[SWO_RD_BATCH_1_HUD]` shipping (proves pipeline). (PROJECT:SWO, P2 → P1 once Batch 1 merges)
-- [ ] **[SWO_RD_BATCH_3_VFX]** Generate 6 VFX spritesheets via `rd_animation__vfx`: sparkle 32×32×4f, heart 32×32×4f, food crumb 32×32×3f, level-up 64×64×6f, glow ring 32×32×4f, dust trail 16×16×3f. Frame counts must be in {3,4,6,8,10,12,16}. Promote to `public/sanctuary/vfx/`. Wire into existing radial-menu reactions (PR #215) replacing placeholder sparkle. Cost cap $0.50. (PROJECT:SWO, P2 → P1 after Batch 2)
-- [ ] **[SWO_RD_BATCH_4_HATS]** Generate 8 × 32×32 cosmetic hats (wizard, crown, halo, party, beanie, top, bow, antlers). Each uses img2img against `public/purple_skrumpey.png` with `strength: 0.55` so hats sit on a Skrumpey body silhouette. `rd_fast__game_asset` style, `remove_bg: true`. Promote to `public/sanctuary/cosmetics/hats/`. Add 8 rows to `sanctuary_cosmetic_items` seed JSON (price 10–25 STAR, level req 0–5, all category=hat, rarity common/uncommon). Cost cap $0.50. Unblocks `[SWO_V2_SHOP_BACKEND]` content seed. Pairs with `[SWO_V2_COSMETIC_ITEM_DESIGN]`. (PROJECT:SWO, P2 → P1 after Batch 3)
-- [ ] **[SWO_RD_BATCH_5_VIGNETTES]** Generate 3 RD_PRO empty-state illustrations (96×64: no-companion, empty-journal, no-quests) + 8 RD_FAST 64×64 location vignettes (one per zone). Closes the existing `public/sanctuary/ASSET_SPEC.md` gap (`empty/` + `locations/` directories spec'd but never populated). Wire empty states into existing first-time-UX overlays. Cost cap $2.00 (RD_PRO is flat $0.18/image; explicit operator approval required). (PROJECT:SWO, P2 → P1 after Batch 4)
+- ~~[SWO_RD_BATCH_2_CURRENCY]~~ → `[SWO_V3_SHOP_CHROME]` (FM palette, V3 pipeline)
+- ~~[SWO_RD_BATCH_3_VFX]~~ → `[SWO_SHARED_VFX_TRIGGER_API]` (overlay contract) + `[SWO_V3_VFX_SPRITES]` (FM-palette sheets)
+- ~~[SWO_RD_BATCH_4_HATS]~~ → `[SWO_V3_COSMETIC_HATS_V1]` (img2img on V3 player, not `purple_skrumpey.png`)
+- ~~[SWO_RD_BATCH_5_VIGNETTES]~~ → DROPPED (V2-polish-only; revisit if operator wants V3 empty states)
 
 
 ### Adaptive RAG Pipeline

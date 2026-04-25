@@ -630,11 +630,20 @@ def recover_unknown(failure: dict, dry_run: bool = False) -> dict:
 def check_chromadb_health(dry_run: bool = False) -> dict:
     """Check ChromaDB health and attempt repair if broken.
 
+    Result schema:
+      - healthy:                 True iff brain reports status="healthy"
+      - recoverable_soft_issue:  True iff brain initialized but reported non-fatal
+                                 issues (orphan edges, transient errors). These do
+                                 NOT trigger destructive recovery and do NOT count
+                                 as a hard failure for retry budget / paging.
+      - success:                 True iff no hard failure (healthy OR soft-issue
+                                 path). False only when the brain failed to init,
+                                 i.e. destructive recovery was attempted.
+
     Steps:
     1. Try to import and instantiate ClarvisBrain
     2. If it fails, attempt SQLite .recover on the ChromaDB sqlite3 file
     3. If .recover fails, try restoring from latest backup
-    4. Returns a result dict with success/failure details
     """
     result = {"action": "chromadb_health_check", "job": "chromadb", "type": "chromadb_health"}
     data_dir = WORKSPACE / "data" / "clarvisdb"
@@ -645,20 +654,33 @@ def check_chromadb_health(dry_run: bool = False) -> dict:
         b = get_brain()
         hc = b.health_check()
         if hc["status"] == "healthy":
+            result["healthy"] = True
+            result["recoverable_soft_issue"] = False
             result["success"] = True
             result["detail"] = f"ChromaDB healthy: {hc['total_memories']} memories"
             return result
         else:
-            result["issues"] = hc.get("issues", [])
-            _log(f"ChromaDB health check issues: {hc.get('issues', [])}")
+            issues = hc.get("issues", [])
+            result["issues"] = issues
+            result["healthy"] = False
+            result["recoverable_soft_issue"] = True
             # Soft-unhealthy (orphan edges, transient errors) — brain initialized fine.
             # Do NOT run destructive .recover for these; return and let targeted jobs
             # (graph backfill, hygiene) handle them. Only true init failure warrants recovery.
-            result["success"] = False
-            result["detail"] = "ChromaDB reports soft issues; skipping .recover (brain initialized)"
+            # success=True because there is no hard failure to retry; cron doctor must
+            # not page/escalate this. Issues are still surfaced via logs + evolution queue.
+            result["success"] = True
+            result["detail"] = f"ChromaDB soft issues (skipping .recover): {issues}"
+            _log(f"SOFT-ISSUE: ChromaDB health_check non-fatal issues: {issues}")
+            # Surface graph-related soft issues to graph hygiene / backfill so they
+            # actually get resolved without lying about job success.
+            if not dry_run:
+                _surface_soft_issues_to_queue(issues)
             return result
     except Exception as e:
         result["init_error"] = str(e)[:200]
+        result["healthy"] = False
+        result["recoverable_soft_issue"] = False
         _log(f"ChromaDB init failed: {e}")
 
     if dry_run:
@@ -717,6 +739,27 @@ def check_chromadb_health(dry_run: bool = False) -> dict:
     result["success"] = False
     result["detail"] = "ChromaDB unhealthy — repair attempted, queued for review"
     return result
+
+
+def _surface_soft_issues_to_queue(issues: list) -> None:
+    """Route soft brain health issues to the right hygiene job via evolution queue.
+
+    Idempotent per-day via add_task's dedup. Only fires for issues that map to
+    a known maintenance job; transient store/recall hiccups are logged only.
+    """
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    for issue in issues:
+        text = str(issue).lower()
+        if "orphan edge" in text:
+            _add_evolution_task(
+                f"[brain-soft-issue {today}] graph orphan edges: {issue} — "
+                "run `python3 -m clarvis brain backfill` (or wait for graph_compaction)"
+            )
+        elif "missing collections" in text:
+            _add_evolution_task(
+                f"[brain-soft-issue {today}] {issue} — verify ClarvisDB collection bootstrap"
+            )
+        # store/recall errors and stats errors are transient — logs only, no queue spam.
 
 
 # Recovery dispatch
@@ -835,7 +878,15 @@ def recover(dry_run: bool = False) -> list[dict]:
         try:
             chromadb_result = check_chromadb_health(dry_run=dry_run)
             results.append(chromadb_result)
-            if not dry_run and not chromadb_result.get("success"):
+            # Only count true hard failures (destructive recovery attempted) toward
+            # the daily retry budget. Soft issues are routed to hygiene jobs and
+            # must not burn the budget that's reserved for real init failures.
+            hard_failure = (
+                not dry_run
+                and not chromadb_result.get("success")
+                and not chromadb_result.get("recoverable_soft_issue")
+            )
+            if hard_failure:
                 state["retries"]["chromadb"] = chromadb_retries + 1
         except Exception as ex:
             _log(f"ChromaDB health check error: {ex}")
@@ -939,9 +990,16 @@ if __name__ == "__main__":
         else:
             print(f"Recovery {'simulation' if dry_run else 'attempt'} for {len(results)} job(s):\n")
             for r in results:
-                status_str = "would_do" if dry_run else ("OK" if r.get("success") else "FAILED")
+                if dry_run:
+                    status_str = "would_do"
+                elif r.get("recoverable_soft_issue"):
+                    status_str = "SOFT"  # surfaced to hygiene job, not a hard failure
+                elif r.get("success"):
+                    status_str = "OK"
+                else:
+                    status_str = "FAILED"
                 detail = r.get("would_do", r.get("detail", ""))
-                print(f"  [{status_str:7s}] {r['job']:20s} ({r['type']}) — {r.get('action', '')} — {detail}")
+                print(f"  [{status_str:8s}] {r['job']:20s} ({r['type']}) — {r.get('action', '')} — {detail}")
 
     elif cmd == "status":
         s = status()

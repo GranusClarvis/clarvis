@@ -55,6 +55,19 @@ Planning docs, queue items, and brand positioning do NOT count as delivery.
 | 31 | #217 | feat: render other players from Colyseus multiplayer state | 2026-04-23 |
 | 32 | #218 | feat: in-world chat bubbles with Colyseus broadcast | 2026-04-23 |
 | 33 | #219 | feat: quest NPC sprites with click-to-dialog and quest board | 2026-04-23 |
+| 34 | #232–#235 | feat: 4 room minigames (Hot Springs Memory, Cooking Rhythm, Dream Catcher, Lore Trivia) | 2026-04-25 |
+| 35 | #236 | feat: LLM-backed sanctuary companion chat (ADR-002) | 2026-04-25 |
+| 36 | #237 | feat: server-side chat history pagination + companion memory | 2026-04-25 |
+| 37 | #238 | feat: bond_score → 4 behavioral chat tones | 2026-04-25 |
+| 38 | #239 | feat: in-world companion chat overlay with hotkey C | 2026-04-25 |
+| 39 | #240 | feat: STAR currency storage + earn/spend/balance API | 2026-04-25 |
+| 40 | #241 | feat: layered cosmetic rendering for companion (hat + accessory) | 2026-04-25 |
+| 41 | #242 | feat: cosmetic shop backend + inventory + equip API | 2026-04-25 |
+| 42 | `7149ed2` | feat(sanctuary v3): canonical plan, locked palette, RD pipeline, first NPC | 2026-04-25 |
+| 43 | `404dd93` | feat(sanctuary v3): bulk-generate 9 NPCs + 15 themed props through RD pipeline | 2026-04-25 |
+| 44 | `993ce6c` | feat(sanctuary v3): 8 building exteriors + walkable test scene at ?v=3 | 2026-04-25 |
+| 45 | `5cec372` | feat(sanctuary v3): phase 6 — tilemap-driven overworld + animated water | 2026-04-25 |
+| 46 | `c2efa0c` | feat(sanctuary v3): phase 7 — door transitions + procedural room interiors | 2026-04-25 |
 
 ## Branch Cleanup Log
 
@@ -109,49 +122,90 @@ _Revalidated against dev HEAD 5ed3557. Updated status reflects actual merge stat
 | 2026-04-05 | a5479fd | SWO ecosystem positioning doc |
 | 2026-04-03 | 09b0598 | SWO brand integration doc + LLM prompt evaluator |
 
-## Sanctuary V2 — World-First Rebuild (reviewed 2026-04-23)
+## Sanctuary — V2/V3 Operating Model (reconciled 2026-04-25)
 
-_Full plan: `docs/SANCTUARY_V2_PLAN.md`. Queue tasks: `memory/evolution/QUEUE.md` §Star Sanctuary V2._
-_Direction: lobby-first, social, game-like. Tamagotchi + Club Penguin + Habbo vibes._
+_V2 = gameplay testbed (`?v=2`). V3 = production tile-based pixel-art rebuild (`?v=3`). Shared logic (DB, overlays, EventBus, Colyseus, minigames, quest system, companion chat, shop backend) benefits both automatically._
+_**Canonical V3 doc:** `docs/SANCTUARY_V3.md` (in SWO repo). **Replan:** `memory/evolution/swo_sanctuary_v2_v3_replan_2026-04-25.md`. **Execution log:** `memory/evolution/swo_sanctuary_v3_alignment_execution_2026-04-25.md`._
 
-**Core change:** Replace React panel-based dashboard with Phaser 3 game canvas world. Players walk a pixel-art map with their animated Skrumpey companion, see other players, chat with bubbles, discover quests via NPCs, shop at The Bazaar. Backend/API layer unchanged — V2 is a frontend revolution.
+**Routing** (`app/sanctuary/SanctuaryRouter.tsx`): `?v=3 → SanctuaryV3 → PhaserGameV3`; `?v=2 or NEXT_PUBLIC_SANCTUARY_V2=true → SanctuaryV2`; else `SanctuaryContent` (V1).
 
-**Stack:** Phaser 3 + Colyseus (multiplayer) + React overlays (contextual UI) + EventBus (bridge) + easystar.js (pathfinding) + Howler.js (audio)
+**Local testing (verified 2026-04-25, branch `clarvis/star-world-order/t0425200011-0a6c`):**
+- `npm run dev` (Next.js, port 3000) + `npm run colyseus:dev` (Colyseus multiplayer)
+- Visit `localhost:3000/sanctuary?v=3` (V3) or `?v=2` (V2)
+- `npm run type-check` ✅ passes; `/sanctuary?v=3` returns HTTP 200
+- Pre-PR gate: `npm run type-check && npm run lint && npm run build`
+- RD cost gate: `RD_API_KEY=... node scripts/v3/generate.mjs --check-cost`
 
-**Phase Status (reviewed 2026-04-23, updated with operator split brief):**
+### V2 — Testbed Status (frozen at PRs #208–#240 + V2 polish)
 
-| Phase | PRs | Status | Gate |
-|-------|-----|--------|------|
-| 0. API Lock & Security | #205-#207 | ✅ DONE | All routes tested, wallet auth, rate limiting |
-| P0 Blockers | f17f38e (collision) | **1/6 done** | Collision ✅, 5 remain: door, NPC art, chat echo, companion BG, room gameplay |
-| 1. Canvas Foundation | #208-#210, #213 | ✅ DONE | Player walks 8-zone world, real map art, click-to-move |
-| 2. Companion Alive | #214-#215 | ✅ DONE | Companion follows, mood anims, radial menu |
-| 3. Multiplayer Lobby | #216-#218 | ✅ DONE | Colyseus rooms, other players, chat bubbles |
-| 4. Diegetic Content | #219 (partial) | **25%** | Quest NPCs done; 3 overlays + Spawn Fox intro + room NPCs + quest hub remain |
-| 4B. Room Activities & Minigames | — | Not started | Timed quests, Training Grounds XP, minigame plumbing, 8 room minigames |
-| 5. LLM Companion | — | Not started | — |
-| 6. Economy | — | Not started | STAR currency + shop + cosmetics (4 PRs) |
-| 7. Personal Rooms | — | Not started | — |
-| 8. Polish | — | Not started | Mobile, onboarding (Spawn Fox guided), sound |
-| RD Asset Pipeline | — | Planned (action plan 2026-04-25) | scripts/rd/ + manifest+dedup → 5 batches → ~41 assets unblock HUD/Shop/VFX/cosmetics/empty states |
+| Phase | PRs / Commits | Status |
+|-------|---------------|--------|
+| 0. API Lock & Security | #205–#207 | ✅ DONE (Zod, rate limit, wallet auth on POST) |
+| 1. Canvas Foundation | #208–#210, #213 + `f17f38e` collision | ✅ DONE |
+| 2. Companion Alive | #214–#215 | ✅ DONE |
+| 3. Multiplayer Lobby | #216–#218 | ✅ DONE |
+| 4. Diegetic Content | #219 + `40d0177` Spawn Fox + `50ad237` overlays | ✅ DONE |
+| 4B. Room Minigames | #232–#235 (3 added today: Cooking Rhythm, Dream Catcher, Lore Trivia) | ✅ DONE |
+| 5. LLM Companion | #236–#240 (`1144e4b`, `1d44697`, `b5bc7ef`, `3084f9f`) | ✅ DONE |
+| 6. Economy | `fd9924c` STAR currency + `72d6202` layered cosmetics + `5aa2965` shop+inventory backend | ✅ DONE — UI lives in SHARED |
+| 7+ | — | Frozen / superseded by V3 |
 
-**Operator manual work (2026-04-23):** Uploaded 4 player sprites, 8 room backgrounds, 8 NPC sprites, overworld map, marked collision map. Authored `extract_sanctuary_layout.mjs`, `analyze_sprite.mjs`, wired real collision data (685 rects), clean character sprite pipeline (`PlayerSprite::registerFrames`), room background loading in BootScene/RoomScene.
+V2 polish remaining (P2): `[SWO_V2_COMPANION_BG_MATTE]`, `[SWO_V2_STATUS_VERIFY]`, `[SWO_V2_DEPRECATION_GATE]`.
 
-**P0 Playability Blockers (discovered 2026-04-23):**
-1. ~~`[SWO_P0_COLLISION_FIX]`~~ — ✅ FIXED (commit f17f38e: `physics.add.collider` wired)
-2. `[SWO_P0_STAR_GARDEN_DOOR]` — Star Garden has no door (7/8 doors defined)
-3. `[SWO_P0_NPC_REAL_SPRITES]` — NPCs use placeholder circles despite real art existing
-4. `[SWO_P0_CHAT_LOCAL_ECHO]` — Chat requires Colyseus roundtrip, no local echo
-5. `[SWO_P0_COMPANION_BG_MATTE]` — Companion mood PNGs have non-transparent backgrounds
-6. `[SWO_P0_ROOM_GAMEPLAY]` — Rooms are static image viewers (no player/movement/collision)
+### V3 — Production Rebuild Status (commits `7149ed2 → c2efa0c` on dev)
 
-**Recommended execution order:** P0 blockers (2→3→4→5→6) → Phase 4 content → Phase 4B activities/minigames → Phase 5 LLM → Phase 6 economy
+| Phase | Commit | Status |
+|-------|--------|--------|
+| 0. Canonical plan + locked palette | `7149ed2` | ✅ DONE (`docs/SANCTUARY_V3.md`, FM palette PNG+TXT, RD style ID) |
+| 1. FM tileset + first NPC sign-off | `7149ed2` | ✅ DONE (Spawn Fox passed) |
+| 2. RD pipeline scripts | `7149ed2` | ✅ DONE (`scripts/v3/{generate,normalize,rd-client,create-style,build-review}.mjs`) |
+| 3. Spawn Fox eyeball sign-off | `7149ed2` | ✅ DONE |
+| 4. Bulk NPC + prop generation | `404dd93` | ✅ DONE (9 more NPCs + 15 themed props) |
+| 5. Building exteriors + walkable test scene | `993ce6c` | ✅ DONE (8 buildings, `?v=3` walkable) |
+| 6. Tilemap-driven overworld + animated water | `5cec372` | ✅ DONE (Tiled JSON, 6-frame water) |
+| 7. Door transitions + procedural room interiors | `c2efa0c` | ✅ DONE (8 rooms launchable via `[E]`) |
+| 8. UI restyle / ambient particles / font / HUD icons | — | ⏳ NOT STARTED — `[SWO_V3_HUD_ICONS]`, `[SWO_V3_FONT_SWAP]`, `[SWO_V3_UI_RESTYLE]`, `[SWO_V3_PARTICLES_AMBIENT]` |
+| 9. Hand-authored maps + parity audit | — | ⏳ NOT STARTED — `[SWO_V3_OVERWORLD_MAP_DETAIL]`, `[SWO_V3_ROOM_INTERIOR_MAPS]`, `[SWO_V3_FEATURE_PARITY_AUDIT]` |
 
-**Art track retired items (2026-04-23):** WORLD_TILESET_ART (operator painted map), COMPANION_SPRITE_ART (mood PNGs exist), NPC_QUEST_CONTENT (NPCs defined, only dialog content remains)
+**V3 assets in repo (verified 2026-04-25):** 11 NPC walking sheets (`public/sanctuary-v3/npcs/`), 15 themed props, 8 building exteriors, FM 64-color palette, custom RD user style ID `user__swo_forgotten_sanctuary_0dbd7f09`, overworld Tiled JSON (60×40 tiles, layers ground/buildings/props/water/npcs/doors/collision), procedural `RoomSceneV3`.
 
-**Testing convention:** Primary dev/test loop is local (`npm run dev` + `npm run colyseus:dev`, verify at localhost:3000/sanctuary). test.starworldorder.com is secondary deployment verification only.
+**V3 weak points (concrete, observed 2026-04-25):**
+1. **Overworld map composition is placeholder.** `public/sanctuary-v3/maps/overworld.json` ground layer has 2400 tiles but **only 4 unique tile gids** (gid=2 grass = 1899/2400 ≈ 79%). Reads as flat green carpet around 8 building anchors, not an RPG forest route. Tracked: `[SWO_V3_OVERWORLD_MAP_DETAIL]`.
+2. **Room interiors are procedural.** `RoomSceneV3.renderInterior()` paints a floor+wall grid from a single FM crop — no decoration, no path, identical-looking across all 8 rooms apart from one signature prop. Tracked: `[SWO_V3_ROOM_INTERIOR_MAPS]`.
+3. **HUD/UI chrome still cosmic-palette + emoji.** Press Start 2P font and `#ffd700` accents in `WorldSceneV3`/`RoomSceneV3` text labels diverge from FM doctrine §4 (`#d4a445` antique gold). Tracked: `[SWO_V3_FONT_SWAP]`, `[SWO_V3_HUD_ICONS]`, `[SWO_V3_UI_RESTYLE]`.
+4. **No animation polish beyond water + walk-cycle.** No idle bob on player, no particles, no door open animation, no scene-transition flourish (only fade in/out at 250ms). Tracked: `[SWO_V3_PARTICLES_AMBIENT]`.
+5. **Pipeline is unhardened.** No prompt_hash dedup before RD POST; no daily/per-batch cost ceiling; no flock; no append-only `requested.jsonl`. One bug could re-bill the entire FM asset set. Tracked: `[SWO_V3_PIPELINE_HARDENING]`.
+6. **Companion sprite not yet wired to V3.** `WorldSceneV3` does not spawn a companion next to the player; V3 doc §13 says the constellation PNGs are kept on-spec, but the rendering hook is not yet present. Tracked: implicit in `[SWO_V3_FEATURE_PARITY_AUDIT]`.
 
-**NPC↔Sprite mapping (from operator sprite sheets):** Spawn Fox → Spawn_Fox_Sprite.png (Town Square intro), Springs Duck → Hot Springs, Observatory Owl → Observatory, Training Wolf → Training Grounds, Kitchen Bunny → Nebula Kitchen, Garden Ent → Star Garden, Hollow Moth → Cosmic Library, Dream Sheep → Dream Hollow, Aura Golem → Aura Forge.
+### Shared — what benefits both V2 and V3
+- Companion chat (LLM, history pagination, memory) — DONE (#236–#240)
+- Shop backend + STAR currency + cosmetic equip API — DONE (`fd9924c`/`72d6202`/`5aa2965`)
+- Quest system + Quest Board + Quest Tracker — DONE
+- Minigame framework + 7 minigames — DONE (#232–#235 + earlier)
+- Multiplayer (Colyseus), EventBus, React overlays — DONE
+- **Outstanding SHARED**: `[SWO_SHARED_SHOP_DIALOG]`, `[SWO_SHARED_QUEST_DIALOG_CONTENT]`, `[SWO_SHARED_ONBOARDING]`, `[SWO_SHARED_SOUND_DESIGN]`, `[SWO_SHARED_VFX_TRIGGER_API]`, `[SWO_SHARED_MOBILE_OVERLAYS]`, `[SWO_SHARED_EXPEDITIONS]`, `[SWO_SHARED_CHAT_MEMORY_CONSOLIDATION]`, `[SWO_SHARED_COSMETIC_ITEM_DESIGN]`.
+
+### Recommended next-task order (post-alignment)
+
+1. **`[SWO_V3_PIPELINE_HARDENING]`** (P1, 1 PR) — credit-waste prevention before next batch.
+2. **`[SWO_V3_HUD_ICONS]`** (P1, 1 PR, ~$0.30) — most-visible UX win, lands on both `?v=2` and `?v=3` because overlays are shared.
+3. **`[SWO_SHARED_SHOP_DIALOG]`** (P1, 1 PR) — backend already shipped; UI is the missing piece.
+4. **`[SWO_V3_FONT_SWAP]`** (P1, 1 PR, ~1h) — single global font swap is the biggest tone shift for the smallest effort.
+5. **`[SWO_V3_OVERWORLD_MAP_DETAIL]`** (P1, 1 PR) — fix the flat-green-carpet overworld; no new RD spend.
+6. **`[SWO_V3_ROOM_INTERIOR_MAPS]`** (P1, 1–2 PRs) — replace procedural rooms with hand-authored Tiled JSON.
+7. **`[SWO_OPERATOR_PLAYTEST_BRIEF]`** (CONTENT, no PR) — refresh as V2-and-V3 brief so operator can drive next sprint.
+8. **`[SWO_SHARED_QUEST_DIALOG_CONTENT]`** (P1, 1 PR) — both tracks consume same data.
+9. **`[SWO_V2_COMPANION_BG_MATTE]`** (P2, 30 min, 1 PR) — quick V2 polish; shipped tooling.
+
+### Naming convention (binding)
+
+| Prefix | Lane | Touches |
+|--------|------|---------|
+| `[SWO_SHARED_*]` | Shared logic | DB, API, overlays, EventBus, Colyseus, quest data, minigame rules, content. React-only or backend-only. |
+| `[SWO_V2_*]` | V2 testbed | `app/sanctuary/SanctuaryV2.tsx`, `components/sanctuary/PhaserGame.tsx`, `game/{config,scenes,sprites,systems}/`, `public/sanctuary/`. |
+| `[SWO_V3_*]` | V3 production | `app/sanctuary/SanctuaryV3.tsx`, `components/sanctuary-v3/PhaserGameV3.tsx`, `game/v3/`, `public/sanctuary-v3/`, `scripts/v3/`. |
+
+If an item touches more than one lane, **split it**. The SHARED item is usually the trunk.
 
 ## Notes
 
