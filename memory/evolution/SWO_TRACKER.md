@@ -68,6 +68,19 @@ Planning docs, queue items, and brand positioning do NOT count as delivery.
 | 44 | `993ce6c` | feat(sanctuary v3): 8 building exteriors + walkable test scene at ?v=3 | 2026-04-25 |
 | 45 | `5cec372` | feat(sanctuary v3): phase 6 — tilemap-driven overworld + animated water | 2026-04-25 |
 | 46 | `c2efa0c` | feat(sanctuary v3): phase 7 — door transitions + procedural room interiors | 2026-04-25 |
+| 47 | #245 | feat(sanctuary): seed 5 daily errands + 3 weekly adventures via JSON | 2026-04-26 |
+| 48 | #246 | content(sanctuary): SWO_SHARED_COSMETIC_ITEM_DESIGN — 30-item catalog spec | 2026-04-26 |
+| 49 | #247 | feat(sanctuary v2.3): guided onboarding tutorial overlay | 2026-04-26 |
+| 50 | #248 | feat(sanctuary): Howler-based ambient + SFX audio service | 2026-04-26 |
+| 51 | #249 | feat(sanctuary v3): harden RD pipeline against credit waste | 2026-04-26 |
+| 52 | #253 | feat(sanctuary v3): swap Press Start 2P → Pixelify Sans [SWO_V3_FONT_SWAP] | 2026-04-26 |
+| 53 | #254 | feat(sanctuary v3): mount missing overlays + parity audit [SWO_V3_FEATURE_PARITY_AUDIT] | 2026-04-26 |
+| 54 | #255 | feat(sanctuary v3): spawn companion sprite in WorldSceneV3 [SWO_V3_COMPANION_SPRITE] | 2026-04-26 |
+| 55 | #256 | feat(sanctuary v3): wire 7 minigames into V3 [SWO_V3_MINIGAMES] | 2026-04-26 |
+| 56 | #257 | feat(sanctuary): share InteractAction→VfxKind mapping for V2/V3 [SWO_SHARED_VFX_TRIGGER_API] | 2026-04-26 |
+| 57 | #258 | feat(sanctuary v3): emit location-entered/exited from V3 zones [SWO_V3_LOCATION_EVENTS] | 2026-04-26 |
+| 58 | #259 | feat(sanctuary v3): mount radial CompanionMenu overlay [SWO_V3_RADIAL_MENU] | 2026-04-26 |
+| 59 | #260 | feat(sanctuary v3): EasyStar click-to-move pathfinding [SWO_V3_PLAYER_PATHFINDING] | 2026-04-26 |
 
 ## Branch Cleanup Log
 
@@ -81,17 +94,28 @@ Planning docs, queue items, and brand positioning do NOT count as delivery.
 
 ## Pending PRs — MERGE PRIORITY ORDER
 
-_Revalidated 2026-04-21 against upstream/dev HEAD (36d0e20). Fork dev synced. All branches cleaned._
+_Revalidated 2026-04-26 against upstream/dev HEAD (68d9c94)._
 
 | # | PR | Title | Status |
 |---|-----|-------|--------|
 | 1 | #204 | feat: wallet auth for sanctuary companion interact | Open — awaiting review |
+| 2 | #258 | feat(sanctuary v3): emit location-entered/exited from V3 zones [SWO_V3_LOCATION_EVENTS] | Open — 2026-04-26 |
+| 3 | #259 | feat(sanctuary v3): mount radial CompanionMenu overlay [SWO_V3_RADIAL_MENU] | Open — 2026-04-26 |
+| 4 | #260 | feat(sanctuary v3): EasyStar click-to-move pathfinding [SWO_V3_PLAYER_PATHFINDING] | Open — 2026-04-26 |
 
 **Resolved:**
 - ~~#177~~ — MERGED on dev (governance votingPower server-side verification)
 - ~~#180~~ — MERGED on dev (admin nonce persistence in SQLite)
 - ~~#181~~ — MERGED on dev (contract archive housekeeping)
 - ~~#179~~ — CLOSED (not merged). Wallet signature on chat/messages/presence. Findings H-1/H-4 remain unaddressed and need a new PR.
+- ~~#250~~ — MERGED on dev (operator playtest brief — `SWO_OPERATOR_PLAYTEST_BRIEF`)
+- ~~#251~~ — MERGED on dev (shared companion VFX event contract — `SWO_SHARED_VFX_TRIGGER_API`)
+- ~~#252~~ — MERGED on dev (overworld map enrichment — `SWO_V3_OVERWORLD_MAP_DETAIL`)
+- ~~#253~~ — MERGED on dev (Pixelify Sans font swap — `SWO_V3_FONT_SWAP`)
+- ~~#254~~ — MERGED on dev (V3 parity audit + overlay mounts — `SWO_V3_FEATURE_PARITY_AUDIT`)
+- ~~#255~~ — MERGED on dev (companion sprite in WorldSceneV3 — `SWO_V3_COMPANION_SPRITE`)
+- ~~#256~~ — MERGED on dev (7 minigames wired into V3 — `SWO_V3_MINIGAMES`)
+- ~~#257~~ — MERGED on dev (shared VFX InteractAction→VfxKind mapping)
 
 ## Security Audit Backlog (from 2026-04-19 audit, revalidated 2026-04-21)
 
@@ -164,8 +188,8 @@ V2 polish remaining (P2): `[SWO_V2_COMPANION_BG_MATTE]`, `[SWO_V2_STATUS_VERIFY]
 | 5. Building exteriors + walkable test scene | `993ce6c` | ✅ DONE (8 buildings, `?v=3` walkable) |
 | 6. Tilemap-driven overworld + animated water | `5cec372` | ✅ DONE (Tiled JSON, 6-frame water) |
 | 7. Door transitions + procedural room interiors | `c2efa0c` | ✅ DONE (8 rooms launchable via `[E]`) |
-| 8. UI restyle / ambient particles / font / HUD icons | — | ⏳ NOT STARTED — `[SWO_V3_HUD_ICONS]`, `[SWO_V3_FONT_SWAP]`, `[SWO_V3_UI_RESTYLE]`, `[SWO_V3_PARTICLES_AMBIENT]` |
-| 9. Hand-authored maps + parity audit | — | ⏳ NOT STARTED — `[SWO_V3_OVERWORLD_MAP_DETAIL]`, `[SWO_V3_ROOM_INTERIOR_MAPS]`, `[SWO_V3_FEATURE_PARITY_AUDIT]` |
+| 8. UI restyle / ambient particles / font / HUD icons | PR #253 (font) open | ⏳ IN PROGRESS — `[SWO_V3_FONT_SWAP]` PR #253 open; `[SWO_V3_HUD_ICONS]` blocked on RD_API_KEY; `[SWO_V3_UI_RESTYLE]`, `[SWO_V3_PARTICLES_AMBIENT]` not started |
+| 9. Hand-authored maps + parity audit | PRs #252 (merged), #254 (parity audit) open | ⏳ IN PROGRESS — `[SWO_V3_OVERWORLD_MAP_DETAIL]` MERGED on dev; `[SWO_V3_FEATURE_PARITY_AUDIT]` PR #254 open with audit doc + 6 overlay mounts; `[SWO_V3_ROOM_INTERIOR_MAPS]` not started |
 
 **V3 assets in repo (verified 2026-04-25):** 11 NPC walking sheets (`public/sanctuary-v3/npcs/`), 15 themed props, 8 building exteriors, FM 64-color palette, custom RD user style ID `user__swo_forgotten_sanctuary_0dbd7f09`, overworld Tiled JSON (60×40 tiles, layers ground/buildings/props/water/npcs/doors/collision), procedural `RoomSceneV3`.
 
@@ -187,15 +211,20 @@ V2 polish remaining (P2): `[SWO_V2_COMPANION_BG_MATTE]`, `[SWO_V2_STATUS_VERIFY]
 
 ### Recommended next-task order (post-alignment)
 
-1. **`[SWO_V3_PIPELINE_HARDENING]`** (P1, 1 PR) — credit-waste prevention before next batch.
-2. **`[SWO_V3_HUD_ICONS]`** (P1, 1 PR, ~$0.30) — most-visible UX win, lands on both `?v=2` and `?v=3` because overlays are shared.
-3. **`[SWO_SHARED_SHOP_DIALOG]`** (P1, 1 PR) — backend already shipped; UI is the missing piece.
-4. **`[SWO_V3_FONT_SWAP]`** (P1, 1 PR, ~1h) — single global font swap is the biggest tone shift for the smallest effort.
-5. **`[SWO_V3_OVERWORLD_MAP_DETAIL]`** (P1, 1 PR) — fix the flat-green-carpet overworld; no new RD spend.
-6. **`[SWO_V3_ROOM_INTERIOR_MAPS]`** (P1, 1–2 PRs) — replace procedural rooms with hand-authored Tiled JSON.
-7. **`[SWO_OPERATOR_PLAYTEST_BRIEF]`** (CONTENT, no PR) — refresh as V2-and-V3 brief so operator can drive next sprint.
-8. **`[SWO_SHARED_QUEST_DIALOG_CONTENT]`** (P1, 1 PR) — both tracks consume same data.
-9. **`[SWO_V2_COMPANION_BG_MATTE]`** (P2, 30 min, 1 PR) — quick V2 polish; shipped tooling.
+_Updated 2026-04-26 (fourth pass): SWO_V3_LOCATION_EVENTS, SWO_V3_RADIAL_MENU, SWO_V3_PLAYER_PATHFINDING shipped this session (PRs #258, #259, #260). All earlier V3 polish (#253–#257) merged on dev. HUD_ICONS still blocked on operator-side RD_API_KEY._
+
+1. **`[SWO_V3_HUD_ICONS]`** (P1, 1 PR, ~$0.30 RD spend) — **BLOCKED on operator running `RD_API_KEY=... node scripts/v3/generate.mjs --force`.** Pipeline ready (#249), manifest entries TBD. Most-visible UX win once unblocked.
+2. ~~**`[SWO_V3_COMPANION_SPRITE]`**~~ → MERGED (#255).
+3. ~~**`[SWO_V3_MINIGAMES]`**~~ → MERGED (#256).
+4. ~~**`[SWO_V3_RADIAL_MENU]`**~~ → PR #259 OPEN 2026-04-26.
+5. **`[SWO_V3_ROOM_INTERIOR_MAPS]`** (P1, 1–2 PRs) — replace procedural rooms with hand-authored Tiled JSON.
+6. **`[SWO_V3_SHOP_CHROME]`** (P1, 1 PR, ~$0.50 RD spend) — blocked on RD_API_KEY like HUD icons.
+7. **`[SWO_V3_MULTIPLAYER]`** (NEW, P2, 1 PR, unblocked by #258) — Colyseus join + `OtherPlayersManager` + chat bubble + chat input in V3.
+8. **`[SWO_V3_UI_RESTYLE]`** (P2, 1 PR) — restyle V3 chrome to FM tones; V2 stays cosmic.
+9. **`[SWO_SHARED_MOBILE_OVERLAYS]`** (P2, 1 PR) — responsive React overlay sweep.
+10. **`[SWO_SHARED_EXPEDITIONS]`** (P2, 1 PR) — multi-step adventures with narrative choices.
+11. ~~**`[SWO_V3_LOCATION_EVENTS]`**~~ → PR #258 OPEN 2026-04-26.
+12. ~~**`[SWO_V3_PLAYER_PATHFINDING]`**~~ → PR #260 OPEN 2026-04-26.
 
 ### Naming convention (binding)
 
