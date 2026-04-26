@@ -26,7 +26,6 @@ _Source: `docs/internal/audits/NEURO_FEATURE_DECISIONS_2026-04-17.md`. Phase 9 s
 
 ### Bugs
 
-- [x] **[CRON_SYNC_STASH_RECOVERY_REF]** `scripts/cron/cron_env.sh::sync_workspace()` now captures both `_stash_selector="stash@{0}"` and `_stash_sha`. CRITICAL log lines and dashboard_event meta include both, with concrete recovery commands (`git stash pop 'stash@{0}'` OR `git stash apply <sha>`). Verified: bash -n clean; both selector + SHA recovery paths exercised in /tmp/stash_test. (2026-04-26)
 
 ## P1 — This Week
 
@@ -49,8 +48,6 @@ _**Lane discipline:** default new feature work to SHARED. Only fork into V2 or V
 
 #### SHARED — both V2 + V3 benefit (default lane)
 
-- [ ] **[SWO_SHARED_QUEST_DIALOG_CONTENT]** Write quest dialog JSON for 5 daily errands + 3 weekly adventures. Map to `sanctuary_quests` table format. JSON seed file. NPC names/zones/locations defined in both `npcDefinitions.ts` (V2) and `game/v3/config/npcDefinitionsV3.ts` (V3). Same dialog data drives both renderers via QuestDialog overlay. (PROJECT:SWO, CONTENT, P1)
-- [ ] **[SWO_SHARED_COSMETIC_ITEM_DESIGN]** 20-30 cosmetic items: 8 hats, 6 accessories, 5 backgrounds, 5 floors, 4 animations, 2 seasonal. Each: name, category, rarity (common/uncommon/rare/epic), STAR price (10-50), level req (0-15), pixel-art spec. Seed JSON for `sanctuary_cosmetic_items`. **Sprite generation forks: V2 cosmic palette under `public/sanctuary/cosmetics/`; V3 FM palette under `public/sanctuary-v3/cosmetics/`. This item owns the shared data spec only.** (PROJECT:SWO, CONTENT, P2)
 - [ ] **[SWO_SHARED_ONBOARDING]** Full guided tutorial extending Spawn Fox intro. Detect new player. Fox walks player through: select companion → walk to first room → interact with NPC → open quest board → try first minigame. Tooltip arrows + highlight zones. Skip button. State in `sanctuary_player_state`. Engine-agnostic (overlays + EventBus events); mounts on V2 and V3. (PROJECT:SWO, P2)
 - [ ] **[SWO_SHARED_SOUND_DESIGN]** Howler.js-based ambient + SFX service (`lib/sanctuary/audio.ts` + EventBus listener). Per-zone ambient loops (crossfade on zone-change event), interaction SFX (pet sparkle, feed munch, level-up chime). Muted by default, volume slider in WelcomeDialog/settings overlay. Both Phaser scenes emit `zone:enter` / `zone:leave` / `companion:react` events; service consumes them. ~8 ambient loops + ~10 SFX. Audio asset folder shared at `public/audio/sanctuary/`. (PROJECT:SWO, P2)
 - [ ] **[SWO_SHARED_VFX_TRIGGER_API]** Shared EventBus contract for companion reactions: `companion:vfx:sparkle`, `companion:vfx:heart`, etc. V2 RadialMenu + V3 RadialMenu both publish these events. Sprite sheets differ per track — V2 stays on emoji/cosmic palette; V3 uses FM palette via `[SWO_V3_VFX_SPRITES]`. This task is the trigger contract only. (PROJECT:SWO, P2)

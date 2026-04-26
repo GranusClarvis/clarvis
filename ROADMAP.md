@@ -46,29 +46,29 @@ Clarvis should grow into:
 - likely first extraction candidate: **ClarvisDB** (vector memory with graph associations)
 - a public website presenting Clarvis, linked repos, current work, and benchmarks
 
-## Current State (2026-04-19)
+## Current State (2026-04-26)
 
 | Capability | Status | Summary |
 |-----------|--------|---------|
-| **Brain (ClarvisDB)** | 88% | memory_quality=0.83, retrieval_precision=0.93 |
-| **Session Continuity** | 92% | autonomy=0.92 |
-| **Heartbeat Evolution** | 83% | task_success=0.83 |
-| **Self-Awareness** | 76% | Phi=0.610 |
-| **Task Tracking** | 84% | task_success=0.83, prompt_context=0.84 |
+| **Brain (ClarvisDB)** | 85% | memory_quality=0.86, retrieval_precision=0.84 |
+| **Session Continuity** | 52% | autonomy=0.52 |
+| **Heartbeat Evolution** | 82% | task_success=0.82 |
+| **Self-Awareness** | 78% | Phi=0.633 |
+| **Task Tracking** | 82% | task_success=0.82, prompt_context=0.82 |
 | **Reflection** | 94% | reflection log fresh (0d old) |
 | **Confidence Gating** | 95% | 50/50 recent predictions resolved |
-| **Attention & Working Memory** | 94% | prompt_context=0.84 |
-| **Reasoning Chains** | 100% | 347 chain files |
+| **Attention & Working Memory** | 92% | prompt_context=0.82 |
+| **Reasoning Chains** | 100% | 345 chain files |
 | **Knowledge Synthesis** | 100% | 60 concepts, 50 cross-domain, 828 edges |
-| **Procedural Memory** | 92% | 162 procedures |
-| **Context Quality** | 90% | prompt_context=0.84, efficiency=0.99 |
+| **Procedural Memory** | 92% | 212 procedures |
+| **Context Quality** | 88% | prompt_context=0.82, efficiency=0.98 |
 | **Monitoring** | 95% | health log fresh (0h old) |
-| **Episodic Memory** | 96% | 458 episodes |
+| **Episodic Memory** | 96% | 500 episodes |
 | **Self-Surgery** | 92% | spine module healthy |
 | **Cognitive Workspace** | 88% | 0 items across buffers |
 | **ACT-R Activation** | 88% | stable |
 | **Agent Orchestrator** | 80% | no agent dir |
-| **Performance Index** | 94% | PI=0.9446 |
+| **Performance Index** | 95% | PI=0.9507 |
 | **Public Surface** | 90% | Dockerfile=yes, README=yes |
 
 ### Weekly State Note (2026-04-19)
