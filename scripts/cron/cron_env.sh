@@ -292,19 +292,26 @@ sync_workspace() {
         return 0
     fi
 
-    local _stashed=0 _stash_ref=""
+    # Capture BOTH the stash selector (stash@{0}, usable with `git stash pop`)
+    # and the commit SHA (stable across stash list shifts, usable with
+    # `git stash apply <sha>`). Operators need the selector for normal recovery;
+    # the SHA is the unambiguous identifier that survives if other stashes are
+    # pushed concurrently.
+    local _stashed=0 _stash_selector="" _stash_sha=""
     if ! git -C "$CLARVIS_WORKSPACE" diff --quiet 2>/dev/null || \
        ! git -C "$CLARVIS_WORKSPACE" diff --cached --quiet 2>/dev/null; then
         git -C "$CLARVIS_WORKSPACE" stash push -q -m "cron-sync-$(date +%s)" 2>/dev/null || return 0
-        _stash_ref=$(git -C "$CLARVIS_WORKSPACE" stash list -1 --format="%H" 2>/dev/null)
+        _stash_selector="stash@{0}"
+        _stash_sha=$(git -C "$CLARVIS_WORKSPACE" stash list -1 --format="%H" 2>/dev/null)
         _stashed=1
     fi
 
     git -C "$CLARVIS_WORKSPACE" merge --ff-only origin/main --quiet 2>/dev/null || {
         if [ "$_stashed" -eq 1 ]; then
             if ! git -C "$CLARVIS_WORKSPACE" stash pop -q 2>/dev/null; then
-                echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] SYNC: CRITICAL — stash pop failed after aborted ff-merge. Stash ref: ${_stash_ref:-unknown}. Run 'git -C $CLARVIS_WORKSPACE stash list' and 'git -C $CLARVIS_WORKSPACE stash pop' to recover." >&2
-                emit_dashboard_event error --section sync_workspace --meta "stash_pop_failed_after_merge_abort stash_ref=${_stash_ref:-unknown}"
+                local _sha_disp="${_stash_sha:-unknown}"
+                echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] SYNC: CRITICAL — stash pop failed after aborted ff-merge. Stash selector: $_stash_selector | SHA: $_sha_disp. Recover with: git -C $CLARVIS_WORKSPACE stash pop '$_stash_selector'   OR by SHA: git -C $CLARVIS_WORKSPACE stash apply $_sha_disp" >&2
+                emit_dashboard_event error --section sync_workspace --meta "stash_pop_failed_after_merge_abort stash_selector=$_stash_selector stash_sha=$_sha_disp"
                 return 1
             fi
         fi
@@ -313,8 +320,9 @@ sync_workspace() {
 
     if [ "$_stashed" -eq 1 ]; then
         if ! git -C "$CLARVIS_WORKSPACE" stash pop -q 2>/dev/null; then
-            echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] SYNC: CRITICAL — stash pop failed after successful ff-merge. Stash ref: ${_stash_ref:-unknown}. Workspace is updated but local changes are stranded. Run 'git -C $CLARVIS_WORKSPACE stash show' and 'git -C $CLARVIS_WORKSPACE stash pop' to recover." >&2
-            emit_dashboard_event error --section sync_workspace --meta "stash_pop_failed_after_ff_merge stash_ref=${_stash_ref:-unknown}"
+            local _sha_disp="${_stash_sha:-unknown}"
+            echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] SYNC: CRITICAL — stash pop failed after successful ff-merge. Stash selector: $_stash_selector | SHA: $_sha_disp. Workspace is updated but local changes are stranded. Recover with: git -C $CLARVIS_WORKSPACE stash pop '$_stash_selector'   OR by SHA: git -C $CLARVIS_WORKSPACE stash apply $_sha_disp" >&2
+            emit_dashboard_event error --section sync_workspace --meta "stash_pop_failed_after_ff_merge stash_selector=$_stash_selector stash_sha=$_sha_disp"
             return 1
         fi
     fi

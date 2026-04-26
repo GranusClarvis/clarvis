@@ -26,7 +26,7 @@ _Source: `docs/internal/audits/NEURO_FEATURE_DECISIONS_2026-04-17.md`. Phase 9 s
 
 ### Bugs
 
-- [ ] **[CRON_SYNC_STASH_RECOVERY_REF]** `scripts/cron/cron_env.sh::sync_workspace()` captures `_stash_ref` via `git stash list -1 --format="%H"`, which yields an opaque commit hash, while the recovery instructions reference stash workflows. Store/log a usable stash selector (`stash@{n}`) or both selector+hash so operators can recover stranded work without guesswork.
+- [x] **[CRON_SYNC_STASH_RECOVERY_REF]** `scripts/cron/cron_env.sh::sync_workspace()` now captures both `_stash_selector="stash@{0}"` and `_stash_sha`. CRITICAL log lines and dashboard_event meta include both, with concrete recovery commands (`git stash pop 'stash@{0}'` OR `git stash apply <sha>`). Verified: bash -n clean; both selector + SHA recovery paths exercised in /tmp/stash_test. (2026-04-26)
 
 ## P1 — This Week
 
@@ -49,7 +49,6 @@ _**Lane discipline:** default new feature work to SHARED. Only fork into V2 or V
 
 #### SHARED — both V2 + V3 benefit (default lane)
 
-- [ ] **[SWO_SHARED_SHOP_DIALOG]** ShopDialog React overlay (`components/sanctuary/overlays/ShopDialog.tsx`). Backend shipped (`5aa2965` cosmetic shop + inventory + equip API). Triggered by NPC interaction (Shop Keeper or Quest Board area) + hotkey (B). Grid layout with category tabs (Hats / Accessories / Backgrounds / Animations). Live companion preview via EventBus. Buy button with STAR price/balance/owned/level-req. Inventory tab (hotkey I) with equip/unequip. Mounts in BOTH SanctuaryV2.tsx and SanctuaryV3.tsx. (PROJECT:SWO, P1)
 - [ ] **[SWO_SHARED_QUEST_DIALOG_CONTENT]** Write quest dialog JSON for 5 daily errands + 3 weekly adventures. Map to `sanctuary_quests` table format. JSON seed file. NPC names/zones/locations defined in both `npcDefinitions.ts` (V2) and `game/v3/config/npcDefinitionsV3.ts` (V3). Same dialog data drives both renderers via QuestDialog overlay. (PROJECT:SWO, CONTENT, P1)
 - [ ] **[SWO_SHARED_COSMETIC_ITEM_DESIGN]** 20-30 cosmetic items: 8 hats, 6 accessories, 5 backgrounds, 5 floors, 4 animations, 2 seasonal. Each: name, category, rarity (common/uncommon/rare/epic), STAR price (10-50), level req (0-15), pixel-art spec. Seed JSON for `sanctuary_cosmetic_items`. **Sprite generation forks: V2 cosmic palette under `public/sanctuary/cosmetics/`; V3 FM palette under `public/sanctuary-v3/cosmetics/`. This item owns the shared data spec only.** (PROJECT:SWO, CONTENT, P2)
 - [ ] **[SWO_SHARED_ONBOARDING]** Full guided tutorial extending Spawn Fox intro. Detect new player. Fox walks player through: select companion → walk to first room → interact with NPC → open quest board → try first minigame. Tooltip arrows + highlight zones. Skip button. State in `sanctuary_player_state`. Engine-agnostic (overlays + EventBus events); mounts on V2 and V3. (PROJECT:SWO, P2)
