@@ -1,7 +1,7 @@
 # ROADMAP.md — Clarvis Evolution Roadmap
 
 _The single source of truth for where Clarvis is going and how to get there._
-_Updated: 2026-04-19_
+_Updated: 2026-04-26_
 
 ---
 
@@ -70,6 +70,13 @@ Clarvis should grow into:
 | **Agent Orchestrator** | 80% | no agent dir |
 | **Performance Index** | 95% | PI=0.9507 |
 | **Public Surface** | 90% | Dockerfile=yes, README=yes |
+
+### Weekly State Note (2026-04-26)
+- SWO became the clear value engine this week: Sanctuary V2 advanced from scaffolding into a playable loop, while V3 was clarified as the production rebuild lane with pipeline hardening and parity/polish as the next serious gates.
+- Core cognition stayed stable enough to support autonomy: brain quality eval held at 0.910, retrieval usefulness at 85%, and CLR passed at 0.810.
+- Reliability debt is now concentrated in execution hygiene rather than raw capability: digest output still garbles autonomous summaries, successful runs are often mislabeled `partial_success`, and goal bookkeeping duplicates active priorities without progress updates.
+- Weekly continuity weakened because daily logs are missing for 2026-04-20 through 2026-04-22.
+- Phi remains a monitored regression signal, not a strategic north star; the practical work is de-emphasis, cleaner goal state, and better execution labeling.
 
 ### Weekly State Note (2026-04-19)
 - Deep audit moved from vague program to evidence-producing workflow: trace retention, trace wiring, toggle wiring, and recovered decision-doc queue items are now in place.

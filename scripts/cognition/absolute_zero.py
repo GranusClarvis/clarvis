@@ -251,7 +251,7 @@ def propose_abduction(episodes: list) -> dict | None:
         }
     else:
         ep = random.choice(failures)
-        error_msg = ep.get("error", "no error message recorded")
+        error_msg = ep.get("error") or "no error message recorded"
         prompt = (
             "Abductive reasoning challenge:\n"
             f"  Task: {ep.get('task', '')[:100]}\n"
