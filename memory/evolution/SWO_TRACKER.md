@@ -3,15 +3,19 @@
 _Dedicated tracker for SWO/Sanctuary project work. Separated from main QUEUE.md per PROJECT_LANES.md governance._
 _Project lane: SWO | Status: ACTIVE | Operator-directed._
 
-> **2026-04-26 RESET — V3 DEFERRED, V2 IS THE ACTIVE SURFACE.**
+> **2026-04-26 RESET — V3 DEFERRED, V2 IS THE ACTIVE SURFACE, COMPANION-FIRST CORE LOOP.**
 >
 > All new feature work, polish, and visual fixes target **V2** (`?v=2` route, page `app/sanctuary/SanctuaryV2.tsx`, Phaser mount `components/sanctuary/PhaserGame.tsx`, game code under `game/{scenes,sprites,systems,config}/`, assets in `public/sanctuary/`). Tag commits/branches `[SWO_V2_*]` (or `[SWO_SHARED_*]` for engine-agnostic React/overlay/EventBus work).
 >
+> **Center of gravity: the Companion (selected Skrumpey).** A tamagotchi-style care + interaction loop is the new core loop. Quests, minigames, and economy stay as supporting structure; new feature work files under `[SWO_V2_COMPANION_*]` first. Direction note: `memory/evolution/swo_sanctuary_companion_first_2026-04-26.md`.
+>
 > **V3 is frozen.** Stop touching `game/v3/`, `public/sanctuary-v3/`, `scripts/v3/`, `docs/SANCTUARY_V3.md`. The `?v=3` route remains for archival access only. **No new PRs tagged `[SWO_V3_*]`.** **No further RD credit spend on V3** (~5 generation passes already burned without V2 parity; remaining RD balance is held for V2 polish only after explicit operator approval).
+>
+> **V1 (`SanctuaryContent.tsx` React panel) is archival.** It stays mounted as the no-flag fallback for backwards-compat only. No new V1 features. Anything still useful in V1 ports into V2 surfaces, not V1.
 >
 > Why V3 stopped: pixel-art-from-scratch parallel rebuild that never reached V2's painted-hub parity, and the FM aesthetic does not compose with V2's painted assets. Full inventory: SWO repo `docs/SANCTUARY_V3_DEFERRED.md`. The V3 doctrine doc (`docs/SANCTUARY_V3.md`) carries a deferred banner at the top.
 >
-> Primary V2 goal: **reduce AI-slop** (palette quantize / dither shader, fix sprite aliasing, downsize NPCs, standardize painted-room palettes — without regenerating the painted backgrounds).
+> Primary V2 goals: **(a) reduce AI-slop** (palette quantize / dither shader, fix sprite aliasing, downsize NPCs, standardize painted-room palettes — without regenerating the painted backgrounds); **(b) build out the Companion core loop** (stats schema → mood-from-stats → companion screen → need alerts → chat-knows-stats). Direction note for (b): `memory/evolution/swo_sanctuary_companion_first_2026-04-26.md`.
 
 ## Delivery Criteria
 
@@ -104,20 +108,18 @@ Planning docs, queue items, and brand positioning do NOT count as delivery.
 
 ## Pending PRs — MERGE PRIORITY ORDER
 
-_Revalidated 2026-04-26 against upstream/dev HEAD (68d9c94)._
+_Revalidated 2026-04-26 (evening) against upstream/dev HEAD. The four "open" rows that lived here all morning are now confirmed merged — kept under Resolved._
 
-| # | PR | Title | Status |
-|---|-----|-------|--------|
-| 1 | #204 | feat: wallet auth for sanctuary companion interact | Open — awaiting review |
-| 2 | #258 | feat(sanctuary v3): emit location-entered/exited from V3 zones [SWO_V3_LOCATION_EVENTS] | Open — 2026-04-26 |
-| 3 | #259 | feat(sanctuary v3): mount radial CompanionMenu overlay [SWO_V3_RADIAL_MENU] | Open — 2026-04-26 |
-| 4 | #260 | feat(sanctuary v3): EasyStar click-to-move pathfinding [SWO_V3_PLAYER_PATHFINDING] | Open — 2026-04-26 |
+| # | Branch / PR | Title | Status |
+|---|-------------|-------|--------|
+| 1 | `clarvis/star-world-order/t0426200012-3b08` (`47d9b08`) | feat(sanctuary v2): deslop post-FX shader (palette quantize + Bayer dither) `[SWO_V2_DESLOP_SHADER]` | Built locally — needs PR + merge (P0) |
 
 **Resolved:**
 - ~~#177~~ — MERGED on dev (governance votingPower server-side verification)
 - ~~#180~~ — MERGED on dev (admin nonce persistence in SQLite)
 - ~~#181~~ — MERGED on dev (contract archive housekeeping)
 - ~~#179~~ — CLOSED (not merged). Wallet signature on chat/messages/presence. Findings H-1/H-4 remain unaddressed and need a new PR.
+- ~~#204~~ — MERGED on dev (wallet auth for sanctuary companion interact). Confirmed 2026-04-26 evening; was incorrectly listed as "open."
 - ~~#250~~ — MERGED on dev (operator playtest brief — `SWO_OPERATOR_PLAYTEST_BRIEF`)
 - ~~#251~~ — MERGED on dev (shared companion VFX event contract — `SWO_SHARED_VFX_TRIGGER_API`)
 - ~~#252~~ — MERGED on dev (overworld map enrichment — `SWO_V3_OVERWORLD_MAP_DETAIL`)
@@ -126,6 +128,9 @@ _Revalidated 2026-04-26 against upstream/dev HEAD (68d9c94)._
 - ~~#255~~ — MERGED on dev (companion sprite in WorldSceneV3 — `SWO_V3_COMPANION_SPRITE`)
 - ~~#256~~ — MERGED on dev (7 minigames wired into V3 — `SWO_V3_MINIGAMES`)
 - ~~#257~~ — MERGED on dev (shared VFX InteractAction→VfxKind mapping)
+- ~~#258~~ — MERGED on dev (V3 location-entered/exited events — `SWO_V3_LOCATION_EVENTS`). V3 deferred post-merge; do not extend.
+- ~~#259~~ — MERGED on dev (V3 radial CompanionMenu overlay mount — `SWO_V3_RADIAL_MENU`). V3 deferred post-merge.
+- ~~#260~~ — MERGED on dev (V3 EasyStar click-to-move pathfinding — `SWO_V3_PLAYER_PATHFINDING`). V3 deferred post-merge.
 
 ## Security Audit Backlog (from 2026-04-19 audit, revalidated 2026-04-21)
 
@@ -156,9 +161,9 @@ _Revalidated against dev HEAD 5ed3557. Updated status reflects actual merge stat
 | 2026-04-05 | a5479fd | SWO ecosystem positioning doc |
 | 2026-04-03 | 09b0598 | SWO brand integration doc + LLM prompt evaluator |
 
-## Sanctuary — V2-Only Operating Model (reset 2026-04-26)
+## Sanctuary — V2-Only, Companion-First Operating Model (reset 2026-04-26)
 
-_V2 (`?v=2`) is the **active surface** — all new feature work, polish, and visual fixes ship here. V3 (`?v=3`) is **DEFERRED** — archival access only, no new PRs, no RD spend. See banner at top of file._
+_V2 (`?v=2`) is the **active surface** — all new feature work, polish, and visual fixes ship here. V3 (`?v=3`) is **DEFERRED** — archival access only, no new PRs, no RD spend. V1 (no flag) is **archival fallback only**. See banner at top of file. Direction note for the companion-first refinement: `memory/evolution/swo_sanctuary_companion_first_2026-04-26.md`._
 
 **Routing** (`app/sanctuary/SanctuaryRouter.tsx`): `?v=2 or NEXT_PUBLIC_SANCTUARY_V2=true → SanctuaryV2`; else `SanctuaryContent` (V1). `?v=3 → SanctuaryV3 → PhaserGameV3` still wired for archival/reference; do not iterate on it.
 
@@ -182,6 +187,24 @@ _V2 (`?v=2`) is the **active surface** — all new feature work, polish, and vis
 | 5. LLM Companion | #236–#240 (`1144e4b`, `1d44697`, `b5bc7ef`, `3084f9f`) | ✅ DONE |
 | 6. Economy | `fd9924c` STAR currency + `72d6202` layered cosmetics + `5aa2965` shop+inventory backend | ✅ DONE — UI lives in SHARED |
 | 7+ (de-slop) | `[SWO_V2_*]` priority queue below | ⏳ ACTIVE — six items (2026-04-26) |
+
+### V2 — Companion-First Core Loop (operator-set 2026-04-26 evening)
+
+_Direction note: `memory/evolution/swo_sanctuary_companion_first_2026-04-26.md`. The Companion (selected Skrumpey) is the new center of gravity; quests/minigames stay as supporting structure. This section ranks **above** the de-slop polish queue for sequencing — but the deslop shader (already built) ships first, then we move into the companion stack._
+
+| # | Task | Acceptance summary | Lane | Priority |
+|---|------|--------------------|------|----------|
+| 1 | `[SWO_V2_COMPANION_STATS_SCHEMA]` | Add hunger / energy / happiness stats (0–100) + per-hour decay rate + `stats_updated_at` to `SanctuaryCompanion`. Pure `decayStats(companion, now)` helper (unit-tested). New GET `/api/sanctuary/companion/stats` returns projected values + active needs. Schema migration ships; existing `interact` endpoints stay green; no UI yet. | V2 | P0 |
+| 2 | `[SWO_V2_COMPANION_INTERACT_AFFECTS_STATS]` | Wire `feed`/`pet`/`talk` to stats; add `sleep` (block other actions until energy ≥ 80) and `play` actions. Caps + reactions/VFX preserved. Daily interaction cap unchanged. Tested at API layer. | V2 | P0 |
+| 3 | `[SWO_V2_COMPANION_MOOD_FROM_STATS]` | Derive mood from current stats (lowest-stat → matching mood; sleeping → `sleeping`); fall back to trait mood when stats not yet populated. Sprite mood animation reflects within ≤1s. | V2 | P0 |
+| 4 | `[SWO_V2_COMPANION_SCREEN_SURFACE]` | New `/sanctuary/companion` route (or default tab in `?v=2` page) becomes the landing surface for owners with an active Skrumpey. Renders sprite + 3 stat bars + need callout + bond/level + last-3 journal lines + quick actions + Chat button + Enter Sanctuary CTA. World hub stays reachable via deep link. | V2 | P0 |
+| 5 | `[SWO_V2_COMPANION_NEED_ALERTS]` | In-page soft alert in `CompanionHUD.tsx` when any stat drops below 30; click jumps to companion screen. Never blocks gameplay; never auto-opens an overlay. | V2 | P1 |
+| 6 | `[SWO_V2_COMPANION_CHAT_KNOWS_STATS]` | Inject current stats + active needs + last 3 actions into the LLM chat system prompt; keep bond-tone layer. Replies are voice-y, not stat-readouts (no raw numbers); injected blob ≤200 tokens. | V2 | P1 |
+| 7 | `[SWO_V1_ARCHIVE_FORMALIZE]` | Add a banner inside V1 (`SanctuaryContent.tsx`) ("Sanctuary has moved — open the new Sanctuary"). One-line note in this tracker + `swo_sanctuary_v3_deferred_2026-04-26.md` confirming V1 is fallback-only. No code removal in this PR. | V2 | P1 |
+
+**Companion track exclusions (out-of-scope unless operator re-opens):** new minigame scenes, new world zones, new quest content, mobile-app shell, push notifications, voice chat, multiplayer companion features, on-chain companion state.
+
+**Quest track posture:** quest authoring shipped (`[SWO_SHARED_QUEST_DIALOG_CONTENT]` → PR #245). New quest features and new quest content are **demoted to P2 or retired** — see Retired/Deferred Items in `QUEUE.md`.
 
 ### V2 — De-Slop Priority Queue (2026-04-26, operator-set)
 
@@ -226,14 +249,23 @@ All `[SWO_V3_*]` items are frozen. The `?v=3` route stays for archival access. R
 - Multiplayer (Colyseus), EventBus, React overlays — DONE
 - **Outstanding SHARED**: `[SWO_SHARED_SHOP_DIALOG]`, `[SWO_SHARED_QUEST_DIALOG_CONTENT]`, `[SWO_SHARED_ONBOARDING]`, `[SWO_SHARED_SOUND_DESIGN]`, `[SWO_SHARED_VFX_TRIGGER_API]`, `[SWO_SHARED_MOBILE_OVERLAYS]`, `[SWO_SHARED_EXPEDITIONS]`, `[SWO_SHARED_CHAT_MEMORY_CONSOLIDATION]`, `[SWO_SHARED_COSMETIC_ITEM_DESIGN]`.
 
-### Recommended next-task order (2026-04-26)
+### Recommended next-task order (2026-04-26 evening, post companion-first reset)
 
-1. **`[SWO_V2_DESLOP_SHADER]`** (P0) — Phaser post-FX palette-quantize/dither pipeline. Highest leverage on the AI-slop goal; everything else looks better behind it.
-2. **`[SWO_V2_PLAYER_SPRITE_ALIASING]`** (P0) — fix the most visible aliasing offender once shader establishes a target palette.
-3. **`[SWO_V2_NPC_DISPLAY_SIZE]`** (P0) — one-line constant change + hit-region update. Cheap, high value.
-4. **`[SWO_V2_ROOM_PALETTE_STANDARDIZE]`** (P1) — batch script over the 8 painted rooms; benefits compound with the shader.
-5. **`[SWO_V2_HALFWIRED_FEATURE_FINISH]`** (P1) — pick DevMapEditor; surface the panel or delete it. Document the other two as deliberate stubs.
-6. **`[SWO_V2_NPC_SELECT_SKRUMPEY_GATE]`** (P1) — UX gate on NPC interaction.
+Two tracks are live in parallel: **(A) ship the already-built deslop shader, then build the Companion core loop** (this is the new center of gravity); **(B) continue V2 visual polish** in slots when no Companion P0 is ready.
+
+1. **`[SWO_V2_DESLOP_SHADER]`** (P0, A) — already built (`47d9b08`); just needs PR + merge. Do not let this sit. Highest single visual leverage on V2.
+2. **`[SWO_V2_COMPANION_STATS_SCHEMA]`** (P0, A) — foundation for the new core loop; nothing else in the companion track moves without it.
+3. **`[SWO_V2_COMPANION_INTERACT_AFFECTS_STATS]`** (P0, A) — wires existing `feed`/`pet`/`talk` to stats; adds `sleep`/`play`.
+4. **`[SWO_V2_COMPANION_MOOD_FROM_STATS]`** (P0, A) — closes the loop visually using existing mood sprite animations.
+5. **`[SWO_V2_COMPANION_SCREEN_SURFACE]`** (P0, A) — the daily-return surface; companion becomes default landing.
+6. **`[SWO_V2_PLAYER_SPRITE_ALIASING]`** (P0, B) — fold in once a Companion P0 isn't ready to ship.
+7. **`[SWO_V2_NPC_DISPLAY_SIZE]`** (P0, B) — one-line constant + hit region.
+8. **`[SWO_V2_COMPANION_NEED_ALERTS]`** (P1, A) — soft HUD alert when any stat crosses threshold.
+9. **`[SWO_V2_COMPANION_CHAT_KNOWS_STATS]`** (P1, A) — chat prompt knows current stats / recent actions.
+10. **`[SWO_V2_ROOM_PALETTE_STANDARDIZE]`** (P1, B) — batch palette-snap over 8 painted rooms.
+11. **`[SWO_V2_HALFWIRED_FEATURE_FINISH]`** (P1, B) — pick DevMapEditor; ship or remove.
+12. **`[SWO_V2_NPC_SELECT_SKRUMPEY_GATE]`** (P1, B) — UX gate on NPC interaction; still relevant from companion screen.
+13. **`[SWO_V1_ARCHIVE_FORMALIZE]`** (P1) — V1 banner + tracker note; no code removal.
 
 ### Naming convention (binding, updated 2026-04-26)
 
