@@ -108,13 +108,14 @@ Planning docs, queue items, and brand positioning do NOT count as delivery.
 
 ## Pending PRs — MERGE PRIORITY ORDER
 
-_Revalidated 2026-04-26 (evening) against upstream/dev HEAD. The four "open" rows that lived here all morning are now confirmed merged — kept under Resolved._
+_Revalidated 2026-04-27 against upstream/dev HEAD. No pending pre-built PRs awaiting merge — deslop shader confirmed merged via #264._
 
 | # | Branch / PR | Title | Status |
 |---|-------------|-------|--------|
-| 1 | `clarvis/star-world-order/t0426200012-3b08` (`47d9b08`) | feat(sanctuary v2): deslop post-FX shader (palette quantize + Bayer dither) `[SWO_V2_DESLOP_SHADER]` | Built locally — needs PR + merge (P0) |
+| — | — | (none) | — |
 
 **Resolved:**
+- ~~#264~~ — MERGED on dev 2026-04-26 (deslop post-FX shader, palette quantize + Bayer dither — `SWO_V2_DESLOP_SHADER`). Verified 2026-04-27.
 - ~~#177~~ — MERGED on dev (governance votingPower server-side verification)
 - ~~#180~~ — MERGED on dev (admin nonce persistence in SQLite)
 - ~~#181~~ — MERGED on dev (contract archive housekeeping)
@@ -190,7 +191,7 @@ _V2 (`?v=2`) is the **active surface** — all new feature work, polish, and vis
 
 ### V2 — Companion-First Core Loop (operator-set 2026-04-26 evening)
 
-_Direction note: `memory/evolution/swo_sanctuary_companion_first_2026-04-26.md`. The Companion (selected Skrumpey) is the new center of gravity; quests/minigames stay as supporting structure. This section ranks **above** the de-slop polish queue for sequencing — but the deslop shader (already built) ships first, then we move into the companion stack._
+_Direction note: `memory/evolution/swo_sanctuary_companion_first_2026-04-26.md`. The Companion (selected Skrumpey) is the new center of gravity; quests/minigames stay as supporting structure. This section ranks **above** the de-slop polish queue for sequencing. The deslop shader has shipped (PR #264, merged 2026-04-26) — Companion stack is now the active focus._
 
 | # | Task | Acceptance summary | Lane | Priority |
 |---|------|--------------------|------|----------|
@@ -212,7 +213,7 @@ Six priorities ordered as in the operator brief. Items 1–3 are de-slop visual 
 
 | # | Task | Acceptance summary | Lane | Priority |
 |---|------|--------------------|------|----------|
-| 1 | `[SWO_V2_DESLOP_SHADER]` | Phaser post-FX pipeline (built-in `PostFXPipeline` API) palette-quantizes (+ optional Bayer dither) the canvas to a fixed N-color SWO palette. Dev-flag toggle (`?v=2&deslop=1` + `localStorage`). Ship enabled only after operator A/B inspection. | V2 | P0 |
+| 1 | ~~`[SWO_V2_DESLOP_SHADER]`~~ | ~~Phaser post-FX pipeline (built-in `PostFXPipeline` API) palette-quantizes (+ optional Bayer dither) the canvas to a fixed N-color SWO palette. Dev-flag toggle (`?v=2&deslop=1` + `localStorage`). Ship enabled only after operator A/B inspection.~~ **DONE — PR #264 merged 2026-04-26 (commit `47d9b08`).** Shipped opt-in (`DESLOP_DEFAULT_ON=false`); operator A/B inspection still pending before flipping default. | V2 | ✓ |
 | 2 | `[SWO_V2_PLAYER_SPRITE_ALIASING]` | Fix `public/sanctuary/player.png` aliasing. No non-integer scaling: redraw at display size or lock integer scale (1×/2×/3×) + `setScaleMode(NEAREST)` + `roundPixels: true`. **No RD.** | V2 | P0 |
 | 3 | `[SWO_V2_NPC_DISPLAY_SIZE]` | Reduce NPC display size 64 → 48 px in `game/sprites/NPCSprite.ts`; update collider/hit region/nameplate offsets accordingly. | V2 | P0 |
 | 4 | `[SWO_V2_ROOM_PALETTE_STANDARDIZE]` | Standardize palette across the 8 painted room backgrounds via batch color-adjust script (Pillow / ImageMagick). Lives at `scripts/v2/standardize_room_palette.{mjs,py}`. **No regeneration.** | V2 | P1 |
@@ -249,18 +250,18 @@ All `[SWO_V3_*]` items are frozen. The `?v=3` route stays for archival access. R
 - Multiplayer (Colyseus), EventBus, React overlays — DONE
 - **Outstanding SHARED**: `[SWO_SHARED_SHOP_DIALOG]`, `[SWO_SHARED_QUEST_DIALOG_CONTENT]`, `[SWO_SHARED_ONBOARDING]`, `[SWO_SHARED_SOUND_DESIGN]`, `[SWO_SHARED_VFX_TRIGGER_API]`, `[SWO_SHARED_MOBILE_OVERLAYS]`, `[SWO_SHARED_EXPEDITIONS]`, `[SWO_SHARED_CHAT_MEMORY_CONSOLIDATION]`, `[SWO_SHARED_COSMETIC_ITEM_DESIGN]`.
 
-### Recommended next-task order (2026-04-26 evening, post companion-first reset)
+### Recommended next-task order (revalidated 2026-04-27, post companion-first reset)
 
-Two tracks are live in parallel: **(A) ship the already-built deslop shader, then build the Companion core loop** (this is the new center of gravity); **(B) continue V2 visual polish** in slots when no Companion P0 is ready.
+Two tracks are live in parallel: **(A) Companion core loop** (this is the new center of gravity, primary focus); **(B) V2 visual polish** in slots when no Companion P0 is ready. Deslop shader (was item 1) shipped via PR #264 — companion stack is the active head of A.
 
-1. **`[SWO_V2_DESLOP_SHADER]`** (P0, A) — already built (`47d9b08`); just needs PR + merge. Do not let this sit. Highest single visual leverage on V2.
-2. **`[SWO_V2_COMPANION_STATS_SCHEMA]`** (P0, A) — foundation for the new core loop; nothing else in the companion track moves without it.
-3. **`[SWO_V2_COMPANION_INTERACT_AFFECTS_STATS]`** (P0, A) — wires existing `feed`/`pet`/`talk` to stats; adds `sleep`/`play`.
-4. **`[SWO_V2_COMPANION_MOOD_FROM_STATS]`** (P0, A) — closes the loop visually using existing mood sprite animations.
-5. **`[SWO_V2_COMPANION_SCREEN_SURFACE]`** (P0, A) — the daily-return surface; companion becomes default landing.
-6. **`[SWO_V2_PLAYER_SPRITE_ALIASING]`** (P0, B) — fold in once a Companion P0 isn't ready to ship.
-7. **`[SWO_V2_NPC_DISPLAY_SIZE]`** (P0, B) — one-line constant + hit region.
-8. **`[SWO_V2_COMPANION_NEED_ALERTS]`** (P1, A) — soft HUD alert when any stat crosses threshold.
+1. **`[SWO_V2_COMPANION_STATS_SCHEMA]`** (P0, A) — foundation for the new core loop; nothing else in the companion track moves without it.
+2. **`[SWO_V2_COMPANION_INTERACT_AFFECTS_STATS]`** (P0, A) — wires existing `feed`/`pet`/`talk` to stats; adds `sleep`/`play`.
+3. **`[SWO_V2_COMPANION_MOOD_FROM_STATS]`** (P0, A) — closes the loop visually using existing mood sprite animations.
+4. **`[SWO_V2_COMPANION_SCREEN_SURFACE]`** (P0, A) — the daily-return surface; companion becomes default landing.
+5. **`[SWO_V2_PLAYER_SPRITE_ALIASING]`** (P0, B) — fold in once a Companion P0 isn't ready to ship.
+6. **`[SWO_V2_NPC_DISPLAY_SIZE]`** (P0, B) — one-line constant + hit region.
+7. **`[SWO_V2_COMPANION_NEED_ALERTS]`** (P1, A) — soft HUD alert when any stat crosses threshold.
+8. **Deslop A/B verification** (operational, A) — operator-driven inspection of `?deslop=1` against off; once accepted, flip `DESLOP_DEFAULT_ON=true`.
 9. **`[SWO_V2_COMPANION_CHAT_KNOWS_STATS]`** (P1, A) — chat prompt knows current stats / recent actions.
 10. **`[SWO_V2_ROOM_PALETTE_STANDARDIZE]`** (P1, B) — batch palette-snap over 8 painted rooms.
 11. **`[SWO_V2_HALFWIRED_FEATURE_FINISH]`** (P1, B) — pick DevMapEditor; ship or remove.
