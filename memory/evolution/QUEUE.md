@@ -26,7 +26,7 @@ _Source: `docs/internal/audits/NEURO_FEATURE_DECISIONS_2026-04-17.md`. Phase 9 s
 
 ### Bugs
 
-- [ ] **[ABSOLUTE_ZERO_ERROR_FALLBACK_COMMIT]** `scripts/cognition/absolute_zero.py` has an unstaged null/empty-string fallback fix (`ep.get("error") or "no error message recorded"`) discovered during evening code review, but it is not committed and has no focused regression test. Commit the fix with a minimal unit test covering both `error=None` and `error=""` so abductive failure prompts never render blank error context. (PROJECT:CLARVIS, P0)
+- [x] **[ABSOLUTE_ZERO_ERROR_FALLBACK_COMMIT]** Fix was already committed (e360494, 2026-04-26); added focused regression test `tests/test_absolute_zero_error_fallback.py` (3 cases: `error=None`, `error=""`, real message). All passing 2026-04-27. (PROJECT:CLARVIS, P0)
 
 ## P1 — This Week
 
@@ -73,7 +73,7 @@ _Six visual/structural polish items. Track B ships in parallel with Track A — 
 #### V2 polish — secondary (P2, do after the six priorities)
 
 - ~~[SWO_V2_COMPANION_BG_MATTE]~~ → VERIFIED NO-OP 2026-04-26 (Claude Code session): ran `node scripts/matte_companion_sprites.mjs` (dry-run) against all 60 PNGs under `public/sanctuary/companions/`. Result: `0 file(s) would be modified, 60 already transparent, 0 no-match`. Sample alpha analysis (aether/idle.png, parallel/idle.png, prime/happy.png) confirms ~73% fully transparent + ~20% opaque + ~7% partial-alpha edges — clean sprite alpha as expected. The header note "10×6 companion mood PNGs ✓ (need BG cleanup)" predates the asset re-export; no further action needed.
-- [ ] **[SWO_V2_STATUS_VERIFY]** Verify status of `[SWO_V2_STAR_GARDEN_DOOR]` and `[SWO_V2_NPC_REAL_SPRITES]` against dev HEAD. If still broken, scope a single fix PR; otherwise close them in `SWO_TRACKER.md`. (PROJECT:SWO, P2)
+- [x] **[SWO_V2_STATUS_VERIFY]** Verified 2026-04-27 against `upstream/dev`. Both child tasks already shipped: `[SWO_V2_STAR_GARDEN_DOOR]` fixed in `3d8e4cc` (DOORS array now contains 8 entries — Star Garden door at x=694,y=480,w=56,h=68); `[SWO_V2_NPC_REAL_SPRITES]` shipped in `e0900f6` (real PNG textures wired via BootScene + NPCSprite). Closed in SWO_TRACKER.md. (PROJECT:SWO, P2)
 - ~~[SWO_V2_DEPRECATION_GATE]~~ → RETIRED 2026-04-26: V3 is now the deprecated lane (deferred), not V2. The "V2 stops getting fixes when V3 hits parity" gate is moot. V2 is the active surface indefinitely.
 
 #### Sanctuary — Post-V2 / strategic (P2)

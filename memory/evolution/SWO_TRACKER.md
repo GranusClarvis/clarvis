@@ -220,8 +220,9 @@ Six priorities ordered as in the operator brief. Items 1–3 are de-slop visual 
 | 5 | `[SWO_V2_HALFWIRED_FEATURE_FINISH]` | Pick one of {DevMapEditor (no UI), MultiplayerBridge (incomplete), click-to-move (stub)}; either ship the minimum end-to-end or remove the mount. Document the other two as deliberate stubs. Recommended pick: DevMapEditor (low risk, dev-only). | V2 | P1 |
 | 6 | `[SWO_V2_NPC_SELECT_SKRUMPEY_GATE]` | NPC click → if no active Skrumpey: auto-select if exactly one owned, else show guidance overlay with jump-to-picker button, else show "no Skrumpey" CTA. Wire through `SanctuaryContent.tsx` + `NPCSprite.ts`. | V2 | P1 |
 
-V2 polish, secondary (P2): `[SWO_V2_STATUS_VERIFY]` (close-out for `[SWO_V2_STAR_GARDEN_DOOR]` and `[SWO_V2_NPC_REAL_SPRITES]`).
+V2 polish, secondary (P2): ~~`[SWO_V2_STATUS_VERIFY]`~~ — both child tasks already shipped on dev HEAD (verified 2026-04-27): `[SWO_V2_STAR_GARDEN_DOOR]` fixed in commit `3d8e4cc` (DOORS array now has 8 entries for 8 rooms); `[SWO_V2_NPC_REAL_SPRITES]` shipped in commit `e0900f6` (real PNG textures wired through BootScene + NPCSprite).
 Retired 2026-04-26: `[SWO_V2_COMPANION_BG_MATTE]` (verified no-op), `[SWO_V2_DEPRECATION_GATE]` (moot — V3 is now the deprecated lane).
+Retired 2026-04-27: `[SWO_V2_STATUS_VERIFY]`, `[SWO_V2_STAR_GARDEN_DOOR]`, `[SWO_V2_NPC_REAL_SPRITES]` (all verified shipped).
 
 ### V3 — DEFERRED 2026-04-26 (frozen, do not iterate)
 
