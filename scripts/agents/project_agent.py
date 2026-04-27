@@ -1130,16 +1130,30 @@ def _sync_mirror(agent_name: str) -> bool:
         )
         if dirty.returncode == 0 and dirty.stdout.strip():
             _log(f"Mirror sync: clearing dirty state for '{agent_name}' before pull")
-            subprocess.run(
+            reset = subprocess.run(
                 ["git", "reset", "--hard", "HEAD"],
                 cwd=str(mirror_dir),
                 capture_output=True, text=True, timeout=30,
             )
-            subprocess.run(
+            if reset.returncode != 0:
+                _log(
+                    f"Mirror sync: git reset --hard failed for '{agent_name}' "
+                    f"(rc={reset.returncode}): {reset.stderr.strip()[:300]} — "
+                    f"aborting sync, mirror needs repair"
+                )
+                return False
+            clean = subprocess.run(
                 ["git", "clean", "-fd"],
                 cwd=str(mirror_dir),
                 capture_output=True, text=True, timeout=30,
             )
+            if clean.returncode != 0:
+                _log(
+                    f"Mirror sync: git clean -fd failed for '{agent_name}' "
+                    f"(rc={clean.returncode}): {clean.stderr.strip()[:300]} — "
+                    f"aborting sync, mirror needs repair"
+                )
+                return False
         result = subprocess.run(
             ["git", "pull", "--ff-only"],
             cwd=str(mirror_dir),

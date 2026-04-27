@@ -1871,6 +1871,55 @@ class TestSyncMirror:
         result = _sync_mirror("nonexistent-agent-xyz")
         assert result is False
 
+    @patch("project_agent.subprocess.run")
+    def test_sync_mirror_aborts_on_reset_failure(self, mock_run):
+        """If `git reset --hard` fails on a dirty mirror, abort before pulling."""
+        # status -> dirty, reset -> failure (e.g. permission denied)
+        mock_run.side_effect = [
+            MagicMock(returncode=0, stdout=" M file.txt\n", stderr=""),  # status
+            MagicMock(returncode=1, stdout="", stderr="fatal: unable to write index"),  # reset
+        ]
+        import project_agent as pa
+        original_mirrors = dict(MIRROR_DIRS)
+        mirror_dir = Path("/tmp/test_mirror_reset_fail")
+        mirror_dir.mkdir(exist_ok=True)
+        try:
+            pa.MIRROR_DIRS["test-reset-fail"] = mirror_dir
+            result = _sync_mirror("test-reset-fail")
+            assert result is False
+            # Crucially: pull was NOT invoked after reset failed
+            invoked_cmds = [call[0][0] for call in mock_run.call_args_list]
+            assert mock_run.call_count == 2
+            assert ["git", "pull", "--ff-only"] not in invoked_cmds
+        finally:
+            pa.MIRROR_DIRS.clear()
+            pa.MIRROR_DIRS.update(original_mirrors)
+            mirror_dir.rmdir()
+
+    @patch("project_agent.subprocess.run")
+    def test_sync_mirror_aborts_on_clean_failure(self, mock_run):
+        """If `git clean -fd` fails after a successful reset, abort before pulling."""
+        mock_run.side_effect = [
+            MagicMock(returncode=0, stdout="?? junk.txt\n", stderr=""),  # status
+            MagicMock(returncode=0, stdout="", stderr=""),               # reset OK
+            MagicMock(returncode=1, stdout="", stderr="error: failed to remove locked.tmp"),  # clean
+        ]
+        import project_agent as pa
+        original_mirrors = dict(MIRROR_DIRS)
+        mirror_dir = Path("/tmp/test_mirror_clean_fail")
+        mirror_dir.mkdir(exist_ok=True)
+        try:
+            pa.MIRROR_DIRS["test-clean-fail"] = mirror_dir
+            result = _sync_mirror("test-clean-fail")
+            assert result is False
+            invoked_cmds = [call[0][0] for call in mock_run.call_args_list]
+            assert mock_run.call_count == 3
+            assert ["git", "pull", "--ff-only"] not in invoked_cmds
+        finally:
+            pa.MIRROR_DIRS.clear()
+            pa.MIRROR_DIRS.update(original_mirrors)
+            mirror_dir.rmdir()
+
 
 class TestGetChangedFilesFromGit:
     def test_git_diff_in_workspace(self, tmp_path):
