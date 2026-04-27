@@ -26,7 +26,6 @@ _Source: `docs/internal/audits/NEURO_FEATURE_DECISIONS_2026-04-17.md`. Phase 9 s
 
 ### Bugs
 
-- [x] **[P0_PROJECT_AGENT_MIRROR_RESET_FAILURE_HANDLING]** `scripts/agents/project_agent.py::_sync_mirror()` now hard-resets/cleans dirty mirrors before `git pull --ff-only`, but it ignores the return codes of `git reset --hard` and `git clean -fd`. If either fails (permissions, index corruption, locked files), the function can continue into `git pull`, masking the true cause and leaving the mirror in a half-recovered state. Fix: check both subprocess results, abort sync on failure, and log the exact stderr so validation can classify the mirror as repair-needed instead of silently retrying. Acceptance: unit/smoke path proves reset/clean failure stops the sync before pull. (PROJECT:CLARVIS) — DONE 2026-04-27: `_sync_mirror` now returns False with logged stderr when reset or clean fails; verified by 2 new unit tests in `tests/scripts/test_project_agent.py::TestSyncMirror` (`test_sync_mirror_aborts_on_reset_failure`, `test_sync_mirror_aborts_on_clean_failure`).
 
 ## P1 — This Week
 
