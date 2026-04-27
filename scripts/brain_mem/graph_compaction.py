@@ -367,6 +367,13 @@ def _sqlite_nearest_neighbor_edges(store, brain, k=5, sample_per_col=80, dry_run
         except Exception:
             continue
 
+        # Exclude ephemeral health-check probes — they get hard-deleted on the
+        # next health_check, leaving any edges to/from them as orphans that
+        # cron_doctor then flags every 30 min.
+        all_ids = [i for i in all_ids if not i.startswith("_health_probe_")]
+        if not all_ids:
+            continue
+
         if len(all_ids) <= sample_per_col:
             sample_ids = all_ids
         else:
@@ -393,7 +400,7 @@ def _sqlite_nearest_neighbor_edges(store, brain, k=5, sample_per_col=80, dry_run
                     continue
 
                 for nid in nn_result["ids"][0]:
-                    if nid != sid:
+                    if nid != sid and not nid.startswith("_health_probe_"):
                         edges_batch.append((
                             sid, nid, "nearest_neighbor", now_str,
                             col_name, col_name, 0.8,
