@@ -26,7 +26,6 @@ _Source: `docs/internal/audits/NEURO_FEATURE_DECISIONS_2026-04-17.md`. Phase 9 s
 
 ### Bugs
 
-- [x] **[ABSOLUTE_ZERO_ERROR_FALLBACK_COMMIT]** Fix was already committed (e360494, 2026-04-26); added focused regression test `tests/test_absolute_zero_error_fallback.py` (3 cases: `error=None`, `error=""`, real message). All passing 2026-04-27. (PROJECT:CLARVIS, P0)
 
 ## P1 — This Week
 
@@ -73,12 +72,10 @@ _Six visual/structural polish items. Track B ships in parallel with Track A — 
 #### V2 polish — secondary (P2, do after the six priorities)
 
 - ~~[SWO_V2_COMPANION_BG_MATTE]~~ → VERIFIED NO-OP 2026-04-26 (Claude Code session): ran `node scripts/matte_companion_sprites.mjs` (dry-run) against all 60 PNGs under `public/sanctuary/companions/`. Result: `0 file(s) would be modified, 60 already transparent, 0 no-match`. Sample alpha analysis (aether/idle.png, parallel/idle.png, prime/happy.png) confirms ~73% fully transparent + ~20% opaque + ~7% partial-alpha edges — clean sprite alpha as expected. The header note "10×6 companion mood PNGs ✓ (need BG cleanup)" predates the asset re-export; no further action needed.
-- [x] **[SWO_V2_STATUS_VERIFY]** Verified 2026-04-27 against `upstream/dev`. Both child tasks already shipped: `[SWO_V2_STAR_GARDEN_DOOR]` fixed in `3d8e4cc` (DOORS array now contains 8 entries — Star Garden door at x=694,y=480,w=56,h=68); `[SWO_V2_NPC_REAL_SPRITES]` shipped in `e0900f6` (real PNG textures wired via BootScene + NPCSprite). Closed in SWO_TRACKER.md. (PROJECT:SWO, P2)
 - ~~[SWO_V2_DEPRECATION_GATE]~~ → RETIRED 2026-04-26: V3 is now the deprecated lane (deferred), not V2. The "V2 stops getting fixes when V3 hits parity" gate is moot. V2 is the active surface indefinitely.
 
 #### Sanctuary — Post-V2 / strategic (P2)
 
-- [ ] **[SANCTUARY_STAR_CURRENCY_DECISION]** STAR on Monad (soulbound vs transferable vs hybrid). Blocks on-chain cosmetic minting. Off-chain backend already shipped (`fd9924c`). Not needed for V2 MVP. See STAR_SANCTUARY_PLAN.md §3.3. (PROJECT:SWO, P2)
 
 #### Retired / Deferred Items
 
@@ -138,7 +135,6 @@ _Six visual/structural polish items. Track B ships in parallel with Track A — 
 
 
 
-- [ ] **[PHI_DEEMPHASIS_AUDIT]** Audit and reduce Clarvis-wide overfocus on Phi. Goal: Phi should remain only a lightweight regression/health signal, not a recurring optimization target, routing bias, prompt contaminant, or context-budget parasite. Find where Phi/Integration language, tasks, alerts, queue injection, prompt sections, and autonomous logic still over-prioritize it; downgrade/remove those pathways where low-value; preserve only minimal monitoring for genuine regressions. Deliver: clear map of where Phi is still plaguing the system, code/config/doc changes to de-emphasize it, and updated rules so future work is judged more by operator value, task outcomes, retrieval quality, reliability, and shipped results than by Phi movement. (PROJECT:CLARVIS)
 
 ### Deep Audit — Phase 9 Follow-ups (P1, added 2026-04-17)
 
@@ -342,7 +338,8 @@ _Original V2 cosmic-palette batches were retired and re-mapped to V3-lane equiva
 ### 2026-04-20 evolution scan
 
 - [ ] [UNVERIFIED] **[FIX_PHI_HEALTH_REPORTING]** The health pipeline reports Phi=0.000 because `phi_metric.py` was never committed to `scripts/metrics/` on main — it only exists in stale worktrees. Either (a) add a `scripts/metrics/phi_metric.py` wrapper that calls `clarvis.metrics.phi.compute_phi()`, or (b) fix the health data collector (`cron_pi_refresh.sh` / `daily_brain_eval.py`) to import from `clarvis.metrics.phi` directly. Acceptance: `health_monitor.sh` and evolution context report Phi≥0.60 instead of 0.000.
-- [ ] **[SEMANTIC_OVERLAP_BOOST]** Phi's weakest sub-component is `semantic_cross_collection`=0.579 (others ≥0.63). Identify the 5 lowest-similarity collection pairs (goals↔autonomous-learning=0.492, procedures↔autonomous-learning=0.488) and add 10–15 bridging memories that create genuine semantic connections between those domains. Verify Phi semantic component rises ≥0.60 without degrading other components.
+- [x] **[SEMANTIC_OVERLAP_BOOST]** Added 13 bridging memories across 5 weakest pairs (identity↔goals, procedures↔autonomous-learning, preferences↔goals, goals↔autonomous-learning, identity↔episodes). Per-pair improvements: identity↔goals 0.4804→0.4971, preferences↔goals 0.5035→0.5132. Overall semantic_cross_collection unchanged at 0.5801 (target 0.60 NOT reached) — root cause: metric uses `col.get(limit=100)` first-N sampling, so bridges appended to large collections (autonomous-learning idx 297+, episodes 550+, procedures 252+) are invisible. Followup task added below to fix sampling bias in `clarvis/metrics/phi.py`. 2026-04-28.
+- [ ] **[PHI_SEMANTIC_SAMPLING_FIX]** `clarvis/metrics/phi.py:228` uses `col.get(include=["embeddings"], limit=100)` which returns the FIRST 100 entries by insertion order — appended bridges in large collections (>100) are invisible to `semantic_cross_collection`, so adding bridge memories to autonomous-learning/episodes/procedures has zero metric effect. Fix: replace `limit=100` with random sampling (e.g., `random.sample(range(count), 100)` then `col.get(ids=...)`) OR increase `TARGET_SAMPLE` to cover full collection. Acceptance: re-run `[SEMANTIC_OVERLAP_BOOST]` follow-up bridges and verify semantic_cross_collection rises ≥0.60. (Discovered 2026-04-28 during SEMANTIC_OVERLAP_BOOST execution.)
 - [ ] **[CRON_STALE_WORKTREE_CLEANUP]** 10+ stale worktrees exist under `.claude/worktrees/` from prior agent runs, each containing full repo copies. Add a weekly cron entry (Sun 05:25, between existing hygiene jobs) that runs `git worktree prune` and removes any `.claude/worktrees/` dirs older than 7 days. Non-Python task (bash cron script).
 - [ ] **[AUTONOMOUS_EXECUTION_CAPABILITY_LIFT]** `autonomous_execution` is the weakest capability at 0.64. Audit the last 20 autonomous cron episodes for failure patterns (timeout, lock contention, wrong-model spawn). Implement the top fix (likely: reduce lock wait time or add per-job timeout tuning). Acceptance: capability score ≥0.70 on next weekly benchmark.
 
