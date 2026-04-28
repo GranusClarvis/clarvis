@@ -1565,6 +1565,8 @@ def _make_preflight_result():
         "route_reason": "unknown", "prompt_variant_id": "", "prompt_variant_task_type": "",
         "context_relevance_score": None, "priority_override": None,
         "audit_trace_id": "",  # Phase 0: populated by start_trace() in run_preflight
+        "pre_task_commit_sha": "",  # Pre-task HEAD SHA (for git-based output validation)
+        "pre_task_porcelain": "",  # Pre-task working tree state (for git-based output validation)
         "timings": {},
     }
 
@@ -1675,6 +1677,38 @@ def _preflight_assemble_context(result, next_task, ctx):
     result["timings"]["context"] = round(time.monotonic() - t10, 3)
 
 
+def _capture_pre_task_git_state():
+    """Snapshot HEAD SHA before the task runs.
+
+    Used by postflight to compute the actual diff produced during this task,
+    independent of whatever the previous commit happened to be (HEAD~1).
+    Returns ("", "") on any failure — postflight tolerates missing values.
+    """
+    import subprocess
+    ws = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
+    sha = ""
+    porcelain = ""
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True, text=True, timeout=5, cwd=ws,
+        )
+        if out.returncode == 0:
+            sha = out.stdout.strip()
+    except Exception:
+        pass
+    try:
+        out = subprocess.run(
+            ["git", "status", "--porcelain"],
+            capture_output=True, text=True, timeout=5, cwd=ws,
+        )
+        if out.returncode == 0:
+            porcelain = out.stdout.strip()
+    except Exception:
+        pass
+    return sha, porcelain
+
+
 def run_preflight(dry_run=False):
     """Run all pre-execution checks in a single process.
 
@@ -1684,6 +1718,9 @@ def run_preflight(dry_run=False):
     t0 = time.monotonic()
     result = _make_preflight_result()
     _start_audit_trace(result)
+    pre_sha, pre_porcelain = _capture_pre_task_git_state()
+    result["pre_task_commit_sha"] = pre_sha
+    result["pre_task_porcelain"] = pre_porcelain
 
     # Populate context_relevance from gate/performance metrics (zero-LLM)
     try:

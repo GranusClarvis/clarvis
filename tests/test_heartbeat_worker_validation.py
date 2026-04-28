@@ -351,3 +351,103 @@ class TestValidateWorkerOutput:
         result = validate_worker_output(RESEARCH, "", "partial_success")
         assert result["validated"] is True
         assert result["downgrade"] is False
+
+
+# ---------------------------------------------------------------------------
+# Git-evidence false-partial fix (AUTONOMOUS_OUTPUT_VALIDATION_FALSE_PARTIAL_AUDIT)
+# ---------------------------------------------------------------------------
+
+class TestGitEvidenceOverridesTextHeuristic:
+    """The false-partial pattern: real file changes happened, but the Claude
+    Code summary output didn't echo Edit/Write tool-call markers, so the
+    text-only validator wrongly downgraded shipped work to partial_success.
+    Real filesystem evidence must override the text heuristic."""
+
+    def test_implementation_summary_output_with_real_diff_passes(self):
+        # Reproduces the actual SEMANTIC_OVERLAP_BOOST / PHI_SEMANTIC_SAMPLING_FIX
+        # case: a short summary output that has none of the tool-call markers
+        # the regex looks for, but a real diff exists.
+        summary_only = "Implemented the fix, see commit. All tests green."
+        diff = (
+            "clarvis/metrics/phi.py            | 24 ++++++++++++++-------\n"
+            "data/phi_regression_baseline.json | 10 ++++-----\n"
+            "memory/evolution/QUEUE.md         |  2 +-\n"
+            "3 files changed, 24 insertions(+), 12 deletions(-)"
+        )
+        result = validate_worker_output(
+            IMPLEMENTATION, summary_only, "success",
+            git_diff_stat=diff, task_made_commit=True,
+        )
+        assert result["validated"] is True
+        assert result["downgrade"] is False
+        assert result["checks"]["has_file_changes"] is True
+        assert result["checks"]["has_code"] is True
+
+    def test_implementation_test_file_in_diff_credits_has_tests(self):
+        diff = (
+            "clarvis/metrics/self_model.py            | 21 +++--\n"
+            "tests/clarvis/test_self_model.py         | 38 +++++++\n"
+            "2 files changed, 56 insertions(+), 3 deletions(-)"
+        )
+        result = validate_worker_output(
+            IMPLEMENTATION, "Done.", "success",
+            git_diff_stat=diff, task_made_commit=True,
+        )
+        assert result["validated"] is True
+        assert result["checks"]["has_tests"] is True
+        assert result["checks"]["has_code"] is True
+
+    def test_implementation_bookkeeping_only_diff_still_downgrades(self):
+        # Diff shows ONLY QUEUE.md / SWO_TRACKER.md / status.json — these are
+        # housekeeping, not actual delivery. Should still be downgraded.
+        diff = (
+            "memory/evolution/QUEUE.md       |  4 +-\n"
+            "memory/evolution/SWO_TRACKER.md |  3 +-\n"
+            "website/static/status.json      | 36 ++++++++--\n"
+            "3 files changed, 41 insertions(+), 2 deletions(-)"
+        )
+        result = validate_worker_output(
+            IMPLEMENTATION, "Updated tracker.", "success",
+            git_diff_stat=diff, task_made_commit=True,
+        )
+        assert result["validated"] is False
+        assert result["downgrade"] is True
+        assert "no file changes detected" in result["reasons"]
+
+    def test_implementation_no_diff_no_text_evidence_downgrades(self):
+        # No diff captured AND output_text has no markers — true partial.
+        result = validate_worker_output(
+            IMPLEMENTATION, "Thought about it.", "success",
+            git_diff_stat="", task_made_commit=False,
+        )
+        assert result["validated"] is False
+        assert result["downgrade"] is True
+
+    def test_maintenance_real_diff_credits_has_actions(self):
+        diff = (
+            "scripts/cron/cron_doctor.py | 12 ++++++++++--\n"
+            "1 file changed, 10 insertions(+), 2 deletions(-)"
+        )
+        result = validate_worker_output(
+            MAINTENANCE, "Fixed the doctor.", "success",
+            git_diff_stat=diff, task_made_commit=True,
+        )
+        assert result["validated"] is True
+        assert result["checks"]["has_actions"] is True
+
+    def test_research_unaffected_by_git_signal(self):
+        # Research validator is unchanged: a code diff doesn't substitute for
+        # findings/brain storage/structure.
+        diff = "some/file.py | 1 +\n1 file changed, 1 insertion(+)"
+        result = validate_worker_output(
+            RESEARCH, "I looked at stuff.", "success",
+            git_diff_stat=diff, task_made_commit=True,
+        )
+        assert result["validated"] is False
+        assert result["downgrade"] is True
+
+    def test_back_compat_default_args(self):
+        # Older callers that don't pass git args still work.
+        out = "Edited foo.py\ndef bar(): pass"
+        result = validate_worker_output(IMPLEMENTATION, out, "success")
+        assert result["validated"] is True

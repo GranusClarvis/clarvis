@@ -153,10 +153,66 @@ def _check_research_output(output_text):
     return passed, reasons, checks
 
 
-def _check_implementation_output(output_text):
+_TEST_PATH_RE = re.compile(
+    r"(^|[\s/])"  # word boundary or path sep
+    r"(?:tests?/|test_[A-Za-z0-9_]+\.py|[A-Za-z0-9_]+_test\.py"
+    r"|[A-Za-z0-9_.-]+\.test\.[tj]sx?|[A-Za-z0-9_.-]+\.spec\.[tj]sx?)",
+)
+_CODE_PATH_RE = re.compile(
+    r"\.(?:py|ts|tsx|js|jsx|mjs|cjs|sh|sql|go|rs|java|rb|c|h|cpp|hpp"
+    r"|tf|yaml|yml|toml|json)\b",
+)
+
+
+def _git_evidence_from_diff(diff_stat):
+    """Extract has_file_changes / has_tests / has_code signals from a git diff stat.
+
+    diff_stat is the output of ``git diff --stat`` (or empty/None).
+    Bookkeeping-only diffs (just QUEUE.md / SWO_TRACKER.md / status.json /
+    digest.md) do NOT count as code/test changes — those are journaling, not work.
+    """
+    sig = {"has_file_changes": False, "has_tests": False, "has_code": False}
+    if not diff_stat:
+        return sig
+    bookkeeping_only_paths = (
+        "memory/evolution/QUEUE.md",
+        "memory/evolution/QUEUE_ARCHIVE.md",
+        "memory/evolution/SWO_TRACKER.md",
+        "website/static/status.json",
+        "memory/cron/digest.md",
+    )
+    real_change_lines = []
+    for line in diff_stat.splitlines():
+        s = line.strip()
+        if not s or s.startswith("|") or "files changed" in s or "file changed" in s:
+            continue
+        # Lines look like "path/to/file.py | 4 +++-"; isolate the path
+        path = s.split("|", 1)[0].strip()
+        if not path:
+            continue
+        if path in bookkeeping_only_paths:
+            continue
+        real_change_lines.append(path)
+
+    if real_change_lines:
+        sig["has_file_changes"] = True
+        for p in real_change_lines:
+            if _TEST_PATH_RE.search(p):
+                sig["has_tests"] = True
+            if _CODE_PATH_RE.search(p):
+                sig["has_code"] = True
+    return sig
+
+
+def _check_implementation_output(output_text, git_diff_stat="", task_made_commit=False):
     """Implementation must have file changes and ideally tests.
 
-    Checks for: file edits/writes, test execution, code artifacts.
+    Checks for: file edits/writes, test execution, code artifacts. When
+    ``git_diff_stat`` is provided (the diff produced *during* this task — see
+    `_capture_git_outcome` with `pre_task_sha`), filesystem evidence overrides
+    the output_text heuristic. This catches the false-partial pattern where a
+    summary-style Claude Code output omits tool-call markers even though real
+    files changed and a commit landed.
     """
     checks = {
         "has_file_changes": False,
@@ -165,10 +221,10 @@ def _check_implementation_output(output_text):
     }
     reasons = []
 
-    if not output_text:
+    if not output_text and not git_diff_stat:
         return False, ["no output text"], checks
 
-    text_lower = output_text.lower()
+    text_lower = (output_text or "").lower()
 
     # Check for file changes (tool use patterns from Claude Code output)
     if any(marker in text_lower for marker in [
@@ -187,7 +243,16 @@ def _check_implementation_output(output_text):
         checks["has_tests"] = True
 
     # Check for code artifacts (function defs, imports, etc.)
-    if re.search(r"(def |class |import |from .+ import)", output_text):
+    if output_text and re.search(r"(def |class |import |from .+ import)", output_text):
+        checks["has_code"] = True
+
+    # Filesystem evidence: real diffs from this task win over text heuristics.
+    git_sig = _git_evidence_from_diff(git_diff_stat)
+    if git_sig["has_file_changes"]:
+        checks["has_file_changes"] = True
+    if git_sig["has_tests"]:
+        checks["has_tests"] = True
+    if git_sig["has_code"]:
         checks["has_code"] = True
 
     passed = checks["has_file_changes"]  # File changes are required
@@ -202,10 +267,11 @@ def _check_implementation_output(output_text):
     return passed, reasons, checks
 
 
-def _check_maintenance_output(output_text):
+def _check_maintenance_output(output_text, git_diff_stat="", task_made_commit=False):
     """Maintenance must have health status or actions taken.
 
     Checks for: health/status reporting, cleanup actions, metrics.
+    Real filesystem changes (diff stat) count as actions taken.
     """
     checks = {
         "has_status": False,
@@ -213,10 +279,10 @@ def _check_maintenance_output(output_text):
     }
     reasons = []
 
-    if not output_text:
+    if not output_text and not git_diff_stat:
         return False, ["no output text"], checks
 
-    text_lower = output_text.lower()
+    text_lower = (output_text or "").lower()
 
     # Check for health/status reporting
     if any(marker in text_lower for marker in [
@@ -233,6 +299,11 @@ def _check_maintenance_output(output_text):
         "compacted", "backed up", "fixed", "repaired",
         "no action needed", "all healthy", "nothing to clean",
     ]):
+        checks["has_actions"] = True
+
+    # Filesystem evidence: any non-bookkeeping diff counts as actions.
+    git_sig = _git_evidence_from_diff(git_diff_stat)
+    if git_sig["has_file_changes"]:
         checks["has_actions"] = True
 
     passed = checks["has_status"] or checks["has_actions"]
@@ -252,7 +323,8 @@ _VALIDATORS = {
 }
 
 
-def validate_worker_output(worker_type, output_text, task_status):
+def validate_worker_output(worker_type, output_text, task_status,
+                           git_diff_stat="", task_made_commit=False):
     """Validate worker output against type-specific expectations.
 
     Only validates successful tasks — failed/timeout/crash tasks are not
@@ -262,6 +334,11 @@ def validate_worker_output(worker_type, output_text, task_status):
         worker_type: str from classify_worker_type().
         output_text: Raw output text from the executor.
         task_status: Current task status ("success", "failure", etc.).
+        git_diff_stat: ``git diff --stat`` of changes produced during the task
+            (post-task minus pre-task). When supplied, real filesystem changes
+            count as positive evidence and prevent false-partial downgrades on
+            summary-style outputs that omit tool-call markers.
+        task_made_commit: True if a new commit landed during the task.
 
     Returns:
         dict: {
@@ -289,7 +366,10 @@ def validate_worker_output(worker_type, output_text, task_status):
     if validator is None:
         return result
 
-    passed, reasons, checks = validator(output_text)
+    if worker_type in (IMPLEMENTATION, MAINTENANCE):
+        passed, reasons, checks = validator(output_text, git_diff_stat, task_made_commit)
+    else:
+        passed, reasons, checks = validator(output_text)
     result["checks"] = checks
     result["reasons"] = reasons
 

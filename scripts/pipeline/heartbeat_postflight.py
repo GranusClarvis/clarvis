@@ -463,11 +463,22 @@ def _transcript_log(ctx, _pf_errors):
     return timings
 
 
-def _capture_git_outcome():
-    """Capture git diff --stat and latest commit for cost-per-commit tracking."""
+def _capture_git_outcome(pre_task_sha=""):
+    """Capture git changes attributable to the just-completed task.
+
+    When ``pre_task_sha`` is provided, computes the diff against it (the SHA
+    captured in preflight before the task ran). This gives the *actual* changes
+    produced during this task, not just whatever HEAD~1 happens to be.
+    Falls back to HEAD~1 when no pre-task SHA is available (older preflight or
+    standalone runs).
+
+    Also captures unstaged/uncommitted working-tree changes via porcelain output
+    so that tasks which modified files without committing are still credited.
+    """
     import subprocess
     ws = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
-    result = {"git_diff_stat": None, "latest_commit": None}
+    result = {"git_diff_stat": None, "latest_commit": None, "task_diff_stat": None,
+              "task_made_commit": False, "task_porcelain": ""}
     try:
         diff = subprocess.run(
             ["git", "diff", "--stat", "HEAD~1"],
@@ -484,6 +495,33 @@ def _capture_git_outcome():
         )
         if log_out.returncode == 0 and log_out.stdout.strip():
             result["latest_commit"] = log_out.stdout.strip()
+    except Exception:
+        pass
+    if pre_task_sha:
+        try:
+            head = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                capture_output=True, text=True, timeout=5, cwd=ws,
+            )
+            if head.returncode == 0:
+                cur_sha = head.stdout.strip()
+                if cur_sha and cur_sha != pre_task_sha:
+                    result["task_made_commit"] = True
+                    diff = subprocess.run(
+                        ["git", "diff", "--stat", f"{pre_task_sha}..HEAD"],
+                        capture_output=True, text=True, timeout=10, cwd=ws,
+                    )
+                    if diff.returncode == 0 and diff.stdout.strip():
+                        result["task_diff_stat"] = diff.stdout.strip()
+        except Exception:
+            pass
+    try:
+        st = subprocess.run(
+            ["git", "status", "--porcelain"],
+            capture_output=True, text=True, timeout=5, cwd=ws,
+        )
+        if st.returncode == 0:
+            result["task_porcelain"] = st.stdout.strip()
     except Exception:
         pass
     return result
@@ -522,7 +560,9 @@ def _build_postflight_ctx(exit_code, output_file, preflight_data, task_duration)
             error_evidence = f"instant-fail ({preflight_data.get('crash_duration', '?')}s), original: {error_evidence}"
         log(f"Error taxonomy: {error_type} ({error_evidence})")
 
-    git_outcome = _capture_git_outcome()
+    pre_task_sha = preflight_data.get("pre_task_commit_sha", "") if isinstance(preflight_data, dict) else ""
+    pre_task_porcelain = preflight_data.get("pre_task_porcelain", "") if isinstance(preflight_data, dict) else ""
+    git_outcome = _capture_git_outcome(pre_task_sha)
 
     return {
         "task": task,
@@ -542,6 +582,10 @@ def _build_postflight_ctx(exit_code, output_file, preflight_data, task_duration)
         "preflight_data": preflight_data,
         "git_diff_stat": git_outcome["git_diff_stat"],
         "latest_commit": git_outcome["latest_commit"],
+        "task_diff_stat": git_outcome.get("task_diff_stat"),
+        "task_made_commit": git_outcome.get("task_made_commit", False),
+        "task_porcelain": git_outcome.get("task_porcelain", ""),
+        "pre_task_porcelain": pre_task_porcelain,
         "WORKSPACE": WORKSPACE,
         "QUEUE_FILE": os.path.join(WORKSPACE, "memory/evolution/QUEUE.md"),
         "QUEUE_ARCHIVE": os.path.join(WORKSPACE, "memory/evolution/QUEUE_ARCHIVE.md"),
@@ -2020,7 +2064,14 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
             prompt_variant_task_type=preflight_data.get("prompt_variant_task_type", ""),
         )
         ctx["worker_type"] = worker_type
-        wv_result = validate_worker_output(worker_type, ctx["output_text"], ctx["task_status"])
+        # Prefer the diff produced during this task (pre-task SHA → HEAD).
+        # Fall back to HEAD~1 diff if pre-task SHA wasn't captured.
+        wv_diff = ctx.get("task_diff_stat") or ctx.get("git_diff_stat") or ""
+        wv_result = validate_worker_output(
+            worker_type, ctx["output_text"], ctx["task_status"],
+            git_diff_stat=wv_diff,
+            task_made_commit=bool(ctx.get("task_made_commit")),
+        )
         ctx["worker_validation"] = wv_result
         if wv_result["downgrade"]:
             ctx["task_status"] = "partial_success"
