@@ -15,6 +15,7 @@ Migrated from scripts/phi_metric.py (Phase 5 spine refactor).
 
 import json
 import os
+import random
 from collections import defaultdict
 from datetime import datetime, timezone
 
@@ -222,16 +223,25 @@ def semantic_cross_collection(brain):
         count = col.count()
         if count > 0:
             active_collections.append(col_name)
-            limit = min(TARGET_SAMPLE, count) if count > TARGET_SAMPLE else None
+            # Random sampling fix (2026-04-28): `col.get(limit=N)` returns the
+            # FIRST N entries by insertion order, so memories appended later
+            # (e.g. bridge entries in large collections) were invisible to
+            # this metric. Fetch all IDs first, then pull embeddings for a
+            # random TARGET_SAMPLE-sized subset.
             try:
-                kw = {"include": ["embeddings"]}
-                if limit is not None:
-                    kw["limit"] = limit
-                results = col.get(**kw)
-            except Exception:
-                if limit is None:
-                    results = col.get(include=["embeddings"], limit=TARGET_SAMPLE)
+                if count > TARGET_SAMPLE:
+                    id_results = col.get(include=[])
+                    all_ids = id_results.get("ids", [])
+                    if not all_ids:
+                        continue
+                    sampled_ids = random.sample(all_ids, min(TARGET_SAMPLE, len(all_ids)))
+                    results = col.get(ids=sampled_ids, include=["embeddings"])
                 else:
+                    results = col.get(include=["embeddings"])
+            except Exception:
+                try:
+                    results = col.get(include=["embeddings"], limit=TARGET_SAMPLE)
+                except Exception:
                     continue
             all_embs = results.get("embeddings")
             if all_embs is None:

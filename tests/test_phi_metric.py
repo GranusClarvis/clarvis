@@ -115,6 +115,50 @@ class TestPhiMetricRegression:
 
 
 @pytest.mark.slow
+class TestSemanticSamplingFix:
+    """Regression guard for [PHI_SEMANTIC_SAMPLING_FIX] (2026-04-28).
+
+    Pre-fix `col.get(include=["embeddings"], limit=100)` returned the FIRST 100
+    entries by insertion order, so appended bridges in large collections were
+    invisible to `semantic_cross_collection`. The fix uses `random.sample` over
+    all IDs. These checks catch a regression to insertion-order sampling.
+    """
+
+    def _has_oversized_collection(self):
+        from clarvis.metrics.phi import _get_brain
+        brain = _get_brain()
+        return any(col.count() > 100 for col in brain.collections.values())
+
+    def test_random_sampling_yields_variance_across_runs(self):
+        """Two consecutive calls with different RNG seeds must differ."""
+        if not self._has_oversized_collection():
+            pytest.skip("No collection > TARGET_SAMPLE; sampling path not exercised")
+
+        import random
+        from clarvis.metrics.phi import semantic_cross_collection, _get_brain
+        brain = _get_brain()
+
+        random.seed(1)
+        s1, _ = semantic_cross_collection(brain)
+        random.seed(2)
+        s2, _ = semantic_cross_collection(brain)
+        assert s1 != s2, (
+            f"semantic_cross_collection is deterministic across seeds "
+            f"({s1} == {s2}) — sampling has regressed to insertion order"
+        )
+
+    def test_sampling_uses_random_module(self):
+        """Source-level guard: the loop must call random.sample over IDs."""
+        import inspect
+        from clarvis.metrics import phi as phi_mod
+        src = inspect.getsource(phi_mod.semantic_cross_collection)
+        assert "random.sample" in src, (
+            "semantic_cross_collection no longer uses random.sample — "
+            "this likely re-introduces the insertion-order bias"
+        )
+
+
+@pytest.mark.slow
 class TestPhiDecomposition:
     """Verify decomposition file is fresh and structurally valid."""
 
