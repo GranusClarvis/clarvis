@@ -357,7 +357,6 @@ _Note: queue is saturated (29 pending, P1 at cap). Adding minimal, high-signal i
 
 ### 2026-04-26 weekly review
 
-- [x] **[AUTONOMOUS_OUTPUT_VALIDATION_FALSE_PARTIAL_AUDIT]** _Done 2026-04-28: 18/20 partials were FALSE — Claude tail summary lacks tool-call markers though real diffs landed. Fix: capture pre-task SHA in preflight, diff against HEAD post-task, feed into `worker_validation.py` (impl + maintenance only). Bookkeeping-only diffs (QUEUE/SWO_TRACKER/status.json) still downgrade. Report at `memory/research/2026-04-28_autonomous_output_validation_false_partial_audit.md`; +7 tests in `tests/test_heartbeat_worker_validation.py::TestGitEvidenceOverridesTextHeuristic`._
 - [ ] [UNVERIFIED] **[DAILY_LOG_COVERAGE_GUARD]** Weekly review found missing daily logs for 2026-04-20 through 2026-04-22, which weakens continuity and makes trend review lossy. Add a lightweight guard in the daily/cron writing path that ensures `memory/YYYY-MM-DD.md` exists before first write and emits an alert if a UTC day closes without a daily file. Acceptance: backstop creates the file shell automatically and the next missed day is detectable from logs/alerting instead of silently disappearing. (PROJECT:CLARVIS)
 
 ### 2026-04-27 evolution scan

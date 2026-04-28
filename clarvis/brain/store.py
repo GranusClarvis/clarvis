@@ -270,10 +270,12 @@ class StoreMixin:
                 ids=[new_id], metadatas=[new_meta]
             )
 
-        # Mark old memory as superseded
+        # Mark old memory as superseded and archived so live-goal consumers
+        # (get_goals(include_archived=False), get_goals_summary) drop it.
         old_meta["status"] = "superseded"
         old_meta["superseded_by"] = new_id
         old_meta["superseded_at"] = datetime.now(timezone.utc).isoformat()
+        old_meta["archived"] = "true"
         self.collections[old_col].update(
             ids=[old_memory_id], metadatas=[old_meta]
         )
@@ -504,25 +506,34 @@ class StoreMixin:
     # === GOAL TRACKING ===
 
     def get_goals(self, include_archived=False):
-        """Get all tracked goals with normalized name/progress fields."""
+        """Get all tracked goals with normalized name/progress fields.
+
+        Honors externally-stamped `progress` metadata (e.g. from
+        scripts/hooks/refresh_priorities.py) when present, instead of always
+        re-parsing it from the document body.
+        """
         raw = self.get(GOALS)
         for g in raw:
             meta = g.get("metadata", {})
-            if "goal" in meta and "progress" in meta:
+            has_goal = "goal" in meta
+            has_progress = "progress" in meta and meta.get("progress") not in (None, "")
+            if has_goal and has_progress:
                 continue
             doc = g.get("document", "")
             goal_id = g.get("id", "")
             if ":" in doc and "%" in doc:
                 name = doc.split(":")[0].strip()
                 try:
-                    progress = int(doc.split(":")[1].split("%")[0].strip())
+                    parsed_progress = int(doc.split(":")[1].split("%")[0].strip())
                 except (ValueError, IndexError):
-                    progress = 0
+                    parsed_progress = 0
             else:
                 name = goal_id.replace("goal-", "").replace("-", " ").replace("_", " ").title()
-                progress = 0
-            meta["goal"] = name
-            meta["progress"] = progress
+                parsed_progress = 0
+            if not has_goal:
+                meta["goal"] = name
+            if not has_progress:
+                meta["progress"] = parsed_progress
 
         if not include_archived:
             raw = [g for g in raw if str(g.get("metadata", {}).get("archived", "")).lower() != "true"]

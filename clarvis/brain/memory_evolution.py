@@ -134,9 +134,11 @@ def evolve_memory(brain, old_id, old_collection, new_text, reason="contradiction
     # Store evolved memory
     col.upsert(ids=[new_id], documents=[new_text], metadatas=[new_meta])
 
-    # Mark original as superseded
+    # Mark original as superseded AND archived so get_goals(include_archived=False)
+    # and similar consumers stop surfacing both the old and new record as live.
     old_meta["superseded_by"] = new_id
     old_meta["superseded_at"] = datetime.now(timezone.utc).isoformat()
+    old_meta["archived"] = "true"
     col.upsert(ids=[old_id], documents=[old_doc], metadatas=[old_meta])
 
     # Link old → new in graph

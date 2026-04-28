@@ -101,11 +101,14 @@ class TestEvolveMemory:
         assert new_meta["evolved_from"] == mid
         assert new_meta["evolution_reason"] == "correction"
 
-        # Check old memory is marked superseded
+        # Check old memory is marked superseded AND archived
+        # (archived flag prevents get_goals(include_archived=False) from
+        # surfacing the superseded record alongside the live successor)
         old_mem = tmp_brain.collections[LEARNINGS].get(ids=[mid])
         old_meta = old_mem["metadatas"][0]
         assert old_meta["superseded_by"] == result["new_id"]
         assert "superseded_at" in old_meta
+        assert str(old_meta.get("archived", "")).lower() == "true"
 
     def test_importance_inherited_and_boosted(self, tmp_brain):
         mid = tmp_brain.store("Original text", collection=LEARNINGS, importance=0.6)

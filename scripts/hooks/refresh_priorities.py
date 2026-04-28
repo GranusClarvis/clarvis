@@ -63,6 +63,42 @@ def extract_queue_items(queue_text: str) -> dict[str, list[str]]:
     return priorities
 
 
+def compute_queue_progress(queue_text: str) -> dict:
+    """Derive a coarse progress signal for the active weekly priority record.
+
+    Counts checkbox states across the whole QUEUE.md (P0+P1+P2+sections).
+    Returns dict: {progress, done, partial, open, total, ratio_done, ratio_active}.
+    `progress` is a 0-100 int = floor(100 * (done + 0.5*partial) / total),
+    suitable for dropping into goal metadata so weekly priorities no longer sit at 0.
+    """
+    done = partial = open_ = 0
+    for line in queue_text.splitlines():
+        m = re.match(r"^\s*- \[([ ~x])\]", line)
+        if not m:
+            continue
+        ch = m.group(1)
+        if ch == "x":
+            done += 1
+        elif ch == "~":
+            partial += 1
+        else:
+            open_ += 1
+    total = done + partial + open_
+    if total == 0:
+        return {"progress": 0, "done": 0, "partial": 0, "open": 0, "total": 0,
+                "ratio_done": 0.0, "ratio_active": 0.0}
+    score = (done + 0.5 * partial) / total
+    return {
+        "progress": int(score * 100),
+        "done": done,
+        "partial": partial,
+        "open": open_,
+        "total": total,
+        "ratio_done": round(done / total, 4),
+        "ratio_active": round((done + partial) / total, 4),
+    }
+
+
 def extract_roadmap_state(roadmap_text: str) -> str:
     """Extract the Current State table from ROADMAP.md as a compact summary."""
     lines = roadmap_text.splitlines()
@@ -118,16 +154,19 @@ def refresh(dry_run: bool = False) -> str:
 
     priorities = extract_queue_items(queue_text)
     roadmap_summary = extract_roadmap_state(roadmap_text)
+    progress_stats = compute_queue_progress(queue_text)
     memory_text = build_memory_text(priorities, roadmap_summary)
 
     if dry_run:
         print("=== DRY RUN — would store: ===")
         print(memory_text)
+        print(f"\n[progress] {progress_stats}")
         return memory_text
 
     # Import brain and upsert
     from clarvis.brain import brain
     from clarvis.brain.constants import GOALS
+    from datetime import datetime, timezone
 
     memory_id = brain.store(
         text=memory_text,
@@ -137,7 +176,27 @@ def refresh(dry_run: bool = False) -> str:
         source="refresh_priorities.py",
         memory_id=MEMORY_ID,
     )
+    # Stamp progress metadata so brain.get_goals() reports a live, non-zero
+    # progress for the canonical weekly priorities record.
+    try:
+        col = brain.collections[GOALS]
+        existing = col.get(ids=[memory_id])
+        if existing.get("ids"):
+            meta = existing["metadatas"][0] if existing.get("metadatas") else {}
+            meta["progress"] = progress_stats["progress"]
+            meta["progress_done"] = progress_stats["done"]
+            meta["progress_partial"] = progress_stats["partial"]
+            meta["progress_open"] = progress_stats["open"]
+            meta["progress_total"] = progress_stats["total"]
+            meta["progress_updated"] = datetime.now(timezone.utc).isoformat()
+            meta["progress_source"] = "QUEUE.md"
+            col.update(ids=[memory_id], metadatas=[meta])
+    except Exception as e:
+        print(f"[warn] progress metadata update failed: {e}")
     print(f"Stored '{memory_id}' in {GOALS} (importance={IMPORTANCE})")
+    print(f"Progress: {progress_stats['progress']}% "
+          f"({progress_stats['done']}/{progress_stats['total']} done, "
+          f"{progress_stats['partial']} partial)")
     print(f"Content length: {len(memory_text)} chars")
     return memory_text
 
