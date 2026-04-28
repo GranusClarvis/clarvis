@@ -476,22 +476,27 @@ def _assess_autonomous_execution():
     log_recent_lines = 0
 
     # --- Source 1: autonomous.log (24h rolling window) ---
+    # Anchor on the canonical postflight emission "Recording outcome: <status>"
+    # (heartbeat_postflight.py) and the canonical executor line "EXECUTION: ... exit=N".
+    # Each heartbeat emits one of each, so max(outcome, exec) deduplicates while
+    # being resilient to either source being truncated/missing. Avoid loose
+    # substrings like "FAILED" or "COMPLETED" — those false-match SELF-TEST
+    # FAILED, PERF GATE: FAIL, task names containing "FAILURE_HANDLING", etc.
     try:
         if os.path.exists(log_path):
             with open(log_path) as f:
                 lines = f.readlines()
             recent_lines = [l for l in lines if today in l or yesterday in l]
             log_recent_lines = len(recent_lines)
-            # Match postflight format "Recording outcome: success" and legacy "COMPLETED"
-            # Also match EXECUTION exit code as a cross-check
-            # Deduplicate: each heartbeat logs both EXECUTION and Recording outcome
-            # Count unique heartbeat completions by counting only "outcome:" lines or EXECUTION lines, not both
-            outcome_lines = [l for l in recent_lines if "outcome: success" in l or "COMPLETED" in l]
+            outcome_lines = [l for l in recent_lines if "Recording outcome: success" in l]
             exec_success = [l for l in recent_lines if "EXECUTION:" in l and "exit=0" in l]
             log_completed = max(len(outcome_lines), len(exec_success))
-            # Match actual execution failures only — exclude "Verification FAILED: lock held"
-            # preflight messages which are informational, not task failures
-            outcome_fail = [l for l in recent_lines if "outcome: timeout" in l or "outcome: failure" in l or ("FAILED" in l and "Verification FAILED" not in l)]
+            outcome_fail = [
+                l for l in recent_lines
+                if "Recording outcome: failure" in l
+                or "Recording outcome: timeout" in l
+                or "Recording outcome: crash" in l
+            ]
             exec_fail = [l for l in recent_lines if "EXECUTION:" in l and "exit=" in l and "exit=0" not in l]
             log_failed = max(len(outcome_fail), len(exec_fail))
             log_descriptions = outcome_lines if outcome_lines else exec_success
