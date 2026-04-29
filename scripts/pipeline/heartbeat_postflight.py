@@ -271,7 +271,11 @@ from clarvis.heartbeat.error_classifier import (  # noqa: F401
 from clarvis.heartbeat.episode_encoder import episode_encode as _episode_encode_canonical
 
 # Worker-type classification and output validation
-from clarvis.heartbeat.worker_validation import classify_worker_type, validate_worker_output
+from clarvis.heartbeat.worker_validation import (
+    classify_worker_type,
+    validate_worker_output,
+    porcelain_delta_paths,
+)
 
 # Project-task delivery validation (PR requirement for SWO/project-lane tasks)
 from clarvis.heartbeat.delivery_validator import validate_project_delivery
@@ -2067,10 +2071,21 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
         # Prefer the diff produced during this task (pre-task SHA → HEAD).
         # Fall back to HEAD~1 diff if pre-task SHA wasn't captured.
         wv_diff = ctx.get("task_diff_stat") or ctx.get("git_diff_stat") or ""
+        # Porcelain delta credits uncommitted working-tree edits so tasks that
+        # changed files without committing are not falsely downgraded.
+        try:
+            wv_porcelain_delta = porcelain_delta_paths(
+                ctx.get("pre_task_porcelain", ""),
+                ctx.get("task_porcelain", ""),
+            )
+        except Exception:
+            wv_porcelain_delta = []
+        ctx["porcelain_delta_paths"] = wv_porcelain_delta
         wv_result = validate_worker_output(
             worker_type, ctx["output_text"], ctx["task_status"],
             git_diff_stat=wv_diff,
             task_made_commit=bool(ctx.get("task_made_commit")),
+            porcelain_delta=wv_porcelain_delta,
         )
         ctx["worker_validation"] = wv_result
         if wv_result["downgrade"]:

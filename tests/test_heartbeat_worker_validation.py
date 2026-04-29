@@ -9,6 +9,7 @@ import pytest
 from clarvis.heartbeat.worker_validation import (
     classify_worker_type,
     validate_worker_output,
+    porcelain_delta_paths,
     _check_research_output,
     _check_implementation_output,
     _check_maintenance_output,
@@ -448,6 +449,155 @@ class TestGitEvidenceOverridesTextHeuristic:
 
     def test_back_compat_default_args(self):
         # Older callers that don't pass git args still work.
+        out = "Edited foo.py\ndef bar(): pass"
+        result = validate_worker_output(IMPLEMENTATION, out, "success")
+        assert result["validated"] is True
+
+
+# ---------------------------------------------------------------------------
+# Porcelain-delta uncommitted-edit credit
+# (WORKER_VALIDATION_UNCOMMITTED_DIFF_CREDIT)
+# ---------------------------------------------------------------------------
+
+class TestPorcelainDeltaPaths:
+    """porcelain_delta_paths() should surface paths newly dirty/untracked."""
+
+    def test_new_untracked_file(self):
+        pre = ""
+        post = "?? scripts/new_thing.py"
+        assert porcelain_delta_paths(pre, post) == ["scripts/new_thing.py"]
+
+    def test_new_modified_file(self):
+        pre = ""
+        post = " M clarvis/brain/store.py"
+        assert porcelain_delta_paths(pre, post) == ["clarvis/brain/store.py"]
+
+    def test_paths_present_in_pre_are_excluded(self):
+        # File was already dirty before the task — not the task's work.
+        pre = " M scripts/old_dirty.py"
+        post = " M scripts/old_dirty.py\n?? tests/new_test.py"
+        assert porcelain_delta_paths(pre, post) == ["tests/new_test.py"]
+
+    def test_handles_rename_destination(self):
+        pre = ""
+        post = "R  old/path.py -> new/path.py"
+        assert porcelain_delta_paths(pre, post) == ["new/path.py"]
+
+    def test_empty_inputs(self):
+        assert porcelain_delta_paths("", "") == []
+        assert porcelain_delta_paths(None, None) == []
+
+    def test_multiple_new_paths_sorted(self):
+        post = "?? b.py\n?? a.py"
+        assert porcelain_delta_paths("", post) == ["a.py", "b.py"]
+
+
+class TestUncommittedEditCredit:
+    """Uncommitted edits (porcelain delta) should be credited as evidence,
+    matching the contract for committed diffs. This fixes the false-partial
+    downgrade where validate_worker_output() previously only saw committed
+    diff stats even though postflight captured working-tree porcelain."""
+
+    def test_implementation_uncommitted_edit_passes(self):
+        # No commit, no diff stat, but the working tree shows real edits to
+        # source + tests. Validator must credit them.
+        out = "Done."
+        delta = ["clarvis/brain/store.py", "tests/test_store.py"]
+        result = validate_worker_output(
+            IMPLEMENTATION, out, "success",
+            git_diff_stat="", task_made_commit=False,
+            porcelain_delta=delta,
+        )
+        assert result["validated"] is True
+        assert result["downgrade"] is False
+        assert result["checks"]["has_file_changes"] is True
+        assert result["checks"]["has_tests"] is True
+        assert result["checks"]["has_code"] is True
+
+    def test_implementation_committed_diff_still_works(self):
+        # Pre-existing path: committed-only edits remain credited (regression
+        # guard for the fix).
+        diff = (
+            "scripts/cron/cron_doctor.py | 12 ++++++++++--\n"
+            "1 file changed, 10 insertions(+), 2 deletions(-)"
+        )
+        result = validate_worker_output(
+            IMPLEMENTATION, "Done.", "success",
+            git_diff_stat=diff, task_made_commit=True,
+            porcelain_delta=[],
+        )
+        assert result["validated"] is True
+        assert result["checks"]["has_file_changes"] is True
+        assert result["checks"]["has_code"] is True
+
+    def test_implementation_mixed_committed_and_uncommitted(self):
+        # Some files committed, others left dirty — both should count.
+        diff = (
+            "clarvis/brain/store.py | 4 +++-\n"
+            "1 file changed, 3 insertions(+), 1 deletion(-)"
+        )
+        delta = ["tests/test_store.py"]
+        result = validate_worker_output(
+            IMPLEMENTATION, "shipped", "success",
+            git_diff_stat=diff, task_made_commit=True,
+            porcelain_delta=delta,
+        )
+        assert result["validated"] is True
+        assert result["checks"]["has_file_changes"] is True
+        assert result["checks"]["has_tests"] is True  # from porcelain delta
+        assert result["checks"]["has_code"] is True   # from committed diff
+
+    def test_implementation_bookkeeping_only_porcelain_still_downgrades(self):
+        # Working tree shows ONLY journaling files dirty — same exclusion
+        # rule as committed diffs.
+        delta = [
+            "memory/evolution/QUEUE.md",
+            "memory/evolution/SWO_TRACKER.md",
+            "website/static/status.json",
+        ]
+        result = validate_worker_output(
+            IMPLEMENTATION, "Updated tracker.", "success",
+            git_diff_stat="", task_made_commit=False,
+            porcelain_delta=delta,
+        )
+        assert result["validated"] is False
+        assert result["downgrade"] is True
+        assert "no file changes detected" in result["reasons"]
+
+    def test_maintenance_uncommitted_edit_credits_action(self):
+        # Maintenance task that edited a script without committing.
+        delta = ["scripts/cron/cron_doctor.py"]
+        result = validate_worker_output(
+            MAINTENANCE, "Fixed the doctor.", "success",
+            git_diff_stat="", task_made_commit=False,
+            porcelain_delta=delta,
+        )
+        assert result["validated"] is True
+        assert result["checks"]["has_actions"] is True
+
+    def test_implementation_no_commit_no_delta_still_downgrades(self):
+        # No commit, no working-tree changes, no text evidence — true partial.
+        result = validate_worker_output(
+            IMPLEMENTATION, "Thought about it.", "success",
+            git_diff_stat="", task_made_commit=False,
+            porcelain_delta=[],
+        )
+        assert result["validated"] is False
+        assert result["downgrade"] is True
+
+    def test_research_unaffected_by_porcelain_delta(self):
+        # Research validator stays text-only — code paths in delta don't
+        # substitute for findings/storage/structure.
+        result = validate_worker_output(
+            RESEARCH, "I looked at stuff.", "success",
+            git_diff_stat="", task_made_commit=False,
+            porcelain_delta=["some/file.py"],
+        )
+        assert result["validated"] is False
+        assert result["downgrade"] is True
+
+    def test_back_compat_no_porcelain_arg(self):
+        # Callers that don't pass porcelain_delta keep working.
         out = "Edited foo.py\ndef bar(): pass"
         result = validate_worker_output(IMPLEMENTATION, out, "success")
         assert result["validated"] is True

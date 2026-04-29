@@ -26,7 +26,6 @@ _Source: `docs/internal/audits/NEURO_FEATURE_DECISIONS_2026-04-17.md`. Phase 9 s
 
 ### Bugs
 
-- [ ] [UNVERIFIED] **[WORKER_VALIDATION_UNCOMMITTED_DIFF_CREDIT]** `scripts/pipeline/heartbeat_postflight.py` now captures `task_porcelain` / `pre_task_porcelain`, but `validate_worker_output()` only receives commit diff stats, so tasks that change files without committing are still not credited despite the comment claiming they are. Wire porcelain-delta evidence into worker validation (or compute a tracked-file diff directly), and add tests for both committed and uncommitted edit paths. (PROJECT:CLARVIS)
 
 ## P1 — This Week
 
@@ -356,8 +355,6 @@ _Original V2 cosmic-palette batches were retired and re-mapped to V3-lane equiva
 
 _Note: queue still saturated (21 pending, P1 at cap). Adding 3 high-signal items only. Phi item is a de-emphasis execution slice — removing Phi's contamination of the evolution prompt itself, in line with `[PHI_DEEMPHASIS_AUDIT]` and `[PHI_AUTO_INJECTION_REMOVAL]` (the prompt that requested this very task hardcodes "WEAKEST METRIC: Phi", so each scan keeps adding Phi tasks regardless of de-emphasis rulings)._
 
-- [ ] [UNVERIFIED] **[PHI_EVOLUTION_PROMPT_DEEMPHASIS]** Strip Phi-as-mandatory-target from the evolution scan prompt builder itself. The cron_evolution / strategic-scan prompt currently hardcodes a "WEAKEST METRIC: Phi (Integration)=X — at least one new task MUST target this" header, which contaminates every evolution scan with Phi bias regardless of operator value. Touch: the prompt template under `scripts/cron/cron_evolution.sh` / `scripts/strategic_evolution.py` (or wherever this prompt is assembled). Replace the Phi-special-cased header with a dynamic "weakest capability" picker that selects from `capability_scores` (currently autonomous_execution=0.64, code_generation=0.74) and skips Phi unless it has regressed ≥0.10 sustained ≥3 days. Acceptance: grep of evolution prompt sources shows no hardcoded "WEAKEST METRIC: Phi" string; next evolution scan prompt names a real capability gap, not Phi. Pairs with `[PHI_AUTO_INJECTION_REMOVAL]`. (PROJECT:CLARVIS)
-- [ ] [UNVERIFIED] **[DIGEST_GARBLE_FIX]** The 2026-04-25 digest contains literal garbled output: `"me plays.n  ,n  tests_passed: true,n  error: null,n  confidence: 0.85,n  pr_class: Annn,  log: ..."` — a JSON/dict block where `\n` escapes were stringified to literal `n` characters, with truncation mid-sentence ("me plays" appears to be a chopped tail of "the user plays"). Source is the autonomous evolution writer path that promotes Claude task output into `memory/cron/digest.md`. Find the writer (likely `clarvis/cron/digest_writer.py` or `cron_autonomous.sh` post-step) and fix the unescape/format step so JSON dicts render as readable prose or a fenced code block. Acceptance: next autonomous task entry in digest.md is human-readable, with no literal `n,n,n` chains and no mid-word truncation. Feeds Phase 12 digest actionability work directly. (PROJECT:CLARVIS)
 - ~~[SWO_OPERATOR_PLAYTEST_BRIEF]~~ → DONE (PR #250 merged 2026-04-26 per `SWO_TRACKER.md`).
 
 ### 2026-04-24 evolution scan

@@ -63,19 +63,59 @@ def extract_queue_items(queue_text: str) -> dict[str, list[str]]:
     return priorities
 
 
-def compute_queue_progress(queue_text: str) -> dict:
-    """Derive a coarse progress signal for the active weekly priority record.
+_TOP_LEVEL_HEADER = re.compile(r"^##\s+(.+)")
+_ACTIVE_PRIORITY_HEADER = re.compile(r"^##\s+P[012]\b")
+_SUBSECTION_HEADER = re.compile(r"^#{3,}\s+(.+)")
+_RETIRED_TOKENS = re.compile(
+    r"\b(retir|defer|archiv|deprecat|supersed|dropped|out[- ]of[- ]scope)",
+    re.IGNORECASE,
+)
 
-    Counts checkbox states across the whole QUEUE.md (P0+P1+P2+sections).
+
+def _subsection_is_active(title: str) -> bool:
+    """A subsection is treated as inactive if its title flags retired/deferred work."""
+    return not _RETIRED_TOKENS.search(title)
+
+
+def compute_queue_progress(queue_text: str) -> dict:
+    """Count checkbox states across the active weekly priority record only.
+
+    Active scope = items under the top-level ``## P0``/``## P1``/``## P2`` headings,
+    excluding subsections whose heading marks them as retired/deferred/archived
+    (e.g. ``#### Retired / Deferred Items`` under P1, or
+    ``### Sanctuary Asset Batches — RETIRED 2026-04-25`` under P2). Top-level blocks
+    that are not active priorities (``## NEW ITEMS``, ``## Partial Items``,
+    ``## Research Sessions``) are also excluded. Strikethrough items
+    (``- [x] ~~...~~``) are skipped because they're retired in place.
+
     Returns dict: {progress, done, partial, open, total, ratio_done, ratio_active}.
-    `progress` is a 0-100 int = floor(100 * (done + 0.5*partial) / total),
-    suitable for dropping into goal metadata so weekly priorities no longer sit at 0.
+    ``progress`` is a 0-100 int = floor(100 * (done + 0.5*partial) / total),
+    suitable for dropping into goal metadata so weekly priorities reflect live work.
     """
     done = partial = open_ = 0
+    in_active_priority = False
+    in_active_subsection = True
+
     for line in queue_text.splitlines():
+        if _TOP_LEVEL_HEADER.match(line):
+            in_active_priority = bool(_ACTIVE_PRIORITY_HEADER.match(line))
+            in_active_subsection = True
+            continue
+
+        m_sub = _SUBSECTION_HEADER.match(line)
+        if m_sub:
+            in_active_subsection = _subsection_is_active(m_sub.group(1))
+            continue
+
+        if not (in_active_priority and in_active_subsection):
+            continue
+
         m = re.match(r"^\s*- \[([ ~x])\]", line)
         if not m:
             continue
+        if "~~" in line:
+            continue
+
         ch = m.group(1)
         if ch == "x":
             done += 1
@@ -83,6 +123,7 @@ def compute_queue_progress(queue_text: str) -> dict:
             partial += 1
         else:
             open_ += 1
+
     total = done + partial + open_
     if total == 0:
         return {"progress": 0, "done": 0, "partial": 0, "open": 0, "total": 0,

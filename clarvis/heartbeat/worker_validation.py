@@ -164,6 +164,15 @@ _CODE_PATH_RE = re.compile(
 )
 
 
+_BOOKKEEPING_ONLY_PATHS = (
+    "memory/evolution/QUEUE.md",
+    "memory/evolution/QUEUE_ARCHIVE.md",
+    "memory/evolution/SWO_TRACKER.md",
+    "website/static/status.json",
+    "memory/cron/digest.md",
+)
+
+
 def _git_evidence_from_diff(diff_stat):
     """Extract has_file_changes / has_tests / has_code signals from a git diff stat.
 
@@ -174,13 +183,6 @@ def _git_evidence_from_diff(diff_stat):
     sig = {"has_file_changes": False, "has_tests": False, "has_code": False}
     if not diff_stat:
         return sig
-    bookkeeping_only_paths = (
-        "memory/evolution/QUEUE.md",
-        "memory/evolution/QUEUE_ARCHIVE.md",
-        "memory/evolution/SWO_TRACKER.md",
-        "website/static/status.json",
-        "memory/cron/digest.md",
-    )
     real_change_lines = []
     for line in diff_stat.splitlines():
         s = line.strip()
@@ -190,7 +192,7 @@ def _git_evidence_from_diff(diff_stat):
         path = s.split("|", 1)[0].strip()
         if not path:
             continue
-        if path in bookkeeping_only_paths:
+        if path in _BOOKKEEPING_ONLY_PATHS:
             continue
         real_change_lines.append(path)
 
@@ -204,15 +206,79 @@ def _git_evidence_from_diff(diff_stat):
     return sig
 
 
-def _check_implementation_output(output_text, git_diff_stat="", task_made_commit=False):
+def _parse_porcelain_paths(porcelain_text):
+    """Parse `git status --porcelain` output into a set of file paths.
+
+    Handles renames ("R  old -> new") by taking the destination path, and
+    strips quoting that git uses for paths with special characters.
+    """
+    paths = set()
+    for line in (porcelain_text or "").splitlines():
+        if len(line) < 4:
+            continue
+        rest = line[3:]
+        if " -> " in rest:
+            rest = rest.split(" -> ", 1)[1]
+        rest = rest.strip()
+        if rest.startswith('"') and rest.endswith('"'):
+            rest = rest[1:-1]
+        if rest:
+            paths.add(rest)
+    return paths
+
+
+def porcelain_delta_paths(pre_porcelain, post_porcelain):
+    """Return file paths newly dirty/untracked in post that weren't in pre.
+
+    These are paths the task touched in the working tree but possibly didn't
+    commit (e.g. a new test file written but never staged). Crediting them
+    fixes the false-partial pattern where uncommitted real edits were ignored.
+    """
+    pre_set = _parse_porcelain_paths(pre_porcelain)
+    post_set = _parse_porcelain_paths(post_porcelain)
+    return sorted(post_set - pre_set)
+
+
+def _git_evidence_from_paths(paths):
+    """Same shape as ``_git_evidence_from_diff`` but takes a list of paths.
+
+    Bookkeeping-only paths are filtered the same way diff stats are.
+    """
+    sig = {"has_file_changes": False, "has_tests": False, "has_code": False}
+    real = [p for p in (paths or []) if p and p not in _BOOKKEEPING_ONLY_PATHS]
+    if real:
+        sig["has_file_changes"] = True
+        for p in real:
+            if _TEST_PATH_RE.search(p):
+                sig["has_tests"] = True
+            if _CODE_PATH_RE.search(p):
+                sig["has_code"] = True
+    return sig
+
+
+def _merge_signals(*sigs):
+    out = {"has_file_changes": False, "has_tests": False, "has_code": False}
+    for s in sigs:
+        if not s:
+            continue
+        for k in out:
+            if s.get(k):
+                out[k] = True
+    return out
+
+
+def _check_implementation_output(output_text, git_diff_stat="", task_made_commit=False,
+                                 porcelain_delta=None):
     """Implementation must have file changes and ideally tests.
 
     Checks for: file edits/writes, test execution, code artifacts. When
     ``git_diff_stat`` is provided (the diff produced *during* this task — see
     `_capture_git_outcome` with `pre_task_sha`), filesystem evidence overrides
-    the output_text heuristic. This catches the false-partial pattern where a
-    summary-style Claude Code output omits tool-call markers even though real
-    files changed and a commit landed.
+    the output_text heuristic. ``porcelain_delta`` carries paths newly
+    dirty/untracked since the task started — this credits work that edited or
+    created files without committing. This catches the false-partial pattern
+    where a summary-style Claude Code output omits tool-call markers even
+    though real files changed.
     """
     checks = {
         "has_file_changes": False,
@@ -221,7 +287,7 @@ def _check_implementation_output(output_text, git_diff_stat="", task_made_commit
     }
     reasons = []
 
-    if not output_text and not git_diff_stat:
+    if not output_text and not git_diff_stat and not porcelain_delta:
         return False, ["no output text"], checks
 
     text_lower = (output_text or "").lower()
@@ -246,8 +312,13 @@ def _check_implementation_output(output_text, git_diff_stat="", task_made_commit
     if output_text and re.search(r"(def |class |import |from .+ import)", output_text):
         checks["has_code"] = True
 
-    # Filesystem evidence: real diffs from this task win over text heuristics.
-    git_sig = _git_evidence_from_diff(git_diff_stat)
+    # Filesystem evidence: real diffs and uncommitted-edit deltas win over
+    # text heuristics. Committed diff + working-tree porcelain delta together
+    # give credit for both committed and uncommitted edits.
+    git_sig = _merge_signals(
+        _git_evidence_from_diff(git_diff_stat),
+        _git_evidence_from_paths(porcelain_delta),
+    )
     if git_sig["has_file_changes"]:
         checks["has_file_changes"] = True
     if git_sig["has_tests"]:
@@ -267,11 +338,13 @@ def _check_implementation_output(output_text, git_diff_stat="", task_made_commit
     return passed, reasons, checks
 
 
-def _check_maintenance_output(output_text, git_diff_stat="", task_made_commit=False):
+def _check_maintenance_output(output_text, git_diff_stat="", task_made_commit=False,
+                              porcelain_delta=None):
     """Maintenance must have health status or actions taken.
 
     Checks for: health/status reporting, cleanup actions, metrics.
-    Real filesystem changes (diff stat) count as actions taken.
+    Real filesystem changes (diff stat or porcelain delta) count as
+    actions taken — including uncommitted edits.
     """
     checks = {
         "has_status": False,
@@ -279,7 +352,7 @@ def _check_maintenance_output(output_text, git_diff_stat="", task_made_commit=Fa
     }
     reasons = []
 
-    if not output_text and not git_diff_stat:
+    if not output_text and not git_diff_stat and not porcelain_delta:
         return False, ["no output text"], checks
 
     text_lower = (output_text or "").lower()
@@ -301,8 +374,12 @@ def _check_maintenance_output(output_text, git_diff_stat="", task_made_commit=Fa
     ]):
         checks["has_actions"] = True
 
-    # Filesystem evidence: any non-bookkeeping diff counts as actions.
-    git_sig = _git_evidence_from_diff(git_diff_stat)
+    # Filesystem evidence: any non-bookkeeping diff or porcelain delta counts
+    # as actions (covers both committed and uncommitted maintenance edits).
+    git_sig = _merge_signals(
+        _git_evidence_from_diff(git_diff_stat),
+        _git_evidence_from_paths(porcelain_delta),
+    )
     if git_sig["has_file_changes"]:
         checks["has_actions"] = True
 
@@ -324,7 +401,8 @@ _VALIDATORS = {
 
 
 def validate_worker_output(worker_type, output_text, task_status,
-                           git_diff_stat="", task_made_commit=False):
+                           git_diff_stat="", task_made_commit=False,
+                           porcelain_delta=None):
     """Validate worker output against type-specific expectations.
 
     Only validates successful tasks — failed/timeout/crash tasks are not
@@ -339,6 +417,11 @@ def validate_worker_output(worker_type, output_text, task_status,
             count as positive evidence and prevent false-partial downgrades on
             summary-style outputs that omit tool-call markers.
         task_made_commit: True if a new commit landed during the task.
+        porcelain_delta: Optional list of file paths newly dirty/untracked
+            since the task started (computed from pre/post
+            ``git status --porcelain``). Credits uncommitted edits so that
+            tasks which changed files without committing are not falsely
+            downgraded. See :func:`porcelain_delta_paths`.
 
     Returns:
         dict: {
@@ -367,7 +450,10 @@ def validate_worker_output(worker_type, output_text, task_status,
         return result
 
     if worker_type in (IMPLEMENTATION, MAINTENANCE):
-        passed, reasons, checks = validator(output_text, git_diff_stat, task_made_commit)
+        passed, reasons, checks = validator(
+            output_text, git_diff_stat, task_made_commit,
+            porcelain_delta=porcelain_delta,
+        )
     else:
         passed, reasons, checks = validator(output_text)
     result["checks"] = checks
