@@ -105,9 +105,10 @@ def _sync_sidecar_complete(tag: str) -> None:
 
 
 def _extract_tag_from_text(text: str) -> Optional[str]:
-    """Extract [TAG] from task text for sidecar sync. Handles **bold** wrapping."""
-    m = re.match(r"(?:\*\*)?(\[([A-Z][A-Za-z0-9_:.-]+)\])(?:\*\*)?", text.strip())
-    return m.group(2) if m else None
+    """Extract [TAG] from task text for sidecar sync. Handles **bold** wrapping
+    and skips leading status markers like [UNVERIFIED] (delegates to engine)."""
+    from clarvis.queue.engine import _extract_tag
+    return _extract_tag(text)
 MAX_AUTO_TASKS_PER_DAY = 5
 SIMILARITY_THRESHOLD = 0.5  # Word overlap ratio to consider a duplicate
 

@@ -101,6 +101,25 @@ class TestExtractTag:
     def test_lowercase_rejected(self):
         assert _extract_tag("[lowercase] nope") is None
 
+    def test_skips_unverified_status_marker(self):
+        # Hallucination guard prefixes [UNVERIFIED] in front of the real tag.
+        # Without skipping it the sidecar collapses every guarded task to one
+        # bogus "UNVERIFIED" entry, causing all_filtered_by_v2 in the selector.
+        text = "[UNVERIFIED] **[WORKER_VALIDATION_UNCOMMITTED_DIFF_CREDIT]** body"
+        assert _extract_tag(text) == "WORKER_VALIDATION_UNCOMMITTED_DIFF_CREDIT"
+
+    def test_skips_other_status_markers(self):
+        assert _extract_tag("[VERIFIED] **[REAL_TAG]** body") == "REAL_TAG"
+        assert _extract_tag("[BLOCKED] [REAL_TAG] body") == "REAL_TAG"
+        assert _extract_tag("[WIP] **[ANOTHER_TAG]** body") == "ANOTHER_TAG"
+
+    def test_status_marker_alone_is_no_tag(self):
+        # A line with only a status marker and no real tag has no tag.
+        assert _extract_tag("[UNVERIFIED] no real tag here") is None
+
+    def test_bold_wrapped_real_tag(self):
+        assert _extract_tag("**[BOLD_TAG]** body") == "BOLD_TAG"
+
 
 # ---------------------------------------------------------------------------
 # Reconciliation tests

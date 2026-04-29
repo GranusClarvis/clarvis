@@ -52,18 +52,35 @@ STUCK_RUNNING_HOURS = 3
 # Tag extraction pattern: [TAG] at start of task text, optionally wrapped in markdown bold (**[TAG]**)
 _TAG_RE = re.compile(r"^(?:\*\*)?(\[[A-Z][A-Za-z0-9_:.-]+\])(?:\*\*)?")
 
+# Status markers added by guards/auditors that prefix a task line but are NOT the
+# real task tag. They must be skipped so the actual semantic tag (typically
+# bold-wrapped) is used as the sidecar key. Without this, every guarded task
+# collapses to a single sidecar entry (e.g. "UNVERIFIED") and the queue selector
+# filters them all out via "all_filtered_by_v2".
+_STATUS_MARKERS = frozenset({"UNVERIFIED", "VERIFIED", "BLOCKED", "WIP", "TODO", "DRAFT"})
+
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _extract_tag(text: str) -> Optional[str]:
-    """Extract [TAG] from task text. Handles optional **bold** markdown wrapping."""
-    m = _TAG_RE.match(text.strip())
-    if m:
-        bracket_group = m.group(1)
-        return bracket_group[1:-1]  # strip surrounding []
-    return None
+    """Extract [TAG] from task text. Handles optional **bold** markdown wrapping
+    and skips leading status markers like [UNVERIFIED] added by guards.
+    """
+    s = text.strip()
+    m = _TAG_RE.match(s)
+    if not m:
+        return None
+    candidate = m.group(1)[1:-1]  # strip surrounding []
+    if candidate in _STATUS_MARKERS:
+        # Skip status marker and look for the real tag immediately after
+        rest = s[m.end():].lstrip()
+        m2 = _TAG_RE.match(rest)
+        if m2:
+            return m2.group(1)[1:-1]
+        return None  # only a status marker, no real tag
+    return candidate
 
 
 # ---------------------------------------------------------------------------
