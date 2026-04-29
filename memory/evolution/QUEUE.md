@@ -26,8 +26,16 @@ _Source: `docs/internal/audits/NEURO_FEATURE_DECISIONS_2026-04-17.md`. Phase 9 s
 
 ### Bugs
 
+- [ ] [UNVERIFIED] **[QUEUE_PROGRESS_ACTIVE_SCOPE_FIX]** `scripts/hooks/refresh_priorities.py:compute_queue_progress()` currently counts every checkbox in all of `QUEUE.md`, including deferred/retired/archive-style sections, but its docstring says it should reflect the active weekly priority record. Restrict progress accounting to active P0/P1/P2 task scopes only (exclude retired/deferred/partial/reference blocks) and add a regression test with mixed active + retired items so `brain.get_goals()` progress is not inflated by historical debris. (PROJECT:CLARVIS)
+- [ ] [UNVERIFIED] **[WORKER_VALIDATION_UNCOMMITTED_DIFF_CREDIT]** `scripts/pipeline/heartbeat_postflight.py` now captures `task_porcelain` / `pre_task_porcelain`, but `validate_worker_output()` only receives commit diff stats, so tasks that change files without committing are still not credited despite the comment claiming they are. Wire porcelain-delta evidence into worker validation (or compute a tracked-file diff directly), and add tests for both committed and uncommitted edit paths. (PROJECT:CLARVIS)
 
 ## P1 — This Week
+
+### BunnyBagz — MegaETH Casino (added 2026-04-29)
+
+- [ ] **[BUNNYBAGZ_PHASE0_EXECUTION]** Keep BunnyBagz in Clarvis's active queue and continue refining/executing the project in slices: lock brand/domain/handles decisions as they arrive, convert repo planning docs into an execution queue, complete Phase 0 scaffolding (repo rename, `apps/web`, chain config, Foundry rails), then drive solo-first MVP toward Coinflip → Dice → Hi-Lo with small-bankroll constraints and later PVP expansion. Source of truth in repo docs: `docs/DECISIONS.md`, `docs/ROADMAP.md`, `docs/BUILD_PLAN.md`. Operator directive recorded 2026-04-29. (PROJECT:BUNNYBAGZ, P1)
+  - Slice 2026-04-29 (Clarvis subconscious): scaffolded `apps/web` Next.js 15 (App Router, TS, strict) — `pnpm --filter @bunnybagz/web build` + `typecheck` green; added Foundry stub (`BunnyBagzVersion.sol` + test) so `forge test` runs a non-empty suite; replaced placeholder CI with 4 real jobs (verify typecheck+test, web typecheck, contracts forge build+test, lint). Branch in repo: `feature/mvp-planning-and-rebrand`. Phase 0 exit-criteria status: `pnpm dev` runs the empty app ✅, `forge test` runs non-empty suite ✅, CI wired ✅. Still open (operator-blocking): domain confirmation, X/TG/Discord handle squat, repo rename `mega-house → bunnybagz`.
+- [ ] **[BUNNYBAGZ_PHASE1_KICKOFF]** When operator unblocks Phase 0 open items (domain, handles, repo rename), spawn a Claude Code slice to start Phase 1: write `BunnyBagzBankroll.sol` + `BunnyBagzRandomness.sol` + `BunnyBagzCoinflip.sol` with Foundry tests (settlement math 100% + fuzz randomness + invariant on bankroll solvency), wire `apps/api/seed/*` Edge fns, scaffold `/play/coinflip` and `/verify/[betId]`. Exit: testnet first-time-bet flow in <30s on mobile. (PROJECT:BUNNYBAGZ, P1)
 
 ### Claude Design & Routines Integration (cross-project, added 2026-04-20)
 
@@ -67,7 +75,6 @@ _Tamagotchi-style care + interaction loop on top of the existing companion schem
 
 _Six visual/structural polish items. Track B ships in parallel with Track A — these go in slots when no Companion P0 is ready. Items 1–3 are de-slop visual fixes; 4 standardises existing painted assets; 5 closes half-wired features; 6 is a UX gate. **No RD credits.**_
 
-- [ ] [UNVERIFIED] **[SWO_V2_ROOM_PALETTE_STANDARDIZE]** Standardize palette across the 8 painted room backgrounds in `public/sanctuary/rooms/` (or wherever they live in the V2 asset tree — verify path during the read step). Use a batch color-adjust script (Python+Pillow or ImageMagick) — **not** RD regeneration — that snaps each room PNG to the shared SWO palette established by `[SWO_V2_DESLOP_SHADER]`. Output deltas to a side-by-side review folder before overwriting. Acceptance: script lives under `scripts/v2/standardize_room_palette.{mjs,py}`, all 8 rooms re-exported, palette histogram diff shows convergence to the shared palette ±5% tolerance, no asset is RD-regenerated. (PROJECT:SWO, P1, Track B)
 
 #### V2 polish — secondary (P2, do after the six priorities)
 
@@ -188,7 +195,6 @@ _Source: `docs/internal/audits/decisions/2026-04-16_meta_audit_phases_0_4.md`. A
 ---
 
 ## P2 — When Idle
-- [ ] [UNVERIFIED] **[AUDIT_PHASE_0_COST_TRACE_JOIN_LIFT]** Phase 0 PASS ruling (2026-04-28) found `traced_ratio_vs_costs = 0.8902` — ~18 of 164 cost-tracked Claude spawns in the 7-day window lack a corresponding audit trace. Investigate the gap (likely culprits: manual `claude -p ...` invocations bypassing `spawn_claude.sh`, plus a small number of cron-pathway spawns whose cost row was written before trace finalize). Lift the ratio toward 0.95. Acceptance: traced_ratio_vs_costs ≥ 0.95 on a fresh 7-day window; concrete fix (either docs/discipline change or a wrapper enforcement) recorded in the Phase 0 decision doc. Source: `docs/internal/audits/decisions/2026-04-16_phase0_instrumentation.md` §"Update — 2026-04-28". (PROJECT:CLARVIS, audit_phase_0)
 
 ### Claude Design & Routines — Medium-term (P2, added 2026-04-20)
 
@@ -337,7 +343,6 @@ _Original V2 cosmic-palette batches were retired and re-mapped to V3-lane equiva
 
 ### 2026-04-20 evolution scan
 
-- [ ] [UNVERIFIED] **[FIX_PHI_HEALTH_REPORTING]** The health pipeline reports Phi=0.000 because `phi_metric.py` was never committed to `scripts/metrics/` on main — it only exists in stale worktrees. Either (a) add a `scripts/metrics/phi_metric.py` wrapper that calls `clarvis.metrics.phi.compute_phi()`, or (b) fix the health data collector (`cron_pi_refresh.sh` / `daily_brain_eval.py`) to import from `clarvis.metrics.phi` directly. Acceptance: `health_monitor.sh` and evolution context report Phi≥0.60 instead of 0.000.
 
 ### 2026-04-25 evolution scan
 
