@@ -53,6 +53,14 @@ HEALTH_DIGEST=$(python3 -m clarvis.heartbeat.health --window 24 --digest 2>/dev/
 python3 -m clarvis.heartbeat.health --window 24 >> "$LOGFILE" 2>&1 || true
 [ -n "$HEALTH_DIGEST" ] && echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] HEALTH: $HEALTH_DIGEST" >> "$LOGFILE"
 
+# Step 0.2: Queue runnable view — shows whether the queue is even runnable,
+# not just how many tasks are pending. Surfaces eligible/blocked breakdown
+# (in_progress, succeeded-but-unchecked, backoff, deferred) so the digest
+# can tell the conscious layer when work exists but the engine can't run any.
+RUNNABLE_DIGEST=$(python3 -m clarvis.queue.runnable --digest 2>/dev/null || echo "")
+python3 -m clarvis.queue.runnable --top 5 >> "$LOGFILE" 2>&1 || true
+[ -n "$RUNNABLE_DIGEST" ] && echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] RUNNABLE: $RUNNABLE_DIGEST" >> "$LOGFILE"
+
 # Step 0.5: Context window GC
 run_step "context_gc" python3 -m clarvis context gc
 
@@ -148,7 +156,7 @@ fi
 
 # === DIGEST: Write first-person summary for M2.5 agent ===
 python3 "$CLARVIS_WORKSPACE/scripts/tools/digest_writer.py" reflection \
-    "${DIGEST_STATUS} QUEUE: ${QUEUE_PENDING} pending, ${QUEUE_DONE} done. WEAKEST: ${WEAKEST_METRIC}. ${HEALTH_DIGEST} Pipeline: optimize, reflect, synthesize, crosslink, consolidate, learn, amplify, episodic, temporal, meta-learn, AZR, causal, brain-effectiveness. Session saved." \
+    "${DIGEST_STATUS} QUEUE: ${QUEUE_PENDING} pending, ${QUEUE_DONE} done. WEAKEST: ${WEAKEST_METRIC}. ${HEALTH_DIGEST} ${RUNNABLE_DIGEST} Pipeline: optimize, reflect, synthesize, crosslink, consolidate, learn, amplify, episodic, temporal, meta-learn, AZR, causal, brain-effectiveness. Session saved." \
     >> "$LOGFILE" 2>&1 || true
 
 if [ "$STEP_FAILURES" -gt 0 ]; then

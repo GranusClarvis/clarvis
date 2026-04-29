@@ -97,6 +97,16 @@ fi
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] CONTEXT: compressed_queue=${#COMPRESSED_QUEUE}b health=${#COMPRESSED_HEALTH}b" >> "$LOGFILE"
 
+# Queue runnable view + heartbeat health: surface execution-shape signals to
+# the evolution analyst so newly-proposed tasks can target real bottlenecks
+# (e.g. dominant block reason, low eligibility ratio) rather than purely
+# metrics-driven gaps. Both are pre-computed so the analyst doesn't burn
+# Claude time running probes.
+RUNNABLE_DIGEST=$(python3 -m clarvis.queue.runnable --digest 2>/dev/null || echo "")
+HEALTH_DIGEST=$(python3 -m clarvis.heartbeat.health --window 24 --digest 2>/dev/null || echo "")
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] RUNNABLE: $RUNNABLE_DIGEST" >> "$LOGFILE"
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] HEALTH: $HEALTH_DIGEST" >> "$LOGFILE"
+
 # ============================================================================
 # CLAUDE CODE ANALYSIS (the actual expensive part — this is the core work)
 # ============================================================================
@@ -125,6 +135,12 @@ ACTION (MANDATORY if <5 pending tasks):
 
 STATIC_STEPS
     printf '%s\n\n%s\n\n' "$COMPRESSED_QUEUE" "$COMPRESSED_HEALTH"
+    if [ -n "$RUNNABLE_DIGEST" ] || [ -n "$HEALTH_DIGEST" ]; then
+        printf 'EXECUTION SHAPE (use to target bottlenecks, not just gaps):\n'
+        [ -n "$HEALTH_DIGEST" ]   && printf '  • %s\n' "$HEALTH_DIGEST"
+        [ -n "$RUNNABLE_DIGEST" ] && printf '  • %s\n' "$RUNNABLE_DIGEST"
+        printf '\n'
+    fi
     if [ -n "$EVO_CONTEXT_BRIEF" ]; then
         printf 'CONTEXT (brain introspection + episodic + failures):\n%s\n\n' "$EVO_CONTEXT_BRIEF"
     fi
@@ -164,7 +180,7 @@ if [ "$CLAUDE_EXIT" -eq 0 ]; then
     EVO_TASK_LIST=$(grep '^\- \[ \]' "$EVO_OUTPUT_FILE" 2>/dev/null | head -5 | head -c 500 || echo "")
 
     # Build enriched digest entry with scan diagnostics
-    DIGEST_BODY="Deep evolution analysis complete. ${PHI_SHORT:-Phi unknown}. Weakest: ${WEAKEST:-unknown}. $PENDING_COUNT tasks pending. Calibration: ${CALIBRATION_SHORT:-unknown}."
+    DIGEST_BODY="Deep evolution analysis complete. ${PHI_SHORT:-Phi unknown}. Weakest: ${WEAKEST:-unknown}. $PENDING_COUNT tasks pending. Calibration: ${CALIBRATION_SHORT:-unknown}. ${RUNNABLE_DIGEST}"
     if [ -n "$EVO_ANALYSIS" ]; then
         DIGEST_BODY="$DIGEST_BODY
 $EVO_ANALYSIS"

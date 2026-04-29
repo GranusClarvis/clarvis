@@ -229,6 +229,41 @@ if echo "$HB_LINE" | grep -q "CRITICAL"; then
     ((FAILURES++)) || true
 fi
 
+# --- Queue runnable health (eligible vs blocked, project-lane starvation) ---
+# Heartbeat health detects "no execution happened"; queue runnable detects WHY.
+# When in_queue > 0 but eligible == 0, the queue is full but dead — the engine
+# has nothing to hand the executor. This is a separate failure shape from
+# silent-skip (heartbeat health) and worth alerting on independently.
+QR_LINE=$(python3 -m clarvis.queue.runnable --json 2>/dev/null \
+    | python3 -c "
+import json, sys
+try:
+    d = json.loads(sys.stdin.read() or '{}')
+except Exception:
+    print('MISSED  queue_runnable — parse failed')
+    sys.exit(0)
+sev = d.get('severity', 'unknown')
+total = d.get('in_queue_total', 0)
+elig = d.get('eligible_count', 0)
+counts = d.get('counts_by_reason', {})
+parts = []
+for r in ('in_progress', 'succeeded', 'deferred', 'backoff', 'max_retries'):
+    n = counts.get(r, 0)
+    if n:
+        parts.append(f'{n}{r[:3]}')
+detail = '/'.join(parts) if parts else 'clean'
+if sev == 'critical':
+    print(f'WARN    queue_runnable — CRITICAL: {elig}/{total} eligible ({detail})')
+elif sev == 'warn':
+    print(f'WARN    queue_runnable — warn: {elig}/{total} eligible ({detail})')
+else:
+    print(f'OK      queue_runnable — {elig}/{total} eligible ({detail})')
+" 2>/dev/null || echo "MISSED  queue_runnable — eval failed")
+REPORT="${REPORT}${QR_LINE}\n"
+if echo "$QR_LINE" | grep -q "CRITICAL"; then
+    ((FAILURES++)) || true
+fi
+
 # --- Stale PR check (weekly — only runs on Sundays) ---
 # Lists open Clarvis-authored PRs older than 14 days with review status.
 DAY_OF_WEEK=$(date +%u)  # 7=Sunday
@@ -377,11 +412,12 @@ fi
 #   2. It's the first alert of the day (daily reminder at most), OR
 #   3. No alert was sent yet for the current failure set
 ALERT_STATE_FILE="$CLARVIS_WORKSPACE/data/watchdog_alert_state.json"
-# Include heartbeat_health CRITICAL in the dedup hash too — otherwise a new
-# silent-execution incident wouldn't trigger an alert when MISSED/STALE sets
-# are unchanged. We deliberately match the literal "CRITICAL" token (warn-only
-# health is still rate-limited daily by the date-based branch below).
-CURRENT_FAILURES=$(echo -e "$REPORT" | grep -E "^MISSED|^STALE|heartbeat_health.*CRITICAL" | sort | md5sum | awk '{print $1}')
+# Include heartbeat_health and queue_runnable CRITICAL in the dedup hash too —
+# otherwise a new silent-execution or queue-stall incident wouldn't trigger an
+# alert when MISSED/STALE sets are unchanged. We deliberately match the literal
+# "CRITICAL" token (warn-only severity is still rate-limited daily by the
+# date-based branch below).
+CURRENT_FAILURES=$(echo -e "$REPORT" | grep -E "^MISSED|^STALE|heartbeat_health.*CRITICAL|queue_runnable.*CRITICAL" | sort | md5sum | awk '{print $1}')
 SHOULD_ALERT=false
 
 if [ "$FAILURES" -gt 0 ] && [ "$ALERT_MODE" = true ]; then
@@ -422,7 +458,7 @@ json.dump(state, open('$ALERT_STATE_FILE', 'w'), indent=2)
 
 ${FAILURES} cron job(s) still failing after auto-recovery:
 
-$(echo -e "$REPORT" | grep -E "MISSED|STALE|heartbeat_health.*CRITICAL")
+$(echo -e "$REPORT" | grep -E "MISSED|STALE|heartbeat_health.*CRITICAL|queue_runnable.*CRITICAL")
 
 Recovery log: memory/cron/doctor.log
 Watchdog log: memory/cron/watchdog.log"

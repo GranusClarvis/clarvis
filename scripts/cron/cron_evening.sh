@@ -103,6 +103,24 @@ esac
 HEALTH_DIGEST=$(python3 -m clarvis.heartbeat.health --window 24 --digest 2>/dev/null || echo "heartbeat health: unavailable")
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] HEALTH: severity=$HEALTH_SEVERITY — $HEALTH_DIGEST" >> "$LOGFILE"
 
+# === QUEUE RUNNABLE VIEW: eligible/blocked task breakdown ===
+# Replaces the "Claude, run this one-liner if no_task >= 25%" probe with a
+# pre-computed structured view. The auditor sees in_queue / eligible /
+# blocked-by-reason counts directly and can name a specific filter
+# (in_progress, succeeded-but-unchecked, backoff, max_retries, project_lane).
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Computing queue runnable view..." >> "$LOGFILE"
+RUNNABLE_REPORT_FILE=$(mktemp --suffix=.txt)
+python3 -m clarvis.queue.runnable --top 5 --samples 3 > "$RUNNABLE_REPORT_FILE" 2>> "$LOGFILE"
+RUNNABLE_TEXT_EXIT=$?
+cat "$RUNNABLE_REPORT_FILE" >> "$LOGFILE"
+RUNNABLE_SEVERITY="ok"
+case "$RUNNABLE_TEXT_EXIT" in
+    1) RUNNABLE_SEVERITY="warn" ;;
+    2) RUNNABLE_SEVERITY="critical" ;;
+esac
+RUNNABLE_DIGEST=$(python3 -m clarvis.queue.runnable --digest 2>/dev/null || echo "queue runnable: unavailable")
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] RUNNABLE: severity=$RUNNABLE_SEVERITY — $RUNNABLE_DIGEST" >> "$LOGFILE"
+
 # === EXISTING: Claude Code evening audit ===
 # Try to acquire global Claude lock — if held, skip audit but continue to digest
 AUDIT_SKIPPED=""
@@ -126,26 +144,40 @@ if [ -z "$AUDIT_SKIPPED" ]; then
 You are Clarvis's evening auditor. Your job is to detect SILENT FAILURES that
 the cron pipeline didn't catch — not to grep for the word "error".
 
-The structured heartbeat health report below replaces the old "grep -i error"
-sweep. Read it first; the per-cycle outcomes tell you whether the system is
-actually executing tasks or skipping them.
+Two structured reports below replace the old "grep -i error" sweep:
+  • HEARTBEAT HEALTH — per-cycle outcomes from autonomous.log
+  • QUEUE RUNNABLE  — eligible vs blocked, with each blocked task's reason
+
+Read them first. They tell you whether the system actually executed tasks
+AND whether the queue is even runnable. Together they pinpoint silent-skip
+incidents without a probe round-trip.
 STATIC
         printf 'WEAKEST METRIC: %s — flag if today'\''s work helped or hurt this.\n\n' "$WEAKEST_METRIC"
         printf '## HEARTBEAT HEALTH (severity=%s)\n' "$HEALTH_SEVERITY"
         cat "$HEALTH_REPORT_FILE"
+        printf '\n## QUEUE RUNNABLE (severity=%s)\n' "$RUNNABLE_SEVERITY"
+        cat "$RUNNABLE_REPORT_FILE"
         cat <<'STATIC2'
 
 ## CHECKLIST (in order)
-1. **Execution health.** From the report above, what is `executed_ok` / total?
+1. **Execution health.** From the heartbeat report, what is `executed_ok` / total?
    - If <50%, the system is mostly idling — explain why (no_task? deferred? crash?).
    - If `consecutive_no_execution >= 3` or severity is CRITICAL, treat as a P0
      incident. Find the root cause: queue selector, project-lane filter, gate
      thresholds, broken preflight. Add a P0 task to QUEUE.md if a fix is needed.
-2. **Silent skips.** If `no_task` ≥ 25% of cycles, run:
-     python3 -c "from clarvis.queue.engine import QueueEngine, parse_queue; \
-                 print('eligible:', len(QueueEngine().ranked_eligible()), \
-                       'in_queue:', len(parse_queue()))"
-   If `eligible` < `in_queue`, identify which filter is dropping tasks.
+2. **Queue runnable shape.** From the runnable report:
+   - If `Eligible (engine) == 0` and `In QUEUE.md > 0`, the queue is full but
+     dead — name the dominant block reason (in_progress / succeeded /
+     deferred / backoff / max_retries / other) and trace it to a specific
+     module: archive_completed (succeeded-unchecked), heartbeat_postflight
+     (in_progress not closed), engine.mark_failed (backoff/max_retries),
+     project-lane filter (lane=X has 0 eligible).
+   - Cross-reference with heartbeat health: if no_task rate is high AND
+     eligible_count is healthy, the issue is downstream of selection
+     (gates: cognitive_load, sizing, mode, confidence). If eligible_count
+     is low, the issue is the queue itself.
+   - Flag any "succeeded but checkbox still [ ]" backlog ≥3 — sidecar/QUEUE
+     drift means work isn't being archived; archive_completed is stalled.
 3. **Recent commits + workspace.** `git status --short` and `git log --oneline -10`.
    Cross-reference today's commits against what the digest claims happened — any
    gaps suggest tasks marked done in QUEUE.md without actual code changes.
@@ -155,6 +187,7 @@ STATIC
 ## OUTPUT FORMAT (mandatory)
 AUDIT: pass|warn|issues_found — <1 sentence diagnosis>.
 HEALTH: severity=<ok|warn|critical> exec_rate=<pct> no_task_streak=<n>.
+RUNNABLE: severity=<ok|warn|critical> eligible=<n>/<total> dominant_block=<reason|none>.
 ROOT_CAUSE: <none|single sentence pointing at a specific module/file>.
 FIXES: <count> — <files touched, comma-separated, or "none">.
 METRIC_IMPACT: improved|neutral|degraded.
@@ -166,7 +199,7 @@ STATIC2
         < "$EVENING_PROMPT_FILE" >> "$LOGFILE" 2>&1
     rm -f "$EVENING_PROMPT_FILE"
 fi
-rm -f "$HEALTH_REPORT_FILE" "$HEALTH_JSON_FILE"
+rm -f "$HEALTH_REPORT_FILE" "$HEALTH_JSON_FILE" "$RUNNABLE_REPORT_FILE"
 
 # === DIGEST: Write first-person summary for M2.5 agent ===
 PHI_DIGEST=$(echo "$PHI_OUTPUT" | grep -oP 'Phi\s*=\s*[\d.]+' | head -1)
@@ -174,7 +207,7 @@ PHI_DIGEST=$(echo "$PHI_OUTPUT" | grep -oP 'Phi\s*=\s*[\d.]+' | head -1)
 ASSESSMENT_DIGEST=$(echo "$ASSESSMENT_OUTPUT" | grep -oP '^\s{2}[A-Z][^:]+:\s[\d.]+' | head -7 | tr '\n' '; ')
 [ -z "$ASSESSMENT_DIGEST" ] && ASSESSMENT_DIGEST="assessment unavailable"
 python3 "$CLARVIS_WORKSPACE/scripts/tools/digest_writer.py" evening \
-    "Evening assessment complete. $PHI_DIGEST. Capability scores: $ASSESSMENT_DIGEST. Ran retrieval benchmark, self-report, and dashboard regeneration. Evening code audit ${AUDIT_SKIPPED:+skipped (lock held)}${AUDIT_SKIPPED:-done}. $HEALTH_DIGEST" \
+    "Evening assessment complete. $PHI_DIGEST. Capability scores: $ASSESSMENT_DIGEST. Ran retrieval benchmark, self-report, and dashboard regeneration. Evening code audit ${AUDIT_SKIPPED:+skipped (lock held)}${AUDIT_SKIPPED:-done}. $HEALTH_DIGEST $RUNNABLE_DIGEST" \
     >> "$LOGFILE" 2>&1 || true
 
 # === DAILY MEMORY LOG: Generate memory/YYYY-MM-DD.md from digest ===
