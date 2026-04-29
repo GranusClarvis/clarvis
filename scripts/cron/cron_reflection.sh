@@ -45,6 +45,14 @@ QUEUE_DONE=$(grep -c '^\- \[x\]' memory/evolution/QUEUE.md 2>/dev/null || echo 0
 WEAKEST_METRIC=$(get_weakest_metric)
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] QUEUE: $QUEUE_PENDING pending, $QUEUE_DONE completed. Weakest: $WEAKEST_METRIC" >> "$LOGFILE"
 
+# Step 0.1: Heartbeat health probe (silent-failure detection) — the reflection
+# cycle is the right place to learn from execution patterns, so we surface the
+# structured outcomes alongside the queue stats. Critical severity propagates
+# into the digest so the conscious layer is aware.
+HEALTH_DIGEST=$(python3 -m clarvis.heartbeat.health --window 24 --digest 2>/dev/null || echo "")
+python3 -m clarvis.heartbeat.health --window 24 >> "$LOGFILE" 2>&1 || true
+[ -n "$HEALTH_DIGEST" ] && echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] HEALTH: $HEALTH_DIGEST" >> "$LOGFILE"
+
 # Step 0.5: Context window GC
 run_step "context_gc" python3 -m clarvis context gc
 
@@ -140,7 +148,7 @@ fi
 
 # === DIGEST: Write first-person summary for M2.5 agent ===
 python3 "$CLARVIS_WORKSPACE/scripts/tools/digest_writer.py" reflection \
-    "${DIGEST_STATUS} QUEUE: ${QUEUE_PENDING} pending, ${QUEUE_DONE} done. WEAKEST: ${WEAKEST_METRIC}. Pipeline: optimize, reflect, synthesize, crosslink, consolidate, learn, amplify, episodic, temporal, meta-learn, AZR, causal, brain-effectiveness. Session saved." \
+    "${DIGEST_STATUS} QUEUE: ${QUEUE_PENDING} pending, ${QUEUE_DONE} done. WEAKEST: ${WEAKEST_METRIC}. ${HEALTH_DIGEST} Pipeline: optimize, reflect, synthesize, crosslink, consolidate, learn, amplify, episodic, temporal, meta-learn, AZR, causal, brain-effectiveness. Session saved." \
     >> "$LOGFILE" 2>&1 || true
 
 if [ "$STEP_FAILURES" -gt 0 ]; then

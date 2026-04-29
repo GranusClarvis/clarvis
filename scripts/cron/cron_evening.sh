@@ -84,6 +84,25 @@ python3 "$CLARVIS_WORKSPACE/scripts/metrics/self_report.py" >> "$LOGFILE" 2>&1 |
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Regenerating dashboard..." >> "$LOGFILE"
 python3 "$CLARVIS_WORKSPACE/scripts/metrics/dashboard.py" >> "$LOGFILE" 2>&1 || true
 
+# === HEARTBEAT HEALTH: structured outcome analysis (replaces shallow grep) ===
+# Parses memory/cron/autonomous.log into per-cycle records and scores recent
+# execution rate. Surfaces silent-failure patterns (all_filtered_by_v2,
+# repeated no-task, instant-fail clusters) that the old grep audit missed.
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] Computing heartbeat health (last 24 cycles)..." >> "$LOGFILE"
+HEALTH_REPORT_FILE=$(mktemp --suffix=.txt)
+HEALTH_JSON_FILE=$(mktemp --suffix=.json)
+python3 -m clarvis.heartbeat.health --window 24 > "$HEALTH_REPORT_FILE" 2>> "$LOGFILE"
+HEALTH_TEXT_EXIT=$?
+python3 -m clarvis.heartbeat.health --window 24 --json > "$HEALTH_JSON_FILE" 2>> "$LOGFILE" || true
+cat "$HEALTH_REPORT_FILE" >> "$LOGFILE"
+HEALTH_SEVERITY="ok"
+case "$HEALTH_TEXT_EXIT" in
+    1) HEALTH_SEVERITY="warn" ;;
+    2) HEALTH_SEVERITY="critical" ;;
+esac
+HEALTH_DIGEST=$(python3 -m clarvis.heartbeat.health --window 24 --digest 2>/dev/null || echo "heartbeat health: unavailable")
+echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] HEALTH: severity=$HEALTH_SEVERITY — $HEALTH_DIGEST" >> "$LOGFILE"
+
 # === EXISTING: Claude Code evening audit ===
 # Try to acquire global Claude lock — if held, skip audit but continue to digest
 AUDIT_SKIPPED=""
@@ -104,17 +123,41 @@ if [ -z "$AUDIT_SKIPPED" ]; then
     EVENING_PROMPT_FILE=$(mktemp)
     {
         cat <<'STATIC'
-You are Clarvis's evening auditor.
-QUEUE: Check memory/evolution/QUEUE.md — note any stale or blocked tasks.
+You are Clarvis's evening auditor. Your job is to detect SILENT FAILURES that
+the cron pipeline didn't catch — not to grep for the word "error".
+
+The structured heartbeat health report below replaces the old "grep -i error"
+sweep. Read it first; the per-cycle outcomes tell you whether the system is
+actually executing tasks or skipping them.
 STATIC
         printf 'WEAKEST METRIC: %s — flag if today'\''s work helped or hurt this.\n\n' "$WEAKEST_METRIC"
+        printf '## HEARTBEAT HEALTH (severity=%s)\n' "$HEALTH_SEVERITY"
+        cat "$HEALTH_REPORT_FILE"
         cat <<'STATIC2'
-STEPS:
-1. Run git status + git log --oneline -10 to see today's changes.
-2. Scan memory/cron/*.log for errors (grep -i 'error\|fail\|warn' in last 100 lines).
-3. If a bug is found, fix it (1 fix max). If no bugs, skip.
 
-OUTPUT FORMAT (mandatory): "AUDIT: pass|issues_found — <1 sentence>. FIXES: <count>. METRIC_IMPACT: improved|neutral|degraded."
+## CHECKLIST (in order)
+1. **Execution health.** From the report above, what is `executed_ok` / total?
+   - If <50%, the system is mostly idling — explain why (no_task? deferred? crash?).
+   - If `consecutive_no_execution >= 3` or severity is CRITICAL, treat as a P0
+     incident. Find the root cause: queue selector, project-lane filter, gate
+     thresholds, broken preflight. Add a P0 task to QUEUE.md if a fix is needed.
+2. **Silent skips.** If `no_task` ≥ 25% of cycles, run:
+     python3 -c "from clarvis.queue.engine import QueueEngine, parse_queue; \
+                 print('eligible:', len(QueueEngine().ranked_eligible()), \
+                       'in_queue:', len(parse_queue()))"
+   If `eligible` < `in_queue`, identify which filter is dropping tasks.
+3. **Recent commits + workspace.** `git status --short` and `git log --oneline -10`.
+   Cross-reference today's commits against what the digest claims happened — any
+   gaps suggest tasks marked done in QUEUE.md without actual code changes.
+4. **One bounded fix.** If you found a concrete bug in the cron/review stack,
+   fix it (≤1 fix, ≤5 files). If no clear bug, do NOT invent one.
+
+## OUTPUT FORMAT (mandatory)
+AUDIT: pass|warn|issues_found — <1 sentence diagnosis>.
+HEALTH: severity=<ok|warn|critical> exec_rate=<pct> no_task_streak=<n>.
+ROOT_CAUSE: <none|single sentence pointing at a specific module/file>.
+FIXES: <count> — <files touched, comma-separated, or "none">.
+METRIC_IMPACT: improved|neutral|degraded.
 STATIC2
     } > "$EVENING_PROMPT_FILE"
     timeout 1200 env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \
@@ -123,6 +166,7 @@ STATIC2
         < "$EVENING_PROMPT_FILE" >> "$LOGFILE" 2>&1
     rm -f "$EVENING_PROMPT_FILE"
 fi
+rm -f "$HEALTH_REPORT_FILE" "$HEALTH_JSON_FILE"
 
 # === DIGEST: Write first-person summary for M2.5 agent ===
 PHI_DIGEST=$(echo "$PHI_OUTPUT" | grep -oP 'Phi\s*=\s*[\d.]+' | head -1)
@@ -130,7 +174,7 @@ PHI_DIGEST=$(echo "$PHI_OUTPUT" | grep -oP 'Phi\s*=\s*[\d.]+' | head -1)
 ASSESSMENT_DIGEST=$(echo "$ASSESSMENT_OUTPUT" | grep -oP '^\s{2}[A-Z][^:]+:\s[\d.]+' | head -7 | tr '\n' '; ')
 [ -z "$ASSESSMENT_DIGEST" ] && ASSESSMENT_DIGEST="assessment unavailable"
 python3 "$CLARVIS_WORKSPACE/scripts/tools/digest_writer.py" evening \
-    "Evening assessment complete. $PHI_DIGEST. Capability scores: $ASSESSMENT_DIGEST. Ran retrieval benchmark, self-report, and dashboard regeneration. Evening code audit ${AUDIT_SKIPPED:+skipped (lock held)}${AUDIT_SKIPPED:-done}." \
+    "Evening assessment complete. $PHI_DIGEST. Capability scores: $ASSESSMENT_DIGEST. Ran retrieval benchmark, self-report, and dashboard regeneration. Evening code audit ${AUDIT_SKIPPED:+skipped (lock held)}${AUDIT_SKIPPED:-done}. $HEALTH_DIGEST" \
     >> "$LOGFILE" 2>&1 || true
 
 # === DAILY MEMORY LOG: Generate memory/YYYY-MM-DD.md from digest ===

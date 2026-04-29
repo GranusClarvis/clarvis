@@ -7,3 +7,8 @@ from .brain_bridge import (  # noqa: F401
     brain_record_outcome,
     brain_update_context,
 )
+
+# health is intentionally NOT imported here — it's invoked via `python3 -m
+# clarvis.heartbeat.health`, and eager package-level import causes a runpy
+# RuntimeWarning ("found in sys.modules after import of package…").
+# Import directly: `from clarvis.heartbeat.health import analyze`.

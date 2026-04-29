@@ -197,6 +197,38 @@ if echo "$QH" | grep -q "^WARN"; then
     ((FAILURES++)) || true
 fi
 
+# --- Heartbeat execution health (silent-failure detection) ---
+# autonomous.log freshness alone doesn't catch when every cycle exits early via
+# all_filtered_by_v2, no_task, deferred, or instant-fail. Parse the structured
+# outcomes and treat critical severity (e.g. 3+ consecutive non-execution
+# cycles, or >=50% no-task rate) as a watchdog failure that triggers alerting.
+HB_LINE=$(python3 -m clarvis.heartbeat.health --window 24 --json 2>/dev/null \
+    | python3 -c "
+import json, sys
+try:
+    d = json.loads(sys.stdin.read() or '{}')
+except Exception:
+    print('MISSED  heartbeat_health — parse failed')
+    sys.exit(0)
+sev = d.get('severity', 'unknown')
+total = d.get('total_cycles', 0)
+counts = d.get('counts', {})
+ok = counts.get('executed_ok', 0)
+fail = counts.get('executed_fail', 0)
+no_task = counts.get('no_task', 0) + counts.get('queue_empty', 0) + counts.get('deferred', 0)
+streak = d.get('consecutive_no_execution', 0)
+if sev == 'critical':
+    print(f'WARN    heartbeat_health — CRITICAL: {ok}ok/{fail}fail/{no_task}no-task in {total} cycles, streak={streak}')
+elif sev == 'warn':
+    print(f'WARN    heartbeat_health — warn: {ok}ok/{fail}fail/{no_task}no-task in {total} cycles')
+else:
+    print(f'OK      heartbeat_health — {ok}ok/{fail}fail/{no_task}no-task in {total} cycles')
+" 2>/dev/null || echo "MISSED  heartbeat_health — eval failed")
+REPORT="${REPORT}${HB_LINE}\n"
+if echo "$HB_LINE" | grep -q "CRITICAL"; then
+    ((FAILURES++)) || true
+fi
+
 # --- Stale PR check (weekly — only runs on Sundays) ---
 # Lists open Clarvis-authored PRs older than 14 days with review status.
 DAY_OF_WEEK=$(date +%u)  # 7=Sunday
@@ -345,7 +377,11 @@ fi
 #   2. It's the first alert of the day (daily reminder at most), OR
 #   3. No alert was sent yet for the current failure set
 ALERT_STATE_FILE="$CLARVIS_WORKSPACE/data/watchdog_alert_state.json"
-CURRENT_FAILURES=$(echo -e "$REPORT" | grep -E "^MISSED|^STALE" | sort | md5sum | awk '{print $1}')
+# Include heartbeat_health CRITICAL in the dedup hash too — otherwise a new
+# silent-execution incident wouldn't trigger an alert when MISSED/STALE sets
+# are unchanged. We deliberately match the literal "CRITICAL" token (warn-only
+# health is still rate-limited daily by the date-based branch below).
+CURRENT_FAILURES=$(echo -e "$REPORT" | grep -E "^MISSED|^STALE|heartbeat_health.*CRITICAL" | sort | md5sum | awk '{print $1}')
 SHOULD_ALERT=false
 
 if [ "$FAILURES" -gt 0 ] && [ "$ALERT_MODE" = true ]; then
@@ -386,7 +422,7 @@ json.dump(state, open('$ALERT_STATE_FILE', 'w'), indent=2)
 
 ${FAILURES} cron job(s) still failing after auto-recovery:
 
-$(echo -e "$REPORT" | grep -E "MISSED|STALE")
+$(echo -e "$REPORT" | grep -E "MISSED|STALE|heartbeat_health.*CRITICAL")
 
 Recovery log: memory/cron/doctor.log
 Watchdog log: memory/cron/watchdog.log"
