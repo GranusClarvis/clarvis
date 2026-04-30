@@ -131,10 +131,14 @@ def weakest():
     with open(pb.METRICS_FILE) as f:
         stored = json.load(f)
     metrics = stored.get("metrics", {})
+    # Phi excluded per [PHI_AUTO_INJECTION_REMOVAL] — passive observability only.
+    PHI_DEEMPHASISED = {"phi"}
     worst_name, worst_margin = None, float("inf")
     for key, meta in pb.TARGETS.items():
         target = meta.get("target")
         if target is None or meta.get("direction") == "monitor":
+            continue
+        if key in PHI_DEEMPHASISED:
             continue
         val = metrics.get(key)
         if val is None:

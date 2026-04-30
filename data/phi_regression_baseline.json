@@ -1,10 +1,10 @@
 {
-  "phi": 0.6163,
+  "phi": 0.6155,
   "components": {
-    "intra_collection_density": 0.6204,
-    "cross_collection_connectivity": 0.5922,
-    "semantic_cross_collection": 0.5328,
+    "intra_collection_density": 0.6256,
+    "cross_collection_connectivity": 0.5945,
+    "semantic_cross_collection": 0.5263,
     "collection_reachability": 1.0
   },
-  "timestamp": "2026-04-28T05:33:46.688986+00:00"
+  "timestamp": "2026-04-30T06:07:26.209083+00:00"
 }

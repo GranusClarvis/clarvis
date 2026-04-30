@@ -1715,11 +1715,20 @@ if __name__ == "__main__":
                     metrics["context_relevance"] = round(agg["mean_relevance"], 3)
             except Exception as e:
                 logger.debug("Refreshing context_relevance for weakest metric report failed: %s", e)
-            # Compute margin-to-target ratio for each scored metric
+            # Compute margin-to-target ratio for each scored metric.
+            # Phi is excluded per [PHI_AUTO_INJECTION_REMOVAL] / [PHI_DEEMPHASIS_AUDIT]:
+            # Phi is a passive observability signal only, not a target the evolution
+            # prompt should mandate work against. The literal "WEAKEST METRIC: Phi…"
+            # injection drove a closed loop where each evolution scan added another
+            # Phi task. Phi is still recorded in performance_history.jsonl and shown
+            # on the dashboard; only this *prompt-injection* selection drops it.
+            PHI_DEEMPHASISED = {"phi"}
             worst_name, worst_margin = None, float("inf")
             for key, meta in TARGETS.items():
                 target = meta.get("target")
                 if target is None or meta.get("direction") == "monitor":
+                    continue
+                if key in PHI_DEEMPHASISED:
                     continue
                 val = metrics.get(key)
                 if val is None:
