@@ -600,19 +600,27 @@ class QueueEngine:
     # -- QUEUE.md manipulation --
 
     def _mark_checkbox(self, tag: str, annotation: str = "") -> None:
-        """Mark a task [x] in QUEUE.md by tag."""
+        """Mark all unchecked occurrences of a task [x] in QUEUE.md by tag.
+
+        Flips every `[ ] [TAG]` line to `[x] [TAG]`, not just the first.
+        Without this, when auto_split (or other paths) creates duplicate task
+        lines that share one sidecar tag, only the first would flip — the rest
+        would linger as [ ] and surface as runnable_view "succeeded but
+        checkbox still [ ]" drift. Also tolerates leading whitespace so that
+        indented sub-items under a parent are flipped too.
+        """
         if not os.path.exists(self.queue_file):
             return
         with open(self.queue_file) as f:
             content = f.read()
 
         tag_pattern = re.compile(
-            rf"^(- \[) \] (\*\*)?(\[{re.escape(tag)}\].*)$", re.MULTILINE
+            rf"^(\s*- \[) \] (\*\*)?(\[{re.escape(tag)}\].*)$", re.MULTILINE
         )
         suffix = f" ({annotation})" if annotation else ""
 
         new_content, count = tag_pattern.subn(
-            rf"\g<1>x] \g<2>\g<3>{suffix}", content, count=1
+            rf"\g<1>x] \g<2>\g<3>{suffix}", content
         )
         if count > 0:
             with open(self.queue_file, "w") as f:

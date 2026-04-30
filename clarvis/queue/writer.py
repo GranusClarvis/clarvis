@@ -636,6 +636,14 @@ def archive_completed():
     Called at end of each heartbeat postflight to keep QUEUE.md lean.
     Deduplicates against existing archive entries.
 
+    Self-healing reconciliation: any [ ] line whose tag is marked 'succeeded'
+    in the sidecar is flipped to [x] before the archive sweep. This catches
+    drift from cases where engine.mark_succeeded() updated the sidecar but
+    failed to flip every duplicate in QUEUE.md (e.g., when auto_split spawns
+    multiple lines sharing one tag, and the underlying _mark_checkbox only
+    flipped count=1 of them). The drift symptom was the runnable_view
+    "succeeded but checkbox still [ ]" warning.
+
     Returns number of items archived.
     """
     archive_file = os.path.join(os.path.dirname(QUEUE_FILE), "QUEUE_ARCHIVE.md")
@@ -649,12 +657,37 @@ def archive_completed():
         if not content:
             return 0
 
+        # Self-heal sidecar/QUEUE.md drift: flip [ ] -> [x] for any tag whose
+        # sidecar entry is 'succeeded'. Captures duplicates that engine's
+        # _mark_checkbox missed (it only flipped count=1) and any other path
+        # that updated the sidecar without touching QUEUE.md.
+        try:
+            from clarvis.queue.engine import _load_sidecar
+            sidecar_succeeded = {
+                tag for tag, entry in _load_sidecar().items()
+                if entry.get("state") == "succeeded"
+            }
+        except Exception:
+            sidecar_succeeded = set()
+
+        if sidecar_succeeded:
+            healed_lines = []
+            for line in content.split("\n"):
+                m = re.match(r'^(\s*)- \[ \] (.+)$', line)
+                if m:
+                    indent, item_text = m.group(1), m.group(2)
+                    tag = _extract_tag_from_text(item_text)
+                    if tag and tag in sidecar_succeeded:
+                        line = f"{indent}- [x] {item_text} (drift-recovered: {datetime.now(timezone.utc).strftime('%Y-%m-%d')})"
+                healed_lines.append(line)
+            content = "\n".join(healed_lines)
+
         # Extract completed items and their full lines
         completed = []
         completed_tags = []
         new_lines = []
         for line in content.split("\n"):
-            m = re.match(r'^- \[x\] (.+)', line.strip())
+            m = re.match(r'^\s*- \[x\] (.+)', line)
             if m:
                 item_text = m.group(1)
                 completed.append(item_text)
