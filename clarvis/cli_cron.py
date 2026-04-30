@@ -158,6 +158,7 @@ _JOBS = {
     "status_json": "50 5 * * * . __WORKSPACE__/scripts/cron/cron_env.sh && python3 __WORKSPACE__/scripts/infra/generate_status_json.py >> __WORKSPACE__/memory/cron/status_json.log 2>&1",
     "brain_eval": "5 6 * * * __WORKSPACE__/scripts/cron/cron_brain_eval.sh >> __WORKSPACE__/memory/cron/brain_eval.log 2>&1",
     "llm_brain_review": "15 6 * * * __WORKSPACE__/scripts/cron/cron_llm_brain_review.sh >> __WORKSPACE__/memory/cron/llm_brain_review.log 2>&1",
+    "heartbeat_notask_triage": "25 6 * * * __WORKSPACE__/scripts/cron/heartbeat_notask_triage.sh 7 >> __WORKSPACE__/memory/cron/heartbeat_triage.log 2>&1",
     "relevance_refresh": "40 2 * * * . __WORKSPACE__/scripts/cron/cron_env.sh && python3 -m clarvis cognition context-relevance refresh >> __WORKSPACE__/memory/cron/relevance_refresh.log 2>&1",
     "orchestrator": "30 19 * * * __WORKSPACE__/scripts/cron/cron_orchestrator.sh >> __WORKSPACE__/memory/cron/orchestrator.log 2>&1",
     # Monthly
@@ -202,7 +203,7 @@ _PRESETS: dict[str, dict] = {
             # Weekly hygiene
             "goal_hygiene", "brain_hygiene", "data_lifecycle", "cleanup",
             # Evaluation
-            "pi_refresh", "status_json", "brain_eval",
+            "pi_refresh", "status_json", "brain_eval", "heartbeat_notask_triage",
             # Monthly
             "monthly_reflection",
         ],
@@ -237,6 +238,7 @@ _PRESETS: dict[str, dict] = {
             "goal_hygiene", "brain_hygiene", "data_lifecycle", "cleanup",
             # Evaluation + benchmarks
             "pi_refresh", "status_json", "brain_eval", "llm_brain_review", "relevance_refresh",
+            "heartbeat_notask_triage",
             "pi_benchmark", "clr_benchmark", "absolute_zero",
             # Orchestrator
             "orchestrator",
