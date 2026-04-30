@@ -22,6 +22,7 @@ Or from Python:
 
 import os
 import shutil
+import subprocess
 import sys
 import json
 import fcntl
@@ -33,6 +34,8 @@ DIGEST_STATE = os.path.join(WORKSPACE, "data", "digest_state.json")
 
 DIGEST_ARCHIVE_DIR = os.path.join(WORKSPACE, "memory", "cron", "archive")
 DIGEST_ARCHIVE_RETAIN_DAYS = 30
+
+DIGEST_LINT_SCRIPT = os.path.join(WORKSPACE, "scripts", "cron", "digest_lint.sh")
 
 SECTION_EMOJI = {
     "morning": "🌅",
@@ -114,6 +117,35 @@ def _reset_if_new_day(state):
     return state
 
 
+def _run_lint(file_path: str):
+    """Invoke digest_lint.sh against file_path. Returns (exit_code, reason).
+
+    Lint is skipped (treated as pass) if the script is missing or errors out —
+    a broken lint must never block legitimate digest writes.
+    """
+    if not os.path.exists(DIGEST_LINT_SCRIPT):
+        return (0, "")
+    try:
+        result = subprocess.run(
+            ["bash", DIGEST_LINT_SCRIPT, file_path],
+            capture_output=True, text=True, timeout=10,
+        )
+        reason = (result.stdout or result.stderr).strip().splitlines()
+        return (result.returncode, reason[0] if reason else "")
+    except Exception:
+        return (0, "")
+
+
+def _build_entry(source: str, summary: str, fenced: bool = False) -> str:
+    timestamp = datetime.now(timezone.utc).strftime("%H:%M UTC")
+    emoji = SECTION_EMOJI.get(source, "📝")
+    if fenced:
+        body = f"_lint flagged the raw payload — rendering verbatim below._\n\n```\n{summary}\n```"
+    else:
+        body = summary
+    return f"### {emoji} {source.title()} — {timestamp}\n\n{body}\n\n---\n\n"
+
+
 def write_digest(source: str, summary: str):
     """
     Append a digest entry.
@@ -122,18 +154,12 @@ def write_digest(source: str, summary: str):
         source: One of morning/autonomous/evolution/evening/reflection
         summary: First-person summary of what happened (1-5 sentences)
     """
-    now = datetime.now(timezone.utc)
-    timestamp = now.strftime("%H:%M UTC")
-    emoji = SECTION_EMOJI.get(source, "📝")
-
-    # Clean up summary — ensure it's concise
     summary = summary.strip()
     if len(summary) > 1000:
         summary = summary[:997] + "..."
 
-    entry = f"### {emoji} {source.title()} — {timestamp}\n\n{summary}\n\n---\n\n"
+    entry = _build_entry(source, summary, fenced=False)
 
-    # Use a single lock file for both digest and state operations
     lock_path = DIGEST_FILE + ".lock"
     os.makedirs(os.path.dirname(DIGEST_FILE), exist_ok=True)
     os.makedirs(os.path.dirname(DIGEST_STATE), exist_ok=True)
@@ -144,8 +170,23 @@ def write_digest(source: str, summary: str):
         state = _load_state()
         state = _reset_if_new_day(state)
 
+        rollback_size = os.path.getsize(DIGEST_FILE) if os.path.exists(DIGEST_FILE) else 0
+
         with open(DIGEST_FILE, "a") as f:
             f.write(entry)
+
+        lint_code, lint_reason = _run_lint(DIGEST_FILE)
+        lint_failed = lint_code != 0
+        if lint_failed:
+            with open(DIGEST_FILE, "r+") as f:
+                f.truncate(rollback_size)
+            fallback_entry = _build_entry(source, summary, fenced=True)
+            with open(DIGEST_FILE, "a") as f:
+                f.write(fallback_entry)
+            sys.stderr.write(
+                f"digest_writer: lint failed ({lint_reason}); rolled back and "
+                f"re-rendered as fenced code block\n"
+            )
 
         state["entries_today"] = state.get("entries_today", 0) + 1
         _save_state(state)
@@ -153,7 +194,13 @@ def write_digest(source: str, summary: str):
         fcntl.flock(lock_fd, fcntl.LOCK_UN)
         lock_fd.close()
 
-    return {"written": True, "file": DIGEST_FILE, "entries_today": state["entries_today"]}
+    return {
+        "written": True,
+        "file": DIGEST_FILE,
+        "entries_today": state["entries_today"],
+        "lint_failed": lint_failed,
+        "lint_reason": lint_reason if lint_failed else "",
+    }
 
 
 def generate_summary(source: str, data: dict) -> str:
