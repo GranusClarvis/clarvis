@@ -472,9 +472,134 @@ class EpisodicMemory:
         "action.api_error":      "API call failure (HTTP, OpenRouter, model error)",
         "action.race_condition": "Concurrency/lock/stale-state issue",
         "action.validation":     "Schema, format, or contract validation failure",
+        # Sub-buckets for root-cause analysis (ACTION_FAILURE_TAXONOMY_REFINE 2026-05-01)
+        "action.path_missing":         "Referenced file/directory does not exist",
+        "action.command_nonzero":      "Subprocess exited with non-zero status",
+        "action.assertion_failed":     "Python AssertionError or similar inline assertion",
+        "action.lint_typecheck_error": "Linter/type-checker rejected the change (tsc, mypy, ruff, eslint)",
+        "action.edit_string_not_found": "Edit tool's old_string did not match file contents",
+        "action.git_conflict":         "Merge/rebase produced unresolved conflict markers",
+        "action.test_failed":          "Test runner reported test failures (pytest, jest, validation script)",
+        "action.unverified":           "Spawned agent reported tests_passed but parent flagged partial_success",
         "crash":        "Infrastructure crash (instant-fail, <10s duration)",
         "partial-success": "Task partially completed but did not fully succeed",
     }
+
+    # Action sub-type classifiers, ordered most-specific → least-specific.
+    # First match wins. Patterns are case-insensitive and run over (error_msg + output_text).
+    _ACTION_SUBTYPE_PATTERNS = (
+        ("action.git_conflict", (
+            r"merge conflict",
+            r"<<<<<<<\s+head",
+            r"conflict\s*\(content\)",
+            r"both modified:",
+            r"fix conflicts and run",
+            r"unresolved conflict",
+        )),
+        ("action.edit_string_not_found", (
+            r"old_string.*not\s+found",
+            r"string to replace not found",
+            r"no occurrences of .* found",
+            r"string not found in",
+            r"edit failed:.*not found",
+        )),
+        ("action.lint_typecheck_error", (
+            r"\bts\d{3,5}\b",                            # TypeScript error codes
+            r"tsc[: ].*error",
+            r"\bpyright\b.*error",
+            r"\bmypy\b.*error",
+            r"\beslint\b.*error",
+            r"\bruff\b.*(check|error)",
+            r"\bpylint\b.*(error|fatal)",
+            r"\bflake8\b",
+            r"cannot find name '?",
+            r"is not assignable to type",
+            r"type error:",
+        )),
+        ("action.test_failed", (
+            r"\bpytest\b.*fail",
+            r"\d+\s+tests?\s+failed",
+            r"jest.*fail",
+            r"\\?\"?tests_passed\\?\"?\s*[:=]\s*false",
+            r"validation failed",
+            r"^\s*test failed",
+            r"\bfail(ed)?\b.*\.test\.",
+            r"mirror validation failed",
+        )),
+        ("action.assertion_failed", (
+            r"\bassertionerror\b",
+            r"\bassert\b.*fail",
+            r"assertion failed",
+        )),
+        ("action.path_missing", (
+            r"no such file or directory",
+            r"\bfilenotfounderror\b",
+            r"\benoent\b",
+            r"cannot find file",
+            r"path does not exist",
+            r"file not found:",
+            r"missing\s+\S+\.(?:py|md|json|sh|js|ts|tsx|yaml|yml|toml)\b",
+        )),
+        ("action.command_nonzero", (
+            r"exit code [1-9]\d*",
+            r"exited with (?:code |status )?[1-9]",
+            r"exited with status [1-9]",
+            r"returned non-?zero",
+            r"non-?zero exit",
+            r"exit status [1-9]",
+            r"command failed.*\bexit\b",
+        )),
+        ("action.unverified", (
+            # Spawned project-agent JSON output (often double-escaped in stored error field)
+            r"\\?\"?tests_passed\\?\"?\s*[:=]\s*true",
+            r"\\?\"?pr_class\\?\"?\s*[:=]",
+            r"\\?\"?confidence\\?\"?\s*[:=]\s*0\.",
+            # Self-reported "actually fine, nothing to do" partial_success episodes
+            r"all\s+\d*\s*tasks?\s+(?:are\s+)?(?:already\s+)?(?:done|completed|verified|pushed)",
+            r"no\s+(?:further|code|more)\s+(?:action|changes|work)\s+(?:needed|required)",
+            r"completed successfully\b",
+            r"all\s+(?:done|verified|completed|pushed)\b",
+            r"already\s+(?:done|completed|fixed|resolved)",
+            r"\bmarked\s+(?:task\s+)?done\b",
+            r"\bno\s+changes?\s+needed\b",
+            r"\bnext:\s*none\b",
+        )),
+    )
+
+    @classmethod
+    def _classify_action_subtype(cls, error_msg, output_text=None):
+        """Best-effort sub-bucket classification for an `action` failure.
+
+        Inspects error_msg + last ~50 lines of output_text. Returns one of
+        the `action.<subtype>` keys, an existing top-level type when the
+        signature is clearly infrastructure (auth/import → system/external_dep),
+        or None when no signal is found.
+        """
+        import re
+        parts = []
+        if error_msg:
+            parts.append(str(error_msg))
+        if output_text:
+            tail = "\n".join(str(output_text).splitlines()[-50:])
+            parts.append(tail)
+        text = "\n".join(parts)
+        if not text.strip():
+            return None
+
+        lower = text.lower()
+        # Reclassify obvious infrastructure failures away from `action`
+        if re.search(r"\b401\b|authentication_error|oauth token", lower):
+            return "external_dep"
+        if re.search(r"\bimporterror\b|\bmodulenotfounderror\b", lower):
+            return "import_error"
+        if re.search(r"permission denied|disk quota|no space left|segfault", lower):
+            return "system"
+
+        for subtype, patterns in cls._ACTION_SUBTYPE_PATTERNS:
+            for pat in patterns:
+                if re.search(pat, lower, re.I):
+                    return subtype
+        return None
 
     def encode(self, task_text, section, salience, outcome,
                duration_s=0, error_msg=None, steps_taken=None,
@@ -507,6 +632,12 @@ class EpisodicMemory:
                     "permission denied", "disk quota", "no space left",
                 )):
                     ft = "system"
+            # If the upstream tag is the catch-all "action", try to refine it
+            # into a sub-bucket via regex over error/output (root-cause analysis).
+            if ft in (None, "action"):
+                refined = self._classify_action_subtype(error_msg, output_text)
+                if refined:
+                    ft = refined
             # Always assign a failure_type for non-success outcomes;
             # "action" is the catch-all default when no specific type detected
             if ft is None:
@@ -794,25 +925,44 @@ class EpisodicMemory:
             "newest": self.episodes[-1]["timestamp"][:10]
         }
 
-    @staticmethod
-    def _get_failure_type(episode):
+    @classmethod
+    def _get_failure_type(cls, episode):
         """Extract failure type from episode (first-class field or legacy tag).
 
         Returns failure_type string or None for successful episodes.
+
+        Generic ``action`` tags are retroactively refined into sub-buckets
+        (path_missing, command_nonzero, etc.) via regex classification over
+        the stored error message, so historical episodes participate in
+        root-cause stats without needing a re-encode.
         """
+        outcome = episode.get("outcome", "")
+
         # First-class field (new episodes)
         ft = episode.get("failure_type")
-        if ft:
+        if ft and ft != "action":
             return ft
+        if ft == "action":
+            refined = cls._classify_action_subtype(
+                episode.get("error"), episode.get("lesson")
+            )
+            if refined:
+                return refined
+            # partial_success episodes whose error matches no failure pattern
+            # are agent self-reports of completion (orchestrator flagged them
+            # for review). Bucket as `unverified` — they distort root-cause
+            # analysis when lumped with real action failures.
+            if outcome == "partial_success":
+                return "action.unverified"
+            return "action"
         # Legacy: extract from tags list (e.g. "error_type:timeout")
         for tag in episode.get("tags", []):
             if isinstance(tag, str) and tag.startswith("error_type:"):
                 return tag.split(":", 1)[1]
         # Infer from outcome and error message for old episodes without tags
-        outcome = episode.get("outcome", "")
         if outcome == "timeout":
             return "timeout"
-        if outcome in ("failure", "soft_failure"):
+        if outcome in ("failure", "soft_failure", "partial_success"):
             # Auto-detect system/infrastructure failures from error message
             error = (episode.get("error") or "").lower()
             if any(sig in error for sig in (
@@ -822,7 +972,14 @@ class EpisodicMemory:
                 "permission denied", "disk quota", "no space left",
             )):
                 return "system"
-            return "action"  # default for untagged failures
+            refined = cls._classify_action_subtype(
+                episode.get("error"), episode.get("lesson")
+            )
+            if refined:
+                return refined
+            if outcome == "partial_success":
+                return "action.unverified"
+            return "action"
         return None
 
     def _compute_valence(self, outcome, salience, duration_s, error_msg):

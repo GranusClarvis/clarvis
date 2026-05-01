@@ -309,14 +309,37 @@ def benchmark_episodes():
 
         # Failure type distribution from structured taxonomy
         failure_types = stats.get("failure_types", {})
-        # Identify weakest failure mode (highest count)
-        weakest_failure = max(failure_types, key=failure_types.get) if failure_types else None
+        # `action.unverified` is the bucket for partial_success episodes the
+        # spawned agent self-reported as done — they're not real action
+        # failures, so they're excluded from accuracy + weakest-mode picks.
+        unverified = failure_types.get("action.unverified", 0)
+        # Identify weakest *real* failure mode (highest count, excluding the
+        # self-report bucket and the catch-all `action`). Falls back to overall
+        # max when no concrete sub-bucket has been recorded yet.
+        REAL_FAILURE_EXCLUDE = {"action.unverified", "action"}
+        real_modes = {k: v for k, v in failure_types.items()
+                      if k not in REAL_FAILURE_EXCLUDE and v > 0}
+        weakest_failure = (
+            max(real_modes, key=real_modes.get) if real_modes
+            else (max(failure_types, key=failure_types.get) if failure_types else None)
+        )
 
-        # Action accuracy = success / (real total - timeouts - system failures)
-        # System failures (auth errors, import errors, infra) are not action failures
+        # Top-3 root-cause sub-buckets for the weekly PI digest. Surfacing them
+        # lets follow-up scans target concrete failure shapes instead of the
+        # opaque `action` catch-all.
+        top_subtypes = sorted(
+            ((k, v) for k, v in failure_types.items() if k.startswith("action.")
+             and k != "action.unverified" and v > 0),
+            key=lambda kv: -kv[1],
+        )[:3]
+        top_failure_subtypes = [{"type": k, "count": v} for k, v in top_subtypes]
+
+        # Action accuracy = success / (real_total - timeouts - system - unverified)
+        # System failures (auth, import, infra) and unverified self-reports
+        # are not action failures, so they don't count in the denominator.
         timeouts = outcomes.get("timeout", 0)
         system_failures = failure_types.get("system", 0)
-        actionable = max(real_total - timeouts - system_failures, 1)
+        actionable = max(real_total - timeouts - system_failures - unverified, 1)
         action_accuracy = round(successes / actionable, 3)
 
         return {
@@ -328,6 +351,7 @@ def benchmark_episodes():
             "outcomes": outcomes,
             "failure_types": failure_types,
             "weakest_failure_mode": weakest_failure,
+            "top_failure_subtypes": top_failure_subtypes,
             "avg_valence": stats.get("avg_valence", 0.0),
             "strong_memories": stats.get("strong_memories", 0),
             "forgotten_memories": stats.get("forgotten_memories", 0),
@@ -953,6 +977,7 @@ def _flatten_full_metrics(speed, retrieval, efficiency, brain_stats, phi,
         "action_accuracy":      episodes.get("action_accuracy", 0.0),
         "failure_types":        episodes.get("failure_types", {}),
         "weakest_failure_mode": episodes.get("weakest_failure_mode"),
+        "top_failure_subtypes": episodes.get("top_failure_subtypes", []),
         "phi":                  phi["phi"],
         "context_relevance":    context.get("context_relevance", 0.0),
         "graph_density":        brain_stats["graph_density"],
@@ -1153,6 +1178,9 @@ def run_refresh_benchmark():
         "brain_query_p95_ms":   speed.get("p95_ms", 0),
         "episode_success_rate": episodes.get("success_rate", prev_metrics.get("episode_success_rate", 0.0)),
         "action_accuracy":      episodes.get("action_accuracy", prev_metrics.get("action_accuracy", 0.0)),
+        "failure_types":        episodes.get("failure_types", prev_metrics.get("failure_types", {})),
+        "weakest_failure_mode": episodes.get("weakest_failure_mode", prev_metrics.get("weakest_failure_mode")),
+        "top_failure_subtypes": episodes.get("top_failure_subtypes", prev_metrics.get("top_failure_subtypes", [])),
         "context_relevance":    fresh_context_relevance,
         "graph_density":        brain_stats.get("graph_density", 0.0),
         "brain_total_memories": brain_stats.get("total_memories", 0),

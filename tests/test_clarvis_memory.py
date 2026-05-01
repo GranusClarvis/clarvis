@@ -3653,5 +3653,77 @@ class TestProceduralCLIConstants:
             assert len(tmpl["scaffold"]) >= 3, f"Template {key} scaffold too short"
 
 
+# ---------------------------------------------------------------------------
+# 22. Episodic — action failure sub-bucket classifier (ACTION_FAILURE_TAXONOMY_REFINE)
+# ---------------------------------------------------------------------------
+
+class TestActionSubtypeClassifier:
+    """Verify the regex classifier splits the generic `action` bucket."""
+
+    def _classify(self, error, output=None):
+        from clarvis.memory.episodic_memory import EpisodicMemory
+        return EpisodicMemory._classify_action_subtype(error, output)
+
+    def test_path_missing(self):
+        assert self._classify("FileNotFoundError: data/episodes.json").endswith("path_missing")
+        assert self._classify("No such file or directory: foo.py").endswith("path_missing")
+
+    def test_command_nonzero(self):
+        assert self._classify("subprocess returned non-zero exit code 2").endswith("command_nonzero")
+        assert self._classify("foo exited with status 1").endswith("command_nonzero")
+
+    def test_assertion_failed(self):
+        assert self._classify("AssertionError: expected 5 got 4").endswith("assertion_failed")
+
+    def test_lint_typecheck_error(self):
+        assert self._classify("tsc: error TS2304: Cannot find name 'Foo'").endswith("lint_typecheck_error")
+        assert self._classify("mypy error: incompatible types").endswith("lint_typecheck_error")
+
+    def test_edit_string_not_found(self):
+        assert self._classify("Edit failed: old_string not found in file").endswith("edit_string_not_found")
+        assert self._classify("No occurrences of 'foo' found in bar.py").endswith("edit_string_not_found")
+
+    def test_git_conflict(self):
+        assert self._classify("CONFLICT (content): Merge conflict in foo.py").endswith("git_conflict")
+        assert self._classify("Fix conflicts and run git rebase --continue").endswith("git_conflict")
+
+    def test_test_failed(self):
+        assert self._classify("3 tests failed in pytest").endswith("test_failed")
+        assert self._classify("Mirror validation FAILED.").endswith("test_failed")
+
+    def test_unverified_self_report(self):
+        # Spawned-agent JSON output (escaped quotes as stored)
+        s = '"tests_passed\\": true,\\n  "pr_class\\": "A"'
+        assert self._classify(s) == "action.unverified"
+        assert self._classify("All 3 tasks are done and verified.") == "action.unverified"
+
+    def test_external_dep_reclassified(self):
+        # Auth/401 errors should be promoted out of the action namespace
+        assert self._classify("401 authentication_error: OAuth token expired") == "external_dep"
+
+    def test_import_error_reclassified(self):
+        assert self._classify("ImportError: No module named 'foo'") == "import_error"
+
+    def test_no_signal_returns_none(self):
+        assert self._classify("") is None
+        assert self._classify(None) is None
+
+    def test_get_failure_type_refines_action(self):
+        """Legacy episodes tagged plain 'action' should be retroactively refined."""
+        from clarvis.memory.episodic_memory import EpisodicMemory
+        ep = {
+            "outcome": "failure",
+            "failure_type": "action",
+            "error": "tsc: error TS2304: Cannot find name 'Foo'",
+        }
+        assert EpisodicMemory._get_failure_type(ep) == "action.lint_typecheck_error"
+
+    def test_get_failure_type_partial_success_default(self):
+        """partial_success episodes without a specific signal default to action.unverified."""
+        from clarvis.memory.episodic_memory import EpisodicMemory
+        ep = {"outcome": "partial_success", "failure_type": "action", "error": "some neutral text"}
+        assert EpisodicMemory._get_failure_type(ep) == "action.unverified"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
