@@ -682,16 +682,69 @@ def archive_completed():
                 healed_lines.append(line)
             content = "\n".join(healed_lines)
 
-        # Extract completed items and their full lines
+        # Extract completed items and their full lines.
+        #
+        # Verification guard for `[UNVERIFIED]` items (added 2026-05-01 after
+        # the BunnyBagz Phase-1 false-DONE incident — see
+        # `memory/evolution/bunnybagz_realignment_2026-05-01.md`):
+        #
+        #   - Always log every archived `[UNVERIFIED]` item with its tag, so
+        #     the audit trail exists even in default (permissive) mode.
+        #   - When env `CLARVIS_QUEUE_UNVERIFIED_GUARD=block` is set, refuse
+        #     to archive `[UNVERIFIED]` items unless a sidecar verification
+        #     record exists at `data/audit/queue_verifications/<tag>.json`.
+        #     Such items stay in QUEUE.md as `[x]` so subsequent operator
+        #     review can resolve them (verify or downgrade to `[ ]`).
+        #
+        # Default mode is `log` so existing in-flight cron isn't disrupted;
+        # the operator flips to `block` once `[BB_PHASE1_VERIFICATION_PASS]`
+        # lands and the verification-record producer is wired.
+        guard_mode = os.environ.get("CLARVIS_QUEUE_UNVERIFIED_GUARD", "log").lower()
+        verification_dir = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(QUEUE_FILE))),
+            "data", "audit", "queue_verifications",
+        )
+        audit_log = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(QUEUE_FILE))),
+            "monitoring", "queue_unverified_archive.log",
+        )
+
+        def _has_verification_record(tag: str) -> bool:
+            if not tag:
+                return False
+            return os.path.exists(os.path.join(verification_dir, f"{tag}.json"))
+
+        def _log_unverified(tag: Optional[str], item_text: str, action: str) -> None:
+            try:
+                os.makedirs(os.path.dirname(audit_log), exist_ok=True)
+                with open(audit_log, "a") as fh:
+                    fh.write(json.dumps({
+                        "ts": datetime.now(timezone.utc).isoformat(),
+                        "tag": tag,
+                        "action": action,
+                        "guard_mode": guard_mode,
+                        "snippet": item_text[:120],
+                    }) + "\n")
+            except Exception:
+                pass
+
         completed = []
         completed_tags = []
         new_lines = []
+        held_unverified = 0
         for line in content.split("\n"):
             m = re.match(r'^\s*- \[x\] (.+)', line)
             if m:
                 item_text = m.group(1)
-                completed.append(item_text)
                 tag = _extract_tag_from_text(item_text)
+                if "[UNVERIFIED]" in item_text:
+                    if guard_mode == "block" and not _has_verification_record(tag):
+                        _log_unverified(tag, item_text, "held")
+                        new_lines.append(line)
+                        held_unverified += 1
+                        continue
+                    _log_unverified(tag, item_text, "archived")
+                completed.append(item_text)
                 if tag:
                     completed_tags.append(tag)
             else:
