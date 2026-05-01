@@ -93,6 +93,11 @@ except (ImportError, Exception):
     extract_steps = None
 
 try:
+    edit_failure_scan = _load_script("edit_failure_telemetry", "cognition").scan_and_log
+except (ImportError, Exception):
+    edit_failure_scan = None
+
+try:
     benchmark_record = _load_script("benchmark_brief", "metrics").record
 except (ImportError, Exception):
     benchmark_record = None
@@ -464,6 +469,24 @@ def _transcript_log(ctx, _pf_errors):
         logging.debug("Transcript log failed (non-fatal): %s", e)
         _pf_errors.append("transcript_log")
     timings["transcript_log"] = round(time.monotonic() - t, 3)
+
+    # §9.55 Edit-tool old_string failure telemetry (Action Accuracy bucket).
+    t = time.monotonic()
+    if edit_failure_scan:
+        try:
+            preflight_data = ctx.get("preflight_data") or {}
+            task_tag = preflight_data.get("task_tag", "") if isinstance(preflight_data, dict) else ""
+            res = edit_failure_scan(ctx["task"], task_tag, ctx["output_text"])
+            if res.get("rows_added"):
+                log(f"Edit-failure telemetry: +{res['rows_added']} rows "
+                    f"(7d={res['threshold_count']}, emitted={res['emitted']}/{res['emit_reason']})")
+            elif res.get("emitted"):
+                log(f"Edit-failure telemetry: P2 task emitted "
+                    f"(7d={res['threshold_count']}, reason={res['emit_reason']})")
+        except Exception as e:
+            logging.debug("Edit-failure telemetry failed (non-fatal): %s", e)
+            _pf_errors.append("edit_failure_telemetry")
+    timings["edit_failure_telemetry"] = round(time.monotonic() - t, 3)
     return timings
 
 
