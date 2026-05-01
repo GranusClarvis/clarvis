@@ -18,6 +18,9 @@
 # Exit:   0 = no drift; 1 = drift detected; 2 = audit error
 #
 # Test override: set CRON_AUDIT_CRONTAB_FILE to a file path to substitute for `crontab -l`.
+# Test hook:    set CLARVIS_CRONTAB_CMD to a binary that emulates `crontab` (used by tests
+#               to simulate permission-denied / unreadable crontabs without touching the
+#               system crontab). Defaults to plain `crontab` from PATH.
 
 set -uo pipefail
 
@@ -49,7 +52,25 @@ parse_crontab() {
     if [ -n "$CRONTAB_SOURCE" ] && [ -f "$CRONTAB_SOURCE" ]; then
         cmd_output="$(cat "$CRONTAB_SOURCE")"
     else
-        cmd_output="$(crontab -l 2>/dev/null || true)"
+        # Capture stdout and stderr separately so we can distinguish a benign
+        # "no crontab for <user>" (just an empty schedule) from a real read or
+        # permission failure. The previous `crontab -l 2>/dev/null || true`
+        # silently masked permission errors as zero-drift.
+        local stderr_file="$TMPDIR_AUDIT/crontab.stderr"
+        local crontab_cmd="${CLARVIS_CRONTAB_CMD:-crontab}"
+        local rc=0
+        cmd_output="$("$crontab_cmd" -l 2>"$stderr_file")" || rc=$?
+        local stderr_msg
+        stderr_msg="$(cat "$stderr_file" 2>/dev/null || true)"
+        if [ "$rc" -ne 0 ]; then
+            if echo "$stderr_msg" | grep -qiE 'no crontab for'; then
+                cmd_output=""
+            else
+                log "ERROR: crontab -l failed (exit=$rc): ${stderr_msg:-<no stderr>}"
+                log "Refusing to report drift from an unreadable live crontab. Use CRON_AUDIT_CRONTAB_FILE=<path> to supply a fixture."
+                return 2
+            fi
+        fi
     fi
     echo "$cmd_output" | awk '
     /^[[:space:]]*$/ { next }
@@ -222,6 +243,11 @@ compare() {
 # --- Main --------------------------------------------------------------------
 main() {
     parse_crontab
+    local crontab_rc=$?
+    if [ "$crontab_rc" -ne 0 ]; then
+        log "=== Audit ABORTED — crontab source unreadable (exit $crontab_rc) ==="
+        return "$crontab_rc"
+    fi
     parse_clarvis
     parse_claude_md
     compare
