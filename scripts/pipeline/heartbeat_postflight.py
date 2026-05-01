@@ -265,6 +265,44 @@ _import_time = time.monotonic() - start_import
 log = lambda msg: print(f"[{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S')}] POSTFLIGHT: {msg}", file=sys.stderr)
 
 
+# === IMPORT-MISS TELEMETRY (POSTFLIGHT_IMPORT_MISS_TELEMETRY) ===
+# Surface silent encoder degradation when optional hooks resolve to None.
+def _probe_import_misses():
+    """Record any None-resolved postflight hook imports to data/audit/postflight_import_misses.jsonl.
+
+    Writes one JSONL line per heartbeat iff at least one tracked hook is None.
+    Consumed by 22:30 evening report as `postflight_import_misses_24h: N`.
+    """
+    tracked = {
+        "conf_outcome": conf_outcome,
+        "pred_resolve_enhanced": pred_resolve_enhanced,
+        "close_chain": close_chain,
+        "record_use": record_use,
+        "learn_from_task": learn_from_task,
+        "EpisodicMemory": EpisodicMemory,
+        "write_digest": write_digest,
+        "log_decision": log_decision,
+    }
+    missing = [name for name, ref in tracked.items() if ref is None]
+    if not missing:
+        return
+    try:
+        workspace = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
+        audit_dir = os.path.join(workspace, "data", "audit")
+        os.makedirs(audit_dir, exist_ok=True)
+        record = {
+            "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "missing": missing,
+        }
+        with open(os.path.join(audit_dir, "postflight_import_misses.jsonl"), "a") as f:
+            f.write(json.dumps(record) + "\n")
+    except Exception as e:
+        log(f"import_miss_probe failed: {e}")
+
+
+_probe_import_misses()
+
+
 # Error classification — canonical implementation in clarvis.heartbeat.error_classifier
 from clarvis.heartbeat.error_classifier import (  # noqa: F401
     ERROR_RULES as _ERROR_RULES,

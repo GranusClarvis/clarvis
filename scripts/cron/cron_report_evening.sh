@@ -259,6 +259,35 @@ if cols:
     cols_str = ", ".join([f"{k.split('-')[-1]}({v})" for k, v in top_cols])
     lines.append(f"  Top: {cols_str}")
 
+# Postflight import-miss telemetry — silent encoder degradation signal
+import_miss_path = os.path.join(WORKSPACE, "data/audit/postflight_import_misses.jsonl")
+if os.path.exists(import_miss_path):
+    try:
+        from datetime import timedelta
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+        miss_count = 0
+        miss_names = {}
+        with open(import_miss_path) as f:
+            for line in f:
+                try:
+                    rec = json.loads(line)
+                    ts = datetime.fromisoformat(rec["ts"].replace("Z", "+00:00"))
+                    if ts >= cutoff:
+                        miss_count += 1
+                        for n in rec.get("missing", []):
+                            miss_names[n] = miss_names.get(n, 0) + 1
+                except Exception:
+                    continue
+        if miss_count > 0:
+            lines.append(f"  postflight_import_misses_24h: {miss_count}")
+            top_miss = sorted(miss_names.items(), key=lambda x: -x[1])[:3]
+            if top_miss:
+                lines.append(f"  Top missing: {', '.join(f'{n}({c})' for n, c in top_miss)}")
+        else:
+            lines.append(f"  postflight_import_misses_24h: 0")
+    except Exception:
+        pass
+
 lines.append("")
 
 # Rating prompt for unlabeled tasks
