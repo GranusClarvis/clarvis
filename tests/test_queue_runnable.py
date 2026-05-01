@@ -20,6 +20,7 @@ from clarvis.queue.runnable import (
     format_view,
     digest_summary,
     _classify,
+    _is_project_task,
 )
 
 
@@ -171,6 +172,27 @@ def test_backoff_window_blocks_pending(tmp_engine):
     assert view.counts_by_reason.get("backoff", 0) == 1
     samples = view.blocked_samples.get("backoff", [])
     assert any(s["tag"] == "CLEANUP" for s in samples)
+
+
+def test_canonical_project_tag_wins_over_body_examples():
+    """Regression: 2026-05-01T17:00 — [QUEUE_LANE_MINIMUM_GUARD] (PROJECT:CLARVIS)
+    mentioned PROJECT:SWO and PROJECT:BUNNYBAGZ in its body as examples and
+    was misrouted to the SWO project agent. Canonical (PROJECT:X) at the end
+    of the line is now authoritative."""
+    text = (
+        "Add a per-project lane-minimum signal. When an actively-assigned "
+        "project tag (PROJECT:BUNNYBAGZ, PROJECT:SWO, etc.) has zero eligible "
+        "items, escalate via the morning digest. (PROJECT:CLARVIS)"
+    )
+    assert _is_project_task(text, "CLARVIS") is True
+    assert _is_project_task(text, "SWO") is False
+    assert _is_project_task(text, "BUNNYBAGZ") is False
+
+
+def test_legacy_bracket_style_still_matches():
+    """Tasks without canonical (PROJECT:X) tag still match via bracket fallback."""
+    assert _is_project_task("[SWO_V2] polish work", "SWO_V2") is True
+    assert _is_project_task("(SWO) Deploy", "SWO") is True
 
 
 def test_project_lane_zero_eligible_warns(tmp_engine, monkeypatch):

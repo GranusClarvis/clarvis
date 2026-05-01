@@ -33,6 +33,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import time
 from dataclasses import dataclass, field, asdict
 from typing import Optional
@@ -82,11 +83,26 @@ class RunnableView:
         return asdict(self)
 
 
+_CANONICAL_PROJECT_TAG_RE = re.compile(r"\(PROJECT:([A-Z0-9_-]+)\)", re.IGNORECASE)
+
+
 def _is_project_task(text: str, lane: str) -> bool:
-    """Mirror heartbeat_preflight._is_project_task for offline reporting."""
+    """Mirror heartbeat_preflight._is_project_task for offline reporting.
+
+    A canonical `(PROJECT:X)` tag (the convention QUEUE.md uses at end of line)
+    is authoritative when present — only that lane matches. Without a canonical
+    tag, fall back to substring matching for legacy bracket-only styles.
+
+    Why: the QUEUE_LANE_MINIMUM_GUARD task (PROJECT:CLARVIS) mentioned
+    PROJECT:SWO and PROJECT:BUNNYBAGZ in its body as examples and was
+    incorrectly routed to the SWO project agent on 2026-05-01T17:00.
+    """
     if not lane:
         return False
     lu = lane.upper()
+    canonical = _CANONICAL_PROJECT_TAG_RE.findall(text)
+    if canonical:
+        return canonical[-1].upper() == lu
     tu = text.upper()
     return (f"PROJECT:{lu}" in tu) or (f"({lu})" in tu) or (f"[{lu}" in tu)
 

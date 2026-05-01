@@ -18,6 +18,7 @@ Usage:
 
 import json
 import os
+import re
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -442,12 +443,24 @@ def _preflight_attention(result):
     return codelet_result
 
 
+_CANONICAL_PROJECT_TAG_RE = re.compile(r"\(PROJECT:([A-Z0-9_-]+)\)", re.IGNORECASE)
+
+
 def _is_project_task(task_text, lane=None):
-    """Return True if task_text matches the active project lane."""
+    """Return True if task_text matches the active project lane.
+
+    Canonical `(PROJECT:X)` tag wins when present — substring matches against
+    examples mentioned in the body (`PROJECT:SWO, PROJECT:BUNNYBAGZ, etc.`) no
+    longer misroute Clarvis-tagged tasks to project agents (incident
+    2026-05-01T17:00, [QUEUE_LANE_MINIMUM_GUARD]).
+    """
     lane = lane or _PROJECT_LANE
     if not lane:
         return False
     lane_upper = lane.upper()
+    canonical = _CANONICAL_PROJECT_TAG_RE.findall(task_text)
+    if canonical:
+        return canonical[-1].upper() == lane_upper
     text_upper = task_text.upper()
     return (f"PROJECT:{lane_upper}" in text_upper
             or f"({lane_upper})" in text_upper
