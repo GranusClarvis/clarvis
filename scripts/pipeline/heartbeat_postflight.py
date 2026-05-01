@@ -315,7 +315,8 @@ def _compute_completeness(timings, pf_errors):
 
 
 def _episode_encode(task, task_section, best_salience, task_status, task_duration,
-                    error_type, output_text, preflight_data, _pf_errors):
+                    error_type, output_text, preflight_data, _pf_errors,
+                    conf_outcome_result=None):
     """§5 Episode encoding + §5.01 Trajectory scoring. Delegates to canonical module."""
     return _episode_encode_canonical(
         task, task_section, best_salience, task_status, task_duration,
@@ -323,6 +324,7 @@ def _episode_encode(task, task_section, best_salience, task_status, task_duratio
         EpisodicMemory=EpisodicMemory,
         record_trajectory_event=record_trajectory_event,
         log=log,
+        conf_outcome_result=conf_outcome_result,
     )
 
 
@@ -348,7 +350,7 @@ def _cot_score(chain_id, _pf_errors):
     return timings
 
 
-def _confidence_record(task_event, exit_code, task, preflight_data, _pf_errors):
+def _confidence_record(task_event, exit_code, task, preflight_data, _pf_errors, ctx=None):
     """§1 Confidence outcome + §1.5 AST evaluation."""
     timings = {}
 
@@ -357,7 +359,9 @@ def _confidence_record(task_event, exit_code, task, preflight_data, _pf_errors):
     if conf_outcome and task_event:
         try:
             actual = "success" if exit_code == 0 else "failure"
-            conf_outcome(task_event, actual)
+            result = conf_outcome(task_event, actual)
+            if ctx is not None:
+                ctx["conf_outcome_result"] = result
         except Exception as e:
             log(f"Confidence outcome failed: {e}")
             _pf_errors.append("confidence")
@@ -2150,7 +2154,7 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
     timings["delivery_validation"] = round(time.monotonic() - t_dv, 3)
 
     # §1-2.7: Confidence, reasoning chain, failure lessons, brain bridge
-    timings.update(_confidence_record(ctx["task_event"], exit_code, ctx["task"], preflight_data, _pf_errors))
+    timings.update(_confidence_record(ctx["task_event"], exit_code, ctx["task"], preflight_data, _pf_errors, ctx=ctx))
     timings.update(_reasoning_close(ctx["chain_id"], ctx["task_status"], ctx["task"], exit_code, ctx["output_text"], _pf_errors))
     timings.update(_brain_store(ctx["task"], ctx["task_status"], exit_code, ctx["output_text"],
                                 ctx["error_type"], task_duration, _pf_errors, ctx["RETRY_FILE"]))
@@ -2158,7 +2162,8 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
     timings.update(_pf_attention_hooks_procedural(ctx, _pf_errors))
     # §5: Episode encoding + trajectory
     timings.update(_episode_encode(ctx["task"], ctx["task_section"], ctx["best_salience"], ctx["task_status"],
-                                   task_duration, ctx["error_type"], ctx["output_text"], preflight_data, _pf_errors))
+                                   task_duration, ctx["error_type"], ctx["output_text"], preflight_data, _pf_errors,
+                                   conf_outcome_result=ctx.get("conf_outcome_result")))
     # §5.02: Chain-of-thought self-evaluation
     timings.update(_cot_score(ctx["chain_id"], _pf_errors))
     # §5.05-5.95: Cognitive subsystems

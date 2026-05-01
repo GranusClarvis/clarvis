@@ -11,6 +11,8 @@ from typing import Optional
 import typer
 
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_enable=False)
+episodes_app = typer.Typer(no_args_is_help=True, pretty_exceptions_enable=False, help="Episode reports.")
+app.add_typer(episodes_app, name="episodes")
 
 WORKSPACE = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 
@@ -382,3 +384,107 @@ def graph_verify(
 
     if not result['parity_ok']:
         raise typer.Exit(1)
+
+
+def _episode_calibration_rollup(days: int = 7, gap_threshold: float = 0.05) -> dict:
+    """Compute a per-week rollup of mean calibration_score vs success rate.
+
+    Flags weeks where (success_rate - mean_calibration) >= gap_threshold —
+    the "over-counted-success" symptom (model thinks it succeeded but its
+    confidence calibration disagrees).
+    """
+    from datetime import datetime, timedelta, timezone
+    from pathlib import Path
+
+    episodes_file = Path(WORKSPACE) / "data" / "episodes.json"
+    if not episodes_file.exists():
+        return {
+            "window_days": days,
+            "weeks": [],
+            "flagged_weeks": [],
+            "total_episodes": 0,
+            "with_calibration": 0,
+            "note": "episodes.json not found",
+        }
+
+    with open(episodes_file) as f:
+        episodes = json.load(f)
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    weeks: dict = {}
+    with_cal = 0
+    in_window = 0
+    for ep in episodes:
+        ts = ep.get("timestamp")
+        if not ts:
+            continue
+        try:
+            dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            continue
+        if dt < cutoff:
+            continue
+        in_window += 1
+        # ISO week key (year, week)
+        iso_year, iso_week, _ = dt.isocalendar()
+        wkey = f"{iso_year}-W{iso_week:02d}"
+        bucket = weeks.setdefault(wkey, {"n": 0, "successes": 0,
+                                         "cal_sum": 0.0, "cal_n": 0,
+                                         "bands": {"low": 0, "medium": 0, "high": 0}})
+        bucket["n"] += 1
+        if ep.get("outcome") == "success":
+            bucket["successes"] += 1
+        cs = ep.get("calibration_score")
+        if isinstance(cs, (int, float)):
+            bucket["cal_sum"] += float(cs)
+            bucket["cal_n"] += 1
+            with_cal += 1
+        cb = ep.get("confidence_band")
+        if cb in bucket["bands"]:
+            bucket["bands"][cb] += 1
+
+    week_rows = []
+    flagged = []
+    for wkey in sorted(weeks):
+        b = weeks[wkey]
+        success_rate = (b["successes"] / b["n"]) if b["n"] else None
+        mean_cal = (b["cal_sum"] / b["cal_n"]) if b["cal_n"] else None
+        gap = None
+        flagged_week = False
+        if success_rate is not None and mean_cal is not None:
+            gap = round(success_rate - mean_cal, 4)
+            if gap >= gap_threshold:
+                flagged_week = True
+                flagged.append({"week": wkey, "gap": gap,
+                                "success_rate": round(success_rate, 4),
+                                "mean_calibration": round(mean_cal, 4)})
+        week_rows.append({
+            "week": wkey,
+            "episodes": b["n"],
+            "successes": b["successes"],
+            "success_rate": round(success_rate, 4) if success_rate is not None else None,
+            "with_calibration": b["cal_n"],
+            "mean_calibration": round(mean_cal, 4) if mean_cal is not None else None,
+            "gap": gap,
+            "flagged": flagged_week,
+            "bands": b["bands"],
+        })
+
+    return {
+        "window_days": days,
+        "gap_threshold": gap_threshold,
+        "total_episodes_in_window": in_window,
+        "with_calibration": with_cal,
+        "weeks": week_rows,
+        "flagged_weeks": flagged,
+    }
+
+
+@episodes_app.command("calibration-report")
+def episodes_calibration_report(
+    days: int = typer.Option(7, "--days", "-d", help="Lookback window in days."),
+    gap_threshold: float = typer.Option(0.05, "--gap", help="Flag weeks where success_rate - mean_calibration >= this."),
+):
+    """7-day rollup of episode calibration vs success rate (JSON)."""
+    report = _episode_calibration_rollup(days=days, gap_threshold=gap_threshold)
+    print(json.dumps(report, indent=2))

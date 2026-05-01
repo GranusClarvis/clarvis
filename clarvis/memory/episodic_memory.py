@@ -603,7 +603,8 @@ class EpisodicMemory:
 
     def encode(self, task_text, section, salience, outcome,
                duration_s=0, error_msg=None, steps_taken=None,
-               failure_type=None, output_text=None):
+               failure_type=None, output_text=None,
+               calibration_score=None, confidence_band=None):
         """Encode a new episode from a heartbeat task.
 
         Args:
@@ -611,6 +612,12 @@ class EpisodicMemory:
                 timeout, memory, planning, system, action, partial-success.
                 Only meaningful when outcome != 'success'.
             output_text: Raw executor output; used to extract a one-line lesson.
+            calibration_score: Optional float in [0, 1] derived from
+                clarvis.cognition.confidence.outcome() — Brier-style
+                1.0 - (confidence - int(correct))**2. Higher = better calibrated.
+            confidence_band: Optional bucket label "low" (<0.5),
+                "medium" (0.5–0.8), or "high" (≥0.8) from the predicted
+                confidence at preflight time.
         """
         now = datetime.now(timezone.utc)
 
@@ -661,6 +668,11 @@ class EpisodicMemory:
             "access_times": [now.timestamp()],  # ACT-R: track retrievals
             "activation": 1.0  # initial activation
         }
+
+        if calibration_score is not None:
+            episode["calibration_score"] = float(calibration_score)
+        if confidence_band is not None:
+            episode["confidence_band"] = confidence_band
 
         self.episodes.append(episode)
         self._id_index[episode["id"]] = episode
