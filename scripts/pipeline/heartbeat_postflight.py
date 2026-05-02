@@ -261,6 +261,12 @@ try:
 except ImportError:
     queue_engine = None
 
+# Queue verification record producer — pairs with [QUEUE_UNVERIFIED_ARCHIVE_GUARD]
+try:
+    from clarvis.queue.verification import write_verification_record as _write_queue_verification
+except ImportError:
+    _write_queue_verification = None
+
 _import_time = time.monotonic() - start_import
 log = lambda msg: print(f"[{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S')}] POSTFLIGHT: {msg}", file=sys.stderr)
 
@@ -1971,6 +1977,32 @@ def _pf_queue_update(ctx, _pf_errors):
                 log(f"Queue engine: marked [{task_tag}] {effective_status} (no run_id)")
         except Exception as e:
             log(f"Queue engine update failed (non-fatal): {e}")
+
+    # --- Verification record producer (pairs with [QUEUE_UNVERIFIED_ARCHIVE_GUARD]) ---
+    # On success+tag, write data/audit/queue_verifications/<tag>.json IFF at least
+    # one of three evidence types is present: pytest exit 0, git diff includes a
+    # claimed file, or operator-typed --verified flag. Without evidence, skip.
+    if _write_queue_verification and task_tag and exit_code == 0:
+        try:
+            operator_verified = False
+            if isinstance(preflight_data, dict):
+                operator_verified = bool(preflight_data.get("operator_verified"))
+            rec = _write_queue_verification(
+                task_tag,
+                selftest_result=ctx.get("selftest_result"),
+                task_diff_stat=ctx.get("task_diff_stat"),
+                task_porcelain=ctx.get("task_porcelain"),
+                queue_body=task,
+                operator_verified=operator_verified,
+                workspace=ctx.get("WORKSPACE"),
+            )
+            if rec:
+                log(f"Queue verification: wrote sidecar for [{task_tag}] "
+                    f"(evidence={len(rec['evidence'])})")
+            else:
+                log(f"Queue verification: no evidence for [{task_tag}], skipped sidecar")
+        except Exception as e:
+            log(f"Queue verification record write failed (non-fatal): {e}")
 
     # --- Legacy path: queue_writer marks [x] in QUEUE.md ---
     # Project tasks without PR delivery stay unchecked (partial_success / no_pr_delivery)
