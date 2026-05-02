@@ -18,8 +18,96 @@ References:
     Dunlosky, J. & Metcalfe, J. (2009). Metacognition.
 """
 
+import re
 from collections import Counter
 from typing import Dict, List, Optional, Tuple
+
+# Transient infrastructure failures excluded from rolling Episode Success Rate
+# (kept in raw counts for ops visibility). Reason: 401 / auth errors from
+# OpenRouter / Claude API are almost always credential rotation or rate-limit
+# symptoms — not reasoning/action failures.
+TRANSIENT_AUTH_PATTERN = re.compile(
+    r"401|authenti(?:c|f)|unauthorized|invalid_api_key",
+    re.IGNORECASE,
+)
+
+
+def classify_episode_failure(error_msg: Optional[str],
+                             output_text: Optional[str] = None) -> Optional[str]:
+    """Classify an episode's failure into a structured reason category.
+
+    Currently detects only ``transient_auth``. Other failure shapes are left
+    to the EpisodicMemory taxonomy classifier; this hook is the metacognitive
+    pre-filter for failures that should NOT degrade Episode Success Rate.
+
+    Args:
+        error_msg: Stored error string (often truncated).
+        output_text: Optional executor output / lesson text.
+
+    Returns:
+        ``"transient_auth"`` when the error matches the auth pattern,
+        otherwise ``None``.
+    """
+    parts = []
+    if error_msg:
+        parts.append(str(error_msg))
+    if output_text:
+        parts.append(str(output_text))
+    if not parts:
+        return None
+    text = "\n".join(parts)
+    if TRANSIENT_AUTH_PATTERN.search(text):
+        return "transient_auth"
+    return None
+
+
+# Failure types excluded from the rolling ESR denominator. Kept in raw outcome
+# counts so ops dashboards still see them, but not counted as reasoning/action
+# failures for the gated metric.
+ESR_EXCLUDED_FAILURE_TYPES = frozenset({"transient_auth"})
+
+
+def compute_episode_success_rate(outcomes: Dict[str, int],
+                                 failure_types: Optional[Dict[str, int]] = None,
+                                 exclude_transient: bool = True) -> float:
+    """Compute Episode Success Rate with optional transient-failure exclusion.
+
+    ESR = successes / (real_total - excluded_transient_failures)
+
+    ``soft_failure`` outcomes are always excluded (they are observational
+    annotations from failure_amplifier, not real failures). When
+    ``exclude_transient`` is True, ``transient_auth`` failures are also
+    excluded — these are 401 / credential-rotation / rate-limit symptoms, not
+    reasoning failures. The raw counts in ``outcomes`` and ``failure_types``
+    are unchanged.
+
+    Args:
+        outcomes: Mapping of outcome label → count
+                  (e.g. ``{"success": 17, "failure": 3}``).
+        failure_types: Mapping of failure_type → count. Used to subtract
+                       transient categories from the denominator.
+        exclude_transient: If True, subtract ESR_EXCLUDED_FAILURE_TYPES.
+
+    Returns:
+        Success rate in [0.0, 1.0]. Returns ``0.0`` when the adjusted total
+        reaches zero (e.g. every episode was a transient-auth failure).
+    """
+    if not outcomes:
+        return 0.0
+
+    total = sum(outcomes.values())
+    successes = outcomes.get("success", 0)
+    soft = outcomes.get("soft_failure", 0)
+    real_total = total - soft
+
+    if exclude_transient and failure_types:
+        excluded = sum(failure_types.get(ft, 0) for ft in ESR_EXCLUDED_FAILURE_TYPES)
+        real_total -= excluded
+
+    if real_total <= 0:
+        return 0.0
+    return round(successes / real_total, 3)
+
 
 # Stop words excluded from coherence calculations
 _STOP_WORDS = frozenset({

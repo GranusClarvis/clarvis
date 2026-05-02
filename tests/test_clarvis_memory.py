@@ -3698,8 +3698,10 @@ class TestActionSubtypeClassifier:
         assert self._classify("All 3 tasks are done and verified.") == "action.unverified"
 
     def test_external_dep_reclassified(self):
-        # Auth/401 errors should be promoted out of the action namespace
-        assert self._classify("401 authentication_error: OAuth token expired") == "external_dep"
+        # Auth/401 errors should be promoted out of the action namespace into
+        # the transient_auth bucket, which is excluded from rolling ESR
+        # (see clarvis.cognition.metacognition.ESR_EXCLUDED_FAILURE_TYPES).
+        assert self._classify("401 authentication_error: OAuth token expired") == "transient_auth"
 
     def test_import_error_reclassified(self):
         assert self._classify("ImportError: No module named 'foo'") == "import_error"

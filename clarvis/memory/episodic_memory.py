@@ -463,6 +463,7 @@ class EpisodicMemory:
         "import_error": "ImportError/ModuleNotFoundError — missing dependency",
         "data_missing": "Missing file, broken JSON, empty data, missing config",
         "external_dep": "Network, API, auth, rate-limit, service failure",
+        "transient_auth": "Transient credential/401/rate-limit (excluded from ESR denominator)",
         "memory":       "ChromaDB/embedding/brain subsystem failure",
         "planning":     "Task selection, queue, routing, preflight failure",
         "logic_bug":    "Assertion, type, value, index, attribute error",
@@ -587,9 +588,11 @@ class EpisodicMemory:
             return None
 
         lower = text.lower()
-        # Reclassify obvious infrastructure failures away from `action`
-        if re.search(r"\b401\b|authentication_error|oauth token", lower):
-            return "external_dep"
+        # Reclassify obvious infrastructure failures away from `action`.
+        # Auth/401 is its own bucket (excluded from rolling ESR denominator
+        # — see clarvis.cognition.metacognition.ESR_EXCLUDED_FAILURE_TYPES).
+        if re.search(r"\b401\b|authenti[cf]|unauthorized|invalid_api_key|oauth token", lower):
+            return "transient_auth"
         if re.search(r"\bimporterror\b|\bmodulenotfounderror\b", lower):
             return "import_error"
         if re.search(r"permission denied|disk quota|no space left|segfault", lower):
@@ -627,13 +630,21 @@ class EpisodicMemory:
         # Validate and normalize failure_type; auto-detect system failures from error
         ft = None
         if outcome != "success":
-            if failure_type:
+            # Transient auth/credential signals (401, authenticate, invalid_api_key)
+            # are excluded from the rolling ESR denominator. This check runs FIRST
+            # — even when an upstream caller passed a different failure_type like
+            # "external_dep" — because the postflight error_classifier matches 401
+            # via the broader "external_dep" rule, which would otherwise mask the
+            # transient_auth tag and pull ESR down on credential rotations.
+            from clarvis.cognition.metacognition import classify_episode_failure
+            if classify_episode_failure(error_msg, output_text) == "transient_auth":
+                ft = "transient_auth"
+            elif failure_type:
                 ft = failure_type if failure_type in self.FAILURE_TYPES else "action"
             elif error_msg:
                 # Auto-classify infrastructure failures to avoid polluting action accuracy
                 err_lower = error_msg.lower()
                 if any(sig in err_lower for sig in (
-                    "401", "authentication_error", "oauth token",
                     "importerror", "modulenotfounderror",
                     "nested sessions", "cannot be launched inside",
                     "permission denied", "disk quota", "no space left",

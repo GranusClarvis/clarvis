@@ -8,8 +8,11 @@ import pytest
 from clarvis.cognition.metacognition import (
     brier_score,
     check_step_quality,
+    classify_episode_failure,
     compute_coherence,
+    compute_episode_success_rate,
     diagnose_sessions,
+    ESR_EXCLUDED_FAILURE_TYPES,
     evaluate_session,
     GRADE_GOOD,
     GRADE_ADEQUATE,
@@ -326,3 +329,147 @@ class TestGradeConstants:
         assert GRADE_GOOD == 0.70
         assert GRADE_ADEQUATE == 0.45
         assert GRADE_SHALLOW == 0.20
+
+
+# ── classify_episode_failure / ESR exclusion ─────────────────────────
+
+class TestClassifyEpisodeFailure:
+    def test_401_status_classified_transient(self):
+        assert classify_episode_failure("API Error: 401 unauthorized") == "transient_auth"
+
+    def test_authenticate_keyword(self):
+        msg = 'Failed to authenticate. API Error: 401 {"type":"error","error":{"type":"authentication_error"}}'
+        assert classify_episode_failure(msg) == "transient_auth"
+
+    def test_invalid_api_key(self):
+        assert classify_episode_failure("invalid_api_key returned by upstream") == "transient_auth"
+
+    def test_unauthorized_keyword(self):
+        assert classify_episode_failure("HTTP 401 Unauthorized: token expired") == "transient_auth"
+
+    def test_non_auth_failure_returns_none(self):
+        assert classify_episode_failure("AssertionError: expected 1 got 2") is None
+
+    def test_empty_input_returns_none(self):
+        assert classify_episode_failure(None) is None
+        assert classify_episode_failure("") is None
+
+    def test_output_text_also_scanned(self):
+        assert classify_episode_failure(
+            error_msg="task exited",
+            output_text="...\nclaude.api.AuthenticationError: 401\n...",
+        ) == "transient_auth"
+
+
+class TestComputeEpisodeSuccessRate:
+    def test_no_failures(self):
+        rate = compute_episode_success_rate({"success": 10}, {})
+        assert rate == 1.0
+
+    def test_real_failures_count(self):
+        rate = compute_episode_success_rate(
+            {"success": 8, "failure": 2},
+            {"action": 2},
+        )
+        assert rate == 0.8
+
+    def test_soft_failures_excluded(self):
+        # soft_failure outcomes are observational, never count
+        rate = compute_episode_success_rate(
+            {"success": 8, "soft_failure": 2},
+            {},
+        )
+        assert rate == 1.0
+
+    def test_transient_auth_excluded_from_denominator(self):
+        # 8 success + 2 transient_auth → 8/8 = 1.0 (auth doesn't pull ESR down)
+        rate = compute_episode_success_rate(
+            {"success": 8, "failure": 2},
+            {"transient_auth": 2},
+        )
+        assert rate == 1.0
+
+    def test_transient_can_be_kept_when_disabled(self):
+        rate = compute_episode_success_rate(
+            {"success": 8, "failure": 2},
+            {"transient_auth": 2},
+            exclude_transient=False,
+        )
+        assert rate == 0.8
+
+    def test_constant_membership(self):
+        assert "transient_auth" in ESR_EXCLUDED_FAILURE_TYPES
+
+
+def test_auth_failure_excluded_from_esr():
+    """Acceptance test for ESR_AUTH_TRANSIENT_RECLASSIFY.
+
+    A synthetic 401-classified episode injected into an otherwise all-success
+    sample must NOT pull the rolling Episode Success Rate below the gate
+    (≥0.85). Raw counts in `outcomes`/`failure_types` are preserved for ops
+    visibility.
+    """
+    # Baseline: 17 successes, 0 failures → ESR = 1.0, well above the 0.85 gate
+    baseline_outcomes = {"success": 17}
+    baseline_failure_types: dict = {}
+    baseline_esr = compute_episode_success_rate(baseline_outcomes, baseline_failure_types)
+    assert baseline_esr == 1.0
+
+    # Inject a synthetic 401 episode the way EpisodicMemory.encode would:
+    # outcome=failure, classified by metacognition as transient_auth.
+    err = 'API Error: 401 {"type":"error","error":{"type":"authentication_error"}}'
+    assert classify_episode_failure(err) == "transient_auth"
+
+    polluted_outcomes = {"success": 17, "failure": 1}
+    polluted_failure_types = {"transient_auth": 1}
+
+    # With exclusion ON (production behaviour): auth episode is removed from
+    # the ESR denominator, so the rate stays at 1.0 — matches acceptance
+    # criterion that a synthetic 401 does not pull ESR down.
+    esr = compute_episode_success_rate(polluted_outcomes, polluted_failure_types)
+    assert esr >= 0.85, f"ESR {esr} below 0.85 gate after auth episode"
+    assert esr == baseline_esr, "transient_auth should not affect ESR"
+
+    # With exclusion OFF (legacy behaviour): the failure does pull ESR down,
+    # confirming the exclusion is the mechanism, not a coincidence.
+    legacy_esr = compute_episode_success_rate(
+        polluted_outcomes, polluted_failure_types, exclude_transient=False,
+    )
+    assert legacy_esr < baseline_esr
+
+    # Raw counts preserved (ops visibility): the dicts the helper consumes
+    # are untouched by the call.
+    assert polluted_outcomes == {"success": 17, "failure": 1}
+    assert polluted_failure_types == {"transient_auth": 1}
+
+
+def test_encode_overrides_upstream_external_dep_to_transient_auth(tmp_path, monkeypatch):
+    """Postflight's error_classifier matches a 401 as `external_dep` (3+ keyword
+    hits: "401" + "api error" + "authentication_error"). Without the override,
+    `EpisodicMemory.encode(failure_type="external_dep")` would persist
+    "external_dep" and the auth episode would still pull ESR down.
+
+    This test pins the override: when the error_msg matches the metacognitive
+    transient_auth pattern, encode() must promote the failure_type to
+    "transient_auth" regardless of the upstream classification.
+    """
+    import clarvis.memory.episodic_memory as em
+
+    monkeypatch.setattr(em, "EPISODES_FILE", tmp_path / "episodes.json")
+    monkeypatch.setattr(em, "CAUSAL_LINKS_FILE", tmp_path / "causal_links.json")
+
+    memory = em.EpisodicMemory()
+    err = 'API Error: 401 {"type":"error","error":{"type":"authentication_error"}}'
+    memory.encode(
+        task_text="some task",
+        section="P1",
+        salience=0.5,
+        outcome="failure",
+        duration_s=12.0,
+        error_msg=err,
+        failure_type="external_dep",  # what postflight would pass for a 401
+        output_text=err,
+    )
+
+    assert memory.episodes, "encode should append an episode"
+    assert memory.episodes[-1]["failure_type"] == "transient_auth"

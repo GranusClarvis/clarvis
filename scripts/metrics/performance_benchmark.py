@@ -296,6 +296,7 @@ def benchmark_episodes():
     """
     try:
         from clarvis.memory.episodic_memory import EpisodicMemory
+        from clarvis.cognition.metacognition import ESR_EXCLUDED_FAILURE_TYPES
         em = EpisodicMemory()
         stats = em.get_stats()
         outcomes = stats.get("outcomes", {})
@@ -304,11 +305,17 @@ def benchmark_episodes():
 
         # Exclude soft_failures (manufactured by failure_amplifier, not real failures)
         soft_failures = outcomes.get("soft_failure", 0)
-        real_total = max(total - soft_failures, 1)
-        success_rate = round(successes / real_total, 3)
 
         # Failure type distribution from structured taxonomy
         failure_types = stats.get("failure_types", {})
+
+        # Transient infrastructure failures (401/auth/credential rotation) are
+        # excluded from the rolling ESR denominator — see
+        # clarvis.cognition.metacognition.ESR_EXCLUDED_FAILURE_TYPES. Raw counts
+        # remain in `outcomes`/`failure_types` for ops visibility.
+        transient_excluded = sum(failure_types.get(ft, 0) for ft in ESR_EXCLUDED_FAILURE_TYPES)
+        real_total = max(total - soft_failures - transient_excluded, 1)
+        success_rate = round(successes / real_total, 3)
         # `action.unverified` is the bucket for partial_success episodes the
         # spawned agent self-reported as done — they're not real action
         # failures, so they're excluded from accuracy + weakest-mode picks.
@@ -346,6 +353,7 @@ def benchmark_episodes():
             "total_episodes": total,
             "real_episodes": real_total,
             "soft_failures_excluded": soft_failures,
+            "transient_auth_excluded": transient_excluded,
             "success_rate": success_rate,
             "action_accuracy": action_accuracy,
             "outcomes": outcomes,
