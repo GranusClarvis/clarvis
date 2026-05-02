@@ -197,8 +197,15 @@ def test_legacy_bracket_style_still_matches():
 
 def test_project_lane_zero_eligible_warns(tmp_engine, monkeypatch):
     """Project lane set + project tasks all blocked → warn finding so the
-    operator/auditor sees the lane is starving."""
+    operator/auditor sees the lane is starving.
+
+    Also asserts the structured `lane_health` record for the empty-lane →
+    escalation path (`[QUEUE_LANE_MINIMUM_GUARD]` 2026-05-01). The morning
+    digest reads `lane_health` directly to surface per-lane escalation BEFORE
+    the autonomous selector falls back to Clarvis self-maintenance.
+    """
     monkeypatch.setenv("CLARVIS_PROJECT_LANE", "SWO_V2")
+    monkeypatch.delenv("CLARVIS_ACTIVE_PROJECT_LANES", raising=False)
     # Defer the only project task in our fixture
     tmp_engine.reconcile()
     sidecar = tmp_engine._load()
@@ -211,6 +218,75 @@ def test_project_lane_zero_eligible_warns(tmp_engine, monkeypatch):
     assert view.project_eligible == 0
     assert any("project lane" in f.lower() for f in view.findings)
     assert view.severity in ("warn", "critical")
+
+    # Structured per-lane record exists and carries the escalation reason
+    swo_v2 = next((lh for lh in view.lane_health if lh["lane"] == "SWO_V2"), None)
+    assert swo_v2 is not None, "lane_health should have a record for SWO_V2"
+    assert swo_v2["in_queue"] == 1
+    assert swo_v2["eligible"] == 0
+    assert swo_v2["severity"] == "warn"
+    assert swo_v2["escalation"] is not None
+    assert "escalate" in swo_v2["escalation"].lower()
+
+
+def test_multiple_active_lanes_each_get_health_record(tmp_engine, monkeypatch):
+    """When CLARVIS_ACTIVE_PROJECT_LANES lists several lanes, each gets its
+    own lane_health record — even ones with zero items in queue (informational,
+    severity=ok) and ones that are starving (severity=warn).
+
+    Regression for `[QUEUE_LANE_MINIMUM_GUARD]`: with multiple operator-assigned
+    project lanes (BunnyBagz + SWO concurrently), a single missing lane must
+    still escalate without being masked by a healthy sibling lane.
+    """
+    monkeypatch.setenv("CLARVIS_PROJECT_LANE", "SWO_V2")
+    monkeypatch.setenv(
+        "CLARVIS_ACTIVE_PROJECT_LANES",
+        "BUNNYBAGZ,SWO_V2,UNUSED_LANE",
+    )
+    tmp_engine.reconcile()
+    sidecar = tmp_engine._load()
+    # Starve SWO_V2 — its only task is deferred
+    sidecar["SWO_V2_POLISH"]["state"] = "deferred"
+    tmp_engine._save(sidecar)
+
+    view = runnable_view(engine=tmp_engine)
+    lanes = {lh["lane"]: lh for lh in view.lane_health}
+
+    # Primary CLARVIS_PROJECT_LANE is included exactly once even when it
+    # also appears in CLARVIS_ACTIVE_PROJECT_LANES (de-dup).
+    assert sum(1 for lh in view.lane_health if lh["lane"] == "SWO_V2") == 1
+
+    # Starved lane escalates
+    assert lanes["SWO_V2"]["severity"] == "warn"
+    assert lanes["SWO_V2"]["in_queue"] == 1
+    assert lanes["SWO_V2"]["eligible"] == 0
+    assert lanes["SWO_V2"]["escalation"] is not None
+
+    # Active lane with no queue items: informational only (no escalation
+    # noise — operator may have intentionally drained the lane between sprints)
+    assert lanes["BUNNYBAGZ"]["in_queue"] == 0
+    assert lanes["BUNNYBAGZ"]["eligible"] == 0
+    assert lanes["BUNNYBAGZ"]["severity"] == "ok"
+    assert lanes["BUNNYBAGZ"]["escalation"] is None
+
+    assert lanes["UNUSED_LANE"]["severity"] == "ok"
+    assert lanes["UNUSED_LANE"]["escalation"] is None
+
+    # The starved lane is the one that must surface in findings — and the
+    # overall severity must reflect it
+    assert any("SWO_V2" in f for f in view.findings)
+    assert view.severity in ("warn", "critical")
+
+
+def test_no_active_lanes_yields_empty_lane_health(tmp_engine, monkeypatch):
+    """With no project lane env vars set, lane_health is empty and no
+    project-lane finding is emitted (severity stays ok on a clean queue)."""
+    monkeypatch.delenv("CLARVIS_PROJECT_LANE", raising=False)
+    monkeypatch.delenv("CLARVIS_ACTIVE_PROJECT_LANES", raising=False)
+    view = runnable_view(engine=tmp_engine)
+    assert view.lane_health == []
+    assert view.severity == "ok"
+    assert not any("project lane" in f.lower() for f in view.findings)
 
 
 def test_digest_summary_includes_severity_and_counts(tmp_engine):

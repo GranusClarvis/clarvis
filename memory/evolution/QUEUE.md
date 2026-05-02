@@ -194,7 +194,6 @@ _Source: deep analysis of why Clarvis self-work > project-agent work. Core issue
 
 _Filed after the BunnyBagz Phase-1 false-DONE incident. Detail in `memory/evolution/bunnybagz_realignment_2026-05-01.md`. Both items prevent the same drift pattern from recurring on any project lane (not just BB)._
 
-- [x] **[QUEUE_VERIFICATION_RECORD_PRODUCER]** When `CLARVIS_QUEUE_UNVERIFIED_GUARD=block` flips on, **something** has to write the sidecar verification records. Add a hook in `scripts/pipeline/heartbeat_postflight.py` that, on a successful task completion, writes `data/audit/queue_verifications/<tag>.json` with `{tag, verified_at, evidence: [list-of-test-runs-or-file-checks]}` IFF the postflight observed at least one of: (a) a test invocation that exited 0, (b) a `git diff --stat` showing the file the queue body claimed, (c) an explicit operator-typed `--verified` flag on `clarvis queue mark-done`. Without this, the block-mode guard would refuse all archives. **Acceptance:** unit test covers the three evidence paths + the no-evidence skip. Pairs with `[QUEUE_UNVERIFIED_ARCHIVE_GUARD]`. (PROJECT:CLARVIS) (done 2026-05-02: `clarvis/queue/verification.py` + hook in `_pf_queue_update`; 11/11 tests pass in `tests/test_queue_verification_record.py`)
 
 
 ### Deep Audit — Phase 0 Follow-ups (added 2026-04-16 via AUDIT_CAP_OVERRIDE)

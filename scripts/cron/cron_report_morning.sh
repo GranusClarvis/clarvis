@@ -276,6 +276,30 @@ if today_completed:
         lines.append(f"  • {t}")
     lines.append("")
 
+# Lane health — surface per-project escalation BEFORE queue summary so
+# operators see "lane is starving" before the catch-all pending count.
+# See `[QUEUE_LANE_MINIMUM_GUARD]` (BunnyBagz Phase-1 false-DONE 2026-05-01).
+try:
+    sys.path.insert(0, os.path.join(WORKSPACE))
+    from clarvis.queue.runnable import runnable_view as _runnable_view
+    _rv = _runnable_view()
+    if _rv.lane_health:
+        lines.append("🛤  LANE HEALTH")
+        lines.append("-" * 20)
+        for lh in _rv.lane_health:
+            mark = lh.get("severity", "ok").upper()
+            lines.append(
+                f"  [{mark}] {lh.get('lane','?')}: "
+                f"{lh.get('eligible',0)} elig / {lh.get('in_queue',0)} queued"
+            )
+            esc = lh.get("escalation")
+            if esc:
+                lines.append(f"    ⚠ {esc}")
+        lines.append("")
+except Exception as _e:
+    # Never let lane-health rendering break the morning report
+    print(f"[report_morning] lane_health render skipped: {_e}")
+
 # Queue status
 lines.append("📋 QUEUE STATUS")
 lines.append("-" * 20)

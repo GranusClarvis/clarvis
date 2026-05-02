@@ -65,6 +65,26 @@ class TaskBucket:
 
 
 @dataclass
+class LaneHealth:
+    """Per-project-lane runnable summary.
+
+    Surfaces the empty-lane → escalation signal so the autonomous selector
+    cannot silently drop an actively-assigned project lane and fall back to
+    Clarvis self-maintenance. See `[QUEUE_LANE_MINIMUM_GUARD]` (2026-05-01
+    BunnyBagz Phase-1 false-DONE incident, `bunnybagz_realignment_2026-05-01.md`).
+    """
+    lane: str
+    in_queue: int
+    eligible: int
+    blocked: int
+    severity: str = "ok"     # ok|warn|critical
+    escalation: Optional[str] = None  # human-readable reason when severity != ok
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+@dataclass
 class RunnableView:
     in_queue_total: int
     eligible_count: int
@@ -74,6 +94,7 @@ class RunnableView:
     project_lane: Optional[str] = None
     project_eligible: int = 0
     project_in_queue: int = 0
+    lane_health: list[dict] = field(default_factory=list)  # per-lane LaneHealth dicts
     eligible_top: list[dict] = field(default_factory=list)
     blocked_samples: dict = field(default_factory=dict)    # block_reason -> [TaskBucket dicts]
     severity: str = "ok"                                    # ok|warn|critical
@@ -105,6 +126,37 @@ def _is_project_task(text: str, lane: str) -> bool:
         return canonical[-1].upper() == lu
     tu = text.upper()
     return (f"PROJECT:{lu}" in tu) or (f"({lu})" in tu) or (f"[{lu}" in tu)
+
+
+def _active_project_lanes() -> list[str]:
+    """Return the de-duplicated, upper-cased list of project lanes the
+    autonomous selector should treat as actively assigned.
+
+    Sources (merged, in order):
+      - `CLARVIS_PROJECT_LANE` — single legacy lane; kept first for back-compat.
+      - `CLARVIS_ACTIVE_PROJECT_LANES` — comma-separated list of additional lanes
+        the operator has assigned (e.g. `BUNNYBAGZ,SWO,SWO_V2`).
+
+    Without these, the empty-lane signal is impossible to compute (we have no
+    way to know which `(PROJECT:X)` tags are "active" vs ambient examples) and
+    the selector silently falls through to Clarvis self-maintenance — the
+    failure mode `[QUEUE_LANE_MINIMUM_GUARD]` exists to surface.
+    """
+    lanes: list[str] = []
+    seen: set[str] = set()
+    primary = (os.environ.get("CLARVIS_PROJECT_LANE") or "").strip()
+    if primary:
+        u = primary.upper()
+        if u not in seen:
+            lanes.append(u)
+            seen.add(u)
+    extra = os.environ.get("CLARVIS_ACTIVE_PROJECT_LANES", "")
+    for raw in extra.split(","):
+        v = raw.strip().upper()
+        if v and v not in seen:
+            lanes.append(v)
+            seen.add(v)
+    return lanes
 
 
 def _classify(task: dict, now_epoch: float) -> str:
@@ -155,6 +207,7 @@ def runnable_view(
     md_tasks, _sidecar = eng.reconcile()
     in_queue_total = len(md_tasks)
     project_lane = os.environ.get("CLARVIS_PROJECT_LANE", "").strip() or None
+    active_lanes = _active_project_lanes()
     now_epoch = time.time()
 
     eligible_score_map = {t["tag"]: t["score"] for t in eng.ranked_eligible()}
@@ -163,6 +216,9 @@ def runnable_view(
     for t in md_tasks:
         reason = _classify(t, now_epoch)
         score = eligible_score_map.get(t["tag"]) if reason == "eligible" else None
+        # is_project tracks the legacy single-lane field so existing consumers
+        # (digest, callers reading project_eligible/project_in_queue) keep
+        # working. Multi-lane health is reported separately in `lane_health`.
         buckets.append(TaskBucket(
             tag=t["tag"],
             text=t["text"],
@@ -197,8 +253,41 @@ def runnable_view(
     project_eligible = sum(1 for b in eligible if b.is_project)
     project_in_queue = sum(1 for b in buckets if b.is_project)
 
+    # Per-lane health for every actively-assigned project lane. An empty lane
+    # (in_queue > 0 but eligible == 0) is the failure mode the autonomous
+    # selector must escalate on BEFORE falling back to Clarvis self-maintenance.
+    lane_health: list[LaneHealth] = []
+    for lane in active_lanes:
+        in_q = sum(1 for b in buckets if _is_project_task(b.text, lane))
+        elig = sum(1 for b in eligible if _is_project_task(b.text, lane))
+        blk = in_q - elig
+        sev = "ok"
+        esc: Optional[str] = None
+        if in_q > 0 and elig == 0:
+            sev = "warn"
+            esc = (
+                f"project lane={lane} has {in_q} task(s) in queue but 0 eligible "
+                f"— escalate before autonomous slot falls back to self-maintenance"
+            )
+        # in_q == 0 (no items in lane) is informational only — operator may
+        # have intentionally drained the lane between sprints. Don't escalate
+        # so an unassigned lane doesn't drown the digest in noise.
+        lane_health.append(LaneHealth(
+            lane=lane,
+            in_queue=in_q,
+            eligible=elig,
+            blocked=blk,
+            severity=sev,
+            escalation=esc,
+        ))
+
     findings: list[str] = []
     severity = "ok"
+
+    for lh in lane_health:
+        if lh.escalation:
+            severity = max(severity, lh.severity, key=_sev_rank)
+            findings.append(lh.escalation)
 
     if in_queue_total > 0 and len(eligible) == 0:
         severity = "critical"
@@ -220,12 +309,10 @@ def runnable_view(
             f"sidecar/QUEUE.md drift; archive_completed may be stalled"
         )
 
-    if project_lane and project_in_queue > 0 and project_eligible == 0:
-        severity = max(severity, "warn", key=_sev_rank)
-        findings.append(
-            f"project lane={project_lane} has {project_in_queue} task(s) in queue "
-            f"but 0 eligible — project slots will fall back to general"
-        )
+    # Per-lane escalation is emitted above via lane_health. The legacy
+    # `project_lane`/`project_in_queue`/`project_eligible` fields stay populated
+    # for the single-lane back-compat case; the structured signal lives in
+    # `lane_health` so per-lane consumers (cron_report_morning) can render it.
 
     stuck_in_progress = counts_by_reason.get("in_progress", 0)
     if stuck_in_progress >= 2:
@@ -244,6 +331,7 @@ def runnable_view(
         project_lane=project_lane,
         project_eligible=project_eligible,
         project_in_queue=project_in_queue,
+        lane_health=[lh.to_dict() for lh in lane_health],
         eligible_top=eligible_top,
         blocked_samples=blocked_samples,
         severity=severity,
@@ -265,6 +353,18 @@ def format_view(view: RunnableView) -> str:
             f"Project lane: {view.project_lane} — "
             f"{view.project_eligible} eligible / {view.project_in_queue} in queue"
         )
+
+    if view.lane_health:
+        lines.extend(["", "## Lane health"])
+        for lh in view.lane_health:
+            mark = "OK" if lh.get("severity") == "ok" else lh.get("severity", "?").upper()
+            lines.append(
+                f"  [{mark:4s}] {lh.get('lane','?'):14s} "
+                f"{lh.get('eligible',0)} eligible / {lh.get('in_queue',0)} in queue"
+            )
+            esc = lh.get("escalation")
+            if esc:
+                lines.append(f"          ↳ {esc}")
 
     if view.counts_by_reason:
         lines.extend(["", "## Block reasons"])
@@ -333,6 +433,13 @@ def digest_summary(view: RunnableView) -> str:
         parts.append(
             f"lane={view.project_lane}: {view.project_eligible}/{view.project_in_queue}"
         )
+    if view.lane_health:
+        empties = [lh for lh in view.lane_health
+                   if lh.get("in_queue", 0) > 0 and lh.get("eligible", 0) == 0]
+        if empties:
+            parts.append(
+                "lanes-empty: " + ",".join(lh["lane"] for lh in empties)
+            )
     if view.findings:
         parts.append("findings: " + "; ".join(view.findings[:2]))
     return ". ".join(parts) + "."
