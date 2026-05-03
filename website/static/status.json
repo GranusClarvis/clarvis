@@ -4,54 +4,62 @@
     "pending_mode": null
   },
   "queue": {
-    "pending": 5,
+    "pending": 20,
     "in_progress": 5,
     "done": 0
   },
   "benchmarks": {
     "clr": {
-      "clr": 0.815,
+      "clr": 0.81,
       "baseline_clr": 0.19,
-      "value_add": 0.625,
+      "value_add": 0.62,
       "gate_pass": true,
       "dimensions": {
         "memory_quality": 0.896,
-        "retrieval_precision": 0.744,
-        "prompt_context": 0.844,
-        "task_success": 0.812,
-        "autonomy": 0.62,
+        "retrieval_precision": 0.788,
+        "prompt_context": 0.802,
+        "task_success": 0.81,
+        "autonomy": 0.582,
         "efficiency": 0.987,
-        "integration_dynamics": 0.849
+        "integration_dynamics": 0.845
       },
-      "timestamp": "2026-05-02T05:45:11.818302+00:00"
+      "timestamp": "2026-05-03T05:45:11.042034+00:00"
     },
     "pi": {
-      "pi": 0.9472,
+      "pi": 0.9476,
       "dimensions": 15,
-      "timestamp": "2026-05-02T05:45:02.296211+00:00"
+      "timestamp": "2026-05-03T05:45:02.303805+00:00"
     }
   },
   "phi": {
-    "current": 0.6187,
-    "timestamp": "2026-05-01T18:00:04.277452+00:00"
+    "current": 0.6214,
+    "timestamp": "2026-05-02T18:00:03.977689+00:00"
   },
   "bloat_score": 0.0,
   "brain": {
-    "total_memories": 2804,
+    "total_memories": 2673,
     "collections": 10
   },
   "episodes": {
-    "success_rate": 0.86,
+    "success_rate": 0.856,
     "total": 500,
     "breakdown": {
-      "success": 430,
+      "success": 428,
       "soft_failure": 0,
       "failure": 14,
       "timeout": 3
     }
   },
-  "uptime_since": "2026-02-18 12:20:55",
+  "uptime_since": "2026-02-18 12:21:21",
   "recent_completions": [
+    {
+      "tag": "UNVERIFIED",
+      "status": "success"
+    },
+    {
+      "tag": "UNVERIFIED",
+      "status": "success"
+    },
     {
       "tag": "SPINE_PROXY_REPLACEMENT",
       "status": "success"
@@ -63,15 +71,7 @@
     {
       "tag": "QUEUE_AUTO_ARCHIVE",
       "status": "success"
-    },
-    {
-      "tag": "CRON_CANONICAL_ENTRYPOINTS",
-      "status": "success"
-    },
-    {
-      "tag": "OSR_GIT_HISTORY_SCRUB",
-      "status": "success"
     }
   ],
-  "updated_at": "2026-05-02T05:50:03.066631+00:00"
+  "updated_at": "2026-05-03T05:50:03.090881+00:00"
 }
