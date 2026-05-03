@@ -300,6 +300,22 @@ except Exception as _e:
     # Never let lane-health rendering break the morning report
     print(f"[report_morning] lane_health render skipped: {_e}")
 
+# Lane autofill — when an active lane has in_queue==0, file a refill task
+# so the next heartbeat has something concrete to pick up. See
+# `[QUEUE_LANE_MINIMUM_AUTOFILL]` (BunnyBagz lane went 24h silent 2026-05-02).
+try:
+    from clarvis.queue.lane_autofill import autofill_empty_lanes as _autofill
+    _spawned = _autofill()
+    if _spawned:
+        lines.append("🌱 LANE AUTOFILL")
+        lines.append("-" * 20)
+        for _ln in _spawned:
+            lines.append(f"  + [{_ln}_LANE_REFILL] queued")
+        lines.append("")
+except Exception as _e:
+    # Never let autofill break the morning report
+    print(f"[report_morning] lane_autofill skipped: {_e}")
+
 # Queue status
 lines.append("📋 QUEUE STATUS")
 lines.append("-" * 20)

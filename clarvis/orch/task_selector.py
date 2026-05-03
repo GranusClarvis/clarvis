@@ -57,7 +57,8 @@ EPISODES_FILE = os.path.join(_WS, "data", "episodes.json")
 # Project Lane — operator-directed project boost (see docs/PROJECT_LANES.md).
 # When CLARVIS_PROJECT_LANE is set (e.g. "SWO"), tasks containing [PROJECT:<lane>]
 # get a +0.3 scoring boost so project work wins over internal experimentation.
-_PROJECT_LANE = os.environ.get("CLARVIS_PROJECT_LANE", "").strip()
+# CLARVIS_ACTIVE_PROJECT_LANES (comma-separated) extends the boost to multiple
+# lanes — same +0.3, applied at most once per task (no double-counting).
 PROJECT_LANE_BOOST = 0.3
 
 # Keywords that signal AGI/consciousness relevance (high-value work)
@@ -105,16 +106,47 @@ CONTEXT_IMPROVEMENT_KEYWORDS = [
 CONTEXT_RELEVANCE_THRESHOLD = 0.60
 
 
+def _active_project_lanes():
+    """Return de-duplicated, upper-cased list of active project lanes.
+
+    Sources (merged, in order):
+      - CLARVIS_PROJECT_LANE — single legacy lane.
+      - CLARVIS_ACTIVE_PROJECT_LANES — comma-separated extended lanes.
+
+    Read at call-time so cron-set env applies (not import-time).
+    """
+    lanes = []
+    seen = set()
+    primary = (os.environ.get("CLARVIS_PROJECT_LANE") or "").strip()
+    if primary:
+        u = primary.upper()
+        lanes.append(u)
+        seen.add(u)
+    extra = os.environ.get("CLARVIS_ACTIVE_PROJECT_LANES", "")
+    for raw in extra.split(","):
+        v = raw.strip().upper()
+        if v and v not in seen:
+            lanes.append(v)
+            seen.add(v)
+    return lanes
+
+
 def _project_lane_boost(task_text, subsection=""):
-    """Return PROJECT_LANE_BOOST if the task matches the active project lane, else 0."""
-    if not _PROJECT_LANE:
+    """Return PROJECT_LANE_BOOST if the task matches any active project lane, else 0.
+
+    Matches across both CLARVIS_PROJECT_LANE and CLARVIS_ACTIVE_PROJECT_LANES.
+    Boost is applied at most once per task — no double-counting when multiple
+    lanes match or when the same lane appears in both env vars.
+    """
+    lanes = _active_project_lanes()
+    if not lanes:
         return 0.0
-    lane_upper = _PROJECT_LANE.upper()
     combined = (task_text + " " + subsection).upper()
-    if f"PROJECT:{lane_upper}" in combined or f"({lane_upper})" in combined:
-        return PROJECT_LANE_BOOST
-    if f"[{lane_upper}]" in combined:
-        return PROJECT_LANE_BOOST
+    for lane in lanes:
+        if (f"PROJECT:{lane}" in combined
+                or f"({lane})" in combined
+                or f"[{lane}]" in combined):
+            return PROJECT_LANE_BOOST
     return 0.0
 
 

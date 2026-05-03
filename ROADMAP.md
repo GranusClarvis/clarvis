@@ -1,7 +1,7 @@
 # ROADMAP.md — Clarvis Evolution Roadmap
 
 _The single source of truth for where Clarvis is going and how to get there._
-_Updated: 2026-04-26_
+_Updated: 2026-05-03_
 
 ---
 
@@ -51,10 +51,10 @@ Clarvis should grow into:
 | Capability | Status | Summary |
 |-----------|--------|---------|
 | **Brain (ClarvisDB)** | 82% | memory_quality=0.90, retrieval_precision=0.74 |
-| **Session Continuity** | 62% | autonomy=0.62 |
+| **Session Continuity** | 58% | continuity weakened by missing daily logs (2026-04-27 to 2026-04-29) |
 | **Heartbeat Evolution** | 81% | task_success=0.81 |
 | **Self-Awareness** | 77% | Phi=0.621 |
-| **Task Tracking** | 82% | task_success=0.81, prompt_context=0.84 |
+| **Task Tracking** | 79% | queue truth improved, but verification tails and eligibility drift remain |
 | **Reflection** | 94% | reflection log fresh (0d old) |
 | **Confidence Gating** | 95% | 50/50 recent predictions resolved |
 | **Attention & Working Memory** | 94% | prompt_context=0.84 |
@@ -67,9 +67,16 @@ Clarvis should grow into:
 | **Self-Surgery** | 92% | spine module healthy |
 | **Cognitive Workspace** | 88% | 0 items across buffers |
 | **ACT-R Activation** | 88% | stable |
-| **Agent Orchestrator** | 80% | no agent dir |
+| **Agent Orchestrator** | 78% | routing improving, but lane-boundary / active-lane drift still unresolved |
 | **Performance Index** | 95% | PI=0.9472 |
 | **Public Surface** | 90% | Dockerfile=yes, README=yes |
+
+### Weekly State Note (2026-05-03)
+- BunnyBagz replaced SWO as the week's clearest value engine: Phase 1 recovery closed multiple false-DONE gaps and turned the lane back into concrete product delivery rather than archive theater.
+- Core cognition remained stable enough to carry daily autonomous work (CLR ~0.81, PI ~0.95 band, retrieval usefulness ~75-80%), so the limiting factor is now execution hygiene, not raw capability.
+- Reliability debt is concentrated in representation drift: queue truthfulness, lane eligibility, stale `[UNVERIFIED]` tails, missing daily logs, and roadmap / goal-state freshness.
+- `brain.get_goals()` still shows a noisy, overlapping goal stack heavy on SWO and legacy Phi framing, which now lags actual priorities; BunnyBagz and continuity hygiene deserve stronger explicit representation.
+- Phi remains a passive observability signal, not a north star. The highest-leverage work is better weekly hygiene across goals, logs, queue state, and project-lane continuity.
 
 ### Weekly State Note (2026-04-26)
 - SWO became the clear value engine this week: Sanctuary V2 advanced from scaffolding into a playable loop, while V3 was clarified as the production rebuild lane with pipeline hardening and parity/polish as the next serious gates.
