@@ -77,6 +77,24 @@ export CLARVIS_GRAPH_DUAL_WRITE="0"
 # Examples: "SWO", "SANCTUARY", ""
 export CLARVIS_PROJECT_LANE="${CLARVIS_PROJECT_LANE:-SWO}"
 
+# Active project lanes — co-active operator-directed projects, comma-separated.
+# Read by clarvis/queue/runnable.py for per-lane health monitoring (the lane-
+# minimum guard that fires when a lane has 0 eligible items but >0 in_queue).
+# Each lane listed here gets its own LaneHealth record in the morning brief.
+# CLARVIS_PROJECT_LANE is the primary boost target; this is the broader set.
+# Update this when the operator adds/removes an active project.
+export CLARVIS_ACTIVE_PROJECT_LANES="${CLARVIS_ACTIVE_PROJECT_LANES:-SWO,BUNNYBAGZ}"
+
+# Unverified-archive guard — controls clarvis/queue/writer.archive_completed().
+#   "log"   — (default) append [UNVERIFIED] archive events to monitoring log
+#             but still archive the item. Observability only.
+#   "block" — refuse to archive [UNVERIFIED] items unless a sidecar
+#             verification record exists at data/audit/queue_verifications/.
+#             Held items stay in QUEUE.md as [x] for operator review.
+# The verification-record producer hook (clarvis/queue/verification.py) writes
+# sidecar records on real test/file evidence, so block mode is safe to enable.
+export CLARVIS_QUEUE_UNVERIFIED_GUARD="${CLARVIS_QUEUE_UNVERIFIED_GUARD:-block}"
+
 # Self-repo sync policy. Controls whether sync_workspace() pulls origin/main
 # into Clarvis's own workspace before cron/spawn work.
 #   "skip"  — (default) do NOT auto-sync; Clarvis commits/pushes directly
