@@ -34,17 +34,17 @@ _Source: `docs/internal/audits/NEURO_FEATURE_DECISIONS_2026-04-17.md`. Phase 9 s
 _Repo: `GranusClarvis/bunnybagz` (renamed from `mega-house` 2026-04-29). Active branch: `feature/mvp-planning-and-rebrand`. Local workspace: `/home/agent/agents/mega-house/workspace`._
 _**Workflow:** BunnyBagz is managed and tested **directly in its own repo**. Do NOT route through the SWO PR workflow. Standard flow: pull → branch → edit → `pnpm --filter @bunnybagz/<pkg> test` (verify+api+web) + `forge test` (CI) → commit + push to working branch. PRs only when the operator explicitly asks._
 
-_**Status doc (sole source of truth):** `memory/cron/bb_phase1_status_2026-05-02.md`._
+_**Status doc (sole source of truth):** `memory/evolution/bb_phase1_status_2026-05-03.md` (supersedes `memory/cron/bb_phase1_status_2026-05-02.md`)._
 _**Realignment background:** `memory/evolution/bunnybagz_realignment_2026-05-01.md` (root cause of the 2026-04-30 queue-degradation incident)._
 _**Latest verification pass:** `memory/cron/bb_phase1_verification_2026-05-01.md` (14 items audited; 6 silently-archived drift, now re-opened below as `[BB_*_REAL]`)._
 
-_**Phase status (2026-05-02 evening, after commits `f513618` `a017122` `1473631`):**_
+_**Phase status (2026-05-03 evening, after commits `ae1897f` `cdf105f`):**_
 - _**Phase 0 — Repo & rails: ✅ DONE.**_
-- _**Phase 1 — Coinflip end-to-end on testnet: ⚠ ~92%.** Contracts + edge fns + `/play/coinflip` + `/verify/[betId]` + parity + GEO flag + keeper-bot settle + framer-motion spin + token system + dark/light parity + mascots + `/play` + `/wallet` + recent-outcomes strip + keyboard/aria-live + WCAG-AA contrast audit ALL DONE. **Remaining (autonomous-doable):** indexer (Ponder) real impl, wagmi-CLI ABI codegen, persistent KV adapter (Cloudflare/Upstash). **Remaining (operator-gated):** funded testnet deploy run._
-- _**Phase 2 — Dice + HiLo + USDM: ⚠ ~25%.** `BunnyBagzDice.sol` shipped + tested (commit `005b12a`); HiLo contract MISSING; USDM integration not started; Playwright e2e MISSING; `/play/dice` route not started._
+- _**Phase 1 — Coinflip end-to-end on testnet: ⚠ ~96%.** All software-side closeout done: contracts + edge fns + real Ponder indexer + persistent KV adapter + wagmi-CLI ABI codegen + every UI polish item. Today's session also fixed a Phase-0-era chain-id drift (`6342 → 6343`, the upstream MegaETH testnet id per `megaeth-labs/documentation` `vars.yaml`) and shipped `packages/contracts/script/deploy-testnet.sh` — a faucet-sized deploy runbook verified end-to-end against `https://carrot.megaeth.com/rpc` (every call simulates cleanly except the final `deposit{value:…}` which reverts on `OutOfFunds`, as expected with a 0-balance wallet). **Single remaining gap:** operator funds `0xb29e6735629539cEd64F0d6f0c476Fe92539fD7B` from `https://testnet.megaeth.com/` (Cloudflare Turnstile gates the API; agent cannot self-fund) and runs the deploy script._
+- _**Phase 2 — Dice + HiLo + USDM: ⚠ ~30%.** `BunnyBagzDice.sol` (commit `005b12a`) and `BunnyBagzHiLo.sol` (commit `70b53c9`) shipped + tested; USDM integration not started; Playwright e2e MISSING; `/play/dice` and `/play/hi-lo` routes not started._
 - _**Phase 3+ — operator-blocked.** Audit firm, multisig, counsel, mainnet._
 
-_**Test inventory (verified live 2026-05-02 evening):** `@bunnybagz/verify` **22/22**, `@bunnybagz/api` **36/36**, `@bunnybagz/web` **132/132**. Foundry suite covers Bankroll/Coinflip/Dice/Randomness/Version. `pnpm -r typecheck` clean._
+_**Test inventory (verified live 2026-05-03 evening):** contracts **102/102**, web **157/157**, api **46/46**, indexer **21/21**, all green after the chain-id rename. `@bunnybagz/verify` baseline **22/22** unchanged._
 
 _**Operator-blocking — DO NOT attempt autonomously:** funded testnet deployer key + first deploy, KV/Redis production binding (impl is autonomous-doable; the **binding** is operator-gated), indexer Fly.io machine + Neon Postgres (impl is autonomous-doable; the **hosting** is operator-gated), audit firm engagement, multisig signer set, X/TG/Discord handle squat, real-money mainnet seed._
 
@@ -53,9 +53,13 @@ _**Operator-blocking — DO NOT attempt autonomously:** funded testnet deployer 
 _Items the 2026-05-01 verification pass found silently archived as `[x] [UNVERIFIED]` but with no on-disk artifact. Mirroring the `[BB_TAILWIND_TOKENS_REAL]` pattern, each has a real acceptance contract that requires the test/file to exist before it can be archived._
 
 
+#### Phase 1 closeout — operator action required (single blocker)
+
+- [ ] **[BB_PHASE1_TESTNET_FAUCET_AND_DEPLOY]** Operator-gated. The Phase 1 software is shipped, the deploy pipeline is verified end-to-end against `https://carrot.megaeth.com/rpc`, and a deployer wallet exists at `0xb29e6735629539cEd64F0d6f0c476Fe92539fD7B` (private key gitignored at `~/agents/mega-house/secrets/testnet-wallet.json`). The faucet at `https://testnet.megaeth.com/` is gated by Cloudflare Turnstile (sitekey `0x4AAAAAAB8N9XQ8u4dRKBt_`); agent cannot self-fund. **Operator action:** (1) visit faucet, paste address, complete Turnstile (0.005 ETH/24h is enough — deploy + register + deposit fits in well under 0.001 ETH at the network's 0.001 gwei base fee). (2) Run `bash packages/contracts/script/deploy-testnet.sh` from `/home/agent/agents/mega-house/workspace`. (3) Commit `packages/contracts/deployments/6343.json` + the regenerated `packages/chain/src/addresses.generated.ts`. Closes Phase 1. Reference: `memory/evolution/bb_phase1_status_2026-05-03.md`. (PROJECT:BUNNYBAGZ) (2026-05-03)
+
 #### Phase 1 closeout — UI polish for operator demo (P1, autonomous-doable)
 
-_The 30-second flow works (UX_PLAN §2) but `bb_phase1_status_2026-05-02.md` flags four polish items that bridge "Phase 1 functional" to "Phase 1 looks intentional under an operator demo". Each ships as one PR with concrete tests._
+_The 30-second flow works (UX_PLAN §2) but `bb_phase1_status_2026-05-02.md` flagged four polish items that bridge "Phase 1 functional" to "Phase 1 looks intentional under an operator demo". Each ships as one PR with concrete tests._
 
 
 #### Phase 2 — re-open + new (P1 once Phase 1 closes; staged P2 today)
@@ -204,7 +208,6 @@ _Source: 2026-05-02 evening end-to-end audit (`memory/cron/bb_phase1_status_2026
 
 - [x] **[CONFIG_MULTI_LANE_ACTIVATION]** Wire BUNNYBAGZ as a co-active project lane alongside SWO. Edit `scripts/cron/cron_env.sh` to set `CLARVIS_ACTIVE_PROJECT_LANES="SWO,BUNNYBAGZ"` (read by `clarvis/queue/runnable.py` for lane-health monitoring). Edit the same file to flip `CLARVIS_QUEUE_UNVERIFIED_GUARD="block"` (writer.py reads this; default `log` is opt-in observability, `block` is the actual prevention). Both env vars only take effect for cron + spawn; interactive use unaffected. **Acceptance:** `grep CLARVIS_ACTIVE_PROJECT_LANES scripts/cron/cron_env.sh` returns the new line; next cron_morning report shows `🛤 LANE HEALTH` for both SWO and BUNNYBAGZ; planted-test (mark a fake `[BB_TEST_UNVERIFIED]` item `[x] [UNVERIFIED]` with no sidecar verification record + run `archive_completed`) is HELD not archived. (PROJECT:CLARVIS) (2026-05-03 14:16 UTC)
 - [x] [UNVERIFIED] **[PROJECT_VERIFICATION_CADENCE_GENERIC]** `[BB_PHASE1_VERIFICATION_PASS_RECURRING]` (filed under BB above) bakes in a per-project weekly verification. Generalize: `scripts/audit/project_verification_pass.py <lane>` — reads QUEUE_ARCHIVE.md for `[x] [<LANE>_*]` items in the last N days, asserts cited commit/file/test claims hold, writes `memory/cron/<lane_lower>_verification_<YYYY-MM-DD>.md`, auto-reopens drift as `[<LANE>_<TAG>_REAL]`. Cron entry runs per active lane (read `CLARVIS_ACTIVE_PROJECT_LANES`). **Acceptance:** running `project_verification_pass.py SWO` produces a SWO doc; running `project_verification_pass.py BUNNYBAGZ` produces a BB doc; cron entry installed via `clarvis cron`; first weekly run produces both docs. Replaces `[BB_PHASE1_VERIFICATION_PASS_RECURRING]` once shipped (mark BB item DONE then). (PROJECT:CLARVIS) (2026-05-03T14:16:04Z)
-- [ ] **[QUEUE_LANE_DROP_AUDIT]** Diagnose why the BB lane went silent for 36+ hours after the 2026-05-01 realignment despite the lane-minimum guard shipping mid-window. Read `monitoring/queue_unverified_archive.log` + `data/audit/queue_verifications/` + cron run logs from 2026-05-01 18:00 → 2026-05-02 18:00 CET. Write `docs/internal/audits/QUEUE_LANE_DROP_AUDIT_2026-05-02.md` enumerating: (a) when lane-health was first surfaced in a morning brief, (b) whether `archive_completed()` was actually called in `block` mode (it wasn't — env var unset), (c) which heartbeats picked Clarvis-self instead of BB and why (selector logged scores), (d) one concrete recommendation per finding. **Acceptance:** doc exists with ≥3 findings + ≥3 recommendations; recommendations either map to existing queued items above OR file new ones inline. (PROJECT:CLARVIS)
 
 #### Capability building — UI quality (2026-05-02 evening)
 
