@@ -12,6 +12,14 @@
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || echo "${CLARVIS_WORKSPACE:-$HOME/.openclaw/workspace}/scripts/cron")/cron_env.sh"
 
+# Drain deferred-spawn ledger first — runs in background, never blocks the
+# watchdog. If a spawn was deferred while another Claude was running and the
+# completing worker's EXIT trap missed the trigger (crash, kill -9), this
+# safety net catches it on the watchdog cadence.
+if [ -x "$CLARVIS_WORKSPACE/scripts/agents/respawn_deferred.sh" ]; then
+    nohup "$CLARVIS_WORKSPACE/scripts/agents/respawn_deferred.sh" >/dev/null 2>&1 &
+fi
+
 LOG_DIR="$CLARVIS_WORKSPACE/memory/cron"
 WATCHDOG_LOG="$LOG_DIR/watchdog.log"
 NOW=$(date +%s)

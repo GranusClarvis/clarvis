@@ -54,15 +54,46 @@ if [ -n "$CATEGORY" ] && [ "$TIMEOUT" = "1200" ]; then
     esac
 fi
 
+_usage() {
+    cat >&2 <<'USAGE'
+Usage: ./spawn_claude.sh 'task description' [timeout] [--no-tg] [--isolated] [--category=CAT] [--topic=N] [--chat=ID] [--retry=N]
+  TASK     — required, must NOT start with "-" (catch arg-order swaps)
+  timeout  — integer seconds (default 1200). Set via --category=... to use a preset.
+  --no-tg     skip Telegram delivery
+  --isolated  run in git worktree isolation
+  --category=CAT  preset timeout: quick=600 standard=1200 research=1800 build=1800
+  --topic=N    deliver to Telegram topic thread N
+  --chat=ID    deliver to chat ID (default: $CLARVIS_TG_CHAT_ID)
+  --retry=N    retry N times with backoff if global lock held (default: 0)
+Exit codes:
+   0  worker detached, Claude is running
+   2  USAGE error (bad TASK / TIMEOUT)
+  64  bad arg (TASK starts with "-" — likely arg-order swap)
+  75  EX_TEMPFAIL — deferred (lock held). Ledger persisted, auto-respawn scheduled.
+USAGE
+}
+
+# === Argument validation ===
+# Catch the failure mode seen on 2026-05-03 13:44 where a flag was passed as
+# $1, the task became $2, and the non-numeric task fell into `timeout`'s arg
+# slot — `timeout` rejected it (exit 125) and the operator's task vanished.
 if [ -z "$TASK" ]; then
-    echo "Usage: ./spawn_claude.sh 'task description' [timeout] [--no-tg] [--isolated] [--category=CAT] [--topic=N] [--chat=ID] [--retry=N]"
-    echo "Default timeout: 1200s (20 min). Use --no-tg to skip Telegram delivery."
-    echo "Use --isolated to run in git worktree isolation."
-    echo "Use --category=CAT to set timeout by task type: quick=600s, standard=1200s, research=1800s, build=1800s."
-    echo "Use --topic=N to deliver output to a specific Telegram topic thread."
-    echo "Use --chat=ID to deliver to a specific chat (default: \$CLARVIS_TG_CHAT_ID)."
-    echo "Use --retry=N to retry N times with backoff if global lock is held (default: 0, reject immediately)."
-    exit 1
+    _usage
+    exit 2
+fi
+if [[ "$TASK" == -* ]]; then
+    echo "[spawn_claude] USAGE_ERROR: TASK starts with '-' (got: ${TASK:0:60}...). Did you mean to pass it as a flag? See --help." >&2
+    _usage
+    exit 64
+fi
+if ! [[ "$TIMEOUT" =~ ^[0-9]+$ ]]; then
+    echo "[spawn_claude] USAGE_ERROR: timeout must be a non-negative integer (got: ${TIMEOUT:0:60}...). Did the args get swapped?" >&2
+    _usage
+    exit 64
+fi
+if [ "$TIMEOUT" -lt 60 ]; then
+    echo "[spawn_claude] USAGE_ERROR: timeout=$TIMEOUT too low (minimum 60s)." >&2
+    exit 64
 fi
 
 PROMPT_FILE="/tmp/claude_prompt_$$.txt"
@@ -189,15 +220,38 @@ EX_DEFERRED=75  # EX_TEMPFAIL — caller should retry later
 _spawn_report_deferred() {
     # $1=reason_label  $2=gpid  $3=gage_seconds
     local label="$1" gpid="${2:-?}" gage="${3:-?}"
-    local status="DEFERRED" queue_ok="no"
-    if python3 -m clarvis queue add \
-         "Deferred spawn_claude: ${TASK:0:120}" \
-         --priority P0 --source spawn_claude_overlap_guard \
-         >> "$LOGFILE" 2>&1; then
-        status="QUEUED"
-        queue_ok="yes"
+
+    # Persist the FULL task + flags to the deferred-spawn ledger so the
+    # respawner can restart it verbatim once the lock is free. This replaces
+    # the old behavior of adding a 120-char-truncated `Deferred spawn_claude:`
+    # entry to QUEUE.md (which had no [TAG] and was never picked up).
+    local LEDGER_ID
+    LEDGER_ID=$(
+        python3 - "$TASK" "$TIMEOUT" "$CATEGORY" "$SEND_TG" "$ISOLATED" "$TG_TOPIC" "$TG_CHAT_ID" "$RETRY_MAX" "$label" 2>>"$LOGFILE" <<'PY'
+import sys
+from clarvis.agents.spawn_ledger import record_deferred
+task, timeout, category, send_tg, isolated, tg_topic, tg_chat_id, retry_max, reason = sys.argv[1:10]
+path = record_deferred(
+    task,
+    timeout=int(timeout) if timeout.isdigit() else 1200,
+    category=category,
+    send_tg=(send_tg == "true"),
+    isolated=(isolated == "true"),
+    tg_topic=tg_topic,
+    tg_chat_id=tg_chat_id,
+    retry_max=int(retry_max) if retry_max.isdigit() else 0,
+    reason=reason,
+)
+if path:
+    print(path.stem)
+PY
+    )
+    local ledger_status="ledger=missing"
+    if [ -n "$LEDGER_ID" ]; then
+        ledger_status="ledger_id=$LEDGER_ID"
     fi
-    local msg="[spawn_claude] ${status}: ${label} (PID ${gpid}, age=${gage}s) — task NOT_STARTED. queue=${queue_ok}"
+
+    local msg="[spawn_claude] DEFERRED: ${label} (PID ${gpid}, age=${gage}s) — task NOT_STARTED. ${ledger_status}. Auto-respawn will fire on lock release."
     echo "$msg"
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] $msg" >> "$LOGFILE"
     if [ -n "${QUEUE_RUN_ID:-}" ]; then
@@ -209,7 +263,7 @@ engine.end_run('$QUEUE_RUN_ID', outcome='deferred', exit_code=$EX_DEFERRED, dura
     if [ -n "${CLARVIS_AUDIT_TRACE_ID:-}" ]; then
         python3 -c "
 from clarvis.audit import finalize_trace
-finalize_trace('$CLARVIS_AUDIT_TRACE_ID', outcome='deferred', exit_code=$EX_DEFERRED, duration_s=0.0, extra={'execution': {'deferred_reason': '$label'}})
+finalize_trace('$CLARVIS_AUDIT_TRACE_ID', outcome='deferred', exit_code=$EX_DEFERRED, duration_s=0.0, extra={'execution': {'deferred_reason': '$label', 'ledger_id': '$LEDGER_ID'}})
 " >> "$LOGFILE" 2>&1 || true
     fi
     rm -f "$PROMPT_FILE" "$TASK_FILE" 2>/dev/null || true
@@ -286,6 +340,12 @@ cleanup() {
     rm -f "\$GLOBAL_LOCK"
   fi
   rm -f "$WORKER_SCRIPT" "$OUTPUT_FILE" "$TASK_FILE" "$WORKER_LOG"
+  # Drain any deferred-spawn ledger entries now that the lock is free.
+  # Detached + best-effort — failures here must not affect the worker exit.
+  if [ -x "${CLARVIS_WORKSPACE:-$HOME/.openclaw/workspace}/scripts/agents/respawn_deferred.sh" ]; then
+    nohup "${CLARVIS_WORKSPACE:-$HOME/.openclaw/workspace}/scripts/agents/respawn_deferred.sh" \
+      >/dev/null 2>&1 &
+  fi
 }
 trap cleanup EXIT
 unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT 2>/dev/null || true

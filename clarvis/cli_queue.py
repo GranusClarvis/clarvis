@@ -86,13 +86,20 @@ def add(
     priority: str = typer.Option("P1", "--priority", "-p", help="Priority: P0, P1, P2, or Backlog"),
     source: str = typer.Option("cli", "--source", "-s", help="Source identifier"),
 ):
-    """Add a task to the evolution queue."""
+    """Add a task to the evolution queue.
+
+    Exits 0 if the task was added, 2 if it was rejected (duplicate, daily cap,
+    priority cap, mode gate, or research-completion lock). Callers that need
+    to know whether the task actually landed must check the exit code, NOT
+    assume success on exit 0 from the previous behavior.
+    """
     from clarvis.queue.writer import add_task
     added = add_task(task, priority=priority, source=source)
     if added:
         print(f"Added to {priority}: {task}")
     else:
         print("Not added (duplicate or daily cap reached).")
+        raise typer.Exit(2)
 
 
 @app.command()
