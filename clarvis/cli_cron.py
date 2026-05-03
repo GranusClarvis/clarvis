@@ -170,6 +170,13 @@ _JOBS = {
     "pi_benchmark": "0 6 * * 0 . __WORKSPACE__/scripts/cron/cron_env.sh && python3 __WORKSPACE__/scripts/metrics/performance_benchmark.py record >> __WORKSPACE__/memory/cron/pi_benchmark.log 2>&1",
     "clr_benchmark": "30 6 * * 0 __WORKSPACE__/scripts/cron/cron_clr_benchmark.sh >> __WORKSPACE__/memory/cron/clr_benchmark.log 2>&1",
     "absolute_zero": "0 3 * * 0 __WORKSPACE__/scripts/cron/cron_absolute_zero.sh >> __WORKSPACE__/memory/cron/absolute_zero.log 2>&1",
+    # Weekly BB (BunnyBagz) verification — Sunday inside the maintenance window
+    # at 04:35 (graph_compaction at 04:30 finishes in ~1s but we offset by 5 min
+    # to avoid the maintenance-lock skip). Walks QUEUE_ARCHIVE.md for [x] [BB_*]
+    # items archived in the last 7 days, asserts cited commits + files exist,
+    # and auto-reopens drift via clarvis.queue.writer.add_task.
+    # Shares /tmp/clarvis_maintenance.lock.
+    "bb_phase_verification": "35 4 * * 0 __WORKSPACE__/scripts/cron/cron_bb_phase_verification.sh >> __WORKSPACE__/memory/cron/bb_phase_verification.log 2>&1",
 }
 
 
@@ -204,6 +211,8 @@ _PRESETS: dict[str, dict] = {
             "report_morning", "report_evening",
             # Weekly hygiene
             "goal_hygiene", "brain_hygiene", "data_lifecycle", "cleanup",
+            # Weekly BB (BunnyBagz) drift verification
+            "bb_phase_verification",
             # Evaluation
             "pi_refresh", "status_json", "brain_eval", "heartbeat_notask_triage",
             # Maintenance guards
@@ -241,6 +250,8 @@ _PRESETS: dict[str, dict] = {
             "report_morning", "report_evening",
             # Weekly hygiene
             "goal_hygiene", "brain_hygiene", "data_lifecycle", "cleanup",
+            # Weekly BB (BunnyBagz) drift verification
+            "bb_phase_verification",
             # Evaluation + benchmarks
             "pi_refresh", "status_json", "brain_eval", "llm_brain_review", "relevance_refresh",
             "heartbeat_notask_triage",
