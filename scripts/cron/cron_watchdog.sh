@@ -86,6 +86,7 @@ check_job "db_vacuum"       "$LOG_DIR/chromadb_vacuum.log"  26   # daily at 05:0
 check_job "orchestrator"    "$LOG_DIR/orchestrator.log"     26   # daily at 19:30
 check_job "pi_refresh"      "$LOG_DIR/pi_refresh.log"       26   # daily at 05:45
 check_job "brain_eval"      "$LOG_DIR/brain_eval.log"       26   # daily at 06:05
+check_job "retrieval_quality" "$LOG_DIR/retrieval_quality.log" 26 # daily at 06:20
 check_job "llm_brain_review" "$LOG_DIR/llm_brain_review.log" 26  # daily at 06:20
 check_job "llm_context_review" "$LOG_DIR/llm_context_review.log" 26 # daily at 06:40
 check_job "status_json"     "$LOG_DIR/status_json.log"      26   # daily at 05:50
@@ -386,6 +387,7 @@ if [ "$FAILURES" -gt 0 ]; then
   recheck_job "$LOG_DIR/orchestrator.log" 26
   recheck_job "$LOG_DIR/pi_refresh.log" 26
   recheck_job "$LOG_DIR/brain_eval.log" 26
+  recheck_job "$LOG_DIR/retrieval_quality.log" 26
   recheck_job "$LOG_DIR/llm_brain_review.log" 26
   recheck_job "$LOG_DIR/llm_context_review.log" 26
   recheck_job "$LOG_DIR/status_json.log" 26

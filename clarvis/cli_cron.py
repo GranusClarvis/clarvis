@@ -158,6 +158,12 @@ _JOBS = {
     "status_json": "50 5 * * * . __WORKSPACE__/scripts/cron/cron_env.sh && python3 __WORKSPACE__/scripts/infra/generate_status_json.py >> __WORKSPACE__/memory/cron/status_json.log 2>&1",
     "brain_eval": "5 6 * * * __WORKSPACE__/scripts/cron/cron_brain_eval.sh >> __WORKSPACE__/memory/cron/brain_eval.log 2>&1",
     "llm_brain_review": "15 6 * * * __WORKSPACE__/scripts/cron/cron_llm_brain_review.sh >> __WORKSPACE__/memory/cron/llm_brain_review.log 2>&1",
+    # 06:25 — Daily retrieval-quality dashboard refresh (~06:20 CET window).
+    # Slot 06:20 is taken by llm_brain_review in the installed crontab; 06:25
+    # avoids overlap. Canonical-source TBD pending [P3_DASHBOARD_SOURCE_AUDIT];
+    # until that audit lands this job runs scripts/brain_mem/retrieval_benchmark.py
+    # plus an interim aggregator that writes data/retrieval_quality/dashboard.md.
+    "retrieval_quality": "25 6 * * * __WORKSPACE__/scripts/cron/cron_retrieval_quality.sh >> __WORKSPACE__/memory/cron/retrieval_quality.log 2>&1",
     "heartbeat_notask_triage": "25 6 * * * __WORKSPACE__/scripts/cron/heartbeat_notask_triage.sh 7 >> __WORKSPACE__/memory/cron/heartbeat_triage.log 2>&1",
     "digest_actionability": "35 22 * * * __WORKSPACE__/scripts/maint/digest_actionability_check.sh >> __WORKSPACE__/memory/cron/digest_actionability.log 2>&1",
     "notask_attribution": "55 23 * * * __WORKSPACE__/scripts/maint/notask_attribution.sh >> __WORKSPACE__/memory/cron/notask_attribution.log 2>&1",
@@ -214,7 +220,7 @@ _PRESETS: dict[str, dict] = {
             # Weekly BB (BunnyBagz) drift verification
             "bb_phase_verification",
             # Evaluation
-            "pi_refresh", "status_json", "brain_eval", "heartbeat_notask_triage",
+            "pi_refresh", "status_json", "brain_eval", "retrieval_quality", "heartbeat_notask_triage",
             # Maintenance guards
             "digest_actionability",
             "notask_attribution",
@@ -254,6 +260,7 @@ _PRESETS: dict[str, dict] = {
             "bb_phase_verification",
             # Evaluation + benchmarks
             "pi_refresh", "status_json", "brain_eval", "llm_brain_review", "relevance_refresh",
+            "retrieval_quality",
             "heartbeat_notask_triage",
             "pi_benchmark", "clr_benchmark", "absolute_zero",
             # Orchestrator
