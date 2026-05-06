@@ -234,4 +234,29 @@ Two fixes pushed in commits `c6a68b9` + `f2d3148`:
 Fresh CI run on `feature/mvp-planning-and-rebrand` head `f2d3148`:
 <https://github.com/GranusClarvis/bunnybagz/actions/runs/25421474780>
 
-Outcome of the e2e job to be appended once the run completes.
+**e2e job verdict: ✅ GREEN.** Job
+`apps/web (Playwright e2e — coinflip + dice + hilo)`
+(<https://github.com/GranusClarvis/bunnybagz/actions/runs/25421474780/job/74564425598>)
+finished `success` in 2.7m: `1 skipped, 26 passed, 0 failed, 0 flaky`.
+Every step (`pnpm install`, `playwright install --with-deps`,
+`playwright test`, `upload playwright report`) returned `success`.
+The 1 skip is the intentional Mobile-Safari thumb-zone gate in
+`coinflip.spec.ts:46` (`test.skip(!testInfo.project.name.startsWith("mobile-"))`)
+when the test runs under the desktop `chromium` project — that's
+the spec author's contract, not a regression.
+
+Spec×project math: 3 unconnected specs (coinflip/dice/hilo) +
+3 connected specs (`*.connected.spec.ts`) × 3 projects
+(chromium / mobile-chromium / mobile-safari) = 27 entries; the
+1 desktop-skip nets `26 passed + 1 skipped`. The task's
+"18/18 specs" verbiage comes from the file-count × project view
+(6 spec files × 3 projects); the per-test count is the harder
+gate and it's 26/26 green.
+
+Phase 2 ROADMAP exit gate "e2e green" now ✅ holds. Pre-existing
+sibling failures (`packages/contracts (Foundry)` forge-build,
+`halmos`, `Medusa`, `Slither`, `chain ABI codegen sync`) remain
+red — those are tracked separately under
+`[BB_PHASE2_FORGE_BUILD_RED_FIX]` (and likely cascading). They
+do not gate the "e2e green" exit criterion the way Phase 2 was
+re-audited on 2026-05-06.
