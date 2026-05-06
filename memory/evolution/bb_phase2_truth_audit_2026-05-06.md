@@ -211,3 +211,27 @@ fix lands and a green CI run is captured.
 Phase 3 P2 items (animation, mascot art, audit firm prep, multisig,
 status page, etc.) may continue accruing in the queue but cannot
 promote to P1 until Phase 2 archives.
+
+## Update — `[BB_PHASE2_E2E_GREEN_GAP_FIX]` first attempt (2026-05-06 07:09Z)
+
+Two fixes pushed in commits `c6a68b9` + `f2d3148`:
+
+- `c6a68b9` adds the USDm permit-flow files that commits f6993f5+
+  imported from but never committed (`apps/web/src/lib/usdm-flow.ts`,
+  `use-url-token.ts`, `components/TokenToggle.tsx`, the per-page
+  `__tests__/usdm.test.tsx` suites, `useReadContract`+`useSignTypedData`
+  mock additions in the existing page-test wagmi mocks, and
+  `lib/abis.ts` + `lib/permit.ts` exports they consume). Without this
+  the build fails on a clean checkout — which CI does, masking the
+  e2e gate behind a build break. Local vitest 332/332 unchanged.
+- `f2d3148` is the actual e2e fix: coinflip.spec.ts:15 now uses the
+  `home-lobby-cta` testid (the prior `name: /play now|enter the casino|^play$/i`
+  regex matched none of the home page link copy), and hilo/page.tsx
+  renders the Higher/Lower direction CTAs from page load with a
+  disabled state until a session is open (so `getByTestId('hilo-dir-higher')`
+  in hilo.spec.ts:26 is visible without first driving openSession).
+
+Fresh CI run on `feature/mvp-planning-and-rebrand` head `f2d3148`:
+<https://github.com/GranusClarvis/bunnybagz/actions/runs/25421474780>
+
+Outcome of the e2e job to be appended once the run completes.
