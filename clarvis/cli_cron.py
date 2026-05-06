@@ -75,6 +75,8 @@ _KNOWN_JOBS = [
     "pi_refresh",
     "clr_benchmark",
     "absolute_zero",
+    "bb_phase_verification",
+    "bb_beta_summary",
 ]
 
 
@@ -183,6 +185,10 @@ _JOBS = {
     # and auto-reopens drift via clarvis.queue.writer.add_task.
     # Shares /tmp/clarvis_maintenance.lock.
     "bb_phase_verification": "35 4 * * 0 __WORKSPACE__/scripts/cron/cron_bb_phase_verification.sh >> __WORKSPACE__/memory/cron/bb_phase_verification.log 2>&1",
+    # Daily BB Phase 3 internal-beta summary — 09:00 CET. Self-disables when
+    # BUNNYBAGZ_BETA_ACTIVE != 1 so installing this in advance of beta-on
+    # is a no-op. See docs/INTERNAL_BETA_PLAN.md.
+    "bb_beta_summary": "0 9 * * * __WORKSPACE__/scripts/cron/cron_bb_beta_summary.sh >> __WORKSPACE__/memory/cron/bb_beta_summary.log 2>&1",
 }
 
 
@@ -219,6 +225,8 @@ _PRESETS: dict[str, dict] = {
             "goal_hygiene", "brain_hygiene", "data_lifecycle", "cleanup",
             # Weekly BB (BunnyBagz) drift verification
             "bb_phase_verification",
+            # Daily BB Phase 3 internal beta summary (no-op until operator flips BUNNYBAGZ_BETA_ACTIVE=1)
+            "bb_beta_summary",
             # Evaluation
             "pi_refresh", "status_json", "brain_eval", "retrieval_quality", "heartbeat_notask_triage",
             # Maintenance guards
@@ -258,6 +266,8 @@ _PRESETS: dict[str, dict] = {
             "goal_hygiene", "brain_hygiene", "data_lifecycle", "cleanup",
             # Weekly BB (BunnyBagz) drift verification
             "bb_phase_verification",
+            # Daily BB Phase 3 internal beta summary (no-op until operator flips BUNNYBAGZ_BETA_ACTIVE=1)
+            "bb_beta_summary",
             # Evaluation + benchmarks
             "pi_refresh", "status_json", "brain_eval", "llm_brain_review", "relevance_refresh",
             "retrieval_quality",
