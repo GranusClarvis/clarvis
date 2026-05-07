@@ -95,6 +95,7 @@ Planning docs, queue items, and brand positioning do NOT count as delivery.
 | 57 | #258 | feat(sanctuary v3): emit location-entered/exited from V3 zones [SWO_V3_LOCATION_EVENTS] | 2026-04-26 |
 | 58 | #259 | feat(sanctuary v3): mount radial CompanionMenu overlay [SWO_V3_RADIAL_MENU] | 2026-04-26 |
 | 59 | #260 | feat(sanctuary v3): EasyStar click-to-move pathfinding [SWO_V3_PLAYER_PATHFINDING] | 2026-04-26 |
+| 60 | #277 | feat(sanctuary v2.7): cozy/tamagotchi polish on the Companion screen [SWO_V2_COMPANION_COZY_POLISH] | 2026-05-07 |
 
 ## Branch Cleanup Log
 
@@ -112,7 +113,7 @@ _Revalidated 2026-04-27 against upstream/dev HEAD. No pending pre-built PRs awai
 
 | # | Branch / PR | Title | Status |
 |---|-------------|-------|--------|
-| — | — | (none) | — |
+| 1 | `clarvis/star-world-order/swo-v2-companion-cozy-polish` / [#277](https://github.com/InverseAltruism/Star-World-Order/pull/277) | feat(sanctuary v2.7): cozy/tamagotchi polish on the Companion screen [SWO_V2_COMPANION_COZY_POLISH] | Open 2026-05-07 |
 
 **Resolved:**
 - ~~#264~~ — MERGED on dev 2026-04-26 (deslop post-FX shader, palette quantize + Bayer dither — `SWO_V2_DESLOP_SHADER`). Verified 2026-04-27.
@@ -193,17 +194,24 @@ _V2 (`?v=2`) is the **active surface** — all new feature work, polish, and vis
 
 _Direction note: `memory/evolution/swo_sanctuary_companion_first_2026-04-26.md`. The Companion (selected Skrumpey) is the new center of gravity; quests/minigames stay as supporting structure. This section ranks **above** the de-slop polish queue for sequencing. The deslop shader has shipped (PR #264, merged 2026-04-26) — Companion stack is now the active focus._
 
-| # | Task | Acceptance summary | Lane | Priority |
-|---|------|--------------------|------|----------|
-| 1 | `[SWO_V2_COMPANION_STATS_SCHEMA]` | Add hunger / energy / happiness stats (0–100) + per-hour decay rate + `stats_updated_at` to `SanctuaryCompanion`. Pure `decayStats(companion, now)` helper (unit-tested). New GET `/api/sanctuary/companion/stats` returns projected values + active needs. Schema migration ships; existing `interact` endpoints stay green; no UI yet. | V2 | P0 |
-| 2 | `[SWO_V2_COMPANION_INTERACT_AFFECTS_STATS]` | Wire `feed`/`pet`/`talk` to stats; add `sleep` (block other actions until energy ≥ 80) and `play` actions. Caps + reactions/VFX preserved. Daily interaction cap unchanged. Tested at API layer. | V2 | P0 |
-| 3 | `[SWO_V2_COMPANION_MOOD_FROM_STATS]` | Derive mood from current stats (lowest-stat → matching mood; sleeping → `sleeping`); fall back to trait mood when stats not yet populated. Sprite mood animation reflects within ≤1s. | V2 | P0 |
-| 4 | `[SWO_V2_COMPANION_SCREEN_SURFACE]` | New `/sanctuary/companion` route (or default tab in `?v=2` page) becomes the landing surface for owners with an active Skrumpey. Renders sprite + 3 stat bars + need callout + bond/level + last-3 journal lines + quick actions + Chat button + Enter Sanctuary CTA. World hub stays reachable via deep link. | V2 | P0 |
-| 5 | `[SWO_V2_COMPANION_NEED_ALERTS]` | In-page soft alert in `CompanionHUD.tsx` when any stat drops below 30; click jumps to companion screen. Never blocks gameplay; never auto-opens an overlay. | V2 | P1 |
-| 6 | `[SWO_V2_COMPANION_CHAT_KNOWS_STATS]` | Inject current stats + active needs + last 3 actions into the LLM chat system prompt; keep bond-tone layer. Replies are voice-y, not stat-readouts (no raw numbers); injected blob ≤200 tokens. | V2 | P1 |
-| 7 | `[SWO_V1_ARCHIVE_FORMALIZE]` | Add a banner inside V1 (`SanctuaryContent.tsx`) ("Sanctuary has moved — open the new Sanctuary"). One-line note in this tracker + `swo_sanctuary_v3_deferred_2026-04-26.md` confirming V1 is fallback-only. No code removal in this PR. | V2 | P1 |
+| # | Task | Acceptance summary | Lane | Priority | Status |
+|---|------|--------------------|------|----------|--------|
+| 1 | `[SWO_V2_COMPANION_STATS_SCHEMA]` | Add hunger / energy / happiness stats (0–100) + per-hour decay rate + `stats_updated_at` to `SanctuaryCompanion`. Pure `decayStats(companion, now)` helper (unit-tested). New GET `/api/sanctuary/companion/stats` returns projected values + active needs. | V2 | P0 | ✅ DONE (commit `270bce1`, on dev) |
+| 2 | `[SWO_V2_COMPANION_INTERACT_AFFECTS_STATS]` | Wire `feed`/`pet`/`talk` to stats; add `sleep` + `play`. Caps + reactions/VFX preserved. Daily interaction cap unchanged. | V2 | P0 | ✅ DONE (folded into stats schema PR + follow-up; on dev) |
+| 3 | `[SWO_V2_COMPANION_MOOD_FROM_STATS]` | Derive mood from current stats (lowest-stat → matching mood; sleeping → `sleeping`); trait mood fallback when stats not populated. | V2 | P0 | ✅ DONE (`lib/sanctuary/mood.ts`, on dev) |
+| 4 | `[SWO_V2_COMPANION_SCREEN_SURFACE]` | New `/sanctuary/companion` (default landing for owners with an active Skrumpey). Renders sprite + 3 stat bars + need callout + bond/level + last-3 journal + quick actions + Chat + Enter Sanctuary CTA. | V2 | P0 | ✅ DONE (commit `941ff11`, on dev) |
+| 5 | `[SWO_V2_COMPANION_NEED_ALERTS]` | In-page soft alert in `CompanionHUD.tsx` when any stat drops below 30; click jumps to companion screen. Never blocks gameplay. | V2 | P1 | ✅ DONE (commit `a241cac`, on dev) |
+| 6 | `[SWO_V2_COMPANION_CHAT_KNOWS_STATS]` | Inject current stats + active needs + last 3 actions into the LLM chat system prompt. Replies voice-y, not stat-readouts; ≤200-token blob. | V2 | P1 | ✅ DONE (commit `fc95324`, on dev) |
+| 7 | `[SWO_V1_ARCHIVE_FORMALIZE]` | Banner inside V1 (`SanctuaryContent.tsx`); tracker note confirming V1 is fallback-only. No code removal. | V2 | P1 | ✅ DONE (commit `cdda233`, on dev) |
+| 8 | `[SWO_V2_COMPANION_COZY_POLISH]` | Cozy/tamagotchi voice on the Companion screen: mood-aware greeting, last-visit anchor, sprite reactions per quick action, stat-bar +N + glow pulse, sleep-state warmth ("shhh — they're dreaming" + muted buttons), journal-line variety pool. New pure helper `companionGreeting.ts` + 25 vitest cases. | V2 | P1 | 🟡 PR #277 open (2026-05-07) |
 
 **Companion track exclusions (out-of-scope unless operator re-opens):** new minigame scenes, new world zones, new quest content, mobile-app shell, push notifications, voice chat, multiplayer companion features, on-chain companion state.
+
+**Cozy polish follow-ups (filed in `QUEUE.md` 2026-05-07, all P1/P2):**
+- `[SWO_V2_COMPANION_BOND_MILESTONE_CELEBRATE]` (P1) — fire confetti/heart burst when `bond_score` crosses 25/50/75/100 thresholds; idempotent per threshold per companion.
+- `[SWO_V2_COMPANION_LOCAL_VISIT_MARKER]` (P1) — persist per-token "screen opened at" in `localStorage` so the cozy last-visit line refreshes even without an interaction (today it reads `stats_updated_at`, so the phrase goes stale on a no-action open).
+- `[SWO_V2_COMPANION_CHAT_REMEMBERS_RECENT_ACTIONS]` (P2) — extend chat system-prompt to inject last 1–3 interaction journal lines (≤80 tokens) for temporally-anchored replies.
+- `[SWO_V2_COMPANION_TIME_OF_DAY_GREETING]` (P2) — prefix the cozy greeting with "Good morning." / "Up late?" using the operator's local hour.
 
 **Quest track posture:** quest authoring shipped (`[SWO_SHARED_QUEST_DIALOG_CONTENT]` → PR #245). New quest features and new quest content are **demoted to P2 or retired** — see Retired/Deferred Items in `QUEUE.md`.
 
