@@ -1019,20 +1019,29 @@ def _preflight_episodic(result, next_task, _rt):
         try:
             em = EpisodicMemory()
             _ep_n = 3 if _rt == "LIGHT_RETRIEVAL" else 5
-            similar = em.recall_similar(next_task, n=_ep_n)
+            similar = em.recall_similar(next_task, n=_ep_n) or []
+            if not isinstance(similar, list):
+                similar = [similar] if similar else []
+            similar = [e for e in similar if isinstance(e, dict)]
             if similar:
                 similar_episodes = "\n".join(
-                    f"  [{e.get('outcome', '?')}] {e.get('task', '')[:80]}"
-                    for e in (similar if isinstance(similar, list) else [similar])
+                    f"  [{e.get('outcome') or '?'}] {(e.get('task') or '')[:80]}"
+                    for e in similar
                 )[:500]
-            failures = em.recall_failures(n=3)
+            failures = em.recall_failures(n=3) or []
+            if not isinstance(failures, list):
+                failures = [failures] if failures else []
+            failures = [e for e in failures if isinstance(e, dict)]
             if failures:
                 failure_episodes = "\n".join(
-                    f"  [{e.get('outcome', '?')}] {e.get('task', '')[:80]}"
-                    for e in (failures if isinstance(failures, list) else [failures])
+                    f"  [{e.get('outcome') or '?'}] {(e.get('task') or '')[:80]}"
+                    for e in failures
                 )[:300]
         except Exception as e:
-            log(f"Episodic recall failed: {e}")
+            log(
+                f"degraded_recall episodic-recall-failed source=heartbeat_preflight._preflight_episodic "
+                f"error={type(e).__name__}:{str(e)[:160]}"
+            )
     # Shadow mode: episodic ran but output excluded from prompt
     if _toggle_shadow("episodic_memory_injection") and (similar_episodes or failure_episodes):
         log("Episodic memory SHADOW — results recorded to trace but excluded from prompt")

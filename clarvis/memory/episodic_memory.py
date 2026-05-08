@@ -21,6 +21,7 @@ like "what caused this failure?" and "what chain of events led here?"
 """
 
 import json
+import logging
 import math
 import os
 import sys
@@ -31,6 +32,19 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from clarvis.brain import brain
+
+_logger = logging.getLogger("clarvis.memory.episodic_memory")
+
+
+def _log_degraded(message, **fields):
+    """Emit a structured degraded-recall event.
+
+    Used when episodic recall hits a null/malformed boundary but can
+    continue. Logs a single key=value record so operators can grep
+    ``degraded_recall`` instead of seeing a Python traceback.
+    """
+    payload = " ".join(f"{k}={v!r}" for k, v in fields.items())
+    _logger.warning("degraded_recall %s %s", message, payload)
 
 _WS = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
 _SCRIPTS_DIR = os.path.join(_WS, "scripts")
@@ -786,9 +800,22 @@ class EpisodicMemory:
 
         If use_spreading_activation=True, also boosts attention items related
         to the query — closing the loop between episodic recall and GWT spotlight.
+
+        Degrades gracefully on null/malformed episodes: episodes with missing
+        or non-string ``task``/``id`` fields are skipped (logged once per call).
         """
-        # Semantic search in brain
-        results = brain.recall(query, n=n * 2, collections=["clarvis-episodes"])
+        # Semantic search in brain — guard against None / non-list returns
+        try:
+            results = brain.recall(query, n=n * 2, collections=["clarvis-episodes"]) or []
+        except Exception as exc:
+            _log_degraded(
+                "brain.recall failed",
+                source="episodic_memory.recall_similar",
+                error=str(exc)[:200],
+            )
+            results = []
+        if not isinstance(results, list):
+            results = [results] if results else []
 
         # Recompute all activations (ACT-R decay)
         self._decay_activations()
@@ -796,18 +823,39 @@ class EpisodicMemory:
         # Boost retrieved episodes' activation (retrieval strengthens memory)
         matched_episodes = []
         seen_ids = set()
+        skipped_null = 0
         for r in results:
-            doc = r.get("document", "")
+            if not isinstance(r, dict):
+                continue
+            doc = r.get("document") or ""
+            if not isinstance(doc, str):
+                doc = str(doc) if doc is not None else ""
             # Find matching local episode
             for ep in self.episodes:
-                if ep["id"] in seen_ids:
+                if not isinstance(ep, dict):
+                    skipped_null += 1
                     continue
-                if ep["task"][:50] in doc or doc[:50] in f"Episode: {ep['task']}":
-                    ep["access_times"].append(datetime.now(timezone.utc).timestamp())
+                ep_id = ep.get("id")
+                if ep_id is None or ep_id in seen_ids:
+                    continue
+                ep_task = ep.get("task")
+                if not isinstance(ep_task, str) or not ep_task:
+                    skipped_null += 1
+                    continue
+                if ep_task[:50] in doc or doc[:50] in f"Episode: {ep_task}":
+                    ep.setdefault("access_times", []).append(
+                        datetime.now(timezone.utc).timestamp()
+                    )
                     ep["activation"] = self._compute_activation(ep)
                     matched_episodes.append(ep)
-                    seen_ids.add(ep["id"])
+                    seen_ids.add(ep_id)
                     break
+        if skipped_null:
+            _log_degraded(
+                "skipped episodes with null/invalid task during recall_similar",
+                source="episodic_memory.recall_similar",
+                skipped=skipped_null,
+            )
 
         self._save()
         # Sort by activation (highest first)
@@ -901,10 +949,17 @@ class EpisodicMemory:
 
     def recall_failures(self, n=5):
         """Recall recent failure episodes (high learning value).
-        Includes both hard failures and soft failures."""
-        failures = [e for e in self.episodes if e["outcome"] in ("failure", "soft_failure", "timeout")]
+        Includes both hard failures and soft failures.
+
+        Skips malformed entries (non-dict / missing outcome) instead of raising.
+        """
+        failures = [
+            e for e in self.episodes
+            if isinstance(e, dict)
+            and e.get("outcome") in ("failure", "soft_failure", "timeout")
+        ]
         self._decay_activations()
-        failures.sort(key=lambda e: e["activation"], reverse=True)
+        failures.sort(key=lambda e: e.get("activation", 0.0), reverse=True)
         return failures[:n]
 
     def get_stats(self):
@@ -1089,6 +1144,8 @@ class EpisodicMemory:
         if hasattr(self, '_last_decay_time') and (now - self._last_decay_time) < 60:
             return  # Already recomputed recently
         for ep in self.episodes:
+            if not isinstance(ep, dict):
+                continue
             ep["activation"] = self._compute_activation(ep)
         self._last_decay_time = now
 
