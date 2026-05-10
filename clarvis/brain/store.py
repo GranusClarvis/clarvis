@@ -1018,12 +1018,16 @@ class StoreMixin:
             if not found:
                 issues.append("retrieval failed: probe memory not in recall results")
 
-            # Clean up probe to avoid accumulating health-check garbage
+            # Clean up probe to avoid accumulating health-check garbage.
+            # Failures here used to be silently swallowed, which caused 345+
+            # orphan health_probe records to cluster in clarvis-memories
+            # (P3_CHUNK_GRANULARITY_AUDIT 2026-05-07 §5). Log loudly so
+            # future leaks page someone instead of silently accumulating.
             try:
                 self.delete_memory(probe_id, collection=MEMORIES,
                                    reason="health_probe_cleanup", hard=True)
-            except Exception:
-                pass  # cleanup is best-effort
+            except Exception as e:
+                _store_log.warning("health probe cleanup failed: %s", e)
         except Exception as e:
             issues.append(f"store/recall error: {e}")
 
