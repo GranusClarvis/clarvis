@@ -1,7 +1,7 @@
 # ROADMAP.md — Clarvis Evolution Roadmap
 
 _The single source of truth for where Clarvis is going and how to get there._
-_Updated: 2026-05-03_
+_Updated: 2026-05-10_
 
 ---
 
@@ -70,6 +70,13 @@ Clarvis should grow into:
 | **Agent Orchestrator** | 80% | no agent dir |
 | **Performance Index** | 94% | PI=0.9413 |
 | **Public Surface** | 90% | Dockerfile=yes, README=yes |
+
+### Weekly State Note (2026-05-10)
+- BunnyBagz became the week’s dominant value engine: Phase 2 truth gaps narrowed sharply, Phase 3 surface quality advanced across nearly every major page, and the remaining problems are now specific QA defects instead of vague unease.
+- Core cognition stayed strong enough to support dense autonomous shipping (brain quality ~0.87–0.97, retrieval usefulness 80–85%, CLR 0.826 PASS), so the constraint is still execution hygiene and representation truth, not raw capability.
+- Reliability debt is now concentrated in stale self-description: missing daily logs for 2026-05-04 through 2026-05-06, a crowded `brain.get_goals()` stack, and roadmap/goal language that still overstates SWO’s centrality relative to actual delivery.
+- Retrieval work is converging on a more honest diagnosis: the bottleneck is increasingly missing canonical memories and stale reporting/source paths, not generic search latency or total brain quality.
+- Phi remains background telemetry. The practical work is BunnyBagz QA closeout, goal-stack realignment, continuity hygiene, and retrieval truthfulness.
 
 ### Weekly State Note (2026-05-03)
 - BunnyBagz replaced SWO as the week's clearest value engine: Phase 1 recovery closed multiple false-DONE gaps and turned the lane back into concrete product delivery rather than archive theater.
