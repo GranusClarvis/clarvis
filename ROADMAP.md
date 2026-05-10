@@ -46,29 +46,29 @@ Clarvis should grow into:
 - likely first extraction candidate: **ClarvisDB** (vector memory with graph associations)
 - a public website presenting Clarvis, linked repos, current work, and benchmarks
 
-## Current State (2026-05-03)
+## Current State (2026-05-10)
 
 | Capability | Status | Summary |
 |-----------|--------|---------|
-| **Brain (ClarvisDB)** | 82% | memory_quality=0.90, retrieval_precision=0.74 |
-| **Session Continuity** | 58% | continuity weakened by missing daily logs (2026-04-27 to 2026-04-29) |
-| **Heartbeat Evolution** | 81% | task_success=0.81 |
-| **Self-Awareness** | 77% | Phi=0.621 |
-| **Task Tracking** | 79% | queue truth improved, but verification tails and eligibility drift remain |
+| **Brain (ClarvisDB)** | 87% | memory_quality=0.96, retrieval_precision=0.78 |
+| **Session Continuity** | 62% | autonomy=0.62 |
+| **Heartbeat Evolution** | 80% | task_success=0.80 |
+| **Self-Awareness** | 77% | Phi=0.620 |
+| **Task Tracking** | 80% | task_success=0.80, prompt_context=0.79 |
 | **Reflection** | 94% | reflection log fresh (0d old) |
 | **Confidence Gating** | 95% | 50/50 recent predictions resolved |
-| **Attention & Working Memory** | 94% | prompt_context=0.84 |
-| **Reasoning Chains** | 100% | 305 chain files |
+| **Attention & Working Memory** | 89% | prompt_context=0.79 |
+| **Reasoning Chains** | 100% | 338 chain files |
 | **Knowledge Synthesis** | 100% | 60 concepts, 50 cross-domain, 828 edges |
-| **Procedural Memory** | 92% | 214 procedures |
-| **Context Quality** | 90% | prompt_context=0.84, efficiency=0.99 |
+| **Procedural Memory** | 92% | 193 procedures |
+| **Context Quality** | 87% | prompt_context=0.79, efficiency=0.99 |
 | **Monitoring** | 95% | health log fresh (0h old) |
 | **Episodic Memory** | 96% | 500 episodes |
 | **Self-Surgery** | 92% | spine module healthy |
 | **Cognitive Workspace** | 88% | 0 items across buffers |
 | **ACT-R Activation** | 88% | stable |
-| **Agent Orchestrator** | 78% | routing improving, but lane-boundary / active-lane drift still unresolved |
-| **Performance Index** | 95% | PI=0.9472 |
+| **Agent Orchestrator** | 80% | no agent dir |
+| **Performance Index** | 94% | PI=0.9413 |
 | **Public Surface** | 90% | Dockerfile=yes, README=yes |
 
 ### Weekly State Note (2026-05-03)
