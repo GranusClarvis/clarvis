@@ -1587,7 +1587,8 @@ def _pf_gates(ctx, _pf_errors):
                     "total_modules": ih_report["total_modules"],
                     "violations": ih_report["violations"], "healthy": ih_report["healthy"],
                 }
-                struct_hist_file = os.path.join(os.path.dirname(__file__), '..', 'data', 'structural_health_history.jsonl')
+                _ws_for_struct = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
+                struct_hist_file = os.path.join(_ws_for_struct, 'data', 'structural_health_history.jsonl')
                 ih_entry = {"timestamp": datetime.now(timezone.utc).isoformat(), "type": "structural_health", "metrics": ih_metrics}
                 with open(struct_hist_file, "a") as hf:
                     hf.write(json.dumps(ih_entry) + "\n")
@@ -2018,6 +2019,8 @@ def _pf_queue_update(ctx, _pf_errors):
             result_mark = _mark_task_in_queue(task_for_marking, timestamp, ctx["QUEUE_FILE"], ctx["QUEUE_ARCHIVE"])
             if result_mark == "marked":
                 log("Marked task complete in QUEUE.md")
+            elif result_mark == "already_complete":
+                log(f"Task already marked [x] in QUEUE.md (likely by Claude): {task[:60]}")
             elif result_mark == "archived":
                 log(f"Task already in QUEUE_ARCHIVE.md: {task[:60]}")
             else:
@@ -2130,7 +2133,8 @@ def _persist_completeness(ctx, timings, _pf_errors, completeness, stages_attempt
         log(f"Post-flight complete in {timings['total']:.2f}s — "
             f"{stages_ok}/{stages_attempted} stages OK ({completeness:.0%})")
     try:
-        completeness_file = os.path.join(os.path.dirname(__file__), '..', 'data', 'postflight_completeness.jsonl')
+        _ws_for_completeness = os.environ.get("CLARVIS_WORKSPACE", os.path.expanduser("~/.openclaw/workspace"))
+        completeness_file = os.path.join(_ws_for_completeness, 'data', 'postflight_completeness.jsonl')
         os.makedirs(os.path.dirname(completeness_file), exist_ok=True)
         entry = {
             "timestamp": datetime.now(timezone.utc).isoformat(),

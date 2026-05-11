@@ -182,12 +182,18 @@ _import_time = time.monotonic() - start_import
 log = lambda msg: print(f"[{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S')}] PREFLIGHT: {msg}", file=sys.stderr)
 
 
-QUEUE_FILE = os.path.join(os.path.dirname(__file__), "..", "memory", "evolution", "QUEUE.md")
-WORKSPACE = os.path.join(os.path.dirname(__file__), "..")
+# File lives in scripts/pipeline/, so workspace root is two levels up.
+# Honor CLARVIS_WORKSPACE when set (matches heartbeat_postflight convention)
+# so tests and worktrees can override without symlinking.
+WORKSPACE = os.environ.get(
+    "CLARVIS_WORKSPACE",
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")),
+)
+QUEUE_FILE = os.path.join(WORKSPACE, "memory", "evolution", "QUEUE.md")
 LOCK_DIR = "/tmp"
 
 # Project-lane slot reservation state file
-_SLOT_STATE_FILE = os.path.join(os.path.dirname(__file__), "..", "data", "project_lane_slot.json")
+_SLOT_STATE_FILE = os.path.join(WORKSPACE, "data", "project_lane_slot.json")
 _PROJECT_LANE = os.environ.get("CLARVIS_PROJECT_LANE", "").strip()
 
 
@@ -656,6 +662,37 @@ def _preflight_select_task(result, codelet_result, t0):
                 autosplit_tags.extend(more_autosplit)
         except Exception as e:
             log(f"Rescue pass failed (non-fatal): {e}")
+
+    # Starvation rescue: when EVERY candidate was deferred for soft reasons
+    # (oversize / soft-verification only — not cognitive_load/mode_gate/confidence_gate),
+    # pick the least-bad candidate so the heartbeat makes forward progress instead
+    # of looping no-ops. This is gated to soft reasons because hard gates (mode,
+    # confidence, cognitive load) reflect real safety/load constraints.
+    if not next_task and deferred_tasks and candidates:
+        SOFT_PREFIXES = ("oversized", "verification:")
+        soft_only = all(
+            any((d.get("reason") or "").startswith(p) for p in SOFT_PREFIXES)
+            for d in deferred_tasks
+        )
+        if soft_only:
+            # Choose the candidate with the lowest oversize score (or first if none have a score)
+            def _starvation_score(c):
+                # candidate.salience is a positive ranking; larger = more salient.
+                # We invert so highest-salience wins the tiebreak.
+                return -float(c.get("salience", 0.0))
+            best = sorted(candidates[:_MAX_CANDIDATES], key=_starvation_score)[0]
+            next_task = best.get("text") or ""
+            task_section = best.get("section", "P1")
+            best_salience = best.get("salience", 0.0)
+            try:
+                import re as _re_s
+                _m = _re_s.match(r"\[([^\]]+)\]", next_task.strip())
+                selected_tag = _m.group(1) if _m else None
+            except Exception:
+                selected_tag = None
+            log(f"STARVATION RESCUE: all {len(deferred_tasks)} deferred for soft reasons — "
+                f"executing best-available: {next_task[:60]}...")
+            result["starvation_rescue"] = True
 
     if not next_task:
         log(f"All {len(deferred_tasks)} candidates deferred — no executable task this heartbeat")
