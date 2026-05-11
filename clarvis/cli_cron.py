@@ -308,7 +308,7 @@ def _parse_crontab() -> list[dict]:
         if "openclaw/workspace/scripts/" not in line and "openclaw/workspace" not in line:
             continue
         # Must reference a known script pattern (cron job, backup, hygiene, etc.)
-        if not re.search(r"scripts/(?:cron/cron_|infra/|cognition/|brain_mem/|metrics/|hooks/|cron_|backup_|health_monitor|dream_engine)", line):
+        if not re.search(r"scripts/(?:cron/|infra/|cognition/|brain_mem/|metrics/|hooks/|maint/|cron_|backup_|health_monitor|dream_engine)", line):
             # Also match clarvis-managed lines that use `python3 -m clarvis` or `python3 scripts/`
             if "python3 -m clarvis" not in line and "python3 scripts/" not in line:
                 continue
