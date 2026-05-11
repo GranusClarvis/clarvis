@@ -20,7 +20,7 @@ References:
 
 import re
 from collections import Counter
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Iterable, List, Optional, Tuple
 
 # Transient infrastructure failures excluded from rolling Episode Success Rate
 # (kept in raw counts for ops visibility). Reason: 401 / auth errors from
@@ -65,6 +65,129 @@ def classify_episode_failure(error_msg: Optional[str],
 # counts so ops dashboards still see them, but not counted as reasoning/action
 # failures for the gated metric.
 ESR_EXCLUDED_FAILURE_TYPES = frozenset({"transient_auth"})
+
+
+# Failure-type tags that indicate a real downstream failure the agent's
+# self-reported success cannot override. If postflight tagged the episode with
+# any of these we leave the partial_success label intact.
+_REAL_FAILURE_TYPES = frozenset({
+    "test_failed",
+    "assertion_failed",
+    "compile_error",
+    "lint_real_error",
+    "action.test_failed",
+    "action.assertion_failed",
+    "action.lint_typecheck_error",
+    "action.compile_error",
+})
+
+# Episode tags that signal a real validator/CI failure — these block the
+# success-self-report override even when the agent claims success.
+_BLOCKING_TAGS = frozenset({
+    "code_validation:fail",
+    "tests:fail",
+    "lint:fail",
+})
+
+_STRUCTURED_TESTS_PASSED_RE = re.compile(
+    r'tests_passed["\s\\]*:\s*["\s\\]*true', re.IGNORECASE)
+_STRUCTURED_ERROR_NULL_RE = re.compile(
+    r'"\s*error\s*"\s*:\s*null', re.IGNORECASE)
+_STRUCTURED_PR_CLASS_RE = re.compile(
+    r'pr_class["\s\\]*:\s*["\s\\]*([A-D])', re.IGNORECASE)
+_LESSON_SUCCESS_RE = re.compile(r'^\s*success\b', re.IGNORECASE)
+# Matches `RESULT: success — ...` lines emitted by spawned executors.
+_RESULT_SUCCESS_RE = re.compile(
+    r'^\s*RESULT\s*:\s*success\b', re.IGNORECASE | re.MULTILINE)
+
+
+def reclassify_agent_reported_success(
+    error_text: Optional[str],
+    lesson_text: Optional[str] = None,
+    output_text: Optional[str] = None,
+    failure_type: Optional[str] = None,
+    tags: Optional[Iterable[str]] = None,
+    exit_code: Optional[int] = None,
+) -> Tuple[bool, dict]:
+    """Detect when an episode flagged ``partial_success`` should actually be ``success``.
+
+    Per the FAILURE_HISTOGRAM_AUDIT_2026-05-02 §5.1 finding, ~50% of plain
+    ``failure_type=action`` episodes are postflight artifacts: the spawned
+    Claude Code agent self-reports success but the worker-validation /
+    delivery-validation pass downgrades the episode because of a brittle
+    output-text heuristic. This classifier honors the agent's structured
+    response when:
+
+    1. ``exit_code`` is 0 (or unknown — we trust agent self-report when
+       postflight didn't capture an exit code), AND
+    2. ``failure_type`` is not in :data:`_REAL_FAILURE_TYPES` (real test/lint
+       failures still count), AND
+    3. No tag in ``tags`` is in :data:`_BLOCKING_TAGS` (validator says fail), AND
+    4. One of the success-marker conditions holds:
+       - **Structured reply** (audit's primary signal): the haystack
+         (``error`` ∪ ``lesson`` ∪ ``output``) contains
+         ``"tests_passed": true`` AND ``"error": null`` AND
+         ``"pr_class": "A"`` or ``"B"``.
+       - **Lesson-derived marker**: ``lesson_text`` starts with the literal
+         word "success" (the failure-lesson generator writes
+         ``"success — ..."`` when the agent's own report begins that way).
+
+    Args:
+        error_text: Truncated error/output tail stored on the episode.
+        lesson_text: Lesson string written by the failure-lesson generator.
+        output_text: Optional full output text (richer haystack when available).
+        failure_type: Postflight-assigned failure_type, if any.
+        tags: Episode tags (e.g. ``["code_validation:pass"]``).
+        exit_code: Exit code of the spawned Claude Code, if known.
+
+    Returns:
+        ``(should_override, signals)`` — ``should_override=True`` means the
+        caller should treat the episode as ``success`` instead of
+        ``partial_success``. ``signals`` is a diagnostic dict listing which
+        marker fired and which (if any) gating condition blocked the override.
+    """
+    signals = {
+        "structured_success": False,
+        "lesson_success": False,
+        "blocked_by": None,
+    }
+
+    if exit_code is not None and exit_code != 0:
+        signals["blocked_by"] = "exit_code"
+        return False, signals
+
+    if failure_type and failure_type in _REAL_FAILURE_TYPES:
+        signals["blocked_by"] = "failure_type"
+        return False, signals
+
+    if tags:
+        blocking = next((t for t in tags if t in _BLOCKING_TAGS), None)
+        if blocking:
+            signals["blocked_by"] = f"tag:{blocking}"
+            return False, signals
+
+    haystack_parts = [str(p) for p in (error_text, lesson_text, output_text) if p]
+    haystack = "\n".join(haystack_parts)
+
+    if haystack:
+        has_tests_passed = bool(_STRUCTURED_TESTS_PASSED_RE.search(haystack))
+        has_error_null = bool(_STRUCTURED_ERROR_NULL_RE.search(haystack))
+        pr_match = _STRUCTURED_PR_CLASS_RE.search(haystack)
+        pr_class = pr_match.group(1).upper() if pr_match else None
+        if has_tests_passed and has_error_null and pr_class in ("A", "B"):
+            signals["structured_success"] = True
+            signals["pr_class"] = pr_class
+            return True, signals
+
+    if lesson_text and _LESSON_SUCCESS_RE.match(lesson_text):
+        signals["lesson_success"] = True
+        return True, signals
+
+    if output_text and _RESULT_SUCCESS_RE.search(output_text):
+        signals["result_line_success"] = True
+        return True, signals
+
+    return False, signals
 
 
 def compute_episode_success_rate(outcomes: Dict[str, int],

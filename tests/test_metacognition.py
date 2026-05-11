@@ -17,6 +17,7 @@ from clarvis.cognition.metacognition import (
     GRADE_GOOD,
     GRADE_ADEQUATE,
     GRADE_SHALLOW,
+    reclassify_agent_reported_success,
 )
 
 
@@ -473,3 +474,148 @@ def test_encode_overrides_upstream_external_dep_to_transient_auth(tmp_path, monk
 
     assert memory.episodes, "encode should append an episode"
     assert memory.episodes[-1]["failure_type"] == "transient_auth"
+
+
+# ── reclassify_agent_reported_success ───────────────────────────────
+
+class TestReclassifyAgentReportedSuccess:
+    """Acceptance tests for ESR_CLASSIFIER_MISCLASSIFIED_FIX.
+
+    Per FAILURE_HISTOGRAM_AUDIT_2026-05-02 §5.1, ~50% of plain `action`
+    failures are postflight artifacts where the spawned Claude Code agent
+    self-reports success but worker/delivery validators downgrade the
+    episode. The classifier honors the agent's structured reply when no
+    real test/lint failure occurred.
+    """
+
+    def test_structured_reply_overrides_partial(self):
+        # SWO project-agent canonical reply: tests_passed + null error + pr_class A/B
+        reply = (
+            'Output:\n```json\n{\n'
+            '  "tests_passed": true,\n'
+            '  "error": null,\n'
+            '  "confidence": 0.92,\n'
+            '  "pr_class": "A"\n'
+            '}\n```\n'
+        )
+        override, signals = reclassify_agent_reported_success(
+            error_text=reply,
+            failure_type="action",
+            tags=["code_validation:pass"],
+            exit_code=0,
+        )
+        assert override is True
+        assert signals["structured_success"] is True
+        assert signals["pr_class"] == "A"
+
+    def test_lesson_starts_with_success_overrides_partial(self):
+        # Plain `action` partial with success-prefixed lesson — the most
+        # common false-partial in the audit's last-100 window.
+        override, signals = reclassify_agent_reported_success(
+            error_text="...some truncated tail with NEXT: follow-up\n",
+            lesson_text="success — shipped feature, all tests green, PR #42",
+            failure_type="action",
+            tags=["code_validation:pass"],
+            exit_code=0,
+        )
+        assert override is True
+        assert signals["lesson_success"] is True
+
+    def test_result_line_in_output_overrides_partial(self):
+        # Executor emitted an explicit RESULT: success line.
+        output = (
+            "...lots of work output...\n"
+            "RESULT: success — fixed broken import in preflight\n"
+            "Files modified: clarvis/x.py, tests/test_x.py\n"
+        )
+        override, signals = reclassify_agent_reported_success(
+            error_text=None,
+            output_text=output,
+            failure_type="action",
+            exit_code=0,
+        )
+        assert override is True
+        assert signals["result_line_success"] is True
+
+    def test_real_test_failure_blocks_override(self):
+        # Even with a "success" lesson, a real test_failed failure_type wins.
+        override, signals = reclassify_agent_reported_success(
+            error_text="3 tests failed, 0 passed",
+            lesson_text="success — work done",
+            failure_type="action.test_failed",
+            exit_code=1,
+        )
+        assert override is False
+        assert signals["blocked_by"] in ("exit_code", "failure_type")
+
+    def test_code_validation_fail_tag_blocks_override(self):
+        override, signals = reclassify_agent_reported_success(
+            error_text=None,
+            lesson_text="success — work done",
+            failure_type="action",
+            tags=["code_validation:fail"],
+            exit_code=0,
+        )
+        assert override is False
+        assert signals["blocked_by"] == "tag:code_validation:fail"
+
+    def test_nonzero_exit_blocks_override(self):
+        override, signals = reclassify_agent_reported_success(
+            error_text=None,
+            lesson_text="success — work done",
+            failure_type=None,
+            exit_code=2,
+        )
+        assert override is False
+        assert signals["blocked_by"] == "exit_code"
+
+    def test_no_signal_keeps_partial(self):
+        # No structured reply, no success lesson, no RESULT line — leave as is.
+        override, signals = reclassify_agent_reported_success(
+            error_text="some tail with no success markers",
+            lesson_text="partial — only touched the tracker",
+            failure_type="action",
+            exit_code=0,
+        )
+        assert override is False
+        assert signals["blocked_by"] is None
+        assert signals["structured_success"] is False
+        assert signals["lesson_success"] is False
+
+    def test_pr_class_c_does_not_override(self):
+        # pr_class C means the agent itself signals "won't ship" — don't override.
+        reply = '{"tests_passed": true, "error": null, "pr_class": "C"}'
+        override, signals = reclassify_agent_reported_success(
+            error_text=reply,
+            failure_type="action",
+            exit_code=0,
+        )
+        assert override is False
+        assert signals["structured_success"] is False
+
+    def test_acceptance_episode_replay_flips_at_least_10(self):
+        """Acceptance: rerunning the classifier on the prior 100 episodes
+        must shift ≥10 partial_success entries to success."""
+        import json
+        from pathlib import Path
+        episodes_path = Path(__file__).resolve().parents[1] / "data" / "episodes.json"
+        if not episodes_path.exists():
+            pytest.skip("data/episodes.json not present in this checkout")
+        episodes = json.loads(episodes_path.read_text())
+        last_100 = episodes[-100:]
+        partials = [e for e in last_100 if e.get("outcome") == "partial_success"]
+        flips = 0
+        for ep in partials:
+            override, _ = reclassify_agent_reported_success(
+                error_text=ep.get("error"),
+                lesson_text=ep.get("lesson"),
+                failure_type=ep.get("failure_type"),
+                tags=ep.get("tags"),
+                exit_code=0,  # episode store doesn't preserve exit_code
+            )
+            if override:
+                flips += 1
+        assert flips >= 10, (
+            f"Expected ≥10 partial→success flips per FAILURE_HISTOGRAM_AUDIT_2026-05-02 "
+            f"§5.1 acceptance, got {flips} of {len(partials)} partial_success episodes"
+        )

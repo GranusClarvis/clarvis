@@ -2223,6 +2223,34 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
         _pf_errors.append("delivery_validation")
     timings["delivery_validation"] = round(time.monotonic() - t_dv, 3)
 
+    # §0.7: Agent-self-report success override
+    # Per FAILURE_HISTOGRAM_AUDIT_2026-05-02 §5.1: ~50% of plain `action`
+    # failures are postflight artifacts where the agent reported success but
+    # validator heuristics downgraded the episode. Honor the agent's
+    # structured reply / RESULT line when no real test/lint failure occurred.
+    t_asr = time.monotonic()
+    if ctx.get("task_status") == "partial_success":
+        try:
+            from clarvis.cognition.metacognition import reclassify_agent_reported_success
+            override, asr_signals = reclassify_agent_reported_success(
+                error_text=ctx.get("error_evidence"),
+                output_text=ctx.get("output_text"),
+                failure_type=ctx.get("error_type"),
+                tags=None,
+                exit_code=exit_code,
+            )
+            ctx["agent_self_report_signals"] = asr_signals
+            if override:
+                ctx["task_status"] = "success"
+                ctx["error_type"] = None
+                ctx["agent_self_report_override"] = True
+                log("Agent-self-report OVERRIDE: partial_success → success "
+                    f"(signals: {asr_signals})")
+        except Exception as e:
+            log(f"Agent-self-report override failed (non-fatal): {e}")
+            _pf_errors.append("agent_self_report_override")
+    timings["agent_self_report_override"] = round(time.monotonic() - t_asr, 3)
+
     # §1-2.7: Confidence, reasoning chain, failure lessons, brain bridge
     timings.update(_confidence_record(ctx["task_event"], exit_code, ctx["task"], preflight_data, _pf_errors, ctx=ctx))
     timings.update(_reasoning_close(ctx["chain_id"], ctx["task_status"], ctx["task"], exit_code, ctx["output_text"], _pf_errors))
