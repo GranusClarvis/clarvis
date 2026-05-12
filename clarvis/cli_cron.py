@@ -122,6 +122,10 @@ _JOBS = {
     "graph_verify": "45 4 * * * __WORKSPACE__/scripts/cron/cron_graph_verify.sh >> __WORKSPACE__/memory/cron/graph_verify.log 2>&1",
     "intra_density_boost": "50 4 * * * __WORKSPACE__/scripts/cron/cron_intra_density_boost.sh >> __WORKSPACE__/memory/cron/intra_density_boost.log 2>&1",
     "chromadb_vacuum": "0 5 * * * __WORKSPACE__/scripts/cron/cron_chromadb_vacuum.sh >> __WORKSPACE__/memory/cron/chromadb_vacuum.log 2>&1",
+    # 04:55 — P@3 dashboard refresh (lands before chromadb_vacuum at 05:00).
+    # Refreshes data/retrieval_quality/dashboard.md daily and alerts on
+    # >0.05 P@3 regressions via Telegram. See [P3_DASHBOARD_REFRESH_CRON].
+    "p3_dashboard_refresh": "55 4 * * * __WORKSPACE__/scripts/cron/cron_p3_dashboard_refresh.sh >> __WORKSPACE__/memory/cron/p3_dashboard_refresh.log 2>&1",
     # Core cycle
     "morning": "0 8 * * * __WORKSPACE__/scripts/cron/cron_morning.sh >> __WORKSPACE__/memory/cron/morning.log 2>&1",
     "evening": "0 18 * * * __WORKSPACE__/scripts/cron/cron_evening.sh >> __WORKSPACE__/memory/cron/evening.log 2>&1",
@@ -213,6 +217,7 @@ _PRESETS: dict[str, dict] = {
             "backup", "backup_verify",
             # Maintenance
             "graph_checkpoint", "graph_compaction", "graph_verify", "intra_density_boost", "chromadb_vacuum",
+            "p3_dashboard_refresh",
             # Core daily cycle
             "morning", "evening", "reflection", "evolution",
             # Moderate autonomous (4x/day)
@@ -249,6 +254,7 @@ _PRESETS: dict[str, dict] = {
             "backup", "backup_verify",
             # Maintenance
             "graph_checkpoint", "graph_compaction", "graph_verify", "intra_density_boost", "chromadb_vacuum",
+            "p3_dashboard_refresh",
             # Core daily cycle
             "morning", "evening", "reflection", "evolution",
             # Moderate autonomous (6x/day)
