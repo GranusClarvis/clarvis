@@ -24,6 +24,7 @@ import json
 import logging
 import math
 import os
+import re
 import sys
 import tempfile
 import time
@@ -496,9 +497,50 @@ class EpisodicMemory:
         "action.git_conflict":         "Merge/rebase produced unresolved conflict markers",
         "action.test_failed":          "Test runner reported test failures (pytest, jest, validation script)",
         "action.unverified":           "Spawned agent reported tests_passed but parent flagged partial_success",
+        "incomplete_by_design":        "Agent self-flagged explicit deferral ([UNVERIFIED], follow-up, operator-blocked) — excluded from ESR denominator",
         "crash":        "Infrastructure crash (instant-fail, <10s duration)",
         "partial-success": "Task partially completed but did not fully succeed",
     }
+
+    # Self-flag patterns that signal the agent explicitly deferred work
+    # ([UNVERIFIED] / follow-up / operator-blocked). When detected, the episode
+    # is tagged `incomplete_by_design` instead of `action.unverified` so it can
+    # be excluded from the rolling ESR denominator. See ESR_UNVERIFIED_TRIAGE
+    # §3 `correctly-downgraded` bucket (15.5% of action.unverified).
+    _INCOMPLETE_BY_DESIGN_PATTERN = re.compile(
+        r"\[\s*unverified[_\s\d]*\]"          # [UNVERIFIED], [UNVERIFIED_1], etc.
+        r"|operator[-_ ]?(?:blocked|gated)"   # operator-blocked, operator-gated
+        r"|\bfollow[-_ ]?ups?\b",             # follow-up, follow up, follow_ups
+        re.IGNORECASE,
+    )
+
+    @classmethod
+    def _classify_incomplete_by_design(cls, error_msg, output_text=None):
+        """Detect agent self-flags of explicit deferral.
+
+        Scans the error message + output tail for the 3 self-flag patterns:
+        ``[UNVERIFIED]``, ``follow-up``, or ``operator-blocked``. These are
+        intentional deferrals (work left for a later session or operator),
+        not failures — they should be tagged ``incomplete_by_design`` and
+        excluded from the rolling ESR denominator.
+
+        Returns ``"incomplete_by_design"`` on match, otherwise ``None``.
+        """
+        parts = []
+        if error_msg:
+            parts.append(str(error_msg))
+        if output_text:
+            # Scan a larger output tail than _classify_action_subtype because
+            # the agent often surfaces `next_steps` / `notes` JSON fields
+            # near the bottom of its output.
+            tail = "\n".join(str(output_text).splitlines()[-120:])
+            parts.append(tail)
+        text = "\n".join(parts)
+        if not text.strip():
+            return None
+        if cls._INCOMPLETE_BY_DESIGN_PATTERN.search(text):
+            return "incomplete_by_design"
+        return None
 
     # Action sub-type classifiers, ordered most-specific → least-specific.
     # First match wins. Patterns are case-insensitive and run over (error_msg + output_text).
@@ -670,6 +712,14 @@ class EpisodicMemory:
                 refined = self._classify_action_subtype(error_msg, output_text)
                 if refined:
                     ft = refined
+            # Self-flag deferrals (`[UNVERIFIED]`, `follow-up`, `operator-blocked`)
+            # are explicit deferrals, not failures — route them away from
+            # `action.unverified` so they can be excluded from ESR. Runs after
+            # `_classify_action_subtype` so a real test/lint failure still wins.
+            if ft in (None, "action", "action.unverified"):
+                deferred = self._classify_incomplete_by_design(error_msg, output_text)
+                if deferred:
+                    ft = deferred
             # Always assign a failure_type for non-success outcomes;
             # "action" is the catch-all default when no specific type detected
             if ft is None:
@@ -1018,21 +1068,29 @@ class EpisodicMemory:
 
         # First-class field (new episodes)
         ft = episode.get("failure_type")
-        if ft and ft != "action":
+        if ft and ft not in ("action", "action.unverified"):
             return ft
-        if ft == "action":
+        if ft in ("action", "action.unverified"):
             refined = cls._classify_action_subtype(
                 episode.get("error"), episode.get("lesson")
             )
-            if refined:
+            if refined and refined != "action.unverified":
                 return refined
+            # Check for explicit deferral self-flags before defaulting to
+            # `action.unverified`. These episodes are intentional deferrals
+            # (excluded from ESR), not opaque self-reports.
+            deferred = cls._classify_incomplete_by_design(
+                episode.get("error"), episode.get("lesson")
+            )
+            if deferred:
+                return deferred
             # partial_success episodes whose error matches no failure pattern
             # are agent self-reports of completion (orchestrator flagged them
             # for review). Bucket as `unverified` — they distort root-cause
             # analysis when lumped with real action failures.
             if outcome == "partial_success":
                 return "action.unverified"
-            return "action"
+            return ft or "action"
         # Legacy: extract from tags list (e.g. "error_type:timeout")
         for tag in episode.get("tags", []):
             if isinstance(tag, str) and tag.startswith("error_type:"):
@@ -1053,6 +1111,13 @@ class EpisodicMemory:
             refined = cls._classify_action_subtype(
                 episode.get("error"), episode.get("lesson")
             )
+            if refined and refined != "action.unverified":
+                return refined
+            deferred = cls._classify_incomplete_by_design(
+                episode.get("error"), episode.get("lesson")
+            )
+            if deferred:
+                return deferred
             if refined:
                 return refined
             if outcome == "partial_success":

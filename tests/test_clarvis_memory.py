@@ -3727,5 +3727,105 @@ class TestActionSubtypeClassifier:
         assert EpisodicMemory._get_failure_type(ep) == "action.unverified"
 
 
+class TestIncompleteByDesignClassifier:
+    """Verify agent self-flags route to `incomplete_by_design` (excluded from ESR).
+
+    Source: ESR_UNVERIFIED_TRIAGE_2026-05-12 §3 `correctly-downgraded` bucket —
+    11 episodes (15.5%) where the agent explicitly flagged work as deferred
+    via [UNVERIFIED] / follow-up / operator-blocked. These are intentional
+    deferrals, not failures.
+    """
+
+    def _classify(self, error, output=None):
+        from clarvis.memory.episodic_memory import EpisodicMemory
+        return EpisodicMemory._classify_incomplete_by_design(error, output)
+
+    # --- 3 self-flag patterns from the task spec ---
+
+    def test_unverified_bracketed_token(self):
+        assert self._classify("[UNVERIFIED] task not yet verified") == "incomplete_by_design"
+        # Numbered variant ([UNVERIFIED_1]) used by some agent outputs
+        assert self._classify("[UNVERIFIED_1] partial progress") == "incomplete_by_design"
+        assert self._classify("status: [unverified]") == "incomplete_by_design"
+
+    def test_follow_up_self_flag(self):
+        assert self._classify("agent flagged follow-up") == "incomplete_by_design"
+        assert self._classify("NEXT: follow up in 7 days") == "incomplete_by_design"
+        # JSON-style next_steps field
+        assert self._classify('{"next_steps": ["follow-up needed"]}') == "incomplete_by_design"
+
+    def test_operator_blocked_self_flag(self):
+        assert self._classify("operator-blocked: needs funded testnet key") == "incomplete_by_design"
+        assert self._classify("status: operator blocked") == "incomplete_by_design"
+        assert self._classify("operator-gated: requires manual sign-off") == "incomplete_by_design"
+
+    # --- Control set: must NOT trigger incomplete_by_design ---
+
+    def test_control_real_failures_not_misrouted(self):
+        # Real test failure
+        assert self._classify("AssertionError: expected 5 got 4") is None
+        # Real lint error
+        assert self._classify("tsc: error TS2304: Cannot find name 'Foo'") is None
+        # Plain agent self-report of completion (different bucket: action.unverified)
+        assert self._classify("All 3 tasks are done and verified.") is None
+        # Empty / None
+        assert self._classify("") is None
+        assert self._classify(None) is None
+        # A neutral message
+        assert self._classify("Some neutral text with no signals.") is None
+
+    def test_output_text_tail_scanned(self):
+        """Self-flags often appear near the bottom of long agent outputs."""
+        long_output = "\n".join(["filler line"] * 80 + ['"next_steps": ["[UNVERIFIED] follow up needed"]'])
+        assert self._classify(None, long_output) == "incomplete_by_design"
+
+    # --- End-to-end: encode() routes self-flagged episodes correctly ---
+
+    def test_get_failure_type_routes_to_incomplete_by_design(self):
+        """Self-flagged partial_success episodes route to `incomplete_by_design`,
+        not `action.unverified`."""
+        from clarvis.memory.episodic_memory import EpisodicMemory
+        ep = {
+            "outcome": "partial_success",
+            "failure_type": "action",
+            "error": "follow-up needed in 7 days",
+        }
+        assert EpisodicMemory._get_failure_type(ep) == "incomplete_by_design"
+
+    def test_get_failure_type_real_failure_wins_over_deferral(self):
+        """If the episode has a real test/lint failure signal, that wins
+        over an incidental `follow-up` mention."""
+        from clarvis.memory.episodic_memory import EpisodicMemory
+        ep = {
+            "outcome": "failure",
+            "failure_type": "action",
+            "error": "tsc: error TS2304: Cannot find name 'Foo' (TODO follow-up later)",
+        }
+        # Real lint error must win
+        assert EpisodicMemory._get_failure_type(ep) == "action.lint_typecheck_error"
+
+    def test_failure_types_dict_contains_incomplete_by_design(self):
+        """The failure_type must be registered so encode() accepts it."""
+        from clarvis.memory.episodic_memory import EpisodicMemory
+        assert "incomplete_by_design" in EpisodicMemory.FAILURE_TYPES
+
+    def test_esr_excludes_incomplete_by_design(self):
+        """The `incomplete_by_design` bucket must be in ESR_EXCLUDED_FAILURE_TYPES."""
+        from clarvis.cognition.metacognition import ESR_EXCLUDED_FAILURE_TYPES
+        assert "incomplete_by_design" in ESR_EXCLUDED_FAILURE_TYPES
+        assert "transient_auth" in ESR_EXCLUDED_FAILURE_TYPES  # existing exclusion preserved
+
+    def test_esr_formula_excludes_incomplete_by_design(self):
+        """ESR formula subtracts incomplete_by_design from the denominator."""
+        from clarvis.cognition.metacognition import compute_episode_success_rate
+        # 8 success, 2 incomplete_by_design (which should be excluded).
+        # ESR = 8 / (10 - 2) = 1.0, NOT 8 / 10 = 0.8.
+        esr = compute_episode_success_rate(
+            outcomes={"success": 8, "failure": 2},
+            failure_types={"incomplete_by_design": 2},
+        )
+        assert esr == 1.0
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

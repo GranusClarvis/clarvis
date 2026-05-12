@@ -309,21 +309,27 @@ def benchmark_episodes():
         # Failure type distribution from structured taxonomy
         failure_types = stats.get("failure_types", {})
 
-        # Transient infrastructure failures (401/auth/credential rotation) are
-        # excluded from the rolling ESR denominator — see
-        # clarvis.cognition.metacognition.ESR_EXCLUDED_FAILURE_TYPES. Raw counts
-        # remain in `outcomes`/`failure_types` for ops visibility.
-        transient_excluded = sum(failure_types.get(ft, 0) for ft in ESR_EXCLUDED_FAILURE_TYPES)
-        real_total = max(total - soft_failures - transient_excluded, 1)
+        # Transient infrastructure failures (401/auth/credential rotation) and
+        # explicit deferrals (incomplete_by_design) are excluded from the
+        # rolling ESR denominator — see clarvis.cognition.metacognition.
+        # ESR_EXCLUDED_FAILURE_TYPES. Raw counts remain in `outcomes`/
+        # `failure_types` for ops visibility.
+        esr_excluded_total = sum(failure_types.get(ft, 0) for ft in ESR_EXCLUDED_FAILURE_TYPES)
+        transient_excluded = failure_types.get("transient_auth", 0)
+        real_total = max(total - soft_failures - esr_excluded_total, 1)
         success_rate = round(successes / real_total, 3)
         # `action.unverified` is the bucket for partial_success episodes the
         # spawned agent self-reported as done — they're not real action
         # failures, so they're excluded from accuracy + weakest-mode picks.
+        # `incomplete_by_design` is the explicit-deferral bucket (self-flagged
+        # [UNVERIFIED]/follow-up/operator-blocked) — already excluded from the
+        # ESR denominator via ESR_EXCLUDED_FAILURE_TYPES; also exclude here.
         unverified = failure_types.get("action.unverified", 0)
+        incomplete_by_design = failure_types.get("incomplete_by_design", 0)
         # Identify weakest *real* failure mode (highest count, excluding the
         # self-report bucket and the catch-all `action`). Falls back to overall
         # max when no concrete sub-bucket has been recorded yet.
-        REAL_FAILURE_EXCLUDE = {"action.unverified", "action"}
+        REAL_FAILURE_EXCLUDE = {"action.unverified", "action", "incomplete_by_design"}
         real_modes = {k: v for k, v in failure_types.items()
                       if k not in REAL_FAILURE_EXCLUDE and v > 0}
         weakest_failure = (
@@ -341,12 +347,13 @@ def benchmark_episodes():
         )[:3]
         top_failure_subtypes = [{"type": k, "count": v} for k, v in top_subtypes]
 
-        # Action accuracy = success / (real_total - timeouts - system - unverified)
-        # System failures (auth, import, infra) and unverified self-reports
-        # are not action failures, so they don't count in the denominator.
+        # Action accuracy = success / (real_total - timeouts - system - unverified - incomplete_by_design)
+        # System failures (auth, import, infra), unverified self-reports, and
+        # explicit deferrals are not action failures, so they don't count in
+        # the denominator.
         timeouts = outcomes.get("timeout", 0)
         system_failures = failure_types.get("system", 0)
-        actionable = max(real_total - timeouts - system_failures - unverified, 1)
+        actionable = max(real_total - timeouts - system_failures - unverified - incomplete_by_design, 1)
         action_accuracy = round(successes / actionable, 3)
 
         return {
@@ -354,6 +361,8 @@ def benchmark_episodes():
             "real_episodes": real_total,
             "soft_failures_excluded": soft_failures,
             "transient_auth_excluded": transient_excluded,
+            "incomplete_by_design_excluded": incomplete_by_design,
+            "esr_excluded_total": esr_excluded_total,
             "success_rate": success_rate,
             "action_accuracy": action_accuracy,
             "outcomes": outcomes,

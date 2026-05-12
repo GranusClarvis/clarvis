@@ -64,7 +64,12 @@ def classify_episode_failure(error_msg: Optional[str],
 # Failure types excluded from the rolling ESR denominator. Kept in raw outcome
 # counts so ops dashboards still see them, but not counted as reasoning/action
 # failures for the gated metric.
-ESR_EXCLUDED_FAILURE_TYPES = frozenset({"transient_auth"})
+#
+# - ``transient_auth``: 401/credential/rate-limit symptoms (not reasoning failures).
+# - ``incomplete_by_design``: agent self-flagged explicit deferrals
+#   ([UNVERIFIED], follow-up, operator-blocked) — intentional, not failures.
+#   See ESR_UNVERIFIED_TRIAGE_2026-05-12 §3 `correctly-downgraded` bucket.
+ESR_EXCLUDED_FAILURE_TYPES = frozenset({"transient_auth", "incomplete_by_design"})
 
 
 # Failure-type tags that indicate a real downstream failure the agent's
