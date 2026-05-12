@@ -2227,6 +2227,39 @@ def run_postflight(exit_code, output_file, preflight_data, task_duration=0):
         _pf_errors.append("delivery_validation")
     timings["delivery_validation"] = round(time.monotonic() - t_dv, 3)
 
+    # §0.65: Verification retry probe (ESR_POSTFLIGHT_VERIFICATION_RETRY_PROBE)
+    # When status is `partial_success` but the agent claimed `tests_passed=true`,
+    # extract and re-run the cited test command once with a 60s budget.
+    # Flaky-test / stale-cache cases that now pass get rescued back to `success`.
+    # Default mode is shadow (telemetry only); flip via
+    # CLARVIS_VERIFICATION_RETRY_ACTIVE=1 once shadow rescue rate ≥10%.
+    t_vr = time.monotonic()
+    try:
+        from clarvis.cognition.verification_retry import maybe_retry as _verify_maybe_retry
+        vr_result = _verify_maybe_retry(
+            task_status=ctx.get("task_status", ""),
+            output_text=ctx.get("output_text"),
+            failure_type=ctx.get("error_type"),
+            cwd=os.environ.get("CLARVIS_WORKSPACE") or os.getcwd(),
+        )
+        ctx["verification_retry"] = vr_result
+        if vr_result.get("triggered"):
+            log(f"Verification retry: outcome={vr_result.get('outcome')} "
+                f"shadow={vr_result.get('shadow_mode')} "
+                f"duration={vr_result.get('duration_s')}s")
+        if vr_result.get("override"):
+            ctx["task_status"] = "success"
+            ctx["error_type"] = None
+            ctx["verification_retry_override"] = True
+            log("Verification retry OVERRIDE: partial_success → success "
+                f"(command={vr_result.get('command')})")
+    except Exception as e:
+        log(f"Verification retry failed (non-fatal): {e}")
+        ctx["verification_retry"] = {"triggered": False, "outcome": "error",
+                                     "reason": f"exception: {type(e).__name__}"}
+        _pf_errors.append("verification_retry")
+    timings["verification_retry"] = round(time.monotonic() - t_vr, 3)
+
     # §0.7: Agent-self-report success override
     # Per FAILURE_HISTOGRAM_AUDIT_2026-05-02 §5.1: ~50% of plain `action`
     # failures are postflight artifacts where the agent reported success but
