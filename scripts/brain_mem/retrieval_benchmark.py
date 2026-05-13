@@ -199,6 +199,30 @@ BENCHMARK_PAIRS = [
         "category": "context",
         "gold_evidence": "Last heartbeat: brain healthy, task executed successfully, episode recorded, verified session continuity. Brain health check passed with expected memory count.",
     },
+    {
+        "id": "B21",
+        "query": "current morning plan and weakest collection pair priorities",
+        "expected_substrings": ["morning plan", "phi_pair_bridge", "weakest"],
+        "expected_collections": [CONTEXT],
+        "category": "context",
+        "gold_evidence": "Morning plan: target the weakest collection pairs with bridge memories and cross-links to close Phi gaps. Daily planning surfaces current active priorities into the working context.",
+    },
+    {
+        "id": "B22",
+        "query": "GWT broadcast attention current task",
+        "expected_substrings": ["gwt broadcast", "current task", "attention"],
+        "expected_collections": [CONTEXT],
+        "category": "context",
+        "gold_evidence": "GWT broadcast context: salience-weighted items from attention spotlight, including the CURRENT TASK and supporting episodic recalls. Forms the working context bound during heartbeat preflight.",
+    },
+    {
+        "id": "B23",
+        "query": "current state Phi weakest goal tracking temporal awareness",
+        "expected_substrings": ["phi=", "weakest", "goal tracking"],
+        "expected_collections": [CONTEXT, MEMORIES],
+        "category": "context",
+        "gold_evidence": "My current state: Phi measurement plus the weakest sub-component (often goal tracking or temporal awareness in brain retrieval), recorded each heartbeat to drive self-improvement priorities.",
+    },
     # --- Autonomous learning ---
     {
         "id": "B19",
