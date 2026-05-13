@@ -114,7 +114,10 @@ def validate_python_file(filepath):
     for node in ast.walk(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             if hasattr(node, 'end_lineno') and node.end_lineno:
-                length = node.end_lineno - node.lineno
+                # Inclusive line count: a function spanning lines 1..101 is 101
+                # lines long. Without the +1 a 101-line function is reported as
+                # 100 and escapes the >100 advisory/error gate.
+                length = node.end_lineno - node.lineno + 1
                 if length > 100:
                     finding = {
                         "type": "structure",

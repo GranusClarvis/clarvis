@@ -139,6 +139,58 @@ def test_flag_off_keeps_long_function_as_error(monkeypatch):
         os.unlink(path)
 
 
+# --- 100/101 boundary regression (CV_FUNCTION_LENGTH_OFF_BY_ONE) ---
+
+def _function_with_total_lines(total_lines):
+    """Build a function whose total line count (def + body + return) equals total_lines.
+
+    Layout: 1 def line + (total_lines - 2) body lines + 1 return line.
+    """
+    assert total_lines >= 3, "function needs at least def + 1 body + return"
+    body = "\n".join([f"    x{i} = {i}" for i in range(total_lines - 2)])
+    return f"def f():\n{body}\n    return 0\n"
+
+
+def test_function_exactly_100_lines_is_not_flagged():
+    """A function exactly 100 lines long must NOT trip the >100 gate."""
+    src = _function_with_total_lines(100)
+    path = _write_tmp_py(src)
+    try:
+        result = validate_python_file(path)
+        assert result["valid"] is True
+        assert result["errors"] == []
+        advisory_subtypes = [a.get("subtype") for a in result["advisories"]]
+        assert "function_too_long" not in advisory_subtypes, (
+            f"100-line function must not be flagged; advisories={result['advisories']}"
+        )
+    finally:
+        os.unlink(path)
+
+
+def test_function_exactly_101_lines_is_flagged_as_advisory():
+    """Regression: a 101-line function must trigger the advisory.
+
+    Before the fix, length was computed as `end_lineno - lineno` (exclusive),
+    so a 101-line function reported as 100 and escaped the >100 gate.
+    """
+    src = _function_with_total_lines(101)
+    path = _write_tmp_py(src)
+    try:
+        result = validate_python_file(path)
+        assert result["valid"] is True  # advisory mode — still valid
+        advisory_subtypes = [a.get("subtype") for a in result["advisories"]]
+        assert "function_too_long" in advisory_subtypes, (
+            f"101-line function must be flagged; advisories={result['advisories']}"
+        )
+        msg = next(
+            a["message"] for a in result["advisories"]
+            if a.get("subtype") == "function_too_long"
+        )
+        assert "101" in msg, f"reported length should be 101, got: {msg}"
+    finally:
+        os.unlink(path)
+
+
 # --- Bare-except still a hard error (correctness-impacting) ---
 
 def test_bare_except_still_hard_error_even_with_flag():
