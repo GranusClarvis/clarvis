@@ -70,12 +70,73 @@ Since no parallel `shadow_outcome` was recorded, we cannot compute the queue's c
 
 ---
 
-## 3. Premature-verdict placeholder
+## 2.6 Runnable harness — `scripts/audit/structure_rule_advisory_audit.py`
 
-Today (2026-05-12 22:00 UTC, ~3h after rule-fix landed):
-- Recent episodes (2026-05-11 + 2026-05-12 = 19): **0** with any `advisory` tag, **0** with `shadow_outcome` field.
-- This is consistent with the design — `shadow_outcome` was never wired (see §1), and the advisory path requires a recent commit that adds a >100-line function for the tag to emit.
-- **No verdict possible today.** Re-run the §2 census on 2026-05-15.
+The §2 methodology is implemented as a self-contained Python script so the
+2026-05-16 audit reduces to one command. The harness:
+
+- Anchors on the merge commit `f4431f0` (2026-05-13 01:07:00 UTC) — NOT the
+  side-branch commit `0d4977a` — and uses a 72h window.
+- Reads `data/episodes.json` directly (single source of truth for tag census).
+- Computes §2.1 tag census, §2.2 ESR over window, §2.4 bare-except regression
+  check, and emits a §2.5 verdict: `PREMATURE` (window open), `HOLD` (sanity
+  failure or ESR regression), `REVERT` (bare-except regression detected), or
+  `FLIP_CANDIDATE` (all numeric gates pass — promote after §2.3 manual review).
+- Supports three output modes: plain (terminal), `--json` (machine), and
+  `--markdown` (emits §3-style block that can be pasted in place of §3 below).
+- Exits non-zero on REVERT so the heartbeat scheduler can treat it as a signal.
+
+`§2.3` (10-sample manual FP/FN review) is intentionally *not* automated — it
+requires human/LLM judgement about whether each advisory was a true demotion.
+The harness emits the advisory episode IDs via `--sample N` so the reviewer
+can fetch each episode's diff and adjudicate manually.
+
+Self-test (executed 2026-05-13 05:33 UTC, 4.4h after merge):
+
+```
+$ python3 scripts/audit/structure_rule_advisory_audit.py
+Anchor:        2026-05-13T01:07:00+00:00
+Window end:    2026-05-16T01:07:00+00:00
+Elapsed:       4.43h / 72h
+Window closed: False
+Episodes:      1
+Outcomes:      {'success': 1}
+ESR:           1.0 (floor 0.94)
+Advisory tags: 0
+Bare-except advisory (regression): 0
+Hard cv-fail:  0
+cv-pass:       1
+VERDICT:       PREMATURE — 3-day shadow window has not yet elapsed
+```
+
+Verdict logic verified with simulated `now=anchor+3d1h`: the same data set
+returns `HOLD` (zero advisories — sanity gate §2.1 fails), confirming the
+window-close branch is wired.
+
+---
+
+## 3. Premature-verdict placeholder (re-run with `--markdown` on 2026-05-16)
+
+**Window-open snapshot (2026-05-13 05:33 UTC, 4.43h / 72h elapsed):**
+
+| Metric | Value | Notes |
+|---|---|---|
+| Episodes in window | 1 | The merge episode itself |
+| `code_validation:advisory:function_too_long` | 0 | Target ≥ 1 after window close |
+| `code_validation:advisory:bare_except` (regression) | 0 | Must remain 0 |
+| Hard `code_validation:fail` (any subtype) | 0 | Baseline clean |
+| `code_validation:pass` | 1 | Pass-emission path is wired and firing |
+| ESR over window | 1.0 | Floor 0.94 — way too small a sample to be load-bearing |
+| Verdict | **PREMATURE** | Window has not elapsed |
+
+**Re-run command on 2026-05-16:**
+```
+python3 scripts/audit/structure_rule_advisory_audit.py --markdown
+```
+Paste the output in place of this §3 block. If the verdict is `FLIP_CANDIDATE`,
+perform the §2.3 10-sample manual review using the printed advisory IDs and the
+`clarvis brain search <id>` lookup. Only after manual review passes should
+`[STRUCTURE_RULE_ADVISORY_DEFAULT_HARDCODE]` be filed per §4.2.
 
 ---
 
