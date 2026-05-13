@@ -12,7 +12,7 @@ Research basis:
 Usage:
     from clarvis.metrics.code_validation import validate_python_file, validate_output
     result = validate_python_file("/path/to/file.py")
-    # result = {"valid": True/False, "errors": [...], "refinement": "..."}
+    # result = {"valid": bool, "errors": [...], "advisories": [...], "refinement": "..."}
 """
 
 import ast
@@ -33,22 +33,49 @@ ERROR_TYPES = {
     "test": "Test failures",
 }
 
+# Subtypes within "structure" that are soft/advisory only — they do not block
+# code correctness and must not downgrade episode outcome. Gated by the
+# STRUCTURE_RULE_ADVISORY=1 env flag for a 3-day shadow rollout
+# (ESR_STRUCTURE_RULE_NOT_FAILURE, see ESR_UNVERIFIED_TRIAGE_2026-05-12).
+_STRUCTURE_ADVISORY_SUBTYPES = frozenset({"function_too_long"})
+
+
+def _structure_rule_advisory_enabled():
+    """Return True when structure-only rules should be demoted to advisories."""
+    val = os.environ.get("STRUCTURE_RULE_ADVISORY", "1").strip().lower()
+    return val not in ("", "0", "false", "no", "off")
+
 
 def validate_python_file(filepath):
     """Run deterministic validation on a Python file.
 
+    Splits findings into hard ``errors`` (syntax, imports, hard structural
+    issues like bare except) and soft ``advisories`` (oversized functions —
+    style hints that do not break code). See ESR_STRUCTURE_RULE_NOT_FAILURE
+    in ESR_UNVERIFIED_TRIAGE_2026-05-12 for why this split exists: the
+    >100-line function rule was the single largest source of false
+    `code_validation:fail` downgrades.
+
     Returns dict with:
-        valid: bool — all checks passed
-        errors: list of {type, message, line} dicts
-        refinement: str — concise error summary for LLM (Pattern 1: filtered context)
+        valid: bool — no hard errors (advisories ignored)
+        errors: list of {type, message, line} dicts (hard failures only)
+        advisories: list of {type, subtype, message, line} (soft signals)
+        refinement: str — concise error summary for LLM (errors only)
     """
     errors = []
+    advisories = []
+    advisory_mode = _structure_rule_advisory_enabled()
 
     try:
         with open(filepath, "r") as f:
             content = f.read()
     except (OSError, IOError) as e:
-        return {"valid": False, "errors": [{"type": "io", "message": str(e)}], "refinement": str(e)}
+        return {
+            "valid": False,
+            "errors": [{"type": "io", "message": str(e)}],
+            "advisories": [],
+            "refinement": str(e),
+        }
 
     # Stage 1: Syntax check
     try:
@@ -63,7 +90,12 @@ def validate_python_file(filepath):
         refinement = f"Syntax error at line {e.lineno}: {e.msg}"
         if e.text:
             refinement += f"\n  {e.text.strip()}"
-        return {"valid": False, "errors": errors, "refinement": refinement}
+        return {
+            "valid": False,
+            "errors": errors,
+            "advisories": advisories,
+            "refinement": refinement,
+        }
 
     # Stage 2: Import analysis (static — no runtime imports)
     for node in ast.walk(tree):
@@ -76,26 +108,35 @@ def validate_python_file(filepath):
                         "line": node.lineno,
                     })
 
-    # Stage 3: Structural checks
+    # Stage 3: Structural checks — split into errors vs advisories.
+    # Oversized functions are advisory-only (style hint, not correctness);
+    # bare-except remains a hard error since it changes runtime behavior.
     for node in ast.walk(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             if hasattr(node, 'end_lineno') and node.end_lineno:
                 length = node.end_lineno - node.lineno
                 if length > 100:
-                    errors.append({
+                    finding = {
                         "type": "structure",
+                        "subtype": "function_too_long",
                         "message": f"Function '{node.name}' is {length} lines (>100)",
                         "line": node.lineno,
-                    })
+                    }
+                    if advisory_mode:
+                        advisories.append(finding)
+                    else:
+                        errors.append(finding)
 
         if isinstance(node, ast.ExceptHandler) and node.type is None:
             errors.append({
                 "type": "structure",
+                "subtype": "bare_except",
                 "message": "Bare except clause (catches all exceptions including KeyboardInterrupt)",
                 "line": node.lineno,
             })
 
-    # Build refinement (Pattern 1: filtered, relevant error context for LLM)
+    # Build refinement from hard errors only (advisories don't feed the LLM
+    # debug loop — they're style noise, not actionable bugs).
     if errors:
         lines = []
         for e in errors[:5]:  # Cap at 5 errors (Pattern 2: don't overwhelm)
@@ -108,6 +149,7 @@ def validate_python_file(filepath):
     return {
         "valid": len(errors) == 0,
         "errors": errors,
+        "advisories": advisories,
         "refinement": refinement,
     }
 

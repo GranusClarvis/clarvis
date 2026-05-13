@@ -1399,12 +1399,20 @@ def _pf_complexity_gate(ctx):
 
 
 def _pf_code_validation(ctx, _pf_errors):
-    """§7.43 Code validation gate (Self-Refine pattern)."""
+    """§7.43 Code validation gate (Self-Refine pattern).
+
+    Splits findings into hard ``errors`` (lint/syntax/import/test) vs soft
+    ``advisories`` (function_too_long / style hints). Only hard errors
+    trigger the ``code_validation:fail`` blocking tag; advisory-only files
+    are tagged ``code_validation:pass`` with the advisory list recorded for
+    telemetry. See ESR_STRUCTURE_RULE_NOT_FAILURE.
+    """
     timings = {}
     t743 = time.monotonic()
     if cv_validate_output or cv_validate_file:
         try:
             cv_file_errors = []
+            cv_file_advisories = []
             cv_output_result = None
 
             if cv_validate_output and ctx["output_text"]:
@@ -1430,6 +1438,9 @@ def _pf_code_validation(ctx, _pf_errors):
                         fv = cv_validate_file(fpath)
                         if not fv["valid"]:
                             cv_file_errors.append({"file": relpath, "errors": fv["errors"][:3], "refinement": fv["refinement"]})
+                        adv = fv.get("advisories") or []
+                        if adv:
+                            cv_file_advisories.append({"file": relpath, "advisories": adv[:3]})
 
             has_output_errs = cv_output_result and cv_output_result.get("has_errors", False)
             has_file_errs = len(cv_file_errors) > 0
@@ -1437,8 +1448,10 @@ def _pf_code_validation(ctx, _pf_errors):
             if has_output_errs or has_file_errs:
                 _handle_cv_failures(ctx, cv_output_result, cv_file_errors, has_output_errs)
             else:
-                log("CODE VALIDATION: all checks passed")
-                _tag_cv_pass(ctx["task"])
+                log("CODE VALIDATION: all checks passed"
+                    + (f" ({sum(len(a['advisories']) for a in cv_file_advisories)} advisories)"
+                       if cv_file_advisories else ""))
+                _tag_cv_pass(ctx["task"], advisories=cv_file_advisories)
         except Exception as e:
             log(f"Code validation gate failed (non-fatal): {e}")
             _pf_errors.append("code_validation")
@@ -1499,15 +1512,37 @@ def _handle_cv_failures(ctx, cv_output_result, cv_file_errors, has_output_errs):
             log(f"CODE VALIDATION FEEDBACK: queue injection failed: {e}")
 
 
-def _tag_cv_pass(task):
-    """Tag latest episode with code_validation:pass."""
+def _tag_cv_pass(task, advisories=None):
+    """Tag latest episode with code_validation:pass.
+
+    When ``advisories`` is provided, the episode is annotated with the
+    advisory list and ``advisories=function_too_long`` tag (or similar)
+    for telemetry, but ``code_validation:fail`` is NOT applied — advisories
+    are soft signals that do not downgrade outcome.
+    """
     if EpisodicMemory:
         try:
             em_cv = EpisodicMemory()
             if em_cv.episodes:
                 latest = em_cv.episodes[-1]
                 if latest.get("task", "")[:60] == task[:60]:
-                    latest.setdefault("tags", []).append("code_validation:pass")
+                    tags = latest.setdefault("tags", [])
+                    tags.append("code_validation:pass")
+                    if advisories:
+                        subtypes = sorted({
+                            a.get("subtype") or a.get("type") or "advisory"
+                            for fa in advisories
+                            for a in fa.get("advisories", [])
+                        })
+                        for sub in subtypes:
+                            tags.append(f"code_validation:advisory:{sub}")
+                        latest["code_validation"] = {
+                            "passed": True,
+                            "advisories": [
+                                {"file": fa["file"], "items": fa["advisories"]}
+                                for fa in advisories
+                            ],
+                        }
                     em_cv._save()
         except Exception as e:
             logging.debug("Tagging episode with code_validation:pass failed: %s", e)

@@ -2,7 +2,8 @@
 
 **Task:** `[POSTFLIGHT_RULE_TIGHTEN_SHADOW_VERIFY]`
 **Authored (scaffold):** 2026-05-12 (the day the rule-fix shipped — `0d4977a`)
-**Verdict ETA:** 2026-05-15 (corrected from 2026-05-19; see §1)
+**Merge-to-main (anchors shadow clock):** 2026-05-13 (cherry-picked under `[ESR_STRUCTURE_RULE_NOT_FAILURE_MERGE]`; see §1.5)
+**Verdict ETA:** 2026-05-16 (3 days from merge-to-main, not commit-to-side-branch)
 **Status:** PREMATURE — shadow window has not elapsed. This document captures the **contract drift** between the queue task and the actually-shipped change, and re-anchors the audit methodology to what was built. The numeric verdict (FLIP / HOLD / REVERT) is deferred until the window closes.
 
 ---
@@ -11,11 +12,13 @@
 
 The queue task `[POSTFLIGHT_RULE_TIGHTEN_SHADOW_VERIFY]` was written on the assumption that the rule-fix shipped under flag `POSTFLIGHT_RULE_TIGHTEN=1` with parallel `outcome` vs `shadow_outcome` recording for a 7-day window. **None of that is what shipped, and additionally the change is not on main.** See §1.5 below for the merge-state finding.
 
-### 1.5 The rule-fix is not on main (critical)
+### 1.5 The rule-fix is not on main (critical) — RESOLVED 2026-05-13
 
-`git log --all --oneline --graph` shows `0d4977a` ("fix(esr): split code_validation into errors vs advisories") on a side branch (worktree `worktree-melodic-seeking-oasis`), **not on `main`**. Main's HEAD is `e196617`, two commits ahead of `12dc3d6` (the backfill), and `0d4977a` is a sibling, not an ancestor. The current on-disk `clarvis/metrics/code_validation.py` (executed by heartbeat scripts) returns `{valid, errors, refinement}` — the old shape — confirming the change is unmerged. QUEUE marks the parent task `[ESR_STRUCTURE_RULE_NOT_FAILURE]` `[x] [UNVERIFIED]` shipped today; that's accurate in the "code-was-written" sense but misleading in the "production-behavior-changed" sense. The shadow window has not started in production.
+**Original finding (2026-05-12):** `git log --all --oneline --graph` shows `0d4977a` ("fix(esr): split code_validation into errors vs advisories") on a side branch (worktree `worktree-melodic-seeking-oasis`), **not on `main`**. Main's HEAD is `e196617`, two commits ahead of `12dc3d6` (the backfill), and `0d4977a` is a sibling, not an ancestor. The current on-disk `clarvis/metrics/code_validation.py` (executed by heartbeat scripts) returned `{valid, errors, refinement}` — the old shape — confirming the change was unmerged. QUEUE marks the parent task `[ESR_STRUCTURE_RULE_NOT_FAILURE]` `[x] [UNVERIFIED]` shipped today; that was accurate in the "code-was-written" sense but misleading in the "production-behavior-changed" sense. The shadow window had not started in production.
 
-**Consequence for the audit:** even if the queue's 7-day window were honored, there would be nothing to measure — the new rule has not run against any episode in production. The first action item below is therefore a merge gate, not an audit.
+**Resolution (2026-05-13):** `[ESR_STRUCTURE_RULE_NOT_FAILURE_MERGE]` cherry-picked `0d4977a` from `worktree-melodic-seeking-oasis` to `main`. On-disk validator now returns `{valid, errors, advisories, refinement}` and exposes `_structure_rule_advisory_enabled()` (default-on via `STRUCTURE_RULE_ADVISORY=1`). All 7 acceptance tests in `tests/test_esr_structure_rule_not_failure.py` plus 14 existing tests in `tests/test_clarvis_metrics_code_validation.py` pass (21/21 green). **Shadow clock anchored: 2026-05-13.** Verdict ETA: 2026-05-16.
+
+**Consequence for the audit:** the `STRUCTURE_RULE_ADVISORY_SHADOW_VERIFY` task can now run against the §2 methodology; until 2026-05-16 the placeholder verdict in §3 remains.
 
 ### 1.6 Drift table
 
@@ -78,7 +81,7 @@ Today (2026-05-12 22:00 UTC, ~3h after rule-fix landed):
 
 ## 4. Follow-up actions
 
-0. **MERGE GATE (blocking everything below):** branch holding `0d4977a` must be merged to main before any shadow window starts. Without this merge, the heartbeat continues to execute the old validator and the rule-fix has zero production effect — regardless of what QUEUE says about shipped state. Open a new queue item `[ESR_STRUCTURE_RULE_NOT_FAILURE_MERGE]` to land `0d4977a` (and any other unmerged sibling ESR commits) onto main. Once merged, reset the 3-day shadow clock from merge-time, not commit-time.
+0. **MERGE GATE (blocking everything below) — DONE 2026-05-13:** `[ESR_STRUCTURE_RULE_NOT_FAILURE_MERGE]` cherry-picked `0d4977a` to main. Validator now returns the new shape; 21/21 tests pass; shadow clock anchored at 2026-05-13. The audit due-date is therefore 2026-05-16 (3 days from merge-to-main, not commit-to-side-branch).
 1. **Re-anchor the QUEUE audit task** to the actually-shipped flag name and 3-day window (audit due 3 days after merge, not 2026-05-19). Update task name from `POSTFLIGHT_RULE_TIGHTEN_SHADOW_VERIFY` → `STRUCTURE_RULE_ADVISORY_SHADOW_VERIFY` for findability. **(Done in this commit; see QUEUE.md NEW ITEMS.)**
 2. **If audit on 2026-05-15 passes → FLIP**: append `[STRUCTURE_RULE_ADVISORY_DEFAULT_HARDCODE]` to QUEUE NEW ITEMS — remove the `STRUCTURE_RULE_ADVISORY` env-check from `clarvis/metrics/code_validation.py:_structure_rule_advisory_enabled` and bake the advisory split in.
 3. **If audit on 2026-05-15 reveals FN > 5%**: the rule is too permissive — file a new triage task to identify which signals are being missed.
