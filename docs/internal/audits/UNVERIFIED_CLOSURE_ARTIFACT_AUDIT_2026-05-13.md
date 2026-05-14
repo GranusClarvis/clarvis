@@ -156,3 +156,9 @@ The `[~] [HELD: ARTIFACT_MISSING]` downgrade path (Fix #1) is non-destructive:
 1. **`[QUEUE_ARTIFACT_GUARD_WRITER_PREARCHIVE]`** — implement Fix #1 in `clarvis/queue/writer.py:633`; new `tests/test_queue_artifact_guard.py` with planted-missing-artifact fixture.
 2. **`[QUEUE_ARTIFACT_GUARD_ENGINE_MARK]`** — implement Fix #2 in `clarvis/orch/queue_engine.py`; ship behind `CLARVIS_QUEUE_UNVERIFIED_REQUIRE_ARTIFACT="warn"` flag, flip to `block` after 7-day shadow.
 3. **`[UNVERIFIED_BACKFILL_2026-05-12]`** — re-attempt the 4 missing-artifact tasks from rows 8/9/12/13 (each is a non-Python markdown audit that one heartbeat slot can deliver).
+
+---
+
+## Backfill confirmation
+
+**2026-05-14:** all 3 class-c artifacts (rows 3, 8, 9) backfilled by `[MISSING_AUDIT_ARTIFACT_BACKFILL_2026-05-14]` — `P3_BY_CATEGORY_LOW_PRECISION_AUDIT_2026-05-13.md`, `AUTO_COMMIT_DIRTY_AUDIT_2026-05-12.md`, `HEARTBEAT_NOTASK_UNKNOWN_2026-05-12.md` now exist on disk and each meets its original task's acceptance bar. Class-c row count: 3 → 0. Rows 12/13 (bonus sweep) remain class-c, deferred to a future backfill slot.
