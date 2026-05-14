@@ -95,6 +95,16 @@ export CLARVIS_ACTIVE_PROJECT_LANES="${CLARVIS_ACTIVE_PROJECT_LANES:-SWO,BUNNYBA
 # sidecar records on real test/file evidence, so block mode is safe to enable.
 export CLARVIS_QUEUE_UNVERIFIED_GUARD="${CLARVIS_QUEUE_UNVERIFIED_GUARD:-block}"
 
+# Artifact-existence guard (Fix #1 from UNVERIFIED_CLOSURE_ARTIFACT_AUDIT_2026-05-13).
+# When "1", clarvis/queue/writer.archive_completed() refuses to archive items
+# whose extracted artifact path doesn't exist on disk (with sibling-workspace
+# exception via CLARVIS_ACTIVE_PROJECT_LANES). Held items get HELD line in
+# monitoring/queue_archive_holds.log. 3-day shadow began 2026-05-14; verify
+# task scheduled for 2026-05-17. Was unset on ship day (this row's reason)
+# so the shadow window had zero observation data — flipped on at the evening
+# audit immediately after shipping.
+export CLARVIS_QUEUE_ARCHIVE_GUARD="${CLARVIS_QUEUE_ARCHIVE_GUARD:-1}"
+
 # Self-repo sync policy. Controls whether sync_workspace() pulls origin/main
 # into Clarvis's own workspace before cron/spawn work.
 #   "skip"  — (default) do NOT auto-sync; Clarvis commits/pushes directly
