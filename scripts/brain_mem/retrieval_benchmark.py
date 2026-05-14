@@ -240,6 +240,57 @@ BENCHMARK_PAIRS = [
         "category": "meta",
         "gold_evidence": "Recurring session themes: brain maintenance, cron reliability, memory quality improvement, code quality gates, performance benchmarking, autonomous evolution. Themes synthesized via periodic episodic synthesis.",
     },
+    # --- Identity expansion (low-n hardening 2026-05-14) ---
+    {
+        "id": "B24",
+        "query": "Clarvis dual-layer architecture overview",
+        "expected_substrings": ["dual-layer", "architecture", "conscious"],
+        "expected_collections": [IDENTITY],
+        "category": "identity",
+        "gold_evidence": "Clarvis Architecture Overview: dual-layer autonomous cognitive agent — conscious M2.5 for chat, subconscious Claude Code Opus for autonomous evolution.",
+    },
+    {
+        "id": "B25",
+        "query": "Clarvis is JARVIS-inspired autonomous AI agent",
+        "expected_substrings": ["jarvis", "autonomous ai", "inspired"],
+        "expected_collections": [IDENTITY],
+        "category": "identity",
+        "gold_evidence": "Clarvis Identity and Purpose: Clarvis is an autonomous AI agent inspired by JARVIS, designed for cognitive autonomy and self-evolution.",
+    },
+    # --- Preferences expansion (low-n hardening 2026-05-14) ---
+    {
+        "id": "B26",
+        "query": "Should I use sessions_spawn to run claude code",
+        "expected_substrings": ["never", "sessions_spawn", "wrong model"],
+        "expected_collections": [PREFERENCES, LEARNINGS],
+        "category": "preferences",
+        "gold_evidence": "NEVER use sessions_spawn to run Claude Code — it spawns M2.5 (wrong model), not Claude Code. Caused $4+ waste incident. Use scripts/agents/spawn_claude.sh instead.",
+    },
+    {
+        "id": "B27",
+        "query": "Claude code spawn flags and timeout convention",
+        "expected_substrings": ["dangerously-skip-permissions", "claudecode", "timeout"],
+        "expected_collections": [PREFERENCES, PROCEDURES],
+        "category": "preferences",
+        "gold_evidence": "Claude Code spawn convention: env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT, --dangerously-skip-permissions, full path /home/agent/.local/bin/claude, minimum timeout 600s default 1200s.",
+    },
+    # --- Goals expansion (low-n hardening 2026-05-14) ---
+    {
+        "id": "B28",
+        "query": "Goal to strengthen agent identity coherence via SOUL",
+        "expected_substrings": ["identity coherence", "soul.md", "identity"],
+        "expected_collections": [GOALS],
+        "category": "goals",
+        "gold_evidence": "Goal: Strengthen agent identity coherence — ensure SOUL.md, SELF.md, and clarvis-identity collection remain aligned across sessions and model updates.",
+    },
+    {
+        "id": "B29",
+        "query": "Goal Phi integration target above threshold",
+        "expected_substrings": ["phi", "integration", "target"],
+        "expected_collections": [GOALS, LEARNINGS],
+        "category": "goals",
+        "gold_evidence": "Goal: Achieve and sustain Phi (Integration) above 0.65 target through balanced growth across all 7 self-model capability domains.",
+    },
 ]
 
 
