@@ -109,6 +109,58 @@ def _extract_tag_from_text(text: str) -> Optional[str]:
     and skips leading status markers like [UNVERIFIED] (delegates to engine)."""
     from clarvis.queue.engine import _extract_tag
     return _extract_tag(text)
+
+
+# Artifact-path guard helpers (Fix #1 from
+# docs/internal/audits/UNVERIFIED_CLOSURE_ARTIFACT_AUDIT_2026-05-13.md).
+_ARTIFACT_FIELD_RE = re.compile(
+    r'artifact_path:\s*`?([^\s`,]+\.(?:md|py|sh|json|tsx|ts|mjs|cjs))`?'
+)
+_ARTIFACT_BACKTICK_RE = re.compile(
+    r'`((?:docs/internal/audits|monitoring|memory/cron|memory/evolution)'
+    r'/[^`\s]+\.(?:md|py|sh|json))`'
+)
+
+
+def _extract_artifact_paths(item_text: str) -> list[str]:
+    """Extract candidate artifact paths from a closed task body.
+
+    Honoured forms:
+      - explicit `artifact_path: <path>` field (preferred)
+      - backticked paths under known artifact dirs (docs/internal/audits/,
+        monitoring/, memory/cron/, memory/evolution/) ending in .md/.py/.sh/.json
+
+    Returned in declaration order, deduplicated.
+    """
+    seen: set[str] = set()
+    paths: list[str] = []
+    for m in _ARTIFACT_FIELD_RE.finditer(item_text):
+        p = m.group(1)
+        if p not in seen:
+            seen.add(p)
+            paths.append(p)
+    for m in _ARTIFACT_BACKTICK_RE.finditer(item_text):
+        p = m.group(1)
+        if p not in seen:
+            seen.add(p)
+            paths.append(p)
+    return paths
+
+
+def _row_has_project_lane_exception(item_text: str, active_lanes: set[str]) -> bool:
+    """Whether a closure row should be exempted from the artifact guard.
+
+    Always exempt `(PROJECT:BUNNYBAGZ)` (sibling-workspace mega-house path).
+    Also exempt any `(PROJECT:<NAME>)` whose NAME is listed in
+    `CLARVIS_ACTIVE_PROJECT_LANES` (operator-controlled).
+    """
+    upper = item_text.upper()
+    if "(PROJECT:BUNNYBAGZ)" in upper:
+        return True
+    for lane in active_lanes:
+        if f"(PROJECT:{lane})" in upper:
+            return True
+    return False
 MAX_AUTO_TASKS_PER_DAY = 5
 SIMILARITY_THRESHOLD = 0.5  # Word overlap ratio to consider a duplicate
 
@@ -700,14 +752,27 @@ def archive_completed():
         # the operator flips to `block` once `[BB_PHASE1_VERIFICATION_PASS]`
         # lands and the verification-record producer is wired.
         guard_mode = os.environ.get("CLARVIS_QUEUE_UNVERIFIED_GUARD", "log").lower()
+        workspace_root = os.path.dirname(os.path.dirname(os.path.dirname(QUEUE_FILE)))
         verification_dir = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(QUEUE_FILE))),
-            "data", "audit", "queue_verifications",
+            workspace_root, "data", "audit", "queue_verifications",
         )
         audit_log = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(QUEUE_FILE))),
-            "monitoring", "queue_unverified_archive.log",
+            workspace_root, "monitoring", "queue_unverified_archive.log",
         )
+        holds_log = os.path.join(
+            workspace_root, "monitoring", "queue_archive_holds.log",
+        )
+
+        # Artifact guard (Fix #1 from UNVERIFIED_CLOSURE_ARTIFACT_AUDIT_2026-05-13).
+        # Default off; flipped on after 3-day shadow.
+        artifact_guard_enabled = (
+            os.environ.get("CLARVIS_QUEUE_ARCHIVE_GUARD", "0") == "1"
+        )
+        active_lanes = {
+            l.strip().upper()
+            for l in os.environ.get("CLARVIS_ACTIVE_PROJECT_LANES", "").split(",")
+            if l.strip()
+        }
 
         def _has_verification_record(tag: str) -> bool:
             if not tag:
@@ -728,16 +793,51 @@ def archive_completed():
             except Exception:
                 pass
 
+        def _log_artifact_hold(tag: Optional[str], item_text: str, missing: str) -> None:
+            try:
+                os.makedirs(os.path.dirname(holds_log), exist_ok=True)
+                with open(holds_log, "a") as fh:
+                    fh.write(json.dumps({
+                        "ts": datetime.now(timezone.utc).isoformat(),
+                        "tag": tag,
+                        "missing_path": missing,
+                        "snippet": item_text[:120],
+                    }) + "\n")
+            except Exception:
+                pass
+
         completed = []
         completed_tags = []
         new_lines = []
         held_unverified = 0
+        held_artifact_missing = 0
         for line in content.split("\n"):
             m = re.match(r'^\s*- \[x\] (.+)', line)
             if m:
                 item_text = m.group(1)
                 tag = _extract_tag_from_text(item_text)
                 if "[UNVERIFIED]" in item_text:
+                    # Artifact-existence guard (runs before block-mode guard).
+                    if (
+                        artifact_guard_enabled
+                        and not _row_has_project_lane_exception(item_text, active_lanes)
+                    ):
+                        artifact_paths = _extract_artifact_paths(item_text)
+                        missing = [
+                            p for p in artifact_paths
+                            if not os.path.exists(os.path.join(workspace_root, p))
+                        ]
+                        if artifact_paths and missing:
+                            held_line = re.sub(
+                                r'^(\s*)- \[x\] ',
+                                rf'\1- [~] HELD: ARTIFACT_MISSING — {missing[0]} ',
+                                line,
+                                count=1,
+                            )
+                            new_lines.append(held_line)
+                            _log_artifact_hold(tag, item_text, missing[0])
+                            held_artifact_missing += 1
+                            continue
                     if guard_mode == "block" and not _has_verification_record(tag):
                         _log_unverified(tag, item_text, "held")
                         new_lines.append(line)
@@ -750,7 +850,11 @@ def archive_completed():
             else:
                 new_lines.append(line)
 
-        if not completed:
+        # If guards downgraded any rows to [~] HELD, we still need to rewrite
+        # QUEUE.md even when nothing actually archived this sweep.
+        any_holds = held_unverified or held_artifact_missing or sidecar_succeeded
+
+        if not completed and not any_holds:
             return 0
 
         # Read existing archive for dedup
@@ -771,7 +875,8 @@ def archive_completed():
                 f.write(f"\n## Archived {today}\n")
                 f.write("\n".join(archive_entries) + "\n")
 
-        # Rewrite QUEUE.md without completed items
+        # Rewrite QUEUE.md (even when only holds were applied) so [~] downgrades
+        # land on disk.
         with open(QUEUE_FILE, "w") as f:
             f.write("\n".join(new_lines))
 
