@@ -104,6 +104,18 @@ WORK_DIR="$CLARVIS_WORKSPACE"
 WORKTREE_PATH=""
 WORKTREE_BRANCH=""
 
+# === Postflight pre-spawn snapshot (CLARVIS_PROC_SPAWN_VERIFY_POSTFLIGHT) ===
+# Capture sha256 + full snapshot of QUEUE.md before the spawn, so the worker
+# can diff against it post-Claude and reject artifact-missing closures.
+SPAWN_SESSION_ID="spawn-$(date -u +%Y%m%dT%H%M%S)-$$"
+PRE_QUEUE_SNAPSHOT="/tmp/clarvis_spawn_queue_pre_$$.snapshot"
+PRE_QUEUE_SHA="/tmp/clarvis_spawn_queue_pre_$$.sha"
+QUEUE_FILE_ABS="$CLARVIS_WORKSPACE/memory/evolution/QUEUE.md"
+if [ -f "$QUEUE_FILE_ABS" ]; then
+    cp "$QUEUE_FILE_ABS" "$PRE_QUEUE_SNAPSHOT" 2>/dev/null || true
+    sha256sum "$QUEUE_FILE_ABS" 2>/dev/null | awk '{print $1}' > "$PRE_QUEUE_SHA" || true
+fi
+
 sync_workspace 2>> "$LOGFILE"
 
 # === Worktree Isolation ===
@@ -410,6 +422,22 @@ except Exception as e:
 PYEOF
 fi
 tail -c 2000 "$OUTPUT_FILE" >> "\$LOGFILE" 2>/dev/null || true
+# === POSTFLIGHT VERIFY (CLARVIS_PROC_SPAWN_VERIFY_POSTFLIGHT) ===
+# Diff QUEUE.md against the pre-spawn snapshot; reject closures that flipped
+# to [x] [UNVERIFIED] but reference artifacts that do not exist on disk.
+POSTFLIGHT_RC=0
+if [ -f "$PRE_QUEUE_SNAPSHOT" ] && [ -f "$CLARVIS_WORKSPACE/scripts/agents/spawn_postflight_verify.py" ]; then
+  python3 "$CLARVIS_WORKSPACE/scripts/agents/spawn_postflight_verify.py" \
+    --pre-state-file "$PRE_QUEUE_SNAPSHOT" \
+    --session-id "$SPAWN_SESSION_ID" \
+    --workspace "$CLARVIS_WORKSPACE" \
+    >> "\$LOGFILE" 2>&1 || POSTFLIGHT_RC=\$?
+  if [ \$POSTFLIGHT_RC -ne 0 ]; then
+    echo "[\$(date -u +%Y-%m-%dT%H:%M:%S)] [spawn_claude] POSTFLIGHT_HELD: artifact-missing rows emitted (rc=\$POSTFLIGHT_RC) — see monitoring/spawn_artifact_holds.log" >> "\$LOGFILE"
+    if [ \$RESULT -eq 0 ]; then RESULT=\$POSTFLIGHT_RC; fi
+  fi
+fi
+rm -f "$PRE_QUEUE_SNAPSHOT" "$PRE_QUEUE_SHA" 2>/dev/null || true
 # === TELEGRAM DELIVERY ===
 # Disable errexit for delivery/cleanup — these are best-effort, must not kill the worker
 set +e

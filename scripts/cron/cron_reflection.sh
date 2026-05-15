@@ -20,6 +20,9 @@ set_script_timeout 3600 "$LOGFILE"
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Reflection starting ===" >> "$LOGFILE"
 emit_dashboard_event task_started --task-name "Daily reflection" --section cron_reflection --executor claude-opus
 
+# Postflight artifact-existence baseline (CLARVIS_PROC_SPAWN_VERIFY_POSTFLIGHT)
+clarvis_postflight_snapshot
+
 # Failure tracking — continue on error but log and count failures
 STEP_FAILURES=0
 FAILED_STEPS=""
@@ -164,4 +167,9 @@ if [ "$STEP_FAILURES" -gt 0 ]; then
 else
     emit_dashboard_event task_completed --task-name "Daily reflection" --section cron_reflection --status success
 fi
+# Postflight artifact verifier (CLARVIS_PROC_SPAWN_VERIFY_POSTFLIGHT)
+clarvis_postflight_verify "$LOGFILE"
+POSTFLIGHT_RC=$?
+
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Reflection complete (${STEP_FAILURES} failures) ===" >> "$LOGFILE"
+exit $POSTFLIGHT_RC

@@ -80,6 +80,9 @@ fi
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Heartbeat starting (optimized batched pipeline) ===" >> "$LOGFILE"
 
+# Postflight artifact-existence baseline (CLARVIS_PROC_SPAWN_VERIFY_POSTFLIGHT)
+clarvis_postflight_snapshot
+
 PREFLIGHT_FILE=$(mktemp --suffix=.json)
 
 # === PRE-EXECUTION VALIDATION: Queue file sanity check ===
@@ -730,4 +733,11 @@ fi
 rm -f "$TASK_OUTPUT_FILE" "$PREFLIGHT_FILE" "${TASK_OUTPUT_FILE}.reconsider.json"
 
 emit_dashboard_event task_completed --task-name "${NEXT_TASK:0:120}" --section cron_autonomous --executor "$EXECUTOR_USED" --exit-code "$TASK_EXIT" --duration-s "$TASK_DURATION" --status "$([ "$TASK_EXIT" -eq 0 ] && echo success || echo failed)"
+
+# Postflight artifact verifier — non-zero rc surfaces in this script's exit so
+# downstream cron-watchdog logging picks it up. (CLARVIS_PROC_SPAWN_VERIFY_POSTFLIGHT)
+clarvis_postflight_verify "$LOGFILE"
+POSTFLIGHT_RC=$?
+
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Heartbeat complete (preflight=${PF_TOTAL_TIME}s + exec=${TASK_DURATION}s + postflight=${PF_POST_TIME:-?}s) ===" >> "$LOGFILE"
+exit $POSTFLIGHT_RC

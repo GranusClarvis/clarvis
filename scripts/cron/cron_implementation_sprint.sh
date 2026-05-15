@@ -30,6 +30,9 @@ sync_workspace 2>> "$LOGFILE"
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Implementation Sprint starting ===" >> "$LOGFILE"
 emit_dashboard_event task_started --task-name "Implementation Sprint" --section cron_implementation --executor claude-opus
 
+# Postflight artifact-existence baseline (CLARVIS_PROC_SPAWN_VERIFY_POSTFLIGHT)
+clarvis_postflight_snapshot
+
 # Extract the FIRST unchecked IMPLEMENTATION task from QUEUE.md
 # Skips research tasks (Research:, Bundle, study, paper, investigate, explore)
 IMPL_TASK=$(python3 -c "
@@ -194,4 +197,10 @@ if echo "$GIT_AUTOFIX_ACTION" | grep -qE "committed|pushed"; then
 fi
 
 emit_dashboard_event task_completed --task-name "Implementation Sprint" --section cron_implementation --status "$([ ${TASK_EXIT:-1} -eq 0 ] && echo success || echo failed)" --duration-s "${TASK_DURATION:-0}"
+
+# Postflight artifact verifier (CLARVIS_PROC_SPAWN_VERIFY_POSTFLIGHT)
+clarvis_postflight_verify "$LOGFILE"
+POSTFLIGHT_RC=$?
+
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Implementation Sprint complete (${TASK_DURATION}s) ===" >> "$LOGFILE"
+exit $POSTFLIGHT_RC

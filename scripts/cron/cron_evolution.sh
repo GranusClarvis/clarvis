@@ -31,6 +31,9 @@ fi
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Evolution analysis starting (optimized) ===" >> "$LOGFILE"
 emit_dashboard_event task_started --task-name "Evolution analysis" --section cron_evolution --executor claude-opus
 
+# Postflight artifact-existence baseline (CLARVIS_PROC_SPAWN_VERIFY_POSTFLIGHT)
+clarvis_postflight_snapshot
+
 # ============================================================================
 # BATCHED METRICS COLLECTION (single Python process)
 # Replaces: calibration, prediction_review, phi_metric, self_model assess,
@@ -213,4 +216,9 @@ else
     echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] WARN: Evolution had failures (claude=$CLAUDE_EXIT, preflight=${EVO_EXIT:-0})" >> "$LOGFILE"
     emit_dashboard_event task_completed --task-name "Evolution analysis" --section cron_evolution --status failure
 fi
+# Postflight artifact verifier (CLARVIS_PROC_SPAWN_VERIFY_POSTFLIGHT)
+clarvis_postflight_verify "$LOGFILE"
+POSTFLIGHT_RC=$?
+
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Evolution analysis complete ===" >> "$LOGFILE"
+exit $POSTFLIGHT_RC

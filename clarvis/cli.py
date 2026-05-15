@@ -30,6 +30,7 @@ def _register_subcommands():
     from clarvis.cli_doctor import app as doctor_app
     from clarvis.cli_local import app as local_app
     from clarvis.cli_heartbeat import app as heartbeat_app
+    from clarvis.cli_hooks import app as hooks_app
     from clarvis.cli_mode import app as mode_app
     from clarvis.cli_queue import app as queue_app
     from clarvis.cli_maintenance import app as maintenance_app
@@ -49,6 +50,7 @@ def _register_subcommands():
     app.add_typer(doctor_app, name="doctor", help="Post-install health verification.")
     app.add_typer(local_app, name="local", help="Zero-API-key local model quickstart.")
     app.add_typer(heartbeat_app, name="heartbeat", help="Heartbeat pipeline.")
+    app.add_typer(hooks_app, name="hooks", help="Manage git pre-commit hooks (install, list, status).")
     app.add_typer(maintenance_app, name="maintenance", help="Periodic hygiene and lifecycle.")
     app.add_typer(metrics_app, name="metrics", help="Metrics: self-model, phi, PI.")
     app.add_typer(mode_app, name="mode", help="Runtime mode control-plane.")

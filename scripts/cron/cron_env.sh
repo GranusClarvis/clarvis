@@ -289,6 +289,58 @@ print(f\"reason={d.get('reason','?')} aborted={d.get('aborted',False)}\")
     return $MONITORED_EXIT
 }
 
+# === Postflight artifact-existence verifier (CLARVIS_PROC_SPAWN_VERIFY_POSTFLIGHT) ===
+# Honored by all cron spawners that drive run_claude_monitored.
+#
+# Usage:
+#   clarvis_postflight_snapshot                # captures pre-state into PRE files; sets POSTFLIGHT_PRE_SNAPSHOT/SHA/SESSION
+#   clarvis_postflight_verify "$LOGFILE"       # diffs current QUEUE.md vs snapshot; emits holds + annotations; rc=1 on hold
+#
+# Variables exported by snapshot (consumed by verify):
+#   POSTFLIGHT_PRE_SNAPSHOT  — full QUEUE.md snapshot path (/tmp)
+#   POSTFLIGHT_PRE_SHA       — sha256 file path (/tmp; matches the
+#                              spec literal /tmp/clarvis_spawn_queue_pre.sha
+#                              but PID-suffixed for parallel-spawn safety)
+#   POSTFLIGHT_SESSION_ID    — session id recorded with each hold
+clarvis_postflight_snapshot() {
+    local _src="${CRON_SOURCE:-$(basename "${BASH_SOURCE[1]:-$0}" .sh 2>/dev/null || echo unknown)}"
+    POSTFLIGHT_SESSION_ID="${_src}-$(date -u +%Y%m%dT%H%M%S)-$$"
+    POSTFLIGHT_PRE_SNAPSHOT="/tmp/clarvis_spawn_queue_pre_${_src}_$$.snapshot"
+    POSTFLIGHT_PRE_SHA="/tmp/clarvis_spawn_queue_pre_${_src}_$$.sha"
+    local _qf="$CLARVIS_WORKSPACE/memory/evolution/QUEUE.md"
+    if [ -f "$_qf" ]; then
+        cp "$_qf" "$POSTFLIGHT_PRE_SNAPSHOT" 2>/dev/null || true
+        sha256sum "$_qf" 2>/dev/null | awk '{print $1}' > "$POSTFLIGHT_PRE_SHA" || true
+    fi
+    export POSTFLIGHT_SESSION_ID POSTFLIGHT_PRE_SNAPSHOT POSTFLIGHT_PRE_SHA
+}
+
+# Returns 0 (no holds), 1 (holds emitted) — caller may surface this in its log.
+clarvis_postflight_verify() {
+    local _logfile="${1:-/dev/null}"
+    local _verifier="$CLARVIS_WORKSPACE/scripts/agents/spawn_postflight_verify.py"
+    local _rc=0
+    if [ -z "${POSTFLIGHT_PRE_SNAPSHOT:-}" ] || [ ! -f "$POSTFLIGHT_PRE_SNAPSHOT" ]; then
+        return 0
+    fi
+    if [ ! -f "$_verifier" ]; then
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] POSTFLIGHT: verifier missing at $_verifier (skipping)" >> "$_logfile"
+        rm -f "$POSTFLIGHT_PRE_SNAPSHOT" "$POSTFLIGHT_PRE_SHA" 2>/dev/null || true
+        return 0
+    fi
+    python3 "$_verifier" \
+        --pre-state-file "$POSTFLIGHT_PRE_SNAPSHOT" \
+        --session-id "${POSTFLIGHT_SESSION_ID:-unknown}" \
+        --workspace "$CLARVIS_WORKSPACE" \
+        >> "$_logfile" 2>&1 || _rc=$?
+    if [ "$_rc" -ne 0 ]; then
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] POSTFLIGHT_HELD: artifact-missing rows emitted (session=$POSTFLIGHT_SESSION_ID, rc=$_rc) — see monitoring/spawn_artifact_holds.log" >> "$_logfile"
+    fi
+    rm -f "$POSTFLIGHT_PRE_SNAPSHOT" "$POSTFLIGHT_PRE_SHA" 2>/dev/null || true
+    unset POSTFLIGHT_PRE_SNAPSHOT POSTFLIGHT_PRE_SHA POSTFLIGHT_SESSION_ID
+    return $_rc
+}
+
 # Sync Clarvis's own workspace (main branch) with origin before doing work.
 # Controlled by CLARVIS_SELF_SYNC env var:
 #   "skip" (default) — no-op; Clarvis commits directly to main.

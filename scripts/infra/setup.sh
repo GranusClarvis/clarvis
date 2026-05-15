@@ -68,10 +68,23 @@ else
 fi
 
 # Step 3: Set CLARVIS_WORKSPACE if not set
-echo "[2/2] Environment..."
+echo "[2/3] Environment..."
 if [ -z "${CLARVIS_WORKSPACE:-}" ]; then
     echo "  Tip: export CLARVIS_WORKSPACE=\"$REPO_ROOT\""
     echo "  (Add to your shell profile for persistence)"
+fi
+
+# Step 4: Install git pre-commit hooks (artifact check + orphan tag check).
+echo "[3/3] Git hooks..."
+if [ -d "$REPO_ROOT/.git" ]; then
+    if [ ! -e "$REPO_ROOT/.git/hooks/pre-commit" ]; then
+        python3 -m clarvis hooks install || \
+            echo "  WARN: clarvis hooks install failed (non-fatal)"
+    else
+        echo "  OK: .git/hooks/pre-commit already exists (leaving as-is, use --force to overwrite)"
+    fi
+else
+    echo "  Skipped: not a git repo"
 fi
 
 echo ""

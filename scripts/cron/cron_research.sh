@@ -30,6 +30,9 @@ sync_workspace 2>> "$LOGFILE"
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Research session starting ===" >> "$LOGFILE"
 emit_dashboard_event task_started --task-name "Research session" --section cron_research --executor claude-opus
 
+# Postflight artifact-existence baseline (CLARVIS_PROC_SPAWN_VERIFY_POSTFLIGHT)
+clarvis_postflight_snapshot
+
 # Extract the FIRST unchecked research task from QUEUE.md
 # Looks for items with [RESEARCH] tag, "Research:" prefix, or "Bundle " prefix
 # across all sections (P0, Pillar 1-4, Backlog)
@@ -540,4 +543,10 @@ print(f'Attribution logged: {attribution[\"research_id\"]}')
 rm -f "$TASK_OUTPUT_FILE"
 
 emit_dashboard_event task_completed --task-name "Research session" --section cron_research --status "$([ ${TASK_EXIT:-1} -eq 0 ] && echo success || echo failed)" --duration-s "${TASK_DURATION:-0}"
+
+# Postflight artifact verifier (CLARVIS_PROC_SPAWN_VERIFY_POSTFLIGHT)
+clarvis_postflight_verify "$LOGFILE"
+POSTFLIGHT_RC=$?
+
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Research session complete (${TASK_DURATION}s) ===" >> "$LOGFILE"
+exit $POSTFLIGHT_RC
