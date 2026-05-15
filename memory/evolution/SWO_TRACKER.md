@@ -287,13 +287,16 @@ Two tracks are live in parallel: **(A) Companion core loop** (this is the new ce
 
 If an item touches more than one lane, split it. The V2 item is usually the trunk now (was SHARED under the previous V2/V3 model).
 
-## Cosmic Casino — BB merge-in (2026-05-15, **PHASES B–D shipped**)
+## Cosmic Casino — BB merge-in (2026-05-15, **Phase A done; B–F structured**)
 
 Operator-bound: MegaETH is treated as a failed experiment. The BunnyBagz
 contract stack (`mega-house` repo) was absorbed into SWO as the casino
 layer on Monad. Full migration plan and branding rationale:
 `memory/evolution/bb_swo_monad_repositioning_2026-05-15.md`. Implementation
-log (this session): `memory/evolution/cosmic_casino_monad_testnet_live_2026-05-15.md`.
+log (Phase A): `memory/evolution/cosmic_casino_monad_testnet_live_2026-05-15.md`.
+**End-to-end delivery plan (Phases B–F)**: `memory/evolution/cosmic_casino_delivery_plan_2026-05-15.md`
+— authoritative for QA / E2E / rollout / contract verification / monitoring /
+launch checklist / post-launch hardening.
 
 **Branding locked in (autonomous decision 2026-05-15):**
 - Sub-brand: **Cosmic Casino** (matches `app/casino/page.tsx` `<title>`; aligns with SWO's "Cosmic Mandate" + "cosmic realm" copy).
@@ -327,6 +330,113 @@ log (this session): `memory/evolution/cosmic_casino_monad_testnet_live_2026-05-1
 | C12 | D | Update `CasinoContent.tsx` card statuses to `'testnet'` / `'live'` | `[SWO_CASINO_STATUS_FLIP]` | ✅ shipped — `testnet` badge surfaced |
 | C13 | — | Cancel BB Phase 3/4/5 queue items (`[BB_PHASE3_*]` etc.) — explicitly killed | `[SWO_CASINO_BB_CANCEL]` | ⏳ separate sweep task |
 | C14 | E | (Operator gate) Audit, multisig migration, mainnet 143 deploy via CREATE3 same salts | `[SWO_CASINO_MAINNET]` | ⏸ blocked on audit + operator |
+
+### Phase B — Foundry test suite full port (P0, autonomous)
+
+| # | Phase | Tag | Description | Status |
+|---|---|---|---|--------|
+| B1 | B | `[SWO_CASINO_TEST_PORT_BANKROLL]` | Port Bankroll unit + breaker + invariant | ⏳ |
+| B2 | B | `[SWO_CASINO_TEST_PORT_COINFLIP]` | Port Coinflip unit + commit-replay + Halmos | ⏳ |
+| B3 | B | `[SWO_CASINO_TEST_PORT_DICE]` | Port Dice unit | ⏳ |
+| B4 | B | `[SWO_CASINO_TEST_PORT_HILO]` | Port HiLo→ConstellationClimb unit | ⏳ |
+| B5 | B | `[SWO_CASINO_TEST_PORT_RANDOMNESS]` | Port randomness lib unit | ⏳ |
+| B6 | B | `[SWO_CASINO_TEST_PORT_ALLOWLIST]` | Port allowlist unit | ⏳ |
+| B7 | B | `[SWO_CASINO_TEST_PORT_DEPLOY_DETERMINISTIC]` | CREATE3 prediction = actual on local anvil + Monad dry-run | ⏳ |
+| B8 | B | `[SWO_CASINO_TEST_PORT_MEDUSA]` | Port Medusa invariant harness | ⏳ |
+| B9 | B | `[SWO_CASINO_TEST_COVERAGE_BAR]` | `forge coverage` ≥ 90% on `contracts/casino/src/` | ⏳ |
+
+### Phase C — CI integration (P0, autonomous)
+
+| # | Phase | Tag | Description | Status |
+|---|---|---|---|--------|
+| C-CI1 | C | `[SWO_CASINO_CI_FORGE_TEST]` | `.github/workflows/casino-forge.yml` runs `forge test` on PRs | ⏳ |
+| C-CI2 | C | `[SWO_CASINO_CI_FORGE_COVERAGE]` | `forge coverage` ≥ 90% line gate | ⏳ |
+| C-CI3 | C | `[SWO_CASINO_CI_FOUNDRY_FMT]` | `forge fmt --check` job | ⏳ |
+| C-CI4 | C | `[SWO_CASINO_CI_VITEST]` | Vitest casino project on casino path changes | ⏳ |
+| C-CI5 | C | `[SWO_CASINO_CI_E2E]` | Playwright connected suite on anvil-forked Monad | ⏳ |
+
+### Phase D — UI port (P0, autonomous, ~3–4 sessions)
+
+| # | Phase | Tag | Description | Status |
+|---|---|---|---|--------|
+| D1 | D | `[SWO_CASINO_LIB_CHAIN_CLIENT]` | Port `packages/chain` adapter → `lib/casino/{chain,abi,bets}.ts` | ⏳ |
+| D2 | D | `[SWO_CASINO_LIB_VERIFY]` | Port `packages/verify` → `lib/casino/verify.ts` | ⏳ |
+| D3 | D | `[SWO_CASINO_COMPONENT_BET_PANEL]` | Port BetPanel + CTA dwell ≥600ms (BB QA lesson F3) | ⏳ |
+| D4 | D | `[SWO_CASINO_COMPONENT_TRUST_STRIP]` | Port TrustStrip + mobile-44 hit floor | ⏳ |
+| D5 | D | `[SWO_CASINO_COMPONENT_WALLET_SHEET]` | Port WalletSheet + focus trap | ⏳ |
+| D6 | D | `[SWO_CASINO_COMPONENT_RECENT_BETS]` | Port RecentBets (empty until indexer) | ⏳ |
+| D7 | D | `[SWO_CASINO_COMPONENT_FAIRNESS_PROOF]` | Port FairnessProof commit/reveal display | ⏳ |
+| D8 | D | `[SWO_CASINO_COINFLIP_UI]` | `/casino/coinflip/page.tsx` end-to-end bet flow | ⏳ |
+| D9 | D | `[SWO_CASINO_DICE_UI]` | `/casino/dice/page.tsx` with rollUnder slider | ⏳ |
+| D10 | D | `[SWO_CASINO_HILO_UI]` | `/casino/constellation-climb/page.tsx` open/step/cashOut | ⏳ |
+| D11 | D | `[SWO_CASINO_UI_CHAIN_GATE]` | "Switch to Monad" CTA for wrong-chain users | ⏳ |
+| D12 | D | `[SWO_CASINO_TESTNET_OPEN_ACCESS]` | `AccessGate` bypass on chain 10143 for QA | ⏳ |
+| D13 | D | `[SWO_CASINO_MASCOT_SWAP]` | Star Skrumpey dealer art (reuse SWO IP, no RD spend) | ⏳ |
+| D14 | D | `[SWO_CASINO_NATSPEC_BLOCK_TIME_FIX]` | Sweep "≈25s on MegaETH" → "≈2 min on Monad" in code+docs+UI copy | ⏳ |
+| D15 | D | `[SWO_CASINO_ALLOWLIST_UI_GATE]` | UI reads `game.allowlist()` and pre-checks before signing | ⏳ |
+
+### Phase E — Off-chain infra (P1, autonomous)
+
+| # | Phase | Tag | Description | Status |
+|---|---|---|---|--------|
+| E1 | E | `[SWO_CASINO_KEEPER_PORT]` | Port seed-manager keeper to daemon / Vercel cron / Defender Autotask | ⏳ |
+| E2 | E | `[SWO_CASINO_KEEPER_DOCTOR]` | Port `keeper/doctor.ts` + `/api/casino/health` route | ⏳ |
+| E3 | E | `[SWO_CASINO_KEEPER_HEALTH_MONITOR]` | Cron-driven liveness alert (Telegram if offline >5 min) | ⏳ |
+| E4 | E | `[SWO_CASINO_INDEXER_PORT]` | Ponder config → Monad 10143; hosting target operator-decided | ⏳ |
+| E5 | E | `[SWO_CASINO_DEFENDER_MONITORS_PORT]` | Port 4 Defender monitors retargeted at monad-testnet network | ⏳ |
+| E6 | E | `[SWO_CASINO_DEFENDER_ACTION_TELEGRAM]` | Telegram forwarder → SWO ops chat | ⏳ |
+| E7 | E | `[SWO_CASINO_BANKROLL_TOP_UP_RUNBOOK]` | `docs/runbooks/CASINO_BANKROLL_TOPUP.md` + alert <0.05 MON | ⏳ |
+| E8 | E | `[SWO_CASINO_BREAKER_STRESS_TEST]` | Synthetic bot load fires breaker on testnet; `stress_breaker.sh` | ⏳ |
+
+### Phase F — QA, E2E, verification, runbooks, checklist (P1, autonomous)
+
+| # | Phase | Tag | Description | Status |
+|---|---|---|---|--------|
+| F1 | F | `[SWO_CASINO_QA_HARNESS_PORT]` | Port `apps/web/scripts/qa/{run,audits,report}.mjs` for `/casino/*` | ⏳ |
+| F2 | F | `[SWO_CASINO_QA_DEFECT_TAXONOMY]` | Adopt 8 BB defect classes for casino harness | ⏳ |
+| F3 | F | `[SWO_CASINO_PLAYWRIGHT_CONNECTED]` | `e2e/casino/{coinflip,dice,climb}.connected.spec.ts` | ⏳ |
+| F4 | F | `[SWO_CASINO_PLAYWRIGHT_FOCUS_RING]` | `e2e/casino/focus-ring.spec.ts` | ⏳ |
+| F5 | F | `[SWO_CASINO_PLAYWRIGHT_VISUAL_BASELINE]` | Snapshot 375×812 + 1280×800 baselines | ⏳ |
+| F6 | F | `[SWO_CASINO_VITEST_BET_PANEL]` | BetPanel component tests (44px hit floor, 600ms dwell, 12px floor) | ⏳ |
+| F7 | F | `[SWO_CASINO_MONADSCAN_VERIFY]` | `forge verify-contract` 4 contracts on Monadscan testnet | ⏳ |
+| F8 | F | `[SWO_CASINO_MAINNET_ADDRESS_PREDICTION]` | Publish predicted mainnet 143 addresses in `DEPLOYED.md` | ⏳ |
+| F9 | F | `[SWO_CASINO_OPERATOR_SMOKE_RUNBOOK]` | `docs/runbooks/CASINO_TESTNET_SMOKE.md` (operator-driven) | ⏳ |
+| F10 | F | `[SWO_CASINO_LAUNCH_CHECKLIST]` | `docs/runbooks/CASINO_LAUNCH_CHECKLIST.md` — T1–T14 + M1–M14 | ⏳ |
+| F11 | F | `[SWO_CASINO_POST_LAUNCH_HARDENING]` | `docs/runbooks/CASINO_POST_LAUNCH.md` — first-30-days cadence | ⏳ |
+| F12 | F | `[SWO_CASINO_TESTNET_EXIT_DOC]` | `cosmic_casino_testnet_exit_<date>.md` mirroring `bb_phase2_testnet_live` shape | ⏳ |
+
+### Phase G — Mainnet (P2, OPERATOR-GATED, no autonomous execution)
+
+| # | Phase | Tag | Description | Status |
+|---|---|---|---|--------|
+| G1 | G | `[SWO_CASINO_AUDIT_PICK]` | Operator picks audit firm (Spearbit / ToB / Cyfrin / ChainSecurity) | ⏸ operator |
+| G2 | G | `[SWO_CASINO_MULTISIG_MIGRATION]` | Ownership: EOA → SWO governance multisig (Safe on chain 143) | ⏸ operator |
+| G3 | G | `[SWO_CASINO_GEO_BLOCKLIST]` | OFAC + 9-country block (carry over from BB) at route layer + WAF | ⏸ operator |
+| G4 | G | `[SWO_CASINO_RESPONSIBLE_GAMING_PAGE]` | Port `/responsible-gaming` page + legal review | ⏸ operator |
+| G5 | G | `[SWO_CASINO_MAINNET_DEPLOY]` | `bash script/deploy-mainnet.sh` (same salts ⇒ same addresses) | ⏸ operator |
+| G6 | G | `[SWO_CASINO_MAINNET_SEED]` | Initial bankroll seed (operator-sized; suggested 10–50 MON) | ⏸ operator |
+| G7 | G | `[SWO_CASINO_MAINNET_OWNERSHIP_HANDOVER]` | `transferOwnership` to multisig; revoke deployer | ⏸ operator |
+| G8 | G | `[SWO_CASINO_MAINNET_SMOKE]` | Operator smoke on chain 143 (min stakes, 3 games) | ⏸ operator |
+| G9 | G | `[SWO_CASINO_STATUS_FLIP_MAINNET]` | UI status `'live'` on chain 143 in `CasinoContent.tsx` | ⏸ operator |
+
+### Testnet exit gates (must all green before mainnet ceremony)
+
+| # | Gate | Owner phase | Status |
+|---|---|---|--------|
+| T1 | Foundry coverage ≥ 90% | B | ⏳ |
+| T2 | CI `forge test` green on PRs | C | ⏳ |
+| T3 | All 3 game UIs live on `/casino/<game>` | D | ⏳ |
+| T4 | Chain-gate works for wrong-chain users | D | ⏳ |
+| T5 | Operator smoke: 3 bets settled on chain 10143 | F | ⏳ |
+| T6 | Defender monitors firing on testnet | E | ⏳ |
+| T7 | Keeper online ≥ 24h with clean health log | E | ⏳ |
+| T8 | Breaker stress test fires + resets cleanly | E | ⏳ |
+| T9 | Bankroll never <0.05 MON for >5 min | E | ⏳ |
+| T10 | Monadscan verified for all 4 contracts | F | ⏳ |
+| T11 | Mainnet addresses predicted and published | F | ⏳ |
+| T12 | QA harness: zero HIGH findings across 48 variants | F | ⏳ |
+| T13 | NatSpec/UI copy block-time sweep done | D | ⏳ |
+| T14 | `[SWO_CASINO_BB_CANCEL]` BB phase 3/4/5 sweep done | Clarvis | ⏳ |
 
 Resolved operator decisions (autonomous, 2026-05-15):
 - Deployer key: **reuse** BB deployer (it's funded, owns the salts). Same address on every chain via CREATE3.
