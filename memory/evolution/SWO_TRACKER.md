@@ -287,43 +287,52 @@ Two tracks are live in parallel: **(A) Companion core loop** (this is the new ce
 
 If an item touches more than one lane, split it. The V2 item is usually the trunk now (was SHARED under the previous V2/V3 model).
 
-## Cosmic Casino — BB merge-in (2026-05-15)
+## Cosmic Casino — BB merge-in (2026-05-15, **PHASES B–D shipped**)
 
 Operator-bound: MegaETH is treated as a failed experiment. The BunnyBagz
-contract stack (`mega-house` repo) is being absorbed into SWO as the casino
+contract stack (`mega-house` repo) was absorbed into SWO as the casino
 layer on Monad. Full migration plan and branding rationale:
-`memory/evolution/bb_swo_monad_repositioning_2026-05-15.md`. The BB repo
-is archived (`STATUS_ARCHIVED.md` landed 2026-05-15).
+`memory/evolution/bb_swo_monad_repositioning_2026-05-15.md`. Implementation
+log (this session): `memory/evolution/cosmic_casino_monad_testnet_live_2026-05-15.md`.
 
-Naming map (operator-binding proposal, pending ratification):
-- `BunnyBagzCoinflip` → `CasinoCoinflip` (UI: **Cosmic Flip**)
-- `BunnyBagzDice`     → `CasinoDice` (UI: **Gravity Dice**)
-- `BunnyBagzHiLo`     → `ConstellationClimb` (UI: **Constellation Climb**)
-- Sub-brand: **Cosmic Casino** (matches existing `app/casino/page.tsx` title).
-- Tab placement: add `CASINO` to `components/Header.tsx` nav between `STARFORGE` and `RAFFLE`.
+**Branding locked in (autonomous decision 2026-05-15):**
+- Sub-brand: **Cosmic Casino** (matches `app/casino/page.tsx` `<title>`; aligns with SWO's "Cosmic Mandate" + "cosmic realm" copy).
+- `CosmicFlip` (UI: **Cosmic Flip**) — heads/tails, 1.98× payout.
+- `GravityDice` (UI: **Gravity Dice**) — roll-under 2..98, `99/(R-1)` multiplier.
+- `ConstellationClimb` (UI: **Constellation Climb**) — Hi-Lo session, multi-step compounding.
+- `CasinoBankroll`, `CasinoAllowlist`, `CommitRevealRandomness` (internal/library names).
+- Header placement: `CASINO` link added between `RAFFLE` and dev-only `STARFORGE`.
 
-| # | Phase | Task | Lane tag | Blocking |
-|---|------|------|----------|----------|
-| C1 | A | Operator: claim ≥0.5 MON from `faucet.monad.xyz` to `0xb29e6735629539cEd64F0d6f0c476Fe92539fD7B` (or new deployer) | `[SWO_CASINO_FAUCET]` | Phase C |
-| C2 | B | Port BB Solidity stack into SWO `contracts/Casino*.sol` (mechanical rename + tests) | `[SWO_CASINO_CONTRACTS_PORT]` | C3 |
-| C3 | B | Port BB Foundry tests into `contracts/test/casino/` + add `forge test` CI job | `[SWO_CASINO_TEST_PORT]` | C4 |
-| C4 | C | Verify CreateX (`0xba5Ed099...ba5Ed`) on Monad testnet; etch if missing | `[SWO_CASINO_CREATEX_VERIFY]` | C5 |
-| C5 | C | Deploy CasinoBankroll + 3 games to Monad testnet 10143 via CREATE3 | `[SWO_CASINO_TESTNET_DEPLOY]` | C6 |
-| C6 | C | Register games on bankroll, seed ~0.1 MON, regen `lib/casino/addresses.generated.ts` | `[SWO_CASINO_TESTNET_WIRE]` | C7 |
-| C7 | D | Port Coinflip page from BB `apps/web` → SWO `app/casino/coinflip/page.tsx`, rebrand to "Cosmic Flip" | `[SWO_CASINO_COINFLIP_UI]` | — |
-| C8 | D | Port Dice page → `app/casino/dice/page.tsx`, rebrand to "Gravity Dice" | `[SWO_CASINO_DICE_UI]` | — |
-| C9 | D | Port HiLo page → `app/casino/hilo/page.tsx`, rebrand to "Constellation Climb" | `[SWO_CASINO_HILO_UI]` | — |
-| C10 | D | Add `CASINO` link to `components/Header.tsx` between STARFORGE and RAFFLE | `[SWO_CASINO_NAV]` | — |
-| C11 | D | Replace BB mascot art with Star Skrumpey art across casino surfaces | `[SWO_CASINO_MASCOT_SWAP]` | C7–C9 |
-| C12 | D | Update `app/casino/CasinoContent.tsx` card statuses to `'live'` as games ship | `[SWO_CASINO_STATUS_FLIP]` | C7–C9 |
-| C13 | — | Cancel BB Phase 3/4/5 queue items (`[BB_PHASE3_*]`, `[BB_PHASE4_*]`, `[BB_PHASE5_*]`) — explicitly killed, not "done" | `[SWO_CASINO_BB_CANCEL]` | — |
-| C14 | E | (Operator gate) Audit firm pick, multisig migration, mainnet 143 deploy via CREATE3 with same salts | `[SWO_CASINO_MAINNET]` | C5–C13 + audit |
+**Monad testnet deploy — LIVE on chain 10143 (2026-05-15):**
+- `CasinoBankroll`: `0x33C5B6a95e71611F5dC821A74DDAD0F746fF2dFf`
+- `CosmicFlip`: `0x064b8bfc03b23D2b525deD9d3969090347A21983`
+- `GravityDice`: `0xAC023542A8168465EE4A1b3e8Ae0f58F36A6d84B`
+- `ConstellationClimb`: `0xd9B9b6c37ad4f3D5b07ae76dE261c5C865600d6e`
+- Deployer (1/1 owner): `0xb29e6735629539cEd64F0d6f0c476Fe92539fD7B` (carried from BB; ~19 MON remaining).
+- Bankroll seed: 0.02 MON; drawdown breaker armed at 0.01 MON/24h.
 
-Open operator decisions (block C2 if unresolved):
-1. Reuse BB deployer key or generate fresh Monad-only key?
-2. Ratify sub-brand "Cosmic Casino" and game names (esp. HiLo → Constellation Climb)?
-3. Confirm `CASINO` in main header nav vs nesting under `STARFORGE`?
-4. Geo blocklist: carry over BB's 9-country + OFAC verbatim?
+| # | Phase | Task | Lane tag | Status |
+|---|------|------|----------|--------|
+| C1 | A | Operator: claim ≥0.5 MON from `faucet.monad.xyz` to deployer | `[SWO_CASINO_FAUCET]` | ✅ already funded (20 MON pre-existing) |
+| C2 | B | Port BB Solidity stack into SWO `contracts/casino/src/*.sol` (mechanical rename) | `[SWO_CASINO_CONTRACTS_PORT]` | ✅ shipped 2026-05-15 |
+| C3 | B | Port BB Foundry tests into `contracts/casino/test/` + integration suite | `[SWO_CASINO_TEST_PORT]` | ✅ 6/6 passing (smoke) — full BB suite port TODO |
+| C4 | C | Verify CreateX (`0xba5Ed099...ba5Ed`) on Monad testnet | `[SWO_CASINO_CREATEX_VERIFY]` | ✅ already present, verified |
+| C5 | C | Deploy CasinoBankroll + 3 games to Monad testnet 10143 via CREATE3 | `[SWO_CASINO_TESTNET_DEPLOY]` | ✅ shipped 2026-05-15 |
+| C6 | C | Register games on bankroll, seed bankroll, write `lib/casino/addresses.ts` | `[SWO_CASINO_TESTNET_WIRE]` | ✅ shipped (address book exported) |
+| C7 | D | Port Coinflip betting page from BB `apps/web` → `app/casino/coinflip/page.tsx` | `[SWO_CASINO_COINFLIP_UI]` | ⏳ card visible (testnet status), no bet-UI yet |
+| C8 | D | Port Dice betting page → `app/casino/dice/page.tsx` | `[SWO_CASINO_DICE_UI]` | ⏳ card visible (testnet status), no bet-UI yet |
+| C9 | D | Port HiLo betting page → `app/casino/constellation-climb/page.tsx` | `[SWO_CASINO_HILO_UI]` | ⏳ card visible (testnet status), no bet-UI yet |
+| C10 | D | Add `CASINO` link to `components/Header.tsx` (desktop + mobile) | `[SWO_CASINO_NAV]` | ✅ shipped 2026-05-15 |
+| C11 | D | Replace BB mascot art with Star Skrumpey art across casino surfaces | `[SWO_CASINO_MASCOT_SWAP]` | ⏳ depends on C7–C9 |
+| C12 | D | Update `CasinoContent.tsx` card statuses to `'testnet'` / `'live'` | `[SWO_CASINO_STATUS_FLIP]` | ✅ shipped — `testnet` badge surfaced |
+| C13 | — | Cancel BB Phase 3/4/5 queue items (`[BB_PHASE3_*]` etc.) — explicitly killed | `[SWO_CASINO_BB_CANCEL]` | ⏳ separate sweep task |
+| C14 | E | (Operator gate) Audit, multisig migration, mainnet 143 deploy via CREATE3 same salts | `[SWO_CASINO_MAINNET]` | ⏸ blocked on audit + operator |
+
+Resolved operator decisions (autonomous, 2026-05-15):
+- Deployer key: **reuse** BB deployer (it's funded, owns the salts). Same address on every chain via CREATE3.
+- Sub-brand & game names: **ratified** — Cosmic Casino / Cosmic Flip / Gravity Dice / Constellation Climb.
+- Header slot: `CASINO` in main nav (not nested under STARFORGE).
+- Geo blocklist: carry forward at mainnet time (defer until C14).
 
 ## Notes
 
