@@ -192,3 +192,101 @@ def test_script_compiles():
         text=True,
     )
     assert result.returncode == 0, result.stderr
+
+
+# ---------------------------------------------------------------------------
+# Parity cases for [CLARVIS_PROC_ARTIFACT_HOOK_REQUIRE_CONCRETE_PATH_PARITY]:
+# newly-checked rows with zero concrete artifact paths must FAIL, not silently
+# pass. Active-lane bypass still exempts them.
+# ---------------------------------------------------------------------------
+
+
+def test_newly_checked_row_with_no_concrete_path_is_rejected(
+    hook, workspace, tmp_path, capsys
+):
+    head = tmp_path / "QUEUE.head.md"
+    staged = tmp_path / "QUEUE.staged.md"
+    _write_queue(
+        head,
+        [
+            "## P0 — Current Sprint",
+            "- [ ] **[CLARVIS_TEST_PROSE_ONLY]** Investigate the thing. (PROJECT:CLARVIS)",
+        ],
+    )
+    _write_queue(
+        staged,
+        [
+            "## P0 — Current Sprint",
+            "- [x] [UNVERIFIED] **[CLARVIS_TEST_PROSE_ONLY]** Investigated and decided no action needed. (PROJECT:CLARVIS)",
+        ],
+    )
+    rc = hook.main(
+        [
+            "--path",
+            str(staged),
+            "--head",
+            str(head),
+            "--workspace",
+            str(workspace),
+        ]
+    )
+    assert rc == 1
+    captured = capsys.readouterr()
+    # Error text must clearly tell the author to add a real file path.
+    assert "NO_CONCRETE_ARTIFACT_PATH" in captured.err
+    assert "add a real file path" in captured.err
+
+
+def test_no_concrete_path_row_is_bypassed_via_active_lanes(
+    hook, workspace, tmp_path, monkeypatch
+):
+    monkeypatch.setenv("CLARVIS_ACTIVE_PROJECT_LANES", "PROJECT:SWO")
+    head = tmp_path / "QUEUE.head.md"
+    staged = tmp_path / "QUEUE.staged.md"
+    _write_queue(
+        head,
+        [
+            "## P1 — This Week",
+            "- [ ] **[SWO_V2_PROSE_ONLY]** Polish companion vibes. (PROJECT:SWO)",
+        ],
+    )
+    _write_queue(
+        staged,
+        [
+            "## P1 — This Week",
+            "- [x] [UNVERIFIED] **[SWO_V2_PROSE_ONLY]** Polished, ready for review. (PROJECT:SWO)",
+        ],
+    )
+    rc = hook.main(
+        [
+            "--path",
+            str(staged),
+            "--head",
+            str(head),
+            "--workspace",
+            str(workspace),
+        ]
+    )
+    assert rc == 0, "PROJECT:SWO no-path row should bypass the artifact check"
+
+
+def test_check_rows_returns_distinct_failure_codes(hook, workspace, tmp_path):
+    """The hook exports `MISSING_PATHS` and `NO_CONCRETE_ARTIFACT_PATH` as
+    module constants and `check_rows()` tags each failure with its code so
+    downstream tooling (postflight verifier) can react differently."""
+    assert hook.MISSING_PATHS == "MISSING_PATHS"
+    assert hook.NO_CONCRETE_ARTIFACT_PATH == "NO_CONCRETE_ARTIFACT_PATH"
+
+    rows = [
+        (
+            1,
+            "- [x] [UNVERIFIED] **[T_MISSING]** at `scripts/never_existed.py`. (PROJECT:CLARVIS)",
+        ),
+        (
+            2,
+            "- [x] [UNVERIFIED] **[T_PROSE]** Just shipped, trust me. (PROJECT:CLARVIS)",
+        ),
+    ]
+    failures = hook.check_rows(rows, workspace=workspace, active_lanes=set())
+    codes = sorted(f[2] for f in failures)
+    assert codes == [hook.MISSING_PATHS, hook.NO_CONCRETE_ARTIFACT_PATH]

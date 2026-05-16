@@ -34,9 +34,14 @@ from typing import List, Tuple
 DEFAULT_QUEUE_REL = "memory/evolution/QUEUE.md"
 DEFAULT_HOLDS_LOG_REL = "monitoring/spawn_artifact_holds.log"
 HOLD_ANNOTATION_RE = re.compile(
-    r"\s*\[~\]\s*SPAWN_POSTFLIGHT_HELD:\s*ARTIFACT_MISSING"
+    r"\s*\[~\]\s*SPAWN_POSTFLIGHT_HELD:\s*(?:ARTIFACT_MISSING|NO_CONCRETE_ARTIFACT_PATH)"
 )
 TAG_RE = re.compile(r"\*\*\[([A-Z0-9_\-]+)\]\*\*")
+NO_PATH_ANNOTATION = (
+    "[~] SPAWN_POSTFLIGHT_HELD: NO_CONCRETE_ARTIFACT_PATH — row cites no "
+    "on-disk path under docs/, monitoring/, memory/, scripts/, or tests/ — "
+    "add a real file path before closing."
+)
 
 
 def _load_hook_module():
@@ -105,26 +110,43 @@ def verify(
 
     holds: List[dict] = []
     annotated_post_lines = list(post_lines)
-    for line_no, line, missing in failures:
+    for line_no, line, code, missing in failures:
         # Skip rows that already carry a postflight-held annotation — avoid
         # double-annotating across repeated postflight runs.
         if HOLD_ANNOTATION_RE.search(line):
             continue
         tag = _extract_tag(line)
-        for missing_path in missing:
-            hold = {
-                "ts": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                "session_id": session_id,
-                "tag": tag,
-                "row_line_no": line_no,
-                "missing_path": missing_path,
-                "row_excerpt": line[:240],
-            }
-            holds.append(hold)
-        # Append a single annotation per missing path to the row.
-        annotation_suffix = " ".join(
-            f"[~] SPAWN_POSTFLIGHT_HELD: ARTIFACT_MISSING — {p}" for p in missing
-        )
+        ts = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+        if code == _HOOK.NO_CONCRETE_ARTIFACT_PATH:
+            holds.append(
+                {
+                    "ts": ts,
+                    "session_id": session_id,
+                    "tag": tag,
+                    "row_line_no": line_no,
+                    "reason": "NO_CONCRETE_ARTIFACT_PATH",
+                    "missing_path": None,
+                    "row_excerpt": line[:240],
+                }
+            )
+            annotation_suffix = NO_PATH_ANNOTATION
+        else:
+            for missing_path in missing:
+                holds.append(
+                    {
+                        "ts": ts,
+                        "session_id": session_id,
+                        "tag": tag,
+                        "row_line_no": line_no,
+                        "reason": "ARTIFACT_MISSING",
+                        "missing_path": missing_path,
+                        "row_excerpt": line[:240],
+                    }
+                )
+            annotation_suffix = " ".join(
+                f"[~] SPAWN_POSTFLIGHT_HELD: ARTIFACT_MISSING — {p}"
+                for p in missing
+            )
         idx = line_no - 1
         if 0 <= idx < len(annotated_post_lines):
             existing = annotated_post_lines[idx]
@@ -219,14 +241,16 @@ def main(argv: List[str] | None = None) -> int:
 
     if holds and not args.quiet:
         print(
-            f"spawn_postflight_verify: {len(holds)} ARTIFACT_MISSING hold(s) "
+            f"spawn_postflight_verify: {len(holds)} artifact hold(s) "
             f"emitted for session {args.session_id}",
             file=sys.stderr,
         )
         for hold in holds:
+            reason = hold.get("reason", "ARTIFACT_MISSING")
+            missing = hold.get("missing_path") or "<none>"
             print(
-                f"  HOLD tag={hold['tag']} missing={hold['missing_path']} "
-                f"row_line={hold['row_line_no']}",
+                f"  HOLD tag={hold['tag']} reason={reason} "
+                f"missing={missing} row_line={hold['row_line_no']}",
                 file=sys.stderr,
             )
     return rc

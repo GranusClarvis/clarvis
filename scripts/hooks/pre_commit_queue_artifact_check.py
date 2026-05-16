@@ -56,6 +56,12 @@ from typing import Iterable, List, Set, Tuple
 
 TARGET = "memory/evolution/QUEUE.md"
 
+# Failure codes returned by `check_rows()`. These are stable identifiers so
+# downstream tooling (postflight verifier, log scrapers) can distinguish the
+# two ways a closure row can fail.
+MISSING_PATHS = "MISSING_PATHS"
+NO_CONCRETE_ARTIFACT_PATH = "NO_CONCRETE_ARTIFACT_PATH"
+
 # Rows that are `[x] [UNVERIFIED]`.
 CLOSED_UNVERIFIED_RE = re.compile(
     r"^\s*-\s*\[[xX]\]\s*\[UNVERIFIED\]"
@@ -160,11 +166,15 @@ def check_rows(
     *,
     workspace: Path,
     active_lanes: Set[str],
-) -> List[Tuple[int, str, List[str]]]:
-    """Return `[(line_no, line, missing_paths), ...]` for rows that reference
-    at least one artifact that does not exist on disk *and* are not exempt
-    via a matching active project lane."""
-    failures: List[Tuple[int, str, List[str]]] = []
+) -> List[Tuple[int, str, str, List[str]]]:
+    """Return `[(line_no, line, code, paths), ...]` for rows that fail the
+    artifact check. `code` is one of `MISSING_PATHS` (referenced paths are
+    not on disk) or `NO_CONCRETE_ARTIFACT_PATH` (row references no concrete
+    artifact path at all — prose-only closure).
+
+    Rows in an active project lane (via `CLARVIS_ACTIVE_PROJECT_LANES`) are
+    exempt from both checks."""
+    failures: List[Tuple[int, str, str, List[str]]] = []
     for line_no, line in rows:
         row_tags = _row_project_tags(line)
         if active_lanes and (row_tags & active_lanes):
@@ -172,11 +182,12 @@ def check_rows(
             continue
         paths = _extract_paths(line)
         if not paths:
-            # No referenced artifacts -> nothing to verify, accept.
+            # Prose-only closure — no on-disk artifact to verify against.
+            failures.append((line_no, line, NO_CONCRETE_ARTIFACT_PATH, []))
             continue
         missing = [p for p in paths if not (workspace / p).exists()]
         if missing:
-            failures.append((line_no, line, missing))
+            failures.append((line_no, line, MISSING_PATHS, missing))
     return failures
 
 
@@ -213,13 +224,23 @@ def _resolve_workspace() -> Path:
 
 
 def _print_failures(
-    failures: List[Tuple[int, str, List[str]]], stream=sys.stderr
+    failures: List[Tuple[int, str, str, List[str]]], stream=None
 ) -> None:
-    for line_no, line, missing in failures:
+    if stream is None:
+        stream = sys.stderr
+    for line_no, line, code, missing in failures:
         snippet = line if len(line) <= 200 else line[:197] + "..."
-        print(f"  L{line_no}: {snippet}", file=stream)
-        for path in missing:
-            print(f"      MISSING: {path}", file=stream)
+        print(f"  L{line_no} [{code}]: {snippet}", file=stream)
+        if code == NO_CONCRETE_ARTIFACT_PATH:
+            print(
+                "      NO_CONCRETE_ARTIFACT_PATH: row cites no on-disk path "
+                "under docs/, monitoring/, memory/, scripts/, or tests/ — "
+                "add a real file path before closing.",
+                file=stream,
+            )
+        else:
+            for path in missing:
+                print(f"      MISSING: {path}", file=stream)
 
 
 def main(argv: List[str] | None = None) -> int:
@@ -268,8 +289,8 @@ def main(argv: List[str] | None = None) -> int:
         if not failures:
             return 0
         print(
-            f"queue-artifact-check: {len(failures)} newly-checked row(s) reference "
-            f"missing artifacts in {args.path}:",
+            f"queue-artifact-check: {len(failures)} newly-checked row(s) failed "
+            f"the artifact check in {args.path}:",
             file=sys.stderr,
         )
         _print_failures(failures)
@@ -285,7 +306,7 @@ def main(argv: List[str] | None = None) -> int:
         rows = _newly_checked_rows(None, staged_lines)
         failures = check_rows(rows, workspace=workspace, active_lanes=active_lanes)
         print(
-            f"queue-artifact-check: dry-run found {len(failures)} artifact-missing "
+            f"queue-artifact-check: dry-run found {len(failures)} failing "
             f"newly-checked row(s) in {target}",
             file=sys.stderr,
         )
@@ -308,15 +329,17 @@ def main(argv: List[str] | None = None) -> int:
 
     print(
         f"queue-artifact-check: {len(failures)} newly-checked `[x] [UNVERIFIED]` "
-        f"row(s) in {TARGET} reference artifact(s) that do not exist on disk:",
+        f"row(s) in {TARGET} failed the artifact check:",
         file=sys.stderr,
     )
     _print_failures(failures)
     print(
-        "\nClosure rows must point at concrete, on-disk artifacts (file paths "
-        "under docs/, monitoring/, memory/, scripts/, tests/). Either ship the "
-        "artifact, fix the path, or move the work into the appropriate active "
-        "project lane (CLARVIS_ACTIVE_PROJECT_LANES).",
+        "\nEvery `[x] [UNVERIFIED]` closure row must point at a concrete, "
+        "on-disk artifact path (file paths under docs/, monitoring/, memory/, "
+        "scripts/, tests/). Prose-only closures are not accepted. Either ship "
+        "the artifact and add a real file path to the row, fix the path, or "
+        "move the work into the appropriate active project lane "
+        "(CLARVIS_ACTIVE_PROJECT_LANES).",
         file=sys.stderr,
     )
     return 1
