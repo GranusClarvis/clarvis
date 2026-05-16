@@ -158,6 +158,11 @@ _JOBS = {
     "goal_hygiene": "10 5 * * 0 cd __WORKSPACE__ && python3 scripts/hooks/goal_hygiene.py clean >> memory/cron/goal_hygiene.log 2>&1",
     "brain_hygiene": "15 5 * * 0 cd __WORKSPACE__ && python3 scripts/brain_mem/brain_hygiene.py run >> memory/cron/brain_hygiene.log 2>&1",
     "data_lifecycle": "20 5 * * 0 cd __WORKSPACE__ && python3 scripts/infra/data_lifecycle.py >> memory/cron/data_lifecycle.log 2>&1",
+    # Sunday 05:25 — SWO_TRACKER.md -> QUEUE.md sync (forward: append missing
+    # P0/P1 tracker rows; inverse: archive queue rows whose tracker is DONE).
+    # Sits between schedule_audit at 05:24 and cleanup at 05:30. See
+    # [CLARVIS_PROC_QUEUE_SWO_SYNC].
+    "queue_swo_sync": "25 5 * * 0 cd __WORKSPACE__ && python3 scripts/cron/queue_swo_sync.py >> memory/cron/queue_swo_sync.log 2>&1",
     "cleanup": "30 5 * * 0 __WORKSPACE__/scripts/cron/cron_cleanup.sh >> __WORKSPACE__/memory/cron/cleanup.log 2>&1",
     # Evaluation
     "pi_refresh": "45 5 * * * __WORKSPACE__/scripts/cron/cron_pi_refresh.sh >> __WORKSPACE__/memory/cron/pi_refresh.log 2>&1",
@@ -227,7 +232,7 @@ _PRESETS: dict[str, dict] = {
             # Reports
             "report_morning", "report_evening",
             # Weekly hygiene
-            "goal_hygiene", "brain_hygiene", "data_lifecycle", "cleanup",
+            "goal_hygiene", "brain_hygiene", "data_lifecycle", "queue_swo_sync", "cleanup",
             # Weekly BB (BunnyBagz) drift verification
             "bb_phase_verification",
             # Daily BB Phase 3 internal beta summary (no-op until operator flips BUNNYBAGZ_BETA_ACTIVE=1)
@@ -269,7 +274,7 @@ _PRESETS: dict[str, dict] = {
             # Reports
             "report_morning", "report_evening",
             # Weekly hygiene
-            "goal_hygiene", "brain_hygiene", "data_lifecycle", "cleanup",
+            "goal_hygiene", "brain_hygiene", "data_lifecycle", "queue_swo_sync", "cleanup",
             # Weekly BB (BunnyBagz) drift verification
             "bb_phase_verification",
             # Daily BB Phase 3 internal beta summary (no-op until operator flips BUNNYBAGZ_BETA_ACTIVE=1)
