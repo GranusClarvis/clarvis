@@ -220,5 +220,12 @@ fi
 clarvis_postflight_verify "$LOGFILE"
 POSTFLIGHT_RC=$?
 
+# Preserve first non-zero rc (CLARVIS_PROC_CRON_POSTFLIGHT_EXIT_PRESERVE_FAILURE).
+# Evolution uses CLAUDE_EXIT and EVO_EXIT instead of TASK_EXIT.
+FINAL_RC=$(combine_exit_codes "${CLAUDE_EXIT:-0}" "${EVO_EXIT:-0}" "$POSTFLIGHT_RC")
+if [ "$FINAL_RC" != "0" ] && [ "$FINAL_RC" != "$POSTFLIGHT_RC" ]; then
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] EXIT_PRESERVE: claude=${CLAUDE_EXIT:-0} evo=${EVO_EXIT:-0} verifier=$POSTFLIGHT_RC -> exit $FINAL_RC" >> "$LOGFILE"
+fi
+
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Evolution analysis complete ===" >> "$LOGFILE"
-exit $POSTFLIGHT_RC
+exit "$FINAL_RC"

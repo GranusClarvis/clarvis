@@ -202,5 +202,11 @@ emit_dashboard_event task_completed --task-name "Implementation Sprint" --sectio
 clarvis_postflight_verify "$LOGFILE"
 POSTFLIGHT_RC=$?
 
+# Preserve first non-zero rc (CLARVIS_PROC_CRON_POSTFLIGHT_EXIT_PRESERVE_FAILURE)
+FINAL_RC=$(combine_exit_codes "${TASK_EXIT:-0}" "${PREFLIGHT_EXIT:-0}" "$POSTFLIGHT_RC")
+if [ "$FINAL_RC" != "0" ] && [ "$FINAL_RC" != "$POSTFLIGHT_RC" ]; then
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] EXIT_PRESERVE: task=${TASK_EXIT:-0} preflight=${PREFLIGHT_EXIT:-0} verifier=$POSTFLIGHT_RC -> exit $FINAL_RC" >> "$LOGFILE"
+fi
+
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Implementation Sprint complete (${TASK_DURATION}s) ===" >> "$LOGFILE"
-exit $POSTFLIGHT_RC
+exit "$FINAL_RC"

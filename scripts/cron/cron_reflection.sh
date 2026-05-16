@@ -171,5 +171,17 @@ fi
 clarvis_postflight_verify "$LOGFILE"
 POSTFLIGHT_RC=$?
 
+# Preserve first non-zero rc (CLARVIS_PROC_CRON_POSTFLIGHT_EXIT_PRESERVE_FAILURE).
+# Reflection has no single TASK_EXIT — it accumulates per-step failures into
+# STEP_FAILURES. Treat any step failure as a non-zero rc (use exit code 1).
+REFLECTION_RC=0
+if [ "${STEP_FAILURES:-0}" -gt 0 ]; then
+    REFLECTION_RC=1
+fi
+FINAL_RC=$(combine_exit_codes "$REFLECTION_RC" "$POSTFLIGHT_RC")
+if [ "$FINAL_RC" != "0" ] && [ "$FINAL_RC" != "$POSTFLIGHT_RC" ]; then
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] EXIT_PRESERVE: step_failures=${STEP_FAILURES:-0} verifier=$POSTFLIGHT_RC -> exit $FINAL_RC" >> "$LOGFILE"
+fi
+
 echo "[$(date -u +%Y-%m-%dT%H:%M:%S)] === Reflection complete (${STEP_FAILURES} failures) ===" >> "$LOGFILE"
-exit $POSTFLIGHT_RC
+exit "$FINAL_RC"

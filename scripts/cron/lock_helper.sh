@@ -277,3 +277,32 @@ acquire_maintenance_lock() {
     _register_lock "$MAINTENANCE_LOCK"
     _audit_lock "clarvis_maintenance.lock" "ACQUIRE"
 }
+
+# =============================================================================
+# combine_exit_codes <rc1> [rc2] [rc3] ...
+#
+# Echoes the first non-zero argument, or 0 if all are zero / absent.
+# Used by cron orchestrators to preserve task/preflight failure exit codes
+# when the postflight verifier (which runs unconditionally at end-of-script)
+# returns 0. Without this, `exit $POSTFLIGHT_RC` silently masks a failed
+# Claude/preflight run and the watchdog records a false success.
+#
+# Why this matters: CLARVIS_PROC_CRON_POSTFLIGHT_EXIT_PRESERVE_FAILURE — the
+# postflight verifier was added late and clobbered the orchestrator's exit
+# status. Returning the FIRST non-zero rc preserves the earliest failure
+# signal (root cause) rather than the last one (cleanup pass).
+#
+# Usage:
+#   exit "$(combine_exit_codes "$TASK_EXIT" "$POSTFLIGHT_RC")"
+# =============================================================================
+combine_exit_codes() {
+    local rc
+    for rc in "$@"; do
+        # Treat empty/unset as zero (script may not have set TASK_EXIT yet)
+        if [ -n "$rc" ] && [ "$rc" != "0" ]; then
+            echo "$rc"
+            return 0
+        fi
+    done
+    echo "0"
+}
