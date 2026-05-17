@@ -46,29 +46,29 @@ Clarvis should grow into:
 - likely first extraction candidate: **ClarvisDB** (vector memory with graph associations)
 - a public website presenting Clarvis, linked repos, current work, and benchmarks
 
-## Current State (2026-05-10)
+## Current State (2026-05-17)
 
 | Capability | Status | Summary |
 |-----------|--------|---------|
-| **Brain (ClarvisDB)** | 87% | memory_quality=0.96, retrieval_precision=0.78 |
-| **Session Continuity** | 62% | autonomy=0.62 |
-| **Heartbeat Evolution** | 80% | task_success=0.80 |
-| **Self-Awareness** | 77% | Phi=0.620 |
-| **Task Tracking** | 80% | task_success=0.80, prompt_context=0.79 |
+| **Brain (ClarvisDB)** | 90% | memory_quality=0.99, retrieval_precision=0.81 |
+| **Session Continuity** | 60% | autonomy=0.60 |
+| **Heartbeat Evolution** | 84% | task_success=0.84 |
+| **Self-Awareness** | 78% | Phi=0.633 |
+| **Task Tracking** | 84% | task_success=0.84, prompt_context=0.83 |
 | **Reflection** | 94% | reflection log fresh (0d old) |
 | **Confidence Gating** | 95% | 50/50 recent predictions resolved |
-| **Attention & Working Memory** | 89% | prompt_context=0.79 |
-| **Reasoning Chains** | 100% | 338 chain files |
+| **Attention & Working Memory** | 94% | prompt_context=0.83 |
+| **Reasoning Chains** | 100% | 394 chain files |
 | **Knowledge Synthesis** | 100% | 60 concepts, 50 cross-domain, 828 edges |
-| **Procedural Memory** | 92% | 193 procedures |
-| **Context Quality** | 87% | prompt_context=0.79, efficiency=0.99 |
+| **Procedural Memory** | 92% | 215 procedures |
+| **Context Quality** | 90% | prompt_context=0.83, efficiency=0.99 |
 | **Monitoring** | 95% | health log fresh (0h old) |
 | **Episodic Memory** | 96% | 500 episodes |
 | **Self-Surgery** | 92% | spine module healthy |
 | **Cognitive Workspace** | 88% | 0 items across buffers |
 | **ACT-R Activation** | 88% | stable |
 | **Agent Orchestrator** | 80% | no agent dir |
-| **Performance Index** | 94% | PI=0.9413 |
+| **Performance Index** | 95% | PI=0.95 |
 | **Public Surface** | 90% | Dockerfile=yes, README=yes |
 
 ### Weekly State Note (2026-05-10)
