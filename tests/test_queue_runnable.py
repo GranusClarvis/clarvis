@@ -133,19 +133,32 @@ def test_in_progress_counted_as_blocked(tmp_engine):
     assert view.blocked_count == 1
 
 
-def test_succeeded_but_unchecked_counts_as_blocked(tmp_engine):
-    """If sidecar says succeeded but checkbox stays [ ], runnable_view should
-    surface this — it indicates archive_completed/QUEUE drift."""
+def test_succeeded_with_open_checkbox_gets_resurrected(tmp_engine):
+    """SWO Casino drift regression (2026-05-18): if sidecar says succeeded but
+    checkbox is `[ ]` in QUEUE.md, reconcile (called by runnable_view) must
+    resurrect those entries to pending — `[ ]` is the operator-authoritative
+    open signal. Previously the runnable_view bucketed them as 'succeeded'
+    drift and surfaced a warning; the new semantics make this unreachable
+    because reconcile heals the sidecar first."""
     tmp_engine.reconcile()
     sidecar = tmp_engine._load()
     sidecar["URGENT_FIX"]["state"] = "succeeded"
     sidecar["DEPLOY_PREP"]["state"] = "succeeded"
     sidecar["ENGINE_V2"]["state"] = "succeeded"
     tmp_engine._save(sidecar)
+
     view = runnable_view(engine=tmp_engine)
-    assert view.counts_by_reason.get("succeeded", 0) == 3
-    assert any("checkbox still" in f for f in view.findings)
-    assert view.severity in ("warn", "critical")
+
+    # No row should land in the 'succeeded' bucket — reconcile resurrected them
+    assert view.counts_by_reason.get("succeeded", 0) == 0
+    assert not any("checkbox still" in f for f in view.findings)
+    # All three formerly-succeeded rows are now eligible
+    assert view.eligible_count >= 3
+    # Sidecar reflects the resurrection
+    s = tmp_engine._load()
+    assert s["URGENT_FIX"]["state"] == "pending"
+    assert s["DEPLOY_PREP"]["state"] == "pending"
+    assert s["ENGINE_V2"]["state"] == "pending"
 
 
 def test_all_blocked_is_critical(tmp_engine):

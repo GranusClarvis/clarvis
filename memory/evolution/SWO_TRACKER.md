@@ -287,6 +287,52 @@ Two tracks are live in parallel: **(A) Companion core loop** (this is the new ce
 
 If an item touches more than one lane, split it. The V2 item is usually the trunk now (was SHARED under the previous V2/V3 model).
 
+## Sanctuary Engagement V2 — 7 PRs (added 2026-05-18, operator brief)
+
+> **Center of gravity for V2 after the cozy-polish track shipped.** Infrastructure is solid (stats, mood, decay, bond, chat personality, expeditions engine, STAR ledger) but the **design layer is flat**: actions all bump similar stats, no preferences, no risk, no reason to sleep. The Expeditions engine has no DB/API/UI yet. These 7 PRs close the gap.
+>
+> **Binding plan:** `docs/SANCTUARY_ENGAGEMENT_PLAN.md` — PR-quality rules, design doctrine, anti-patterns, the 7-PR order.
+
+| PR | Tag | Order | Track | Status |
+|----|-----|-------|-------|--------|
+| 1 | `[SWO_V2_SANCTUARY_PREFERENCE_PROFILE]` | first | A — Loop depth | ⏳ |
+| 2 | `[SWO_V2_SANCTUARY_EXPEDITIONS_DB_API]` | second | A — Loop depth | ⏳ |
+| 3 | `[SWO_V2_SANCTUARY_EXPEDITIONS_UI]` | after PR2 | A — Loop depth | ⏳ |
+| 4 | `[SWO_V2_SANCTUARY_SLEEP_DYNAMICS]` | parallel w/ PR2/3 | B — Care depth | ⏳ |
+| 5 | `[SWO_V2_SANCTUARY_STREAKS]` | after PR4 | B — Care depth | ⏳ |
+| 6 | `[SWO_V2_SANCTUARY_STAR_ECONOMY_SINKS]` | after PR3 | C — Economy | ⏳ |
+| 7 | `[SWO_V2_SANCTUARY_VARIABLE_REWARDS]` | last | C — Economy | ⏳ |
+
+**Design doctrine (must hold for every PR):**
+- Action choice must be meaningful (hidden preference per-Skrumpey × need-state × mood).
+- Sleep must matter (24h+ no sleep → Tired halves bond gains; full cycle → dream reward with floor; early-wake → −2 bond + journal).
+- Risk/reward deterministic; RNG only on aesthetic prizes.
+- Variable rewards always have a floor.
+- Compassionate streaks (1 miss pauses, 2 misses reset).
+- Identity over power (bond milestones reveal personality, never raw stat lifts).
+
+**Anti-patterns (auto-reject):** notification spam, pay-to-not-lose, full-reset streaks on one miss, variable rewards with zero floor, forced social/share gates.
+
+**PR-quality rules (every PR):**
+1. Pre-flight: `git log --oneline origin/dev -50` + `gh -R InverseAltruism/Star-World-Order pr list --state open` — no competing PRs.
+2. 300–800 lines per PR including tests.
+3. Rebase on `origin/dev`, never merge.
+4. Vitest unit/component for all new logic + 1 Playwright happy-path + 1 negative-path for player-facing flows. CI all-green.
+5. PR description: design rationale + acceptance checklist + actual local test counts pasted.
+6. Commit prefix: `feat(sanctuary): …` / `fix(sanctuary): …` / `docs(sanctuary): …`.
+
+**Per-PR acceptance summaries** (full detail in `docs/SANCTUARY_ENGAGEMENT_PLAN.md §5`):
+
+| PR | Files (primary) | Acceptance highlights | E2E |
+|----|-----------------|----------------------|-----|
+| PR1 | `lib/sanctuary/preferences.ts` + test; extend `companionAction.ts` | Two Skrumpey on one wallet → different profiles; loved=4×, hated subtracts; clue after N=3 matched | Feed two companions, assert differing bond; hated action negative outcome |
+| PR2 | `sanctuary_expeditions` + `sanctuary_expedition_progress` migrations; `app/api/sanctuary/expeditions/{list,start,choose,abandon}`; `data/sanctuary/expeditions/{easy,medium,hard}.json` | start deducts STAR; failure costs; outcomes deterministic against `(seed, choices)` | Walk easy → success; walk hard risky branch → failure |
+| PR3 | `components/sanctuary/overlays/ExpeditionDialog.tsx`; hook into `QuestBoard.tsx` | Renders current step; choice POSTs; abandon POSTs; resume from DB on reload | Full walkthrough + reload mid-flight resumes |
+| PR4 | `lib/sanctuary/sleepDynamics.ts` + test; wire into `companionAction.ts` + sleep endpoint | Tired gate after 24h; full cycle clears + grants ≥ floor; early-wake −2 + journal | All three cases via time-skip helper |
+| PR5 | `sanctuary_companion_streaks` migration; `lib/sanctuary/streaks.ts`; HUD chip in `CompanionHUD.tsx` | 1-miss pauses, 2-misses reset, milestone fires once | 9-day timeline w/ 1 miss; streak still active; 7-day journal entry |
+| PR6 | Gacha pull in `components/sanctuary/overlays/ShopDialog.tsx` | Every pull yields ≥1 cosmetic; 1000-pull distribution within tolerance | 5 pulls all yield; rare badge fires on rare |
+| PR7 | `lib/sanctuary/variableRewards.ts` + test; wire into `companionAction.ts` after preference + need-state | 1000-sim distribution within ±0.5%; bonus badge fires; floor always present | 50 interactions w/ fixed seed; bonus badge ≥1; floor in journal every time |
+
 ## Cosmic Casino — BB merge-in (2026-05-15, **Phase A done; B–F structured**)
 
 Operator-bound: MegaETH is treated as a failed experiment. The BunnyBagz
@@ -322,9 +368,9 @@ launch checklist / post-launch hardening.
 | C4 | C | Verify CreateX (`0xba5Ed099...ba5Ed`) on Monad testnet | `[SWO_CASINO_CREATEX_VERIFY]` | ✅ already present, verified |
 | C5 | C | Deploy CasinoBankroll + 3 games to Monad testnet 10143 via CREATE3 | `[SWO_CASINO_TESTNET_DEPLOY]` | ✅ shipped 2026-05-15 |
 | C6 | C | Register games on bankroll, seed bankroll, write `lib/casino/addresses.ts` | `[SWO_CASINO_TESTNET_WIRE]` | ✅ shipped (address book exported) |
-| C7 | D | Port Coinflip betting page from BB `apps/web` → `app/casino/coinflip/page.tsx` | `[SWO_CASINO_COINFLIP_UI]` | ⏳ card visible (testnet status), no bet-UI yet |
-| C8 | D | Port Dice betting page → `app/casino/dice/page.tsx` | `[SWO_CASINO_DICE_UI]` | ⏳ card visible (testnet status), no bet-UI yet |
-| C9 | D | Port HiLo betting page → `app/casino/constellation-climb/page.tsx` | `[SWO_CASINO_HILO_UI]` | ⏳ card visible (testnet status), no bet-UI yet |
+| C7 | D | Port Coinflip betting page from BB `apps/web` → `app/casino/coinflip/page.tsx` | `[SWO_CASINO_COINFLIP_UI]` | ✅ PR #306 (`1725354`, 2026-05-17) |
+| C8 | D | Port Dice betting page → `app/casino/dice/page.tsx` | `[SWO_CASINO_DICE_UI]` | ✅ PR #309 (`b501115`, 2026-05-17) |
+| C9 | D | Port HiLo betting page → `app/casino/constellation-climb/page.tsx` | `[SWO_CASINO_HILO_UI]` | ⏳ open — only D10 not yet shipped in Phase D |
 | C10 | D | Add `CASINO` link to `components/Header.tsx` (desktop + mobile) | `[SWO_CASINO_NAV]` | ✅ shipped 2026-05-15 |
 | C11 | D | Replace BB mascot art with Star Skrumpey art across casino surfaces | `[SWO_CASINO_MASCOT_SWAP]` | ⏳ depends on C7–C9 |
 | C12 | D | Update `CasinoContent.tsx` card statuses to `'testnet'` / `'live'` | `[SWO_CASINO_STATUS_FLIP]` | ✅ shipped — `testnet` badge surfaced |
@@ -335,45 +381,45 @@ launch checklist / post-launch hardening.
 
 | # | Phase | Tag | Description | Status |
 |---|---|---|---|--------|
-| B1 | B | `[SWO_CASINO_TEST_PORT_BANKROLL]` | Port Bankroll unit + breaker + invariant | ⏳ |
-| B2 | B | `[SWO_CASINO_TEST_PORT_COINFLIP]` | Port Coinflip unit + commit-replay + Halmos | ⏳ |
-| B3 | B | `[SWO_CASINO_TEST_PORT_DICE]` | Port Dice unit | ⏳ |
-| B4 | B | `[SWO_CASINO_TEST_PORT_HILO]` | Port HiLo→ConstellationClimb unit | ⏳ |
-| B5 | B | `[SWO_CASINO_TEST_PORT_RANDOMNESS]` | Port randomness lib unit | ⏳ |
-| B6 | B | `[SWO_CASINO_TEST_PORT_ALLOWLIST]` | Port allowlist unit | ⏳ |
-| B7 | B | `[SWO_CASINO_TEST_PORT_DEPLOY_DETERMINISTIC]` | CREATE3 prediction = actual on local anvil + Monad dry-run | ⏳ |
-| B8 | B | `[SWO_CASINO_TEST_PORT_MEDUSA]` | Port Medusa invariant harness | ⏳ |
-| B9 | B | `[SWO_CASINO_TEST_COVERAGE_BAR]` | `forge coverage` ≥ 90% on `contracts/casino/src/` | ⏳ |
+| B1 | B | `[SWO_CASINO_TEST_PORT_BANKROLL]` | Port Bankroll unit + breaker + invariant | ✅ PR #287 (`4b31b96`) |
+| B2 | B | `[SWO_CASINO_TEST_PORT_COINFLIP]` | Port Coinflip unit + commit-replay + Halmos | ✅ PR #288 (`f340b14`) |
+| B3 | B | `[SWO_CASINO_TEST_PORT_DICE]` | Port Dice unit | ✅ PR #289 (`f625b83`) |
+| B4 | B | `[SWO_CASINO_TEST_PORT_HILO]` | Port HiLo→ConstellationClimb unit | ✅ PR #290 (`1c02775`) |
+| B5 | B | `[SWO_CASINO_TEST_PORT_RANDOMNESS]` | Port randomness lib unit | ✅ PR #291 (`18dccd8`) |
+| B6 | B | `[SWO_CASINO_TEST_PORT_ALLOWLIST]` | Port allowlist unit | ✅ PR #292 (`52b8805`) |
+| B7 | B | `[SWO_CASINO_TEST_PORT_DEPLOY_DETERMINISTIC]` | CREATE3 prediction = actual on local anvil + Monad dry-run | ✅ (`70396fc`) |
+| B8 | B | `[SWO_CASINO_TEST_PORT_MEDUSA]` | Port Medusa invariant harness | ✅ PR #293 (`7045981`) |
+| B9 | B | `[SWO_CASINO_TEST_COVERAGE_BAR]` | `forge coverage` ≥ 90% on `contracts/casino/src/` | ⏳ verify — `docs/casino/coverage_<date>.md` claim flagged in `[SWO_CASINO_FORGE_COVERAGE_VERIFY_2026-05-16]` |
 
 ### Phase C — CI integration (P0, autonomous)
 
 | # | Phase | Tag | Description | Status |
 |---|---|---|---|--------|
-| C-CI1 | C | `[SWO_CASINO_CI_FORGE_TEST]` | `.github/workflows/casino-forge.yml` runs `forge test` on PRs | ⏳ |
-| C-CI2 | C | `[SWO_CASINO_CI_FORGE_COVERAGE]` | `forge coverage` ≥ 90% line gate | ⏳ |
-| C-CI3 | C | `[SWO_CASINO_CI_FOUNDRY_FMT]` | `forge fmt --check` job | ⏳ |
-| C-CI4 | C | `[SWO_CASINO_CI_VITEST]` | Vitest casino project on casino path changes | ⏳ |
-| C-CI5 | C | `[SWO_CASINO_CI_E2E]` | Playwright connected suite on anvil-forked Monad | ⏳ |
+| C-CI1 | C | `[SWO_CASINO_CI_FORGE_TEST]` | `.github/workflows/casino-forge.yml` runs `forge test` on PRs | ✅ PR #295 (`4954ef0`) |
+| C-CI2 | C | `[SWO_CASINO_CI_FORGE_COVERAGE]` | `forge coverage` ≥ 90% line gate | ✅ PR #295 (`e7cb5a6`) |
+| C-CI3 | C | `[SWO_CASINO_CI_FOUNDRY_FMT]` | `forge fmt --check` job | ✅ PR #296 (`12cb6a8`) |
+| C-CI4 | C | `[SWO_CASINO_CI_VITEST]` | Vitest casino project on casino path changes | ✅ PR #299 (`97de879`) |
+| C-CI5 | C | `[SWO_CASINO_CI_E2E]` | Playwright connected suite on anvil-forked Monad | ✅ PR #300 (`c88bc2d`) |
 
 ### Phase D — UI port (P0, autonomous, ~3–4 sessions)
 
 | # | Phase | Tag | Description | Status |
 |---|---|---|---|--------|
-| D1 | D | `[SWO_CASINO_LIB_CHAIN_CLIENT]` | Port `packages/chain` adapter → `lib/casino/{chain,abi,bets}.ts` | ⏳ |
-| D2 | D | `[SWO_CASINO_LIB_VERIFY]` | Port `packages/verify` → `lib/casino/verify.ts` | ⏳ |
-| D3 | D | `[SWO_CASINO_COMPONENT_BET_PANEL]` | Port BetPanel + CTA dwell ≥600ms (BB QA lesson F3) | ⏳ |
-| D4 | D | `[SWO_CASINO_COMPONENT_TRUST_STRIP]` | Port TrustStrip + mobile-44 hit floor | ⏳ |
-| D5 | D | `[SWO_CASINO_COMPONENT_WALLET_SHEET]` | Port WalletSheet + focus trap | ⏳ |
-| D6 | D | `[SWO_CASINO_COMPONENT_RECENT_BETS]` | Port RecentBets (empty until indexer) | ⏳ |
-| D7 | D | `[SWO_CASINO_COMPONENT_FAIRNESS_PROOF]` | Port FairnessProof commit/reveal display | ⏳ |
-| D8 | D | `[SWO_CASINO_COINFLIP_UI]` | `/casino/coinflip/page.tsx` end-to-end bet flow | ⏳ |
-| D9 | D | `[SWO_CASINO_DICE_UI]` | `/casino/dice/page.tsx` with rollUnder slider | ⏳ |
-| D10 | D | `[SWO_CASINO_HILO_UI]` | `/casino/constellation-climb/page.tsx` open/step/cashOut | ⏳ |
-| D11 | D | `[SWO_CASINO_UI_CHAIN_GATE]` | "Switch to Monad" CTA for wrong-chain users | ⏳ |
-| D12 | D | `[SWO_CASINO_TESTNET_OPEN_ACCESS]` | `AccessGate` bypass on chain 10143 for QA | ⏳ |
-| D13 | D | `[SWO_CASINO_MASCOT_SWAP]` | Star Skrumpey dealer art (reuse SWO IP, no RD spend) | ⏳ |
+| D1 | D | `[SWO_CASINO_LIB_CHAIN_CLIENT]` | Port `packages/chain` adapter → `lib/casino/{chain,abi,bets}.ts` | ✅ (`efdd113`) |
+| D2 | D | `[SWO_CASINO_LIB_VERIFY]` | Port `packages/verify` → `lib/casino/verify.ts` | ✅ (`efdd113`) |
+| D3 | D | `[SWO_CASINO_COMPONENT_BET_PANEL]` | Port BetPanel + CTA dwell ≥600ms (BB QA lesson F3) | ✅ PR #300 (`2b0c073`) |
+| D4 | D | `[SWO_CASINO_COMPONENT_TRUST_STRIP]` | Port TrustStrip + mobile-44 hit floor | ✅ PR #301 (`7b358ab`) |
+| D5 | D | `[SWO_CASINO_COMPONENT_WALLET_SHEET]` | Port WalletSheet + focus trap | ✅ PR #302 (`db51227`) |
+| D6 | D | `[SWO_CASINO_COMPONENT_RECENT_BETS]` | Port RecentBets (empty until indexer) | ✅ PRs #303/#304 (`91cdc3e`, `800a89d`) |
+| D7 | D | `[SWO_CASINO_COMPONENT_FAIRNESS_PROOF]` | Port FairnessProof commit/reveal display | ✅ PR #305 (`efdd113`) |
+| D8 | D | `[SWO_CASINO_COINFLIP_UI]` | `/casino/coinflip/page.tsx` end-to-end bet flow | ✅ PR #306 (`1725354`) |
+| D9 | D | `[SWO_CASINO_DICE_UI]` | `/casino/dice/page.tsx` with rollUnder slider | ✅ PR #309 (`b501115`) |
+| D10 | D | `[SWO_CASINO_HILO_UI]` | `/casino/constellation-climb/page.tsx` open/step/cashOut | ⏳ **NEXT** — all deps shipped (D1–D7, D11). Pick today. |
+| D11 | D | `[SWO_CASINO_UI_CHAIN_GATE]` | "Switch to Monad" CTA for wrong-chain users | ✅ PR #310 (`74f90d1`) |
+| D12 | D | `[SWO_CASINO_TESTNET_OPEN_ACCESS]` | `AccessGate` bypass on chain 10143 for QA | ⏳ unblocks operator smoke gate T5 |
+| D13 | D | `[SWO_CASINO_MASCOT_SWAP]` | Star Skrumpey dealer art (reuse SWO IP, no RD spend) | ⏳ runnable for D8/D9 surfaces now (D10 added after PR) |
 | D14 | D | `[SWO_CASINO_NATSPEC_BLOCK_TIME_FIX]` | Sweep "≈25s on MegaETH" → "≈2 min on Monad" in code+docs+UI copy | ⏳ |
-| D15 | D | `[SWO_CASINO_ALLOWLIST_UI_GATE]` | UI reads `game.allowlist()` and pre-checks before signing | ⏳ |
+| D15 | D | `[SWO_CASINO_ALLOWLIST_UI_GATE]` | UI reads `game.allowlist()` and pre-checks before signing | ⏳ runnable for D8/D9 now |
 
 ### Phase E — Off-chain infra (P1, autonomous)
 

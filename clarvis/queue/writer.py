@@ -52,28 +52,57 @@ STATE_FILE = os.path.join(_WS, "data", "queue_writer_state.json")
 
 
 def _sync_sidecar_add(tags_and_priorities: list[tuple[str, str]], source: str = "unknown") -> None:
-    """Create sidecar entries for newly added tasks so they're immediately visible to the engine.
+    """Create or resurrect sidecar entries for tasks just written to QUEUE.md.
 
-    Called after add_task()/add_tasks() writes to QUEUE.md. This prevents
-    sidecar drift: without this, new tasks only appear in the sidecar on
-    the next reconcile() call (i.e., next heartbeat), and any soak_check()
-    or stats() call in between would report 'missing_in_sidecar'.
+    Called after add_task()/add_tasks() writes to QUEUE.md. Two cases must
+    be handled symmetrically so the sidecar tracks QUEUE.md immediately
+    (without waiting for the next heartbeat reconcile):
+
+      1. NEW tag: insert a default `pending` entry.
+      2. EXISTING tag in `removed` or `succeeded`: resurrect to `pending`
+         (operator/writer is re-opening the task). Without this, an
+         add_task() that re-introduces a previously-closed tag leaves
+         the sidecar entry stuck in its terminal state until the next
+         heartbeat — that drift was the SWO Sanctuary / SWO Casino case
+         on 2026-05-18 (rows present `[ ]` in QUEUE.md but sidecar
+         reported `removed` / `succeeded`).
+
+    `pending`/`running`/`failed`/`deferred` entries are left untouched —
+    they're already live and the engine owns their lifecycle.
 
     Args:
-        tags_and_priorities: list of (tag, priority) tuples for newly added tasks.
+        tags_and_priorities: list of (tag, priority) tuples for tasks
+            just written to QUEUE.md.
         source: provenance string propagated into the sidecar entry.
     """
     if not tags_and_priorities:
         return
     try:
-        from clarvis.queue.engine import _load_sidecar, _save_sidecar, _default_entry
+        from clarvis.queue.engine import (
+            _load_sidecar, _save_sidecar, _default_entry, _now_iso,
+        )
         sidecar = _load_sidecar()
         changed = False
         for tag, priority in tags_and_priorities:
-            if tag and tag not in sidecar:
+            if not tag:
+                continue
+            entry = sidecar.get(tag)
+            if entry is None:
                 entry = _default_entry(tag, priority)
                 entry["source"] = source
                 sidecar[tag] = entry
+                changed = True
+            elif entry.get("state") in ("removed", "succeeded"):
+                entry["state"] = "pending"
+                entry["attempts"] = 0
+                entry["failure_reason"] = None
+                entry["skip_until"] = 0
+                entry["priority"] = priority
+                entry["updated_at"] = _now_iso()
+                changed = True
+            elif entry.get("priority") != priority:
+                entry["priority"] = priority
+                entry["updated_at"] = _now_iso()
                 changed = True
         if changed:
             _save_sidecar(sidecar)
@@ -709,30 +738,30 @@ def archive_completed():
         if not content:
             return 0
 
-        # Self-heal sidecar/QUEUE.md drift: flip [ ] -> [x] for any tag whose
-        # sidecar entry is 'succeeded'. Captures duplicates that engine's
-        # _mark_checkbox missed (it only flipped count=1) and any other path
-        # that updated the sidecar without touching QUEUE.md.
+        # Canonicalize sidecar state before sweeping. reconcile() now treats
+        # any `[ ] [TAG]` row as authoritative — if the sidecar shows succeeded
+        # for that tag, it gets resurrected to pending (operator re-opened).
+        # Previously this block flipped `[ ]`→`[x]` instead, which silently
+        # erased operator re-opens. Calling reconcile() here keeps sidecar in
+        # sync with QUEUE.md without overwriting the human signal.
+        #
+        # We must look up engine module globals *at call time* — tests
+        # monkeypatch them, and the QueueEngine constructor's default arguments
+        # bind globals at definition time (before the monkeypatch).
+        #
+        # Note: `clarvis.queue.engine` resolves to the QueueEngine *instance*
+        # exported by clarvis/queue/__init__.py — not the module. Reach the
+        # actual module via sys.modules.
         try:
-            from clarvis.queue.engine import _load_sidecar
-            sidecar_succeeded = {
-                tag for tag, entry in _load_sidecar().items()
-                if entry.get("state") == "succeeded"
-            }
+            import sys as _sys
+            _engine_mod = _sys.modules["clarvis.queue.engine"]
+            _engine_mod.QueueEngine(
+                queue_file=QUEUE_FILE,
+                sidecar_file=_engine_mod.SIDECAR_FILE,
+                runs_file=_engine_mod.RUNS_FILE,
+            ).reconcile()
         except Exception:
-            sidecar_succeeded = set()
-
-        if sidecar_succeeded:
-            healed_lines = []
-            for line in content.split("\n"):
-                m = re.match(r'^(\s*)- \[ \] (.+)$', line)
-                if m:
-                    indent, item_text = m.group(1), m.group(2)
-                    tag = _extract_tag_from_text(item_text)
-                    if tag and tag in sidecar_succeeded:
-                        line = f"{indent}- [x] {item_text} (drift-recovered: {datetime.now(timezone.utc).strftime('%Y-%m-%d')})"
-                healed_lines.append(line)
-            content = "\n".join(healed_lines)
+            pass  # best-effort; archive still runs on the raw QUEUE.md
 
         # Extract completed items and their full lines.
         #
@@ -852,7 +881,7 @@ def archive_completed():
 
         # If guards downgraded any rows to [~] HELD, we still need to rewrite
         # QUEUE.md even when nothing actually archived this sweep.
-        any_holds = held_unverified or held_artifact_missing or sidecar_succeeded
+        any_holds = held_unverified or held_artifact_missing
 
         if not completed and not any_holds:
             return 0

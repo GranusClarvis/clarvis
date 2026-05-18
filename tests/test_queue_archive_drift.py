@@ -1,11 +1,17 @@
 """Regression tests for QUEUE.md / sidecar drift repair.
 
-Covers [QUEUE_ARCHIVE_DRIFT_REPAIR] (2026-04-30):
-  - sidecar shows tag as 'succeeded' but the task line in QUEUE.md is still [ ]
-  - this happens when engine._mark_checkbox flipped count=1 of duplicate lines,
-    or when a sidecar update happened without touching QUEUE.md at all
-  - archive_completed() must self-heal these by flipping [ ] -> [x] using the
-    sidecar as the source of truth, then archiving
+Covers [QUEUE_ARCHIVE_DRIFT_REPAIR] (2026-04-30) — original cause — and the
+canonical-fix follow-up (2026-05-18, SWO_CASINO_HILO_UI / TESTNET_OPEN_ACCESS
+drift):
+
+  - QUEUE.md `[ ]` is the human-authoritative "open" signal.
+  - When sidecar says succeeded for a tag that appears as `[ ]` in QUEUE.md,
+    the previous self-heal flipped `[ ]` → `[x]` based on the sidecar. That
+    silently erased operator re-opens (the SWO Casino drift case).
+  - The new semantics: archive_completed() calls reconcile() first, which
+    resurrects sidecar entries (succeeded|removed → pending) for any tag that
+    appears as `[ ]` in QUEUE.md. The `[ ]` line stays open; the sidecar
+    follows.
 
 Also covers the root-cause fix in engine._mark_checkbox: it must flip ALL
 matching unchecked occurrences (not just the first), so duplicate task lines
@@ -65,95 +71,122 @@ def _seed_sidecar(path, entries):
         json.dump(entries, f)
 
 
-def test_archive_completed_heals_succeeded_unchecked_drift(tmp_workspace):
-    """Sidecar says succeeded, QUEUE.md still has [ ] — archive_completed
-    must flip the checkbox and archive the entry."""
+def test_archive_resurrects_sidecar_when_queue_md_has_open_box(tmp_workspace):
+    """SWO Casino drift regression (2026-05-18).
+
+    When sidecar says succeeded but QUEUE.md still has the row as `[ ]`, the
+    operator is signalling "re-open this task". archive_completed() must NOT
+    silently flip the box to `[x]` (the prior bug). Instead, it triggers
+    reconcile(), which resurrects the sidecar entry to pending.
+    """
     queue_body = (
         "# Evolution Queue\n\n"
         "## P0 — Current Sprint\n\n"
-        "- [ ] [STUCK_TASK] Should have flipped (added: 2026-04-30, source: test)\n"
-        "- [ ] [STILL_RUNNING] Pending task that must remain (added: 2026-04-30, source: test)\n"
+        "- [ ] [REOPENED_TASK] Should stay open (added: 2026-05-18, source: test)\n"
+        "- [ ] [STILL_RUNNING] Pending task that must remain (added: 2026-05-18, source: test)\n"
     )
     _seed_queue(tmp_workspace["queue_file"], queue_body)
     _seed_sidecar(tmp_workspace["sidecar_file"], {
-        "STUCK_TASK": {
+        "REOPENED_TASK": {
             "state": "succeeded",
             "attempts": 1,
             "updated_at": "2026-04-30T06:08:46Z",
             "priority": "P0",
+            "failure_reason": None,
+            "skip_until": 0,
         },
         "STILL_RUNNING": {
             "state": "pending",
             "attempts": 0,
             "updated_at": "2026-04-30T06:08:46Z",
             "priority": "P0",
+            "failure_reason": None,
+            "skip_until": 0,
         },
     })
 
     archived = queue_writer.archive_completed()
-    assert archived == 1, "Expected the drifted task to be archived"
+    assert archived == 0, "No [x] entries exist — nothing to archive"
 
     queue_after = open(tmp_workspace["queue_file"]).read()
-    archive_after = open(tmp_workspace["archive_file"]).read()
-
-    # Stuck task was flipped + moved to archive (no longer in QUEUE.md)
-    assert "[STUCK_TASK]" not in queue_after
-    assert "[STUCK_TASK]" in archive_after
-    assert "drift-recovered" in archive_after  # provenance left in archive
-
-    # Pending task untouched
+    # Re-opened row stays open in QUEUE.md
+    assert "- [ ] [REOPENED_TASK]" in queue_after
     assert "- [ ] [STILL_RUNNING]" in queue_after
+    # No archive file written (or empty)
+    if os.path.exists(tmp_workspace["archive_file"]):
+        archive_after = open(tmp_workspace["archive_file"]).read()
+        assert "[REOPENED_TASK]" not in archive_after
+
+    # Sidecar got resurrected to pending by the reconcile() call inside
+    # archive_completed
+    sidecar_after = json.load(open(tmp_workspace["sidecar_file"]))
+    assert sidecar_after["REOPENED_TASK"]["state"] == "pending"
+    assert sidecar_after["REOPENED_TASK"]["attempts"] == 0
+    assert sidecar_after["STILL_RUNNING"]["state"] == "pending"
 
 
-def test_archive_heals_indented_subtask_drift(tmp_workspace):
-    """Indented (sub-)task lines must also be flipped + archived."""
+def test_archive_resurrects_indented_subtask_drift(tmp_workspace):
+    """Indented (sub-)task lines are also subject to the resurrection rule."""
     queue_body = (
         "## P0\n\n"
-        "- [ ] [PARENT] Parent task (added: 2026-04-30, source: test)\n"
-        "  - [ ] [SUB_TASK] Sub-item (added: 2026-04-30, source: auto_split)\n"
+        "- [ ] [PARENT] Parent task (added: 2026-05-18, source: test)\n"
+        "  - [ ] [SUB_TASK] Sub-item (added: 2026-05-18, source: auto_split)\n"
     )
     _seed_queue(tmp_workspace["queue_file"], queue_body)
     _seed_sidecar(tmp_workspace["sidecar_file"], {
-        "SUB_TASK": {"state": "succeeded", "updated_at": "2026-04-30T06:08:46Z", "priority": "P0"},
-        "PARENT": {"state": "pending", "updated_at": "2026-04-30T06:08:46Z", "priority": "P0"},
+        "SUB_TASK": {"state": "succeeded", "attempts": 1,
+                     "updated_at": "2026-04-30T06:08:46Z", "priority": "P0",
+                     "failure_reason": None, "skip_until": 0},
+        "PARENT": {"state": "pending", "attempts": 0,
+                   "updated_at": "2026-04-30T06:08:46Z", "priority": "P0",
+                   "failure_reason": None, "skip_until": 0},
     })
 
     archived = queue_writer.archive_completed()
-    assert archived == 1
+    assert archived == 0  # nothing to archive, only resurrection happens
 
     queue_after = open(tmp_workspace["queue_file"]).read()
-    archive_after = open(tmp_workspace["archive_file"]).read()
+    assert "[SUB_TASK]" in queue_after
+    assert "- [ ] [PARENT]" in queue_after
 
-    assert "[SUB_TASK]" not in queue_after
-    assert "[SUB_TASK]" in archive_after
-    assert "[PARENT]" in queue_after  # parent untouched
+    sidecar_after = json.load(open(tmp_workspace["sidecar_file"]))
+    assert sidecar_after["SUB_TASK"]["state"] == "pending"
+    assert sidecar_after["PARENT"]["state"] == "pending"
 
 
-def test_archive_heals_duplicate_lines_sharing_tag(tmp_workspace):
-    """Multiple [ ] lines sharing one tag (auto_split duplicates) all flip
-    and archive together once the sidecar marks the tag succeeded."""
+def test_archive_resurrects_when_one_of_many_duplicates_reopens(tmp_workspace):
+    """If duplicate `[ ]` rows share a tag and the sidecar says succeeded,
+    the rule is the same: resurrect to pending. (In practice, engine
+    `_mark_checkbox` now flips ALL duplicates together — see
+    test_engine_mark_succeeded_flips_all_duplicates — so this drift only
+    arises from manual edits or external writers.)"""
     queue_body = (
         "## P0\n\n"
-        "- [ ] [DUPE] First occurrence (added: 2026-04-30, source: auto_split)\n"
-        "- [ ] [OTHER] Pending other (added: 2026-04-30, source: test)\n"
-        "- [ ] [DUPE] Second occurrence (added: 2026-04-30, source: auto_split)\n"
-        "- [ ] [DUPE] Third occurrence (added: 2026-04-30, source: auto_split)\n"
+        "- [ ] [DUPE] First occurrence (added: 2026-05-18, source: auto_split)\n"
+        "- [ ] [OTHER] Pending other (added: 2026-05-18, source: test)\n"
+        "- [ ] [DUPE] Second occurrence (added: 2026-05-18, source: auto_split)\n"
+        "- [ ] [DUPE] Third occurrence (added: 2026-05-18, source: auto_split)\n"
     )
     _seed_queue(tmp_workspace["queue_file"], queue_body)
     _seed_sidecar(tmp_workspace["sidecar_file"], {
-        "DUPE": {"state": "succeeded", "updated_at": "2026-04-30T06:08:46Z", "priority": "P0"},
-        "OTHER": {"state": "pending", "updated_at": "2026-04-30T06:08:46Z", "priority": "P0"},
+        "DUPE": {"state": "succeeded", "attempts": 1,
+                 "updated_at": "2026-04-30T06:08:46Z", "priority": "P0",
+                 "failure_reason": None, "skip_until": 0},
+        "OTHER": {"state": "pending", "attempts": 0,
+                  "updated_at": "2026-04-30T06:08:46Z", "priority": "P0",
+                  "failure_reason": None, "skip_until": 0},
     })
 
     archived = queue_writer.archive_completed()
-    assert archived == 3, "All three duplicate DUPE lines should archive"
+    assert archived == 0
 
     queue_after = open(tmp_workspace["queue_file"]).read()
-    archive_after = open(tmp_workspace["archive_file"]).read()
-
-    assert "[DUPE]" not in queue_after, "All DUPE lines must be archived"
-    assert archive_after.count("[DUPE]") == 3
+    assert queue_after.count("- [ ] [DUPE]") == 3
     assert "- [ ] [OTHER]" in queue_after
+
+    sidecar_after = json.load(open(tmp_workspace["sidecar_file"]))
+    assert sidecar_after["DUPE"]["state"] == "pending"
+    assert sidecar_after["DUPE"]["attempts"] == 0
 
 
 def test_engine_mark_succeeded_flips_all_duplicates(tmp_workspace):
@@ -200,3 +233,104 @@ def test_archive_no_op_when_no_drift_and_no_completed(tmp_workspace):
 
     assert archived == 0
     assert before == after
+
+
+# ---------------------------------------------------------------------------
+# _sync_sidecar_add resurrection tests (write-side canonical fix)
+# ---------------------------------------------------------------------------
+
+def test_sync_sidecar_add_inserts_new_tag(tmp_workspace):
+    """Baseline: adding a brand-new tag creates a pending sidecar entry."""
+    _seed_sidecar(tmp_workspace["sidecar_file"], {})
+    queue_writer._sync_sidecar_add(
+        [("BRAND_NEW_TAG", "P1")], source="test_source",
+    )
+    sidecar = json.load(open(tmp_workspace["sidecar_file"]))
+    assert sidecar["BRAND_NEW_TAG"]["state"] == "pending"
+    assert sidecar["BRAND_NEW_TAG"]["priority"] == "P1"
+    assert sidecar["BRAND_NEW_TAG"]["source"] == "test_source"
+
+
+def test_sync_sidecar_add_resurrects_removed_entry(tmp_workspace):
+    """SWO Sanctuary drift regression (2026-05-18): when add_task() re-adds
+    a tag whose sidecar entry is `removed`, the entry must be resurrected to
+    `pending` immediately — not on the next heartbeat reconcile. Otherwise
+    the sidecar stays stuck in `removed` until reconcile runs, and any
+    runnable_view / stats inspection in between shows the wrong state.
+    """
+    _seed_sidecar(tmp_workspace["sidecar_file"], {
+        "REOPENED": {
+            "state": "removed",
+            "attempts": 3,
+            "failure_reason": "previously gave up",
+            "skip_until": 1234567890,
+            "updated_at": "2026-05-01T00:00:00Z",
+            "priority": "P2",
+            "source": "old_source",
+        },
+    })
+    queue_writer._sync_sidecar_add(
+        [("REOPENED", "P0")], source="manual_reopen",
+    )
+    sidecar = json.load(open(tmp_workspace["sidecar_file"]))
+    entry = sidecar["REOPENED"]
+    assert entry["state"] == "pending"
+    assert entry["attempts"] == 0
+    assert entry["failure_reason"] is None
+    assert entry["skip_until"] == 0
+    assert entry["priority"] == "P0"  # priority updated to new section
+
+
+def test_sync_sidecar_add_resurrects_succeeded_entry(tmp_workspace):
+    """Same resurrection rule applies to `succeeded` entries: re-adding a tag
+    to QUEUE.md as `[ ]` means the operator wants it run again."""
+    _seed_sidecar(tmp_workspace["sidecar_file"], {
+        "REPEAT_ME": {
+            "state": "succeeded",
+            "attempts": 1,
+            "failure_reason": None,
+            "skip_until": 0,
+            "updated_at": "2026-05-01T00:00:00Z",
+            "priority": "P1",
+        },
+    })
+    queue_writer._sync_sidecar_add([("REPEAT_ME", "P1")], source="rerun")
+    sidecar = json.load(open(tmp_workspace["sidecar_file"]))
+    entry = sidecar["REPEAT_ME"]
+    assert entry["state"] == "pending"
+    assert entry["attempts"] == 0
+
+
+def test_sync_sidecar_add_leaves_active_entries_untouched(tmp_workspace):
+    """A `pending`/`running`/`failed`/`deferred` entry is mid-lifecycle —
+    _sync_sidecar_add must not clobber it. Priority gets a refresh if it
+    moved sections, but state/attempts/failure_reason are preserved."""
+    _seed_sidecar(tmp_workspace["sidecar_file"], {
+        "ACTIVE": {
+            "state": "failed",
+            "attempts": 2,
+            "failure_reason": "still trying",
+            "skip_until": 1234567890,
+            "updated_at": "2026-05-01T00:00:00Z",
+            "priority": "P1",
+        },
+        "RUNNING": {
+            "state": "running",
+            "attempts": 1,
+            "failure_reason": None,
+            "skip_until": 0,
+            "updated_at": "2026-05-01T00:00:00Z",
+            "priority": "P0",
+        },
+    })
+    queue_writer._sync_sidecar_add(
+        [("ACTIVE", "P0"), ("RUNNING", "P0")], source="rerun",
+    )
+    sidecar = json.load(open(tmp_workspace["sidecar_file"]))
+    # Failed entry kept its state + attempts; only priority refreshed.
+    assert sidecar["ACTIVE"]["state"] == "failed"
+    assert sidecar["ACTIVE"]["attempts"] == 2
+    assert sidecar["ACTIVE"]["failure_reason"] == "still trying"
+    assert sidecar["ACTIVE"]["priority"] == "P0"
+    # Running entry similarly untouched (still running).
+    assert sidecar["RUNNING"]["state"] == "running"

@@ -113,6 +113,22 @@ class TestExtractTag:
         assert _extract_tag("[BLOCKED] [REAL_TAG] body") == "REAL_TAG"
         assert _extract_tag("[WIP] **[ANOTHER_TAG]** body") == "ANOTHER_TAG"
 
+    def test_skips_stalled_and_cancelled_markers(self):
+        """Live-data regression (2026-05-18): operators annotate rows with
+        `[STALLED]` and `[CANCELLED]` prefixes before the real tag. These
+        must be treated as status markers, not as the row's identity, or
+        the sidecar collapses dozens of distinct tasks into one bogus
+        "STALLED" entry."""
+        text = "[STALLED] [CANCELLED] **[REAL_TAG]** body"
+        assert _extract_tag(text) == "REAL_TAG"
+        # Only one wrapping marker recognized at a time, but the helper
+        # walks past the leading one. Documenting current behaviour:
+        # `[STALLED]` alone → real tag right after.
+        assert _extract_tag("[STALLED] [REAL_TAG] body") == "REAL_TAG"
+        assert _extract_tag("[CANCELLED] **[ANOTHER_TAG]** body") == "ANOTHER_TAG"
+        assert _extract_tag("[DEFERRED] [REAL_TAG] body") == "REAL_TAG"
+        assert _extract_tag("[HELD] [REAL_TAG] body") == "REAL_TAG"
+
     def test_status_marker_alone_is_no_tag(self):
         # A line with only a status marker and no real tag has no tag.
         assert _extract_tag("[UNVERIFIED] no real tag here") is None
@@ -157,6 +173,127 @@ class TestReconcile:
 
         tasks, sidecar = engine.reconcile()
         assert sidecar["CLEANUP"]["state"] == "removed"
+
+    def test_resurrect_removed_to_pending(self, engine, tmp_queue):
+        """A tag previously marked 'removed' must return to 'pending' when
+        re-introduced as `[ ]` in QUEUE.md."""
+        queue_file, *_ = tmp_queue
+        engine.reconcile()
+        # Drop CLEANUP from QUEUE.md so it becomes 'removed' in sidecar
+        content = open(queue_file).read()
+        content = content.replace("- [ ] [CLEANUP] Clean up old logs\n", "")
+        with open(queue_file, "w") as f:
+            f.write(content)
+        engine.reconcile()
+        assert engine.get_task_state("CLEANUP")["state"] == "removed"
+
+        # Operator re-adds CLEANUP as `[ ]`
+        with open(queue_file, "a") as f:
+            f.write("- [ ] [CLEANUP] Clean up old logs (round 2)\n")
+        _tasks, sidecar = engine.reconcile()
+        assert sidecar["CLEANUP"]["state"] == "pending"
+        assert sidecar["CLEANUP"]["attempts"] == 0
+        assert sidecar["CLEANUP"]["failure_reason"] is None
+        assert sidecar["CLEANUP"]["skip_until"] == 0
+
+    def test_resurrect_succeeded_to_pending(self, engine, tmp_queue):
+        """Canonical drift fix: a tag previously marked 'succeeded' must
+        return to 'pending' if it reappears as `[ ]` in QUEUE.md.
+
+        Regression test for SWO_CASINO_HILO_UI / SWO_CASINO_TESTNET_OPEN_ACCESS
+        drift case (2026-05-18): two rows shipped `[ ]` in QUEUE.md while the
+        sidecar reported `succeeded`, hiding them from the runnable selector.
+        """
+        queue_file, *_ = tmp_queue
+        engine.reconcile()
+        engine.mark_running("URGENT_FIX")
+        engine.mark_succeeded("URGENT_FIX", "done v1")
+        assert engine.get_task_state("URGENT_FIX")["state"] == "succeeded"
+
+        # Operator re-opens with `[ ]` (e.g., next sprint, same tag)
+        with open(queue_file, "a") as f:
+            f.write("\n- [ ] [URGENT_FIX] Fix critical bug AGAIN\n")
+        _tasks, sidecar = engine.reconcile()
+        assert sidecar["URGENT_FIX"]["state"] == "pending"
+        assert sidecar["URGENT_FIX"]["attempts"] == 0
+        assert sidecar["URGENT_FIX"]["failure_reason"] is None
+        assert sidecar["URGENT_FIX"]["skip_until"] == 0
+
+    def test_succeeded_with_only_checked_box_stays_succeeded(self, engine, tmp_queue):
+        """If a tag only appears as `[x]` (or not at all) in QUEUE.md, the
+        succeeded state must NOT be reset. parse_queue() filters `[x]` rows,
+        so they do not appear in md_tasks and reconcile leaves them alone."""
+        queue_file, *_ = tmp_queue
+        engine.reconcile()
+        engine.mark_running("URGENT_FIX")
+        engine.mark_succeeded("URGENT_FIX", "done")
+        # mark_succeeded flipped the [ ] to [x] in QUEUE.md; reconcile again
+        _tasks, sidecar = engine.reconcile()
+        assert sidecar["URGENT_FIX"]["state"] == "succeeded"
+
+    def test_reconcile_report_dry_run_changes_nothing(self, engine, tmp_queue):
+        """reconcile_report() must NOT touch sidecar — it's a dry-run."""
+        queue_file, *_ = tmp_queue
+        engine.reconcile()
+        engine.mark_running("URGENT_FIX")
+        engine.mark_succeeded("URGENT_FIX", "done")
+
+        # Re-add URGENT_FIX as `[ ]`
+        with open(queue_file, "a") as f:
+            f.write("\n- [ ] [URGENT_FIX] Re-opened\n")
+
+        # Snapshot sidecar bytes pre-report
+        with open(engine.sidecar_file) as f:
+            pre = f.read()
+
+        report = engine.reconcile_report()
+        assert "URGENT_FIX" in report["resurrected_from_succeeded"]
+
+        # Sidecar untouched
+        with open(engine.sidecar_file) as f:
+            post = f.read()
+        assert pre == post
+        # And the sidecar still says succeeded — dry-run never wrote
+        assert engine.get_task_state("URGENT_FIX")["state"] == "succeeded"
+
+    def test_reconcile_report_classifies_added(self, engine, tmp_queue):
+        """A `[ ]` tag never seen before must show up as 'added' in the report."""
+        queue_file, *_ = tmp_queue
+        engine.reconcile()
+        with open(queue_file, "a") as f:
+            f.write("\n- [ ] [BRAND_NEW] Never seen tag\n")
+        report = engine.reconcile_report()
+        assert "BRAND_NEW" in report["added"]
+        # And reconcile actually adds it
+        _tasks, sidecar = engine.reconcile()
+        assert sidecar["BRAND_NEW"]["state"] == "pending"
+
+    def test_reconcile_priority_change_detected(self, engine, tmp_queue):
+        """If a tag moves between priority sections, reconcile must update
+        sidecar priority and reconcile_report must surface the change."""
+        queue_file, *_ = tmp_queue
+        engine.reconcile()
+        # CLEANUP is P2 initially — move it to P0 by rewriting the file
+        new_content = open(queue_file).read().replace(
+            "- [ ] [CLEANUP] Clean up old logs",
+            "",
+        )
+        # Insert CLEANUP under P0 section
+        new_content = new_content.replace(
+            "## P0 — Current Sprint\n\n",
+            "## P0 — Current Sprint\n\n- [ ] [CLEANUP] Clean up old logs\n",
+        )
+        with open(queue_file, "w") as f:
+            f.write(new_content)
+
+        report = engine.reconcile_report()
+        changes = {c["tag"]: c for c in report["priority_changed"]}
+        assert "CLEANUP" in changes
+        assert changes["CLEANUP"]["from"] == "P2"
+        assert changes["CLEANUP"]["to"] == "P0"
+
+        _tasks, sidecar = engine.reconcile()
+        assert sidecar["CLEANUP"]["priority"] == "P0"
 
 
 # ---------------------------------------------------------------------------

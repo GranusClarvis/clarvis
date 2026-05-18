@@ -57,7 +57,14 @@ _TAG_RE = re.compile(r"^(?:\*\*)?(\[[A-Z][A-Za-z0-9_:.-]+\])(?:\*\*)?")
 # bold-wrapped) is used as the sidecar key. Without this, every guarded task
 # collapses to a single sidecar entry (e.g. "UNVERIFIED") and the queue selector
 # filters them all out via "all_filtered_by_v2".
-_STATUS_MARKERS = frozenset({"UNVERIFIED", "VERIFIED", "BLOCKED", "WIP", "TODO", "DRAFT"})
+_STATUS_MARKERS = frozenset({
+    "UNVERIFIED", "VERIFIED", "BLOCKED", "WIP", "TODO", "DRAFT",
+    # Operator-applied annotations that wrap a real tag. Without skipping
+    # these, _extract_tag returns the marker as the tag and every annotated
+    # row collapses to one bogus sidecar entry — that's how the live sidecar
+    # ended up with 50+ rows all tagged "STALLED" (2026-05-18 audit).
+    "STALLED", "CANCELLED", "DEFERRED", "HELD", "PAUSED", "ARCHIVED",
+})
 
 
 def _now_iso() -> str:
@@ -66,21 +73,26 @@ def _now_iso() -> str:
 
 def _extract_tag(text: str) -> Optional[str]:
     """Extract [TAG] from task text. Handles optional **bold** markdown wrapping
-    and skips leading status markers like [UNVERIFIED] added by guards.
+    and skips ANY number of leading status markers (e.g.
+    `[STALLED] [CANCELLED] [REAL_TAG]` returns `REAL_TAG`).
+
+    Status markers are listed in `_STATUS_MARKERS`. Walking the entire chain
+    matters because operators stack annotations: a row that was originally
+    `[UNVERIFIED]` may later get a `[STALLED]` or `[CANCELLED]` prefix added
+    in front of it.
     """
     s = text.strip()
-    m = _TAG_RE.match(s)
-    if not m:
-        return None
-    candidate = m.group(1)[1:-1]  # strip surrounding []
-    if candidate in _STATUS_MARKERS:
-        # Skip status marker and look for the real tag immediately after
-        rest = s[m.end():].lstrip()
-        m2 = _TAG_RE.match(rest)
-        if m2:
-            return m2.group(1)[1:-1]
-        return None  # only a status marker, no real tag
-    return candidate
+    # Walk past any consecutive status markers; the first non-marker bracket
+    # is the real tag. Cap iterations to avoid pathological input.
+    for _ in range(8):
+        m = _TAG_RE.match(s)
+        if not m:
+            return None
+        candidate = m.group(1)[1:-1]  # strip surrounding []
+        if candidate not in _STATUS_MARKERS:
+            return candidate
+        s = s[m.end():].lstrip()
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -247,7 +259,17 @@ class QueueEngine:
         sidecar = self._load()
         md_tags = {t["tag"] for t in md_tasks}
 
-        # Add default entries for new tags; resurrect removed entries
+        # Add default entries for new tags; resurrect removed/succeeded entries.
+        #
+        # QUEUE.md `[ ]` is the human-authoritative "this task is open" signal.
+        # parse_queue() only returns rows currently marked `[ ]`; a row marked
+        # `[x]` is filtered out upstream. So any tag present here must be `[ ]`
+        # in QUEUE.md, regardless of what the sidecar remembers from a prior
+        # run. Resurrect both `removed` and `succeeded` so an operator (or any
+        # writer) re-opening a tag with `[ ]` causes the engine to actually
+        # re-run it. Previously only `removed` was resurrected, and `succeeded`
+        # tags were silently flipped back to `[x]` by archive_completed's
+        # self-heal — erasing operator re-opens.
         for task in md_tasks:
             tag = task["tag"]
             if tag not in sidecar:
@@ -255,8 +277,8 @@ class QueueEngine:
             else:
                 # Update priority if it changed in QUEUE.md
                 sidecar[tag]["priority"] = task["priority"]
-                # Resurrect: if tag was "removed" but reappears in QUEUE.md, reset to pending
-                if sidecar[tag].get("state") == "removed":
+                # Resurrect: tag was closed/dropped, but reappears as [ ] in QUEUE.md
+                if sidecar[tag].get("state") in ("removed", "succeeded"):
                     sidecar[tag]["state"] = "pending"
                     sidecar[tag]["attempts"] = 0
                     sidecar[tag]["failure_reason"] = None
@@ -301,6 +323,83 @@ class QueueEngine:
 
         self._save(sidecar)
         return md_tasks, sidecar
+
+    def reconcile_report(self) -> dict:
+        """Dry-run reconciliation: report drift without touching sidecar.
+
+        Returns a dict describing what reconcile() would change. Useful for
+        operator-facing inspection ("clarvis queue reconcile --dry-run") and
+        for tests that assert specific drift cases.
+
+        Keys:
+            added: tags present in QUEUE.md `[ ]` but absent from sidecar.
+            resurrected_from_removed: tags in QUEUE.md `[ ]` whose sidecar
+                state is "removed" — would be reset to pending.
+            resurrected_from_succeeded: tags in QUEUE.md `[ ]` whose sidecar
+                state is "succeeded" — would be reset to pending (operator
+                re-opened). This is the case that previously silently drifted.
+            marked_removed: active sidecar entries not in QUEUE.md `[ ]`
+                — would be marked removed.
+            stuck_running_recovered: running entries older than
+                STUCK_RUNNING_HOURS that would be auto-failed.
+            priority_changed: tags whose sidecar priority differs from
+                QUEUE.md's current section.
+        """
+        md_tasks = parse_queue(self.queue_file)
+        sidecar = self._load()
+        md_tags = {t["tag"] for t in md_tasks}
+
+        report: dict = {
+            "added": [],
+            "resurrected_from_removed": [],
+            "resurrected_from_succeeded": [],
+            "marked_removed": [],
+            "stuck_running_recovered": [],
+            "priority_changed": [],
+        }
+
+        for task in md_tasks:
+            tag = task["tag"]
+            entry = sidecar.get(tag)
+            if entry is None:
+                report["added"].append(tag)
+                continue
+            if entry.get("state") == "removed":
+                report["resurrected_from_removed"].append(tag)
+            elif entry.get("state") == "succeeded":
+                report["resurrected_from_succeeded"].append(tag)
+            if entry.get("priority") != task["priority"]:
+                report["priority_changed"].append({
+                    "tag": tag,
+                    "from": entry.get("priority"),
+                    "to": task["priority"],
+                })
+
+        for tag, entry in sidecar.items():
+            if tag in md_tags:
+                continue
+            if entry.get("state") not in ("succeeded", "removed"):
+                report["marked_removed"].append(tag)
+
+        now = datetime.now(timezone.utc)
+        for tag, entry in sidecar.items():
+            if entry.get("state") != "running":
+                continue
+            updated = entry.get("updated_at", "")
+            if not updated:
+                continue
+            try:
+                dt = datetime.fromisoformat(updated.replace("Z", "+00:00"))
+                age_h = (now - dt).total_seconds() / 3600
+            except (ValueError, TypeError):
+                continue
+            if age_h >= STUCK_RUNNING_HOURS:
+                report["stuck_running_recovered"].append({
+                    "tag": tag,
+                    "age_hours": round(age_h, 1),
+                })
+
+        return report
 
     # -- scoring (simplified: 3 factors) --
 
@@ -1149,9 +1248,17 @@ def _cli():
         print("OK" if ok else "FAIL: tag not found")
 
     elif cmd == "reconcile":
-        tasks, _ = engine.reconcile()
-        for t in tasks:
-            print(f"[{t['tag']}] state={t['state']} attempts={t['attempts']} priority={t['priority']}")
+        # Accept `reconcile --dry-run` or `reconcile-report` for inspection
+        dry_run = "--dry-run" in args or "-n" in args
+        if dry_run:
+            print(json.dumps(engine.reconcile_report(), indent=2))
+        else:
+            tasks, _ = engine.reconcile()
+            for t in tasks:
+                print(f"[{t['tag']}] state={t['state']} attempts={t['attempts']} priority={t['priority']}")
+
+    elif cmd == "reconcile-report":
+        print(json.dumps(engine.reconcile_report(), indent=2))
 
     elif cmd == "runs" and len(args) > 1:
         runs = engine.get_runs(args[1])
@@ -1197,7 +1304,7 @@ def _cli():
     else:
         print("Usage: queue_engine.py {stats|select|state TAG|mark-running TAG|"
               "mark-succeeded TAG [ann]|mark-failed TAG [reason]|reset TAG|"
-              "reconcile|runs TAG|recent-runs|run-stats|soak|"
+              "reconcile [--dry-run]|reconcile-report|runs TAG|recent-runs|run-stats|soak|"
               "start-external TASK_TEXT [source]|end-external RUN_ID [exit_code] [duration_s]}")
 
 

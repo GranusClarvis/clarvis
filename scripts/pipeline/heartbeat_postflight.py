@@ -2046,7 +2046,7 @@ def _pf_queue_update(ctx, _pf_errors):
     block_completion = dv.get("downgrade") and dv.get("downgrade_reason") == "no_pr_delivery"
 
     try:
-        if exit_code == 0 and not block_completion:
+        if exit_code == 0 and task_status == "success" and not block_completion:
             timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
             task_for_marking = task
             if task_tag:

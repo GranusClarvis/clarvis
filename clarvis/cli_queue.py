@@ -136,10 +136,22 @@ def engine_select():
 
 
 @app.command("engine-reconcile")
-def engine_reconcile():
-    """Reconcile QUEUE.md with sidecar state and show all tasks."""
+def engine_reconcile(
+    dry_run: bool = typer.Option(False, "--dry-run", "-n",
+                                 help="Show drift without modifying sidecar."),
+):
+    """Reconcile QUEUE.md with sidecar state and show all tasks.
+
+    With --dry-run, prints a JSON report of what reconcile would change
+    (resurrected, added, marked_removed, stuck_running_recovered,
+    priority_changed) without touching the sidecar.
+    """
+    import json as _json
     from clarvis.queue.engine import engine
-    tasks, _ = engine.reconcile()
+    if dry_run:
+        print(_json.dumps(engine.reconcile_report(), indent=2))
+        return
+    tasks, _sidecar = engine.reconcile()
     for t in tasks:
         print(f"[{t['tag']}] state={t['state']} attempts={t['attempts']} priority={t['priority']}")
 
